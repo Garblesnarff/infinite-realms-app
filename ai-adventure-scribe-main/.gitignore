@@ -1,0 +1,69 @@
+node_modules
+dist
+server/dist
+.env
+server/.env
+server/.env.local
+*.env.local
+*.env.*.local
+*.log
+**/.DS_Store
+CLAUDE.md
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+# *.md
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python / CrewAI service artifacts
+crewai-service/.venv/
+crewai-service/.venv/**
+**/__pycache__/
+**/*.pyc
+crewai-service/.pytest_cache/
+crewai-service/.mypy_cache/
+crewai-service/.ruff_cache/
+.python-version
+
+# Coverage & build artifacts
+coverage/
+.coverage
+
+# Playwright artifacts
+playwright-report/
+blob-report/
+.test-results/
+
+# Local logs (if previously tracked)
+frontend.log
+server.log
+
+# Vercel local project settings
+.vercel
+
+# Code analysis outputs
+ts-prune-output.txt
+knip-output.txt
+
+# Migration backups
+*.sql.backup
+logs/
