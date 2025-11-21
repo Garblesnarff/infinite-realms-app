@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.76.0"
+  }
+}

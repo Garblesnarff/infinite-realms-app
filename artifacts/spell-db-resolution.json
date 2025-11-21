@@ -1,0 +1,674 @@
+[
+  {
+    "kebabId": "alarm",
+    "baseName": "alarm",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'alarm' (base: 'alarm')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "alarm-ranger",
+    "baseName": "alarm",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'alarm-ranger' (base: 'alarm')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "animal-friendship-druid",
+    "baseName": "animal-friendship",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'animal-friendship-druid' (base: 'animal-friendship')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "animal-friendship-ranger",
+    "baseName": "animal-friendship",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'animal-friendship-ranger' (base: 'animal-friendship')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "bless",
+    "baseName": "bless",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'bless' (base: 'bless')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "bless-paladin",
+    "baseName": "bless",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'bless-paladin' (base: 'bless')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "charm-person-druid",
+    "baseName": "charm-person",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'charm-person-druid' (base: 'charm-person')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "color-spray",
+    "baseName": "color-spray",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'color-spray' (base: 'color-spray')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "command",
+    "baseName": "command",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'command' (base: 'command')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "command-paladin",
+    "baseName": "command",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'command-paladin' (base: 'command')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "compelled-duel",
+    "baseName": "compelled-duel",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'compelled-duel' (base: 'compelled-duel')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "comprehend-languages",
+    "baseName": "comprehend-languages",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'comprehend-languages' (base: 'comprehend-languages')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "create-or-destroy-water",
+    "baseName": "create-or-destroy-water",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'create-or-destroy-water' (base: 'create-or-destroy-water')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "create-or-destroy-water-druid",
+    "baseName": "create-or-destroy-water",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'create-or-destroy-water-druid' (base: 'create-or-destroy-water')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "cure-wounds-druid",
+    "baseName": "cure-wounds",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'cure-wounds-druid' (base: 'cure-wounds')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "cure-wounds-paladin",
+    "baseName": "cure-wounds",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'cure-wounds-paladin' (base: 'cure-wounds')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "cure-wounds-ranger",
+    "baseName": "cure-wounds",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'cure-wounds-ranger' (base: 'cure-wounds')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-evil-and-good",
+    "baseName": "detect-evil-and-good",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-evil-and-good' (base: 'detect-evil-and-good')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-evil-and-good-paladin",
+    "baseName": "detect-evil-and-good",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-evil-and-good-paladin' (base: 'detect-evil-and-good')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-magic",
+    "baseName": "detect-magic",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-magic' (base: 'detect-magic')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-magic-cleric",
+    "baseName": "detect-magic",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-magic-cleric' (base: 'detect-magic')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-magic-druid",
+    "baseName": "detect-magic",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-magic-druid' (base: 'detect-magic')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-magic-paladin",
+    "baseName": "detect-magic",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-magic-paladin' (base: 'detect-magic')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-magic-ranger",
+    "baseName": "detect-magic",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-magic-ranger' (base: 'detect-magic')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-poison-and-disease",
+    "baseName": "detect-poison-and-disease",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-poison-and-disease' (base: 'detect-poison-and-disease')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-poison-and-disease-druid",
+    "baseName": "detect-poison-and-disease",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-poison-and-disease-druid' (base: 'detect-poison-and-disease')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-poison-and-disease-paladin",
+    "baseName": "detect-poison-and-disease",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-poison-and-disease-paladin' (base: 'detect-poison-and-disease')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "detect-poison-and-disease-ranger",
+    "baseName": "detect-poison-and-disease",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'detect-poison-and-disease-ranger' (base: 'detect-poison-and-disease')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "divine-favor",
+    "baseName": "divine-favor",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'divine-favor' (base: 'divine-favor')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "druidcraft",
+    "baseName": "druidcraft",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'druidcraft' (base: 'druidcraft')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "entangle",
+    "baseName": "entangle",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'entangle' (base: 'entangle')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "expeditious-retreat",
+    "baseName": "expeditious-retreat",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'expeditious-retreat' (base: 'expeditious-retreat')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "faerie-fire-druid",
+    "baseName": "faerie-fire",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'faerie-fire-druid' (base: 'faerie-fire')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "false-life",
+    "baseName": "false-life",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'false-life' (base: 'false-life')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "find-familiar",
+    "baseName": "find-familiar",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'find-familiar' (base: 'find-familiar')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "fog-cloud",
+    "baseName": "fog-cloud",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'fog-cloud' (base: 'fog-cloud')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "fog-cloud-druid",
+    "baseName": "fog-cloud",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'fog-cloud-druid' (base: 'fog-cloud')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "fog-cloud-ranger",
+    "baseName": "fog-cloud",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'fog-cloud-ranger' (base: 'fog-cloud')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "goodberry",
+    "baseName": "goodberry",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'goodberry' (base: 'goodberry')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "goodberry-ranger",
+    "baseName": "goodberry",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'goodberry-ranger' (base: 'goodberry')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "grease",
+    "baseName": "grease",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'grease' (base: 'grease')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "guidance",
+    "baseName": "guidance",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'guidance' (base: 'guidance')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "guidance-druid",
+    "baseName": "guidance",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'guidance-druid' (base: 'guidance')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "guiding-bolt",
+    "baseName": "guiding-bolt",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'guiding-bolt' (base: 'guiding-bolt')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "healing-word-druid",
+    "baseName": "healing-word",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'healing-word-druid' (base: 'healing-word')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "hellish-rebuke",
+    "baseName": "hellish-rebuke",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'hellish-rebuke' (base: 'hellish-rebuke')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "heroism-paladin",
+    "baseName": "heroism",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'heroism-paladin' (base: 'heroism')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "hideous-laughter",
+    "baseName": "hideous-laughter",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'hideous-laughter' (base: 'hideous-laughter')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "hunters-mark",
+    "baseName": "hunters-mark",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'hunters-mark' (base: 'hunters-mark')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "identify",
+    "baseName": "identify",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'identify' (base: 'identify')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "illusory-script",
+    "baseName": "illusory-script",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'illusory-script' (base: 'illusory-script')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "inflict-wounds",
+    "baseName": "inflict-wounds",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'inflict-wounds' (base: 'inflict-wounds')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "jump",
+    "baseName": "jump",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'jump' (base: 'jump')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "jump-druid",
+    "baseName": "jump",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'jump-druid' (base: 'jump')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "jump-ranger",
+    "baseName": "jump",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'jump-ranger' (base: 'jump')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "light-cleric",
+    "baseName": "light",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'light-cleric' (base: 'light')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "longstrider",
+    "baseName": "longstrider",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'longstrider' (base: 'longstrider')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "longstrider-druid",
+    "baseName": "longstrider",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'longstrider-druid' (base: 'longstrider')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "longstrider-ranger",
+    "baseName": "longstrider",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'longstrider-ranger' (base: 'longstrider')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "mage-armor",
+    "baseName": "mage-armor",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'mage-armor' (base: 'mage-armor')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "mending-cleric",
+    "baseName": "mending",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'mending-cleric' (base: 'mending')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "mending-druid",
+    "baseName": "mending",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'mending-druid' (base: 'mending')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "poison-spray",
+    "baseName": "poison-spray",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'poison-spray' (base: 'poison-spray')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "poison-spray-druid",
+    "baseName": "poison-spray",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'poison-spray-druid' (base: 'poison-spray')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "produce-flame",
+    "baseName": "produce-flame",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'produce-flame' (base: 'produce-flame')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "protection-from-evil-and-good",
+    "baseName": "protection-from-evil-and-good",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'protection-from-evil-and-good' (base: 'protection-from-evil-and-good')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "protection-from-evil-and-good-cleric",
+    "baseName": "protection-from-evil-and-good",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'protection-from-evil-and-good-cleric' (base: 'protection-from-evil-and-good')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "protection-from-evil-and-good-paladin",
+    "baseName": "protection-from-evil-and-good",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'protection-from-evil-and-good-paladin' (base: 'protection-from-evil-and-good')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "purify-food-and-drink",
+    "baseName": "purify-food-and-drink",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'purify-food-and-drink' (base: 'purify-food-and-drink')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "purify-food-and-drink-druid",
+    "baseName": "purify-food-and-drink",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'purify-food-and-drink-druid' (base: 'purify-food-and-drink')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "purify-food-and-drink-paladin",
+    "baseName": "purify-food-and-drink",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'purify-food-and-drink-paladin' (base: 'purify-food-and-drink')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "resistance",
+    "baseName": "resistance",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'resistance' (base: 'resistance')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "resistance-druid",
+    "baseName": "resistance",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'resistance-druid' (base: 'resistance')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "sanctuary",
+    "baseName": "sanctuary",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'sanctuary' (base: 'sanctuary')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "shield",
+    "baseName": "shield",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'shield' (base: 'shield')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "shield-of-faith",
+    "baseName": "shield-of-faith",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'shield-of-faith' (base: 'shield-of-faith')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "spare-the-dying",
+    "baseName": "spare-the-dying",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'spare-the-dying' (base: 'spare-the-dying')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "speak-with-animals-druid",
+    "baseName": "speak-with-animals",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'speak-with-animals-druid' (base: 'speak-with-animals')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "speak-with-animals-ranger",
+    "baseName": "speak-with-animals",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'speak-with-animals-ranger' (base: 'speak-with-animals')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "tensers-floating-disk",
+    "baseName": "tensers-floating-disk",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'tensers-floating-disk' (base: 'tensers-floating-disk')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "thaumaturgy",
+    "baseName": "thaumaturgy",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'thaumaturgy' (base: 'thaumaturgy')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "thorn-whip",
+    "baseName": "thorn-whip",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'thorn-whip' (base: 'thorn-whip')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "thunderwave-druid",
+    "baseName": "thunderwave",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'thunderwave-druid' (base: 'thunderwave')",
+    "queryMethod": "base_name_fallback"
+  },
+  {
+    "kebabId": "unseen-servant",
+    "baseName": "unseen-servant",
+    "dbUuid": null,
+    "status": "not_found",
+    "error": "No spell found for 'unseen-servant' (base: 'unseen-servant')",
+    "queryMethod": "base_name_fallback"
+  }
+]
