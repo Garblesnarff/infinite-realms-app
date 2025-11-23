@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getBearerToken, AuthTokenPayload } from '../lib/jwt.js';
-import { verifySupabaseToken, createPgClient } from '../../../src/infrastructure/database/index.js';
+import { verifyWorkOSToken } from '../services/workos.js';
+import { createPgClient } from '../../../src/infrastructure/database/index.js';
 
 declare global {
   namespace Express {
@@ -44,15 +45,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const supabaseUser = await verifySupabaseToken(token);
-    if (!supabaseUser) {
+    const workosUser = await verifyWorkOSToken(token);
+    if (!workosUser) {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
-    const plan = await resolveUserPlan(supabaseUser.userId, req);
+    const plan = await resolveUserPlan(workosUser.userId, req);
     req.user = {
-      userId: supabaseUser.userId,
-      email: supabaseUser.email,
+      userId: workosUser.userId,
+      email: workosUser.email,
       plan,
     } as AuthTokenPayload;
     next();
