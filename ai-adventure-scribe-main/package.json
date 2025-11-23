@@ -90,6 +90,8 @@
     "@trpc/client": "^11.7.1",
     "@trpc/react-query": "^11.7.1",
     "@trpc/server": "^11.7.1",
+    "@workos-inc/authkit-react": "^0.13.0",
+    "@workos-inc/node": "^7.74.1",
     "bcryptjs": "^2.4.3",
     "caniuse-lite": "^1.0.30001713",
     "class-variance-authority": "^0.7.1",

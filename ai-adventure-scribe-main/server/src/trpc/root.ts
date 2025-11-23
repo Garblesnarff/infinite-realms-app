@@ -21,6 +21,7 @@
  */
 
 import { router } from './trpc.js';
+import { authRouter } from './routers/auth.js';
 import { blogRouter } from './routers/blog.js';
 import { scenesRouter } from './routers/scenes.js';
 import { tokensRouter } from './routers/tokens.js';
@@ -36,6 +37,7 @@ import { visionBlockersRouter } from './routers/vision-blockers.js';
  * Combines all feature routers
  *
  * Active routers:
+ * - auth: WorkOS AuthKit authentication and user management
  * - blog: Blog CMS operations
  * - scenes: Scene/map management for Foundry VTT-style virtual tabletop
  * - tokens: Token management for Foundry VTT-style virtual tabletop
@@ -47,12 +49,12 @@ import { visionBlockersRouter } from './routers/vision-blockers.js';
  * - visionBlockers: Vision-blocking shapes (walls, doors, windows, terrain)
  *
  * Future routers to be added:
- * - auth: Authentication and user management
  * - campaign: Campaign CRUD operations
  * - session: Game session handling
  * - ai: AI Dungeon Master interactions
  */
 export const appRouter = router({
+  auth: authRouter,
   blog: blogRouter,
   scenes: scenesRouter,
   tokens: tokensRouter,
@@ -62,7 +64,6 @@ export const appRouter = router({
   characterFolders: characterFoldersRouter,
   fogOfWar: fogOfWarRouter,
   visionBlockers: visionBlockersRouter,
-  // Future routers will be added here as they are created
 });
 
 /**

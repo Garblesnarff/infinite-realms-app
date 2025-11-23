@@ -14,6 +14,9 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
+//
+// Note: This client is used for database and storage operations only.
+// Authentication is handled by WorkOS AuthKit.
 
 export const supabase = createClient<Database>(
   SUPABASE_URL || '',

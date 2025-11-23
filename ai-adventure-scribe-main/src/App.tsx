@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { lazy, Suspense } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -9,6 +8,7 @@ import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
 import ProtectedRoute from './features/auth/components/ProtectedRoute';
 import { useTelemetry } from './hooks/use-telemetry';
+import { TRPCProvider } from './lib/trpc/Provider';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
 import Breadcrumbs from './shared/components/layout/breadcrumbs';
 import Navigation from './shared/components/layout/navigation';
@@ -18,6 +18,7 @@ import { RouteLoading } from './shared/components/RouteLoading';
 const Index = lazy(() => import('./pages/Index'));
 const Landing = lazy(() => import('./pages/Landing'));
 const LaunchPage = lazy(() => import('./pages/LaunchPage'));
+const CallbackPage = lazy(() => import('./features/auth/components/CallbackPage'));
 const DiceTest = lazy(() => import('./pages/DiceTest'));
 const CharacterSheet = lazy(() => import('./features/character/components/sheet/character-sheet'));
 const CharacterList = lazy(() => import('./features/character/components/list/character-list'));
@@ -38,19 +39,6 @@ const BattleMapPage = lazy(() => import('./pages/BattleMapPage'));
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;
 
 /**
- * Create a new QueryClient instance
- * This will be used to manage and cache all React Query operations
- */
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // Data is considered fresh for 5 minutes
-      retry: 1, // Only retry failed requests once
-    },
-  },
-});
-
-/**
  * Main App component
  * Provides routing and global providers for the application
  */
@@ -63,8 +51,8 @@ function App() {
   return (
     <ErrorBoundary level="app">
       <HelmetProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
+        <AuthProvider>
+          <TRPCProvider>
             <CharacterProvider>
               <CampaignProvider>
                 <Router
@@ -73,7 +61,7 @@ function App() {
                     v7_relativeSplatPath: true,
                   }}
                 >
-                  <div className="min-h-screen">
+                <div className="min-h-screen">
                     {/* Skip to content for keyboard users */}
                     <a
                       href="#main-content"
@@ -98,6 +86,16 @@ function App() {
                         element={
                           <Suspense fallback={<RouteLoading />}>
                             <Landing />
+                          </Suspense>
+                        }
+                      />
+
+                      {/* OAuth callback route for WorkOS */}
+                      <Route
+                        path="/auth/callback"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <CallbackPage />
                           </Suspense>
                         }
                       />
@@ -207,8 +205,8 @@ function App() {
                 </Router>
               </CampaignProvider>
             </CharacterProvider>
-          </AuthProvider>
-        </QueryClientProvider>
+          </TRPCProvider>
+        </AuthProvider>
       </HelmetProvider>
     </ErrorBoundary>
   );

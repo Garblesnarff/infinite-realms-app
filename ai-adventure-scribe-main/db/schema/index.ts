@@ -5,6 +5,9 @@
  * This file serves as the single entry point for all schema definitions.
  */
 
+// Export all user tables and types
+export * from './users.js';
+
 // Export all blog tables and types
 export * from './blog.js';
 

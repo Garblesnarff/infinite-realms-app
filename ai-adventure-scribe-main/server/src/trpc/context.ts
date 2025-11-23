@@ -2,7 +2,7 @@
  * tRPC Context
  *
  * Creates the context for each tRPC request, including:
- * - Authenticated user information from Supabase tokens
+ * - Authenticated user information from WorkOS tokens
  * - Drizzle database client for type-safe queries
  * - Express request and response objects
  *
@@ -12,10 +12,11 @@
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { db } from '../../../db/client.js';
 import { getBearerToken } from '../lib/jwt.js';
-import { verifySupabaseToken, createPgClient } from '../../../src/infrastructure/database/index.js';
+import { verifyWorkOSToken } from '../services/workos.js';
+import { createPgClient } from '../../../src/infrastructure/database/index.js';
 
 /**
- * Authenticated user payload extracted from Supabase token
+ * Authenticated user payload extracted from WorkOS token
  */
 export interface AuthUser {
   userId: string;
@@ -69,7 +70,7 @@ async function resolveUserPlan(
 
 /**
  * Creates context for tRPC requests
- * Extracts and validates Supabase auth token if present
+ * Extracts and validates WorkOS auth token if present
  */
 export async function createContext({ req, res }: CreateExpressContextOptions) {
   // Extract bearer token from Authorization header
@@ -80,12 +81,12 @@ export async function createContext({ req, res }: CreateExpressContextOptions) {
   // Attempt to authenticate user if token is present
   if (token) {
     try {
-      const supabaseUser = await verifySupabaseToken(token);
-      if (supabaseUser) {
-        const plan = await resolveUserPlan(supabaseUser.userId, req.headers);
+      const workosUser = await verifyWorkOSToken(token);
+      if (workosUser) {
+        const plan = await resolveUserPlan(workosUser.userId, req.headers);
         user = {
-          userId: supabaseUser.userId,
-          email: supabaseUser.email,
+          userId: workosUser.userId,
+          email: workosUser.email,
           plan,
         };
       }

@@ -64,42 +64,17 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           // Only split out the largest dependencies to keep chunks manageable
           if (id.includes('node_modules')) {
-            // React ecosystem (core framework)
-            if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('scheduler')) {
-              return 'react-vendor';
-            }
-
-            // 3D Graphics (very large - ~700KB)
+            // 3D Graphics (very large - ~700KB) - safe to split as it has no React deps
             if (id.includes('three')) {
               return 'three';
             }
 
-            // Supabase (auth & database)
-            if (id.includes('@supabase')) {
-              return 'supabase';
-            }
-
-            // Radix UI components (many small components loaded conditionally)
-            if (id.includes('@radix-ui')) {
-              return 'radix-ui';
-            }
-
-            // Icons (large icon library)
-            if (id.includes('lucide-react')) {
-              return 'icons';
-            }
-
-            // Audio libraries
+            // Audio libraries - safe to split as standalone
             if (id.includes('howler')) {
               return 'audio';
             }
 
-            // TanStack Query
-            if (id.includes('@tanstack')) {
-              return 'query';
-            }
-
-            // Everything else in vendor
+            // Everything else stays together to avoid dependency issues
             return 'vendor';
           }
           return undefined;

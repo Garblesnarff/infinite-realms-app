@@ -8,18 +8,30 @@ import React, {
   useState,
 } from 'react';
 
-import type { User, Session, AuthError, SupabaseClient } from '@supabase/supabase-js';
-
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { trpc } from '@/lib/trpc/client';
 import { addNetworkListener, isOffline } from '@/utils/network';
 
 export type BlogRole = 'admin' | 'editor' | 'author' | 'contributor' | 'viewer';
 export type UserPlan = 'free' | 'pro' | 'enterprise';
 
+// WorkOS User type (compatible with existing code)
+interface WorkOSUser {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+}
+
+// WorkOS Session type (simplified, compatible with access_token usage)
+interface WorkOSSession {
+  access_token: string;
+  refresh_token?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: WorkOSUser | null;
+  session: WorkOSSession | null;
   loading: boolean;
   blogRole: BlogRole | null;
   blogRoleLoading: boolean;
@@ -28,32 +40,51 @@ interface AuthContextType {
   userPlan: UserPlan | null;
   userPlanLoading: boolean;
   refreshUserPlan: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
-const SESSION_STORAGE_KEY = 'aas_supabase_cached_session';
+const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const loadCachedSession = (): Session | null => {
+const loadCachedSession = (): WorkOSSession | null => {
   if (typeof window === 'undefined') return null;
+
+  // Check for tokens in localStorage (set by CallbackPage)
+  const accessToken = window.localStorage.getItem('workos_access_token');
+  const refreshToken = window.localStorage.getItem('workos_refresh_token');
+
+  if (accessToken) {
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken || undefined,
+    };
+  }
+
+  // Fallback to old cached session
   const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Session;
+    return JSON.parse(raw) as WorkOSSession;
   } catch (error) {
     logger.warn('Failed to parse cached session', error);
     return null;
   }
 };
 
-const persistSession = (session: Session | null) => {
+const persistSession = (session: WorkOSSession | null) => {
   if (typeof window === 'undefined') return;
   if (session) {
+    window.localStorage.setItem('workos_access_token', session.access_token);
+    if (session.refresh_token) {
+      window.localStorage.setItem('workos_refresh_token', session.refresh_token);
+    }
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } else {
+    window.localStorage.removeItem('workos_access_token');
+    window.localStorage.removeItem('workos_refresh_token');
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
   }
 };
@@ -67,8 +98,8 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<WorkOSUser | null>(null);
+  const [session, setSession] = useState<WorkOSSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [blogRole, setBlogRole] = useState<BlogRole | null>(null);
   const [blogRoleLoading, setBlogRoleLoading] = useState(false);
@@ -76,21 +107,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userPlanLoading, setUserPlanLoading] = useState(false);
   const hasBootstrapped = useRef(false);
 
-  const setAuthState = useMemo(
-    () => (nextSession: Session | null) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      persistSession(nextSession);
+  // Load session and verify on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      setLoading(true);
+      const cachedSession = loadCachedSession();
 
-      if (!nextSession?.user) {
-        setBlogRole(null);
-        setBlogRoleLoading(false);
-        setUserPlan(null);
-        setUserPlanLoading(false);
+      if (!cachedSession) {
+        setLoading(false);
+        return;
       }
-    },
-    [],
-  );
+
+      try {
+        // Verify token and get user data from backend
+        const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+        const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
+          headers: {
+            Authorization: `Bearer ${cachedSession.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          // Token invalid, clear session
+          persistSession(null);
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        const userData = data.result?.data;
+
+        if (userData) {
+          setSession(cachedSession);
+          setUser({
+            id: userData.id,
+            email: userData.email,
+            firstName: userData.firstName || null,
+            lastName: userData.lastName || null,
+          });
+        }
+      } catch (error) {
+        logger.error('Error verifying session:', error);
+        persistSession(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+  }, []);
+
+  // Persist session to localStorage
+  useEffect(() => {
+    persistSession(session);
+  }, [session]);
+
+  // Clear blog role and user plan when user logs out
+  useEffect(() => {
+    if (!user) {
+      setBlogRole(null);
+      setBlogRoleLoading(false);
+      setUserPlan(null);
+      setUserPlanLoading(false);
+    }
+  }, [user]);
 
   const fetchBlogRole = useCallback(async () => {
     if (!user) {
@@ -133,13 +216,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const client = supabase as SupabaseClient<any, any, any>;
-      // Use RPC that encapsulates role resolution across profiles/authors instead of querying a table directly
-      const { data, error } = await client.rpc('blog_role_for_user', { p_user_id: user.id });
-
-      if (error) throw error;
-
-      setBlogRole((data as BlogRole | null) ?? null);
+      // TODO: Implement blog role fetching via tRPC or API call
+      // For now, default to null
+      setBlogRole(null);
     } catch (error) {
       logger.warn('Failed to load blog role', error);
       setBlogRole(null);
@@ -162,7 +241,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUserPlanLoading(true);
     try {
-      const response = await fetch('http://localhost:8888/v1/llm/quota', {
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const response = await fetch(`${apiUrl}/v1/llm/quota`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
@@ -184,112 +264,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, session]);
 
   useEffect(() => {
-    // Get initial session
-    const bootstrapSession = async () => {
-      if (hasBootstrapped.current) return;
-      hasBootstrapped.current = true;
-
-      if (isOffline()) {
-        const cached = loadCachedSession();
-        if (cached) {
-          setAuthState(cached);
-        }
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        logger.error('Error getting session:', error);
-        const cached = loadCachedSession();
-        if (cached) {
-          setAuthState(cached);
-        }
-      } else {
-        setAuthState(data.session ?? null);
-      }
-      setLoading(false);
-    };
-
-    bootstrapSession();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event !== 'INITIAL_SESSION') {
-        logger.info('Auth state changed:', { event, hasSession: !!session });
-      }
-      setAuthState(session ?? null);
-      setLoading(false);
-    });
-
-    const disposers: Array<() => void> = [() => subscription.unsubscribe()];
-
-    const handleOnline = async () => {
-      logger.info('Network status: online - syncing Supabase session');
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        logger.error('Error refreshing session after reconnect:', error);
-        return;
-      }
-      setAuthState(data.session ?? null);
-    };
-
-    const handleOffline = () => {
-      logger.info('Network status: offline - using cached session');
-      const cached = loadCachedSession();
-      if (cached) {
-        setAuthState(cached);
-      }
-    };
-
-    disposers.push(addNetworkListener('online', handleOnline));
-    disposers.push(addNetworkListener('offline', handleOffline));
-
-    return () => {
-      disposers.forEach((dispose) => dispose());
-    };
-  }, []);
-
-  useEffect(() => {
     if (!user) return;
     fetchBlogRole();
-    // Recompute role only when user.id changes, not when fetchBlogRole reference changes
   }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
     fetchUserPlan();
-    // Recompute plan only when user.id or session changes
   }, [user?.id, session?.access_token]);
 
+  // WorkOS uses hosted UI - these functions redirect to WorkOS
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    return { error };
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    window.location.href = `${apiUrl}/v1/auth/login`;
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    return { error };
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    window.location.href = `${apiUrl}/v1/auth/login`;
+    return { error: null };
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
+    try {
+      persistSession(null);
+      setSession(null);
+      setUser(null);
+      window.location.href = '/';
+    } catch (error) {
       logger.error('Error signing out:', error);
     }
-    setAuthState(null);
-    setLoading(false);
   };
 
   const value = {
