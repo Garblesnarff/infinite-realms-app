@@ -103,29 +103,6 @@ export const FooterSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Newsletter Signup */}
-        <div className="border-t border-gray-800 pt-12 mb-12">
-          <div className="max-w-2xl mx-auto text-center">
-            <h4 className="text-xl font-semibold text-white mb-4">Stay Updated</h4>
-            <p className="text-gray-400 mb-6">
-              Get notified when beta access opens and receive development updates.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="your.email@example.com"
-                className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 transition-colors"
-              />
-              <Button className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300">
-                Subscribe
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500 mt-3">
-              Unsubscribe at any time. We respect your privacy.
-            </p>
-          </div>
-        </div>
-
         {/* Bottom Bar */}
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">

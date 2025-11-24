@@ -140,9 +140,9 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
   };
 
   const inputClasses = {
-    hero: 'text-lg py-4 px-6',
-    section: 'py-3 px-4',
-    modal: 'py-3 px-4',
+    hero: 'h-16 text-lg px-6 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
+    section: 'h-14 text-lg px-4 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
+    modal: 'h-14 text-lg px-4 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
   };
 
   return (
@@ -224,12 +224,10 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
           type="submit"
           disabled={status === 'loading' || status === 'success'}
           className={`
-            w-full ${inputClasses[variant]} font-semibold transition-all duration-300
-            ${
-              variant === 'hero'
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-900 shadow-lg hover:shadow-xl'
-                : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white'
-            }
+            w-full h-14 text-xl font-bold transition-all duration-300
+            bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500
+            text-white shadow-[0_0_30px_rgba(251,191,36,0.3)] hover:shadow-[0_0_40px_rgba(251,191,36,0.5)]
+            hover:scale-[1.02]
           `}
         >
           {status === 'loading' && (

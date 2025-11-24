@@ -21,9 +21,7 @@ import { FinalCTASection } from '@/components/launch/FinalCTASection';
 import { FooterSection } from '@/components/launch/FooterSection';
 import { FounderStorySection } from '@/components/launch/FounderStorySection';
 import { HeroSection } from '@/components/launch/HeroSection';
-import { HowItWorksSection } from '@/components/launch/HowItWorksSection';
 import { RoadmapSection } from '@/components/launch/RoadmapSection';
-import { TeamSection } from '@/components/launch/TeamSection';
 import { VisionSection } from '@/components/launch/VisionSection';
 
 /**
@@ -108,18 +106,6 @@ const LaunchPage: React.FC = () => {
 
         {/* Features Section - What We're Building */}
         <FeaturesSection />
-
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
-
-        {/* How It Works - Beta Journey */}
-        <HowItWorksSection />
-
-        {/* Gradient Transition */}
-        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
-
-        {/* Team Section - Personal Connection */}
-        <TeamSection />
 
         {/* Gradient Transition */}
         <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>

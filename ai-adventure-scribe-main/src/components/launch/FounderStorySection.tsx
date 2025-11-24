@@ -1,5 +1,6 @@
 import React from 'react';
 import { Hammer, Clock, Heart } from 'lucide-react';
+import { Twitter } from 'lucide-react';
 
 export const FounderStorySection: React.FC = () => {
   return (
@@ -9,10 +10,10 @@ export const FounderStorySection: React.FC = () => {
         <img
           src="/founder-bg.jpg"
           alt="Industrial background"
-          className="w-full h-full object-cover opacity-10"
+          className="w-full h-full object-cover opacity-20"
         />
-        {/* Additional dark overlay for grittiness */}
-        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/90 to-gray-900"></div>
+        {/* Reduced overlay opacity so texture shows through */}
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/60 via-gray-900/70 to-gray-900/80"></div>
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
@@ -46,15 +47,27 @@ export const FounderStorySection: React.FC = () => {
               </p>
 
               {/* Signature Section with Script Font */}
-              <div className="pt-8 flex items-center gap-4 border-t border-gray-700/50 mt-8">
-                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg">
-                  R
+              <div className="pt-8 border-t border-gray-700/50 mt-8">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg">
+                    R
+                  </div>
+                  <div>
+                    {/* Handwritten Signature - Using Dancing Script font */}
+                    <p className="text-amber-400 text-4xl font-dancing mb-1">Rob</p>
+                    <p className="text-purple-400 text-sm">Creator, Infinite Realms</p>
+                  </div>
                 </div>
-                <div>
-                  {/* Handwritten Signature - Using Dancing Script font */}
-                  <p className="text-amber-400 text-4xl font-dancing mb-1">Rob</p>
-                  <p className="text-purple-400 text-sm">Creator, Infinite Realms</p>
-                </div>
+                {/* X/Twitter Link */}
+                <a
+                  href="https://x.com/printedpathways"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-gray-300 hover:text-purple-400 transition-colors"
+                >
+                  <Twitter className="w-5 h-5" />
+                  <span className="text-sm">@printedpathways</span>
+                </a>
               </div>
             </div>
           </div>
