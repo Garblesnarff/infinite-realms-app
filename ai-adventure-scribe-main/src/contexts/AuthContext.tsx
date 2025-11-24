@@ -311,12 +311,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const accessToken = session?.access_token;
+
+      // Clear local session first
       persistSession(null);
       setSession(null);
       setUser(null);
+
+      // Extract session ID from JWT token
+      if (accessToken) {
+        try {
+          // Decode JWT (format: header.payload.signature)
+          const parts = accessToken.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            const sessionId = payload.sid;
+
+            if (sessionId) {
+              // Redirect to backend logout endpoint which will redirect to WorkOS
+              window.location.href = `${apiUrl}/v1/auth/logout?session_id=${sessionId}`;
+              return;
+            }
+          }
+        } catch (decodeError) {
+          logger.warn('Failed to decode token for logout:', decodeError);
+        }
+      }
+
+      // Fallback: if no session or decode fails, just redirect home
       window.location.href = '/';
     } catch (error) {
       logger.error('Error signing out:', error);
+      window.location.href = '/';
     }
   };
 

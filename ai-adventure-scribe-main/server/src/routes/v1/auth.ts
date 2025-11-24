@@ -89,5 +89,37 @@ export default function authRouter() {
     }
   });
 
+  /**
+   * Sign out and clear WorkOS session
+   * GET /v1/auth/logout
+   */
+  router.get('/logout', async (req, res) => {
+    const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
+
+    try {
+      // Get session ID from query parameter (passed by frontend)
+      const sessionId = req.query.session_id as string;
+
+      if (!sessionId) {
+        console.warn('No session ID provided for logout');
+        res.redirect(frontendUrl);
+        return;
+      }
+
+      // Get WorkOS logout URL
+      const logoutUrl = workos.userManagement.getLogoutUrl({
+        sessionId,
+      });
+
+      // Redirect to WorkOS to terminate the session
+      // WorkOS will redirect back to the configured redirect URI in dashboard
+      res.redirect(logoutUrl);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Fallback: redirect to frontend anyway
+      res.redirect(frontendUrl);
+    }
+  });
+
   return router;
 }
