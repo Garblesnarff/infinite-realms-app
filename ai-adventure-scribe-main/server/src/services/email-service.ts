@@ -26,7 +26,7 @@ export async function sendWaitlistConfirmation(params: WaitlistEmailParams): Pro
     await resend.emails.send({
       from: 'Rob@infiniterealms.app',
       to: email,
-      subject: '🎲 Welcome to the Infinite Realms Waitlist!',
+      subject: '🎲 Your Party Awaits',
       html: getWaitlistEmailHTML(firstName),
       text: getWaitlistEmailText(firstName),
     });
@@ -48,22 +48,35 @@ function getWaitlistEmailHTML(firstName: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to Infinite Realms</title>
+  <title>Your Party Awaits</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f0f23; color: #e0e0e0;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #0f0f23;">
     <tr>
       <td align="center" style="padding: 40px 0;">
-        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #1a1a2e; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);">
+        <!-- Main Container -->
+        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #151525; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6); border: 1px solid #2a2a44;">
 
-          <!-- Header with gradient -->
+          <!-- Header with Mystical Gradient -->
           <tr>
-            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-              <h1 style="margin: 0; font-size: 32px; font-weight: bold; color: #ffffff; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);">
-                🎲 Infinite Realms
+            <td style="background: linear-gradient(180deg, #2e1065 0%, #0f0f23 100%); padding: 40px 30px; text-align: center; border-bottom: 1px solid #3b0764;">
+              <!-- Logo / Emoji Icon -->
+              <div style="font-size: 48px; margin-bottom: 10px;">🎲</div>
+              <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase;">
+                Infinite Realms
               </h1>
-              <p style="margin: 10px 0 0; font-size: 16px; color: #f0e6ff;">
-                AI-Powered D&D Adventures
+              <p style="margin: 8px 0 0; font-size: 14px; color: #d8b4fe; font-weight: 500; letter-spacing: 1px; text-transform: uppercase;">
+                The Campaign That Never Cancels
               </p>
             </td>
           </tr>
@@ -71,54 +84,70 @@ function getWaitlistEmailHTML(firstName: string): string {
           <!-- Main Content -->
           <tr>
             <td style="padding: 40px 30px;">
-              <h2 style="margin: 0 0 20px; font-size: 24px; color: #ffffff; font-weight: 600;">
-                Hey ${firstName}! 👋
+
+              <!-- Personal Greeting -->
+              <h2 style="margin: 0 0 20px; font-size: 22px; color: #ffffff; font-weight: 700;">
+                Welcome to the Party, ${firstName}! ⚔️
               </h2>
 
-              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #b8b8d0;">
-                You're officially on the waitlist for <strong style="color: #8b7fe6;">Infinite Realms</strong> — the AI-powered platform that brings your D&D adventures to life like never before.
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #cbd5e1;">
+                You're officially on the Founder's Waitlist.
               </p>
 
-              <div style="background-color: #252540; border-left: 4px solid #667eea; padding: 20px; margin: 30px 0; border-radius: 6px;">
-                <h3 style="margin: 0 0 15px; font-size: 18px; color: #ffffff; font-weight: 600;">
-                  ✨ What to Expect
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #cbd5e1;">
+                I'm Rob. I'm building Infinite Realms for a simple reason: <strong>I always wanted to play, but never could.</strong>
+              </p>
+
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #cbd5e1;">
+                 Between 10-hour factory shifts and general life chaos, getting a group together was impossible. I spent years watching Actual Plays from the sidelines. So, I spent the last 3 years teaching AI how to be the perfect 5e Game Master, one that knows the rules, does the voices, and is ready to play whenever you finally get a free moment.
+              </p>
+
+              <!-- The "Loot" Box (Darker background) -->
+              <div style="background-color: #0f0f23; border: 1px solid #3b0764; padding: 25px; margin: 30px 0; border-radius: 8px;">
+                <h3 style="margin: 0 0 15px; font-size: 16px; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                  ✨ Your Waitlist Perks
                 </h3>
-                <ul style="margin: 0; padding-left: 20px; color: #b8b8d0; line-height: 1.8;">
-                  <li>Early access when we launch</li>
-                  <li>Behind-the-scenes development updates</li>
-                  <li>Exclusive beta testing opportunities</li>
-                  <li>Special launch pricing for waitlist members</li>
+                <ul style="margin: 0; padding-left: 20px; color: #e2e8f0; line-height: 1.8; font-size: 15px;">
+                  <li style="margin-bottom: 8px;">Priority access to the Beta (Coming Soon)</li>
+                  <li style="margin-bottom: 8px;">Founder's Badge on your profile</li>
+                  <li style="margin-bottom: 8px;">Grandfathered pricing when we launch</li>
                 </ul>
               </div>
 
-              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #b8b8d0;">
-                We're building something magical, and I can't wait to have you as part of this journey. Follow along on <a href="https://x.com/infiniterealms" style="color: #8b7fe6; text-decoration: none; font-weight: 600;">X (@infiniterealms)</a> for the latest updates and sneak peeks!
-              </p>
-
-              <div style="margin: 30px 0; text-align: center;">
-                <a href="https://infiniterealms.app" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-                  Visit Infinite Realms
+              <!-- CTA Button (Gold for high conversion) -->
+              <div style="margin: 35px 0; text-align: center;">
+                <a href="https://infiniterealms.app/app" style="display: inline-block; padding: 16px 36px; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3); border: 1px solid #f59e0b;">
+                  Check Development Status
                 </a>
               </div>
 
-              <p style="margin: 30px 0 0; font-size: 16px; line-height: 1.6; color: #b8b8d0;">
-                Thanks for believing in the vision,<br>
-                <strong style="color: #8b7fe6;">Rob</strong><br>
-                <span style="font-size: 14px; color: #7a7a95;">Founder, Infinite Realms</span>
+              <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #94a3b8;">
+                I'll be sending updates as we get closer to launch. I don't spam, I only email when there's something cool to show you.
               </p>
+
+              <p style="margin: 30px 0 0; font-size: 16px; line-height: 1.6; color: #cbd5e1;">
+                See you in the dungeon,<br>
+                <strong style="color: #fbbf24;">Rob Hanson</strong><br>
+                <span style="font-size: 14px; color: #94a3b8;">Creator, Infinite Realms</span>
+              </p>
+
+              <!-- The P.S. (Honest & Useful) -->
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #2a2a44; font-size: 14px; color: #94a3b8; font-style: italic;">
+                P.S. I'm currently creating the Pre-Made character library for the beta launch. To help me prioritize the most popular ones: <strong>What class do you usually play?</strong> Hit reply and let me know so I can make sure your favorite is ready on Day 1!
+              </div>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="background-color: #16162e; padding: 30px; text-align: center; border-top: 1px solid #2a2a44;">
-              <p style="margin: 0 0 10px; font-size: 14px; color: #7a7a95;">
-                Follow us:
-                <a href="https://x.com/infiniterealms" style="color: #8b7fe6; text-decoration: none; font-weight: 600;">X</a> ·
-                <a href="https://infiniterealms.app" style="color: #8b7fe6; text-decoration: none; font-weight: 600;">Website</a>
+            <td style="background-color: #0f0f23; padding: 30px; text-align: center; border-top: 1px solid #1e1e32;">
+              <p style="margin: 0 0 15px; font-size: 14px; color: #64748b;">
+                <a href="https://x.com/printedpathways" style="color: #a78bfa; text-decoration: none; font-weight: 600;">Follow on X</a> ·
+                <a href="https://infiniterealms.app" style="color: #a78bfa; text-decoration: none; font-weight: 600;">Visit Website</a>
               </p>
-              <p style="margin: 0; font-size: 12px; color: #5a5a75;">
-                © 2025 Infinite Realms. All rights reserved.
+              <p style="margin: 0; font-size: 12px; color: #475569;">
+                © 2025 Infinite Realms. Barron, WI.<br>
+                You received this because you signed up for the beta.
               </p>
             </td>
           </tr>
@@ -137,26 +166,34 @@ function getWaitlistEmailHTML(firstName: string): string {
  */
 function getWaitlistEmailText(firstName: string): string {
   return `
-Hey ${firstName}! 👋
+Welcome to the Party, ${firstName}! ⚔️
 
-You're officially on the waitlist for Infinite Realms — the AI-powered platform that brings your D&D adventures to life like never before.
+You're officially on the Founder's Waitlist.
 
-✨ What to Expect:
-- Early access when we launch
-- Behind-the-scenes development updates
-- Exclusive beta testing opportunities
-- Special launch pricing for waitlist members
+I'm Rob. I'm building Infinite Realms for a simple reason: I always wanted to play, but never could.
 
-We're building something magical, and I can't wait to have you as part of this journey. Follow along on X (@infiniterealms) for the latest updates and sneak peeks!
+Between 10-hour factory shifts and general life chaos, getting a group together was impossible. I spent years watching Actual Plays from the sidelines. So, I spent the last 3 years teaching AI how to be the perfect 5e Game Master, one that knows the rules, does the voices, and is ready to play whenever you finally get a free moment.
 
-Visit us: https://infiniterealms.app
-Follow us on X: https://x.com/infiniterealms
+✨ Your Waitlist Perks:
+- Priority access to the Beta (Coming Soon)
+- Founder's Badge on your profile
+- Grandfathered pricing when we launch
 
-Thanks for believing in the vision,
-Rob
-Founder, Infinite Realms
+👉 Check Development Status: https://infiniterealms.app/app
+
+I'll be sending updates as we get closer to launch. I don't spam, I only email when there's something cool to show you.
+
+See you in the dungeon,
+Rob Hanson
+Creator, Infinite Realms
+
+P.S. I'm currently creating the Pre-Made character library for the beta launch. To help me prioritize the most popular ones: What class do you usually play? Hit reply and let me know so I can make sure your favorite is ready on Day 1!
 
 ---
-© 2025 Infinite Realms. All rights reserved.
+Follow on X: https://x.com/printedpathways
+Visit Website: https://infiniterealms.app
+
+© 2025 Infinite Realms. Barron, WI.
+You received this because you signed up for the beta.
   `.trim();
 }
