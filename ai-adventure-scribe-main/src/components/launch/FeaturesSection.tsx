@@ -17,17 +17,17 @@ export const FeaturesSection: React.FC = () => {
    * Map features to background images
    */
   const getFeatureImage = (index: number, title: string) => {
-    // Alternate between story and NPC images based on feature type
-    const lowerTitle = title.toLowerCase();
+    // Map each feature to its unique image
+    const imageMap: Record<string, string> = {
+      'Stories That Remember You': '/feature-statue.jpg',
+      'Living Fantasy Worlds': '/feature-world.jpg',
+      'NPCs With Real Memory': '/feature-npc.jpg',
+      'Seamless D&D Rules': '/feature-rules.jpg',
+      'Immersive Voice Acting': '/feature-voice.jpg',
+      'Your Campaign as a Book': '/feature-story.jpg',
+    };
 
-    if (lowerTitle.includes('story') || lowerTitle.includes('narrative') || lowerTitle.includes('campaign')) {
-      return '/feature-story.jpg';
-    } else if (lowerTitle.includes('npc') || lowerTitle.includes('character') || lowerTitle.includes('party')) {
-      return '/feature-npc.jpg';
-    }
-
-    // Alternate for other features
-    return index % 2 === 0 ? '/feature-story.jpg' : '/feature-npc.jpg';
+    return imageMap[title] || '/feature-story.jpg';
   };
 
   /**
