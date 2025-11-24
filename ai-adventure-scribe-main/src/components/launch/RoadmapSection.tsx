@@ -83,9 +83,13 @@ export const RoadmapSection: React.FC = () => {
                       <div className="flex items-start gap-4">
                         {/* Phase Number - Aligned to top */}
                         <div
-                          className={`w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-gray-900 text-xl font-bold ${phase.status === 'current' ? 'bg-gradient-to-br from-amber-400 to-amber-600' : 'bg-gray-600'}`}
+                          className={`w-16 h-16 flex-shrink-0 rounded-full flex items-center justify-center text-2xl font-bold ${
+                            phase.status === 'current'
+                              ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-gray-900'
+                              : 'bg-gray-600 text-white'
+                          }`}
                         >
-                          {phase.phase}
+                          {phase.phase.replace('Phase ', '')}
                         </div>
 
                         {/* Phase Info */}
@@ -121,8 +125,8 @@ export const RoadmapSection: React.FC = () => {
                         <h4 className="text-lg font-semibold text-white mb-4">Key Features</h4>
                         <div className="flex flex-col gap-3">
                           {phase.features.map((feature, featureIndex) => (
-                            <div key={featureIndex} className="flex items-start gap-2">
-                              <div className={`w-2 h-2 rounded-full ${styling.icon} flex-shrink-0 mt-2`}></div>
+                            <div key={featureIndex} className="flex items-start gap-3">
+                              <span className={`${styling.icon} flex-shrink-0 text-lg leading-relaxed`}>•</span>
                               <span className="text-gray-300 text-sm leading-relaxed whitespace-normal">{feature}</span>
                             </div>
                           ))}

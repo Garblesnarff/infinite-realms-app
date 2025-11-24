@@ -140,9 +140,9 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
   };
 
   const inputClasses = {
-    hero: 'h-16 text-lg px-6 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
-    section: 'h-14 text-lg px-4 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
-    modal: 'h-14 text-lg px-4 border border-purple-400/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-gray-900/50',
+    hero: 'h-16 text-lg px-6 border border-purple-500/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/5 text-white placeholder:text-gray-400',
+    section: 'h-14 text-lg px-4 border border-purple-500/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/5 text-white placeholder:text-gray-400',
+    modal: 'h-14 text-lg px-4 border border-purple-500/30 focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white/5 text-white placeholder:text-gray-400',
   };
 
   return (
