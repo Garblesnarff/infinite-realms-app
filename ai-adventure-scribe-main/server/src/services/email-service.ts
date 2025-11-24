@@ -24,7 +24,7 @@ export async function sendWaitlistConfirmation(params: WaitlistEmailParams): Pro
 
   try {
     await resend.emails.send({
-      from: 'Rob@infiniterealms.com',
+      from: 'Rob@infiniterealms.app',
       to: email,
       subject: '🎲 Welcome to the Infinite Realms Waitlist!',
       html: getWaitlistEmailHTML(firstName),
