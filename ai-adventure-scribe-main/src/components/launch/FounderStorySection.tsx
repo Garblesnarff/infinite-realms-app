@@ -3,12 +3,23 @@ import { Hammer, Clock, Heart } from 'lucide-react';
 
 export const FounderStorySection: React.FC = () => {
   return (
-    <section className="py-24 bg-gray-900 relative">
-      <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 md:p-12 border border-purple-500/20 shadow-2xl relative overflow-hidden">
+    <section className="py-24 bg-gray-900 relative overflow-hidden">
+      {/* Background Texture Image */}
+      <div className="absolute inset-0">
+        <img
+          src="/founder-bg.jpg"
+          alt="Industrial background"
+          className="w-full h-full object-cover opacity-10"
+        />
+        {/* Additional dark overlay for grittiness */}
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/90 to-gray-900"></div>
+      </div>
 
-          {/* Background Decorative Elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+      <div className="container mx-auto px-4 relative z-10">
+        <div className="max-w-4xl mx-auto bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-2xl p-8 md:p-12 border border-purple-500/20 shadow-2xl backdrop-blur-sm">
+
+          {/* Decorative Elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
           <div className="relative z-10">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-8 flex items-center gap-3">
@@ -30,28 +41,18 @@ export const FounderStorySection: React.FC = () => {
                 I spent the last 3 years teaching AI how to be the Game Master I couldn't find—while still working those factory shifts. I didn't want a chatbot that hallucinates; I wanted a GM that knows the rules, does the voices, and remembers that tavern I burned down three sessions ago.
               </p>
 
-              <div className="flex items-center gap-4 py-4 border-t border-b border-gray-700/50 my-6">
-                <div className="flex flex-col gap-1">
-                   <span className="text-sm text-gray-400 uppercase tracking-wider">Mission</span>
-                   <span className="text-white font-medium">Democratize Adventure</span>
-                </div>
-                <div className="w-px h-10 bg-gray-700/50"></div>
-                <div className="flex flex-col gap-1">
-                   <span className="text-sm text-gray-400 uppercase tracking-wider">Status</span>
-                   <span className="text-amber-400 font-medium">Beta Ready</span>
-                </div>
-              </div>
-
-              <p>
+              <p className="text-xl text-white font-medium pt-4">
                 I built Infinite Realms so I could finally play. Now, I want you to play too.
               </p>
 
-              <div className="pt-4 flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xl text-white">
+              {/* Signature Section with Script Font */}
+              <div className="pt-8 flex items-center gap-4 border-t border-gray-700/50 mt-8">
+                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg">
                   R
                 </div>
                 <div>
-                  <p className="text-white font-bold">Rob Hanson</p>
+                  {/* Handwritten Signature - Using Dancing Script font */}
+                  <p className="text-amber-400 text-4xl font-dancing mb-1">Rob</p>
                   <p className="text-purple-400 text-sm">Creator, Infinite Realms</p>
                 </div>
               </div>
@@ -59,6 +60,14 @@ export const FounderStorySection: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Add Google Fonts for script signature */}
+      <style jsx>{`
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+        .font-dancing {
+          font-family: 'Dancing Script', cursive;
+        }
+      `}</style>
     </section>
   );
 };

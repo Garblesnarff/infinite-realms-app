@@ -1,22 +1,10 @@
 /**
- * Features Section - Planned Features with Status
+ * Features Section - Image-Based Feature Cards
  *
- * PURPOSE: Showcase what we're building with clear development status
- * Features: Status badges, future-oriented language, transparent roadmap
+ * PURPOSE: Showcase what we're building with epic fantasy imagery
+ * Features: Image backgrounds, status badges, heavy gradients for readability
  */
 
-import {
-  Brain,
-  Image,
-  Users,
-  BookOpen,
-  Mic,
-  Download,
-  Clock,
-  CheckCircle,
-  Wrench,
-  Zap,
-} from 'lucide-react';
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -26,22 +14,20 @@ export const FeaturesSection: React.FC = () => {
   const { features } = launchPageContent;
 
   /**
-   * Get icon component by name
+   * Map features to background images
    */
-  const getIcon = (iconName: string) => {
-    const icons = {
-      Brain,
-      Image,
-      Users,
-      BookOpen,
-      Mic,
-      Download,
-      Clock,
-      CheckCircle,
-      Wrench,
-      Zap,
-    };
-    return icons[iconName as keyof typeof icons] || Brain;
+  const getFeatureImage = (index: number, title: string) => {
+    // Alternate between story and NPC images based on feature type
+    const lowerTitle = title.toLowerCase();
+
+    if (lowerTitle.includes('story') || lowerTitle.includes('narrative') || lowerTitle.includes('campaign')) {
+      return '/feature-story.jpg';
+    } else if (lowerTitle.includes('npc') || lowerTitle.includes('character') || lowerTitle.includes('party')) {
+      return '/feature-npc.jpg';
+    }
+
+    // Alternate for other features
+    return index % 2 === 0 ? '/feature-story.jpg' : '/feature-npc.jpg';
   };
 
   /**
@@ -51,33 +37,23 @@ export const FeaturesSection: React.FC = () => {
     switch (status) {
       case 'in_development':
         return {
-          badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-          icon: 'text-purple-400',
-          bg: 'from-purple-900/40 to-gray-900/40 border-purple-500/20 hover:border-purple-500/40',
+          badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30 backdrop-blur-md',
         };
       case 'beta':
         return {
-          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-          icon: 'text-amber-400',
-          bg: 'from-amber-900/40 to-gray-900/40 border-amber-500/20 hover:border-amber-500/40',
+          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30 backdrop-blur-md',
         };
       case 'planned':
         return {
-          badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
-          icon: 'text-gray-400',
-          bg: 'from-gray-900/40 to-gray-800/40 border-gray-500/20 hover:border-gray-500/40',
+          badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30 backdrop-blur-md',
         };
       case 'coming_soon':
         return {
-          badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-          icon: 'text-blue-400',
-          bg: 'from-blue-900/40 to-gray-900/40 border-blue-500/20 hover:border-blue-500/40',
+          badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30 backdrop-blur-md',
         };
       default:
         return {
-          badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
-          icon: 'text-gray-400',
-          bg: 'from-gray-900/40 to-gray-800/40 border-gray-500/20 hover:border-gray-500/40',
+          badge: 'bg-gray-500/20 text-gray-300 border-gray-500/30 backdrop-blur-md',
         };
     }
   };
@@ -111,78 +87,48 @@ export const FeaturesSection: React.FC = () => {
           <p className="text-xl text-gray-400 max-w-3xl mx-auto">{features.subtitle}</p>
         </div>
 
-        {/* Features Grid */}
+        {/* Features Grid - Image Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.features.map((feature, index) => {
             const styling = getStatusStyling(feature.status);
-            const IconComponent = getIcon(feature.icon);
+            const backgroundImage = getFeatureImage(index, feature.title);
 
             return (
               <div
                 key={index}
-                className={`relative group bg-gradient-to-br ${styling.bg} rounded-2xl p-8 backdrop-blur-sm transition-all duration-300 hover:transform hover:scale-105`}
+                className="relative group h-[400px] rounded-2xl overflow-hidden transition-all duration-300 hover:transform hover:scale-105 hover:shadow-2xl"
               >
+                {/* Background Image */}
+                <div className="absolute inset-0">
+                  <img
+                    src={backgroundImage}
+                    alt={feature.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                </div>
+
+                {/* Heavy Black Gradient Overlay (Bottom to Top) */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
+
                 {/* Status Badge */}
-                <div className="absolute -top-3 left-4">
+                <div className="absolute top-4 left-4 z-10">
                   <Badge className={`${styling.badge} border`}>
                     {getStatusLabel(feature.status)}
                   </Badge>
                 </div>
 
-                {/* Icon */}
-                <div
-                  className={`w-14 h-14 bg-gray-800/50 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform ${styling.icon}`}
-                >
-                  <IconComponent className="w-7 h-7" />
-                </div>
-
-                {/* Content */}
-                <h3 className="text-2xl font-bold text-white mb-3">{feature.title}</h3>
-                <p className="text-gray-400 leading-relaxed">{feature.description}</p>
-
-                {/* Progress Indicator */}
-                <div className="mt-6 flex items-center gap-2">
-                  <div className="flex-1 bg-gray-800/50 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        feature.status === 'in_development'
-                          ? 'bg-purple-400 w-3/4'
-                          : feature.status === 'beta'
-                            ? 'bg-amber-400 w-full'
-                            : feature.status === 'planned'
-                              ? 'bg-gray-400 w-1/4'
-                              : 'bg-blue-400 w-1/2'
-                      }`}
-                    ></div>
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    {feature.status === 'in_development'
-                      ? '75%'
-                      : feature.status === 'beta'
-                        ? '100%'
-                        : feature.status === 'planned'
-                          ? '25%'
-                          : '50%'}
-                  </span>
+                {/* Content - Positioned at Bottom */}
+                <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
+                  <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-200 leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
               </div>
             );
           })}
-        </div>
-
-        {/* Development Timeline Note */}
-        <div className="mt-16 p-6 bg-gray-800/30 border border-gray-700/50 rounded-xl max-w-4xl mx-auto">
-          <div className="flex items-start gap-4">
-            <Clock className="w-6 h-6 text-amber-400 flex-shrink-0 mt-1" />
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Development Timeline</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Our beta launch focuses on the core AI storytelling experience. Advanced features
-                like visual generation and voice narration will be added based on beta feedback and
-                testing. All features shown are planned for full release in 2026.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Bottom CTA */}

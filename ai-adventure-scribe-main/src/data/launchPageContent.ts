@@ -47,7 +47,7 @@ export interface FAQItem {
 export const launchPageContent = {
   // Hero Section
   hero: {
-    badge: 'Closed Beta: Q4 2025 – Be Among the First',
+    badge: 'Closed Beta: Coming Soon – Be Among the First',
     headline: 'No DM? No Schedule? Your Living D&D World Awaits',
     subtitle:
       'Play solo or async with an AI Dungeon Master that remembers every choice, evolves NPCs, and crafts cinematic stories tailored to you.',
@@ -172,7 +172,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         title: 'Closed Beta',
         description:
           'Working with a select group of beta testers to refine core features and gather feedback on the AI Dungeon Master experience.',
-        timeline: 'Now - Q4 2025',
+        timeline: 'Phase 1',
         status: 'current' as const,
         features: [
           'Core AI storytelling engine',
@@ -186,7 +186,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         title: 'Open Beta',
         description:
           'Expanding access to all waitlist members with enhanced features and improved stability based on closed beta feedback.',
-        timeline: 'Q1 2026',
+        timeline: 'Phase 2',
         status: 'upcoming' as const,
         features: [
           'Visual character and scene generation',
@@ -200,7 +200,7 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         title: 'Public Launch',
         description:
           'Full release with all features, mobile apps, and ecosystem integrations for the complete AI Dungeon Master experience.',
-        timeline: 'Q2 2026',
+        timeline: 'Phase 3',
         status: 'upcoming' as const,
         features: [
           'Mobile and tablet applications',
