@@ -8,6 +8,9 @@
 // Export all user tables and types
 export * from './users.js';
 
+// Export all waitlist tables and types
+export * from './waitlist.js';
+
 // Export all blog tables and types
 export * from './blog.js';
 

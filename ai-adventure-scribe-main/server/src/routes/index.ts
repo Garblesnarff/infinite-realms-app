@@ -2,6 +2,7 @@ import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { specs } from '../docs/openapi-config.js';
 import authRouter from './v1/auth.js';
+import waitlistRouter from './v1/waitlist.js';
 import campaignRouter from './v1/campaigns.js';
 import characterRouter from './v1/characters.js';
 import sessionRouter from './v1/sessions.js';
@@ -35,6 +36,7 @@ export function registerRoutes(app: Express) {
 
   // Register all API routes
   app.use('/v1/auth', authRouter());
+  app.use('/v1/waitlist', waitlistRouter());
   app.use('/v1/campaigns', campaignRouter());
   app.use('/v1/characters', characterRouter());
   app.use('/v1/sessions', sessionRouter());

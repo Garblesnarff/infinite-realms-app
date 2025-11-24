@@ -85,8 +85,9 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
     setStatus('loading');
 
     try {
-      // TODO: Replace with actual API endpoint
-      const response = await fetch('/api/waitlist', {
+      // Send to backend API
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://api.infiniterealms.app';
+      const response = await fetch(`${apiUrl}/v1/waitlist`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +96,6 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
           email: formData.email,
           name: formData.name || undefined,
           source: 'launch_page',
-          timestamp: new Date().toISOString(),
         }),
       });
 
