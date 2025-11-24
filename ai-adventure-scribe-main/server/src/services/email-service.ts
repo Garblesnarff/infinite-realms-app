@@ -127,7 +127,7 @@ function getWaitlistEmailHTML(firstName: string): string {
 
               <p style="margin: 30px 0 0; font-size: 16px; line-height: 1.6; color: #cbd5e1;">
                 See you in the dungeon,<br>
-                <strong style="color: #fbbf24;">Rob Hanson</strong><br>
+                <strong style="color: #fbbf24;">Rob</strong><br>
                 <span style="font-size: 14px; color: #94a3b8;">Creator, Infinite Realms</span>
               </p>
 
@@ -146,7 +146,7 @@ function getWaitlistEmailHTML(firstName: string): string {
                 <a href="https://infiniterealms.app" style="color: #a78bfa; text-decoration: none; font-weight: 600;">Visit Website</a>
               </p>
               <p style="margin: 0; font-size: 12px; color: #475569;">
-                © 2025 Infinite Realms. Barron, WI.<br>
+                © 2025 Infinite Realms. Wisconsin, USA.<br>
                 You received this because you signed up for the beta.
               </p>
             </td>
@@ -184,7 +184,7 @@ Between 10-hour factory shifts and general life chaos, getting a group together 
 I'll be sending updates as we get closer to launch. I don't spam, I only email when there's something cool to show you.
 
 See you in the dungeon,
-Rob Hanson
+Rob
 Creator, Infinite Realms
 
 P.S. I'm currently creating the Pre-Made character library for the beta launch. To help me prioritize the most popular ones: What class do you usually play? Hit reply and let me know so I can make sure your favorite is ready on Day 1!
@@ -193,7 +193,7 @@ P.S. I'm currently creating the Pre-Made character library for the beta launch. 
 Follow on X: https://x.com/printedpathways
 Visit Website: https://infiniterealms.app
 
-© 2025 Infinite Realms. Barron, WI.
+© 2025 Infinite Realms. Wisconsin, USA.
 You received this because you signed up for the beta.
   `.trim();
 }
