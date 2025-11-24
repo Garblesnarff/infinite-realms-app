@@ -5,12 +5,11 @@
  * Features: Founding member perks, clear beta limitations, urgency messaging
  */
 
-import { Crown, Star, Zap, MessageCircle, Clock, Users } from 'lucide-react';
+import { Crown, Star, Zap, MessageCircle } from 'lucide-react';
 import React from 'react';
 
 import { WaitlistForm } from './WaitlistForm';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { launchPageContent } from '@/data/launchPageContent';
 
@@ -68,77 +67,6 @@ export const EarlyAccessSection: React.FC = () => {
               </p>
             </div>
             <WaitlistForm variant="section" />
-          </div>
-        </div>
-
-        {/* Beta Limitations & Timeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-          {/* Limitations */}
-          <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8">
-            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Clock className="w-6 h-6 text-amber-400" />
-              Beta Limitations
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-amber-400 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Limited Features:</span> Beta focuses
-                  on core AI storytelling. Advanced features will be added post-launch.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-amber-400 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Potential Bugs:</span> As a beta
-                  product, you may encounter occasional issues that we're actively fixing.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-amber-400 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Feedback Required:</span> We expect
-                  active participation in shaping the product through regular feedback.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8">
-            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Users className="w-6 h-6 text-purple-400" />
-              Beta Timeline
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 mt-1">
-                  Now
-                </Badge>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Waitlist Open:</span> Join now to
-                  secure your spot in the closed beta queue.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 mt-1">
-                  Q4 2025
-                </Badge>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Closed Beta:</span> Limited access for
-                  testing and feedback collection.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <Badge className="bg-gray-500/20 text-gray-300 border-gray-500/30 mt-1">
-                  Q1 2026
-                </Badge>
-                <p className="text-gray-300">
-                  <span className="text-white font-semibold">Open Beta:</span> Expanded access with
-                  more features based on your feedback.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
 

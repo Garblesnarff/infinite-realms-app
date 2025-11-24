@@ -23,12 +23,12 @@ export const VisionSection: React.FC = () => {
           <div className="text-left">
             {/* Headline */}
             <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight uppercase tracking-tight">
-              <span className="text-gray-200">A </span>
+              <span className="text-white">A </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-purple-400">
                 Persistent World
               </span>
               <br />
-              <span className="text-gray-200">That </span>
+              <span className="text-white">That </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-purple-400">
                 Remembers You
               </span>

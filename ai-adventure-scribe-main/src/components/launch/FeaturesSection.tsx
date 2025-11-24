@@ -108,7 +108,7 @@ export const FeaturesSection: React.FC = () => {
                 </div>
 
                 {/* Heavy Black Gradient Overlay (Bottom to Top) */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
 
                 {/* Status Badge */}
                 <div className="absolute top-4 left-4 z-10">

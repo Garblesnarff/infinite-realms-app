@@ -13,7 +13,7 @@ export const FounderStorySection: React.FC = () => {
           className="w-full h-full object-cover opacity-30"
         />
         {/* Much lighter overlay so dragon scale texture shows through */}
-        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/40 via-gray-900/50 to-gray-900/60"></div>
+        <div className="absolute inset-0 bg-gray-900/50"></div>
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
