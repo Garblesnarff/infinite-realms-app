@@ -43,6 +43,31 @@ export default function CallbackPage() {
         // Clear URL hash
         window.history.replaceState(null, '', window.location.pathname);
 
+        // Notify AuthContext that tokens have been updated
+        logger.info('Dispatching auth-tokens-updated event');
+        window.dispatchEvent(new CustomEvent('auth-tokens-updated'));
+
+        // Wait for AuthContext to verify and set user before navigating
+        const authReadyPromise = new Promise<void>((resolve) => {
+          const handleAuthReady = () => {
+            logger.info('Received auth-ready event, proceeding to /app');
+            window.removeEventListener('auth-ready', handleAuthReady);
+            resolve();
+          };
+          window.addEventListener('auth-ready', handleAuthReady);
+        });
+
+        // Add timeout fallback (5 seconds) in case event doesn't fire
+        const timeoutPromise = new Promise<void>((resolve) => {
+          setTimeout(() => {
+            logger.warn('Auth ready timeout reached, proceeding to /app anyway');
+            resolve();
+          }, 5000);
+        });
+
+        // Wait for either auth-ready event or timeout
+        await Promise.race([authReadyPromise, timeoutPromise]);
+
         // Redirect to app
         logger.info('Redirecting to /app');
         navigate('/app');

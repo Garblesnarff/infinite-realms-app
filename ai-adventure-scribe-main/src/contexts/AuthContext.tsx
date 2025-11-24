@@ -40,6 +40,7 @@ interface AuthContextType {
   userPlan: UserPlan | null;
   userPlanLoading: boolean;
   refreshUserPlan: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -107,58 +108,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userPlanLoading, setUserPlanLoading] = useState(false);
   const hasBootstrapped = useRef(false);
 
-  // Load session and verify on mount
-  useEffect(() => {
-    const initAuth = async () => {
-      setLoading(true);
-      const cachedSession = loadCachedSession();
+  // Verify session and load user data
+  const refreshAuth = useCallback(async () => {
+    setLoading(true);
+    const cachedSession = loadCachedSession();
 
-      if (!cachedSession) {
+    if (!cachedSession) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Verify token and get user data from backend
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
+        headers: {
+          Authorization: `Bearer ${cachedSession.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        // Token invalid, clear session
+        persistSession(null);
+        setSession(null);
+        setUser(null);
         setLoading(false);
         return;
       }
 
-      try {
-        // Verify token and get user data from backend
-        const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
-        const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
-          headers: {
-            Authorization: `Bearer ${cachedSession.access_token}`,
-            'Content-Type': 'application/json',
-          },
+      const data = await response.json();
+      const userData = data.result?.data;
+
+      if (userData) {
+        setSession(cachedSession);
+        setUser({
+          id: userData.id,
+          email: userData.email,
+          firstName: userData.firstName || null,
+          lastName: userData.lastName || null,
         });
 
-        if (!response.ok) {
-          // Token invalid, clear session
-          persistSession(null);
-          setSession(null);
-          setUser(null);
-          setLoading(false);
-          return;
+        // Dispatch event to signal auth is ready
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth-ready', { detail: { user: userData } }));
         }
-
-        const data = await response.json();
-        const userData = data.result?.data;
-
-        if (userData) {
-          setSession(cachedSession);
-          setUser({
-            id: userData.id,
-            email: userData.email,
-            firstName: userData.firstName || null,
-            lastName: userData.lastName || null,
-          });
-        }
-      } catch (error) {
-        logger.error('Error verifying session:', error);
-        persistSession(null);
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      logger.error('Error verifying session:', error);
+      persistSession(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load session and verify on mount
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
+
+  // Listen for token updates from CallbackPage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleTokensUpdated = () => {
+      logger.info('Auth tokens updated, refreshing auth state');
+      refreshAuth();
     };
 
-    initAuth();
-  }, []);
+    window.addEventListener('auth-tokens-updated', handleTokensUpdated);
+
+    return () => {
+      window.removeEventListener('auth-tokens-updated', handleTokensUpdated);
+    };
+  }, [refreshAuth]);
 
   // Persist session to localStorage
   useEffect(() => {
@@ -308,6 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userPlan,
     userPlanLoading,
     refreshUserPlan: fetchUserPlan,
+    refreshAuth,
     signUp,
     signIn,
     signOut,

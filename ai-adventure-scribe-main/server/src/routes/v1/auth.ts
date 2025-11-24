@@ -17,6 +17,8 @@ export default function authRouter() {
         provider: 'authkit',
         clientId: authConfig.clientId,
         redirectUri: authConfig.redirectUri,
+        // Force account selection screen in Google OAuth
+        prompt: 'select_account',
       });
 
       // Redirect user to WorkOS hosted login page
