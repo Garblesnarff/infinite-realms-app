@@ -106,9 +106,10 @@ export default function authRouter() {
         return;
       }
 
-      // Get WorkOS logout URL
+      // Get WorkOS logout URL with return redirect
       const logoutUrl = workos.userManagement.getLogoutUrl({
         sessionId,
+        returnTo: frontendUrl,
       });
 
       // Redirect to WorkOS to terminate the session
