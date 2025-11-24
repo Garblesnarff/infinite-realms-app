@@ -10,10 +10,10 @@ export const FounderStorySection: React.FC = () => {
         <img
           src="/founder-bg.jpg"
           alt="Industrial background"
-          className="w-full h-full object-cover opacity-20"
+          className="w-full h-full object-cover opacity-30"
         />
-        {/* Reduced overlay opacity so texture shows through */}
-        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/60 via-gray-900/70 to-gray-900/80"></div>
+        {/* Much lighter overlay so dragon scale texture shows through */}
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/40 via-gray-900/50 to-gray-900/60"></div>
       </div>
 
       <div className="container mx-auto px-4 relative z-10">

@@ -2,7 +2,7 @@
  * Vision Section - Sell the Dream
  *
  * PURPOSE: Paint a vivid picture of the future AI Dungeon Master experience
- * Split view layout: Text on left, epic image on right
+ * Split view layout: Text on left, magical map on right
  */
 
 import { Sparkles } from 'lucide-react';
@@ -16,30 +16,21 @@ export const VisionSection: React.FC = () => {
   return (
     <section id="vision" className="relative py-24 bg-gray-900">
       <div className="max-w-7xl mx-auto px-6">
-        {/* Split View: Text Left, Image Right */}
+        {/* Split View: Text Left, Magical Map Right */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
           {/* Left Column: Text Content */}
           <div className="text-left">
             {/* Headline */}
-            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-8 leading-tight">
-              {vision.headline.split(' ').map((word, index) => (
-                <span
-                  key={index}
-                  className={
-                    index >= 4
-                      ? 'text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-purple-400'
-                      : ''
-                  }
-                >
-                  {word}
-                  {index < vision.headline.split(' ').length - 1 ? ' ' : ''}
-                </span>
-              ))}
+            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-8 leading-tight uppercase tracking-tight">
+              A Persistent World <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-purple-400">
+                That Remembers You
+              </span>
             </h2>
 
-            {/* Vision Content */}
-            <p className="text-2xl sm:text-3xl text-gray-300 leading-relaxed mb-10 font-light">
+            {/* Vision Content - Subheadline */}
+            <p className="text-lg text-gray-300 leading-relaxed mb-8">
               {vision.content}
             </p>
 
@@ -53,19 +44,38 @@ export const VisionSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column: Epic Image */}
-          <div className="relative lg:h-[700px] h-[400px] rounded-2xl overflow-hidden border border-purple-500/20 shadow-2xl">
-            <img
-              src="/hero-bg-v2.jpg"
-              alt="Epic fantasy adventure scene"
-              className="w-full h-full object-cover"
-            />
-            {/* Subtle overlay for depth */}
-            <div className="absolute inset-0 bg-gradient-to-t from-purple-900/40 to-transparent"></div>
+          {/* Right Column: Magical Map with Float Animation */}
+          <div className="relative">
+            <div className="relative lg:h-[700px] h-[400px] rounded-2xl overflow-hidden border border-purple-500/20 shadow-2xl animate-float">
+              <img
+                src="/vision-side.jpg"
+                alt="Magical fantasy map"
+                className="w-full h-full object-cover"
+              />
+              {/* Magical glow overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-purple-900/30 to-transparent"></div>
+              {/* Subtle purple glow around the image */}
+              <div className="absolute inset-0 shadow-[0_0_60px_rgba(168,85,247,0.3)]"></div>
+            </div>
           </div>
 
         </div>
       </div>
+
+      {/* Add float animation */}
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+      `}</style>
     </section>
   );
 };
