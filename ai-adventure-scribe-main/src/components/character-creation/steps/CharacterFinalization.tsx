@@ -1,5 +1,5 @@
-import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
 import { characterDescriptionGenerator } from '@/services/character-description-generator';
 import { characterImageGenerator } from '@/services/character-image-generator';
+import { llmApiClient, type ImageQuotaStatus } from '@/services/llm-api-client';
 import { openRouterService } from '@/services/openrouter-service';
 import { toCharacterPromptData } from '@/services/prompts/characterPrompts';
 
@@ -38,6 +39,18 @@ const CharacterFinalization: React.FC = () => {
     'idle',
   );
   const [searchParams] = useSearchParams();
+  const [imageQuota, setImageQuota] = useState<ImageQuotaStatus | null>(null);
+
+  // Fetch image quota status
+  const fetchImageQuota = useCallback(async () => {
+    const quota = await llmApiClient.getImageQuotaStatus();
+    setImageQuota(quota);
+  }, []);
+
+  // Fetch quota on mount and after generations
+  useEffect(() => {
+    fetchImageQuota();
+  }, [fetchImageQuota]);
 
   // Initialize theme from campaign defaults when available
   useEffect(() => {
@@ -45,6 +58,14 @@ const CharacterFinalization: React.FC = () => {
       setSelectedTheme(campaignState.campaign.defaultArtStyle);
     }
   }, [campaignState.campaign?.defaultArtStyle, state.character?.theme]);
+
+  /**
+   * Check if an error is a quota exceeded error
+   */
+  const isQuotaExceededError = (error: unknown): boolean => {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('402') || message.toLowerCase().includes('quota exceeded');
+  };
 
   /**
    * Updates character description in context
@@ -172,14 +193,26 @@ const CharacterFinalization: React.FC = () => {
         description: 'Your character avatar portrait has been created!',
       });
 
+      // Refresh quota after successful generation
+      fetchImageQuota();
       setGenerationStep('idle');
     } catch (error) {
       logger.error('Failed to generate avatar:', error);
-      toast({
-        title: 'Avatar Generation Failed',
-        description: 'Failed to generate character avatar. Please try again.',
-        variant: 'destructive',
-      });
+
+      if (isQuotaExceededError(error)) {
+        toast({
+          title: 'Daily Image Limit Reached',
+          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
+          variant: 'destructive',
+        });
+        fetchImageQuota();
+      } else {
+        toast({
+          title: 'Avatar Generation Failed',
+          description: 'Failed to generate character avatar. Please try again.',
+          variant: 'destructive',
+        });
+      }
       setGenerationStep('idle');
     } finally {
       setIsGeneratingAvatar(false);
@@ -261,14 +294,26 @@ const CharacterFinalization: React.FC = () => {
         description: `Your detailed character design sheet in ${selectedTheme} theme has been created${avatarReference ? ' using your avatar as reference' : ''}!`,
       });
 
+      // Refresh quota after successful generation
+      fetchImageQuota();
       setGenerationStep('idle');
     } catch (error) {
       logger.error('Failed to generate character design sheet:', error);
-      toast({
-        title: 'Design Sheet Generation Failed',
-        description: 'Failed to generate character design sheet. Please try again.',
-        variant: 'destructive',
-      });
+
+      if (isQuotaExceededError(error)) {
+        toast({
+          title: 'Daily Image Limit Reached',
+          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
+          variant: 'destructive',
+        });
+        fetchImageQuota();
+      } else {
+        toast({
+          title: 'Design Sheet Generation Failed',
+          description: 'Failed to generate character design sheet. Please try again.',
+          variant: 'destructive',
+        });
+      }
       setGenerationStep('idle');
     } finally {
       setIsGeneratingImage(false);
@@ -432,6 +477,34 @@ const CharacterFinalization: React.FC = () => {
             </Select>
           </div>
 
+          {/* Image Generation Quota Tracker */}
+          {imageQuota && (
+            <div className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  {imageQuota.remaining === 0 ? (
+                    <ImageOff className="h-4 w-4 text-red-500" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={imageQuota.remaining === 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}>
+                    {imageQuota.remaining === 0
+                      ? 'Daily limit reached'
+                      : `${imageQuota.remaining} image generation${imageQuota.remaining === 1 ? '' : 's'} remaining today`}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {imageQuota.usage}/{imageQuota.limits.daily.image}
+                </span>
+              </div>
+              {imageQuota.remaining === 0 && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  Resets at midnight UTC
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Avatar Portrait */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -441,7 +514,7 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateAvatar}
-                disabled={isGeneratingAvatar || !state.character?.name?.trim()}
+                disabled={isGeneratingAvatar || !state.character?.name?.trim() || imageQuota?.remaining === 0}
               >
                 {isGeneratingAvatar ? (
                   <>
@@ -483,7 +556,7 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateImage}
-                disabled={isGeneratingImage || !state.character?.name?.trim()}
+                disabled={isGeneratingImage || !state.character?.name?.trim() || imageQuota?.remaining === 0}
               >
                 {isGeneratingImage ? (
                   <>

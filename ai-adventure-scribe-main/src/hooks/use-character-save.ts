@@ -59,16 +59,6 @@ export const useCharacterSave = () => {
 
       const effectiveCampaignId = character.campaign_id || campaignState.campaign?.id || null;
 
-      if (!effectiveCampaignId) {
-        logger.warn('Attempted to save character without campaign context');
-        toast({
-          title: 'Campaign Required',
-          description: 'Select or create a campaign before saving this character.',
-          variant: 'destructive',
-        });
-        return null;
-      }
-
       // Transform and save character data
       const characterData = {
         ...transformCharacterForStorage({

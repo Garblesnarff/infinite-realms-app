@@ -25,6 +25,11 @@ export const useCampaignSave = () => {
     try {
       logger.info('Creating campaign and generating background image...');
 
+      // Get current user if authenticated
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       // First, save the campaign without the background image
       // Extract background_image and map camelCase to snake_case fields
       const {
@@ -39,6 +44,7 @@ export const useCampaignSave = () => {
         .insert([
           {
             ...campaignDataWithoutImage,
+            user_id: user?.id || '00000000-0000-0000-0000-000000000000',
             status: 'active',
             setting_details: campaignData.setting_details || {},
             enhancement_selections: enhancementSelections || [],

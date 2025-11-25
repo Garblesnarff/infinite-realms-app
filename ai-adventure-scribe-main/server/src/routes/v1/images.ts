@@ -19,6 +19,19 @@ export default function imagesRouter() {
   router.use(requireAuth);
   router.use(planRateLimit('images'));
 
+  // Get image quota status
+  router.get('/quota', async (req: Request, res: Response) => {
+    const userId = (req as any).user?.userId as string;
+    const plan = (req as any).user?.plan as string || 'free';
+
+    try {
+      const quotaStatus = await AIUsageService.getQuotaStatus({ userId, plan, type: 'image' });
+      return res.json(quotaStatus);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to fetch quota status' });
+    }
+  });
+
   router.post('/generate', async (req: Request, res: Response) => {
     const { prompt, referenceImage, model, quality, size }: { prompt: string; referenceImage?: string; model?: string; quality?: 'low' | 'medium' | 'high'; size?: string } = req.body || {};
 

@@ -28,6 +28,14 @@ export interface AppendMessageImageParams {
   image: { url: string; prompt?: string; model?: string; quality?: 'low' | 'medium' | 'high' };
 }
 
+export interface ImageQuotaStatus {
+  plan: string;
+  limits: { daily: { llm: number; image: number; voice: number } };
+  usage: number;
+  remaining: number;
+  resetAt: string;
+}
+
 class LlmApiClient {
   private useOfflineFallback = false;
 
@@ -36,10 +44,8 @@ class LlmApiClient {
       throw new Error('API unavailable');
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
+    // Get WorkOS token from localStorage
+    const token = window.localStorage.getItem('workos_access_token');
 
     try {
       const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -133,6 +139,15 @@ class LlmApiClient {
       },
     );
     await res.json().catch(() => ({}));
+  }
+
+  async getImageQuotaStatus(): Promise<ImageQuotaStatus | null> {
+    try {
+      const res = await this.fetchWithAuth('/v1/images/quota');
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 }
 

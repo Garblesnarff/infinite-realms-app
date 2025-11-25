@@ -29,7 +29,7 @@ export type QuotaConfig = {
 export class AIUsageService {
   private static readonly DEFAULT_QUOTAS: Record<string, QuotaConfig> = {
     free: {
-      daily: { llm: 30, image: 5, voice: 10 },
+      daily: { llm: 30, image: 20, voice: 10 },
     },
     pro: {
       daily: { llm: 100, image: 50, voice: 200 },

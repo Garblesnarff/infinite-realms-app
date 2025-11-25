@@ -36,10 +36,8 @@ class LlmApiClient {
       throw new Error('API unavailable');
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
+    // Get WorkOS token from localStorage
+    const token = window.localStorage.getItem('workos_access_token');
 
     try {
       const res = await fetch(`${API_BASE_URL}${path}`, {

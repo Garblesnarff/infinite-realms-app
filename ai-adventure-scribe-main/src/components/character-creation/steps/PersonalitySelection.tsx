@@ -2,7 +2,7 @@ import { Shuffle, Heart, Crown, Shield, Zap } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';

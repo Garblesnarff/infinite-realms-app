@@ -136,8 +136,8 @@ const buildUpdatePayload = (input: Partial<BlogPostMutationInput>) => {
 };
 
 const fetchWithAuth = async (path: string, options: RequestInit = {}): Promise<Response> => {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
+  // Get WorkOS token from localStorage
+  const token = window.localStorage.getItem('workos_access_token');
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,

@@ -33,16 +33,10 @@ class CharacterSpellService {
   private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
   private async getAccessToken(forceRefresh = false): Promise<string> {
-    if (!forceRefresh) {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        logger.warn('[CharacterSpellService] Error retrieving current session', error);
-      }
-
-      const token = data?.session?.access_token;
-      if (token) {
-        return token;
-      }
+    // Get WorkOS token from localStorage
+    const token = window.localStorage.getItem('workos_access_token');
+    if (token) {
+      return token;
     }
 
     const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();

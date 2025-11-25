@@ -125,10 +125,8 @@ class SpellApiService {
       throw new Error('API unavailable, using local fallback');
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
+    // Get WorkOS token from localStorage
+    const token = window.localStorage.getItem('workos_access_token');
 
     try {
       const response = await fetch(`${API_BASE_URL}${url}`, {

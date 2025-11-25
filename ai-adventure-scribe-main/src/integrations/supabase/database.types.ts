@@ -1,3 +1,4 @@
+Connecting to localhost 54321
 export type Json =
   | string
   | number
@@ -7,91 +8,33 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
-      agent_communications: {
-        Row: {
-          content: Json
-          created_at: string | null
-          id: string
-          message_type: string
-          read_at: string | null
-          receiver_id: string | null
-          sender_id: string | null
-        }
-        Insert: {
-          content: Json
-          created_at?: string | null
-          id?: string
-          message_type: string
-          read_at?: string | null
-          receiver_id?: string | null
-          sender_id?: string | null
-        }
-        Update: {
-          content?: Json
-          created_at?: string | null
-          id?: string
-          message_type?: string
-          read_at?: string | null
-          receiver_id?: string | null
-          sender_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_communications_receiver_id_fkey"
-            columns: ["receiver_id"]
-            isOneToOne: false
-            referencedRelation: "agent_states"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "agent_communications_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "agent_states"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      agent_states: {
-        Row: {
-          agent_role: string
-          agent_type: string
-          configuration: Json | null
-          created_at: string | null
-          id: string
-          last_active: string | null
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          agent_role: string
-          agent_type: string
-          configuration?: Json | null
-          created_at?: string | null
-          id?: string
-          last_active?: string | null
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          agent_role?: string
-          agent_type?: string
-          configuration?: Json | null
-          created_at?: string | null
-          id?: string
-          last_active?: string | null
-          status?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       blog_authors: {
         Row: {
           avatar_url: string | null
@@ -100,7 +43,7 @@ export type Database = {
           display_name: string
           id: string
           linkedin_url: string | null
-          metadata: Json | null
+          metadata: Json
           short_bio: string | null
           slug: string
           twitter_handle: string | null
@@ -115,7 +58,7 @@ export type Database = {
           display_name: string
           id?: string
           linkedin_url?: string | null
-          metadata?: Json | null
+          metadata?: Json
           short_bio?: string | null
           slug: string
           twitter_handle?: string | null
@@ -130,7 +73,7 @@ export type Database = {
           display_name?: string
           id?: string
           linkedin_url?: string | null
-          metadata?: Json | null
+          metadata?: Json
           short_bio?: string | null
           slug?: string
           twitter_handle?: string | null
@@ -145,7 +88,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
-          metadata: Json | null
+          metadata: Json
           name: string
           seo_description: string | null
           seo_title: string | null
@@ -156,7 +99,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           name: string
           seo_description?: string | null
           seo_title?: string | null
@@ -167,7 +110,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           name?: string
           seo_description?: string | null
           seo_title?: string | null
@@ -175,77 +118,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
-      }
-      blog_posts: {
-        Row: {
-          author_id: string
-          canonical_url: string | null
-          content: string | null
-          created_at: string | null
-          featured_image_url: string | null
-          hero_image_alt: string | null
-          id: string
-          metadata: Json | null
-          published_at: string | null
-          scheduled_for: string | null
-          seo_description: string | null
-          seo_keywords: string[] | null
-          seo_title: string | null
-          slug: string
-          status: string
-          summary: string | null
-          title: string
-          updated_at: string | null
-        }
-        Insert: {
-          author_id: string
-          canonical_url?: string | null
-          content?: string | null
-          created_at?: string | null
-          featured_image_url?: string | null
-          hero_image_alt?: string | null
-          id?: string
-          metadata?: Json | null
-          published_at?: string | null
-          scheduled_for?: string | null
-          seo_description?: string | null
-          seo_keywords?: string[] | null
-          seo_title?: string | null
-          slug: string
-          status?: string
-          summary?: string | null
-          title: string
-          updated_at?: string | null
-        }
-        Update: {
-          author_id?: string
-          canonical_url?: string | null
-          content?: string | null
-          created_at?: string | null
-          featured_image_url?: string | null
-          hero_image_alt?: string | null
-          id?: string
-          metadata?: Json | null
-          published_at?: string | null
-          scheduled_for?: string | null
-          seo_description?: string | null
-          seo_keywords?: string[] | null
-          seo_title?: string | null
-          slug?: string
-          status?: string
-          summary?: string | null
-          title?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blog_posts_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "blog_authors"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       blog_post_categories: {
         Row: {
@@ -265,14 +137,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "blog_post_categories_category_id_fkey"
+            foreignKeyName: "blog_post_categories_category_id_blog_categories_id_fk"
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "blog_categories"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "blog_post_categories_post_id_fkey"
+            foreignKeyName: "blog_post_categories_post_id_blog_posts_id_fk"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "blog_posts"
@@ -298,17 +170,88 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "blog_post_tags_post_id_fkey"
+            foreignKeyName: "blog_post_tags_post_id_blog_posts_id_fk"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "blog_posts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "blog_post_tags_tag_id_fkey"
+            foreignKeyName: "blog_post_tags_tag_id_blog_tags_id_fk"
             columns: ["tag_id"]
             isOneToOne: false
             referencedRelation: "blog_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_posts: {
+        Row: {
+          author_id: string
+          canonical_url: string | null
+          content: string | null
+          created_at: string | null
+          featured_image_url: string | null
+          hero_image_alt: string | null
+          id: string
+          metadata: Json
+          published_at: string | null
+          scheduled_for: string | null
+          seo_description: string | null
+          seo_keywords: string[]
+          seo_title: string | null
+          slug: string
+          status: string
+          summary: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          author_id: string
+          canonical_url?: string | null
+          content?: string | null
+          created_at?: string | null
+          featured_image_url?: string | null
+          hero_image_alt?: string | null
+          id?: string
+          metadata?: Json
+          published_at?: string | null
+          scheduled_for?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[]
+          seo_title?: string | null
+          slug: string
+          status?: string
+          summary?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          author_id?: string
+          canonical_url?: string | null
+          content?: string | null
+          created_at?: string | null
+          featured_image_url?: string | null
+          hero_image_alt?: string | null
+          id?: string
+          metadata?: Json
+          published_at?: string | null
+          scheduled_for?: string | null
+          seo_description?: string | null
+          seo_keywords?: string[]
+          seo_title?: string | null
+          slug?: string
+          status?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_author_id_blog_authors_id_fk"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "blog_authors"
             referencedColumns: ["id"]
           },
         ]
@@ -318,7 +261,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
-          metadata: Json | null
+          metadata: Json
           name: string
           slug: string
           updated_at: string | null
@@ -327,7 +270,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           name: string
           slug: string
           updated_at?: string | null
@@ -336,7 +279,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
-          metadata?: Json | null
+          metadata?: Json
           name?: string
           slug?: string
           updated_at?: string | null
@@ -345,184 +288,157 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          art_style: string | null
           atmosphere: string | null
           background_image: string | null
           campaign_length: string | null
-          created_at: string | null
+          created_at: string
           description: string | null
           difficulty_level: string | null
+          enhancement_effects: Json | null
+          enhancement_selections: Json | null
           era: string | null
           genre: string | null
           id: string
           location: string | null
           name: string
+          rules_config: Json | null
           setting_details: Json | null
-          status: string | null
+          status: string
+          style_config: Json | null
           thematic_elements: Json | null
           tone: string | null
-          updated_at: string | null
-          user_id: string | null
-          art_style: string | null
-          style_config: Json | null
-          rules_config: Json | null
-          template: boolean
-          visibility: string
-          slug: string | null
-          template_version: number
-          manifest_url: string | null
-          thumbnail_url: string | null
-          published_at: string | null
-          published_by: string | null
-          source_template_id: string | null
-          content_hash: string | null
+          updated_at: string
+          user_id: string
         }
         Insert: {
+          art_style?: string | null
           atmosphere?: string | null
           background_image?: string | null
           campaign_length?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           difficulty_level?: string | null
+          enhancement_effects?: Json | null
+          enhancement_selections?: Json | null
           era?: string | null
           genre?: string | null
           id?: string
           location?: string | null
           name: string
+          rules_config?: Json | null
           setting_details?: Json | null
-          status?: string | null
+          status?: string
+          style_config?: Json | null
           thematic_elements?: Json | null
           tone?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          art_style?: string | null
-          style_config?: Json | null
-          rules_config?: Json | null
-          template?: boolean
-          visibility?: string
-          slug?: string | null
-          template_version?: number
-          manifest_url?: string | null
-          thumbnail_url?: string | null
-          published_at?: string | null
-          published_by?: string | null
-          source_template_id?: string | null
-          content_hash?: string | null
+          updated_at?: string
+          user_id: string
         }
         Update: {
+          art_style?: string | null
           atmosphere?: string | null
           background_image?: string | null
           campaign_length?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           difficulty_level?: string | null
+          enhancement_effects?: Json | null
+          enhancement_selections?: Json | null
           era?: string | null
           genre?: string | null
           id?: string
           location?: string | null
           name?: string
+          rules_config?: Json | null
           setting_details?: Json | null
-          status?: string | null
+          status?: string
+          style_config?: Json | null
           thematic_elements?: Json | null
           tone?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          art_style?: string | null
-          style_config?: Json | null
-          rules_config?: Json | null
-          template?: boolean
-          visibility?: string
-          slug?: string | null
-          template_version?: number
-          manifest_url?: string | null
-          thumbnail_url?: string | null
-          published_at?: string | null
-          published_by?: string | null
-          source_template_id?: string | null
-          content_hash?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "campaigns_published_by_fkey"
-            columns: ["published_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "campaigns_source_template_id_fkey"
-            columns: ["source_template_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      campaign_members: {
-        Row: {
-          campaign_id: string
-          user_id: string
-          role: string
-          joined_at: string | null
-        }
-        Insert: {
-          campaign_id: string
-          user_id: string
-          role?: string
-          joined_at?: string | null
-        }
-        Update: {
-          campaign_id?: string
+          updated_at?: string
           user_id?: string
-          role?: string
-          joined_at?: string | null
+        }
+        Relationships: []
+      }
+      character_folders: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          parent_folder_id: string | null
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          parent_folder_id?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "campaign_members_campaign_id_fkey"
-            columns: ["campaign_id"]
+            foreignKeyName: "character_folders_parent_folder_id_fk"
+            columns: ["parent_folder_id"]
             isOneToOne: false
-            referencedRelation: "campaigns"
+            referencedRelation: "character_folders"
             referencedColumns: ["id"]
           },
         ]
       }
-      character_equipment: {
+      character_permissions: {
         Row: {
-          character_id: string | null
-          created_at: string | null
-          description: string | null
-          equipped: boolean | null
+          can_control_token: boolean
+          can_edit_sheet: boolean
+          character_id: string
+          granted_at: string
+          granted_by: string
           id: string
-          item_name: string
-          item_type: string
-          quantity: number | null
-          updated_at: string | null
+          permission_level: Database["public"]["Enums"]["permission_level"]
+          user_id: string
         }
         Insert: {
-          character_id?: string | null
-          created_at?: string | null
-          description?: string | null
-          equipped?: boolean | null
+          can_control_token?: boolean
+          can_edit_sheet?: boolean
+          character_id: string
+          granted_at?: string
+          granted_by: string
           id?: string
-          item_name: string
-          item_type: string
-          quantity?: number | null
-          updated_at?: string | null
+          permission_level?: Database["public"]["Enums"]["permission_level"]
+          user_id: string
         }
         Update: {
-          character_id?: string | null
-          created_at?: string | null
-          description?: string | null
-          equipped?: boolean | null
+          can_control_token?: boolean
+          can_edit_sheet?: boolean
+          character_id?: string
+          granted_at?: string
+          granted_by?: string
           id?: string
-          item_name?: string
-          item_type?: string
-          quantity?: number | null
-          updated_at?: string | null
+          permission_level?: Database["public"]["Enums"]["permission_level"]
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "character_equipment_character_id_fkey"
+            foreignKeyName: "character_permissions_character_id_fk"
             columns: ["character_id"]
             isOneToOne: false
             referencedRelation: "characters"
@@ -532,493 +448,271 @@ export type Database = {
       }
       character_stats: {
         Row: {
-          armor_class: number
-          character_id: string | null
+          character_id: string
           charisma: number
           constitution: number
           created_at: string | null
-          current_hit_points: number
           dexterity: number
           id: string
-          initiative_bonus: number | null
           intelligence: number
-          max_hit_points: number
-          speed: number | null
           strength: number
-          temporary_hit_points: number | null
           updated_at: string | null
           wisdom: number
         }
         Insert: {
-          armor_class: number
-          character_id?: string | null
-          charisma: number
-          constitution: number
-          created_at?: string | null
-          current_hit_points: number
-          dexterity: number
-          id?: string
-          initiative_bonus?: number | null
-          intelligence: number
-          max_hit_points: number
-          speed?: number | null
-          strength: number
-          temporary_hit_points?: number | null
-          updated_at?: string | null
-          wisdom: number
-        }
-        Update: {
-          armor_class?: number
-          character_id?: string | null
+          character_id: string
           charisma?: number
           constitution?: number
           created_at?: string | null
-          current_hit_points?: number
           dexterity?: number
           id?: string
-          initiative_bonus?: number | null
           intelligence?: number
-          max_hit_points?: number
-          speed?: number | null
           strength?: number
-          temporary_hit_points?: number | null
+          updated_at?: string | null
+          wisdom?: number
+        }
+        Update: {
+          character_id?: string
+          charisma?: number
+          constitution?: number
+          created_at?: string | null
+          dexterity?: number
+          id?: string
+          intelligence?: number
+          strength?: number
           updated_at?: string | null
           wisdom?: number
         }
         Relationships: [
           {
-            foreignKeyName: "character_stats_character_id_fkey"
+            foreignKeyName: "character_stats_character_id_characters_id_fk"
             columns: ["character_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "characters"
             referencedColumns: ["id"]
           },
         ]
       }
-      character_voice_mappings: {
+      character_tokens: {
         Row: {
-          appearance_count: number | null
-          character_name: string
-          created_at: string | null
-          first_appearance: string | null
-          id: string
-          last_used: string | null
-          metadata: Json | null
-          session_id: string | null
-          updated_at: string | null
-          voice_category: string
-          voice_id: string | null
+          character_id: string
+          token_id: string
         }
         Insert: {
-          appearance_count?: number | null
-          character_name: string
-          created_at?: string | null
-          first_appearance?: string | null
-          id?: string
-          last_used?: string | null
-          metadata?: Json | null
-          session_id?: string | null
-          updated_at?: string | null
-          voice_category: string
-          voice_id?: string | null
+          character_id: string
+          token_id: string
         }
         Update: {
-          appearance_count?: number | null
-          character_name?: string
-          created_at?: string | null
-          first_appearance?: string | null
-          id?: string
-          last_used?: string | null
-          metadata?: Json | null
-          session_id?: string | null
-          updated_at?: string | null
-          voice_category?: string
-          voice_id?: string | null
+          character_id?: string
+          token_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "character_voice_mappings_session_id_fkey"
-            columns: ["session_id"]
+            foreignKeyName: "character_tokens_character_id_fk"
+            columns: ["character_id"]
             isOneToOne: false
-            referencedRelation: "game_sessions"
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "character_tokens_token_id_fk"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "tokens"
             referencedColumns: ["id"]
           },
         ]
       }
       characters: {
         Row: {
-          active_concentration: string | null
           alignment: string | null
           appearance: string | null
+          avatar_url: string | null
           background: string | null
           background_image: string | null
           backstory_elements: string | null
-          cantrips: Json | null
-          class: string
-          class_features: Json | null
-          class_levels: Json | null
-          copper_pieces: number | null
-          created_at: string | null
-          damage_immunities: Json | null
-          damage_resistances: Json | null
-          damage_vulnerabilities: Json | null
-          description: string | null
-          electrum_pieces: number | null
-          experience_points: number | null
-          fighting_styles: Json | null
-          gold_pieces: number | null
-          id: string
           campaign_id: string | null
+          cantrips: string | null
+          class: string | null
+          created_at: string | null
+          description: string | null
+          experience_points: number | null
+          folder_id: string | null
+          id: string
           image_url: string | null
+          is_hidden: boolean | null
+          is_public: boolean
           known_spells: string | null
-          languages: Json | null
-          level: number | null
+          level: number
           name: string
+          obscurement: string | null
+          owner_id: string | null
           personality_notes: string | null
           personality_traits: string | null
-          platinum_pieces: number | null
-          race: string
-          saving_throw_proficiencies: string | null
-          silver_pieces: number | null
-          skill_proficiencies: string | null
-          spell_slots: Json | null
-          subrace: string | null
-          tool_proficiencies: string | null
-          total_level: number | null
+          prepared_spells: string | null
+          race: string | null
+          ritual_spells: string | null
+          sharing_mode: Database["public"]["Enums"]["sharing_mode"]
           updated_at: string | null
-          user_id: string | null
+          user_id: string
+          vision_types: string[] | null
         }
         Insert: {
-          active_concentration?: string | null
           alignment?: string | null
           appearance?: string | null
+          avatar_url?: string | null
           background?: string | null
           background_image?: string | null
           backstory_elements?: string | null
-          cantrips?: Json | null
-          class: string
-          class_features?: Json | null
-          class_levels?: Json | null
-          copper_pieces?: number | null
-          created_at?: string | null
-          damage_immunities?: Json | null
-          damage_resistances?: Json | null
-          damage_vulnerabilities?: Json | null
-          description?: string | null
-          electrum_pieces?: number | null
-          experience_points?: number | null
-          fighting_styles?: Json | null
-          gold_pieces?: number | null
-          id?: string
           campaign_id?: string | null
+          cantrips?: string | null
+          class?: string | null
+          created_at?: string | null
+          description?: string | null
+          experience_points?: number | null
+          folder_id?: string | null
+          id?: string
           image_url?: string | null
+          is_hidden?: boolean | null
+          is_public?: boolean
           known_spells?: string | null
-          languages?: Json | null
-          level?: number | null
+          level?: number
           name: string
+          obscurement?: string | null
+          owner_id?: string | null
           personality_notes?: string | null
           personality_traits?: string | null
-          platinum_pieces?: number | null
-          race: string
-          saving_throw_proficiencies?: string | null
-          silver_pieces?: number | null
-          skill_proficiencies?: string | null
-          spell_slots?: Json | null
-          subrace?: string | null
-          tool_proficiencies?: string | null
-          total_level?: number | null
+          prepared_spells?: string | null
+          race?: string | null
+          ritual_spells?: string | null
+          sharing_mode?: Database["public"]["Enums"]["sharing_mode"]
           updated_at?: string | null
-          user_id?: string | null
+          user_id: string
+          vision_types?: string[] | null
         }
         Update: {
-          active_concentration?: string | null
           alignment?: string | null
           appearance?: string | null
+          avatar_url?: string | null
           background?: string | null
           background_image?: string | null
           backstory_elements?: string | null
-          cantrips?: Json | null
-          class?: string
-          class_features?: Json | null
-          class_levels?: Json | null
-          copper_pieces?: number | null
-          created_at?: string | null
-          damage_immunities?: Json | null
-          damage_resistances?: Json | null
-          damage_vulnerabilities?: Json | null
-          description?: string | null
-          electrum_pieces?: number | null
-          experience_points?: number | null
-          fighting_styles?: Json | null
-          gold_pieces?: number | null
-          id?: string
           campaign_id?: string | null
+          cantrips?: string | null
+          class?: string | null
+          created_at?: string | null
+          description?: string | null
+          experience_points?: number | null
+          folder_id?: string | null
+          id?: string
           image_url?: string | null
+          is_hidden?: boolean | null
+          is_public?: boolean
           known_spells?: string | null
-          languages?: Json | null
-          level?: number | null
+          level?: number
           name?: string
+          obscurement?: string | null
+          owner_id?: string | null
           personality_notes?: string | null
           personality_traits?: string | null
-          platinum_pieces?: number | null
-          race?: string
-          saving_throw_proficiencies?: string | null
-          silver_pieces?: number | null
-          skill_proficiencies?: string | null
-          spell_slots?: Json | null
-          subrace?: string | null
-          tool_proficiencies?: string | null
-          total_level?: number | null
+          prepared_spells?: string | null
+          race?: string | null
+          ritual_spells?: string | null
+          sharing_mode?: Database["public"]["Enums"]["sharing_mode"]
           updated_at?: string | null
-          user_id?: string | null
+          user_id?: string
+          vision_types?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "characters_folder_id_fk"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "character_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_spells: {
+        Row: {
+          class_id: string
+          created_at: string | null
+          id: string
+          source_feature: string | null
+          spell_id: string
+          spell_level: number
+        }
+        Insert: {
+          class_id: string
+          created_at?: string | null
+          id?: string
+          source_feature?: string | null
+          spell_id: string
+          spell_level: number
+        }
+        Update: {
+          class_id?: string
+          created_at?: string | null
+          id?: string
+          source_feature?: string | null
+          spell_id?: string
+          spell_level?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_spells_class_id_classes_id_fk"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_spells_spell_id_spells_id_fk"
+            columns: ["spell_id"]
+            isOneToOne: false
+            referencedRelation: "spells"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          caster_type: string | null
+          created_at: string | null
+          hit_die: number
+          id: string
+          name: string
+          ritual_casting: boolean | null
+          spell_slots_start_level: number | null
+          spellcasting_ability: string | null
+          spellcasting_focus_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          caster_type?: string | null
+          created_at?: string | null
+          hit_die: number
+          id?: string
+          name: string
+          ritual_casting?: boolean | null
+          spell_slots_start_level?: number | null
+          spellcasting_ability?: string | null
+          spellcasting_focus_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          caster_type?: string | null
+          created_at?: string | null
+          hit_die?: number
+          id?: string
+          name?: string
+          ritual_casting?: boolean | null
+          spell_slots_start_level?: number | null
+          spellcasting_ability?: string | null
+          spellcasting_focus_type?: string | null
+          updated_at?: string | null
         }
         Relationships: []
-      }
-      combat_actions: {
-        Row: {
-          action_data: Json
-          action_type: string
-          created_at: string | null
-          dice_rolls: Json | null
-          encounter_id: string | null
-          id: string
-          participant_id: string | null
-          result: Json | null
-          round_number: number
-          target_participant_id: string | null
-          turn_order: number
-        }
-        Insert: {
-          action_data?: Json
-          action_type: string
-          created_at?: string | null
-          dice_rolls?: Json | null
-          encounter_id?: string | null
-          id?: string
-          participant_id?: string | null
-          result?: Json | null
-          round_number?: number
-          target_participant_id?: string | null
-          turn_order?: number
-        }
-        Update: {
-          action_data?: Json
-          action_type?: string
-          created_at?: string | null
-          dice_rolls?: Json | null
-          encounter_id?: string | null
-          id?: string
-          participant_id?: string | null
-          result?: Json | null
-          round_number?: number
-          target_participant_id?: string | null
-          turn_order?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combat_actions_encounter_id_fkey"
-            columns: ["encounter_id"]
-            isOneToOne: false
-            referencedRelation: "combat_encounters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combat_actions_participant_id_fkey"
-            columns: ["participant_id"]
-            isOneToOne: false
-            referencedRelation: "combat_participants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combat_actions_target_participant_id_fkey"
-            columns: ["target_participant_id"]
-            isOneToOne: false
-            referencedRelation: "combat_participants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combat_conditions: {
-        Row: {
-          condition_data: Json | null
-          condition_name: string
-          created_at: string | null
-          duration_rounds: number | null
-          expires_at_round: number | null
-          id: string
-          participant_id: string | null
-          save_ability: string | null
-          save_dc: number | null
-        }
-        Insert: {
-          condition_data?: Json | null
-          condition_name: string
-          created_at?: string | null
-          duration_rounds?: number | null
-          expires_at_round?: number | null
-          id?: string
-          participant_id?: string | null
-          save_ability?: string | null
-          save_dc?: number | null
-        }
-        Update: {
-          condition_data?: Json | null
-          condition_name?: string
-          created_at?: string | null
-          duration_rounds?: number | null
-          expires_at_round?: number | null
-          id?: string
-          participant_id?: string | null
-          save_ability?: string | null
-          save_dc?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combat_conditions_participant_id_fkey"
-            columns: ["participant_id"]
-            isOneToOne: false
-            referencedRelation: "combat_participants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combat_encounters: {
-        Row: {
-          combat_log: Json | null
-          created_at: string | null
-          current_participant_id: string | null
-          current_round: number | null
-          current_turn: number | null
-          description: string | null
-          difficulty: string | null
-          encounter_type: string | null
-          id: string
-          initiative_order: Json | null
-          location_id: string | null
-          session_id: string | null
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          combat_log?: Json | null
-          created_at?: string | null
-          current_participant_id?: string | null
-          current_round?: number | null
-          current_turn?: number | null
-          description?: string | null
-          difficulty?: string | null
-          encounter_type?: string | null
-          id?: string
-          initiative_order?: Json | null
-          location_id?: string | null
-          session_id?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          combat_log?: Json | null
-          created_at?: string | null
-          current_participant_id?: string | null
-          current_round?: number | null
-          current_turn?: number | null
-          description?: string | null
-          difficulty?: string | null
-          encounter_type?: string | null
-          id?: string
-          initiative_order?: Json | null
-          location_id?: string | null
-          session_id?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combat_encounters_current_participant_id_fkey"
-            columns: ["current_participant_id"]
-            isOneToOne: false
-            referencedRelation: "combat_participants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combat_encounters_location_id_fkey"
-            columns: ["location_id"]
-            isOneToOne: false
-            referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combat_encounters_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "game_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combat_participants: {
-        Row: {
-          armor_class: number
-          conditions: Json | null
-          created_at: string | null
-          current_hp: number
-          encounter_id: string | null
-          id: string
-          initiative: number
-          initiative_modifier: number
-          is_active: boolean | null
-          max_hp: number
-          participant_id: string
-          participant_type: string
-          position_x: number | null
-          position_y: number | null
-          temporary_hp: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          armor_class?: number
-          conditions?: Json | null
-          created_at?: string | null
-          current_hp: number
-          encounter_id?: string | null
-          id?: string
-          initiative?: number
-          initiative_modifier?: number
-          is_active?: boolean | null
-          max_hp: number
-          participant_id: string
-          participant_type: string
-          position_x?: number | null
-          position_y?: number | null
-          temporary_hp?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          armor_class?: number
-          conditions?: Json | null
-          created_at?: string | null
-          current_hp?: number
-          encounter_id?: string | null
-          id?: string
-          initiative?: number
-          initiative_modifier?: number
-          is_active?: boolean | null
-          max_hp?: number
-          participant_id?: string
-          participant_type?: string
-          position_x?: number | null
-          position_y?: number | null
-          temporary_hp?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combat_participants_encounter_id_fkey"
-            columns: ["encounter_id"]
-            isOneToOne: false
-            referencedRelation: "combat_encounters"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       dialogue_history: {
         Row: {
@@ -1026,7 +720,6 @@ export type Database = {
           created_at: string | null
           id: string
           message: string
-          sequence_number: number
           session_id: string | null
           speaker_id: string | null
           speaker_type: string | null
@@ -1038,7 +731,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           message: string
-          sequence_number?: number
           session_id?: string | null
           speaker_id?: string | null
           speaker_type?: string | null
@@ -1050,7 +742,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           message?: string
-          sequence_number?: number
           session_id?: string | null
           speaker_id?: string | null
           speaker_type?: string | null
@@ -1059,10 +750,45 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "dialogue_history_session_id_fkey"
+            foreignKeyName: "dialogue_history_session_id_game_sessions_id_fk"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fog_of_war: {
+        Row: {
+          created_at: string
+          id: string
+          revealed_areas: Json
+          scene_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          revealed_areas?: Json
+          scene_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          revealed_areas?: Json
+          scene_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fog_of_war_scene_id_fk"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
             referencedColumns: ["id"]
           },
         ]
@@ -1115,14 +841,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "game_sessions_campaign_id_fkey"
+            foreignKeyName: "game_sessions_campaign_id_campaigns_id_fk"
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "game_sessions_character_id_fkey"
+            foreignKeyName: "game_sessions_character_id_characters_id_fk"
             columns: ["character_id"]
             isOneToOne: false
             referencedRelation: "characters"
@@ -1132,122 +858,169 @@ export type Database = {
       }
       locations: {
         Row: {
-          coordinates: Json | null
+          campaign_id: string
+          climate: string | null
+          connected_locations: string[] | null
           created_at: string | null
           description: string | null
           id: string
+          image_url: string | null
           location_type: string | null
+          map_url: string | null
+          metadata: Json | null
           name: string
-          parent_location_id: string | null
+          notable_features: string[] | null
+          population: number | null
+          terrain: string | null
           updated_at: string | null
-          world_id: string | null
         }
         Insert: {
-          coordinates?: Json | null
+          campaign_id: string
+          climate?: string | null
+          connected_locations?: string[] | null
           created_at?: string | null
           description?: string | null
           id?: string
+          image_url?: string | null
           location_type?: string | null
+          map_url?: string | null
+          metadata?: Json | null
           name: string
-          parent_location_id?: string | null
+          notable_features?: string[] | null
+          population?: number | null
+          terrain?: string | null
           updated_at?: string | null
-          world_id?: string | null
         }
         Update: {
-          coordinates?: Json | null
+          campaign_id?: string
+          climate?: string | null
+          connected_locations?: string[] | null
           created_at?: string | null
           description?: string | null
           id?: string
+          image_url?: string | null
           location_type?: string | null
+          map_url?: string | null
+          metadata?: Json | null
           name?: string
-          parent_location_id?: string | null
+          notable_features?: string[] | null
+          population?: number | null
+          terrain?: string | null
           updated_at?: string | null
-          world_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "locations_parent_location_id_fkey"
-            columns: ["parent_location_id"]
+            foreignKeyName: "locations_campaign_id_campaigns_id_fk"
+            columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "locations"
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      measurement_templates: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string
+          direction: number
+          distance: number
+          id: string
+          is_temporary: boolean
+          opacity: number
+          origin_x: number
+          origin_y: number
+          scene_id: string
+          template_type: Database["public"]["Enums"]["template_type"]
+          width: number | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by: string
+          direction: number
+          distance: number
+          id?: string
+          is_temporary?: boolean
+          opacity?: number
+          origin_x: number
+          origin_y: number
+          scene_id: string
+          template_type: Database["public"]["Enums"]["template_type"]
+          width?: number | null
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string
+          direction?: number
+          distance?: number
+          id?: string
+          is_temporary?: boolean
+          opacity?: number
+          origin_x?: number
+          origin_y?: number
+          scene_id?: string
+          template_type?: Database["public"]["Enums"]["template_type"]
+          width?: number | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "locations_world_id_fkey"
-            columns: ["world_id"]
+            foreignKeyName: "measurement_templates_scene_id_fk"
+            columns: ["scene_id"]
             isOneToOne: false
-            referencedRelation: "worlds"
+            referencedRelation: "scenes"
             referencedColumns: ["id"]
           },
         ]
       }
       memories: {
         Row: {
-          category: string | null
-          chapter_marker: boolean | null
+          campaign_id: string | null
           content: string
-          context_id: string | null
+          context: Json | null
           created_at: string | null
           embedding: string | null
-          emotional_tone: string | null
           id: string
           importance: number | null
-          metadata: Json | null
-          narrative_weight: number | null
-          prose_quality: boolean | null
-          related_memories: string[] | null
+          memory_type: string | null
           session_id: string | null
-          story_arc: string | null
-          subcategory: string | null
-          tags: string[] | null
-          type: string
           updated_at: string | null
         }
         Insert: {
-          category?: string | null
-          chapter_marker?: boolean | null
+          campaign_id?: string | null
           content: string
-          context_id?: string | null
+          context?: Json | null
           created_at?: string | null
           embedding?: string | null
-          emotional_tone?: string | null
           id?: string
           importance?: number | null
-          metadata?: Json | null
-          narrative_weight?: number | null
-          prose_quality?: boolean | null
-          related_memories?: string[] | null
+          memory_type?: string | null
           session_id?: string | null
-          story_arc?: string | null
-          subcategory?: string | null
-          tags?: string[] | null
-          type: string
           updated_at?: string | null
         }
         Update: {
-          category?: string | null
-          chapter_marker?: boolean | null
+          campaign_id?: string | null
           content?: string
-          context_id?: string | null
+          context?: Json | null
           created_at?: string | null
           embedding?: string | null
-          emotional_tone?: string | null
           id?: string
           importance?: number | null
-          metadata?: Json | null
-          narrative_weight?: number | null
-          prose_quality?: boolean | null
-          related_memories?: string[] | null
+          memory_type?: string | null
           session_id?: string | null
-          story_arc?: string | null
-          subcategory?: string | null
-          tags?: string[] | null
-          type?: string
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "memories_session_id_fkey"
+            foreignKeyName: "memories_campaign_id_campaigns_id_fk"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memories_session_id_game_sessions_id_fk"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "game_sessions"
@@ -1255,772 +1028,966 @@ export type Database = {
           },
         ]
       }
-      message_acknowledgments: {
-        Row: {
-          acknowledged_at: string | null
-          attempts: number | null
-          created_at: string | null
-          error: string | null
-          id: string
-          last_attempt: string | null
-          message_id: string | null
-          metadata: Json | null
-          status: string
-          timeout_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          attempts?: number | null
-          created_at?: string | null
-          error?: string | null
-          id?: string
-          last_attempt?: string | null
-          message_id?: string | null
-          metadata?: Json | null
-          status?: string
-          timeout_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          acknowledged_at?: string | null
-          attempts?: number | null
-          created_at?: string | null
-          error?: string | null
-          id?: string
-          last_attempt?: string | null
-          message_id?: string | null
-          metadata?: Json | null
-          status?: string
-          timeout_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_acknowledgments_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "agent_communications"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      message_sequences: {
-        Row: {
-          created_at: string | null
-          id: string
-          message_id: string
-          sequence_number: number
-          updated_at: string | null
-          vector_clock: Json
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          message_id: string
-          sequence_number: number
-          updated_at?: string | null
-          vector_clock?: Json
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          message_id?: string
-          sequence_number?: number
-          updated_at?: string | null
-          vector_clock?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "message_sequences_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: true
-            referencedRelation: "agent_communications"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       npcs: {
         Row: {
-          class: string | null
+          backstory: string | null
+          campaign_id: string
           created_at: string | null
-          current_location_id: string | null
           description: string | null
           id: string
-          level: number | null
+          image_url: string | null
+          location: string | null
           name: string
+          occupation: string | null
           personality: string | null
           race: string | null
+          relationship: string | null
           stats: Json | null
           updated_at: string | null
-          world_id: string | null
+          voice_id: string | null
         }
         Insert: {
-          class?: string | null
+          backstory?: string | null
+          campaign_id: string
           created_at?: string | null
-          current_location_id?: string | null
           description?: string | null
           id?: string
-          level?: number | null
+          image_url?: string | null
+          location?: string | null
           name: string
+          occupation?: string | null
           personality?: string | null
           race?: string | null
+          relationship?: string | null
           stats?: Json | null
           updated_at?: string | null
-          world_id?: string | null
+          voice_id?: string | null
         }
         Update: {
-          class?: string | null
+          backstory?: string | null
+          campaign_id?: string
           created_at?: string | null
-          current_location_id?: string | null
           description?: string | null
           id?: string
-          level?: number | null
+          image_url?: string | null
+          location?: string | null
           name?: string
+          occupation?: string | null
           personality?: string | null
           race?: string | null
+          relationship?: string | null
           stats?: Json | null
           updated_at?: string | null
-          world_id?: string | null
+          voice_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "npcs_current_location_id_fkey"
-            columns: ["current_location_id"]
+            foreignKeyName: "npcs_campaign_id_campaigns_id_fk"
+            columns: ["campaign_id"]
             isOneToOne: false
-            referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "npcs_world_id_fkey"
-            columns: ["world_id"]
-            isOneToOne: false
-            referencedRelation: "worlds"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      Oversight: {
-        Row: {
-          created_at: string
-          id: number
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-        }
-        Update: {
-          created_at?: string
-          id?: number
-        }
-        Relationships: []
-      }
-      prompts: {
-        Row: {
-          category: string
-          created_at: string
-          id: string
-          prompt: string
-          tags: string[]
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          category: string
-          created_at?: string
-          id?: string
-          prompt: string
-          tags?: string[]
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          id?: string
-          prompt?: string
-          tags?: string[]
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      quest_progress: {
-        Row: {
-          character_id: string | null
-          created_at: string | null
-          current_objective: string | null
-          id: string
-          progress_data: Json | null
-          quest_id: string | null
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          character_id?: string | null
-          created_at?: string | null
-          current_objective?: string | null
-          id?: string
-          progress_data?: Json | null
-          quest_id?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          character_id?: string | null
-          created_at?: string | null
-          current_objective?: string | null
-          id?: string
-          progress_data?: Json | null
-          quest_id?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quest_progress_character_id_fkey"
-            columns: ["character_id"]
-            isOneToOne: false
-            referencedRelation: "characters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "quest_progress_quest_id_fkey"
-            columns: ["quest_id"]
-            isOneToOne: false
-            referencedRelation: "quests"
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
         ]
       }
       quests: {
         Row: {
-          campaign_id: string | null
+          campaign_id: string
           created_at: string | null
           description: string | null
           difficulty: string | null
           id: string
-          prerequisites: Json | null
+          location_id: string | null
+          metadata: Json | null
+          objectives: string[] | null
+          quest_giver: string | null
           quest_type: string | null
-          rewards: Json | null
+          rewards: string[] | null
           status: string | null
           title: string
           updated_at: string | null
         }
         Insert: {
-          campaign_id?: string | null
+          campaign_id: string
           created_at?: string | null
           description?: string | null
           difficulty?: string | null
           id?: string
-          prerequisites?: Json | null
+          location_id?: string | null
+          metadata?: Json | null
+          objectives?: string[] | null
+          quest_giver?: string | null
           quest_type?: string | null
-          rewards?: Json | null
+          rewards?: string[] | null
           status?: string | null
           title: string
           updated_at?: string | null
         }
         Update: {
-          campaign_id?: string | null
+          campaign_id?: string
           created_at?: string | null
           description?: string | null
           difficulty?: string | null
           id?: string
-          prerequisites?: Json | null
+          location_id?: string | null
+          metadata?: Json | null
+          objectives?: string[] | null
+          quest_giver?: string | null
           quest_type?: string | null
-          rewards?: Json | null
+          rewards?: string[] | null
           status?: string | null
           title?: string
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "quests_campaign_id_fkey"
+            foreignKeyName: "quests_campaign_id_campaigns_id_fk"
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "quests_location_id_locations_id_fk"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      rule_validations: {
+      races: {
         Row: {
+          ability_score_increases: Json | null
           created_at: string | null
+          description: string | null
           id: string
-          is_active: boolean | null
-          rule_category: string
-          rule_conditions: Json | null
-          rule_description: string | null
-          rule_exceptions: Json | null
-          rule_references: Json | null
-          rule_requirements: Json | null
-          rule_source: string | null
-          rule_type: string
+          languages: string[] | null
+          name: string
+          size: string | null
+          speed: number | null
+          traits: Json | null
           updated_at: string | null
-          validation_data: Json
         }
         Insert: {
+          ability_score_increases?: Json | null
           created_at?: string | null
+          description?: string | null
           id?: string
-          is_active?: boolean | null
-          rule_category: string
-          rule_conditions?: Json | null
-          rule_description?: string | null
-          rule_exceptions?: Json | null
-          rule_references?: Json | null
-          rule_requirements?: Json | null
-          rule_source?: string | null
-          rule_type: string
+          languages?: string[] | null
+          name: string
+          size?: string | null
+          speed?: number | null
+          traits?: Json | null
           updated_at?: string | null
-          validation_data: Json
         }
         Update: {
+          ability_score_increases?: Json | null
           created_at?: string | null
+          description?: string | null
           id?: string
-          is_active?: boolean | null
-          rule_category?: string
-          rule_conditions?: Json | null
-          rule_description?: string | null
-          rule_exceptions?: Json | null
-          rule_references?: Json | null
-          rule_requirements?: Json | null
-          rule_source?: string | null
-          rule_type?: string
+          languages?: string[] | null
+          name?: string
+          size?: string | null
+          speed?: number | null
+          traits?: Json | null
           updated_at?: string | null
-          validation_data?: Json
         }
         Relationships: []
       }
-      sync_status: {
+      scene_drawings: {
         Row: {
-          agent_id: string
-          created_at: string | null
+          created_at: string
+          created_by: string
+          drawing_type: Database["public"]["Enums"]["drawing_type"]
+          fill_color: string | null
+          fill_opacity: number
+          font_family: string | null
+          font_size: number | null
           id: string
-          last_sync_timestamp: string
-          sync_state: Json
-          updated_at: string | null
-          vector_clock: Json
+          points_data: Json
+          scene_id: string
+          stroke_color: string
+          stroke_width: number
+          text_content: string | null
+          updated_at: string
+          z_index: number
         }
         Insert: {
-          agent_id: string
-          created_at?: string | null
+          created_at?: string
+          created_by: string
+          drawing_type: Database["public"]["Enums"]["drawing_type"]
+          fill_color?: string | null
+          fill_opacity?: number
+          font_family?: string | null
+          font_size?: number | null
           id?: string
-          last_sync_timestamp?: string
-          sync_state?: Json
-          updated_at?: string | null
-          vector_clock?: Json
+          points_data: Json
+          scene_id: string
+          stroke_color: string
+          stroke_width: number
+          text_content?: string | null
+          updated_at?: string
+          z_index?: number
         }
         Update: {
-          agent_id?: string
-          created_at?: string | null
+          created_at?: string
+          created_by?: string
+          drawing_type?: Database["public"]["Enums"]["drawing_type"]
+          fill_color?: string | null
+          fill_opacity?: number
+          font_family?: string | null
+          font_size?: number | null
           id?: string
-          last_sync_timestamp?: string
-          sync_state?: Json
-          updated_at?: string | null
-          vector_clock?: Json
+          points_data?: Json
+          scene_id?: string
+          stroke_color?: string
+          stroke_width?: number
+          text_content?: string | null
+          updated_at?: string
+          z_index?: number
         }
         Relationships: [
           {
-            foreignKeyName: "sync_status_agent_id_fkey"
-            columns: ["agent_id"]
+            foreignKeyName: "scene_drawings_scene_id_fk"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scene_layers: {
+        Row: {
+          created_at: string
+          id: string
+          is_visible: boolean
+          layer_type: string
+          locked: boolean
+          opacity: number
+          scene_id: string
+          updated_at: string
+          z_index: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          layer_type: string
+          locked?: boolean
+          opacity?: number
+          scene_id: string
+          updated_at?: string
+          z_index: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          layer_type?: string
+          locked?: boolean
+          opacity?: number
+          scene_id?: string
+          updated_at?: string
+          z_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_layers_scene_id_fk"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scene_settings: {
+        Row: {
+          ambient_light_level: number
+          created_at: string
+          darkness_level: number
+          enable_dynamic_lighting: boolean
+          enable_fog_of_war: boolean
+          grid_opacity: number
+          id: string
+          scene_id: string
+          snap_to_grid: boolean
+          time_of_day: string | null
+          updated_at: string
+          weather_effects: string | null
+        }
+        Insert: {
+          ambient_light_level?: number
+          created_at?: string
+          darkness_level?: number
+          enable_dynamic_lighting?: boolean
+          enable_fog_of_war?: boolean
+          grid_opacity?: number
+          id?: string
+          scene_id: string
+          snap_to_grid?: boolean
+          time_of_day?: string | null
+          updated_at?: string
+          weather_effects?: string | null
+        }
+        Update: {
+          ambient_light_level?: number
+          created_at?: string
+          darkness_level?: number
+          enable_dynamic_lighting?: boolean
+          enable_fog_of_war?: boolean
+          grid_opacity?: number
+          id?: string
+          scene_id?: string
+          snap_to_grid?: boolean
+          time_of_day?: string | null
+          updated_at?: string
+          weather_effects?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_settings_scene_id_fk"
+            columns: ["scene_id"]
             isOneToOne: true
-            referencedRelation: "agent_states"
+            referencedRelation: "scenes"
             referencedColumns: ["id"]
           },
         ]
       }
-      task_queue: {
+      scenes: {
         Row: {
-          assigned_agent_id: string | null
-          completed_at: string | null
-          created_at: string | null
-          data: Json
-          error: string | null
-          id: string
-          priority: number | null
-          result: Json | null
-          status: string
-          task_type: string
-          updated_at: string | null
-        }
-        Insert: {
-          assigned_agent_id?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          data?: Json
-          error?: string | null
-          id?: string
-          priority?: number | null
-          result?: Json | null
-          status?: string
-          task_type: string
-          updated_at?: string | null
-        }
-        Update: {
-          assigned_agent_id?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          data?: Json
-          error?: string | null
-          id?: string
-          priority?: number | null
-          result?: Json | null
-          status?: string
-          task_type?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_queue_assigned_agent_id_fkey"
-            columns: ["assigned_agent_id"]
-            isOneToOne: false
-            referencedRelation: "agent_states"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_profiles: {
-        Row: {
-          blog_role: string
-          created_at: string | null
-          email: string
-          plan: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          blog_role?: string
-          created_at?: string | null
-          email: string
-          plan?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          blog_role?: string
-          created_at?: string | null
-          email?: string
-          plan?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      world_factions: {
-        Row: {
-          created_at: string | null
+          background_image_url: string | null
+          campaign_id: string
+          created_at: string
           description: string | null
-          faction_type: string | null
+          grid_color: string | null
+          grid_size: number
+          grid_type: string
+          height: number
           id: string
-          influence_level: number | null
+          is_active: boolean
           name: string
-          relationships: Json | null
-          updated_at: string | null
-          world_id: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+          width: number
         }
         Insert: {
-          created_at?: string | null
+          background_image_url?: string | null
+          campaign_id: string
+          created_at?: string
           description?: string | null
-          faction_type?: string | null
+          grid_color?: string | null
+          grid_size?: number
+          grid_type?: string
+          height: number
           id?: string
-          influence_level?: number | null
+          is_active?: boolean
           name: string
-          relationships?: Json | null
-          updated_at?: string | null
-          world_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+          width: number
         }
         Update: {
-          created_at?: string | null
+          background_image_url?: string | null
+          campaign_id?: string
+          created_at?: string
           description?: string | null
-          faction_type?: string | null
+          grid_color?: string | null
+          grid_size?: number
+          grid_type?: string
+          height?: number
           id?: string
-          influence_level?: number | null
+          is_active?: boolean
           name?: string
-          relationships?: Json | null
-          updated_at?: string | null
-          world_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+          width?: number
         }
         Relationships: [
           {
-            foreignKeyName: "world_factions_world_id_fkey"
-            columns: ["world_id"]
-            isOneToOne: false
-            referencedRelation: "worlds"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      world_history: {
-        Row: {
-          affected_factions: Json | null
-          created_at: string | null
-          description: string | null
-          event_date: string | null
-          event_name: string
-          id: string
-          significance_level: number | null
-          updated_at: string | null
-          world_id: string | null
-        }
-        Insert: {
-          affected_factions?: Json | null
-          created_at?: string | null
-          description?: string | null
-          event_date?: string | null
-          event_name: string
-          id?: string
-          significance_level?: number | null
-          updated_at?: string | null
-          world_id?: string | null
-        }
-        Update: {
-          affected_factions?: Json | null
-          created_at?: string | null
-          description?: string | null
-          event_date?: string | null
-          event_name?: string
-          id?: string
-          significance_level?: number | null
-          updated_at?: string | null
-          world_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "world_history_world_id_fkey"
-            columns: ["world_id"]
-            isOneToOne: false
-            referencedRelation: "worlds"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      worlds: {
-        Row: {
-          campaign_id: string | null
-          climate_type: string | null
-          created_at: string | null
-          description: string | null
-          id: string
-          magic_level: string | null
-          name: string
-          technology_level: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          campaign_id?: string | null
-          climate_type?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          magic_level?: string | null
-          name: string
-          technology_level?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          campaign_id?: string | null
-          climate_type?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          magic_level?: string | null
-          name?: string
-          technology_level?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "worlds_campaign_id_fkey"
+            foreignKeyName: "scenes_campaign_id_fk"
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
         ]
+      }
+      spells: {
+        Row: {
+          area_of_effect: Json | null
+          attack_type: string | null
+          casting_time: string
+          components_material: boolean | null
+          components_somatic: boolean | null
+          components_verbal: boolean | null
+          concentration: boolean | null
+          created_at: string | null
+          damage_at_slot_level: Json | null
+          damage_type: string | null
+          description: string
+          duration: string
+          heal_at_slot_level: Json | null
+          higher_level_text: string | null
+          id: string
+          level: number
+          material_components: string | null
+          material_consumed: boolean | null
+          material_cost_gp: number | null
+          name: string
+          range_text: string
+          ritual: boolean | null
+          school: string
+          updated_at: string | null
+        }
+        Insert: {
+          area_of_effect?: Json | null
+          attack_type?: string | null
+          casting_time: string
+          components_material?: boolean | null
+          components_somatic?: boolean | null
+          components_verbal?: boolean | null
+          concentration?: boolean | null
+          created_at?: string | null
+          damage_at_slot_level?: Json | null
+          damage_type?: string | null
+          description: string
+          duration: string
+          heal_at_slot_level?: Json | null
+          higher_level_text?: string | null
+          id?: string
+          level: number
+          material_components?: string | null
+          material_consumed?: boolean | null
+          material_cost_gp?: number | null
+          name: string
+          range_text: string
+          ritual?: boolean | null
+          school: string
+          updated_at?: string | null
+        }
+        Update: {
+          area_of_effect?: Json | null
+          attack_type?: string | null
+          casting_time?: string
+          components_material?: boolean | null
+          components_somatic?: boolean | null
+          components_verbal?: boolean | null
+          concentration?: boolean | null
+          created_at?: string | null
+          damage_at_slot_level?: Json | null
+          damage_type?: string | null
+          description?: string
+          duration?: string
+          heal_at_slot_level?: Json | null
+          higher_level_text?: string | null
+          id?: string
+          level?: number
+          material_components?: string | null
+          material_consumed?: boolean | null
+          material_cost_gp?: number | null
+          name?: string
+          range_text?: string
+          ritual?: boolean | null
+          school?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      token_configurations: {
+        Row: {
+          avatar_url: string | null
+          border_color: string | null
+          border_width: number | null
+          bright_light_range: number | null
+          character_id: string | null
+          created_at: string
+          darkvision_range: number | null
+          dim_light_range: number | null
+          emits_light: boolean | null
+          grid_size: string | null
+          has_flying: boolean | null
+          has_swimming: boolean | null
+          id: string
+          image_url: string | null
+          light_angle: number | null
+          light_color: string | null
+          light_intensity: number | null
+          light_range: number | null
+          monster_id: string | null
+          movement_speed: number | null
+          nameplate_position: string | null
+          night_vision: boolean | null
+          opacity: number | null
+          scale: number | null
+          show_nameplate: boolean | null
+          size_height: number | null
+          size_width: number | null
+          tint_color: string | null
+          updated_at: string
+          vision_angle: number | null
+          vision_enabled: boolean | null
+          vision_range: number | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          border_color?: string | null
+          border_width?: number | null
+          bright_light_range?: number | null
+          character_id?: string | null
+          created_at?: string
+          darkvision_range?: number | null
+          dim_light_range?: number | null
+          emits_light?: boolean | null
+          grid_size?: string | null
+          has_flying?: boolean | null
+          has_swimming?: boolean | null
+          id?: string
+          image_url?: string | null
+          light_angle?: number | null
+          light_color?: string | null
+          light_intensity?: number | null
+          light_range?: number | null
+          monster_id?: string | null
+          movement_speed?: number | null
+          nameplate_position?: string | null
+          night_vision?: boolean | null
+          opacity?: number | null
+          scale?: number | null
+          show_nameplate?: boolean | null
+          size_height?: number | null
+          size_width?: number | null
+          tint_color?: string | null
+          updated_at?: string
+          vision_angle?: number | null
+          vision_enabled?: boolean | null
+          vision_range?: number | null
+        }
+        Update: {
+          avatar_url?: string | null
+          border_color?: string | null
+          border_width?: number | null
+          bright_light_range?: number | null
+          character_id?: string | null
+          created_at?: string
+          darkvision_range?: number | null
+          dim_light_range?: number | null
+          emits_light?: boolean | null
+          grid_size?: string | null
+          has_flying?: boolean | null
+          has_swimming?: boolean | null
+          id?: string
+          image_url?: string | null
+          light_angle?: number | null
+          light_color?: string | null
+          light_intensity?: number | null
+          light_range?: number | null
+          monster_id?: string | null
+          movement_speed?: number | null
+          nameplate_position?: string | null
+          night_vision?: boolean | null
+          opacity?: number | null
+          scale?: number | null
+          show_nameplate?: boolean | null
+          size_height?: number | null
+          size_width?: number | null
+          tint_color?: string | null
+          updated_at?: string
+          vision_angle?: number | null
+          vision_enabled?: boolean | null
+          vision_range?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_configurations_character_id_fk"
+            columns: ["character_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tokens: {
+        Row: {
+          actor_id: string | null
+          avatar_url: string | null
+          border_color: string | null
+          border_width: number | null
+          bright_light_range: number | null
+          created_at: string
+          created_by: string
+          darkvision_range: number | null
+          dim_light_range: number | null
+          elevation: number | null
+          emits_light: boolean | null
+          grid_size: string
+          has_flying: boolean | null
+          has_swimming: boolean | null
+          id: string
+          image_url: string | null
+          is_hidden: boolean | null
+          is_locked: boolean | null
+          is_visible: boolean | null
+          light_angle: number | null
+          light_color: string | null
+          light_intensity: number | null
+          light_range: number | null
+          movement_speed: number | null
+          name: string
+          nameplate_position: string | null
+          night_vision: boolean | null
+          opacity: number | null
+          position_x: number
+          position_y: number
+          rotation: number | null
+          scale: number | null
+          scene_id: string
+          show_nameplate: boolean | null
+          size_height: number
+          size_width: number
+          tint_color: string | null
+          token_type: string
+          updated_at: string
+          vision_angle: number | null
+          vision_enabled: boolean | null
+          vision_range: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          avatar_url?: string | null
+          border_color?: string | null
+          border_width?: number | null
+          bright_light_range?: number | null
+          created_at?: string
+          created_by: string
+          darkvision_range?: number | null
+          dim_light_range?: number | null
+          elevation?: number | null
+          emits_light?: boolean | null
+          grid_size: string
+          has_flying?: boolean | null
+          has_swimming?: boolean | null
+          id?: string
+          image_url?: string | null
+          is_hidden?: boolean | null
+          is_locked?: boolean | null
+          is_visible?: boolean | null
+          light_angle?: number | null
+          light_color?: string | null
+          light_intensity?: number | null
+          light_range?: number | null
+          movement_speed?: number | null
+          name: string
+          nameplate_position?: string | null
+          night_vision?: boolean | null
+          opacity?: number | null
+          position_x: number
+          position_y: number
+          rotation?: number | null
+          scale?: number | null
+          scene_id: string
+          show_nameplate?: boolean | null
+          size_height: number
+          size_width: number
+          tint_color?: string | null
+          token_type: string
+          updated_at?: string
+          vision_angle?: number | null
+          vision_enabled?: boolean | null
+          vision_range?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          avatar_url?: string | null
+          border_color?: string | null
+          border_width?: number | null
+          bright_light_range?: number | null
+          created_at?: string
+          created_by?: string
+          darkvision_range?: number | null
+          dim_light_range?: number | null
+          elevation?: number | null
+          emits_light?: boolean | null
+          grid_size?: string
+          has_flying?: boolean | null
+          has_swimming?: boolean | null
+          id?: string
+          image_url?: string | null
+          is_hidden?: boolean | null
+          is_locked?: boolean | null
+          is_visible?: boolean | null
+          light_angle?: number | null
+          light_color?: string | null
+          light_intensity?: number | null
+          light_range?: number | null
+          movement_speed?: number | null
+          name?: string
+          nameplate_position?: string | null
+          night_vision?: boolean | null
+          opacity?: number | null
+          position_x?: number
+          position_y?: number
+          rotation?: number | null
+          scale?: number | null
+          scene_id?: string
+          show_nameplate?: boolean | null
+          size_height?: number
+          size_width?: number
+          tint_color?: string | null
+          token_type?: string
+          updated_at?: string
+          vision_angle?: number | null
+          vision_enabled?: boolean | null
+          vision_range?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tokens_scene_id_fk"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          plan: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          plan?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          plan?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vision_blocking_shapes: {
+        Row: {
+          blocks_light: boolean
+          blocks_movement: boolean
+          blocks_vision: boolean
+          created_at: string
+          created_by: string
+          door_state: string | null
+          id: string
+          is_one_way: boolean
+          points_data: Json
+          scene_id: string
+          shape_type: string
+          updated_at: string
+        }
+        Insert: {
+          blocks_light?: boolean
+          blocks_movement?: boolean
+          blocks_vision?: boolean
+          created_at?: string
+          created_by: string
+          door_state?: string | null
+          id?: string
+          is_one_way?: boolean
+          points_data: Json
+          scene_id: string
+          shape_type: string
+          updated_at?: string
+        }
+        Update: {
+          blocks_light?: boolean
+          blocks_movement?: boolean
+          blocks_vision?: boolean
+          created_at?: string
+          created_by?: string
+          door_state?: string | null
+          id?: string
+          is_one_way?: boolean
+          points_data?: Json
+          scene_id?: string
+          shape_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_blocking_shapes_scene_id_fk"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waitlist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
-      blog_user_roles: {
+      pg_stat_statements: {
         Row: {
-          role: string
-          user_id: string
+          blk_read_time: number | null
+          blk_write_time: number | null
+          calls: number | null
+          dbid: unknown
+          jit_emission_count: number | null
+          jit_emission_time: number | null
+          jit_functions: number | null
+          jit_generation_time: number | null
+          jit_inlining_count: number | null
+          jit_inlining_time: number | null
+          jit_optimization_count: number | null
+          jit_optimization_time: number | null
+          local_blks_dirtied: number | null
+          local_blks_hit: number | null
+          local_blks_read: number | null
+          local_blks_written: number | null
+          max_exec_time: number | null
+          max_plan_time: number | null
+          mean_exec_time: number | null
+          mean_plan_time: number | null
+          min_exec_time: number | null
+          min_plan_time: number | null
+          plans: number | null
+          query: string | null
+          queryid: number | null
+          rows: number | null
+          shared_blks_dirtied: number | null
+          shared_blks_hit: number | null
+          shared_blks_read: number | null
+          shared_blks_written: number | null
+          stddev_exec_time: number | null
+          stddev_plan_time: number | null
+          temp_blk_read_time: number | null
+          temp_blk_write_time: number | null
+          temp_blks_read: number | null
+          temp_blks_written: number | null
+          toplevel: boolean | null
+          total_exec_time: number | null
+          total_plan_time: number | null
+          userid: unknown
+          wal_bytes: number | null
+          wal_fpi: number | null
+          wal_records: number | null
+        }
+        Relationships: []
+      }
+      pg_stat_statements_info: {
+        Row: {
+          dealloc: number | null
+          stats_reset: string | null
         }
         Relationships: []
       }
     }
     Functions: {
-      blog_role_for_user: {
-        Args: {
-          p_user_id?: string | null
-        }
+      algorithm_sign: {
+        Args: { algorithm: string; secret: string; signables: string }
         Returns: string
       }
-      can_manage_blog_author: {
-        Args: {
-          p_author_id: string
-          p_user_id?: string | null
-        }
-        Returns: boolean
+      dearmor: { Args: { "": string }; Returns: string }
+      gen_random_uuid: { Args: never; Returns: string }
+      gen_salt: { Args: { "": string }; Returns: string }
+      pg_stat_statements: {
+        Args: { showtext: boolean }
+        Returns: Record<string, unknown>[]
       }
-      can_manage_blog_post: {
-        Args: {
-          p_post_id: string
-          p_user_id?: string | null
-        }
-        Returns: boolean
-      }
-      is_blog_admin: {
-        Args: {
-          p_user_id?: string | null
-        }
-        Returns: boolean
-      }
-      is_blog_author: {
-        Args: {
-          p_user_id?: string | null
-        }
-        Returns: boolean
-      }
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
-      calculate_relevance_score: {
-        Args: {
-          category_match_score: number
-          days_old: number
-          is_featured: boolean
-          tag_match_score: number
-          title_match_score: number
-          view_count: number
-        }
-        Returns: number
-      }
-      calculate_suggestion_score: {
-        Args: {
-          category_match: boolean
-          historical_usage: number
-          original_term: string
-          suggested_term: string
-          tag_similarity: number
-          view_count_proximity: number
-        }
-        Returns: number
-      }
-      create_tools_table: {
-        Args: Record<PropertyKey, never>
+      pg_stat_statements_info: { Args: never; Returns: Record<string, unknown> }
+      pg_stat_statements_reset: {
+        Args: { dbid?: unknown; queryid?: number; userid?: unknown }
         Returns: undefined
       }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
+      pgp_armor_headers: {
         Args: { "": string }
-        Returns: number
+        Returns: Record<string, unknown>[]
       }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
+      sign: {
+        Args: { algorithm?: string; payload: Json; secret: string }
         Returns: string
       }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
+      try_cast_double: { Args: { inp: string }; Returns: number }
+      url_decode: { Args: { data: string }; Returns: string }
+      url_encode: { Args: { data: string }; Returns: string }
+      uuid_generate_v1: { Args: never; Returns: string }
+      uuid_generate_v1mc: { Args: never; Returns: string }
+      uuid_generate_v3: {
+        Args: { name: string; namespace: string }
+        Returns: string
+      }
+      uuid_generate_v4: { Args: never; Returns: string }
+      uuid_generate_v5: {
+        Args: { name: string; namespace: string }
+        Returns: string
+      }
+      uuid_nil: { Args: never; Returns: string }
+      uuid_ns_dns: { Args: never; Returns: string }
+      uuid_ns_oid: { Args: never; Returns: string }
+      uuid_ns_url: { Args: never; Returns: string }
+      uuid_ns_x500: { Args: never; Returns: string }
+      verify: {
+        Args: { algorithm?: string; secret: string; token: string }
+        Returns: {
+          header: Json
+          payload: Json
+          valid: boolean
+        }[]
       }
     }
     Enums: {
-      media_type: "Newspaper" | "Document" | "Photo" | "Video" | "Audio"
-      memory_subcategory:
-        | "current_location"
-        | "previous_location"
-        | "npc"
-        | "player"
-        | "player_action"
-        | "npc_action"
-        | "dialogue"
-        | "description"
-        | "environment"
-        | "item"
-        | "general"
-      timeline_category:
-        | "Technology"
-        | "Political"
-        | "Cultural"
-        | "Economic"
-        | "Military"
-        | "Scientific"
+      drawing_type:
+        | "freehand"
+        | "line"
+        | "circle"
+        | "rectangle"
+        | "polygon"
+        | "text"
+      permission_level: "viewer" | "editor" | "owner"
+      sharing_mode: "private" | "view_only" | "can_edit" | "co_owner"
+      template_type: "cone" | "cube" | "sphere" | "cylinder" | "line" | "ray"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2146,30 +2113,23 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
-      media_type: ["Newspaper", "Document", "Photo", "Video", "Audio"],
-      memory_subcategory: [
-        "current_location",
-        "previous_location",
-        "npc",
-        "player",
-        "player_action",
-        "npc_action",
-        "dialogue",
-        "description",
-        "environment",
-        "item",
-        "general",
+      drawing_type: [
+        "freehand",
+        "line",
+        "circle",
+        "rectangle",
+        "polygon",
+        "text",
       ],
-      timeline_category: [
-        "Technology",
-        "Political",
-        "Cultural",
-        "Economic",
-        "Military",
-        "Scientific",
-      ],
+      permission_level: ["viewer", "editor", "owner"],
+      sharing_mode: ["private", "view_only", "can_edit", "co_owner"],
+      template_type: ["cone", "cube", "sphere", "cylinder", "line", "ray"],
     },
   },
 } as const
+
