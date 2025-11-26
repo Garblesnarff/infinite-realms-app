@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Sparkles } from 'lucide-react';
 
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * QuotaDisplay Component
@@ -11,17 +11,18 @@ import { supabase } from '@/integrations/supabase/client';
  * Fetches data from backend /v1/llm/quota endpoint.
  */
 export function QuotaDisplay() {
-  const { data: quota, isLoading } = useQuery({
-    queryKey: ['llm-quota'],
-    queryFn: async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+  const { session } = useAuth();
 
-      const response = await fetch('http://localhost:8888/v1/llm/quota', {
+  const { data: quota, isLoading } = useQuery({
+    queryKey: ['llm-quota', session?.access_token],
+    queryFn: async () => {
+      const accessToken = session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
+
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiUrl}/v1/llm/quota`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -38,6 +39,7 @@ export function QuotaDisplay() {
         resetAt: string;
       }>;
     },
+    enabled: !!session?.access_token,
     refetchInterval: 60000, // Refetch every minute
     staleTime: 30000, // Consider data stale after 30 seconds
   });

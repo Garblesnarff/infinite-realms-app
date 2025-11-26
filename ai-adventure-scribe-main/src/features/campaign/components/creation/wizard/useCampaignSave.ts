@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { campaignImageGenerator } from '@/services/campaign-image-generator';
@@ -14,6 +15,7 @@ export const useCampaignSave = () => {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   /**
    * Saves campaign data to Supabase and generates background image
@@ -24,11 +26,6 @@ export const useCampaignSave = () => {
     setIsSaving(true);
     try {
       logger.info('Creating campaign and generating background image...');
-
-      // Get current user if authenticated
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
 
       // First, save the campaign without the background image
       // Extract background_image and map camelCase to snake_case fields

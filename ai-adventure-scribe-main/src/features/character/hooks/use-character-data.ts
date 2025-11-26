@@ -33,6 +33,7 @@ import { logger } from '../lib/logger';
 
 import type { Character, AbilityScores } from '@/types/character';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
 import { supabase } from '@/integrations/supabase/client';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
@@ -270,6 +271,7 @@ export const useCharacterData = (characterId: string | undefined) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   /**
    * Validates character ID and handles invalid cases
@@ -299,11 +301,8 @@ export const useCharacterData = (characterId: string | undefined) => {
     try {
       setLoading(true);
 
-      // Get the current user session for ownership check
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+      // Check WorkOS authentication
+      if (!user) {
         toast({
           title: 'Not Authenticated',
           description: 'Please log in to view your characters.',
@@ -323,7 +322,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         `,
         )
         .eq('id', characterId!)
-        .eq('user_id', session.user.id) // CRITICAL: Add ownership check
+        .eq('user_id', user.id) // CRITICAL: Add ownership check
         .maybeSingle();
 
       if (characterError) throw characterError;
@@ -377,7 +376,7 @@ export const useCharacterData = (characterId: string | undefined) => {
   // Fetch character data on mount or when characterId changes
   useEffect(() => {
     fetchCharacter();
-  }, [characterId, navigate, toast]);
+  }, [characterId, navigate, toast, user]);
 
   return { character, loading, refetch: fetchCharacter };
 };
