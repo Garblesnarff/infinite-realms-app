@@ -9,6 +9,7 @@ import type { Character } from '@/types/character';
 
 import { CharacterListSkeleton } from '@/components/skeletons/CharacterListSkeleton';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 import { classes } from '@/data/classOptions';
 import { baseRaces } from '@/data/raceOptions';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -36,6 +37,7 @@ const CharacterList: React.FC = () => {
   const cachedCharactersRef = React.useRef<Partial<Character>[]>(cachedCharacters);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const offlineNoticeShown = React.useRef(false);
 
   React.useEffect(() => {
@@ -89,11 +91,8 @@ const CharacterList: React.FC = () => {
         setOfflineMode(false);
         offlineNoticeShown.current = false;
 
-        // Get the current user session for ownership filtering
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) {
+        // Check WorkOS authentication
+        if (!user) {
           toast({
             title: 'Not Authenticated',
             description: 'Please log in to view your characters.',
@@ -103,7 +102,7 @@ const CharacterList: React.FC = () => {
           return;
         }
 
-        setCurrentUserId(session.user.id);
+        setCurrentUserId(user.id);
 
         const { data, error } = await supabase
           .from('characters')
@@ -119,7 +118,7 @@ const CharacterList: React.FC = () => {
           )
         `,
           )
-          .eq('user_id', session.user.id)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -139,7 +138,7 @@ const CharacterList: React.FC = () => {
         }
       }
     },
-    [toast, navigate, setCachedCharacters],
+    [toast, navigate, setCachedCharacters, user],
   );
 
   React.useEffect(() => {

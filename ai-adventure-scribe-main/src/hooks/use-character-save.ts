@@ -8,6 +8,7 @@ import { logger } from '../lib/logger';
 import type { Character } from '@/types/character';
 
 import { useToast } from '@/components/ui/use-toast'; // Assuming kebab-case
+import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
@@ -39,6 +40,7 @@ export const useCharacterSave = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { state: campaignState } = useCampaign();
+  const { user } = useAuth();
 
   /**
    * Saves character data to Supabase
@@ -51,11 +53,6 @@ export const useCharacterSave = () => {
 
     try {
       setIsSaving(true);
-
-      // Get current user if authenticated
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
 
       const effectiveCampaignId = character.campaign_id || campaignState.campaign?.id || null;
 
