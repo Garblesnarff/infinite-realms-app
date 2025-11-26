@@ -50,7 +50,7 @@ BEGIN
     total_level
   )
   VALUES (
-    (character_data->>'user_id')::uuid,
+    character_data->>'user_id',
     (character_data->>'campaign_id')::uuid,
     character_data->>'name',
     character_data->>'race',
