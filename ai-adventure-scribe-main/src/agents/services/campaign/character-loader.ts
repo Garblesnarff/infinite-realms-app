@@ -18,18 +18,27 @@ export class CharacterLoader {
    * Loads character details by session ID.
    *
    * @param {string} sessionId - The session ID
+   * @param {string} userId - Optional user ID for ownership validation (SECURITY: strongly recommended)
    * @returns {Promise<Character | undefined>} The character or undefined if not found
    */
-  async loadCharacter(sessionId: string): Promise<Character | undefined> {
-    const { data: session } = await supabase
+  async loadCharacter(sessionId: string, userId?: string): Promise<Character | undefined> {
+    // Build session query with ownership validation if userId provided
+    let sessionQuery = supabase
       .from('game_sessions')
-      .select('character_id')
-      .eq('id', sessionId)
-      .single();
+      .select('character_id, user_id')
+      .eq('id', sessionId);
+
+    // SECURITY: Validate session ownership if userId provided
+    if (userId) {
+      sessionQuery = sessionQuery.eq('user_id', userId);
+    }
+
+    const { data: session } = await sessionQuery.single();
 
     if (!session?.character_id) return undefined;
 
-    const { data: characterData } = await supabase
+    // Build character query with ownership validation if userId provided
+    let characterQuery = supabase
       .from('characters')
       .select(
         `
@@ -38,8 +47,14 @@ export class CharacterLoader {
         character_equipment (*)
       `,
       )
-      .eq('id', session.character_id)
-      .single();
+      .eq('id', session.character_id);
+
+    // SECURITY: Validate character ownership if userId provided
+    if (userId) {
+      characterQuery = characterQuery.eq('user_id', userId);
+    }
+
+    const { data: characterData } = await characterQuery.single();
 
     if (!characterData) return undefined;
 

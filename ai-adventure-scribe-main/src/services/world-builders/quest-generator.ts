@@ -405,33 +405,43 @@ export class QuestGenerator {
   /**
    * Generate a quest based on current memories and context
    */
+  /**
+   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   */
   static async generateMemoryBasedQuest(
     campaignId: string,
     sessionId: string,
     characterId: string,
     questType: QuestRequest['type'] = 'side',
+    userId?: string,
   ): Promise<GeneratedQuest> {
     try {
-      // Security check: Get campaign details and verify user ownership
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      // Security check: Verify user ownership of campaign
+      if (!userId) {
+        logger.warn('[QuestGenerator] No userId provided - this is insecure');
+      }
 
-      // Get campaign and character details with user validation
-      const [campaign, memories] = await Promise.all([
-        supabase
-          .from('campaigns')
-          .select('*')
-          .eq('id', campaignId)
-          .eq('user_id', user.id) // Ensure user owns this campaign
-          .single(),
+      // Build query with ownership validation
+      let campaignQuery = supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId);
+
+      if (userId) {
+        campaignQuery = campaignQuery.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
+      }
+
+      // Get campaign and memories in parallel
+      const [campaignResult, memories] = await Promise.all([
+        campaignQuery.single(),
         MemoryManager.getRelevantMemories(sessionId, 'quest opportunities', 5),
       ]);
 
-      if (!campaign.data) {
-        throw new Error('Campaign not found');
+      if (!campaignResult.data) {
+        throw new Error('Campaign not found or access denied');
       }
+
+      const campaign = campaignResult;
 
       const request: QuestRequest = {
         type: questType,

@@ -260,29 +260,35 @@ export class LocationGenerator {
 
   /**
    * Generate a location based on current game context
+   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
    */
   static async generateContextualLocation(
     campaignId: string,
     sessionId: string,
     playerAction: string,
     currentLocationId?: string,
+    userId?: string,
   ): Promise<GeneratedLocation> {
     try {
-      // Security check: Get campaign details and verify user ownership
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      // Security check: Verify user ownership of campaign
+      if (!userId) {
+        logger.warn('[LocationGenerator] No userId provided - this is insecure');
+      }
 
-      const { data: campaign } = await supabase
+      // Build query with ownership validation
+      let query = supabase
         .from('campaigns')
         .select('*')
-        .eq('id', campaignId)
-        .eq('user_id', user.id) // Ensure user owns this campaign
-        .single();
+        .eq('id', campaignId);
+
+      if (userId) {
+        query = query.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
+      }
+
+      const { data: campaign } = await query.single();
 
       if (!campaign) {
-        throw new Error('Campaign not found');
+        throw new Error('Campaign not found or access denied');
       }
 
       // Determine location type based on player action

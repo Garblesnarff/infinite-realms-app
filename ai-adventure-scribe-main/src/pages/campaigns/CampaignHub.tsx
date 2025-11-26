@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -24,19 +25,26 @@ const CampaignHub: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { dispatch } = useCampaign();
+  const { user } = useAuth();
 
   const { data: campaign, isLoading } = useQuery({
-    queryKey: ['campaign', campaignId],
+    queryKey: ['campaign', campaignId, user?.id],
     queryFn: async () => {
+      // SECURITY: Require authenticated user for data isolation
+      if (!user?.id) {
+        throw new Error('Not authenticated');
+      }
+
       const { data, error } = await supabase
         .from('campaigns')
         .select('*')
         .eq('id', campaignId as string)
+        .eq('user_id', user.id) // SECURITY: Validate ownership
         .single();
       if (error) throw error;
       return data;
     },
-    enabled: Boolean(campaignId),
+    enabled: Boolean(campaignId) && Boolean(user?.id),
   });
 
   React.useEffect(() => {

@@ -35,6 +35,7 @@ import React, { useMemo } from 'react';
 import { MemoizedCampaignCard } from './campaign-card';
 import EmptyState from './empty-state';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -60,6 +61,7 @@ interface CampaignListProps {
  */
 const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // map known campaign names to public cover images
   const getCoverFor = useMemo(
@@ -80,8 +82,14 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['campaigns', searchTerm, sortBy],
+    queryKey: ['campaigns', searchTerm, sortBy, user?.id],
     queryFn: async () => {
+      // Require authenticated user for data isolation
+      if (!user?.id) {
+        logger.warn('No authenticated user - cannot fetch campaigns');
+        return [];
+      }
+
       try {
         // Only select minimal fields needed for campaign list view
         // Excludes heavy JSONB fields (setting_details, thematic_elements, style_config, rules_config)
@@ -95,6 +103,7 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
             created_at, updated_at
           `,
           )
+          .eq('user_id', user.id) // SECURITY: Only fetch current user's campaigns
           .order(sortBy, { ascending: false });
 
         // Apply search filter

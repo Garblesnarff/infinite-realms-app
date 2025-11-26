@@ -452,30 +452,30 @@ export class SafetyCommandProcessor {
     }
   }
 
+  /**
+   * @param userId - User ID for audit logging (SECURITY: strongly recommended)
+   */
   private async logSafetyEvent(
     command: SafetyCommand,
     playerMessage?: string,
     aiResponse?: string,
     sessionState?: any,
+    userId?: string,
   ): Promise<void> {
     if (!SAFETY_ENABLED) {
       return;
     }
     try {
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        logger.warn('🛡️ [Safety Audit] No authenticated user found for audit log');
+      // SECURITY: Use provided userId instead of Supabase auth (WorkOS is used)
+      if (!userId) {
+        logger.warn('🛡️ [Safety Audit] No userId provided for audit log - this is insecure');
         return;
       }
 
       // Get session info for audit context
       const auditData = {
         session_id: this.sessionId,
-        user_id: user.id,
+        user_id: userId,
         event_type: command.type,
         triggered_by: command.triggeredBy,
         trigger_word: command.triggerWord,

@@ -24,14 +24,15 @@ export class CharacterLoaderService {
   /**
    * Load a complete character with all spell data populated
    * @param characterId - Character ID to load
+   * @param userId - Optional user ID for ownership validation (SECURITY: strongly recommended)
    * @returns Complete character object with spell arrays populated
    */
-  async loadCharacterWithSpells(characterId: string): Promise<Character | null> {
+  async loadCharacterWithSpells(characterId: string, userId?: string): Promise<Character | null> {
     try {
       logger.info(`🔄 [CharacterLoader] Loading character ${characterId} with spells`);
 
-      // Fetch Character Data from database
-      const { data: characterData, error: characterError } = await supabase
+      // Build query with ownership validation if userId provided
+      let query = supabase
         .from('characters')
         .select(
           `
@@ -39,8 +40,16 @@ export class CharacterLoaderService {
           character_stats(*)
         `,
         )
-        .eq('id', characterId)
-        .single();
+        .eq('id', characterId);
+
+      // SECURITY: Add user_id filter if provided to validate ownership
+      if (userId) {
+        query = query.eq('user_id', userId);
+      } else {
+        logger.warn('[CharacterLoader] Loading character without userId validation - this is insecure');
+      }
+
+      const { data: characterData, error: characterError } = await query.single();
 
       if (characterError) {
         logger.error('[CharacterLoader] Database error:', characterError);
@@ -48,7 +57,7 @@ export class CharacterLoaderService {
       }
 
       if (!characterData) {
-        logger.error('[CharacterLoader] Character not found');
+        logger.error('[CharacterLoader] Character not found or access denied');
         return null;
       }
 

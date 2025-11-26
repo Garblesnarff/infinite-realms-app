@@ -17,6 +17,7 @@ export interface WorldBuildingContext {
   sessionId: string;
   characterId: string;
   playerAction: string;
+  userId?: string; // SECURITY: Required for ownership validation
   currentLocation?: string;
   recentMemories?: Memory[];
   genre?: string;
@@ -47,46 +48,40 @@ export interface WorldBuildingTrigger {
 export class WorldBuilderService {
   /**
    * Validate that user owns the campaign (security check)
-   * MVP version: More lenient validation with graceful degradation
+   * @param campaignId - The campaign ID to validate
+   * @param userId - The user ID to check ownership against (required for security)
+   * @returns true if user owns campaign, false otherwise
    */
-  static async validateUserCampaignAccess(campaignId: string): Promise<boolean> {
+  static async validateUserCampaignAccess(campaignId: string, userId?: string): Promise<boolean> {
     try {
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        logger.warn('No authenticated user for world building, allowing for MVP');
-        return true; // Allow for MVP - might be running in demo mode
+      // SECURITY: Require userId for proper validation
+      if (!userId) {
+        logger.warn('[WorldBuilder] No userId provided for campaign access validation - denying access');
+        return false;
       }
 
-      // Check if campaign exists (more lenient than ownership check)
+      // Check if campaign exists and user owns it
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
         .select('user_id')
         .eq('id', campaignId)
+        .eq('user_id', userId) // SECURITY: Validate ownership
         .single();
 
       if (campaignError) {
-        logger.warn('Campaign query error (allowing for MVP):', campaignError);
-        return true; // Allow for MVP - might be schema issues
+        logger.warn('[WorldBuilder] Campaign query error:', campaignError);
+        return false;
       }
 
       if (!campaign) {
-        logger.warn('Campaign not found (allowing for MVP):', campaignId);
-        return true; // Allow for MVP - might be test data
-      }
-
-      if (campaign.user_id !== user.id) {
-        logger.warn('User does not own campaign, allowing for MVP:', campaignId);
-        return true; // Allow for MVP - might be shared campaigns
+        logger.warn(`[WorldBuilder] Campaign ${campaignId} not found or user ${userId} does not have access`);
+        return false;
       }
 
       return true;
     } catch (error) {
-      logger.warn('Error validating campaign access, allowing for MVP:', error);
-      return true; // Always allow for MVP
+      logger.error('[WorldBuilder] Error validating campaign access:', error);
+      return false;
     }
   }
 
@@ -186,7 +181,7 @@ export class WorldBuilderService {
     logger.info(`🌍 Expanding world for: "${context.playerAction}"`);
 
     // Security check: Validate user owns this campaign
-    const hasAccess = await this.validateUserCampaignAccess(context.campaignId);
+    const hasAccess = await this.validateUserCampaignAccess(context.campaignId, context.userId);
     if (!hasAccess) {
       logger.warn('🚨 Unauthorized world building attempt blocked');
       return result;
@@ -282,6 +277,7 @@ export class WorldBuilderService {
 
   /**
    * Smart world building that responds to player actions
+   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
    */
   static async respondToPlayerAction(
     campaignId: string,
@@ -289,6 +285,7 @@ export class WorldBuilderService {
     characterId: string,
     playerMessage: string,
     aiResponse: string,
+    userId?: string,
   ): Promise<WorldExpansionResult | null> {
     if (!isWorldBuilderEnabled()) {
       logger.debug('World building disabled via feature flag');
@@ -297,7 +294,7 @@ export class WorldBuilderService {
 
     try {
       // Security check: Validate user owns this campaign
-      const hasAccess = await this.validateUserCampaignAccess(campaignId);
+      const hasAccess = await this.validateUserCampaignAccess(campaignId, userId);
       if (!hasAccess) {
         logger.warn('🚨 Unauthorized world building attempt blocked');
         return null;
@@ -310,6 +307,7 @@ export class WorldBuilderService {
         sessionId,
         characterId,
         playerAction: playerMessage,
+        userId,
         recentMemories,
       };
 

@@ -367,28 +367,36 @@ export class NPCGenerator {
   /**
    * Generate an NPC based on current game context and player action
    */
+  /**
+   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   */
   static async generateContextualNPC(
     campaignId: string,
     sessionId: string,
     playerAction: string,
     locationName?: string,
+    userId?: string,
   ): Promise<GeneratedNPC> {
     try {
-      // Security check: Get campaign details and verify user ownership
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      // Security check: Verify user ownership of campaign
+      if (!userId) {
+        logger.warn('[NPCGenerator] No userId provided - this is insecure');
+      }
 
-      const { data: campaign } = await supabase
+      // Build query with ownership validation
+      let query = supabase
         .from('campaigns')
         .select('*')
-        .eq('id', campaignId)
-        .eq('user_id', user.id) // Ensure user owns this campaign
-        .single();
+        .eq('id', campaignId);
+
+      if (userId) {
+        query = query.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
+      }
+
+      const { data: campaign } = await query.single();
 
       if (!campaign) {
-        throw new Error('Campaign not found');
+        throw new Error('Campaign not found or access denied');
       }
 
       // Infer NPC type from player action and location

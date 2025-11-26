@@ -77,11 +77,32 @@ export class ConnectionStateService {
     window.addEventListener('online', () => this.handleOnline());
     window.addEventListener('offline', () => this.handleOffline());
 
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
+    // Listen for WorkOS auth events (not Supabase auth - we use WorkOS AuthKit)
+    // WorkOS tokens are stored in localStorage and dispatched via custom events
+    window.addEventListener('auth-tokens-updated', () => {
+      const hasToken = !!localStorage.getItem('workos_access_token');
+      if (hasToken) {
         this.handleOnline();
-      } else if (event === 'SIGNED_OUT') {
+      }
+    });
+
+    window.addEventListener('auth-ready', () => {
+      const hasToken = !!localStorage.getItem('workos_access_token');
+      if (hasToken) {
+        this.handleOnline();
+      } else {
         this.handleOffline();
+      }
+    });
+
+    // Also listen for storage events (if token is removed in another tab)
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'workos_access_token') {
+        if (event.newValue) {
+          this.handleOnline();
+        } else {
+          this.handleOffline();
+        }
       }
     });
 
@@ -102,9 +123,10 @@ export class ConnectionStateService {
 
   private async attemptReconnection(): Promise<void> {
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        throw new Error('Failed to reconnect');
+      // Check WorkOS token instead of Supabase session
+      const accessToken = localStorage.getItem('workos_access_token');
+      if (!accessToken) {
+        throw new Error('No WorkOS access token found');
       }
       await this.handleOnline();
     } catch (error) {

@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isCampaignCharacterFlowEnabled } from '@/config/featureFlags';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -54,13 +55,19 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
 }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Fetch available characters
   const { data: characters, isLoading } = useQuery({
     queryKey: isCampaignCharacterFlowEnabled()
-      ? ['campaign', campaignId, 'characters', 'play']
-      : ['user-characters'],
+      ? ['campaign', campaignId, 'characters', 'play', user?.id]
+      : ['user-characters', user?.id],
     queryFn: async () => {
+      // SECURITY: Require authenticated user for data isolation
+      if (!user?.id) {
+        return [];
+      }
+
       let query = supabase
         .from('characters')
         .select(
@@ -73,6 +80,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
           )
         `,
         )
+        .eq('user_id', user.id) // SECURITY: Only fetch current user's characters
         .order('created_at', { ascending: false });
 
       if (isCampaignCharacterFlowEnabled()) {
@@ -84,6 +92,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
       if (error) throw error;
       return data as Character[];
     },
+    enabled: !!user?.id, // Only run query when user is authenticated
   });
 
   /**

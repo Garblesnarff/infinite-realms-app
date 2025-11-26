@@ -27,31 +27,41 @@ export class CampaignContextLoader {
    * Loads and parses campaign context by campaign ID.
    *
    * @param {string} campaignId - The campaign ID
+   * @param {string} userId - Optional user ID for ownership validation (SECURITY: strongly recommended)
    * @returns {Promise<CampaignContext>} The campaign context
    * @throws {Error} If the campaign is not found or there's a database error
    */
-  async loadCampaignContext(campaignId: string): Promise<CampaignContext> {
-    const { data: campaign, error } = await supabase
+  async loadCampaignContext(campaignId: string, userId?: string): Promise<CampaignContext> {
+    // Build query with ownership validation if userId provided
+    let query = supabase
       .from('campaigns')
       .select(
         `
-        name, 
-        description, 
+        name,
+        description,
         genre,
         tone,
-        setting_details, // Assuming this contains era, location, atmosphere as JSON
+        setting_details,
         thematic_elements
       `,
       )
-      .eq('id', campaignId)
-      .single();
+      .eq('id', campaignId);
+
+    // SECURITY: Add user_id filter if provided to validate ownership
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else {
+      logger.warn(`[CampaignContextLoader] Loading campaign ${campaignId} without userId validation - this is insecure`);
+    }
+
+    const { data: campaign, error } = await query.single();
 
     if (error) {
       logger.error(`Error loading campaign context for ID ${campaignId}:`, error.message);
       throw new Error(`Failed to load campaign context: ${error.message}`);
     }
     if (!campaign) {
-      throw new Error(`Campaign with ID ${campaignId} not found.`);
+      throw new Error(`Campaign with ID ${campaignId} not found or access denied.`);
     }
 
     // Parse and validate thematic elements
