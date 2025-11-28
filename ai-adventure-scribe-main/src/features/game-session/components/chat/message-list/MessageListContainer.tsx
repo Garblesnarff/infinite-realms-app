@@ -240,13 +240,29 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           },
         };
 
-        await onSendMessage(diceRollMessage);
+        // Check if this completes a batch OR is a single roll
+        const batchComplete = currentRoll.batchId ? isBatchComplete() : true;
 
-        // Check if this completes a batch (for cleanup purposes only)
-        const batchComplete = isBatchComplete();
-        if (batchComplete) {
-          logger.info('[MessageListContainer] Batch complete! Clearing batch state');
-          clearBatch();
+        if (currentRoll.batchId && !batchComplete) {
+          // Batch in progress - persist only (no AI trigger)
+          // onSendMessage only persists, does NOT trigger AI
+          await onSendMessage(diceRollMessage);
+          logger.info('[MessageListContainer] Batch roll persisted, waiting for remaining rolls');
+        } else {
+          // Single roll OR last roll in batch - trigger AI (which also persists)
+          // onSendFullMessage persists AND triggers AI response
+          if (onSendFullMessage) {
+            logger.info('[MessageListContainer] Triggering AI response after roll(s) complete');
+            await onSendFullMessage(formattedRoll);
+          } else {
+            // Fallback if onSendFullMessage not available
+            await onSendMessage(diceRollMessage);
+          }
+
+          if (currentRoll.batchId) {
+            logger.info('[MessageListContainer] Batch complete! Clearing batch state');
+            clearBatch();
+          }
         }
 
         // Capture last roll meta
@@ -274,6 +290,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
     },
     [
       onSendMessage,
+      onSendFullMessage,
       getCurrentDiceRoll,
       completeDiceRoll,
       isBatchComplete,
@@ -305,29 +322,43 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
 
         completeDiceRoll(currentRoll.id, { total: numericResult });
 
-        // ALWAYS send individual roll result to DM (regardless of batch status)
-        // This ensures DM gets each result immediately, like in real D&D
+        // Format the roll result
         const formattedRoll = formatDiceRoll({
           ...currentRoll,
           result: { total: numericResult },
         });
 
-        if (onSendFullMessage) {
-          await onSendFullMessage(formattedRoll);
-        } else {
+        // Check if this completes a batch OR is a single roll
+        const batchComplete = currentRoll.batchId ? isBatchComplete() : true;
+
+        if (currentRoll.batchId && !batchComplete) {
+          // Batch in progress - persist only (no AI trigger)
           const playerMessage: ChatMessage = {
             text: formattedRoll,
             sender: 'player',
             timestamp: new Date().toISOString(),
           };
           await onSendMessage(playerMessage);
-        }
+          logger.info('[MessageListContainer] Manual batch roll persisted, waiting for remaining rolls');
+        } else {
+          // Single roll OR last roll in batch - trigger AI (which also persists)
+          if (onSendFullMessage) {
+            logger.info('[MessageListContainer] Triggering AI response after manual roll(s) complete');
+            await onSendFullMessage(formattedRoll);
+          } else {
+            // Fallback if onSendFullMessage not available
+            const playerMessage: ChatMessage = {
+              text: formattedRoll,
+              sender: 'player',
+              timestamp: new Date().toISOString(),
+            };
+            await onSendMessage(playerMessage);
+          }
 
-        // Check if this completes a batch (for cleanup purposes only)
-        const batchComplete = isBatchComplete();
-        if (batchComplete) {
-          logger.info('[MessageListContainer] Batch complete (manual)! Clearing batch state');
-          clearBatch();
+          if (currentRoll.batchId) {
+            logger.info('[MessageListContainer] Batch complete (manual)! Clearing batch state');
+            clearBatch();
+          }
         }
       } catch (error) {
         handleAsyncError(error, {
