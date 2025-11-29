@@ -36,6 +36,36 @@ export function buildCampaignDescriptionPrompt(params: CampaignParams): string {
 - ${params.tone === 'mysterious' ? 'Layer in secrets, hidden agendas, and puzzles to solve. Nothing is quite what it seems on the surface.' : ''}
 - ${params.tone === 'gritty' ? 'Realistic consequences, resource management, and survival elements. Combat is dangerous and magic is rare.' : ''}
 
+**Verbalized Sampling Technique:**
+To maximize creativity and avoid generic campaign concepts, internally brainstorm 3-4 potential campaign hooks with probability assessments before selecting the final one:
+
+<hook_diversity_process>
+Generate multiple hook variations with probability scores (0.0-1.0):
+- Expected ${params.genre} hook (prob: ~0.85): Classic approach that matches genre conventions
+- Twist on genre (prob: ~0.55): Unexpected element within ${params.genre} framework
+- Subversive approach (prob: ~0.35): Challenges genre assumptions creatively
+- Wild card hook (prob: ≤0.30): Unconventional campaign angle that's memorable and unique
+
+<diversity_dimensions>
+- Vary antagonist types: Monster threat, political conspiracy, cosmic horror, moral dilemma, environmental disaster
+- Vary stakes scale: Personal, local, regional, world-ending, planar
+- Vary player engagement: Direct confrontation, mystery investigation, social navigation, exploration-driven
+- Ensure at least one approach subverts typical ${params.genre} expectations
+</diversity_dimensions>
+
+<example_for_${params.genre}>
+Situation: ${params.genre} campaign, ${params.tone} tone
+
+Potential hooks with probabilities:
+1. Standard ${params.genre} threat (prob: 0.85) - Familiar and engaging
+2. ${params.genre} with unexpected twist (prob: 0.60) - Fresh take on familiar
+3. Genre-blending approach (prob: 0.40) - Combines elements unexpectedly
+4. (Wild Card) Subversive concept (prob: 0.25) - Memorable and unique
+
+Select the hook that best balances creativity with player appeal for ${params.tone} ${params.genre}.
+</example_for_${params.genre}>
+</hook_diversity_process>
+
 **Structure:**
 - **Paragraph 1**: The central hook and immediate threat/opportunity
 - **Paragraph 2**: The unique world elements, key NPCs, and what makes this adventure special
@@ -260,7 +290,34 @@ Keep this to a single line; do not include quotes or extra commentary.
 <title>CRITICAL: ACTION OPTIONS FORMATTING</title>
 
 <verbalized_sampling_technique>
-To ensure creative and diverse choices, first internally brainstorm 4-5 potential actions for the player. One of these must be an unconventional "wild card" option. Then, select the best 2-3 options from your brainstormed list to present to the player.
+To maximize creativity and diversity using the Verbalized Sampling technique, you will internally generate 4-5 potential actions with probability assessments, then select the best 2-3 to present.
+
+<internal_generation_process>
+For each potential action, assign a probability score (0.0-1.0) representing how typical/expected this option is given the situation. Higher probability = more obvious choice. At least one option must have probability ≤ 0.3 (unconventional "wild card").
+
+<diversity_requirements>
+- Vary skill usage: Mix physical, mental, social, and magical approaches
+- Vary risk level: Include safe, moderate, and risky options
+- Vary creativity: From conventional (0.8+) to wild card (≤0.3)
+- Vary consequences: Different potential outcomes and story branches
+- Vary problem-solving approach: Direct, indirect, creative, or unexpected solutions
+</diversity_requirements>
+
+<example_internal_process>
+Situation: Player needs to get past a guard
+
+Internal brainstorming with probabilities:
+1. Negotiate and explain purpose (prob: 0.85) - Obvious social approach
+2. Sneak past using Stealth (prob: 0.75) - Common stealth approach
+3. Create magical distraction (prob: 0.45) - Creative tactical use of abilities
+4. Bribe with valuable item (prob: 0.60) - Moderate risk social/economic
+5. **(Wild Card)** Claim to be sanitation inspector (prob: 0.20) - Unconventional deception
+
+Select best 2-3 from above to present to player.
+</example_internal_process>
+</internal_generation_process>
+
+Present your selected options in the standard format without showing probabilities to the player.
 </verbalized_sampling_technique>
 
 <formatting_rules>

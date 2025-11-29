@@ -308,6 +308,36 @@ export class CharacterDescriptionGenerator {
     // Tone specification
     promptParts.push(`<tone>Write in a ${tone} style appropriate for D&D fantasy setting</tone>`);
 
+    // Verbalized Sampling for maximum creativity
+    promptParts.push('');
+    promptParts.push('<verbalized_sampling_technique>');
+    promptParts.push('  <instruction>Before generating the final description, internally brainstorm 3-4 distinct character concept variations with probability scores (0.0-1.0) representing how typical each approach is</instruction>');
+    promptParts.push('');
+    promptParts.push('  <diversity_dimensions>');
+    promptParts.push(`    <tone_variation>Vary interpretations of "${tone}" tone - from obvious to subtle to unexpected</tone_variation>`);
+    promptParts.push('    <backstory_approach>Mix different backstory types: tragedy (prob: 0.7), triumph (prob: 0.6), mystery (prob: 0.4), redemption (prob: 0.5), wild card (prob: ≤0.3)</backstory_approach>');
+    promptParts.push('    <personality_depth>Range from straightforward (0.8) to complex/contradictory (0.3)</personality_depth>');
+    promptParts.push('    <uniqueness>From conventional representation (0.8) to subversive/unexpected take (0.25)</uniqueness>');
+    promptParts.push('  </diversity_dimensions>');
+    promptParts.push('');
+    promptParts.push('  <example_process>');
+    promptParts.push('    Internal brainstorming for a Dwarf Fighter:');
+    promptParts.push('    1. Gruff, clan-loyal warrior (prob: 0.85) - Standard archetype');
+    promptParts.push('    2. Exiled noble seeking redemption (prob: 0.60) - Emotional depth');
+    promptParts.push('    3. Cheerful optimist who loves cooking (prob: 0.35) - Personality twist');
+    promptParts.push('    4. Former scholar turned warrior (prob: 0.25) - Background subversion');
+    promptParts.push('');
+    promptParts.push('    Select the most compelling concept that balances creativity with authenticity');
+    promptParts.push('  </example_process>');
+    promptParts.push('');
+    promptParts.push('  <selection_criteria>Choose the concept that:');
+    promptParts.push('    - Best fits the character data provided');
+    promptParts.push('    - Offers the most interesting roleplay potential');
+    promptParts.push('    - Avoids clichés while remaining believable');
+    promptParts.push('    - Creates natural story hooks for adventures');
+    promptParts.push('  </selection_criteria>');
+    promptParts.push('</verbalized_sampling_technique>');
+
     // Output format requirements
     promptParts.push('');
     promptParts.push('<output_format>');

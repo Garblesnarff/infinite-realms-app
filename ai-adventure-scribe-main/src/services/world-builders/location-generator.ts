@@ -141,6 +141,51 @@ export class LocationGenerator {
   ${request.context.nearbyLocations?.length ? `<nearby_locations>${request.context.nearbyLocations.join(', ')}</nearby_locations>` : ''}
 </context>
 
+<verbalized_sampling_technique>
+  <instruction>Before generating the final location, internally brainstorm 3-4 distinct atmospheric concepts with probability scores (0.0-1.0) representing how typical each approach is for this type of ${type}</instruction>
+
+  <atmosphere_diversity_dimensions>
+    <expected_atmosphere>Generic ${atmosphere} ${type} (prob: 0.85) - Meets typical expectations</expected_atmosphere>
+    <contrasting_element>Expected type with unexpected mood (prob: 0.50) - e.g., cheerful dungeon, ominous tavern, welcoming tomb</contrasting_element>
+    <unique_feature>Standard location with memorable twist (prob: 0.40) - One element that makes it unforgettable</unique_feature>
+    <wild_card>Completely subversive approach (prob: ≤0.30) - Challenges assumptions about this ${type}</wild_card>
+  </atmosphere_diversity_dimensions>
+
+  <example_process_for_${type}>
+    Internal brainstorming for ${atmosphere} ${type}:
+
+    Atmospheric variations with probabilities:
+    1. Typical ${atmosphere} ${type} (prob: 0.85) - Classic and familiar
+    2. ${type} with contrasting mood element (prob: 0.55) - Unexpected emotional tone
+    3. ${type} with unique historical twist (prob: 0.45) - Memorable backstory element
+    4. (Wild Card) ${type} that subverts genre expectations (prob: ≤0.30) - Surprising but logical
+
+    Select the atmosphere that:
+    - Creates the most vivid sensory experience
+    - Provides interesting exploration opportunities
+    - Balances familiarity with originality
+    - Offers multiple narrative hooks for the DM
+  </example_process_for_${type}>
+
+  <sensory_diversity>
+    Vary across dimensions:
+    - Visual aesthetics: From expected to surreal
+    - Sound design: From silence to cacophony to unusual music
+    - Smell palette: From pleasant to nauseating to otherworldly
+    - Tactile elements: Temperature, texture, spatial feeling
+    - Historical depth: From straightforward to layered mysteries
+  </sensory_diversity>
+
+  <selection_criteria>
+    Choose the location concept that:
+    - Maximizes immersion and player curiosity
+    - Fits ${context.genre} while avoiding clichés
+    - Provides clear interaction opportunities
+    - Creates memorable moments for the party
+    - Balances challenge appropriate to level ${context.playerLevel || 1}
+  </selection_criteria>
+</verbalized_sampling_technique>
+
 <output_format>
   <instruction>Generate a location in this EXACT JSON format:</instruction>
   <json_structure>

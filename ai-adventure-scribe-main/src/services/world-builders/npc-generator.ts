@@ -199,6 +199,42 @@ export class NPCGenerator {
   ${context.playerCharacterName ? `<player_character>${context.playerCharacterName}</player_character>` : ''}
 </context>
 
+<verbalized_sampling_technique>
+  <instruction>Before generating the final NPC, internally brainstorm 3-4 distinct personality concepts with probability scores (0.0-1.0) representing how typical each approach is for this role</instruction>
+
+  <personality_diversity_dimensions>
+    <archetype_adherence>From stereotypical ${role} (prob: 0.9) to subversive/unexpected (prob: 0.2)</archetype_adherence>
+    <complexity>Simple motivations (prob: 0.8) to multi-layered contradictions (prob: 0.3)</complexity>
+    <alignment_presentation>Obvious alignment (prob: 0.75) to hidden/contradictory nature (prob: 0.35)</alignment_presentation>
+    <speech_pattern>Standard speech (prob: 0.8) to unique dialect/quirk (prob: 0.4)</speech_pattern>
+    <background_depth>Straightforward history (prob: 0.7) to mysterious/complex past (prob: 0.4)</background_depth>
+  </personality_diversity_dimensions>
+
+  <example_process_for_${role}>
+    Internal brainstorming for ${importance} ${role}:
+
+    Personality variations with probabilities:
+    1. Typical ${role} archetype (prob: 0.85) - Meets expectations solidly
+    2. ${role} with emotional depth (prob: 0.60) - Familiar but nuanced
+    3. ${role} with unexpected hobby/trait (prob: 0.40) - Memorable twist
+    4. (Wild Card) ${role} that subverts expectations (prob: ≤0.30) - Unconventional but compelling
+
+    Select the personality that:
+    - Best serves the ${importance} narrative role
+    - Provides interesting player interaction opportunities
+    - Balances authenticity with memorability
+    - Offers unexpected depth without being nonsensical
+  </example_process_for_${role}>
+
+  <selection_criteria>
+    Choose the NPC concept that maximizes:
+    - Story potential (quest hooks, secrets, relationships)
+    - Player engagement (interesting to interact with)
+    - Genre authenticity (fits ${context.genre} but avoids clichés)
+    - Roleplaying opportunities (distinct voice and mannerisms)
+  </selection_criteria>
+</verbalized_sampling_technique>
+
 <output_format>
   <instruction>Generate an NPC in this EXACT JSON format:</instruction>
   <json_structure>

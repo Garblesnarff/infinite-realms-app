@@ -228,6 +228,63 @@ export class QuestGenerator {
   ${memoryContext}
 </context>
 
+<verbalized_sampling_technique>
+  <instruction>Before generating the final quest, internally brainstorm 4-5 distinct quest hook approaches with probability scores (0.0-1.0) representing how typical each approach is for ${type} quests</instruction>
+
+  <quest_hook_diversity_dimensions>
+    <structure_approach>
+      - Standard ${type} quest structure (prob: 0.80) - Familiar and reliable
+      - Twist on standard structure (prob: 0.55) - Expected type with unexpected element
+      - Moral dilemma approach (prob: 0.40) - Multiple valid solutions with trade-offs
+      - Wild card structure (prob: ≤0.30) - Unconventional quest design
+    </structure_approach>
+
+    <narrative_dimensions>
+      Vary across these axes:
+      - Stakes scale: Personal → Community → Regional → World-ending → Planar
+      - NPC motivations: Simple → Complex → Hidden agendas → Contradictory
+      - Player agency: Linear path → Multiple approaches → Open-ended → Player-driven
+      - Twist potential: Straightforward → One twist → Layered mysteries → Reality-questioning
+      - Moral clarity: Clear good/evil → Shades of gray → No right answer → Player-defined
+    </narrative_dimensions>
+
+    <engagement_factors>
+      - Emotional hook: What makes players care beyond rewards?
+      - Unique mechanic: What makes this quest mechanically interesting?
+      - Story integration: How does this connect to larger campaign?
+      - Replay value: Would different approaches yield different experiences?
+    </engagement_factors>
+  </quest_hook_diversity_dimensions>
+
+  <example_process_for_${type}_quest>
+    Internal brainstorming for ${difficulty} difficulty ${type} quest:
+
+    Quest hook variations with probabilities:
+    1. Standard ${type} quest (prob: 0.80) - Retrieve/defeat/escort with clear objective
+    2. ${type} with ethical dilemma (prob: 0.55) - Success requires difficult moral choice
+    3. ${type} with faction conflict (prob: 0.45) - Multiple stakeholders with competing interests
+    4. ${type} with reality twist (prob: 0.35) - Things aren't what they seem
+    5. (Wild Card) ${type} that subverts player expectations (prob: ≤0.30) - Unconventional approach
+
+    Select the hook that:
+    - Best fits ${urgency} urgency and ${scope} scope
+    - Provides meaningful player choices
+    - Creates memorable moments
+    - Balances challenge with achievability for level ${context.playerLevel || 1}
+    - Integrates naturally with current story context
+  </example_process_for_${type}_quest>
+
+  <selection_criteria>
+    Choose the quest concept that maximizes:
+    - Player engagement (interesting throughout, not just at end)
+    - Story integration (connects to campaign themes/NPCs/locations)
+    - Replay diversity (different approaches possible)
+    - Consequence weight (player choices matter)
+    - Memorable moments (creates stories players will retell)
+    - Challenge appropriate to ${difficulty} for party of ${context.partySize || 1}
+  </selection_criteria>
+</verbalized_sampling_technique>
+
 <output_format>
   <instruction>Generate a quest in this EXACT JSON format:</instruction>
   <json_structure>
