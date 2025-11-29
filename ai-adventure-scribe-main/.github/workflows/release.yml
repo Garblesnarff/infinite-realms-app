@@ -1,0 +1,156 @@
+name: Release & Changelog
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (auto, patch, minor, major)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip if commit message indicates it's already a release commit
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT"
+
+      - name: Run standard-version
+        id: release
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "patch" ]; then
+            npm run release:patch
+          elif [ "${{ github.event.inputs.release_type }}" = "minor" ]; then
+            npm run release:minor
+          elif [ "${{ github.event.inputs.release_type }}" = "major" ]; then
+            npm run release:major
+          else
+            npm run release
+          fi
+
+          # Get the new version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Extract changelog for this release
+        id: changelog
+        run: |
+          # Extract the changelog section for this version
+          NEW_VERSION="${{ steps.release.outputs.new_version }}"
+
+          # Get content between this version and the previous version header
+          CHANGELOG_CONTENT=$(awk "/^## \[$NEW_VERSION\]/,/^## \[/{if(/^## \[/ && !/^## \[$NEW_VERSION\]/)exit; print}" CHANGELOG.md | tail -n +2)
+
+          # Write to file for multi-line support
+          echo "$CHANGELOG_CONTENT" > /tmp/changelog_content.md
+
+          # Also set output (escaped for GitHub Actions)
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "content<<$EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+
+      - name: Push changes
+        run: |
+          git push --follow-tags origin main
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.release.outputs.new_version }}
+          name: v${{ steps.release.outputs.new_version }}
+          body_path: /tmp/changelog_content.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post to blog
+        if: success()
+        env:
+          BLOG_API_KEY: ${{ secrets.BLOG_API_KEY }}
+          API_URL: ${{ vars.API_URL || 'https://api.infiniterealms.app' }}
+        run: |
+          # Read changelog content
+          CHANGELOG_CONTENT=$(cat /tmp/changelog_content.md)
+
+          # Create JSON payload
+          PAYLOAD=$(jq -n \
+            --arg version "${{ steps.release.outputs.new_version }}" \
+            --arg changelog "$CHANGELOG_CONTENT" \
+            --arg commitHash "${{ github.sha }}" \
+            '{version: $version, changelog: $changelog, commitHash: $commitHash}')
+
+          # Call the internal API
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${API_URL}/internal/release-post" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${BLOG_API_KEY}" \
+            -d "$PAYLOAD")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Response: $BODY"
+          echo "HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Blog post created successfully"
+            echo "$BODY" | jq -r '.url // "URL not returned"'
+          else
+            echo "⚠️ Failed to create blog post (non-fatal)"
+            echo "The release was successful, but the blog post could not be created."
+            echo "This may be because the blog API is not yet configured."
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Version:** ${{ steps.current_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version:** ${{ steps.release.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changelog" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/changelog_content.md >> $GITHUB_STEP_SUMMARY

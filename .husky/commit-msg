@@ -1,0 +1,1 @@
+cd ai-adventure-scribe-main && npx --no -- commitlint --edit ${1}

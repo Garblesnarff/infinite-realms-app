@@ -22,6 +22,7 @@ import inventoryRouter from './v1/inventory.js';
 import spellSlotsRouter from './v1/spell-slots.js';
 import progressionRouter from './v1/progression.js';
 import classFeaturesRouter from './v1/class-features.js';
+import internalRouter from './v1/internal.js';
 import { errorHandler } from '../middleware/error-handler.js';
 
 export function registerRoutes(app: Express) {
@@ -57,6 +58,9 @@ export function registerRoutes(app: Express) {
   app.use('/v1', spellSlotsRouter());
   app.use('/v1/progression', progressionRouter());
   app.use('/v1', classFeaturesRouter());
+
+  // Internal routes for automation (GitHub Actions, etc.)
+  app.use('/internal', internalRouter());
 
   // Register error handler LAST - must be after all routes
   app.use(errorHandler);
