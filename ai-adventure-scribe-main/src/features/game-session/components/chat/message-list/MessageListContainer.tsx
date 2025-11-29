@@ -210,7 +210,26 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           disadvantage: disadvantage || false,
         });
 
-        // Complete the roll in context
+        // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
+        // isBatchComplete() reads from stateRef which is updated in useEffect AFTER render,
+        // so we must calculate it synchronously using current state BEFORE completing the roll
+        let willCompleteBatch = true;  // Default for non-batch rolls (single rolls always complete)
+        if (currentRoll.batchId) {
+          // Count remaining pending rolls in this batch (excluding current roll we're about to complete)
+          const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
+            (roll) => roll.batchId === currentRoll.batchId &&
+                      roll.status === 'pending' &&
+                      roll.id !== currentRoll.id
+          ).length;
+          willCompleteBatch = remainingPendingInBatch === 0;
+          logger.info('[MessageListContainer] Batch status check:', {
+            batchId: currentRoll.batchId,
+            remainingPendingInBatch,
+            willCompleteBatch
+          });
+        }
+
+        // Complete the roll in context (dispatches action - state updates async)
         completeDiceRoll(currentRoll.id, rollResult);
 
         // ALWAYS send individual roll result to DM (regardless of batch status)
@@ -240,10 +259,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           },
         };
 
-        // Check if this completes a batch OR is a single roll
-        const batchComplete = currentRoll.batchId ? isBatchComplete() : true;
-
-        if (currentRoll.batchId && !batchComplete) {
+        // Use pre-calculated willCompleteBatch instead of isBatchComplete() which reads stale state
+        if (currentRoll.batchId && !willCompleteBatch) {
           // Batch in progress - persist only (no AI trigger)
           // onSendMessage only persists, does NOT trigger AI
           await onSendMessage(diceRollMessage);
@@ -293,10 +310,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
       onSendFullMessage,
       getCurrentDiceRoll,
       completeDiceRoll,
-      isBatchComplete,
-      getBatchResults,
       clearBatch,
       formatDiceRoll,
+      state.diceRollQueue.pendingRolls,  // Added: needed for synchronous batch completion check
     ],
   );
 
@@ -320,6 +336,26 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           return;
         }
 
+        // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
+        // isBatchComplete() reads from stateRef which is updated in useEffect AFTER render,
+        // so we must calculate it synchronously using current state BEFORE completing the roll
+        let willCompleteBatch = true;  // Default for non-batch rolls (single rolls always complete)
+        if (currentRoll.batchId) {
+          // Count remaining pending rolls in this batch (excluding current roll we're about to complete)
+          const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
+            (roll) => roll.batchId === currentRoll.batchId &&
+                      roll.status === 'pending' &&
+                      roll.id !== currentRoll.id
+          ).length;
+          willCompleteBatch = remainingPendingInBatch === 0;
+          logger.info('[MessageListContainer] Manual roll batch status check:', {
+            batchId: currentRoll.batchId,
+            remainingPendingInBatch,
+            willCompleteBatch
+          });
+        }
+
+        // Complete the roll in context (dispatches action - state updates async)
         completeDiceRoll(currentRoll.id, { total: numericResult });
 
         // Format the roll result
@@ -328,10 +364,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           result: { total: numericResult },
         });
 
-        // Check if this completes a batch OR is a single roll
-        const batchComplete = currentRoll.batchId ? isBatchComplete() : true;
-
-        if (currentRoll.batchId && !batchComplete) {
+        // Use pre-calculated willCompleteBatch instead of isBatchComplete() which reads stale state
+        if (currentRoll.batchId && !willCompleteBatch) {
           // Batch in progress - persist only (no AI trigger)
           const playerMessage: ChatMessage = {
             text: formattedRoll,
@@ -372,10 +406,9 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
       onSendFullMessage,
       getCurrentDiceRoll,
       completeDiceRoll,
-      isBatchComplete,
-      getBatchResults,
       clearBatch,
       formatDiceRoll,
+      state.diceRollQueue.pendingRolls,  // Added: needed for synchronous batch completion check
     ],
   );
 
