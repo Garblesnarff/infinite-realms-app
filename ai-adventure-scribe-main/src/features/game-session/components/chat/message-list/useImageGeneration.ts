@@ -116,11 +116,20 @@ export const useImageGeneration = ({
 
         if (message.id) {
           try {
+            console.log('[useImageGeneration] Attempting to attach image:', {
+              messageId: message.id,
+              imageUrl: res.url,
+              timestamp: new Date().toISOString(),
+            });
+
             await llmApiClient.appendMessageImage({
               messageId: message.id,
               image: { url: res.url, prompt: res.prompt, model: res.model, quality: res.quality },
             });
+
+            console.log('[useImageGeneration] ✅ Image attached successfully:', message.id);
           } catch (persistErr) {
+            console.error('[useImageGeneration] ❌ Image attachment FAILED:', persistErr);
             handleAsyncError(persistErr, {
               userMessage: 'Failed to save generated image',
               logLevel: 'warn',

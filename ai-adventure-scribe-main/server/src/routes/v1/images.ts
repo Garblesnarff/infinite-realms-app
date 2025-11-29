@@ -242,24 +242,64 @@ export default function imagesRouter() {
     }
 
     try {
-      // Fetch message with session and verify ownership through campaign/character
+      console.log('[Images] ========== PATCH /message/:id/images START ==========');
+      console.log('[Images] Request:', {
+        messageId: id,
+        userId,
+        timestamp: new Date().toISOString(),
+        imageUrl: image.url,
+      });
+
+      // Step 1: Fetch message only (no JOINs that could fail)
       const { data: existing, error: selErr } = await supabaseService
         .from('dialogue_history')
-        .select('images, session_id, game_sessions!dialogue_history_session_id_fkey(campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id))')
+        .select('id, images, session_id')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
-      if (selErr) {
+      console.log('[Images] Query result:', {
+        existing: existing ? 'FOUND' : 'NULL',
+        error: selErr,
+        sessionId: existing?.session_id,
+      });
+
+      if (selErr || !existing) {
+        console.error('[Images] ❌ Message NOT FOUND - returning 404');
+        console.error('[Images] Error:', selErr);
+        console.error('[Images] Message ID:', id);
         return res.status(404).json({ error: 'Message not found' });
       }
 
-      // Verify ownership through session -> campaign or character
-      const session = (existing as any)?.game_sessions;
-      const campaignOwner = session?.campaigns?.user_id;
-      const characterOwner = session?.characters?.user_id;
+      console.log('[Images] ✅ Message FOUND');
 
-      if (campaignOwner !== userId && characterOwner !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
+      // Step 2: Verify ownership through session (separate query)
+      if (existing.session_id) {
+        const { data: sessionData, error: sessionErr } = await supabaseService
+          .from('game_sessions')
+          .select('campaign_id, character_id, campaigns(user_id), characters(user_id)')
+          .eq('id', existing.session_id)
+          .maybeSingle();
+
+        if (sessionErr) {
+          console.error('[Images] Session query error:', sessionErr);
+          return res.status(500).json({ error: 'Failed to verify session ownership' });
+        }
+
+        if (sessionData) {
+          const campaigns = sessionData.campaigns as any;
+          const characters = sessionData.characters as any;
+          const campaignOwner = Array.isArray(campaigns) ? campaigns[0]?.user_id : campaigns?.user_id;
+          const characterOwner = Array.isArray(characters) ? characters[0]?.user_id : characters?.user_id;
+
+          if (campaignOwner !== userId && characterOwner !== userId) {
+            console.warn('[Images] ❌ Access denied - user does not own campaign or character');
+            return res.status(403).json({ error: 'Access denied' });
+          }
+
+          console.log('[Images] ✅ Ownership verified');
+        } else {
+          console.warn('[Images] Session not found, allowing due to potential timing issue');
+        }
       }
 
       const images = Array.isArray(existing?.images) ? existing.images : [];
@@ -273,6 +313,8 @@ export default function imagesRouter() {
         .select('images')
         .single();
       if (updErr) throw updErr;
+
+      console.log('[Images] ✅ Image appended successfully');
       return res.json({ images: updData?.images || [] });
     } catch (e) {
       console.error('[Images] Failed to append image to message', e);

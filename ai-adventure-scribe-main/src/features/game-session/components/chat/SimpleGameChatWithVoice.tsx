@@ -112,10 +112,13 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           narrationSegments: segments as any[],
         };
 
-        setMessages([dmMessage]);
-
-        // Save opening message to database
+        // Save opening message to database FIRST before adding to state
+        // This prevents race condition where image generation tries to attach
+        // before the message exists in the database
         await saveMessageToDatabase(dmMessage, session.id);
+
+        // Now add to state to trigger UI update
+        setMessages([dmMessage]);
       }
     } catch (error) {
       handleAsyncError(error, {
@@ -199,11 +202,50 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   }, [session?.id, sessionLoading, hasLoadedHistory, isLoadingHistory, loadHistory]);
 
   /**
-   * Save a message to the database
+   * Wait for a message to exist in the database with retry logic
+   * Handles potential transaction commit delays in distributed databases
    */
-  const saveMessageToDatabase = useCallback(async (message: ChatMessage, sessionId: string) => {
+  const waitForMessageToExist = useCallback(
+    async (messageId: string, maxRetries = 5, initialDelay = 100): Promise<boolean> => {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const { data, error } = await supabase
+          .from('dialogue_history')
+          .select('id')
+          .eq('id', messageId)
+          .maybeSingle();
+
+        if (!error && data) {
+          console.log(`[SimpleGameChat] ✅ Message verified in database after ${attempt} retries`);
+          return true;
+        }
+
+        if (attempt < maxRetries - 1) {
+          const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
+          console.log(`[SimpleGameChat] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      console.error(`[SimpleGameChat] ❌ Message verification failed after ${maxRetries} retries`);
+      return false;
+    },
+    []
+  );
+
+  /**
+   * Save a message to the database
+   * Returns true if save and verification succeeded, false otherwise
+   */
+  const saveMessageToDatabase = useCallback(async (message: ChatMessage, sessionId: string): Promise<boolean> => {
+    console.log('[SimpleGameChat] Saving message to database:', {
+      messageId: message.id,
+      sessionId,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       const { error } = await supabase.from('dialogue_history').insert({
+        id: message.id,
         session_id: sessionId,
         speaker_type:
           message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
@@ -212,9 +254,24 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       });
 
       if (error) {
+        console.error('[SimpleGameChat] ❌ Database insert FAILED:', error);
         throw error;
       }
+
+      console.log('[SimpleGameChat] Database insert promise resolved, verifying...');
+
+      // Verify the message actually exists in the database
+      const verified = await waitForMessageToExist(message.id);
+
+      if (!verified) {
+        console.error('[SimpleGameChat] ❌ Message verification failed');
+        return false;
+      }
+
+      console.log('[SimpleGameChat] ✅ Message saved and verified:', message.id);
+      return true;
     } catch (error) {
+      console.error('[SimpleGameChat] Exception during save:', error);
       handleAsyncError(error, {
         userMessage: 'Failed to save message',
         logLevel: 'warn',
@@ -222,8 +279,9 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
         context: { location: 'SimpleGameChatWithVoice.saveMessageToDatabase', sessionId },
       });
       // Don't throw here to avoid breaking the UI flow
+      return false;
     }
-  }, []);
+  }, [waitForMessageToExist]);
 
   /**
    * Send message to DM
@@ -249,7 +307,10 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       setMessages(updatedMessages);
 
       // Save user message to database
-      await saveMessageToDatabase(userMessage, session.id);
+      const saved = await saveMessageToDatabase(userMessage, session.id);
+      if (!saved) {
+        console.warn('[SimpleGameChat] User message not saved, but continuing for UI resilience');
+      }
 
       try {
         const context: GameContext = {
@@ -296,10 +357,18 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
             narrationSegments: segments as any[],
           };
 
-          setMessages((prev) => [...prev, dmMessage]);
+          // Save DM message to database FIRST before adding to state
+          // This prevents race condition where image generation tries to attach
+          // before the message exists in the database
+          const saved = await saveMessageToDatabase(dmMessage, session.id);
 
-          // Save DM message to database
-          await saveMessageToDatabase(dmMessage, session.id);
+          if (!saved) {
+            console.warn('[SimpleGameChat] DM message not saved, skipping state update');
+            return; // Don't add to state if save failed
+          }
+
+          // Now add to state to trigger UI update
+          setMessages((prev) => [...prev, dmMessage]);
         }
       } catch (error) {
         handleAsyncError(error, {

@@ -126,19 +126,55 @@ class LlmApiClient {
   }
 
   async appendMessageImage(params: AppendMessageImageParams): Promise<void> {
-    const res = await this.fetchWithAuth(
-      `/v1/images/message/${encodeURIComponent(params.messageId)}/images`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          url: params.image.url,
-          prompt: params.image.prompt,
-          model: params.image.model,
-          quality: params.image.quality,
-        }),
-      },
-    );
-    await res.json().catch(() => ({}));
+    const maxRetries = 5;
+    const initialDelay = 200; // Start at 200ms
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const res = await this.fetchWithAuth(
+          `/v1/images/message/${encodeURIComponent(params.messageId)}/images`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              url: params.image.url,
+              prompt: params.image.prompt,
+              model: params.image.model,
+              quality: params.image.quality,
+            }),
+          },
+        );
+
+        // Check if response is OK
+        if (!res.ok) {
+          const errorBody = await res.text();
+          const is404 = res.status === 404;
+
+          if (is404 && attempt < maxRetries - 1) {
+            // Retry on 404 errors (message might not be committed yet)
+            const delay = initialDelay * Math.pow(2, attempt); // 200ms, 400ms, 800ms, 1600ms, 3200ms
+            console.warn(`[LLMApiClient] 404 on image attachment, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue; // Retry
+          }
+
+          // Non-404 error or final retry attempt - throw
+          throw new Error(`API ${res.status}: ${errorBody}`);
+        }
+
+        // Success
+        await res.json().catch(() => ({}));
+        if (attempt > 0) {
+          console.log(`[LLMApiClient] ✅ Image attachment succeeded on retry attempt ${attempt + 1}`);
+        }
+        return;
+      } catch (error) {
+        if (attempt === maxRetries - 1) {
+          // Final attempt failed
+          throw error;
+        }
+        // Otherwise continue to next retry
+      }
+    }
   }
 
   async getImageQuotaStatus(): Promise<ImageQuotaStatus | null> {
