@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { parseDiceCommand } from '@/utils/diceCommandParser';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
@@ -330,9 +331,20 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
         sessionId,
         turnCountRef.current,
       );
+      // Sanitize the AI response text first
+      let processedText = sanitizeDMText(aiResponseMessage.text);
+
+      // CRITICAL: Truncate at roll request to prevent premature outcome narrative
+      // The AI may generate outcome text AFTER the roll request block - we must NOT display it
+      // The player should only see text BEFORE the roll request; outcome comes in NEW response after roll
+      if (aiResponseMessage.rollRequests && aiResponseMessage.rollRequests.length > 0) {
+        processedText = truncateAtRollRequest(processedText);
+        logger.info('🎲 Truncated AI response at roll request to prevent premature outcome');
+      }
+
       const sanitizedAiResponseMessage: ChatMessage = {
         ...aiResponseMessage,
-        text: sanitizeDMText(aiResponseMessage.text),
+        text: processedText,
       };
 
       // Check for auto-triggered safety commands in AI response

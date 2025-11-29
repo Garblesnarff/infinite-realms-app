@@ -33,7 +33,7 @@ export const useMessages = (sessionId: string | null) => {
       logger.info(`[useMessages] Fetching messages page ${page}, range ${start}-${end}`);
 
       // Single JOIN query to get messages with character data
-      // Order by sequence_number descending to get newest first, then reverse for display
+      // Order by sequence_number ascending for chronological display (oldest first)
       // Sequence numbers ensure proper ordering even with concurrent multi-tab inserts
       const { data, error, count } = await supabase
         .from('dialogue_history')
@@ -53,7 +53,7 @@ export const useMessages = (sessionId: string | null) => {
           { count: 'exact' },
         )
         .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: false })
+        .order('sequence_number', { ascending: true })
         .range(start, end);
 
       if (error) {
@@ -79,8 +79,17 @@ export const useMessages = (sessionId: string | null) => {
         };
       });
 
-      // Reverse to get oldest to newest for display
-      const reversedMessages = messages.reverse();
+      // Defensive sort to guarantee chronological order (oldest first)
+      // Even though DB query uses ascending order, we enforce it client-side
+      // as a belt-and-suspenders approach for production reliability
+      messages.sort((a, b) => {
+        const timeA = new Date(a.timestamp || 0).getTime();
+        const timeB = new Date(b.timestamp || 0).getTime();
+        return timeA - timeB;
+      });
+
+      // Messages are now in chronological order (ascending by timestamp)
+      // Display oldest at top, newest at bottom
 
       // Check if there are more messages
       const totalMessages = count || 0;
@@ -91,7 +100,7 @@ export const useMessages = (sessionId: string | null) => {
         `[useMessages] Loaded ${messages.length} messages, total: ${totalMessages}, hasMore: ${moreAvailable}`,
       );
 
-      return { messages: reversedMessages, hasMore: moreAvailable };
+      return { messages: messages, hasMore: moreAvailable };
     },
     enabled: !!sessionId,
     keepPreviousData: true,
@@ -101,14 +110,15 @@ export const useMessages = (sessionId: string | null) => {
   useEffect(() => {
     if (query.data?.messages) {
       setAllMessages((prev) => {
-        // Prepend older messages to the beginning when loading more history
+        // Initial page load - use messages directly
         if (page === 0) {
           return query.data.messages;
         }
+        // Append newer messages to the end when loading more history
         // Merge new page with existing messages, avoiding duplicates
         const existingIds = new Set(prev.map((m) => m.id));
         const newMessages = query.data.messages.filter((m) => !existingIds.has(m.id));
-        return [...newMessages, ...prev];
+        return [...prev, ...newMessages];
       });
       setHasMore(query.data.hasMore);
     }

@@ -42,7 +42,7 @@ export const useDynamicOptions = ({
   const optionsTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const enabled = String((import.meta as any)?.env?.VITE_DYNAMIC_OPTIONS ?? 'true').toLowerCase();
+    const enabled = String(import.meta.env.VITE_DYNAMIC_OPTIONS ?? 'true').toLowerCase();
     const isEnabled = ['1', 'true', 'yes', 'on'].includes(enabled);
     if (!isEnabled) return;
 
@@ -73,7 +73,7 @@ export const useDynamicOptions = ({
 
     optionsTimerRef.current = window.setTimeout(async () => {
       try {
-        const baseUrl = (import.meta as any)?.env?.VITE_CREWAI_BASE_URL || 'http://127.0.0.1:8000';
+        const baseUrl = import.meta.env.VITE_CREWAI_BASE_URL || 'http://127.0.0.1:8000';
         const lastPlayer = [...messages].reverse().find((m) => m.sender === 'player');
         const history = messages.slice(Math.max(0, messages.length - 8)).map((m) => ({
           role: m.sender === 'player' ? 'user' : m.sender === 'dm' ? 'assistant' : 'system',

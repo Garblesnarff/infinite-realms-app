@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { parseDiceCommand } from '@/utils/diceCommandParser';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
@@ -330,9 +331,20 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
         [...messagesRef.current, playerMessage],
         sessionId,
       );
+      // Sanitize the AI response text first
+      let processedText = sanitizeDMText(aiResponseMessage.text);
+
+      // CRITICAL: Truncate at roll request to prevent premature outcome narrative
+      // The AI may generate outcome text AFTER the roll request block - we must NOT display it
+      // The player should only see text BEFORE the roll request; outcome comes in NEW response after roll
+      if (aiResponseMessage.rollRequests && aiResponseMessage.rollRequests.length > 0) {
+        processedText = truncateAtRollRequest(processedText);
+        logger.info('🎲 Truncated AI response at roll request to prevent premature outcome');
+      }
+
       const sanitizedAiResponseMessage: ChatMessage = {
         ...aiResponseMessage,
-        text: sanitizeDMText(aiResponseMessage.text),
+        text: processedText,
       };
 
       // Check for auto-triggered safety commands in AI response
@@ -379,63 +391,72 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
         return; // Exit early for auto-triggered safety commands
       }
 
-      await sendMessage(sanitizedAiResponseMessage); // Adds AI message to UI and dialogue_history
-
-      // Process roll requests AFTER AI message is displayed to prevent premature response
-      if (
+      // Check if this response contains roll requests
+      const hasRollRequests =
         sanitizedAiResponseMessage.rollRequests &&
-        sanitizedAiResponseMessage.rollRequests.length > 0
-      ) {
+        sanitizedAiResponseMessage.rollRequests.length > 0;
+
+      if (hasRollRequests) {
+        // DO NOT display AI message - suppress the narrative completely
+        // Only process the roll requests (show the dice popup)
+        // The narrative will come from a NEW AI response after the roll completes
         logger.info(
-          '🎲 Processing',
+          '🎲 Suppressing AI narrative - roll requested. Showing',
           sanitizedAiResponseMessage.rollRequests.length,
-          'roll requests after AI message displayed',
+          'dice popup(s) only.',
         );
         processAiResponse(sanitizedAiResponseMessage.rollRequests);
+      } else {
+        // No roll requests - display the message normally
+        await sendMessage(sanitizedAiResponseMessage);
       }
 
-      // Process AI response for combat detection and other features
-      if (onAIResponse) {
-        try {
-          logger.info('[Combat Flow] Processing AI response for combat detection');
-          await onAIResponse(sanitizedAiResponseMessage);
-        } catch (combatError) {
-          handleAsyncError(combatError, {
-            userMessage: 'Failed to process combat response',
-            logLevel: 'warn',
-            showToast: false,
-            context: { location: 'MessageHandler.onAIResponse.combatDetection' },
-          });
-          // Don't throw here - combat processing should not break the message flow
+      // Only process combat detection, voice, scene updates, and memories
+      // when the message is actually displayed (not when suppressed for roll requests)
+      if (!hasRollRequests) {
+        // Process AI response for combat detection and other features
+        if (onAIResponse) {
+          try {
+            logger.info('[Combat Flow] Processing AI response for combat detection');
+            await onAIResponse(sanitizedAiResponseMessage);
+          } catch (combatError) {
+            handleAsyncError(combatError, {
+              userMessage: 'Failed to process combat response',
+              logLevel: 'warn',
+              showToast: false,
+              context: { location: 'MessageHandler.onAIResponse.combatDetection' },
+            });
+            // Don't throw here - combat processing should not break the message flow
+          }
         }
-      }
 
-      // Check if we have narration segments for voice synthesis
-      if (
-        sanitizedAiResponseMessage.narrationSegments &&
-        sanitizedAiResponseMessage.narrationSegments.length > 0
-      ) {
-        logger.info(
-          '[Voice Flow] AI response contains',
-          sanitizedAiResponseMessage.narrationSegments.length,
-          'narration segments',
-        );
-        // Note: Voice playback will be handled by MultiVoicePlayer component
-        // when it detects the narrationSegments in the message
-      }
+        // Check if we have narration segments for voice synthesis
+        if (
+          sanitizedAiResponseMessage.narrationSegments &&
+          sanitizedAiResponseMessage.narrationSegments.length > 0
+        ) {
+          logger.info(
+            '[Voice Flow] AI response contains',
+            sanitizedAiResponseMessage.narrationSegments.length,
+            'narration segments',
+          );
+          // Note: Voice playback will be handled by MultiVoicePlayer component
+          // when it detects the narrationSegments in the message
+        }
 
-      // Update current_scene_description with short blurb (not full reply)
-      if (sanitizedAiResponseMessage.text) {
-        const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
-        await updateGameSessionState((prev) => ({
-          ...prev,
-          current_scene_description: blurb,
-        }));
-        logger.info(
-          '[Memory Flow] Extracting memories from AI response:',
-          sanitizedAiResponseMessage.text,
-        );
-        await extractMemories(sanitizedAiResponseMessage.text); // Non-critical path
+        // Update current_scene_description with short blurb (not full reply)
+        if (sanitizedAiResponseMessage.text) {
+          const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
+          await updateGameSessionState((prev) => ({
+            ...prev,
+            current_scene_description: blurb,
+          }));
+          logger.info(
+            '[Memory Flow] Extracting memories from AI response:',
+            sanitizedAiResponseMessage.text,
+          );
+          await extractMemories(sanitizedAiResponseMessage.text); // Non-critical path
+        }
       }
     } catch (error) {
       handleAsyncError(error, {

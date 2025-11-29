@@ -48,8 +48,9 @@ const ROLL_KEYWORDS: Array<{
   keywords: string[];
   build: () => FallbackRollRequest;
 }> = [
+  // Combat - Attack rolls
   {
-    keywords: ['attack', 'strike', 'swing', 'slash', 'stab', 'shoot', 'fire', 'charge', 'snipe'],
+    keywords: ['attack', 'strike', 'swing', 'slash', 'stab', 'shoot', 'fire', 'charge', 'snipe', 'punch', 'kick', 'hit', 'fight'],
     build: () => ({
       type: 'attack',
       formula: '1d20+attack_bonus',
@@ -57,8 +58,9 @@ const ROLL_KEYWORDS: Array<{
       ac: 13,
     }),
   },
+  // Stealth (DEX) - expanded synonyms and phrases
   {
-    keywords: ['stealth', 'sneak', 'hide', 'creep', 'quiet'],
+    keywords: ['stealth', 'sneak', 'hide', 'creep', 'quietly', 'silently', 'slip past', 'avoid detection', 'stay hidden', 'move unseen', 'shadows', 'unnoticed'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+dexterity_mod',
@@ -68,8 +70,21 @@ const ROLL_KEYWORDS: Array<{
       ability: 'dexterity',
     }),
   },
+  // Deception (CHA) - NEW
   {
-    keywords: ['persuade', 'convince', 'charm', 'negotiate', 'diplomacy', 'talk'],
+    keywords: ['deceive', 'lie', 'bluff', 'mislead', 'disguise', 'pretend', 'fake', 'trick', 'fool', 'con'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+charisma_mod',
+      purpose: 'Deception check to mislead your target',
+      dc: 15,
+      skill: 'deception',
+      ability: 'charisma',
+    }),
+  },
+  // Persuasion (CHA) - expanded
+  {
+    keywords: ['persuade', 'convince', 'charm', 'negotiate', 'diplomacy', 'bargain', 'plead', 'appeal', 'sway', 'win over', 'reason with'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+charisma_mod',
@@ -79,8 +94,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'charisma',
     }),
   },
+  // Intimidation (CHA) - expanded
   {
-    keywords: ['intimidate', 'threaten', 'menace', 'coerce'],
+    keywords: ['intimidate', 'threaten', 'menace', 'coerce', 'scare', 'frighten', 'bully', 'pressure', 'interrogate'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+charisma_mod',
@@ -90,8 +106,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'charisma',
     }),
   },
+  // Investigation (INT) - expanded
   {
-    keywords: ['investigate', 'inspect', 'search', 'study', 'analyze'],
+    keywords: ['investigate', 'inspect', 'search', 'study', 'analyze', 'deduce', 'examine closely', 'find clues', 'look for'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+intelligence_mod',
@@ -101,8 +118,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'intelligence',
     }),
   },
+  // Acrobatics (DEX) - expanded
   {
-    keywords: ['acrobatic', 'flip', 'tumble', 'dodge', 'leap'],
+    keywords: ['acrobatic', 'flip', 'tumble', 'dodge', 'leap', 'balance', 'cartwheel', 'somersault', 'tight-rope', 'nimble'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+dexterity_mod',
@@ -112,8 +130,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'dexterity',
     }),
   },
+  // Athletics (STR) - expanded
   {
-    keywords: ['climb', 'heave', 'lift', 'push', 'force', 'shove', 'grapple'],
+    keywords: ['climb', 'heave', 'lift', 'push', 'force', 'shove', 'grapple', 'swim', 'jump', 'sprint', 'wrestle', 'break down'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+strength_mod',
@@ -123,8 +142,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'strength',
     }),
   },
+  // Perception (WIS) - expanded
   {
-    keywords: ['perceive', 'spot', 'notice', 'scan', 'watch', 'listen', 'hear'],
+    keywords: ['perceive', 'spot', 'notice', 'scan', 'watch', 'listen', 'hear', 'look around', 'keep an eye', 'on guard', 'aware'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+wisdom_mod',
@@ -134,8 +154,9 @@ const ROLL_KEYWORDS: Array<{
       ability: 'wisdom',
     }),
   },
+  // Insight (WIS) - expanded
   {
-    keywords: ['insight', 'sense motive', 'judge', 'read'],
+    keywords: ['insight', 'sense motive', 'judge', 'read', 'tell if', 'detect lies', 'trustworthy', 'honest', 'true intentions'],
     build: () => ({
       type: 'skill_check',
       formula: '1d20+wisdom_mod',
@@ -143,6 +164,114 @@ const ROLL_KEYWORDS: Array<{
       dc: 13,
       skill: 'insight',
       ability: 'wisdom',
+    }),
+  },
+  // Sleight of Hand (DEX) - NEW
+  {
+    keywords: ['pickpocket', 'palm', 'steal', 'swipe', 'pilfer', 'sleight of hand', 'conceal', 'plant'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+dexterity_mod',
+      purpose: 'Sleight of Hand check',
+      dc: 14,
+      skill: 'sleight_of_hand',
+      ability: 'dexterity',
+    }),
+  },
+  // Survival (WIS) - NEW
+  {
+    keywords: ['track', 'forage', 'survive', 'hunt', 'follow trail', 'navigate', 'find path', 'wilderness'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+wisdom_mod',
+      purpose: 'Survival check',
+      dc: 13,
+      skill: 'survival',
+      ability: 'wisdom',
+    }),
+  },
+  // Medicine (WIS) - NEW
+  {
+    keywords: ['heal', 'stabilize', 'treat wound', 'diagnose', 'first aid', 'medicine', 'bandage'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+wisdom_mod',
+      purpose: 'Medicine check',
+      dc: 10,
+      skill: 'medicine',
+      ability: 'wisdom',
+    }),
+  },
+  // Animal Handling (WIS) - NEW
+  {
+    keywords: ['calm animal', 'tame', 'ride', 'control mount', 'animal handling', 'soothe beast'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+wisdom_mod',
+      purpose: 'Animal Handling check',
+      dc: 13,
+      skill: 'animal_handling',
+      ability: 'wisdom',
+    }),
+  },
+  // Performance (CHA) - NEW
+  {
+    keywords: ['perform', 'sing', 'dance', 'act', 'play music', 'entertain', 'distract with'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+charisma_mod',
+      purpose: 'Performance check',
+      dc: 12,
+      skill: 'performance',
+      ability: 'charisma',
+    }),
+  },
+  // Arcana (INT) - NEW
+  {
+    keywords: ['arcana', 'identify spell', 'magical knowledge', 'recognize magic', 'recall arcane'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+intelligence_mod',
+      purpose: 'Arcana check to recall magical knowledge',
+      dc: 15,
+      skill: 'arcana',
+      ability: 'intelligence',
+    }),
+  },
+  // History (INT) - NEW
+  {
+    keywords: ['history', 'recall', 'remember', 'know about', 'heard of', 'historical'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+intelligence_mod',
+      purpose: 'History check to recall knowledge',
+      dc: 13,
+      skill: 'history',
+      ability: 'intelligence',
+    }),
+  },
+  // Nature (INT) - NEW
+  {
+    keywords: ['nature', 'identify plant', 'identify creature', 'natural knowledge', 'recognize beast'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+intelligence_mod',
+      purpose: 'Nature check',
+      dc: 13,
+      skill: 'nature',
+      ability: 'intelligence',
+    }),
+  },
+  // Religion (INT) - NEW
+  {
+    keywords: ['religion', 'divine knowledge', 'recognize deity', 'holy', 'unholy', 'undead lore'],
+    build: () => ({
+      type: 'skill_check',
+      formula: '1d20+intelligence_mod',
+      purpose: 'Religion check',
+      dc: 13,
+      skill: 'religion',
+      ability: 'intelligence',
     }),
   },
 ];
@@ -729,276 +858,153 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
 
           contextPrompt += `<rules_of_play>
 
-**CRITICAL: ALWAYS REQUEST DICE ROLLS FROM PLAYERS**
+<when_to_request_rolls>
+<title>CRITICAL: WHEN TO REQUEST DICE ROLLS</title>
+Request a roll when the outcome is UNCERTAIN. Ask yourself:
+- Can this action fail? → Request a roll
+- Is there opposition or difficulty? → Request a roll
+- Does success/failure meaningfully change the story? → Request a roll
 
-<dice_rolling>
-<title>CRITICAL: ALWAYS REQUEST DICE ROLLS FROM PLAYERS</title>
-You MUST request dice rolls from players for uncertain outcomes. This maintains player agency and engagement.
+<uncertain_outcomes_need_rolls>
+- **Perception**: Noticing hidden things, reading situations, spotting traps
+- **Stealth**: Sneaking, hiding, moving quietly, avoiding detection
+- **Deception**: Lying, disguises, misdirection, bluffing
+- **Persuasion**: Convincing, negotiating, charming, bargaining
+- **Intimidation**: Threatening, coercing, interrogating
+- **Investigation**: Searching, analyzing, deducing, finding clues
+- **Insight**: Reading intentions, detecting lies, sensing motives
+- **Athletics**: Climbing, jumping, swimming, grappling, forcing doors
+- **Acrobatics**: Balance, tumbling, dodging, tight-rope walking
+- **Sleight of Hand**: Pickpocketing, hiding objects, card tricks
+- **Arcana/History/Nature/Religion**: Recalling specialized knowledge
+- **Survival**: Tracking, foraging, navigation, weather prediction
+- **Medicine**: Stabilizing, diagnosing, treating wounds
+- **Animal Handling**: Calming, training, controlling animals
+- **Performance**: Entertaining, impressing, distracting
+- **ALL combat**: Attacks, damage, saves, initiative
+</uncertain_outcomes_need_rolls>
 
-<request_types>
-- Combat actions: Request attack rolls, damage rolls (using character's specific weapon dice), saving throws
-- Skill checks: Ask for Investigation, Perception, Persuasion, etc. rolls
-- Random events: Player rolls for random outcomes when they're the cause
-</request_types>
+<certain_outcomes_no_rolls>
+- Walking down an empty corridor
+- Talking to a friendly, willing NPC about general topics
+- Looking at something obvious in plain sight
+- Picking up an item from a table
+- Opening an unlocked, untrapped door
+</certain_outcomes_no_rolls>
+</when_to_request_rolls>
 
-<formatting>
-- Use CHARACTER'S ACTUAL MODIFIERS in your requests.
-- Format: "Please roll [dice with actual modifier] for [purpose] (target DC [number])"
-</formatting>
+<roll_request_format>
+<title>HOW TO REQUEST ROLLS</title>
+**When an action has uncertain outcome, include this code block at the END of your response:**
 
-<examples>
-✅ "The orc attacks you! Please roll an attack roll with your weapon"
-✅ "Please make a Perception check" (system will auto-calculate WIS modifier + proficiency)
-✅ "Roll initiative!" (system will auto-calculate DEX modifier)
-✅ "Make a Dexterity saving throw (DC 15) to avoid the fireball"
-✅ "Roll for a Stealth check to sneak past the guard"
-</examples>
-
-<simple_requests>
-For simplicity, you can use these commands and the system will calculate modifiers automatically:
-✅ "Make an attack roll"
-✅ "Roll initiative"
-✅ "Make a Dexterity saving throw"
-✅ "Make a Perception check"
-✅ "Roll for Stealth"
-</simple_requests>
-
-<npc_and_environment_rolls>
-You handle rolls for NPCs and the environment "behind the screen".
-✅ "The orc attacks (rolling behind screen... hits AC 13) dealing 6 slashing damage"
-✅ "A mysterious sound echoes from the shadows (rolled for random encounter)"
-</npc_and_environment_rolls>
-
-<never_do_this>
-❌ "You rolled 16 and succeeded" (Player hasn't rolled yet!)
-❌ "Rolling 1d20+3 = 14 for your Perception" (Player should roll!)
-❌ "The result is 18" (without player action)
-</never_do_this>
-</dice_rolling>
-
-<critical_roll_first_rule>
-<title>CRITICAL: REQUEST ROLLS BEFORE NARRATING OUTCOMES</title>
-
-**If a player action has an UNCERTAIN outcome, you MUST send ONLY the roll request with NO narrative text.**
-
-<correct_flow>
-1. Receive player action that needs a roll
-2. Send ONLY the ROLL_REQUESTS_V1 code block - NO narrative text at all
-3. STOP - Wait for player to roll
-4. Receive roll result in next exchange
-5. THEN narrate outcome based on actual roll result
-6. May request another roll if needed, repeat process
-</correct_flow>
-
-<correct_examples>
-✅ Player: "I sneak past the guards"
-✅ AI Response (ONLY the code block, NO other text):
 \`\`\`ROLL_REQUESTS_V1
 {
   "rolls": [
     {
       "type": "skill_check",
-      "formula": "1d20+dex",
-      "purpose": "Stealth check to avoid detection",
+      "formula": "1d20+modifier",
+      "purpose": "Description of what this roll is for",
       "dc": 14
     }
   ]
 }
 \`\`\`
 
-[NEXT EXCHANGE after player rolls 10]
-✅ AI: "You move carefully but a loose board creaks underfoot (rolled 10, failed). The guards turn toward the sound. One shouts 'Who's there?'"
-
----
-
-✅ Player: "I maneuver into cover to see the threat"
-✅ AI Response (ONLY the code block, NO other text):
-\`\`\`ROLL_REQUESTS_V1
-{
-  "rolls": [
-    {
-      "type": "skill_check",
-      "formula": "1d20+4",
-      "purpose": "Stealth check to move into cover",
-      "dc": 13
-    },
-    {
-      "type": "skill_check",
-      "formula": "1d20+4",
-      "purpose": "Perception check to assess the threat",
-      "dc": 12
-    }
-  ]
-}
-\`\`\`
-
-[NEXT EXCHANGE after player rolls both dice]
-✅ AI: "You slip into cover (rolled 13, passed). From your vantage point, your perception (rolled 18) reveals two Omicron guards: one with a pulse rifle, one with an electro-baton."
-</correct_examples>
-
-<wrong_examples>
-❌ Player: "I sneak past the guards"
-❌ AI: "You attempt to move silently through the shadows.
-
-\`\`\`ROLL_REQUESTS_V1
-{\"rolls\": [{\"type\": \"skill_check\", ...}]}
-\`\`\`"
-
-[WRONG - Added narrative text before the roll! Should be ONLY the code block!]
-
----
-
-❌ Player: "I maneuver into cover"
-❌ AI: "You duck behind the wall and peer out, seeing two guards approaching with weapons drawn.
-
-\`\`\`ROLL_REQUESTS_V1
-{\"rolls\": [{\"type\": \"skill_check\", ...}]}
-\`\`\`"
-
-[WRONG - Narrated the outcome before the roll! Should be ONLY the code block!]
-</wrong_examples>
-
-<when_outcome_is_uncertain>
-Send ONLY roll request code block (NO narrative) for:
-- Combat actions (attacks, maneuvers)
-- Stealth/hiding attempts
-- Perception/investigation attempts
-- Social checks (persuasion, intimidation, deception)
-- Physical challenges (climbing, jumping, forcing doors)
-- Saving throws
-- Any action where failure is possible
-
-Only narrate immediately for CERTAIN outcomes:
-- Simple movement with no obstacles
-- Talking to willing NPCs
-- Examining obvious features
-- Automatic successes
-</when_outcome_is_uncertain>
-</critical_roll_first_rule>
-
-<roll_requests_v1_format>
-<title>CRITICAL: STRUCTURED ROLL REQUESTS</title>
-**When requesting dice rolls for uncertain outcomes, send ONLY the ROLL_REQUESTS_V1 code block with NO additional text. DO NOT include any narrative - the code block should be your entire response. DO NOT narrate the outcome until you receive the roll result in the next exchange.**
-
-<format>
-Your response should contain ONLY this code block and nothing else:
-
-\`\`\`ROLL_REQUESTS_V1
-{
-  "rolls": [
-    {
-      "type": "check|save|attack|damage|initiative|skill_check",
-      "formula": "1d20+modifier",
-      "purpose": "Clear description of why this roll is needed",
-      "dc": 12,
-      "ac": 15,
-      "advantage": true,
-      "disadvantage": false
-    }
-  ]
-}
-\`\`\`
-</format>
-
 <field_requirements>
-- **type**: One of: "check", "save", "attack", "damage", "initiative", "skill_check"
-- **formula**: Exact dice notation (e.g., "1d20+3", "2d6+4", "1d20")
-- **purpose**: Brief explanation for the player (e.g., "Stealth check to sneak past guards")
-- **dc**: (Optional) Difficulty Class for checks/saves
-- **ac**: (Optional) Armor Class for attack rolls
-- **advantage**: (Optional) true if roll has advantage
-- **disadvantage**: (Optional) true if roll has disadvantage
+- **type**: "skill_check", "save", "attack", "damage", or "initiative"
+- **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
+- **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
+- **dc**: Difficulty Class for checks/saves (optional)
+- **ac**: Armor Class for attacks (optional)
+- **advantage/disadvantage**: true if applicable (optional)
 </field_requirements>
 
 <examples>
-Example 1 - Skill Check:
-\`\`\`ROLL_REQUESTS_V1
-{
-  "rolls": [
-    {
-      "type": "skill_check",
-      "formula": "1d20+2",
-      "purpose": "Perception check to spot hidden enemies",
-      "dc": 14
-    }
-  ]
-}
-\`\`\`
-
-Example 2 - Combat with Multiple Rolls:
-\`\`\`ROLL_REQUESTS_V1
-{
-  "rolls": [
-    {
-      "type": "initiative",
-      "formula": "1d20+2",
-      "purpose": "Roll initiative as combat begins"
-    },
-    {
-      "type": "attack",
-      "formula": "1d20+5",
-      "purpose": "Attack roll with longsword",
-      "ac": 13
-    }
-  ]
-}
-\`\`\`
-
-Example 3 - Saving Throw:
-\`\`\`ROLL_REQUESTS_V1
-{
-  "rolls": [
-    {
-      "type": "save",
-      "formula": "1d20+1",
-      "purpose": "Dexterity saving throw to dodge fireball",
-      "dc": 15
-    }
-  ]
-}
-\`\`\`
+Stealth: \`{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}\`
+Persuasion: \`{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}\`
+Perception: \`{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}\`
+Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}\`
+Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}\`
 </examples>
+</roll_request_format>
 
-<important_notes>
-- The code block MUST be at the very end of your response, after all narrative text
-- The code block enables automatic pop-up dice rollers for the player
-- If no rolls are needed, you can omit the code block entirely
-- Multiple rolls can be included in the "rolls" array when appropriate
-</important_notes>
-</roll_requests_v1_format>
+<roll_before_outcome>
+<title>CRITICAL: REQUEST ROLLS BEFORE NARRATING OUTCOMES</title>
+**DO NOT narrate results of uncertain actions before the player rolls!**
+
+✅ CORRECT FLOW:
+1. Player says "I try to sneak past the guards"
+2. You respond with narrative setup + roll request at end
+3. Player rolls
+4. THEN you narrate success/failure based on their roll
+
+❌ WRONG: "You successfully sneak past the guards..." (before they rolled!)
+❌ WRONG: "You try to sneak but the guard spots you..." (before they rolled!)
+✅ RIGHT: "The guards patrol the corridor ahead. Their torchlight flickers against the stone walls..." + roll request
+</roll_before_outcome>
+
+<critical_roll_stopping_rule>
+**CRITICAL: YOUR RESPONSE MUST END WITH THE ROLL REQUEST**
+
+When you request a roll, your turn is COMPLETE. You must STOP immediately after the roll request block.
+
+DO NOT after requesting a roll:
+- Narrate what happens if they succeed or fail
+- Describe the outcome conditionally ("If you succeed...")
+- Assume any result and continue the story
+- Add any text after the ROLL_REQUESTS_V1 block
+
+✅ CORRECT (stop after roll request):
+"The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully.
+
+\`\`\`ROLL_REQUESTS_V1
+{"rolls":[{"type":"skill_check","formula":"1d20+athletics","purpose":"Athletics check to climb the wall","dc":15}]}
+\`\`\`"
+
+❌ WRONG (continues after roll request):
+"The ancient wall looms before you...
+
+\`\`\`ROLL_REQUESTS_V1
+{"rolls":[...]}
+\`\`\`
+
+You manage to find purchase on the weathered stone and pull yourself up..."
+
+The outcome narration happens in your NEXT response, AFTER you see the player's roll result.
+</critical_roll_stopping_rule>
+
+<npc_rolls>
+You handle NPC/monster rolls "behind the screen":
+✅ "The orc swings its greataxe (rolled 16, hits AC 13) dealing 12 slashing damage!"
+✅ "The wizard mutters an incantation (you sense hostile magic forming)..."
+</npc_rolls>
 
 <dialogue>
-<title>CRITICAL: NPC DIALOGUE REQUIREMENTS</title>
-- ALL significant NPC interactions MUST use direct quoted speech. Examples: "What brings you to these dark woods?" or "I've been expecting you, adventurer."
-- NEVER describe speech indirectly (e.g., "He greets you warmly" or "She asks about your quest"). Every meaningful NPC response should contain actual spoken words in quotes.
-- This applies to shopkeepers, guards, villagers, enemies, allies - ALL speaking NPCs.
-- Give each NPC a unique voice, vocabulary, and speech pattern.
-- Include body language and emotional cues: The merchant nervously fidgets with his coin purse before saying, "Perhaps we can strike a bargain?"
-- Match dialogue to character: A gruff dwarf might say "Bah! What's a human doing in these tunnels?" while an elegant elf says "How... unexpected to encounter your kind here."
+<title>NPC DIALOGUE REQUIREMENTS</title>
+ALL NPC speech MUST be in direct quotes with attribution:
+✅ "What brings you to my tavern?" the barkeep asks, wiping a glass.
+✅ The guard steps forward. "State your business, stranger."
+❌ The barkeep asks what you want. (NO - use direct quotes!)
+❌ The guard questions you suspiciously. (NO - show the actual words!)
 
-<dialogue_examples>
-✅ CORRECT: The tavern keeper looks up from cleaning glasses. "Rough night out there, eh? What can I get you?"
-❌ INCORRECT: The tavern keeper greets you and asks what you want to drink.
-
-✅ CORRECT: The guard steps forward, hand on sword hilt. "State your business, stranger. The city's been on edge lately."
-❌ INCORRECT: The guard approaches and questions your presence suspiciously.
-</dialogue_examples>
+Give NPCs distinct voices:
+- Gruff dwarf: "Bah! What's a human doing in these tunnels?"
+- Elegant elf: "How... unexpected to encounter your kind here."
+- Nervous merchant: "P-perhaps we could... negotiate?"
 </dialogue>
 
 <combat>
 <title>COMBAT GUIDELINES</title>
-- **REQUEST INITIATIVE FROM PLAYERS**: "Roll initiative! (1d20+dex modifier)"
-- **REQUEST PLAYER ATTACK ROLLS**: "Make an attack roll with your [weapon] (1d20+attack bonus)"
-- **REQUEST SAVING THROWS**: "Make a [ability] saving throw (1d20+modifier, DC [number])"
-- **REQUEST DAMAGE ROLLS**: "Roll damage for your [weapon/spell] ([exact dice from character equipment])" - USE SPECIFIC WEAPON DICE (1d8 for longsword, 1d6 for shortsword, etc.)
-- **NPC ACTIONS**: Handle behind screen: "The orc attacks (rolled behind screen, hits AC 14)"
-- Apply D&D 5e rules: advantage/disadvantage, resistance, spell components, concentration.
-- Describe hits/misses cinematically with mechanical accuracy.
-- Track position, conditions, and tactical elements.
-- Include battle cries and combat dialogue in direct quotes.
-- Consider environmental factors (cover, difficult terrain, lighting).
-- NPCs should use tactics appropriate to their intelligence and experience.
+- Request initiative when combat begins
+- Request attack rolls for player actions
+- Request saving throws when effects target players
+- Request damage rolls after successful hits
+- Handle NPC actions behind the screen
+- Use D&D 5e rules: advantage/disadvantage, conditions, cover
+- Describe actions cinematically with mechanical accuracy
+- Include battle cries and combat dialogue in quotes
 </combat>
+
 </rules_of_play>`;
 
           contextPrompt += `<game_context>`;
@@ -1240,7 +1246,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 2. **New Information**: Reveal new details, clues, or developments.
 3. **NPC Interaction**: Include direct quoted dialogue for ALL speaking NPCs.
 4. **Environmental Details**: Paint the scene with sensory information.
-5. **Choice Point**: End with 2-3 clear options or ask what they want to do next.
+5. **Choice Point**: End with 2-3 clear options UNLESS you are requesting a dice roll. If requesting a roll, END your response immediately after the ROLL_REQUESTS_V1 block with no additional text.
 </structure>
 
 <visual_prompt_rule>
@@ -1281,6 +1287,13 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
           if (voiceContext) {
             contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
           }
+
+          // Add final reminder about roll stopping rule (most important - LLMs weight end of prompt more heavily)
+          contextPrompt += `
+
+<final_reminder>
+<critical>MOST IMPORTANT RULE: If you request a dice roll using ROLL_REQUESTS_V1, your response MUST END with that block. Do NOT add narrative, choices, outcomes, or any text after the roll request. The player rolls first, then you continue the story in your NEXT response.</critical>
+</final_reminder>`;
 
           // Build conversation history
           const messages = [

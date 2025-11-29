@@ -107,11 +107,17 @@ export const useCombatAIIntegration = ({
       }
 
       // Handle combat starting with guard to prevent duplicates
+      // Add cooldown check to prevent rapid re-triggers after combat ends
+      const COMBAT_COOLDOWN_MS = 3000; // 3 seconds cooldown after combat ends
+      const timeSinceLastEnd = Date.now() - (lastCombatEndAtRef.current || 0);
+      const cooldownExpired = timeSinceLastEnd > COMBAT_COOLDOWN_MS;
+
       const canStartCombat =
-        detection.isCombat &&
+        detection.shouldStartCombat && // Use new explicit initiative check from detection
         detection.confidence >= MIN_COMBAT_CONFIDENCE &&
         !!(detection.enemies && detection.enemies.length > 0) &&
-        !state.isInCombat;
+        !state.isInCombat &&
+        cooldownExpired; // Prevent rapid re-triggers
 
       if (canStartCombat && !isStartingCombatRef.current) {
         isStartingCombatRef.current = true;
@@ -157,41 +163,18 @@ export const useCombatAIIntegration = ({
         }
       }
 
-      // Process detected combat actions for dice rolls
-      if (detection.combatActions && detection.combatActions.length > 0) {
-        let emitted = 0;
-        for (const action of detection.combatActions) {
-          // Skip low-value or unknown actor actions to reduce spam
-          const actorName = (action.actor || '').trim();
-          if (!actorName || actorName.toLowerCase() === 'unknown') {
-            continue;
-          }
-
-          // De-duplicate similar actions within this encounter
-          const hash = `${action.rollType}|${actorName}|${action.target || ''}|${action.weapon || ''}`;
-          if (seenActionHashesRef.current.has(hash)) {
-            continue;
-          }
-
-          const rollResult = await createCombatActionRoll(action);
-          if (rollResult) {
-            const combatMessage: ChatMessage = {
-              text: rollResult.description,
-              sender: 'system',
-              context: {
-                combatData: rollResult,
-              },
-              timestamp: new Date().toISOString(),
-            };
-
-            combatMessages.push(combatMessage);
-            seenActionHashesRef.current.add(hash);
-            emitted++;
-            // Throttle per-response emissions
-            if (emitted >= 2) break;
-          }
-        }
-      }
+      // NOTE: Auto-roll combat action processing has been DISABLED.
+      // The proper roll request system in use-ai-response.ts handles all rolls via:
+      // 1. Structured ROLL_REQUESTS_V1 blocks from DM
+      // 2. Regex pattern matching for roll requests
+      // These go through requestDiceRoll() → queue → popup → user rolls
+      //
+      // The previous code here auto-rolled dice silently without showing the popup,
+      // causing "random skill checks" and "DM responds before rolls" issues.
+      // See: https://github.com/anthropics/claude-code/issues/combat-auto-roll
+      //
+      // If combat action roll requests are needed, they should come from the DM agent
+      // via structured format, not auto-detected from narrative text.
 
       // Enforce mutual exclusivity between start/end hints to avoid contradictory logs
       let start = !!detection.shouldStartCombat;

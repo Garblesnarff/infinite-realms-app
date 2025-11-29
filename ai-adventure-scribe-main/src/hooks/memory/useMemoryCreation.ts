@@ -10,7 +10,9 @@ import logger from '@/lib/logger';
 import { processContent } from '@/utils/memoryClassification';
 
 const MIN_SEGMENT_LENGTH = 50;
-const MAX_SEGMENTS_PER_MESSAGE = 3;
+// Reduced from 3 to 1 - store only the single most important memory per message
+// This dramatically reduces DB writes (from 6/turn to 2/turn) while keeping meaningful data
+const MAX_SEGMENTS_PER_MESSAGE = 1;
 
 export const useMemoryCreation = (sessionId: string | null) => {
   const { toast } = useToast();

@@ -12,13 +12,17 @@ import json
 
 app = FastAPI(title="CrewAI DM Orchestrator", version="0.1.0")
 
-# CORS for local dev
+# CORS for local dev and production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://192.168.1.81:3000",
+        "https://infiniterealms.app",
+        "https://www.infiniterealms.app",
+        "https://studio.infiniterealms.app",
+        "https://api.infiniterealms.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],

@@ -114,19 +114,22 @@ const COMBAT_KEYWORDS = {
     'warrior',
   ],
 
-  // Combat ending
+  // Combat ending - ONLY definitive phrases that clearly end combat
+  // Words like "flee", "retreat", "escape" are removed because they can appear
+  // in hypothetical context ("You could flee", "Consider retreating")
   endings: [
     'combat ends',
+    'combat has ended',
+    'the battle is over',
     'battle over',
+    'the fight is over',
     'enemies defeated',
-    'victory',
-    'retreat',
-    'flee',
-    'escape',
-    'surrender',
-    'unconscious',
+    'all enemies defeated',
     'all enemies dead',
     'threat eliminated',
+    'threat has been eliminated',
+    'you are victorious',
+    'you have won',
   ],
 };
 
@@ -154,13 +157,15 @@ export function detectCombatFromText(text: string, context?: unknown): CombatDet
   let combatActions: DetectedCombatAction[] = [];
   let shouldStartCombat = false;
   let hasDirectCombatCue = false;
+  let hasExplicitInitiative = false; // NEW: Track explicit initiative keywords separately
   let shouldEndCombat = false;
 
-  // Check for initiative keywords
+  // Check for initiative keywords - ONLY these should trigger combat start
   if (COMBAT_KEYWORDS.initiative.some((keyword) => lowerText.includes(keyword))) {
     combatScore += 0.9;
     combatType = 'initiative';
     hasDirectCombatCue = true;
+    hasExplicitInitiative = true; // Only set for initiative keywords
   }
 
   // Check for attack keywords
@@ -239,8 +244,10 @@ export function detectCombatFromText(text: string, context?: unknown): CombatDet
   const confidence = Math.min(combatScore, 1.0);
   const isCombat = confidence >= 0.5;
 
-  // Decide if combat should start: requires direct cues (attacks/initiative/spell/damage) or very strong signal
-  shouldStartCombat = hasDirectCombatCue && isCombat;
+  // Decide if combat should start: ONLY on explicit initiative keywords
+  // Attack/spell/damage keywords in narrative should NOT start combat
+  // This prevents "Combat has begun" spam from DM describing actions
+  shouldStartCombat = hasExplicitInitiative && isCombat;
 
   return {
     isCombat,

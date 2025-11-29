@@ -49,7 +49,45 @@ serve(async (req) => {
   const requestId = req.headers.get('x-request-id') || (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
   try {
-    const { task, agentContext, voiceContext, isFirstMessage = false, combatContext } = await req.json();
+    // Parse request body with better error handling
+    let requestBody: any;
+    try {
+      const rawBody = await req.text();
+      console.log('[DM Agent] Raw request body length:', rawBody.length, { requestId });
+
+      // Check for common serialization issues
+      if (rawBody === '[object Object]' || rawBody === '"[object Object]"') {
+        console.error('[DM Agent] Request body was improperly serialized as [object Object]', { requestId });
+        return new Response(
+          JSON.stringify({
+            error: 'Request body serialization error. The client sent an improperly serialized object.',
+            requestId,
+            hint: 'Ensure Date objects are converted to ISO strings before sending'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-request-id': requestId } }
+        );
+      }
+
+      requestBody = JSON.parse(rawBody);
+    } catch (parseError: any) {
+      console.error('[DM Agent] Failed to parse request body:', parseError.message, { requestId });
+      return new Response(
+        JSON.stringify({ error: `Invalid JSON in request body: ${parseError.message}`, requestId }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-request-id': requestId } }
+      );
+    }
+
+    const { task, agentContext, voiceContext, isFirstMessage = false, combatContext } = requestBody;
+
+    // Validate required fields
+    if (!task || !agentContext) {
+      console.error('[DM Agent] Missing required fields in request body', { requestId, hasTask: !!task, hasAgentContext: !!agentContext });
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: task and agentContext are required', requestId }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'x-request-id': requestId } }
+      );
+    }
+
     const { campaignDetails, characterDetails, memories = [] } = agentContext;
 
     console.log('Processing DM Agent task:', {
@@ -120,10 +158,17 @@ serve(async (req) => {
     let rawResponse: string | null = null;
     let unavailableMessage: string | null = null;
 
+    // System instruction for critical roll-stopping rule
+    const systemInstruction = {
+      parts: [{
+        text: `CRITICAL SYSTEM RULE: When you request a dice roll from the player using a ROLL_REQUESTS_V1 code block, you MUST END your response immediately after that block. Do NOT continue with narrative, outcomes, choices, or any additional text after requesting a roll. The player needs to roll the dice first before you continue the story. Your next response (after receiving the roll result) should then narrate the outcome.`
+      }]
+    };
+
     for (const candidate of GEMINI_MODEL_CANDIDATES) {
       attempts.push(candidate);
       try {
-        const chat = genAI.getGenerativeModel({ model: candidate }).startChat({
+        const chat = genAI.getGenerativeModel({ model: candidate, systemInstruction }).startChat({
           history: baseHistory.map((entry) => ({ ...entry, parts: [...entry.parts] })),
           generationConfig: { ...baseGenerationConfig },
         });

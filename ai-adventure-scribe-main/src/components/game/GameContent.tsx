@@ -335,8 +335,12 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
           message.text?.substring(0, 100) + '...',
         );
 
-        if (message.combatDetection) {
-          logger.info('⚔️ Combat detection data found in AI response');
+        // Only process combat if actually detected with sufficient confidence
+        if (message.combatDetection?.isCombat && message.combatDetection.confidence >= 0.5) {
+          logger.info('⚔️ Combat detected in AI response', {
+            confidence: message.combatDetection.confidence,
+            shouldStart: message.combatDetection.shouldStartCombat,
+          });
           const result = await combatAI.processDMResponse(message, characterState.character);
 
           // Send combat messages to chat

@@ -67,7 +67,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
   hasMore,
   suppressEmptyState = false,
 }) => {
-  const { getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll } = useGame();
+  const { getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, isBatchComplete, getBatchResults, clearBatch } = useGame();
   const lastRollRef = useRef<LastRollMeta | null>(null);
 
   // Group consecutive messages from the same sender
@@ -101,6 +101,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
   }, [messages]);
 
   // Handle dice roll from queue
+  // FIXED: Wait for ALL rolls in a batch to complete before triggering AI response
   const handleDiceRoll = React.useCallback(
     async (formula: string, advantage?: boolean, disadvantage?: boolean) => {
       logger.info('[MessageListContainer] Handling dice roll from queue:', {
@@ -131,34 +132,10 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           disadvantage: disadvantage || false,
         });
 
+        // Complete this roll (marks it done in the batch)
         completeDiceRoll(currentRoll.id, rollResult);
 
-        const diceRollMessage: ChatMessage = {
-          text: `Rolled ${formula}${advantage ? ' with advantage' : disadvantage ? ' with disadvantage' : ''} = ${rollResult.total}`,
-          sender: 'player',
-          timestamp: new Date().toISOString(),
-          context: {
-            intent: 'dice_roll',
-            diceRoll: {
-              formula,
-              count,
-              dieType,
-              modifier,
-              advantage: advantage || false,
-              disadvantage: disadvantage || false,
-              results: rollResult.results,
-              keptResults: rollResult.keptResults,
-              total: rollResult.total,
-              naturalRoll: rollResult.naturalRoll,
-              critical: rollResult.critical,
-              timestamp: new Date().toISOString(),
-            },
-          },
-        };
-
-        await onSendMessage(diceRollMessage);
-
-        // Capture last roll meta
+        // Capture last roll meta for potential future use
         const mapKind = (t: string): LastRollMeta['kind'] => {
           if (t === 'attack') return 'attack';
           if (t === 'damage') return 'damage';
@@ -173,7 +150,72 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           label: currentRoll.description,
           result: rollResult.total,
           nat: rollResult.naturalRoll,
+          dc: currentRoll.dc,
+          ac: currentRoll.ac,
+          success: currentRoll.dc ? rollResult.total >= currentRoll.dc : currentRoll.ac ? rollResult.total >= currentRoll.ac : undefined,
         };
+
+        // Check if this was the last roll in the batch
+        // Use setTimeout to allow state to settle after completeDiceRoll
+        setTimeout(async () => {
+          if (isBatchComplete()) {
+            logger.info('[MessageListContainer] Batch complete, sending combined roll results');
+
+            // Get all completed rolls from this batch
+            const batchResults = getBatchResults();
+
+            // Format all roll results into a single message
+            const rollTexts = batchResults.map(roll => {
+              const total = roll.result?.total ?? 0;
+              const nat = roll.result?.naturalRoll ?? total;
+              const dc = roll.dc;
+              const ac = roll.ac;
+              const success = dc ? total >= dc : ac ? total >= ac : null;
+              const successText = success !== null ? (success ? '✓' : '✗') : '';
+              return `${roll.description}: ${total} (nat ${nat}${roll.rollConfig?.modifier ? (roll.rollConfig.modifier >= 0 ? '+' : '') + roll.rollConfig.modifier : ''}) ${successText}`;
+            });
+
+            const combinedText = rollTexts.join('\n');
+
+            const diceRollMessage: ChatMessage = {
+              text: combinedText,
+              sender: 'player',
+              timestamp: new Date().toISOString(),
+              context: {
+                intent: 'dice_roll',
+                diceRoll: {
+                  formula,
+                  count,
+                  dieType,
+                  modifier,
+                  advantage: advantage || false,
+                  disadvantage: disadvantage || false,
+                  results: rollResult.results,
+                  keptResults: rollResult.keptResults,
+                  total: rollResult.total,
+                  naturalRoll: rollResult.naturalRoll,
+                  critical: rollResult.critical,
+                  timestamp: new Date().toISOString(),
+                  // Include all batch results for AI context
+                  batchResults: batchResults.map(r => ({
+                    description: r.description,
+                    total: r.result?.total,
+                    dc: r.dc,
+                    ac: r.ac,
+                    success: r.dc ? (r.result?.total ?? 0) >= r.dc : r.ac ? (r.result?.total ?? 0) >= r.ac : null,
+                  })),
+                },
+              },
+            };
+
+            await onSendMessage(diceRollMessage);
+
+            // Clear the batch state
+            clearBatch();
+          } else {
+            logger.info('[MessageListContainer] Batch not complete, waiting for more rolls');
+          }
+        }, 50); // Small delay to let state update
       } catch (error) {
         handleAsyncError(error, {
           userMessage: 'Failed to process dice roll',
@@ -181,10 +223,11 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
         });
       }
     },
-    [onSendMessage, getCurrentDiceRoll, completeDiceRoll],
+    [onSendMessage, getCurrentDiceRoll, completeDiceRoll, isBatchComplete, getBatchResults, clearBatch],
   );
 
   // Handle manual dice result input
+  // FIXED: Wait for ALL rolls in a batch to complete before triggering AI response
   const handleManualResult = React.useCallback(
     async (result: number) => {
       const currentRoll = getCurrentDiceRoll();
@@ -204,18 +247,63 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           return;
         }
 
+        // Complete this roll (marks it done in the batch)
         completeDiceRoll(currentRoll.id, { total: numericResult });
 
-        if (onSendFullMessage) {
-          await onSendFullMessage(`I rolled ${numericResult}`);
-        } else {
-          const playerMessage: ChatMessage = {
-            text: `I rolled ${numericResult}`,
-            sender: 'player',
-            timestamp: new Date().toISOString(),
-          };
-          await onSendMessage(playerMessage);
-        }
+        // Check if this was the last roll in the batch
+        // Use setTimeout to allow state to settle after completeDiceRoll
+        setTimeout(async () => {
+          if (isBatchComplete()) {
+            logger.info('[MessageListContainer] Batch complete (manual), sending combined roll results');
+
+            // Get all completed rolls from this batch
+            const batchResults = getBatchResults();
+
+            // Format all roll results into a single message
+            const rollTexts = batchResults.map(roll => {
+              const total = roll.result?.total ?? 0;
+              const dc = roll.dc;
+              const ac = roll.ac;
+              const success = dc ? total >= dc : ac ? total >= ac : null;
+              const successText = success !== null ? (success ? '✓' : '✗') : '';
+              return `${roll.description}: ${total} ${successText}`;
+            });
+
+            const combinedText = rollTexts.join('\n');
+
+            const playerMessage: ChatMessage = {
+              text: combinedText,
+              sender: 'player',
+              timestamp: new Date().toISOString(),
+              context: {
+                intent: 'dice_roll',
+                diceRoll: {
+                  total: numericResult,
+                  timestamp: new Date().toISOString(),
+                  // Include all batch results for AI context
+                  batchResults: batchResults.map(r => ({
+                    description: r.description,
+                    total: r.result?.total,
+                    dc: r.dc,
+                    ac: r.ac,
+                    success: r.dc ? (r.result?.total ?? 0) >= r.dc : r.ac ? (r.result?.total ?? 0) >= r.ac : null,
+                  })),
+                },
+              },
+            };
+
+            if (onSendFullMessage) {
+              await onSendFullMessage(combinedText);
+            } else {
+              await onSendMessage(playerMessage);
+            }
+
+            // Clear the batch state
+            clearBatch();
+          } else {
+            logger.info('[MessageListContainer] Batch not complete (manual), waiting for more rolls');
+          }
+        }, 50); // Small delay to let state update
       } catch (error) {
         handleAsyncError(error, {
           userMessage: 'Failed to process dice result',
@@ -223,7 +311,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
         });
       }
     },
-    [onSendMessage, onSendFullMessage, getCurrentDiceRoll, completeDiceRoll],
+    [onSendMessage, onSendFullMessage, getCurrentDiceRoll, completeDiceRoll, isBatchComplete, getBatchResults, clearBatch],
   );
 
   return (

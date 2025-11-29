@@ -312,31 +312,181 @@ export class VoiceDirector {
   }
 
   /**
-   * Fallback: Process plain text when AI segments aren't available
+   * Enhanced: Process plain text by detecting dialogue and attributing voices
+   * Parses quoted speech with attribution to assign character voices
+   * Pattern examples:
+   *   - "Hello there!" the guard says.
+   *   - The merchant exclaims, "Welcome!"
+   *   - "Beware..." warns the wizard.
    */
   static processPlainText(text: string): VoiceSegment[] {
-    logger.info('📝 VoiceDirector: Processing plain text as single DM segment');
+    logger.info('📝 VoiceDirector: Processing plain text with dialogue detection');
 
     const cleanText = VoiceDirector.cleanSegmentText(text);
     if (!cleanText) {
       return [];
     }
 
-    const dmVoice = VoiceDirector.VOICE_POOLS.dm[0]; // Always use main DM voice
+    // Parse text into dialogue and narration segments
+    const parsedSegments = VoiceDirector.parseDialogueFromText(cleanText);
 
-    return [
-      {
-        id: `fallback_${Date.now()}`,
-        type: 'dm',
-        text: cleanText,
-        character: 'DM',
-        voiceId: dmVoice.id,
-        voiceName: dmVoice.name,
-        voiceSettings: dmVoice.settings,
+    if (parsedSegments.length === 0) {
+      // No dialogue found, return as single DM segment
+      const dmVoice = VoiceDirector.VOICE_POOLS.dm[0];
+      return [
+        {
+          id: `fallback_${Date.now()}`,
+          type: 'dm',
+          text: cleanText,
+          character: 'DM',
+          voiceId: dmVoice.id,
+          voiceName: dmVoice.name,
+          voiceSettings: dmVoice.settings,
+          isGenerating: false,
+          isPlaying: false,
+        },
+      ];
+    }
+
+    // Convert parsed segments to voice segments
+    return parsedSegments.map((segment, index) => {
+      const voiceConfig = VoiceDirector.assignVoice(segment);
+      return {
+        id: `parsed_${Date.now()}_${index}`,
+        type: segment.type,
+        text: segment.text,
+        character: segment.character || (segment.type === 'dm' ? 'DM' : 'Unknown'),
+        voiceId: voiceConfig.id,
+        voiceName: voiceConfig.name,
+        voiceSettings: voiceConfig.settings,
         isGenerating: false,
         isPlaying: false,
-      },
-    ];
+      };
+    });
+  }
+
+  /**
+   * Parse dialogue from plain text
+   * Returns an array of segments with type 'dm' (narration) or 'character' (dialogue)
+   */
+  private static parseDialogueFromText(text: string): AISegment[] {
+    const segments: AISegment[] = [];
+
+    // Regex to find quoted dialogue with optional attribution
+    // Matches patterns like:
+    // - "dialogue" the character says/asks/etc.
+    // - "dialogue," said the character
+    // - "dialogue," character says
+    // - The character says, "dialogue"
+    const dialoguePattern = /(?:(?:(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?[""]([^""]+)[""]\s*(?:,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)?)?)/gi;
+
+    let lastIndex = 0;
+    let match;
+
+    while ((match = dialoguePattern.exec(text)) !== null) {
+      // Add narration before this dialogue (if any)
+      const narrationBefore = text.slice(lastIndex, match.index).trim();
+      if (narrationBefore) {
+        segments.push({
+          type: 'dm',
+          text: narrationBefore,
+        });
+      }
+
+      // Extract character name and dialogue
+      const preCharacter = match[1]; // Character mentioned before quote
+      const dialogue = match[2];     // The actual dialogue
+      const postCharacter = match[3]; // Character mentioned after quote
+
+      // Use whichever character name we found
+      const characterName = (preCharacter || postCharacter || '').trim();
+      const voiceCategory = VoiceDirector.detectVoiceCategoryFromNPCType(characterName);
+
+      if (dialogue.trim()) {
+        segments.push({
+          type: 'character',
+          text: dialogue.trim(),
+          character: characterName || 'Unknown NPC',
+          voice_category: voiceCategory,
+        });
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add any remaining narration after the last dialogue
+    const remainingText = text.slice(lastIndex).trim();
+    if (remainingText) {
+      segments.push({
+        type: 'dm',
+        text: remainingText,
+      });
+    }
+
+    // If we found no dialogue, return empty to trigger fallback
+    const hasDialogue = segments.some(s => s.type === 'character');
+    if (!hasDialogue) {
+      return [];
+    }
+
+    logger.info(`🎭 Parsed ${segments.length} segments (${segments.filter(s => s.type === 'character').length} dialogue)`);
+    return segments;
+  }
+
+  /**
+   * Detect voice category from NPC type keywords
+   * Maps common D&D NPC types to voice categories
+   */
+  private static detectVoiceCategoryFromNPCType(character: string): string | undefined {
+    const lowerChar = character.toLowerCase();
+
+    // Guard/Military types -> gruff voice
+    if (/guard|soldier|captain|knight|warrior|mercenary|watchman/.test(lowerChar)) {
+      return 'guard';
+    }
+
+    // Merchant/Trader types -> friendly voice
+    if (/merchant|trader|shopkeep|vendor|salesman|peddler/.test(lowerChar)) {
+      return 'merchant';
+    }
+
+    // Innkeeper/Hospitality types -> warm voice
+    if (/innkeeper|barkeep|bartender|tavern|host|barmaid/.test(lowerChar)) {
+      return 'innkeeper';
+    }
+
+    // Wizard/Mage types -> mysterious/elderly voice
+    if (/wizard|mage|sorcerer|warlock|witch|sage|scholar|oracle|mystic|archmage/.test(lowerChar)) {
+      return 'elder';
+    }
+
+    // Noble/Royalty types -> refined voice
+    if (/noble|lord|lady|duke|duchess|baron|count|prince|princess|king|queen|aristocrat/.test(lowerChar)) {
+      return 'hero'; // Using hero pool for refined voices
+    }
+
+    // Elder/Wise types -> wise elder voice
+    if (/elder|old|ancient|wise|priest|cleric|monk|hermit/.test(lowerChar)) {
+      return 'elder';
+    }
+
+    // Child types -> (use NPC pool for now, could add child voices later)
+    if (/child|boy|girl|kid|young|urchin/.test(lowerChar)) {
+      return 'merchant'; // Friendly voice for children
+    }
+
+    // Creature/Monster types -> creature voice
+    if (/goblin|orc|troll|ogre|beast|creature|monster|dragon|demon|spirit|ghost/.test(lowerChar)) {
+      return 'creature';
+    }
+
+    // Villain types -> villain voice
+    if (/villain|evil|dark|necromancer|cultist|bandit|thief|assassin|rogue/.test(lowerChar)) {
+      return 'villain';
+    }
+
+    // Default: no specific category, will use NPC pool
+    return undefined;
   }
 
   /**

@@ -110,6 +110,8 @@ export const useAIResponse = () => {
   const { state: combatState } = useCombat();
   const { userPlan } = useAuth();
   const lastSigRef = useRef<string>('');
+  // Track processed roll request signatures to prevent infinite re-parsing loops
+  const processedRollRequestsRef = useRef<Set<string>>(new Set());
 
   /**
    * Formats chat messages into a task object for the DM Agent.
@@ -210,6 +212,15 @@ export const useAIResponse = () => {
         };
       }
       lastSigRef.current = sig;
+
+      // Clear processed roll requests when a new player ACTION (not dice roll) comes in
+      // This allows the same roll to be requested again in a new context
+      const isDiceRollMessage = (latestMessage as any).context?.intent === 'dice_roll';
+      if (!isDiceRollMessage) {
+        logger.debug('[useAIResponse] New player action - clearing processed roll requests');
+        processedRollRequestsRef.current.clear();
+      }
+
       // Log dice roll results into session_state for analytics/history
       try {
         const diceCtx: any = (latestMessage as any).context?.diceRoll;
@@ -422,6 +433,31 @@ export const useAIResponse = () => {
             }
           }
         }
+      }
+
+      // DEDUPLICATION: Filter out roll requests that have already been processed
+      // This prevents infinite loops where AI re-requests the same rolls after dice results
+      const originalCount = rollRequests.length;
+      rollRequests = rollRequests.filter((request) => {
+        const signature = `${request.purpose}|${request.formula}|${request.dc ?? ''}|${request.ac ?? ''}`;
+        if (processedRollRequestsRef.current.has(signature)) {
+          logger.info('🎲 Skipping already-processed roll request:', signature);
+          return false;
+        }
+        processedRollRequestsRef.current.add(signature);
+        return true;
+      });
+
+      if (originalCount > 0 && rollRequests.length < originalCount) {
+        logger.info(`🎲 Filtered ${originalCount - rollRequests.length} duplicate roll requests`);
+      }
+
+      // CRITICAL FIX: Suppress ALL roll requests when responding to a dice result
+      // This prevents the endless loop where AI keeps requesting new rolls after each dice result
+      // The AI should narrate the outcome and show options, then wait for user to select an action
+      if (isDiceRollMessage && rollRequests.length > 0) {
+        logger.info('🎲 Suppressing roll requests after dice result - waiting for player action');
+        rollRequests = [];
       }
 
       // Track attack rolls in roll state manager

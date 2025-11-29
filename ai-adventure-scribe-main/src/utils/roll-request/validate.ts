@@ -30,26 +30,44 @@ export function extractPrimaryRollRequest(message: string): ParsedRollRequest | 
   return requests.length > 0 ? requests[0] : null;
 }
 
+/**
+ * CRITICAL: Truncates message at ROLL_REQUESTS_V1 block.
+ * This prevents the AI's premature outcome narrative from being displayed.
+ *
+ * Use this BEFORE displaying/saving the message when roll requests are present.
+ * The player should only see text BEFORE the roll request - the outcome comes
+ * in a NEW response after the roll is completed.
+ */
+export function truncateAtRollRequest(message: string): string {
+  if (!message) return message;
+
+  // Find the ROLL_REQUESTS_V1 block
+  const rollBlockMatch = message.match(/```ROLL_REQUESTS_V1[\s\S]*?```/);
+
+  if (rollBlockMatch && rollBlockMatch.index !== undefined) {
+    // Keep only content BEFORE the roll request block
+    let truncated = message.substring(0, rollBlockMatch.index).trim();
+
+    // Clean up trailing punctuation and whitespace
+    truncated = truncated
+      .replace(/\s+/g, ' ')
+      .replace(/[,;:]\s*$/, '')
+      .trim();
+
+    return truncated;
+  }
+
+  return message; // No roll block found - return as-is
+}
+
+/**
+ * Removes roll requests from message for display.
+ * Now uses truncation to prevent showing outcome after roll block.
+ */
 export function removeRollRequestsFromMessage(message: string): string {
   if (!message) return message;
 
-  // FIRST: Remove all ROLL_REQUESTS_V1 code blocks (handles AI responses with only code blocks)
-  // Using flexible regex pattern that doesn't require specific newline positioning
-  let cleanMessage = message.replace(/```ROLL_REQUESTS_V1[\s\S]*?```/g, '');
-
-  // THEN: Parse remaining message for any regex-matched roll requests and remove them too
-  const requests = parseRollRequests(message);
-  requests.forEach((request) => {
-    cleanMessage = cleanMessage.replace(request.originalText, '').trim();
-  });
-
-  // Clean up extra whitespace and punctuation
-  cleanMessage = cleanMessage
-    .replace(/\s+/g, ' ')
-    .replace(/\.\s*\./g, '.')
-    .replace(/!\s*!/g, '!')
-    .replace(/\?\s*\?/g, '?')
-    .trim();
-
-  return cleanMessage;
+  // Use truncation to remove everything at and after the roll request block
+  // This prevents showing the outcome that the AI generated after the roll request
+  return truncateAtRollRequest(message);
 }
