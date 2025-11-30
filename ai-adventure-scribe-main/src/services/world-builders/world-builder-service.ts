@@ -488,4 +488,150 @@ export class WorldBuilderService {
       return { locations: 0, npcs: 0, quests: 0, totalElements: 0 };
     }
   }
+
+  // ========================================================================
+  // XML TAG HELPERS - Save world elements extracted from DM response XML tags
+  // These methods allow single-call extraction without additional API calls
+  // ========================================================================
+
+  /**
+   * Save an NPC from XML-extracted data (no AI call needed)
+   */
+  static async saveNPCFromXML(
+    campaignId: string,
+    sessionId: string,
+    npc: { name: string; description: string; location: string },
+  ): Promise<void> {
+    try {
+      // Check if NPC already exists (by name in this campaign)
+      const { data: existing } = await supabase
+        .from('npcs')
+        .select('id')
+        .eq('campaign_id', campaignId)
+        .ilike('name', npc.name)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        logger.debug(`[WorldBuilder] NPC "${npc.name}" already exists, skipping`);
+        return;
+      }
+
+      const { error } = await supabase.from('npcs').insert({
+        campaign_id: campaignId,
+        session_id: sessionId,
+        name: npc.name,
+        description: npc.description,
+        current_location: npc.location,
+        role: 'supporting', // Default role for XML-extracted NPCs
+        disposition: 'neutral', // Default disposition
+        generated_by: 'xml_extraction',
+      });
+
+      if (error) {
+        logger.warn(`[WorldBuilder] Failed to save NPC "${npc.name}":`, error);
+      } else {
+        logger.debug(`[WorldBuilder] Saved NPC "${npc.name}" from XML`);
+      }
+    } catch (error) {
+      logger.warn(`[WorldBuilder] Error saving NPC "${npc.name}":`, error);
+    }
+  }
+
+  /**
+   * Save a location from XML-extracted data (no AI call needed)
+   */
+  static async saveLocationFromXML(
+    campaignId: string,
+    sessionId: string,
+    location: { name: string; description: string; status: string },
+  ): Promise<void> {
+    try {
+      // Check if location already exists (by name in this campaign)
+      const { data: existing } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('campaign_id', campaignId)
+        .ilike('name', location.name)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        logger.debug(`[WorldBuilder] Location "${location.name}" already exists, skipping`);
+        return;
+      }
+
+      const { error } = await supabase.from('locations').insert({
+        campaign_id: campaignId,
+        session_id: sessionId,
+        name: location.name,
+        description: location.description,
+        status: location.status || 'revealed',
+        location_type: 'point_of_interest', // Default type for XML-extracted locations
+        generated_by: 'xml_extraction',
+      });
+
+      if (error) {
+        logger.warn(`[WorldBuilder] Failed to save location "${location.name}":`, error);
+      } else {
+        logger.debug(`[WorldBuilder] Saved location "${location.name}" from XML`);
+      }
+    } catch (error) {
+      logger.warn(`[WorldBuilder] Error saving location "${location.name}":`, error);
+    }
+  }
+
+  /**
+   * Save a quest from XML-extracted data (no AI call needed)
+   */
+  static async saveQuestFromXML(
+    campaignId: string,
+    sessionId: string,
+    quest: { name: string; update: string },
+  ): Promise<void> {
+    try {
+      // Check if quest already exists (by name in this campaign)
+      const { data: existing } = await supabase
+        .from('quests')
+        .select('id, status')
+        .eq('campaign_id', campaignId)
+        .ilike('title', quest.name)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        // Quest exists - update its status/description
+        const { error } = await supabase
+          .from('quests')
+          .update({
+            description: quest.update,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing[0].id);
+
+        if (error) {
+          logger.warn(`[WorldBuilder] Failed to update quest "${quest.name}":`, error);
+        } else {
+          logger.debug(`[WorldBuilder] Updated quest "${quest.name}" from XML`);
+        }
+        return;
+      }
+
+      // Create new quest
+      const { error } = await supabase.from('quests').insert({
+        campaign_id: campaignId,
+        session_id: sessionId,
+        title: quest.name,
+        description: quest.update,
+        status: 'active',
+        type: 'side', // Default type for XML-extracted quests
+        generated_by: 'xml_extraction',
+      });
+
+      if (error) {
+        logger.warn(`[WorldBuilder] Failed to save quest "${quest.name}":`, error);
+      } else {
+        logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML`);
+      }
+    } catch (error) {
+      logger.warn(`[WorldBuilder] Error saving quest "${quest.name}":`, error);
+    }
+  }
 }

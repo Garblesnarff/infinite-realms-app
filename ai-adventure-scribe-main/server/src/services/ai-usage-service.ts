@@ -1,6 +1,6 @@
 import { createPgClient } from '../../../src/infrastructure/database/index.js';
 
-export type UsageType = 'llm' | 'image' | 'voice';
+export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 
 export type QuotaConfig = {
   daily: Record<UsageType, number>;
@@ -29,13 +29,15 @@ export type QuotaConfig = {
 export class AIUsageService {
   private static readonly DEFAULT_QUOTAS: Record<string, QuotaConfig> = {
     free: {
-      daily: { llm: 30, image: 20, voice: 10 },
+      // llm: User-initiated chat messages (30/day)
+      // llm_system: Background tasks like memory extraction, world building (500/day - generous for side effects)
+      daily: { llm: 30, llm_system: 500, image: 20, voice: 10 },
     },
     pro: {
-      daily: { llm: 100, image: 50, voice: 200 },
+      daily: { llm: 100, llm_system: 1000, image: 50, voice: 200 },
     },
     enterprise: {
-      daily: { llm: 1000, image: 500, voice: 2000 },
+      daily: { llm: 1000, llm_system: 5000, image: 500, voice: 2000 },
     },
   };
 

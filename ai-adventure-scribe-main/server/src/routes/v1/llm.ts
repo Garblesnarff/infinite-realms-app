@@ -110,7 +110,8 @@ export default function llmRouter() {
       maxTokens = 1000,
       temperature = 0.8,
       history,
-      provider = 'openrouter'
+      provider = 'openrouter',
+      requestType = 'user'  // 'user' for chat messages, 'system' for memory/world building
     }: {
       prompt: string;
       model?: string;
@@ -118,6 +119,7 @@ export default function llmRouter() {
       temperature?: number;
       history?: ChatMessage[];
       provider?: 'openrouter' | 'gemini';
+      requestType?: 'user' | 'system';
     } = req.body || {};
 
     if (!prompt || typeof prompt !== 'string') {
@@ -125,9 +127,12 @@ export default function llmRouter() {
     }
 
     // Quota check (per user/org per day)
+    // 'user' requests count against llm quota (30/day free)
+    // 'system' requests count against llm_system quota (500/day free) for background tasks
     const userId = (req as any).user?.userId as string;
     const plan = (req as any).user?.plan as string || 'free';
-    const quota = await AIUsageService.checkQuotaAndConsume({ userId, plan, type: 'llm', units: 1 });
+    const quotaType = requestType === 'system' ? 'llm_system' : 'llm';
+    const quota = await AIUsageService.checkQuotaAndConsume({ userId, plan, type: quotaType, units: 1 });
     if (!quota.allowed) {
       res.setHeader('Retry-After', String(Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000))));
       return res.status(402).json({ error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt });

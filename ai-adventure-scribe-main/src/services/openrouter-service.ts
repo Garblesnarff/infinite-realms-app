@@ -20,6 +20,8 @@ interface TextGenerationRequest {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  /** 'user' for chat messages (counts against 30/day), 'system' for background tasks like memory extraction (500/day) */
+  requestType?: 'user' | 'system';
 }
 interface ModelConfig {
   id: string;
@@ -110,6 +112,7 @@ export class OpenRouterService {
       model: modelId,
       maxTokens: request.maxTokens,
       temperature: request.temperature,
+      requestType: request.requestType,  // Pass through for quota tracking
     });
     const cfg = this.models.find((m) => m.id === modelId);
     if (cfg?.isFree && cfg.dailyLimit) {

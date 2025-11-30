@@ -14,6 +14,8 @@ export interface GenerateTextParams {
   temperature?: number;
   history?: LLMHistoryMessage[];
   provider?: 'openrouter' | 'gemini';
+  /** 'user' for chat messages (counts against 30/day), 'system' for background tasks like memory extraction (500/day) */
+  requestType?: 'user' | 'system';
 }
 
 export interface GenerateImageParams {
@@ -85,6 +87,7 @@ class LlmApiClient {
           temperature: params.temperature,
           history: params.history,
           provider,
+          requestType: params.requestType || 'user',  // Default to 'user' for backwards compatibility
         }),
       });
 

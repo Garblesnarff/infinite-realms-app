@@ -388,6 +388,91 @@ function keyFor(sessionId: string | undefined, message: string, historyLen: numb
   return `${sessionId || 'nosession'}|${message.slice(0, 256)}|${historyLen}`;
 }
 
+/**
+ * Parse XML tags from DM response for memories and world updates
+ * This allows single-call extraction instead of separate API calls
+ */
+interface ParsedXMLTags {
+  narrative: string;
+  memories: string[];
+  worldUpdates: {
+    npcs: Array<{ name: string; description: string; location: string }>;
+    locations: Array<{ name: string; description: string; status: string }>;
+    quests: Array<{ name: string; update: string }>;
+  };
+  hadTags: boolean;
+}
+
+function parseXMLTagsFromResponse(rawResponse: string): ParsedXMLTags {
+  // Extract narrative (everything before XML tags)
+  let narrative = rawResponse
+    .replace(/<memories>[\s\S]*?<\/memories>/gi, '')
+    .replace(/<world_updates>[\s\S]*?<\/world_updates>/gi, '')
+    .trim();
+
+  // Extract memories
+  const memoriesMatch = rawResponse.match(/<memories>([\s\S]*?)<\/memories>/i);
+  const memories = memoriesMatch
+    ? memoriesMatch[1]
+        .split('\n')
+        .map((line) => line.replace(/^-\s*/, '').trim())
+        .filter((line) => line.length > 0)
+    : [];
+
+  // Extract world updates
+  const worldMatch = rawResponse.match(/<world_updates>([\s\S]*?)<\/world_updates>/i);
+  const worldUpdates: ParsedXMLTags['worldUpdates'] = {
+    npcs: [],
+    locations: [],
+    quests: [],
+  };
+
+  if (worldMatch) {
+    const lines = worldMatch[1].split('\n').filter((line) => line.trim().length > 0);
+    for (const line of lines) {
+      const trimmed = line.replace(/^-\s*/, '').trim();
+
+      // Parse NPC: "npc: Name | Description | Location"
+      const npcMatch = trimmed.match(/^npc:\s*([^|]+)\|([^|]+)\|(.+)$/i);
+      if (npcMatch) {
+        worldUpdates.npcs.push({
+          name: npcMatch[1].trim(),
+          description: npcMatch[2].trim(),
+          location: npcMatch[3].trim(),
+        });
+        continue;
+      }
+
+      // Parse Location: "location: Name | Description | Status"
+      const locMatch = trimmed.match(/^location:\s*([^|]+)\|([^|]+)\|(.+)$/i);
+      if (locMatch) {
+        worldUpdates.locations.push({
+          name: locMatch[1].trim(),
+          description: locMatch[2].trim(),
+          status: locMatch[3].trim(),
+        });
+        continue;
+      }
+
+      // Parse Quest: "quest: Name | Update"
+      const questMatch = trimmed.match(/^quest:\s*([^|]+)\|(.+)$/i);
+      if (questMatch) {
+        worldUpdates.quests.push({
+          name: questMatch[1].trim(),
+          update: questMatch[2].trim(),
+        });
+      }
+    }
+  }
+
+  return {
+    narrative,
+    memories,
+    worldUpdates,
+    hadTags: memoriesMatch !== null || worldMatch !== null,
+  };
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -1293,7 +1378,45 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
 
 <final_reminder>
 <critical>MOST IMPORTANT RULE: If you request a dice roll using ROLL_REQUESTS_V1, your response MUST END with that block. Do NOT add narrative, choices, outcomes, or any text after the roll request. The player rolls first, then you continue the story in your NEXT response.</critical>
-</final_reminder>`;
+</final_reminder>
+
+<memory_and_world_tags>
+<title>STORY MEMORY AND WORLD STATE TRACKING</title>
+After your narrative response, include these XML tags to help track important story elements:
+
+<memories>
+- Key fact or event the player should remember
+- Important NPC relationship or dialogue
+- Story-significant discovery or decision
+</memories>
+
+<world_updates>
+- npc: Name | Brief description | Current location
+- location: Name | Brief description | Status (revealed/visited/etc)
+- quest: Quest name | Status update or new objective
+</world_updates>
+
+<guidelines>
+- Include 1-3 memories per response (only truly significant moments)
+- Only include world_updates when new NPCs, locations, or quests are introduced/changed
+- Keep entries brief and factual
+- These tags help maintain story continuity across sessions
+</guidelines>
+
+<example>
+Your narrative response here...
+
+<memories>
+- Discovered that the innkeeper Marta is secretly a retired adventurer
+- The strange symbol on the door matches one from the player's backstory
+</memories>
+
+<world_updates>
+- npc: Marta | Retired adventurer running the Rusty Nail tavern | Millbrook village
+- location: The Rusty Nail | Cozy tavern with mysterious cellar | visited
+</world_updates>
+</example>
+</memory_and_world_tags>`;
 
           // Build conversation history
           const messages = [
@@ -1483,68 +1606,144 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
           }
         }
 
-        // Extract memories from this conversation exchange
+        // ========================================================================
+        // PHASE 2: XML-TAGGED MEMORY AND WORLD EXTRACTION (Single-call approach)
+        // Instead of making separate API calls, parse XML tags from the DM response
+        // ========================================================================
         if (params.context.sessionId) {
-          // Graceful degradation: free tier only extracts memories every 3rd turn
-          const shouldExtractMemory =
-            params.userPlan === 'pro' ||
-            params.userPlan === 'enterprise' ||
-            !params.userPlan || // Default to extracting if plan is unknown
-            (params.turnCount !== undefined && params.turnCount % 3 === 0);
+          // Parse XML tags from the response
+          const xmlParsed = parseXMLTagsFromResponse(result.text);
 
-          if (shouldExtractMemory) {
+          // If XML tags were found, use them directly (no additional API calls!)
+          if (xmlParsed.hadTags) {
+            logger.info(`📋 Found XML tags in DM response: ${xmlParsed.memories.length} memories, ${xmlParsed.worldUpdates.npcs.length} NPCs, ${xmlParsed.worldUpdates.locations.length} locations, ${xmlParsed.worldUpdates.quests.length} quests`);
+
+            // Store memories from XML tags (no API call needed)
+            if (xmlParsed.memories.length > 0) {
+              try {
+                // Match the actual memories table schema
+                // Required: session_id, content
+                // Optional: campaign_id, memory_type, type, importance, context, metadata
+                const memoriesToSave = xmlParsed.memories.map((content) => ({
+                  session_id: params.context.sessionId!,
+                  campaign_id: params.context.campaignId,
+                  content,
+                  type: 'event',
+                  memory_type: 'story_event',
+                  importance: 4, // Integer 1-5, 4 = moderately important (MemoryService normalizes to 1-5)
+                  metadata: { source: 'xml_extraction', characterId: params.context.characterId },
+                }));
+                await MemoryManager.saveMemories(memoriesToSave);
+                logger.info(`🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`);
+              } catch (memoryError) {
+                logger.warn('Failed to save XML-extracted memories (non-fatal):', memoryError);
+              }
+            }
+
+            // Process world updates from XML tags (no API call needed)
+            const hasWorldUpdates = xmlParsed.worldUpdates.npcs.length > 0 ||
+              xmlParsed.worldUpdates.locations.length > 0 ||
+              xmlParsed.worldUpdates.quests.length > 0;
+
+            if (hasWorldUpdates) {
+              try {
+                // Store NPCs directly
+                for (const npc of xmlParsed.worldUpdates.npcs) {
+                  await WorldBuilderService.saveNPCFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    npc,
+                  );
+                }
+                // Store locations directly
+                for (const loc of xmlParsed.worldUpdates.locations) {
+                  await WorldBuilderService.saveLocationFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    loc,
+                  );
+                }
+                // Store quests directly
+                for (const quest of xmlParsed.worldUpdates.quests) {
+                  await WorldBuilderService.saveQuestFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    quest,
+                  );
+                }
+                logger.info(`🌍 World expanded from XML: +${xmlParsed.worldUpdates.locations.length} locations, +${xmlParsed.worldUpdates.npcs.length} NPCs, +${xmlParsed.worldUpdates.quests.length} quests (no extra API calls)`);
+              } catch (worldError) {
+                logger.warn('Failed to save XML-extracted world updates (non-fatal):', worldError);
+              }
+            }
+
+            // Update result.text to be the clean narrative without XML tags
+            result.text = xmlParsed.narrative;
+          } else {
+            // No XML tags found - fall back to traditional extraction (with batching in Phase 3)
+            logger.info('⚠️ No XML tags found in DM response, using fallback extraction');
+
+            // Graceful degradation: free tier only extracts memories every 3rd turn
+            const shouldExtractMemory =
+              params.userPlan === 'pro' ||
+              params.userPlan === 'enterprise' ||
+              !params.userPlan || // Default to extracting if plan is unknown
+              (params.turnCount !== undefined && params.turnCount % 3 === 0);
+
+            if (shouldExtractMemory) {
+              try {
+                const memoryContext: MemoryContext = {
+                  sessionId: params.context.sessionId,
+                  campaignId: params.context.campaignId,
+                  characterId: params.context.characterId,
+                  currentMessage: params.message,
+                  recentMessages:
+                    params.conversationHistory?.slice(-5).map((msg) => msg.content) || [],
+                };
+
+                const extractionResult = await MemoryManager.extractMemories(
+                  memoryContext,
+                  params.message,
+                  result.text,
+                );
+
+                if (extractionResult.memories.length > 0) {
+                  await MemoryManager.saveMemories(extractionResult.memories);
+                  logger.info(`🧠 Extracted and saved ${extractionResult.memories.length} memories (fallback API call)`);
+                }
+              } catch (memoryError) {
+                logger.warn('Memory extraction failed (non-fatal):', memoryError);
+              }
+            } else {
+              logger.info(
+                `⏭️ Skipping memory extraction for free tier (turn ${params.turnCount}, next extraction on turn ${params.turnCount ? Math.ceil((params.turnCount + 1) / 3) * 3 : 'unknown'})`,
+              );
+            }
+
+            // Expand world based on player action and AI response (fallback)
             try {
-              const memoryContext: MemoryContext = {
-                sessionId: params.context.sessionId,
-                campaignId: params.context.campaignId,
-                characterId: params.context.characterId,
-                currentMessage: params.message,
-                recentMessages:
-                  params.conversationHistory?.slice(-5).map((msg) => msg.content) || [],
-              };
-
-              const extractionResult = await MemoryManager.extractMemories(
-                memoryContext,
+              const worldExpansion = await WorldBuilderService.respondToPlayerAction(
+                params.context.campaignId,
+                params.context.sessionId!,
+                params.context.characterId,
                 params.message,
                 result.text,
               );
 
-              if (extractionResult.memories.length > 0) {
-                await MemoryManager.saveMemories(extractionResult.memories);
-                logger.info(`🧠 Extracted and saved ${extractionResult.memories.length} memories`);
+              if (
+                worldExpansion &&
+                worldExpansion.locations.length +
+                  worldExpansion.npcs.length +
+                  worldExpansion.quests.length >
+                  0
+              ) {
+                logger.info(
+                  `🌍 World expanded (fallback): +${worldExpansion.locations.length} locations, +${worldExpansion.npcs.length} NPCs, +${worldExpansion.quests.length} quests`,
+                );
               }
-            } catch (memoryError) {
-              logger.warn('Memory extraction failed (non-fatal):', memoryError);
+            } catch (worldError) {
+              logger.warn('World building failed (non-fatal):', worldError);
             }
-          } else {
-            logger.info(
-              `⏭️ Skipping memory extraction for free tier (turn ${params.turnCount}, next extraction on turn ${params.turnCount ? Math.ceil((params.turnCount + 1) / 3) * 3 : 'unknown'})`,
-            );
-          }
-
-          // Expand world based on player action and AI response
-          try {
-            const worldExpansion = await WorldBuilderService.respondToPlayerAction(
-              params.context.campaignId,
-              params.context.sessionId!,
-              params.context.characterId,
-              params.message,
-              result.text,
-            );
-
-            if (
-              worldExpansion &&
-              worldExpansion.locations.length +
-                worldExpansion.npcs.length +
-                worldExpansion.quests.length >
-                0
-            ) {
-              logger.info(
-                `🌍 World expanded: +${worldExpansion.locations.length} locations, +${worldExpansion.npcs.length} NPCs, +${worldExpansion.quests.length} quests`,
-              );
-            }
-          } catch (worldError) {
-            logger.warn('World building failed (non-fatal):', worldError);
           }
         }
 
@@ -1582,9 +1781,12 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
     role: 'user' | 'assistant';
     content: string;
     speakerId?: string;
+    id?: string;
   }): Promise<void> {
     try {
+      const messageId = params.id || crypto.randomUUID();
       const { error } = await supabase.from('dialogue_history').insert({
+        id: messageId,
         session_id: params.sessionId,
         speaker_type: params.role,
         speaker_id: params.speakerId,
