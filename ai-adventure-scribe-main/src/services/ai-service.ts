@@ -630,13 +630,18 @@ Should End Combat: ${combatDetection.shouldEndCombat ? 'YES' : 'NO'}`;
 
     combatText += `\n\n**COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
-1. Generate appropriate dice rolls for actions (attack rolls, damage rolls, saving throws)
-2. Apply combat results immediately (reduce HP, apply conditions, etc.)
+1. **REQUEST** dice rolls for player actions using ROLL_REQUESTS_V1 (DO NOT roll for the player)
+2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with "autoExecute": true
 3. Describe combat actions cinematically but maintain mechanical accuracy
-4. Show dice results: "The orc swings (rolls 16, hits AC 13) for 8 slashing damage"
-5. Make tactical decisions for NPCs based on their intelligence and experience
-6. Consider environmental factors and positioning
-7. Narrate the consequences of each action dramatically`;
+4. Make tactical decisions for NPCs based on their intelligence and experience
+5. Consider environmental factors and positioning
+6. After receiving roll results, narrate the consequences dramatically
+
+**CRITICAL COMBAT FLOW:**
+- Player attacks → Request attack + damage rolls via ROLL_REQUESTS_V1, STOP after the block
+- Enemy attacks → Include in ROLL_REQUESTS_V1 with "autoExecute": true, "actorName": "Enemy Name"
+- DO NOT narrate outcomes before rolls are resolved
+- DO NOT roll dice for the player - always request rolls`;
 
     return combatText;
   }
@@ -1266,15 +1271,20 @@ This is the campaign's opening scene. Create an engaging D&D adventure start tha
           // Add specific dice roll requirements for combat
           if (combatDetection.isCombat) {
             contextPrompt += `<combat_roll_requirements>
-<title>IMMEDIATE DICE ROLL REQUIREMENTS</title>
-Based on the detected combat scenario, you MUST include these dice rolls in your response:
-- Initiative rolls for any new combat participants.
-- Attack rolls for any offensive actions.
-- Damage rolls following successful attacks.
-- Saving throws for any effects or spells.
-- Any ability checks mentioned by the player.
+<title>IMMEDIATE DICE ROLL REQUEST REQUIREMENTS</title>
+Based on the detected combat scenario, you MUST REQUEST these dice rolls using ROLL_REQUESTS_V1:
+- Initiative rolls for any new combat participants
+- Attack rolls for player offensive actions (DO NOT roll for the player - REQUEST the roll)
+- Damage rolls following successful player attacks
+- Saving throws for any effects or spells targeting the player
+- Any ability checks mentioned by the player
 
-**CRITICAL**: Include actual dice roll results in your "dice_rolls" array AND display them in the narrative text.
+**CRITICAL FOR COMBAT:**
+- Player actions (attacks, spells, checks) → REQUEST rolls via ROLL_REQUESTS_V1 and STOP
+- NPC/Enemy actions (attacks, saves) → Include in ROLL_REQUESTS_V1 with "autoExecute": true and "actorName": "Enemy Name"
+- DO NOT roll dice for the player
+- DO NOT narrate outcomes before receiving roll results
+- END your response immediately after the ROLL_REQUESTS_V1 block
 </combat_roll_requirements>`;
           }
 

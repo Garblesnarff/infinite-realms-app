@@ -8,6 +8,15 @@ import { useRef } from 'react';
 // Project Services
 import { SessionStateService } from '@/services/session-state-service';
 import { RollManager } from '@/services/roll-manager';
+import {
+  executeAllNPCRolls,
+  formatNPCRollResult,
+  type AutoRollResult,
+} from '@/services/combat/npc-auto-roller';
+import {
+  continueNarrativeWithNPCRolls,
+  formatNPCRollsSystemMessage,
+} from '@/services/ai/npc-roll-handler';
 
 // Project Types
 import {
@@ -460,6 +469,48 @@ export const useAIResponse = () => {
         rollRequests = [];
       }
 
+      // AUTO-EXECUTE NPC ROLLS: Separate NPC rolls from player rolls and execute automatically
+      // NPC rolls (marked with autoExecute: true) are rolled "behind the screen" by the DM
+      let npcRollResults: AutoRollResult[] = [];
+      let npcRollContinuationText: string = '';
+
+      if (rollRequests.length > 0) {
+        const { npcRolls, playerRolls } = await executeAllNPCRolls(rollRequests);
+
+        // Store the auto-executed NPC roll results
+        npcRollResults = npcRolls;
+
+        // Only player rolls should remain in rollRequests (to show UI prompts)
+        rollRequests = playerRolls;
+
+        // If there are NPC rolls, get AI continuation with roll results
+        if (npcRolls.length > 0) {
+          logger.info(`🎲 Auto-executed ${npcRolls.length} NPC rolls behind the screen`);
+
+          // Create system message showing NPC roll results
+          const npcRollsMessage = formatNPCRollsSystemMessage(npcRolls);
+          logger.info(`🎲 NPC Rolls Summary:\n${npcRollsMessage}`);
+
+          // Get AI narrative continuation based on roll outcomes
+          try {
+            const continuation = await continueNarrativeWithNPCRolls(
+              npcRolls,
+              aiContext,
+              sessionId
+            );
+
+            if (continuation.success && continuation.narrative) {
+              npcRollContinuationText = continuation.narrative;
+              logger.info(`📖 Received AI continuation narrative (${continuation.narrative.length} chars)`);
+            } else {
+              logger.warn('⚠️ AI continuation failed, using fallback');
+            }
+          } catch (error) {
+            logger.error('❌ Failed to get NPC roll continuation from AI:', error);
+          }
+        }
+      }
+
       // Track attack rolls in roll state manager
       rollRequests.forEach((request) => {
         if (request.type === 'attack') {
@@ -555,14 +606,22 @@ export const useAIResponse = () => {
         else endHint = false;
       }
 
+      // Append NPC roll continuation to response text if available
+      let finalResponseText = responseText;
+      if (npcRollContinuationText) {
+        finalResponseText = `${responseText}\n\n${npcRollContinuationText}`;
+        logger.info('📖 Appended NPC roll continuation to response');
+      }
+
       // Format the response as an EnhancedChatMessage
       return {
-        text: responseText,
+        text: finalResponseText,
         sender: 'dm',
         timestamp: new Date().toISOString(),
         context: {
           emotion: 'neutral',
           intent: 'response',
+          npcRollResults: npcRollResults.length > 0 ? npcRollResults : undefined,
         },
         narrationSegments: narrationSegments,
         diceRolls: (result as any).dice_rolls || [],

@@ -32,6 +32,9 @@ export interface RollRequest {
   advantage?: boolean;
   disadvantage?: boolean;
   modifier?: number; // Base modifier if not in formula
+  // NEW: Flag for auto-executing NPC rolls (DM rolling "behind the screen")
+  autoExecute?: boolean;
+  actorName?: string; // Name of who's rolling (e.g., "Goblin Archer", "Orc Warrior")
 }
 
 interface DiceRollRequestProps {

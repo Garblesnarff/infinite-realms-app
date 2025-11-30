@@ -18,8 +18,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
 import { NarrationSegment } from '@/hooks/use-ai-response';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSimpleGameSession } from '@/hooks/use-simple-game-session';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -51,6 +53,10 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // NPC Roll Display
+  const [showNPCRolls] = useLocalStorage('game:showNPCRolls', true);
+  const { currentRoll, addRolls, dismissCurrent } = useNPCRollQueue();
 
   // Scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -369,6 +375,15 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
 
           // Now add to state to trigger UI update
           setMessages((prev) => [...prev, dmMessage]);
+
+          // Display NPC roll popups if enabled and rolls are present
+          if (showNPCRolls && response.context?.npcRollResults) {
+            const npcRolls = response.context.npcRollResults;
+            if (Array.isArray(npcRolls) && npcRolls.length > 0) {
+              logger.info(`🎲 Adding ${npcRolls.length} NPC rolls to display queue`);
+              addRolls(npcRolls);
+            }
+          }
         }
       } catch (error) {
         handleAsyncError(error, {
@@ -560,6 +575,11 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           </CardContent>
         </Card>
       </div>
+
+      {/* NPC Roll Display Popup */}
+      {showNPCRolls && currentRoll && (
+        <NPCRollDisplay roll={currentRoll} onDismiss={dismissCurrent} autoDismissDelay={3000} />
+      )}
     </SimpleMessageProvider>
   );
 };
