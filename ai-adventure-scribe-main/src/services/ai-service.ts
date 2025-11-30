@@ -1095,6 +1095,43 @@ Give NPCs distinct voices:
 - Include battle cries and combat dialogue in quotes
 </combat>
 
+<encounter_difficulty>
+<title>CRITICAL: ENCOUNTER SCALING BY CHARACTER LEVEL</title>
+**ALWAYS match enemy difficulty to character level to prevent instant death!**
+
+Character Level 1-2 (8-20 HP):
+- Use CR 1/8 to CR 1/2 enemies ONLY (goblins, kobolds, bandits, wolves)
+- Max enemy damage: 1d6+2 (avg 5 damage)
+- Example enemies: Goblin (7 HP, +4 to hit, 1d6+2 damage), Wolf (11 HP, +4 to hit, 2d4+2 damage)
+- Deadly encounter: 2-3 CR 1/4 enemies or 1 CR 1/2 enemy
+
+Character Level 3-4 (20-35 HP):
+- Use CR 1/2 to CR 2 enemies (orcs, hobgoblins, ogres, werewolves)
+- Max enemy damage: 2d6+3 (avg 10 damage)
+- Example enemies: Orc (15 HP, +5 to hit, 1d12+3 damage), Hobgoblin (11 HP, +3 to hit, 1d8+1 damage)
+
+Character Level 5-8 (35-60 HP):
+- Use CR 2 to CR 5 enemies (young dragons, elementals, trolls)
+- Max enemy damage: 2d10+4 (avg 15 damage)
+
+Character Level 9+ (60+ HP):
+- Use CR 5+ enemies (adult dragons, giants, liches)
+- Can use higher damage (3d10+, 4d8+, etc.)
+
+**CRITICAL RULES:**
+1. NEVER use enemies with damage that exceeds 50% of character's max HP in one hit
+2. Level 1 characters (8-12 HP) should NEVER face enemies dealing 10+ damage
+3. Always check character level before introducing combat
+4. For solo adventurers: use 1-2 enemies max, scaled DOWN one difficulty tier
+5. If unsure, err on the side of easier encounters - TPK (Total Party Kill) ruins the game!
+
+**Damage Guidelines by Level:**
+- Level 1: Max 6 damage per hit (1d6+2 or 1d8+1)
+- Level 2: Max 8 damage per hit (1d8+3 or 2d4+2)
+- Level 3-4: Max 10 damage per hit (1d12+3 or 2d6+3)
+- Level 5+: Scale proportionally to character HP pool
+</encounter_difficulty>
+
 </rules_of_play>`;
 
           contextPrompt += `<game_context>`;

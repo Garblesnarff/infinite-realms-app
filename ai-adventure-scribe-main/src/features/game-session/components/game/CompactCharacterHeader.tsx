@@ -1,9 +1,11 @@
-import { Heart, Shield, Zap } from 'lucide-react';
-import React, { useEffect } from 'react';
+import { Heart, Shield, Zap, Skull } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { getParticipantStatus } from '@/services/combat/damage-integrator';
+import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 /**
@@ -21,6 +23,93 @@ export const CompactCharacterHeader: React.FC = () => {
   const { state: characterState } = useCharacter();
   const character = characterState.character || ({} as any);
 
+  // Combat HP state
+  const [combatHP, setCombatHP] = useState<{
+    current_hp: number;
+    max_hp: number;
+    temp_hp: number;
+    is_conscious: boolean;
+  } | null>(null);
+  const [participantId, setParticipantId] = useState<string | null>(null);
+
+  // Fetch combat HP if character is in an active combat
+  useEffect(() => {
+    if (!character?.id) return;
+
+    async function fetchCombatStatus() {
+      try {
+        // Find active combat encounter for this character
+        const { data: participant, error } = await supabase
+          .from('combat_participants')
+          .select('id, encounter_id')
+          .eq('character_id', character.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error || !participant) {
+          setCombatHP(null);
+          setParticipantId(null);
+          return;
+        }
+
+        setParticipantId(participant.id);
+
+        // Get current HP status
+        const status = await getParticipantStatus(participant.id);
+        if (status) {
+          setCombatHP({
+            current_hp: status.current_hp,
+            max_hp: status.max_hp,
+            temp_hp: status.temp_hp,
+            is_conscious: status.is_conscious,
+          });
+        }
+      } catch (error) {
+        logger.error('[CompactCharacterHeader] Failed to fetch combat status:', error);
+      }
+    }
+
+    fetchCombatStatus();
+  }, [character?.id]);
+
+  // Subscribe to real-time HP updates
+  useEffect(() => {
+    if (!participantId) return;
+
+    const subscription = supabase
+      .channel(`combat_status_${participantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'combat_participant_status',
+          filter: `participant_id=eq.${participantId}`,
+        },
+        async (payload) => {
+          logger.info('[CompactCharacterHeader] HP status updated:', payload);
+
+          // Refresh status
+          const status = await getParticipantStatus(participantId);
+          if (status) {
+            setCombatHP({
+              current_hp: status.current_hp,
+              max_hp: status.max_hp,
+              temp_hp: status.temp_hp,
+              is_conscious: status.is_conscious,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [participantId]);
+
   // Debug logging
   useEffect(() => {
     logger.debug('[CompactCharacterHeader] Character data:', {
@@ -28,8 +117,9 @@ export const CompactCharacterHeader: React.FC = () => {
       avatar_url: character?.avatar_url,
       image_url: character?.image_url,
       background_image: character?.background_image,
+      combatHP,
     });
-  }, [character]);
+  }, [character, combatHP]);
 
   if (!character) {
     return (
@@ -134,9 +224,48 @@ export const CompactCharacterHeader: React.FC = () => {
         {/* HP and AC */}
         <div className="flex gap-4 text-sm justify-center text-white">
           <div className="flex items-center gap-1">
-            <Heart className="w-4 h-4 text-red-400" />
-            <span className="font-semibold">HP:</span>
-            <span>{maxHp}</span>
+            {combatHP ? (
+              <>
+                {combatHP.is_conscious ? (
+                  <Heart
+                    className={`w-4 h-4 ${
+                      combatHP.current_hp === 0
+                        ? 'text-gray-500'
+                        : combatHP.current_hp / combatHP.max_hp <= 0.25
+                          ? 'text-red-600 animate-pulse'
+                          : combatHP.current_hp / combatHP.max_hp <= 0.5
+                            ? 'text-orange-400'
+                            : 'text-red-400'
+                    }`}
+                  />
+                ) : (
+                  <Skull className="w-4 h-4 text-gray-500 animate-pulse" />
+                )}
+                <span className="font-semibold">HP:</span>
+                <span
+                  className={
+                    combatHP.current_hp === 0
+                      ? 'text-gray-500'
+                      : combatHP.current_hp / combatHP.max_hp <= 0.25
+                        ? 'text-red-400 font-bold'
+                        : ''
+                  }
+                >
+                  {combatHP.current_hp}
+                </span>
+                <span className="text-gray-400">/</span>
+                <span>{combatHP.max_hp}</span>
+                {combatHP.temp_hp > 0 && (
+                  <span className="text-blue-300 font-semibold ml-1">(+{combatHP.temp_hp})</span>
+                )}
+              </>
+            ) : (
+              <>
+                <Heart className="w-4 h-4 text-red-400" />
+                <span className="font-semibold">HP:</span>
+                <span>{maxHp}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Shield className="w-4 h-4 text-blue-400" />
