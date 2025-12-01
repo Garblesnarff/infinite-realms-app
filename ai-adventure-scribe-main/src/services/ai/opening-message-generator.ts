@@ -86,7 +86,43 @@ export async function generateOpeningMessage(params: { context: GameContext }): 
         }
       }
 
-      contextPrompt += `\n\nCampaign Tone: ${campaignTone}\n\nCreate an immersive opening scene that:
+      contextPrompt += `\n\nCampaign Tone: ${campaignTone}
+
+<verbalized_sampling_technique>
+<instruction>
+Before generating the final opening scene, internally brainstorm 3-4 distinct opening scenario concepts with probability scores (0.0-1.0) representing how typical each approach is for ${params.context.campaignDetails?.name || 'this campaign'}.
+</instruction>
+
+<diversity_dimensions>
+Vary your opening scenarios across these dimensions:
+- **Setting**: Familiar location (tavern, road) vs. Unusual location (mid-ritual, aboard airship, underwater)
+- **Pacing**: Slow tension build (0.75) vs. Immediate danger (0.45) vs. Mysterious calm before storm (0.30)
+- **NPC Approach**: Helpful guide (0.80) vs. Morally ambiguous contact (0.50) vs. Unexpected ally (0.30)
+- **Tone**: Straightforward adventure start (0.85) vs. Subverted expectation (0.40) vs. Wild card setup (≤0.30)
+- **Player Agency**: Clear objective (0.75) vs. Mystery to unravel (0.50) vs. Moral dilemma (0.35)
+</diversity_dimensions>
+
+<example_process>
+Campaign: ${params.context.campaignDetails?.name || 'Fantasy Adventure'}, Tone: ${campaignTone}
+
+Internal brainstorming:
+1. Start in tavern with quest-giver (prob: 0.85) - Classic, reliable
+2. Mid-journey ambush by ${campaignTone === 'dark' ? 'desperate refugees' : 'mysterious strangers'} (prob: 0.60) - Action-focused
+3. Wake up in strange location with amnesia clue (prob: 0.40) - Mystery hook
+4. (Wild Card) Attending a festival when disaster strikes (prob: 0.25) - Subverts expectations, high contrast
+
+Select the scenario that best balances ${campaignTone} tone with memorable engagement.
+</example_process>
+
+<selection_criteria>
+- Choose scenario that immediately reveals character class value (${params.context.characterDetails?.class || 'adventurer'} abilities useful)
+- Must include at least one sensory detail unique to ${params.context.campaignDetails?.name || 'the campaign world'}
+- Wild card scenarios (prob ≤0.30) preferred when they match campaign tone
+- Avoid "you wake up" or "you enter a tavern" unless subverted creatively
+</selection_criteria>
+</verbalized_sampling_technique>
+
+Create an immersive opening scene that:
 1. **Immediate Engagement**: Start in the middle of an intriguing situation, not just "you enter a tavern"
 2. **Sensory Rich**: Include what you see, hear, smell, feel, and taste
 3. **Character Integration**: Reference their ${params.context.characterDetails?.class || 'character'} abilities, equipment, or background naturally

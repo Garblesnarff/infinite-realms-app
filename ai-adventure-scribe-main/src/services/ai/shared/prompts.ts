@@ -66,6 +66,42 @@ Select the hook that best balances creativity with player appeal for ${params.to
 </example_for_${params.genre}>
 </hook_diversity_process>
 
+<proper_noun_diversity>
+**CRITICAL: Location and NPC Names Must Be Evocative and Specific**
+
+Before finalizing your description, brainstorm 3-4 naming variations for each proper noun:
+
+**Location Names** - Avoid generic names like "Dark Woods" or "Ancient Temple":
+1. Descriptive but common (prob: 0.85): "Shadowfen Marsh", "Ironpeak Mountains"
+2. Evocative with history (prob: 0.55): "The Weeping Stones", "Broken Crown Citadel"
+3. Mysterious/poetic (prob: 0.35): "Veilwhisper Grove", "The Hundred Silent Towers"
+4. Wild card (prob: ≤0.30): "Where-The-Gods-Wept", "Thirteenth Echo"
+
+**NPC Names** - Avoid fantasy name generators:
+1. Standard fantasy (prob: 0.80): "Aldric the Wise", "Ravenna Blackthorn"
+2. Cultural flavor (prob: 0.50): "Grandmother Kettlewick", "Captain Ironjaw"
+3. Memorable epithet (prob: 0.40): "The Architect of Sorrows", "Three-Fingered Margot"
+4. Wild card (prob: ≤0.30): "Nobody", "The One Who Remembers"
+
+**Artifacts/Factions** - Make them sound legendary:
+1. Standard naming (prob: 0.75): "The Order of Light", "The Sunblade"
+2. Specific history (prob: 0.50): "The Last Legion", "The Crown That Weeps"
+3. Mysterious origin (prob: 0.35): "The Covenant of Ash", "The Key to What Was Lost"
+4. Wild card (prob: ≤0.25): "The Thing Beneath", "Those Who Went Before"
+
+Example Internal Process:
+```
+Need a forest location:
+1. Darkwood Forest (0.85) - Generic
+2. The Thornveil (0.60) - Evocative
+3. Whisperwilds (0.40) - Mysterious
+4. The Green Remembrance (0.25) - Poetic/unique
+→ Select: "Whisperwilds" or "The Green Remembrance"
+```
+
+**Rule**: Every location, NPC, and faction mentioned MUST have at least one element that makes it memorable and distinctive. No "Forest of Darkness" or "Evil Wizard" - use the brainstormed options with lower probability scores.
+</proper_noun_diversity>
+
 **Structure:**
 - **Paragraph 1**: The central hook and immediate threat/opportunity
 - **Paragraph 2**: The unique world elements, key NPCs, and what makes this adventure special
