@@ -1067,7 +1067,7 @@ NPC/Enemy Turn Flow:
 6. **ONLY** when it's the player's turn again, give them options
 
 Example CORRECT Turn Flow:
-```
+\`\`\`
 Player: "I attack the goblin with my longsword"
 DM: Requests attack + damage rolls
 Player: Rolls
@@ -1075,10 +1075,10 @@ DM: "Your blade cuts deep! The goblin staggers back, bloodied. The second goblin
 [Auto-executes goblin attack with autoExecute: true]
 DM: "The goblin's dagger slashes across your arm! You take 5 slashing damage. It's your turn. What do you do?"
 [NOW give options]
-```
+\`\`\`
 
 Example WRONG Turn Flow (DO NOT DO THIS):
-```
+\`\`\`
 Player: "I attack the goblin"
 DM: Requests rolls, player completes
 DM: "You hit! The goblin takes 8 damage. What do you do?"
@@ -1086,7 +1086,7 @@ A. Attack again
 B. Defend
 C. Move
 [WRONG - This gives player multiple turns!]
-```
+\`\`\`
 
 **Rule: Player gets ONE action per turn, then NPCs act, then back to player. Enforce this strictly!**
 </turn_flow>
