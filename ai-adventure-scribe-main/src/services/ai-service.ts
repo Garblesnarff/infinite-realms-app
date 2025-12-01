@@ -1117,7 +1117,7 @@ Enemy Death:
 - Track remaining enemies: "Goblin 2 and Goblin 3 continue fighting"
 
 Example Multi-Enemy Combat:
-```
+\`\`\`
 DM: "Two wolves emerge from the shadows - Wolf 1 (larger, scarred) and Wolf 2 (lean, hungry)"
 Player: "I attack Wolf 1"
 DM: [Requests attack roll]
@@ -1126,7 +1126,7 @@ DM: "Your blade strikes Wolf 1! It yelps in pain (5 HP remaining). Now the wolve
 [Auto-executes Wolf 1 attack with actorName: "Wolf 1"]
 [Auto-executes Wolf 2 attack with actorName: "Wolf 2"]
 DM: "Wolf 1 snaps at your leg (rolled 12, miss). Wolf 2 lunges and bites your arm - 6 damage! Your turn."
-```
+\`\`\`
 </multiple_enemies>
 
 <death_saves>
@@ -1156,7 +1156,7 @@ How to Handle:
 6. If 3 failures: "Your third death save fails... everything goes dark. [Character name] has died."
 
 Death Save Tracking Example:
-```
+\`\`\`
 Player at 0 HP (unconscious)
 DM: "Make a death saving throw to cling to life!"
 [Request: death_save roll]
@@ -1166,7 +1166,7 @@ DM: "One success! You're still unconscious. The goblin raises its blade..."
 DM: "Make another death save!"
 Player: Rolls natural 20
 DM: "Your eyes snap open! You regain 1 HP and stand, battered but alive!"
-```
+\`\`\`
 
 CRITICAL: Death is permanent in D&D. Treat it seriously. Give dramatic narration when lives hang in the balance.
 </death_saves>
@@ -1195,22 +1195,22 @@ Healing Mechanics:
 - Healing during combat uses an action (Cure Wounds) or bonus action (Healing Word)
 
 Self-Healing Example:
-```
+\`\`\`
 Player (3 HP remaining): "I cast Cure Wounds on myself"
 DM: "Roll for healing"
 [Request: {"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing"}]
 Player: Rolls 6 (total 9 healing)
 DM: "Divine energy flows through you. You feel your wounds close, regaining 9 HP (now at 12/12 HP, fully healed)!"
-```
+\`\`\`
 
 Healing Downed Ally:
-```
+\`\`\`
 Ally unconscious at 0 HP (2 death save failures)
 Player: "I use Healing Word on them!"
 DM: "Roll healing"
 Player: Rolls 3 healing
 DM: "Your words of power spark life! They regain 3 HP, their eyes snap open, and they gasp for breath! (Death saves reset)"
-```
+\`\`\`
 
 Potion Use:
 - Drinking a potion is an action
@@ -1241,7 +1241,7 @@ How to Grant Temp HP:
 4. If player already has temp HP: "You have 3 temp HP. Armor of Agathys grants 5. You keep the higher value (5 temp HP)."
 
 Temp HP in Combat Example:
-```
+\`\`\`
 Player (12/12 HP): "I cast False Life"
 DM: "Roll temp HP"
 [Request: {"type": "damage", "formula": "1d4+4", "purpose": "False Life temporary HP"}]
@@ -1253,7 +1253,7 @@ DM: "The goblin's blade strikes! 5 damage. Your temp HP absorbs it all - you hav
 
 [Enemy attacks again, deals 4 damage]
 DM: "Another hit! 4 damage. Your 2 temp HP is depleted, and you take 2 real damage (now at 10/12 HP, 0 temp HP)."
-```
+\`\`\`
 
 Temp HP vs Healing:
 - Temp HP 5, Real HP 10/15: Healing spell restores real HP to 15/15, temp HP stays at 5
@@ -1261,11 +1261,11 @@ Temp HP vs Healing:
 - Temp HP + Real HP = Total effective HP pool
 
 Non-Stacking Example:
-```
+\`\`\`
 Player has 5 temp HP from Armor of Agathys
 Player: "I use Inspiring Leader feature, granting 4 temp HP"
 DM: "You already have 5 temp HP. Inspiring Leader would grant 4. You keep the higher value (5 temp HP)."
-```
+\`\`\`
 </temporary_hp>
 
 <advantage_disadvantage>
@@ -1299,7 +1299,7 @@ ROLL_REQUEST Example with Advantage:
   "autoExecute": false,
   "advantageType": "advantage"
 }
-```
+\`\`\`
 
 **CRITICAL: When a player has advantage/disadvantage, request 2 d20 rolls and explicitly state "take the higher/lower"**
 
@@ -1336,7 +1336,7 @@ ROLL_REQUEST for Critical Damage:
   "autoExecute": false,
   "damageType": "slashing"
 }
-```
+\`\`\`
 
 Natural 1 (Critical Fumble):
 - Automatic MISS (regardless of bonuses)
@@ -1416,11 +1416,11 @@ Common Conditions:
 - Unaware of surroundings
 
 Tracking Conditions:
-```
+\`\`\`
 DM: "The goblin shaman casts Hold Person. Make a Wisdom saving throw!"
 [Player rolls, fails]
 DM: "You're PARALYZED! You can't move or take actions. Attacks against you have advantage, and any hit from within 5 feet is an automatic critical. You can retry the save at the end of your turn."
-```
+\`\`\`
 
 **Condition Duration:**
 - Some end after 1 minute (10 rounds)
@@ -1470,14 +1470,14 @@ MOVEMENT:
 - Standing from prone costs HALF your movement
 
 Example Turn:
-```
+\`\`\`
 Player: "I move 20 feet toward the goblin, attack with my longsword, then move 10 feet behind the pillar for cover."
 DM: "Perfect! That's your movement split around your action. Roll to attack!"
 [Player hits]
 DM: "Since you're a rogue, you can use your BONUS ACTION for Cunning Action. Want to Hide behind that pillar?"
 Player: "Yes!"
 DM: "Make a Stealth check as your bonus action."
-```
+\`\`\`
 
 TWO-WEAPON FIGHTING:
 - Action: Attack with light weapon in main hand
