@@ -90,14 +90,14 @@ Before finalizing your description, brainstorm 3-4 naming variations for each pr
 4. Wild card (prob: ≤0.25): "The Thing Beneath", "Those Who Went Before"
 
 Example Internal Process:
-```
+\`\`\`
 Need a forest location:
 1. Darkwood Forest (0.85) - Generic
 2. The Thornveil (0.60) - Evocative
 3. Whisperwilds (0.40) - Mysterious
 4. The Green Remembrance (0.25) - Poetic/unique
 → Select: "Whisperwilds" or "The Green Remembrance"
-```
+\`\`\`
 
 **Rule**: Every location, NPC, and faction mentioned MUST have at least one element that makes it memorable and distinctive. No "Forest of Darkness" or "Evil Wizard" - use the brainstormed options with lower probability scores.
 </proper_noun_diversity>

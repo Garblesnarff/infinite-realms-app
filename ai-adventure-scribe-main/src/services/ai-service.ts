@@ -1149,7 +1149,7 @@ Taking Damage at 0 HP:
 
 How to Handle:
 1. When character reaches 0 HP: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
-2. Request death save: `{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}`
+2. Request death save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."
 4. If stabilized: "You've stabilized! You're still unconscious at 0 HP, but no longer dying."
 5. If healed while down: "The healing magic washes over you. You regain X HP and wake up!"
@@ -1183,7 +1183,7 @@ Healing Sources:
 
 How to Handle Healing:
 1. Player casts healing spell: Request roll for healing amount
-2. Format: `{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing"}`
+2. Format: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing"}\`
 3. Note: Use "damage" type for healing rolls (positive HP change)
 4. Narrate: "The divine light washes over your wounds. You regain 7 hit points!"
 
@@ -1287,7 +1287,7 @@ Disadvantage (roll twice, take LOWER):
 - Attacks in heavy obscurement
 
 ROLL_REQUEST Example with Advantage:
-```json
+\`\`\`json
 {
   "type": "attack",
   "purpose": "Longsword attack with advantage (enemy is prone)",
@@ -1326,7 +1326,7 @@ Correct Crit Damage Examples:
 - Spell (3d6 fire) → **6d6 fire** on crit
 
 ROLL_REQUEST for Critical Damage:
-```json
+\`\`\`json
 {
   "type": "damage",
   "purpose": "CRITICAL HIT - Longsword damage (doubled dice)",
