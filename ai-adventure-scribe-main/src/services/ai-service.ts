@@ -15,6 +15,7 @@ import {
 } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 import { generateCampaignDescription } from './ai/campaign-generator';
+import { generateOpeningMessage } from './ai/opening-message-generator';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
@@ -2289,124 +2290,11 @@ Your narrative response here...
 
   /**
    * Generate an opening message for a new campaign session
-   * Creates an engaging introduction based on campaign and character context
+   * Delegates to modular opening-message-generator.ts which includes verbalized sampling
    */
   static async generateOpeningMessage(params: { context: GameContext }): Promise<string> {
-    logger.info('Generating opening message for new session...');
-
-    const ctx = params.context || ({} as GameContext);
-    const campaign = (ctx.campaignDetails || {}) as any;
-    const character = (ctx.characterDetails || {}) as any;
-
-    const richFallback = (): string => {
-      const campaignName = campaign.name || 'Untitled Campaign';
-      const campaignDesc =
-        campaign.description ||
-        'A world of looming dangers, hidden alliances, and secrets waiting beneath the surface.';
-      const charName = character.name || 'your character';
-      const charRace = character.race?.name || character.race || 'adventurer';
-      const charClass = character.class?.name || character.class || 'wanderer';
-      const charBackground = character.background?.name || character.background || null;
-
-      const bgLine = charBackground
-        ? `Forged by your ${charBackground.toLowerCase()} past,`
-        : 'Shaped by untold roads behind you,';
-
-      // 2–3 rich paragraphs, campaign- and character-specific
-      const intro = `The tale of ${campaignName} does not begin in comfort. The air is thick with unspoken omens as ${charName}, a ${charRace} ${charClass}, stands at the threshold of events that will scar the maps of history. ${bgLine} you feel the weight of this place pressing in—its stories, its failures, its forgotten oaths—waiting for someone reckless or brave enough to listen.`;
-
-      const world = `Around you, the world of ${campaignName} stirs: ${campaignDesc} Lantern light claws at the dark, distant bells toll warnings no one wants to name, and whispers travel faster than truth. Faces in the crowd steal glances in your direction—noticing your equipment, your bearing, the way you measure the exits. Someone here knows more than they dare to say aloud.`;
-
-      // 3 on-theme options in required format so ActionOptions can parse
-      const options = [
-        `A. **Follow the tension**, approach the most anxious-looking onlooker or official and press them for what they are afraid to speak.`,
-        `B. **Scout the surroundings**, slip into observation mode—alleys, rooftops, guards, sigils, anything that reveals who truly holds power here.`,
-        `C. **Invite trouble**, stride boldly into the nearest focal point of activity (a tavern, barricade, or shrine) and announce that you are ready to solve someone’s problem—for a price.`,
-      ];
-
-      return `${intro}\n\n${world}\n\nWhat do you do?\n${options.join('\n')}`;
-    };
-
-    try {
-      const geminiManager = this.getGeminiManager();
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        let campaignTone: 'dark' | 'lighthearted' | 'epic' | 'balanced' = 'balanced';
-        if (campaign.description) {
-          const d = String(campaign.description).toLowerCase();
-          if (d.includes('dark') || d.includes('horror') || d.includes('grim'))
-            campaignTone = 'dark';
-          else if (d.includes('light') || d.includes('comedy') || d.includes('fun'))
-            campaignTone = 'lighthearted';
-          else if (d.includes('epic') || d.includes('legendary') || d.includes('heroic'))
-            campaignTone = 'epic';
-        }
-
-        let prompt = `You are an expert D&D 5e Dungeon Master. Create an immersive, campaign-specific opening scene.`;
-
-        if (campaign.name || campaign.description) {
-          prompt += `\n\nCAMPAIGN:\nTitle: "${campaign.name || 'Untitled Campaign'}"\nDescription: ${campaign.description || 'N/A'}`;
-        }
-
-        if (character.name || character.class || character.race || character.background) {
-          prompt += `\n\nPLAYER CHARACTER:\n`;
-          if (character.name) prompt += `Name: ${character.name}\n`;
-          if (character.race) prompt += `Race: ${character.race?.name || character.race}\n`;
-          if (character.class) prompt += `Class: ${character.class?.name || character.class}\n`;
-          if (character.level) prompt += `Level: ${character.level}\n`;
-          if (character.background)
-            prompt += `Background: ${character.background?.name || character.background}\n`;
-        }
-
-        prompt += `
-
-TONE: ${campaignTone}
-
-REQUIREMENTS:
-1. Start in the middle of an engaging situation tied to this campaign's themes.
-2. Use vivid sensory detail and make the player feel central to events.
-3. Naturally reflect the character's background, talents, or reputation.
-4. Introduce at least one NPC who speaks in direct quoted dialogue.
-5. End with 2-3 clear, distinct action options formatted EXACTLY like:
-   A. **Action Name**, brief description...
-   B. **Action Name**, brief description...
-   C. **Action Name**, brief description...
-6. The options must be grounded in this scene and this campaign, not generic.
-
-STYLE:
-- 2-3 paragraphs, second person ("you"), present tense.
-- No system explanations, no meta commentary.
-- Do NOT wrap the response in JSON or code fences.
-- Do NOT output any content before or after the scene + options.
-
-Now write the opening scene and options.`;
-
-        const response = await model.generateContent(prompt);
-        const text = (await response.response).text() || '';
-
-        // If Gemini returns something empty or obviously generic, use rich fallback
-        if (
-          !text.trim() ||
-          text.includes(
-            'Welcome to your adventure! You find yourself at the beginning of an epic journey.',
-          )
-        ) {
-          logger.warn(
-            '[OpeningMessage] Gemini returned empty or generic text; using rich fallback.',
-          );
-          return richFallback();
-        }
-
-        return text;
-      });
-
-      logger.info('[OpeningMessage] Successfully generated opening message with AI.');
-      return result;
-    } catch (error) {
-      logger.error('[OpeningMessage] Failed to generate via Gemini, using rich fallback:', error);
-      return richFallback();
-    }
+    // Delegate to modular opening message generator (includes verbalized sampling)
+    return generateOpeningMessage(params);
   }
 
   /**
