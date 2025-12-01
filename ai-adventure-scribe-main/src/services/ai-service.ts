@@ -14,6 +14,7 @@ import {
   type DetectedCombatAction,
 } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
+import { generateCampaignDescription } from './ai/campaign-generator';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
@@ -537,6 +538,7 @@ export class AIService {
   }
   /**
    * Generate a campaign description using AI with fallback
+   * Delegates to modular campaign-generator.ts which includes verbalized sampling
    */
   static async generateCampaignDescription(params: {
     genre: string;
@@ -544,57 +546,8 @@ export class AIService {
     length: string;
     tone: string;
   }): Promise<string> {
-    // Skip Edge Function - use local Gemini API directly
-    logger.info('Using local Gemini API for campaign description...');
-
-    try {
-      // Use local Gemini API
-      const geminiManager = this.getGeminiManager();
-
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        const prompt = `Create an engaging D&D 5e campaign description that hooks players immediately and sets up an epic adventure.
-
-**Campaign Parameters:**
-- Genre: ${params.genre}
-- Difficulty: ${params.difficulty}
-- Expected Length: ${params.length}
-- Tone: ${params.tone}
-
-**Requirements:**
-1. **Hook**: Start with a compelling central mystery, threat, or opportunity that demands heroes
-2. **Stakes**: Make it clear what happens if the heroes don't act (people die, world ends, etc.)
-3. **Unique Elements**: Include distinctive locations, NPCs, or plot devices that make this campaign memorable
-4. **Player Agency**: Hint at meaningful choices and multiple approaches to challenges
-5. **World Integration**: Suggest how character backgrounds might connect to the plot
-6. **Adventure Potential**: Indicate specific types of encounters (exploration, political intrigue, combat, puzzles)
-
-**Tone Guidelines:**
-- ${params.tone === 'dark' ? 'Emphasize moral dilemmas, harsh consequences, and atmospheric dread. Heroes face difficult choices with no clear "right" answer.' : ''}
-- ${params.tone === 'heroic' ? 'Focus on noble quests, clear good vs evil, and inspiring moments. Heroes are destined for greatness and legendary deeds.' : ''}
-- ${params.tone === 'comedic' ? 'Include absurd situations, witty NPCs, and opportunities for humor. Serious threats exist but approached with levity.' : ''}
-- ${params.tone === 'mysterious' ? 'Layer in secrets, hidden agendas, and puzzles to solve. Nothing is quite what it seems on the surface.' : ''}
-- ${params.tone === 'gritty' ? 'Realistic consequences, resource management, and survival elements. Combat is dangerous and magic is rare.' : ''}
-
-**Structure:**
-- **Paragraph 1**: The central hook and immediate threat/opportunity
-- **Paragraph 2**: The unique world elements, key NPCs, and what makes this adventure special
-- **Paragraph 3**: What players can expect - types of challenges, character integration, and why this matters
-
-Create a campaign description that makes players say "I want to play in this world right now!"`;
-
-        const response = await model.generateContent(prompt);
-        const result = await response.response;
-        return result.text();
-      });
-
-      logger.info('Successfully generated campaign description using local Gemini API');
-      return result;
-    } catch (geminiError) {
-      logger.error('Local Gemini API failed:', geminiError);
-      throw new Error('Failed to generate campaign description - AI service unavailable');
-    }
+    // Delegate to modular campaign generator (includes verbalized sampling)
+    return generateCampaignDescription(params);
   }
 
   /**
