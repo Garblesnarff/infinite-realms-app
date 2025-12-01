@@ -99,14 +99,27 @@ Need a forest location:
 → Select: "Whisperwilds" or "The Green Remembrance"
 \`\`\`
 
-**MANDATORY RULES**:
-1. **REJECT** any name matching these patterns: [Adjective]+[Noun] (e.g., "Frostpeak", "Darkwood", "Shadowfen")
-2. **REQUIRE** at least ONE of: Historical reference, poetic phrasing, unexpected twist, or mysterious fragment
-3. **SELECT** options with probability ≤0.40 - NEVER use the 0.85 or 0.80 tier
-4. If a name sounds like it could come from a fantasy name generator, **discard it and brainstorm again**
+**MANDATORY RULES - ANTI-LLM NAME PATTERNS**:
 
-Examples of REJECTED names: Frostpeak Mines, Shadowdale, Ironforge, Darkwood Forest, Stormhaven
-Examples of APPROVED names: The Mines That Remember, Frostbitten Vigil, Where-Winter-Waits, The Delve of Lost Voices
+**REJECT IMMEDIATELY** if the name matches ANY of these common LLM patterns:
+1. [Adjective]+[Common Noun]: Frostpeak, Darkwood, Shadowfen, Ironforge, Blackfen, Whisperwood, Silverdale, Stormhaven
+2. [Element]+[Place]: Windmere, Stonekeep, Firevale, Frosthaven, Shadowmere
+3. [Emotion]+[Wood/Dale/Haven]: Sorrowdale, Grimwood, Hopehaven, Dreadhaven
+4. Anything with: Shadow-, Dark-, Iron-, Frost-, Storm-, Silver-, Raven-, Whis(per/tle)-
+5. Compound words that sound "fantasy-generic": Thornvale, Ashford, Ravenwood, Deepwood
+
+**REQUIRE ALL THREE**:
+- Historical fragment OR incomplete phrase ("Where...", "The [Noun] That...", "Before the...")
+- Unexpected word pairing (concepts that don't typically go together)
+- Probability score ≤0.25 (TRUE wild card tier ONLY)
+
+**APPROVED name patterns**:
+- Poetic fragments: "Where-Winter-Waits", "The Green Remembrance", "Before-the-Thaw"
+- Historical echoes: "The Mines That Remember", "What-Was-Promised", "The Merchant's Regret"
+- Unexpected pairings: "Copper Hymns", "The Singing Scar", "Gentle Ruin", "The Joyful Descent"
+- Mysterious incompleteness: "The Third (no second)", "Almost-Home", "The Question", "Twice-Told"
+
+**HARD RULE**: If you can imagine this name appearing in 10+ other fantasy settings, REJECT IT and brainstorm again with prob ≤0.20
 </proper_noun_diversity>
 
 **Structure:**
