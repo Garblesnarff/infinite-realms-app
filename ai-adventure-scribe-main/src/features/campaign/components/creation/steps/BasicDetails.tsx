@@ -10,8 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { AIService } from '@/services/ai-service';
 
 /**
  * Basic campaign details component
@@ -64,18 +64,14 @@ const BasicDetails: React.FC<WizardStepProps> = ({ isLoading = false }) => {
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-campaign-description', {
-        body: {
-          genre: state.campaign.genre,
-          difficulty: state.campaign.difficulty_level,
-          length: state.campaign.campaign_length,
-          tone: state.campaign.tone,
-        },
+      const description = await AIService.generateCampaignDescription({
+        genre: state.campaign.genre || 'Fantasy',
+        difficulty: state.campaign.difficulty_level || 'Medium',
+        length: state.campaign.campaign_length || 'Medium',
+        tone: state.campaign.tone || 'balanced',
       });
 
-      if (error) throw error;
-
-      handleChange('description', data.description);
+      handleChange('description', description);
       toast({
         title: 'Success',
         description: 'Campaign description generated successfully!',
