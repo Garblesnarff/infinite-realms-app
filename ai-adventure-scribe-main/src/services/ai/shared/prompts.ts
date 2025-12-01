@@ -99,7 +99,14 @@ Need a forest location:
 → Select: "Whisperwilds" or "The Green Remembrance"
 \`\`\`
 
-**Rule**: Every location, NPC, and faction mentioned MUST have at least one element that makes it memorable and distinctive. No "Forest of Darkness" or "Evil Wizard" - use the brainstormed options with lower probability scores.
+**MANDATORY RULES**:
+1. **REJECT** any name matching these patterns: [Adjective]+[Noun] (e.g., "Frostpeak", "Darkwood", "Shadowfen")
+2. **REQUIRE** at least ONE of: Historical reference, poetic phrasing, unexpected twist, or mysterious fragment
+3. **SELECT** options with probability ≤0.40 - NEVER use the 0.85 or 0.80 tier
+4. If a name sounds like it could come from a fantasy name generator, **discard it and brainstorm again**
+
+Examples of REJECTED names: Frostpeak Mines, Shadowdale, Ironforge, Darkwood Forest, Stormhaven
+Examples of APPROVED names: The Mines That Remember, Frostbitten Vigil, Where-Winter-Waits, The Delve of Lost Voices
 </proper_noun_diversity>
 
 **Structure:**
