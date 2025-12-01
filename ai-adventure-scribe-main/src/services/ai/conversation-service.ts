@@ -36,9 +36,12 @@ export async function saveChatMessage(params: {
   role: 'user' | 'assistant';
   content: string;
   speakerId?: string;
+  id?: string;
 }): Promise<void> {
   try {
+    const messageId = params.id || crypto.randomUUID();
     const { error } = await supabase.from('dialogue_history').insert({
+      id: messageId,
       session_id: params.sessionId,
       speaker_type: params.role,
       speaker_id: params.speakerId,

@@ -84,6 +84,7 @@ export class AIService {
     role: 'user' | 'assistant';
     content: string;
     speakerId?: string;
+    id?: string;
   }): Promise<void> {
     const { saveChatMessage: save } = await import('./conversation-service');
     return save(params);

@@ -112,10 +112,13 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           narrationSegments: segments as any[],
         };
 
-        setMessages([dmMessage]);
-
-        // Save opening message to database
+        // Save opening message to database FIRST before adding to state
+        // This prevents race condition where image generation tries to attach
+        // before the message exists in the database
         await saveMessageToDatabase(dmMessage, session.id);
+
+        // Now add to state to trigger UI update
+        setMessages([dmMessage]);
       }
     } catch (error) {
       handleAsyncError(error, {
@@ -204,6 +207,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   const saveMessageToDatabase = useCallback(async (message: ChatMessage, sessionId: string) => {
     try {
       const { error } = await supabase.from('dialogue_history').insert({
+        id: message.id,
         session_id: sessionId,
         speaker_type:
           message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
@@ -296,10 +300,13 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
             narrationSegments: segments as any[],
           };
 
-          setMessages((prev) => [...prev, dmMessage]);
-
-          // Save DM message to database
+          // Save DM message to database FIRST before adding to state
+          // This prevents race condition where image generation tries to attach
+          // before the message exists in the database
           await saveMessageToDatabase(dmMessage, session.id);
+
+          // Now add to state to trigger UI update
+          setMessages((prev) => [...prev, dmMessage]);
         }
       } catch (error) {
         handleAsyncError(error, {

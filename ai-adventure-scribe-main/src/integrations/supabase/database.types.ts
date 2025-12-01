@@ -719,7 +719,9 @@ export type Database = {
           context: Json | null
           created_at: string | null
           id: string
+          images: Json | null
           message: string
+          sequence_number: number | null
           session_id: string | null
           speaker_id: string | null
           speaker_type: string | null
@@ -730,7 +732,9 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           id?: string
+          images?: Json | null
           message: string
+          sequence_number?: number | null
           session_id?: string | null
           speaker_id?: string | null
           speaker_type?: string | null
@@ -741,7 +745,9 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           id?: string
+          images?: Json | null
           message?: string
+          sequence_number?: number | null
           session_id?: string | null
           speaker_id?: string | null
           speaker_type?: string | null

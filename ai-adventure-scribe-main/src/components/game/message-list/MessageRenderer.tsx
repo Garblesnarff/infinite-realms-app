@@ -86,8 +86,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 
   // Image presence (persisted or ephemeral) for DM messages
   const hasMessageImages =
-    isDM && Array.isArray((message as any).images) && (message as any).images.length > 0;
-  const firstMessageImgUrl = hasMessageImages ? (message as any).images[0]?.url : undefined;
+    isDM && Array.isArray(message.images) && message.images.length > 0;
+  const firstMessageImgUrl = hasMessageImages ? message.images[0]?.url : undefined;
   const ephemeralImgUrl = isDM && !hasMessageImages ? imageByMessage[messageId]?.url : undefined;
   const hasAnyImage = Boolean(firstMessageImgUrl || ephemeralImgUrl);
 

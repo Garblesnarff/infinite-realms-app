@@ -71,7 +71,7 @@ export const useMessages = (sessionId: string | null) => {
           id: msg.id,
           timestamp: msg.timestamp,
           context: msg.context as MessageContext,
-          images: Array.isArray((msg as any).images) ? (msg as any).images : undefined,
+          images: Array.isArray(msg.images) ? msg.images : undefined,
           characterName:
             msg.speaker_type === 'player' && characterData ? characterData.name : undefined,
           characterAvatar:
@@ -153,6 +153,7 @@ export const useMessages = (sessionId: string | null) => {
         : {};
 
       const { error } = await supabase.from('dialogue_history').insert({
+        id: message.id,
         session_id: sessionId,
         message: message.text,
         speaker_type: message.sender,

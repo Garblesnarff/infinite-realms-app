@@ -67,3 +67,4 @@ knip-output.txt
 # Migration backups
 *.sql.backup
 logs/
+ecosystem.config.cjs
