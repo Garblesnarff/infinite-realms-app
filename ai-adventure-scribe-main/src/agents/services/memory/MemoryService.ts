@@ -1,5 +1,4 @@
-import { getGeminiApiManager } from '@/services/gemini-api-manager-singleton';
-import type { GeminiApiManager } from '@/services/gemini-api-manager';
+import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
 import { GEMINI_TEXT_MODEL } from '@/config/ai';
 
 import type {

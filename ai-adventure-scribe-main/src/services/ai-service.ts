@@ -1,7 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { GEMINI_TEXT_MODEL } from '@/config/ai';
-import { getGeminiApiManager } from './gemini-api-manager-singleton';
-import type { GeminiApiManager } from './gemini-api-manager';
+import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
 import { MemoryManager, MemoryContext } from './memory-manager';
 import type { Memory } from './memory-manager';
 import { WorldBuilderService } from './world-builders/world-builder-service';

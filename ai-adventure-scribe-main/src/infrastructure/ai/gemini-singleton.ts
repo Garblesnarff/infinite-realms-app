@@ -1,4 +1,4 @@
-import { GeminiApiManager } from '@/services/gemini-api-manager';
+import { GeminiApiManager } from './gemini-client';
 
 /**
  * Singleton instance of GeminiApiManager

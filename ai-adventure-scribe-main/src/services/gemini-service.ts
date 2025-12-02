@@ -1,4 +1,4 @@
-import { getGeminiApiManager } from './gemini-api-manager-singleton';
+import { getGeminiApiManager } from '@/infrastructure/ai';
 
 import type { GoogleGenerativeAI } from '@google/generative-ai';
 

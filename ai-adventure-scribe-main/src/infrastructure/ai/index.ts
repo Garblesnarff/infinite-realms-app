@@ -49,4 +49,5 @@ export type {
  * });
  * ```
  */
-export const geminiClient = getGeminiApiManager();
+import { getGeminiApiManager as _getGeminiApiManager } from './gemini-singleton';
+export const geminiClient = _getGeminiApiManager();

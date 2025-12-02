@@ -1,6 +1,4 @@
-import { getGeminiApiManager } from '../gemini-api-manager-singleton';
-
-import type { GeminiApiManager } from '../gemini-api-manager';
+import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
 
 import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import { supabase } from '@/integrations/supabase/client';
