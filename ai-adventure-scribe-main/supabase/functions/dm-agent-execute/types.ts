@@ -68,6 +68,17 @@ export interface CampaignContext {
   world_id?: string;
 }
 
+export interface PassiveScores {
+  perception: number;
+  insight: number;
+  investigation: number;
+}
+
+export interface AbilityScore {
+  score: number;
+  modifier: number;
+}
+
 export interface CharacterContext {
   name: string;
   race: string;
@@ -76,6 +87,17 @@ export interface CharacterContext {
   background?: string;
   description?: string;
   alignment?: string;
+  abilityScores?: {
+    strength: AbilityScore;
+    dexterity: AbilityScore;
+    constitution: AbilityScore;
+    intelligence: AbilityScore;
+    wisdom: AbilityScore;
+    charisma: AbilityScore;
+  };
+  skillProficiencies?: string[];
+  feats?: Array<{ id: string; name: string }>;
+  passiveScores?: PassiveScores;
 }
 
 export interface Memory {

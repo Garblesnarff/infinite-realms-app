@@ -219,6 +219,80 @@ Before responding, verify:
   return contextText;
 }
 
+function buildPassiveSkillsPrompt(): string {
+  return `
+<passive_skills_rules>
+<title>CRITICAL: D&D 5E PASSIVE SKILLS - NEVER REQUEST ROLLS</title>
+
+<fundamentals>
+Passive skills are AUTOMATIC calculations that represent a character's baseline awareness and ability without rolling dice.
+
+Formula: Passive Skill = 10 + ability modifier + proficiency bonus (if proficient) + Observant feat bonus (if applicable)
+
+- Passive Perception: ALWAYS ON - continuous background awareness
+- Passive Insight: Automatic detection of deception and motives
+- Passive Investigation: Notice clues and details at a glance
+- Players NEVER roll for passive skills - the DM uses them automatically
+</fundamentals>
+
+<when_to_use_passive_vs_active>
+USE PASSIVE (automatic, no roll request):
+✓ Character enters a room → Passive Perception notices obvious features automatically
+✓ NPC lies during conversation → Passive Insight detects nervousness/deception automatically
+✓ Glancing at a scene → Passive Investigation spots surface-level clues automatically
+✓ Continuous awareness → What characters notice without actively searching
+
+USE ACTIVE (player declares action, request roll):
+✓ "I search the room for traps" → Request active Investigation check (1d20+INT, DC X)
+✓ "I carefully examine the statue" → Request active Perception check (1d20+WIS, DC X)
+✓ "Can I tell if he's lying?" → Request active Insight check (1d20+WIS, DC X)
+✓ Combat/high-stress situations → Always use active checks, not passive
+</when_to_use_passive_vs_active>
+
+<critical_forbidden_patterns>
+❌ FORBIDDEN - NEVER SAY THESE:
+   - "Make a Passive Perception check"
+   - "Roll Passive Insight"
+   - "Roll for Passive Investigation"
+   - "Give me a Passive [Skill] check"
+
+These are CONTRADICTIONS - passive skills are never rolled!
+</critical_forbidden_patterns>
+
+<correct_passive_usage_examples>
+✅ CORRECT - Use passive scores automatically in narration:
+   - "Your keen awareness (Passive Perception 16) notices fresh scratches on the floor near the altar, suggesting the stone slab has been moved recently."
+   - "The merchant's nervous fidgeting and averted gaze (Passive Insight 14) suggest he's hiding something about the artifact's true value."
+   - "Your analytical mind (Passive Investigation 15) recognizes the symbol on the wall as ancient dwarven runes, though you can't read them without closer study."
+
+✅ CORRECT - Request active checks when players search:
+   - Player: "I search the room for traps."
+   - DM: "Make an Investigation check (1d20+INT modifier, DC 15) to thoroughly search for hidden mechanisms."
+</correct_passive_usage_examples>
+
+<observant_feat_note>
+The Observant feat grants +5 to Passive Perception and Passive Investigation (PHB p.168).
+If a character has this feat, their passive scores are already adjusted - use them automatically.
+</observant_feat_note>
+
+<advantage_disadvantage_modifiers>
+Passive skill modifiers in special circumstances (DM discretion):
+- Advantage on a check: +5 to passive score (e.g., well-lit area for Perception)
+- Disadvantage on a check: -5 to passive score (e.g., darkness for Perception, distracted for Insight)
+- High-stress situations (combat): Use active checks instead of passive
+</advantage_disadvantage_modifiers>
+
+<integration_guideline>
+When narrating scenes, seamlessly integrate what the character's passive scores reveal:
+- Passive Perception 13+ might notice a hidden door's outline
+- Passive Insight 15+ might detect an NPC's lie
+- Passive Investigation 14+ might spot an important clue
+
+NEVER ask the player to roll for these - describe what they notice based on their passive scores.
+</integration_guideline>
+</passive_skills_rules>`;
+}
+
 export function buildPrompt(context: AgentContext, voiceContext?: VoiceContext, isFirstMessage: boolean = false): string {
   const { campaignContext, characterContext, memories, gameState, combatContext } = context;
 
@@ -357,7 +431,21 @@ The outcome narration happens in your NEXT response, AFTER you see the player's 
   <background>${characterContext.background}</background>
   <alignment>${characterContext.alignment}</alignment>
   ${characterContext.description ? `<description>${characterContext.description}</description>` : ''}
+
+  ${characterContext.passiveScores ? `<passive_scores>
+  <always_on_abilities>
+The character's passive skills are ALWAYS ACTIVE. Use these automatically to determine what they notice without asking for rolls:
+
+- Passive Perception: ${characterContext.passiveScores.perception}
+- Passive Insight: ${characterContext.passiveScores.insight}
+- Passive Investigation: ${characterContext.passiveScores.investigation}
+
+CRITICAL: These scores are automatic. NEVER request rolls for passive skills. Use them to reveal information naturally in your narration.
+  </always_on_abilities>
+  </passive_scores>` : ''}
 </character>
+
+${buildPassiveSkillsPrompt()}
 
 ${isFirstMessage ? `
 <opening_scene>

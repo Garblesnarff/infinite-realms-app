@@ -4,6 +4,7 @@ import { CharacterInteractionGenerator } from "./generators/CharacterInteraction
 import { EnvironmentGenerator } from "./generators/EnvironmentGenerator.ts";
 import { buildPrompt } from "./promptBuilder.ts";
 import { DMResponse, StructuredDMResponse, VoiceContext, NarrationSegment } from "./types.ts";
+import { calculatePassiveScores } from "./passiveSkillsEvaluator.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -119,9 +120,22 @@ serve(async (req) => {
     const environmentGen = new EnvironmentGenerator();
     const interactionGen = new CharacterInteractionGenerator();
 
-    // Build prompt with memory, voice context, and combat context
+    // Calculate passive scores for the character
+    const passiveScores = calculatePassiveScores(characterDetails);
+    console.log('[DM Agent] Calculated passive scores:', passiveScores, { requestId });
+
+    // Inject passive scores into character context
+    const enhancedAgentContext = {
+      ...agentContext,
+      characterContext: {
+        ...characterDetails,
+        passiveScores: passiveScores
+      }
+    };
+
+    // Build prompt with memory, voice context, combat context, and passive scores
     const prompt = buildPrompt({
-      agentContext,
+      agentContext: enhancedAgentContext,
       memories: relevantMemories,
       combatContext: combatContext
     }, voiceContext, isFirstMessage);
@@ -158,10 +172,43 @@ serve(async (req) => {
     let rawResponse: string | null = null;
     let unavailableMessage: string | null = null;
 
-    // System instruction for critical roll-stopping rule
+    // System instruction for critical rules
     const systemInstruction = {
       parts: [{
-        text: `CRITICAL SYSTEM RULE: When you request a dice roll from the player using a ROLL_REQUESTS_V1 code block, you MUST END your response immediately after that block. Do NOT continue with narrative, outcomes, choices, or any additional text after requesting a roll. The player needs to roll the dice first before you continue the story. Your next response (after receiving the roll result) should then narrate the outcome.`
+        text: `CRITICAL SYSTEM RULES:
+
+1. ROLL STOPPING: When you request a dice roll from the player using a ROLL_REQUESTS_V1 code block, you MUST END your response immediately after that block. Do NOT continue with narrative, outcomes, choices, or any additional text after requesting a roll. The player needs to roll the dice first before you continue the story. Your next response (after receiving the roll result) should then narrate the outcome.
+
+2. PASSIVE SKILLS - NEVER REQUEST ROLLS:
+   D&D 5E passive skills (Perception, Insight, Investigation) are AUTOMATIC calculations that represent continuous awareness WITHOUT rolling dice.
+
+   Formula: Passive Skill = 10 + ability modifier + proficiency bonus (if proficient)
+
+   The character's passive scores are provided in the context. USE THEM AUTOMATICALLY to determine what the character notices.
+
+   ❌ FORBIDDEN - NEVER SAY THESE:
+      - "Make a Passive Perception check"
+      - "Roll Passive Insight"
+      - "Roll for Passive Investigation"
+      - "Give me a Passive [Skill] check"
+
+   These are CONTRADICTIONS - passive skills are never rolled!
+
+   ✅ CORRECT - Use passive scores automatically in narration:
+      - "Your keen awareness (Passive Perception ${passiveScores.perception}) notices scratches on the floor"
+      - "Your intuition (Passive Insight ${passiveScores.insight}) senses the merchant is nervous"
+      - "Your analytical mind (Passive Investigation ${passiveScores.investigation}) spots ancient runes"
+
+   ✅ CORRECT - Request ACTIVE checks when players explicitly search:
+      - Player: "I search for traps" → DM: "Make an Investigation check (1d20+INT, DC 15)"
+      - Player: "I examine the statue" → DM: "Make a Perception check (1d20+WIS, DC 12)"
+
+   Only request ACTIVE skill checks when:
+   - The player explicitly declares they are searching/investigating
+   - In combat or high-stress situations
+   - The action requires focused effort beyond continuous awareness
+
+   Passive Perception is ALWAYS ON - use it to reveal what characters notice naturally without prompting rolls.`
       }]
     };
 
