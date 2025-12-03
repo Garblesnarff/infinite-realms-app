@@ -29,6 +29,7 @@ export default defineConfig({
       'src/utils/__tests__/spell-data.test.ts',
       'src/utils/__tests__/visual-prompt.test.ts',
       'src/utils/__tests__/srd-gate.test.ts',
+      'src/utils/__tests__/image-label-generator.test.ts',
       'src/utils/memoryClassification.test.ts',
       'src/utils/__tests__/memory-importance-normalization.test.ts',
       'src/utils/__tests__/safetyCommands.test.ts',

@@ -1,4 +1,5 @@
 import { logger } from '../lib/logger';
+import { formatLabelForDisplay } from '@/utils/image-label-generator';
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -45,7 +46,8 @@ export async function listEntityImages(
         const createdAt: string | undefined = (f.created_at || f.updated_at) ?? undefined;
         // Attempt to derive label from the filename: <timestamp>-<label>.png
         const match = /^(\d+)-([^.]+)\./.exec(f.name);
-        const label = match?.[2]?.replace(/-/g, ' ');
+        const rawLabel = match?.[2] || '';
+        const label = formatLabelForDisplay(rawLabel);
         return {
           url: urlData.publicUrl,
           name: f.name,

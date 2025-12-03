@@ -81,6 +81,8 @@ export const useImageGeneration = ({
         // Falls back to 'scene' if no campaign name or scene text available
         const label = generateImageLabel(campaign?.name, sceneText, {
           fallbackLabel: 'scene',
+          genre: campaign?.genre || undefined,
+          characterName: character?.name || undefined,
         });
 
         const res = await generateSceneImage({
