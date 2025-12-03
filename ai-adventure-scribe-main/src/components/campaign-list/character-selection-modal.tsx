@@ -97,13 +97,14 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
 
   /**
    * Handles starting a game with the selected character
+   * Adds &new=true to force creation of a new session instead of resuming existing
    */
   const startGameWithCharacter = (character: Character) => {
     onClose();
 
     // Use setTimeout to ensure modal closes before navigation
     setTimeout(() => {
-      navigate(`/app/game/${campaignId}?character=${character.id}`);
+      navigate(`/app/game/${campaignId}?character=${character.id}&new=true`);
       toast({
         title: 'Starting Adventure!',
         description: `Beginning your journey with ${character.name} in ${campaignName}.`,

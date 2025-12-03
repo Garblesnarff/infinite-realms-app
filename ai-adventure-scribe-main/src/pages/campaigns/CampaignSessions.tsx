@@ -13,7 +13,10 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 const PAGE_SIZE = 10;
-const SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24; // 24 hours
+// Session expiry times
+// Free tier: 7 days
+// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
+const SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
 
 const isSessionExpired = (session: SessionListItem) => {
   const start = session.start_time || session.created_at;
@@ -61,6 +64,13 @@ const CampaignSessions: React.FC = () => {
           throw fetchError;
         }
 
+        console.log('[CampaignSessions] Query results:', {
+          campaignId,
+          pageParam,
+          rowCount: rows?.length ?? 0,
+          rows: rows?.map(r => ({ id: r.id, session_number: r.session_number, status: r.status })),
+        });
+
         return (rows ?? []) as SessionListItem[];
       },
       getNextPageParam: (lastPage, pages) =>
@@ -68,7 +78,15 @@ const CampaignSessions: React.FC = () => {
       enabled: Boolean(campaignId),
     });
 
-  const sessions = React.useMemo(() => (data?.pages ? data.pages.flat() : []), [data?.pages]);
+  const sessions = React.useMemo(() => {
+    const flattened = data?.pages ? data.pages.flat() : [];
+    console.log('[CampaignSessions] Flattened sessions:', {
+      pageCount: data?.pages?.length ?? 0,
+      totalSessions: flattened.length,
+      sessions: flattened.map(s => ({ id: s.id, session_number: s.session_number, status: s.status })),
+    });
+    return flattened;
+  }, [data?.pages]);
 
   React.useEffect(() => {
     if (!campaignId) return;
@@ -109,6 +127,21 @@ const CampaignSessions: React.FC = () => {
     navigate({ pathname: location.pathname, search: search ? `?${search}` : '' });
   }, [campaignId, location.pathname, location.search, navigate, toast]);
 
+  /**
+   * Handles both resuming active sessions and continuing completed sessions.
+   *
+   * RESUME (Active sessions that are not expired):
+   * - Simply navigates to the game with the existing session
+   * - No new session is created
+   * - User picks up exactly where they left off
+   *
+   * CONTINUE (Completed or expired sessions):
+   * - Creates a NEW continuation session
+   * - Increments session_number
+   * - Carries over scene description from previous session
+   * - Links to the same character and campaign
+   * - Resets turn_count to 0
+   */
   const handleContinue = React.useCallback(
     async (session: SessionListItem) => {
       if (!campaignId) return;
@@ -125,11 +158,29 @@ const CampaignSessions: React.FC = () => {
 
       const expired = isSessionExpired(session) || session.status === 'expired';
 
+      // Debug logging
+      console.log('[CampaignSessions] handleContinue called:', {
+        sessionId: session.id,
+        sessionNumber: session.session_number,
+        status: session.status,
+        expired,
+        isExpired: isSessionExpired(session),
+        statusIsExpired: session.status === 'expired',
+        shouldResume: session.status === 'active' && !expired,
+      });
+
+      // RESUME: Active session that is not expired
+      // Navigate to game without creating a new session
+      // Pass sessionId to ensure we load THIS specific session, not just the most recent one
       if (session.status === 'active' && !expired) {
-        navigate(`/app/game/${campaignId}?character=${session.character.id}`);
+        console.log('[CampaignSessions] RESUMING - navigating without creating new session');
+        navigate(`/app/game/${campaignId}?character=${session.character.id}&session=${session.id}`);
         return;
       }
 
+      // CONTINUE: Completed or expired session
+      // Create a new continuation session with incremented session_number
+      console.log('[CampaignSessions] CONTINUING - creating new session');
       setContinuingId(session.id);
 
       try {

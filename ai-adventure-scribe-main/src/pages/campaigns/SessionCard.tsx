@@ -69,8 +69,16 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue,
     .toUpperCase();
 
   const continueDisabled = !session.character?.id || continuing;
-  const continueLabel =
-    session.status === 'active' && !expired ? 'Open Session' : 'Continue Session';
+
+  // Determine button label and variant based on session state
+  // Active sessions can be "Resumed" (reopened without creating new session)
+  // Completed/expired sessions require "Continue" (creates new continuation session)
+  const isResumable = session.status === 'active' && !expired;
+  const buttonLabel = isResumable ? 'Resume Session' : 'Continue Session';
+  const buttonVariant = isResumable ? 'default' : 'outline';
+  const helperText = isResumable
+    ? 'Resume where you left off'
+    : 'Create continuation session';
 
   return (
     <Card className="p-4 md:p-5 shadow-sm border border-border/60">
@@ -125,10 +133,16 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue,
           <Button
             onClick={() => onContinue(session)}
             disabled={continueDisabled}
+            variant={buttonVariant as 'default' | 'outline'}
             className="w-full md:w-44"
           >
-            {continuing ? 'Continuing...' : continueLabel}
+            {continuing ? 'Continuing...' : buttonLabel}
           </Button>
+          {!continueDisabled && !continuing && (
+            <p className="text-xs text-muted-foreground text-center md:text-right">
+              {helperText}
+            </p>
+          )}
           {continueDisabled && !session.character?.id && (
             <p className="text-xs text-destructive/80 text-center md:text-right">
               Character missing. Reassign before continuing.

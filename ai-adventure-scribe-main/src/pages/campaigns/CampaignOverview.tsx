@@ -1,9 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CampaignOverviewProps {
   campaign?: {
@@ -18,8 +20,48 @@ interface CampaignOverviewProps {
   onStartNewSession?: () => void;
 }
 
+// Session expiry times
+// Free tier: 7 days
+// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
+const SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
+
 const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNewSession }) => {
   const { id: campaignId } = useParams();
+  const navigate = useNavigate();
+
+  // Query for most recent active session
+  const { data: activeSession, isLoading: isLoadingActiveSession } = useQuery({
+    queryKey: ['campaign', campaignId, 'active-session'],
+    queryFn: async () => {
+      if (!campaignId) return null;
+
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .select('id, character_id, status, start_time, created_at')
+        .eq('campaign_id', campaignId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      // Check if expired (24 hours)
+      const start = data.start_time || data.created_at;
+      if (!start) return null;
+
+      const startTime = new Date(start).getTime();
+      const isExpired = Number.isFinite(startTime) ? Date.now() - startTime > SESSION_EXPIRY_MS : false;
+
+      return isExpired ? null : data;
+    },
+    enabled: Boolean(campaignId),
+  });
+
+  const handleResumeSession = () => {
+    if (!activeSession?.character_id || !campaignId) return;
+    navigate(`/app/game/${campaignId}?character=${activeSession.character_id}`);
+  };
 
   if (!campaign) {
     return (
@@ -197,6 +239,16 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
               Quick Actions
             </h3>
             <div className="space-y-3">
+              {/* Resume Session button - shows if active session exists */}
+              {activeSession && (
+                <button
+                  onClick={handleResumeSession}
+                  disabled={isLoadingActiveSession}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-infinite-teal to-infinite-teal-dark text-white rounded-lg hover:from-infinite-teal-dark hover:to-infinite-teal transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Resume Session
+                </button>
+              )}
               <button
                 onClick={() => onStartNewSession?.()}
                 className="w-full px-4 py-3 bg-gradient-to-r from-infinite-purple to-infinite-purple-dark text-white rounded-lg hover:from-infinite-purple-dark hover:to-infinite-purple transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"

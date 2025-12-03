@@ -6,6 +6,7 @@ import logger from '@/lib/logger';
 import { llmApiClient } from '@/services/llm-api-client';
 import { generateSceneImage } from '@/services/scene-image-generator';
 import { handleAsyncError } from '@/utils/error-handler';
+import { generateImageLabel } from '@/utils/image-label-generator';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 
@@ -75,8 +76,13 @@ export const useImageGeneration = ({
         }
 
         const t0 = performance.now();
-        const shortId = String(messageId).slice(-8);
-        const label = sessionId ? `scene-${sessionId}-${shortId}` : 'scene';
+
+        // Generate semantic label using campaign name and scene keywords
+        // Falls back to 'scene' if no campaign name or scene text available
+        const label = generateImageLabel(campaign?.name, sceneText, {
+          fallbackLabel: 'scene',
+        });
+
         const res = await generateSceneImage({
           sceneText,
           campaign: {

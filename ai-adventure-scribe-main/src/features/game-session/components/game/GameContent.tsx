@@ -34,6 +34,8 @@ const GameContent: React.FC = () => {
   const { id: campaignIdFromParams } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const characterIdFromParams = searchParams.get('character');
+  const forceNew = searchParams.get('new') === 'true';
+  const specificSessionId = searchParams.get('session') || undefined;
 
   const { state: characterState, dispatch: characterDispatch } = useCharacter();
   const { dispatch: campaignDispatch } = useCampaign();
@@ -42,6 +44,8 @@ const GameContent: React.FC = () => {
   const { sessionData, sessionId, sessionState, updateGameSessionState } = useGameSession(
     campaignIdFromParams,
     characterIdFromParams || undefined,
+    forceNew,
+    specificSessionId,
   );
 
   const [isLoading, setIsLoading] = useState(true);

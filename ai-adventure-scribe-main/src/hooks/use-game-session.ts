@@ -50,8 +50,11 @@ import { supabase } from '@/integrations/supabase/client';
 // ============================
 import logger from '@/lib/logger';
 
-const SESSION_EXPIRY_TIME = 1000 * 60 * 60 * 24; // 24 hours (was 1 hour)
-const CLEANUP_INTERVAL = 1000 * 60 * 15; // Check every 15 minutes (was 5 minutes)
+// Session expiry times
+// Free tier: 7 days
+// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
+const SESSION_EXPIRY_TIME = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
+const CLEANUP_INTERVAL = 1000 * 60 * 15; // Check every 15 minutes
 
 /**
  * React hook for managing game sessions, including creation, expiration, cleanup, and summary generation.
@@ -121,7 +124,12 @@ function sanitizeSessionPatch(patch: Partial<ExtendedGameSession>) {
   return { sanitized, removed };
 }
 
-export const useGameSession = (campaignId?: string, characterId?: string) => {
+export const useGameSession = (
+  campaignId?: string,
+  characterId?: string,
+  forceNew?: boolean,
+  specificSessionId?: string,
+) => {
   const [sessionData, setSessionData] = useState<ExtendedGameSession | null>(null);
   const [sessionState, setSessionState] = useState<
     'active' | 'expired' | 'ending' | 'loading' | 'error' | 'idle'
@@ -659,6 +667,38 @@ export const useGameSession = (campaignId?: string, characterId?: string) => {
         // Set loading state at start
         if (mountedRef.current) {
           setSessionState('loading');
+        }
+
+        // If forceNew=true, skip checking for existing sessions and create a new one
+        if (forceNew) {
+          logger.info('[Session Init] forceNew=true, creating new session');
+          const newSessionId = await createGameSession(campaignId, characterId);
+          if (newSessionId && mountedRef.current) {
+            sessionInitializedRef.current = true; // Mark as successfully initialized
+          }
+          return;
+        }
+
+        // If specificSessionId is provided, load THAT specific session
+        if (specificSessionId) {
+          logger.info('[Session Init] Loading specific session:', specificSessionId);
+          const { data: specificSession, error: specificError } = await supabase
+            .from('game_sessions')
+            .select('*')
+            .eq('id', specificSessionId)
+            .single();
+
+          if (specificError) {
+            logger.error('[Session Init] Error loading specific session:', specificError);
+            // Fall through to normal session search
+          } else if (specificSession && mountedRef.current) {
+            const extended = specificSession as ExtendedGameSession;
+            setSessionData(extended);
+            sessionInitializedRef.current = true;
+            setSessionState('active');
+            logger.info('[Session Init] Loaded specific session:', specificSessionId);
+            return;
+          }
         }
 
         // First, try to find the most recent session for this campaign & character
