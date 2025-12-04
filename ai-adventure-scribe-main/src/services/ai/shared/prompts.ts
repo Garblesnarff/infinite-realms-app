@@ -10,6 +10,52 @@ import type { CombatDetectionResult } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 
 /**
+ * Build campaign name prompt
+ */
+export function buildCampaignNamePrompt(params: CampaignParams): string {
+  return `Generate a compelling, evocative campaign name for a D&D 5e adventure.
+
+**Campaign Parameters:**
+- Genre: ${params.genre}
+- Difficulty: ${params.difficulty}
+- Expected Length: ${params.length}
+- Tone: ${params.tone}
+
+**Requirements:**
+1. The name should be 2-5 words maximum
+2. It should evoke the campaign's tone and genre
+3. It should be memorable and unique - avoid generic fantasy names
+4. It should hint at adventure, mystery, or conflict
+
+**Verbalized Sampling Technique:**
+Generate 4 potential campaign names with probability scores (0.0-1.0):
+- Standard ${params.genre} name (prob: ~0.85): Classic genre-appropriate name
+- Evocative with mystery (prob: ~0.55): Hints at hidden depths
+- Poetic/unusual (prob: ~0.35): Unexpected word pairings
+- Wild card (prob: ≤0.25): Truly unique and memorable
+
+**Anti-LLM Name Patterns - REJECT these:**
+- Generic compound words: Shadowfall, Darkrise, Stormborn, Nightbane
+- [Color]+[Element]: Crimson Dawn, Azure Twilight, Emerald Storm
+- [Emotion]+[Fantasy noun]: Forgotten Realms, Lost Kingdoms, Eternal Shadows
+
+**Approved patterns:**
+- Historical fragments: "Before the Silence", "What Was Promised"
+- Unexpected pairings: "The Copper Hymns", "Gentle Ruin"
+- Mysterious incompleteness: "The Third (no second)", "Almost-Home"
+- Evocative imagery: "Where Winter Waits", "The Singing Scar"
+
+**IMPORTANT: Return ONLY the campaign name, nothing else. No quotes, no explanation, just the name.**
+
+Example outputs:
+- Grim Harvest
+- The Shattered Crown
+- What the Mountain Forgot
+- Copper and Ash
+- Before the Thaw`;
+}
+
+/**
  * Build campaign description prompt
  */
 export function buildCampaignDescriptionPrompt(params: CampaignParams): string {

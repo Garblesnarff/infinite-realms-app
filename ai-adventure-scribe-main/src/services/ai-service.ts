@@ -13,7 +13,7 @@ import {
   type DetectedCombatAction,
 } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
-import { generateCampaignDescription } from './ai/campaign-generator';
+import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { generateOpeningMessage } from './ai/opening-message-generator';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
@@ -548,6 +548,20 @@ export class AIService {
   }): Promise<string> {
     // Delegate to modular campaign generator (includes verbalized sampling)
     return generateCampaignDescription(params);
+  }
+
+  /**
+   * Generate a campaign name using AI
+   * Delegates to modular campaign-generator.ts which includes verbalized sampling
+   */
+  static async generateCampaignName(params: {
+    genre: string;
+    difficulty: string;
+    length: string;
+    tone: string;
+  }): Promise<string> {
+    // Delegate to modular campaign generator (includes verbalized sampling)
+    return generateCampaignName(params);
   }
 
   /**

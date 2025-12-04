@@ -64,23 +64,38 @@ const BasicDetails: React.FC<WizardStepProps> = ({ isLoading = false }) => {
 
     setIsGenerating(true);
     try {
-      const description = await AIService.generateCampaignDescription({
+      const params = {
         genre: state.campaign.genre || 'Fantasy',
         difficulty: state.campaign.difficulty_level || 'Medium',
         length: state.campaign.campaign_length || 'Medium',
         tone: state.campaign.tone || 'balanced',
-      });
+      };
+
+      // Generate both name and description in parallel if name is empty
+      const shouldGenerateName = !state.campaign?.name?.trim();
+
+      const [description, name] = await Promise.all([
+        AIService.generateCampaignDescription(params),
+        shouldGenerateName ? AIService.generateCampaignName(params) : Promise.resolve(null),
+      ]);
 
       handleChange('description', description);
+
+      if (name) {
+        handleChange('name', name);
+      }
+
       toast({
         title: 'Success',
-        description: 'Campaign description generated successfully!',
+        description: shouldGenerateName
+          ? 'Campaign name and description generated successfully!'
+          : 'Campaign description generated successfully!',
       });
     } catch (error) {
       logger.error('Error generating description:', error);
       toast({
         title: 'Error',
-        description: 'Failed to generate campaign description. Please try again.',
+        description: 'Failed to generate campaign content. Please try again.',
         variant: 'destructive',
       });
     } finally {

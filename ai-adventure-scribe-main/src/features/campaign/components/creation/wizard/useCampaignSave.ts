@@ -104,8 +104,10 @@ export const useCampaignSave = () => {
       } else {
         logger.info(`Successfully generated and saved background image for campaign ${campaignId}`);
 
-        // Invalidate campaigns query to refresh the list with the new image
+        // Invalidate all campaign-related queries to refresh with the new image
         queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['gallery', 'campaign', campaignId] });
 
         // Show success notification
         toast({

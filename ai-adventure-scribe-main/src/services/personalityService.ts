@@ -5,7 +5,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export interface PersonalityElement {
   id: string;
-  text: string;
+  // Different tables have different field names for the content
+  text?: string;       // personality_traits table uses 'text'
+  ideal?: string;      // personality_ideals table uses 'ideal'
+  bond?: string;       // personality_bonds table uses 'bond'
+  flaw?: string;       // personality_flaws table uses 'flaw'
   background?: string;
   source: string;
   alignment?: string;
@@ -204,12 +208,25 @@ export class PersonalityService {
     const items = fallbackData[type];
     const randomItem = items[Math.floor(Math.random() * items.length)];
 
-    return {
+    // Return with the correct field name based on type
+    const baseElement = {
       id: `fallback-${Date.now()}`,
-      text: randomItem,
       source: 'PHB',
       created_at: new Date().toISOString(),
     };
+
+    switch (type) {
+      case 'traits':
+        return { ...baseElement, text: randomItem };
+      case 'ideals':
+        return { ...baseElement, ideal: randomItem };
+      case 'bonds':
+        return { ...baseElement, bond: randomItem };
+      case 'flaws':
+        return { ...baseElement, flaw: randomItem };
+      default:
+        return { ...baseElement, text: randomItem };
+    }
   }
 }
 

@@ -89,7 +89,7 @@ const GalleryGrid: React.FC<GalleryGridProps> = ({ title, images, emptyMessage }
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 border-infinite-purple/30">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-auto bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 border-infinite-purple/30">
           <DialogHeader className={`relative z-[${Z_INDEX.DROPDOWN}] pb-4`}>
             <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-infinite-gold to-infinite-purple bg-clip-text text-transparent">
               {active?.label || active?.name || 'Gallery Preview'}
@@ -101,20 +101,20 @@ const GalleryGrid: React.FC<GalleryGridProps> = ({ title, images, emptyMessage }
             </DialogDescription>
           </DialogHeader>
           {active && (
-            <div className="relative w-full max-h-[70vh] overflow-hidden rounded-lg">
+            <div className="relative w-full flex items-center justify-center rounded-lg">
               {/* Background glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-infinite-purple/20 via-transparent to-infinite-gold/20 blur-3xl scale-110"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-infinite-purple/20 via-transparent to-infinite-gold/20 blur-3xl scale-110 pointer-events-none"></div>
 
               <img
                 src={active.url}
                 alt={active.label || active?.name || 'image'}
-                className="relative w-full h-auto object-contain rounded-lg shadow-2xl border border-white/10"
+                className="relative max-w-full max-h-[75vh] w-auto h-auto object-contain rounded-lg shadow-2xl border border-white/10"
               />
 
               {/* Decorative elements */}
-              <div className="absolute top-4 right-4 w-3 h-3 bg-infinite-gold/60 rounded-full animate-pulse"></div>
-              <div className="absolute bottom-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse delay-500"></div>
-              <div className="absolute top-1/2 left-2 w-1 h-1 bg-infinite-teal/50 rounded-full animate-pulse delay-1000"></div>
+              <div className="absolute top-4 right-4 w-3 h-3 bg-infinite-gold/60 rounded-full animate-pulse pointer-events-none"></div>
+              <div className="absolute bottom-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse delay-500 pointer-events-none"></div>
+              <div className="absolute top-1/2 left-2 w-1 h-1 bg-infinite-teal/50 rounded-full animate-pulse delay-1000 pointer-events-none"></div>
             </div>
           )}
         </DialogContent>

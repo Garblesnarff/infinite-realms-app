@@ -40,6 +40,14 @@ interface CharacterData {
     languages?: string[];
     equipment?: string[];
   };
+  // Physical traits - CRITICAL for accurate description generation
+  gender?: 'male' | 'female' | null;
+  age?: number | null;
+  height?: number | null;
+  weight?: number | null;
+  eyes?: string | null;
+  skin?: string | null;
+  hair?: string | null;
 }
 
 interface EnhancedDescription {
@@ -187,6 +195,42 @@ export class CharacterDescriptionGenerator {
     if (characterData.level) promptParts.push(`  <level>${characterData.level}</level>`);
     if (characterData.alignment)
       promptParts.push(`  <alignment>${characterData.alignment}</alignment>`);
+
+    // Add physical traits section - CRITICAL for accurate character representation
+    const hasPhysicalTraits =
+      characterData.gender ||
+      characterData.age ||
+      characterData.height ||
+      characterData.weight ||
+      characterData.eyes ||
+      characterData.skin ||
+      characterData.hair;
+
+    if (hasPhysicalTraits) {
+      promptParts.push('');
+      promptParts.push('  <physical_traits>');
+      if (characterData.gender)
+        promptParts.push(`    <gender>${characterData.gender}</gender>`);
+      if (characterData.age && characterData.age > 0)
+        promptParts.push(`    <age>${characterData.age} years old</age>`);
+      if (characterData.height && characterData.height > 0) {
+        const totalInches = Math.round(characterData.height);
+        const feet = Math.floor(totalInches / 12);
+        const inches = totalInches - feet * 12;
+        promptParts.push(`    <height>${feet}'${inches}" (${Math.round(totalInches * 2.54)} cm)</height>`);
+      }
+      if (characterData.weight && characterData.weight > 0) {
+        promptParts.push(`    <weight>${Math.round(characterData.weight)} lbs (${Math.round(characterData.weight * 0.45)} kg)</weight>`);
+      }
+      if (characterData.eyes) promptParts.push(`    <eye_color>${characterData.eyes}</eye_color>`);
+      if (characterData.skin) promptParts.push(`    <skin_tone>${characterData.skin}</skin_tone>`);
+      if (characterData.hair) promptParts.push(`    <hair>${characterData.hair}</hair>`);
+      promptParts.push('  </physical_traits>');
+      promptParts.push('');
+      promptParts.push(
+        `  <critical_physical_requirements>MANDATORY: The character is ${characterData.gender || 'unspecified gender'}. ${characterData.gender ? `Use ONLY ${characterData.gender === 'female' ? 'she/her' : 'he/him'} pronouns throughout.` : ''} ${characterData.height ? `The character's height is EXACTLY ${Math.floor(characterData.height / 12)}'${Math.round(characterData.height) % 12}" - use this SPECIFIC measurement.` : ''} Do NOT invent different physical characteristics.</critical_physical_requirements>`,
+      );
+    }
 
     // Add personality elements if provided
     promptParts.push('');
@@ -398,6 +442,15 @@ export class CharacterDescriptionGenerator {
     );
     promptParts.push(
       '  <guideline>Base descriptions strictly on the provided information without making assumptions</guideline>',
+    );
+    promptParts.push(
+      '  <guideline>CRITICAL: If gender is specified, use the CORRECT pronouns throughout (she/her for female, he/him for male). Never mix genders.</guideline>',
+    );
+    promptParts.push(
+      '  <guideline>CRITICAL: Use the EXACT height provided in physical_traits. Do not exaggerate or invent different heights.</guideline>',
+    );
+    promptParts.push(
+      '  <guideline>CRITICAL: All physical traits (age, height, weight, eye color, skin tone, hair) must match the provided data exactly.</guideline>',
     );
     promptParts.push('</guidelines>');
 

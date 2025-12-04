@@ -39,6 +39,8 @@ export interface CharacterPromptData {
   appearance?: string | null;
   personality_traits?: string | null;
   theme?: string | null;
+  gender?: 'male' | 'female' | null;
+  age?: number | null;
   height?: number | null;
   weight?: number | null;
   eyes?: string | null;
@@ -102,6 +104,8 @@ const buildPhysicalTraitLines = (data: CharacterPromptData): string[] => {
   const height = formatHeightForPrompt(data.height);
   const weight = formatWeightForPrompt(data.weight);
 
+  if (data.gender) lines.push(`Gender: ${data.gender}`);
+  if (data.age && data.age > 0) lines.push(`Age: ${data.age} years old`);
   if (height) lines.push(`Height: ${height}`);
   if (weight) lines.push(`Weight: ${weight}`);
   if (data.eyes?.trim()) lines.push(`Eye Color: ${data.eyes.trim()}`);
@@ -822,6 +826,8 @@ export const toCharacterPromptData = (
     appearance: character.appearance,
     personality_traits: character.personality_traits,
     theme: character.theme,
+    gender: character.gender ?? null,
+    age: character.age ?? null,
     height: character.height ?? null,
     weight: character.weight ?? null,
     eyes: character.eyes ?? null,
