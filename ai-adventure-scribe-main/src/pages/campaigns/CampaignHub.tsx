@@ -81,10 +81,12 @@ const CampaignHub: React.FC = () => {
   const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   React.useEffect(() => {
-    if (searchParams.get('startSession') === 'true' && !showCharacterModal) {
+    if (searchParams.get('startSession') === 'true') {
       setShowCharacterModal(true);
+    } else {
+      setShowCharacterModal(false);
     }
-  }, [searchParams, showCharacterModal]);
+  }, [searchParams]);
 
   const openCharacterModal = React.useCallback(() => {
     setShowCharacterModal(true);
