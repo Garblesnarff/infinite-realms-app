@@ -146,6 +146,16 @@ function App() {
                                     }
                                   />
                                 )}
+                                {ENABLE_LEGACY_CHARACTER_ENTRY && (
+                                  <Route
+                                    path="/characters/new"
+                                    element={
+                                      <Suspense fallback={<RouteLoading />}>
+                                        <CharacterCreateEntry />
+                                      </Suspense>
+                                    }
+                                  />
+                                )}
                                 <Route
                                   path="/character/:id"
                                   element={
