@@ -1,4 +1,4 @@
-import { Shuffle, Heart, Crown, Shield, Zap } from 'lucide-react';
+import { Shuffle, Heart, Crown, Shield, Zap, Sparkles } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,32 @@ import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import logger from '@/lib/logger';
-import { personalityService } from '@/services/personalityService';
+import { personalityService, PersonalityElement } from '@/services/personalityService';
+
+/**
+ * Safely extract text from a PersonalityElement based on field type
+ * Uses fallback logic: tries field-specific property first, then 'text', then empty string
+ * @param element - The personality element from the API
+ * @param fieldType - Type of field to extract
+ * @returns The extracted text or empty string if not found
+ */
+const extractPersonalityText = (
+  element: PersonalityElement,
+  fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws'
+): string => {
+  switch (fieldType) {
+    case 'traits':
+      return element.text ?? '';
+    case 'ideals':
+      return element.ideal ?? element.text ?? '';
+    case 'bonds':
+      return element.bond ?? element.text ?? '';
+    case 'flaws':
+      return element.flaw ?? element.text ?? '';
+    default:
+      return element.text ?? '';
+  }
+};
 
 /**
  * PersonalitySelection component for character creation
@@ -81,25 +106,21 @@ const PersonalitySelection: React.FC = () => {
 
       const element = await personalityService.getRandomPersonalityElement(fieldType, options);
 
-      // Extract the text based on the field type
-      let randomText: string;
-      switch (fieldType) {
-        case 'traits':
-          randomText = element.text;
-          break;
-        case 'ideals':
-          randomText = element.ideal;
-          break;
-        case 'bonds':
-          randomText = element.bond;
-          break;
-        case 'flaws':
-          randomText = element.flaw;
-          break;
-        default:
-          randomText = element.text;
+      // Extract the text using helper function with fallback logic
+      const randomText = extractPersonalityText(element, fieldType);
+
+      // Validate we got actual text
+      if (!randomText) {
+        logger.warn(`No text extracted for ${fieldType}:`, element);
+        toast({
+          title: 'Error',
+          description: 'Failed to randomize. Please try again.',
+          variant: 'destructive',
+        });
+        return;
       }
 
+      // Update the appropriate field
       switch (fieldType) {
         case 'traits':
           if (index !== undefined) {
@@ -147,25 +168,41 @@ const PersonalitySelection: React.FC = () => {
 
       const batchData = await personalityService.getBatchRandomPersonality(options);
 
-      // Update all personality fields with the batch results
+      // Update all personality fields with the batch results using helper function
       if (batchData.traits && batchData.traits2) {
-        handlePersonalityTraitsChange([batchData.traits.text, batchData.traits2.text]);
+        const trait1 = extractPersonalityText(batchData.traits, 'traits');
+        const trait2 = extractPersonalityText(batchData.traits2, 'traits');
+        if (trait1 && trait2) {
+          handlePersonalityTraitsChange([trait1, trait2]);
+        }
       } else if (batchData.traits) {
         // Fallback if only one trait is returned
-        const currentTraits = state.character?.personalityTraits || ['', ''];
-        handlePersonalityTraitsChange([batchData.traits.text, currentTraits[1]]);
+        const trait1 = extractPersonalityText(batchData.traits, 'traits');
+        if (trait1) {
+          const currentTraits = state.character?.personalityTraits || ['', ''];
+          handlePersonalityTraitsChange([trait1, currentTraits[1]]);
+        }
       }
 
       if (batchData.ideals) {
-        handleIdealChange(batchData.ideals.ideal);
+        const idealText = extractPersonalityText(batchData.ideals, 'ideals');
+        if (idealText) {
+          handleIdealChange(idealText);
+        }
       }
 
       if (batchData.bonds) {
-        handleBondChange(batchData.bonds.bond);
+        const bondText = extractPersonalityText(batchData.bonds, 'bonds');
+        if (bondText) {
+          handleBondChange(bondText);
+        }
       }
 
       if (batchData.flaws) {
-        handleFlawChange(batchData.flaws.flaw);
+        const flawText = extractPersonalityText(batchData.flaws, 'flaws');
+        if (flawText) {
+          handleFlawChange(flawText);
+        }
       }
 
       toast({
@@ -219,24 +256,26 @@ const PersonalitySelection: React.FC = () => {
         </Card>
       )}
 
+      {/* Randomize All Button - Standalone */}
+      <div className="flex justify-center">
+        <Button
+          onClick={handleRandomizeAll}
+          variant="outline"
+          size="lg"
+          className="bg-gradient-to-r from-purple-500 to-amber-500 text-white hover:from-purple-600 hover:to-amber-600 border-0 shadow-lg"
+        >
+          <Sparkles className="mr-2 h-5 w-5" />
+          Randomize All Personality Fields
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Personality Traits */}
         <Card className="glass rounded-2xl hover-lift border-2 border-infinite-purple/20">
           <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Zap className="w-5 h-5 text-infinite-purple" />
-                <h3 className="text-lg font-semibold">Personality Traits</h3>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleRandomizeAll()}
-                className="flex items-center space-x-1 text-xs"
-              >
-                <Shuffle className="w-3 h-3" />
-                <span>Randomize All</span>
-              </Button>
+            <div className="flex items-center space-x-2">
+              <Zap className="w-5 h-5 text-infinite-purple" />
+              <h3 className="text-lg font-semibold">Personality Traits</h3>
             </div>
 
             <p className="text-sm text-muted-foreground">
