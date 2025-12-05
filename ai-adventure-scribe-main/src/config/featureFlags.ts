@@ -12,13 +12,18 @@ const worldBuilderEnabled = parseBoolean((import.meta as any)?.env?.VITE_ENABLE_
 const campaignCharacterFlowEnabled = parseBoolean(
   (import.meta as any)?.env?.VITE_ENABLE_CAMPAIGN_CHARACTER_FLOW,
 );
+const multiplayerInvitesEnabled = parseBoolean(
+  (import.meta as any)?.env?.VITE_ENABLE_MULTIPLAYER_INVITES,
+);
 
 export const featureFlags = {
   semanticMemories: semanticMemoriesEnabled,
   worldBuilder: worldBuilderEnabled,
   campaignCharacterFlow: campaignCharacterFlowEnabled,
+  multiplayerInvites: multiplayerInvitesEnabled,
 };
 
 export const isSemanticMemoriesEnabled = (): boolean => featureFlags.semanticMemories;
 export const isWorldBuilderEnabled = (): boolean => featureFlags.worldBuilder;
 export const isCampaignCharacterFlowEnabled = (): boolean => featureFlags.campaignCharacterFlow;
+export const isMultiplayerInvitesEnabled = (): boolean => featureFlags.multiplayerInvites;

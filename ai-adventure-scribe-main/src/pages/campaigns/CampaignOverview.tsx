@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { isMultiplayerInvitesEnabled } from '@/config/featureFlags';
 import { supabase } from '@/integrations/supabase/client';
 
 interface CampaignOverviewProps {
@@ -255,9 +256,11 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
               >
                 Start New Session
               </button>
-              <button className="w-full px-4 py-3 border-2 border-infinite-gold text-infinite-gold rounded-lg hover:bg-infinite-gold/10 transition-all duration-300 font-medium">
-                Invite Players
-              </button>
+              {isMultiplayerInvitesEnabled() && (
+                <button className="w-full px-4 py-3 border-2 border-infinite-gold text-infinite-gold rounded-lg hover:bg-infinite-gold/10 transition-all duration-300 font-medium">
+                  Invite Players
+                </button>
+              )}
             </div>
           </div>
         </div>
