@@ -15,6 +15,15 @@
 - **Commit and push after EVERY change** - user doesn't have easy local access to code
 - User may not be technical - explain clearly, double-check your assumptions
 
+### 🔒 SECURITY - NEVER COMMIT SECRETS
+- **NEVER commit `.env` files** - they contain API keys, passwords, database URLs
+- **Check `.gitignore`** before committing - verify sensitive files are excluded
+- **Files with secrets** (already gitignored, DO NOT commit):
+  - `.env`, `.env.local`, `server/.env`, `crewai-service/.env`
+- **Safe to commit**: `.env.example` (no real secrets)
+- **If you see secrets in code**: Use `Deno.env.get('KEY_NAME')` or `process.env.KEY_NAME`
+- **Before committing**: Run `git status --ignored` to verify .env files aren't staged
+
 ### Infrastructure (Verified)
 - **Server**: Hetzner VPS (Nuremberg datacenter, Ubuntu 24.04 LTS)
 - **Hostname**: `ubuntu-16gb-nbg1-1`
@@ -286,6 +295,7 @@ The user (project owner) may not be a developer:
 - ❌ Use jargon without explaining
 - ❌ Make risky changes without testing
 - ❌ Batch changes (commit after each logical change)
+- ❌ **NEVER commit .env files or hardcode secrets!**
 
 ---
 
