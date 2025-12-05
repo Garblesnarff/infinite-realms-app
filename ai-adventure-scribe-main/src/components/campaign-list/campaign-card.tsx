@@ -3,8 +3,6 @@ import { ArrowRight, Trash2, Play, AlertTriangle } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import CharacterSelectionModal from './character-selection-modal';
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +49,6 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -248,7 +245,7 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
                 className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowCharacterModal(true);
+                  navigate(`/app/campaigns/${campaign.id}?startSession=true`);
                 }}
               >
                 <Play className="w-4 h-4" />
@@ -336,13 +333,6 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
           </AlertDialogContent>
         </AlertDialogPortal>
       </AlertDialog>
-
-      <CharacterSelectionModal
-        isOpen={showCharacterModal}
-        onClose={() => setShowCharacterModal(false)}
-        campaignId={campaign.id}
-        campaignName={campaign.name}
-      />
     </Card>
   );
 };
