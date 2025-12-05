@@ -6,6 +6,30 @@
 
 ---
 
+## ⚠️ CRITICAL CONTEXT - READ FIRST
+
+### Production Environment
+- **This is a PRODUCTION codebase on a Hetzner VPS**
+- Changes go live immediately - be careful!
+- **Always test before pushing** (`npm run build`, verify changes)
+- **Commit and push after EVERY change** - user doesn't have easy local access to code
+- User may not be technical - explain clearly, double-check your assumptions
+
+### Infrastructure
+- **Supabase**: Running locally in Docker (NOT Supabase Cloud)
+- **PostgreSQL**: In Docker container
+- **Other services**: Multiple Docker containers running
+- **Location**: `/var/www/infiniterealms/ai-adventure-scribe-main/`
+
+### Workflow
+1. Make changes
+2. Test: `npm run build` (catch TS errors)
+3. Commit: `git commit -m "..."`
+4. Push: `git push origin main` (deploys to production!)
+5. Repeat for each logical change
+
+---
+
 ## Project at a Glance
 
 Solo fantasy RPG with AI-powered Dungeon Master. Players create campaigns with persistent worlds and long-term memory.
@@ -61,7 +85,16 @@ bd close bead-id --reason "Fixed: description"
 
 ## Critical Gotchas
 
-### 1. Deno vs Node.js
+### 1. Production Environment (Hetzner VPS)
+- **This is LIVE production** - not a dev environment
+- Changes to `main` branch go live immediately
+- **Test everything**: `npm run build` before pushing
+- **Commit frequently**: User doesn't have easy local access to code
+- **Be cautious**: Real users are affected by bugs
+- **Supabase is local**: Running in Docker, not Supabase Cloud
+- **User may not be technical**: Explain clearly, verify assumptions
+
+### 2. Deno vs Node.js
 - **Supabase Edge Functions** (`supabase/functions/`) = **Deno**
 - **Express Server** (`server/src/`) = **Node.js**
 
@@ -72,7 +105,7 @@ bd close bead-id --reason "Fixed: description"
 - ✅ Use URLs: `https://deno.land/std/...` or `npm:package`
 - ✅ Inline data if you can't import (e.g., proficiency bonus table)
 
-### 2. D&D 5E Passive Skills
+### 3. D&D 5E Passive Skills
 **Common AI DM bug**: Requesting "Make a Passive Perception check"
 
 **The rule** (PHB p.175):
@@ -86,7 +119,7 @@ bd close bead-id --reason "Fixed: description"
 
 **Observant feat**: +5 to Passive Perception/Investigation (must detect and apply)
 
-### 3. AI Education Pattern
+### 4. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
 
 1. Add section to `promptBuilder.ts` with XML tags: `<rule_name>`
@@ -99,25 +132,31 @@ When AI does something wrong, **educate via prompts** (fastest fix):
 ## Quick Command Reference
 
 ```bash
-# Build (checks TypeScript)
+# Build (ALWAYS run before pushing to production!)
 npm run build
 
 # Run dev environment
 npm run dev
 
-# Supabase edge functions
-npx supabase functions serve           # Test locally
-npx supabase functions deploy dm-agent-execute
+# Supabase (local Docker instance)
+npx supabase functions serve           # Test edge functions locally
+npx supabase functions deploy dm-agent-execute  # Deploy to local Supabase
 
 # Server
 npm run server:dev        # Express on port 8888
 npm run server:test       # Run tests
 
-# Git workflow
+# Docker (if needed)
+docker ps                 # See running containers
+docker logs <container>   # View container logs
+
+# Git workflow (PRODUCTION - changes go live!)
 git add -A
 git commit -m "..."       # Include "Closes bead: X"
-git push origin main
+git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 ```
+
+**Remember**: This is production! Always test before pushing.
 
 ---
 
@@ -125,12 +164,14 @@ git push origin main
 
 ### Fix AI DM Behavior
 1. Identify what's wrong (e.g., "AI requests passive rolls")
-2. Research D&D 5E rule (PHB, Sage Advice, web search)
-3. Add education to `promptBuilder.ts` (forbidden + correct examples)
-4. Add to `systemInstruction` if critical ("NEVER do X")
-5. Calculate/provide data AI needs (passive scores, AC, etc.)
-6. Test: `npm run build` (no TS errors)
-7. Create bead, commit, close bead
+2. **Verify with user** if you're not sure - they know the domain
+3. Research D&D 5E rule (PHB, Sage Advice, web search)
+4. Add education to `promptBuilder.ts` (forbidden + correct examples)
+5. Add to `systemInstruction` if critical ("NEVER do X")
+6. Calculate/provide data AI needs (passive scores, AC, etc.)
+7. **Test**: `npm run build` (no TS errors)
+8. **Commit & push** (this is production!)
+9. Create bead, update status, close when done
 
 ### Add New D&D Mechanic
 1. Implement calculation:
@@ -220,5 +261,27 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 
 ---
 
+---
+
+## Working with Non-Technical User
+
+The user (project owner) may not be a developer:
+
+**Do**:
+- ✅ Explain what you're doing in plain language
+- ✅ Double-check assumptions (ask if unsure)
+- ✅ Test thoroughly before pushing to production
+- ✅ Commit/push frequently (they don't have easy code access)
+- ✅ Document changes clearly in commits
+
+**Don't**:
+- ❌ Assume technical knowledge
+- ❌ Use jargon without explaining
+- ❌ Make risky changes without testing
+- ❌ Batch changes (commit after each logical change)
+
+---
+
 **Last Updated**: 2025-01
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
+**Environment**: Hetzner VPS, Production, Docker-based services
