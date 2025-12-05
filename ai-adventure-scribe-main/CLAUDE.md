@@ -15,11 +15,15 @@
 - **Commit and push after EVERY change** - user doesn't have easy local access to code
 - User may not be technical - explain clearly, double-check your assumptions
 
-### Infrastructure
-- **Supabase**: Running locally in Docker (NOT Supabase Cloud)
-- **PostgreSQL**: In Docker container
-- **Other services**: Multiple Docker containers running
+### Infrastructure (Verified)
+- **Server**: Hetzner VPS (Nuremberg datacenter, Ubuntu 24.04 LTS)
+- **Hostname**: `ubuntu-16gb-nbg1-1`
+- **Supabase**: Full local stack in Docker (NOT Supabase Cloud!)
+  - 13 containers: postgres, auth, edge-functions, rest (PostgREST), storage, studio, kong, meta, pooler, realtime, analytics, imgproxy, vector
+  - PostgreSQL 15.8.1.085 exposed on port 54321
+  - Kong API gateway on ports 8001/8444
 - **Location**: `/var/www/infiniterealms/ai-adventure-scribe-main/`
+- **Docker**: All Supabase services containerized, up 5-12 days
 
 ### Workflow
 1. Make changes
@@ -146,9 +150,12 @@ npx supabase functions deploy dm-agent-execute  # Deploy to local Supabase
 npm run server:dev        # Express on port 8888
 npm run server:test       # Run tests
 
-# Docker (if needed)
-docker ps                 # See running containers
-docker logs <container>   # View container logs
+# Docker (Supabase local stack)
+docker ps                           # See all 13 Supabase containers
+docker logs supabase-db             # PostgreSQL logs
+docker logs supabase-edge-functions # Edge function logs
+docker logs supabase-auth           # GoTrue auth logs
+docker logs supabase-kong           # API gateway logs
 
 # Git workflow (PRODUCTION - changes go live!)
 git add -A
