@@ -59,9 +59,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
 
   // Fetch available characters
   const { data: characters, isLoading } = useQuery({
-    queryKey: isCampaignCharacterFlowEnabled()
-      ? ['campaign', campaignId, 'characters', 'play', user?.id]
-      : ['user-characters', user?.id],
+    queryKey: ['campaign', campaignId, 'characters', 'play', user?.id],
     queryFn: async () => {
       // SECURITY: Require authenticated user for data isolation
       if (!user?.id) {
@@ -81,11 +79,8 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
         `,
         )
         .eq('user_id', user.id) // SECURITY: Only fetch current user's characters
+        .eq('campaign_id', campaignId) // SECURITY: Only show characters from this campaign
         .order('created_at', { ascending: false });
-
-      if (isCampaignCharacterFlowEnabled()) {
-        query = query.eq('campaign_id', campaignId);
-      }
 
       const { data, error } = await query;
 
