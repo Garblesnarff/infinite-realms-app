@@ -27,11 +27,9 @@ const CharacterCreateEntry: React.FC = () => {
   const featureOn = isCampaignCharacterFlowEnabled();
   const preselectedCampaign = searchParams.get('campaign');
 
-  React.useEffect(() => {
-    if (featureOn && preselectedCampaign) {
-      navigate(`/app/campaigns/${preselectedCampaign}/characters/new`, { replace: true });
-    }
-  }, [featureOn, preselectedCampaign, navigate]);
+  // If a campaign is preselected via URL param, go directly to the wizard
+  // The wizard will read the campaign param and associate the character with it
+  const hasPreselectedCampaign = Boolean(preselectedCampaign);
 
   // Always call hook regardless of feature flag (rules of hooks requirement)
   // Feature enabled and campaign picker: show campaigns
@@ -104,9 +102,11 @@ const CharacterCreateEntry: React.FC = () => {
     [cloneMutation],
   );
 
-  // Legacy behavior: render wizard directly
+  // Render wizard directly if:
+  // 1. Feature flag is off (legacy behavior)
+  // 2. Campaign is preselected via URL param (navigated from campaign hub)
   // CharacterWizard is already wrapped with ErrorBoundary internally
-  if (!featureOn) {
+  if (!featureOn || hasPreselectedCampaign) {
     return <CharacterWizard />;
   }
 

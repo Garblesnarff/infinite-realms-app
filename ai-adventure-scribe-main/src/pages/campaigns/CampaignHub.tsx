@@ -11,7 +11,6 @@ import CampaignWorld from './CampaignWorld';
 
 import CharacterSelectionModal from '@/components/campaign-list/character-selection-modal';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -110,10 +109,6 @@ const CampaignHub: React.FC = () => {
       );
     }
   }, [location.pathname, location.search, navigate]);
-  const isCharacterCreationRoute = React.useMemo(
-    () => location.pathname.includes('/characters/new'),
-    [location.pathname],
-  );
 
   if (isLoading) {
     return (
@@ -221,7 +216,7 @@ const CampaignHub: React.FC = () => {
             <CampaignOverview campaign={campaign} onStartNewSession={openCharacterModal} />
           </TabsContent>
           <TabsContent value="characters">
-            <CampaignCharacters mode={isCharacterCreationRoute ? 'create' : 'list'} />
+            <CampaignCharacters />
           </TabsContent>
           <TabsContent value="sessions">
             <CampaignSessions />
