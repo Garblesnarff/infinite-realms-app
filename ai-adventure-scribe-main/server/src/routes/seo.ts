@@ -49,9 +49,18 @@ export function seoRouter() {
 
 function buildSitemap(siteUrl: string, posts: BlogPosts) {
   const urls: string[] = [];
-  const baseEntries = ['/', '/blog', '/rss.xml'];
-  baseEntries.forEach((path) => {
-    urls.push(renderSitemapUrl(`${siteUrl}${path === '/' ? '' : path}`, undefined));
+  // Static pages - landing pages have higher priority
+  const landingPages = ['/', '/ai-game-master', '/solo-tabletop-rpg'];
+  const otherPages = ['/blog', '/rss.xml'];
+
+  // Add landing pages with priority
+  landingPages.forEach((path) => {
+    urls.push(renderSitemapUrl(`${siteUrl}${path === '/' ? '' : path}`, undefined, '0.9'));
+  });
+
+  // Add other static pages
+  otherPages.forEach((path) => {
+    urls.push(renderSitemapUrl(`${siteUrl}${path}`, undefined));
   });
 
   posts.forEach((post) => {
@@ -61,9 +70,10 @@ function buildSitemap(siteUrl: string, posts: BlogPosts) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`;
 }
 
-function renderSitemapUrl(loc: string, lastMod?: string) {
+function renderSitemapUrl(loc: string, lastMod?: string, priority?: string) {
   const lastmodTag = lastMod ? `<lastmod>${escapeXml(new Date(lastMod).toISOString())}</lastmod>` : '';
-  return `<url><loc>${escapeXml(loc)}</loc>${lastmodTag}</url>`;
+  const priorityTag = priority ? `<priority>${priority}</priority>` : '';
+  return `<url><loc>${escapeXml(loc)}</loc>${lastmodTag}${priorityTag}</url>`;
 }
 
 function buildRssFeed(siteUrl: string, siteName: string, siteDescription: string, posts: BlogPosts) {

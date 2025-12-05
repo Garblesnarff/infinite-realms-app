@@ -7,6 +7,7 @@ import path from 'path';
 import { registerRoutes } from './routes/index.js';
 import { blogRouter } from './routes/blog.js';
 import { seoRouter } from './routes/seo.js';
+import { landingRouter } from './routes/landing.js';
 import { errorLoggingMiddleware, requestIdMiddleware, requestLoggingMiddleware } from './lib/logger.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { register } from './lib/metrics.js';
@@ -105,6 +106,12 @@ export function createApp(_db?: Db) {
 
   // Mount public blog and SEO routers with cache headers
   app.use('/blog', blogRouter());
+
+  // Mount landing page routes (SSR for SEO)
+  // Must be before seoRouter to handle / route
+  app.use('/', landingRouter());
+
+  // SEO routes (sitemap.xml, robots.txt, rss.xml)
   app.use('/', seoRouter());
 
   registerRoutes(app);

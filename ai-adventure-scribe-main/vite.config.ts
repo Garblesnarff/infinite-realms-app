@@ -59,6 +59,7 @@ export default defineConfig(({ mode }) => ({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         'blog-client': path.resolve(__dirname, 'src/blog-client.ts'),
+        'landing-client': path.resolve(__dirname, 'src/landing-client.ts'),
       },
       output: {
         manualChunks(id) {
