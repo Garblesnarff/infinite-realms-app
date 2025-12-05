@@ -80,9 +80,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
     isLoading: imageLoading,
     hasImage,
     error: imageError,
-    connectionStatus,
-    retryCount,
-  } = useCharacterImageHotLoading(character.id);
+  } = useCharacterImageHotLoading(character.id, character.created_at);
 
   /**
    * Handles character deletion confirmation
