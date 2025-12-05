@@ -8,198 +8,410 @@ interface SoloTabletopRPGPageProps {
 
 export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps) {
   return (
-    <div className="relative overflow-hidden">
-      {/* Atmospheric Background - Warm, Inviting */}
+    <div style={{ position: 'relative', minHeight: '100vh' }}>
+      {/* Atmospheric Background - Warm Ember Tones */}
       <div
-        className="fixed inset-0 pointer-events-none"
         style={{
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
           background: `
-            radial-gradient(ellipse 80% 60% at 30% 20%, rgba(251, 191, 36, 0.12), transparent),
-            radial-gradient(ellipse 60% 50% at 70% 70%, rgba(234, 88, 12, 0.08), transparent),
-            radial-gradient(ellipse 50% 40% at 90% 30%, rgba(251, 146, 60, 0.06), transparent),
-            linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)
+            radial-gradient(ellipse 100% 70% at 30% -10%, rgba(234, 88, 12, 0.18) 0%, transparent 60%),
+            radial-gradient(ellipse 70% 50% at 80% 60%, rgba(184, 134, 11, 0.1) 0%, transparent 50%),
+            radial-gradient(ellipse 60% 50% at 10% 80%, rgba(127, 29, 29, 0.08) 0%, transparent 50%),
+            linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%)
           `,
         }}
       />
 
-      {/* Parchment Texture Overlay */}
+      {/* Ember Particle Effect */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.02]"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
+          opacity: 0.4,
+          backgroundImage: `
+            radial-gradient(2px 2px at 100px 80px, rgba(251, 146, 60, 0.8), transparent),
+            radial-gradient(1.5px 1.5px at 250px 150px, rgba(234, 88, 12, 0.6), transparent),
+            radial-gradient(1px 1px at 180px 250px, rgba(251, 146, 60, 0.5), transparent),
+            radial-gradient(2px 2px at 380px 100px, rgba(184, 134, 11, 0.7), transparent),
+            radial-gradient(1.5px 1.5px at 450px 200px, rgba(234, 88, 12, 0.5), transparent),
+            radial-gradient(1px 1px at 520px 60px, rgba(251, 146, 60, 0.6), transparent)
+          `,
+          backgroundSize: '600px 350px',
         }}
       />
 
-      {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center px-6 py-24">
-        <div className="container max-w-6xl mx-auto">
-          <div className="max-w-3xl">
-            {/* Breadcrumb */}
-            <nav className="flex items-center gap-2 text-sm text-slate-400 mb-6">
-              <a href="/" className="hover:text-amber-400 transition-colors">{site.name}</a>
-              <span>/</span>
-              <span className="text-orange-400">Solo Tabletop RPG</span>
-            </nav>
+      {/* ========== HERO SECTION ========== */}
+      <section
+        style={{
+          position: 'relative',
+          minHeight: '90vh',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8rem 1.5rem 6rem',
+          zIndex: 2,
+        }}
+      >
+        <div className="container" style={{ maxWidth: '1000px' }}>
+          {/* Breadcrumb */}
+          <nav
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              marginBottom: '2rem',
+              fontSize: '0.9rem',
+            }}
+          >
+            <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+              {site.name}
+            </a>
+            <span style={{ color: 'var(--text-muted)' }}>→</span>
+            <span style={{ color: '#fb923c' }}>Solo Tabletop RPG</span>
+          </nav>
 
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 mb-6 rounded-full border border-orange-500/30 bg-orange-500/10">
-              <span className="text-2xl">&#x1F3B2;</span>
-              <span className="text-orange-200 text-sm font-medium">No Group Required</span>
-            </div>
-
-            {/* H1 - Keyword Optimized */}
-            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-              <span
-                style={{
-                  background: 'linear-gradient(135deg, #fef3c7 0%, #fb923c 50%, #ea580c 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                Solo Tabletop RPG
-              </span>
-              <br />
-              <span className="text-white text-3xl sm:text-4xl lg:text-5xl">
-                Epic Adventures, Party of One
-              </span>
-            </h1>
-
-            {/* AEO-Optimized First Paragraph */}
-            <p className="text-xl text-slate-200 mb-6 leading-relaxed">
-              <strong className="text-orange-400">Yes, you can play tabletop RPG alone</strong> - and it's
-              incredible. With an AI Game Master like Infinite Realms, you get the full tabletop experience:
-              character creation, exploration, combat, and storytelling - all on your own schedule.
-            </p>
-
-            <p className="text-lg text-slate-400 mb-8">
-              No more scheduling conflicts. No more canceled sessions. No more waiting for your group.
-              Your adventure is always ready when you are.
-            </p>
-
-            {/* CTA */}
-            <form
-              data-waitlist-form
-              data-source="solo-rpg-hero"
-              className="flex flex-col sm:flex-row gap-3 max-w-lg mb-4"
+          {/* Badge */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.5rem 1.25rem',
+              marginBottom: '2rem',
+              border: '1px solid rgba(251, 146, 60, 0.3)',
+              background: 'rgba(234, 88, 12, 0.1)',
+            }}
+          >
+            <span style={{ fontSize: '1.25rem' }}>🎲</span>
+            <span
+              className="font-elegant"
+              style={{
+                fontSize: '0.875rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: '#fb923c',
+              }}
             >
-              <input
-                type="email"
-                name="email"
-                placeholder="Enter your email"
-                required
-                className="flex-1 px-5 py-4 bg-slate-800/80 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 transition-all"
-              />
-              <button
-                type="submit"
-                data-track-cta="solo-rpg-hero"
-                className="px-8 py-4 font-semibold text-slate-900 rounded-lg transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25 whitespace-nowrap"
-                style={{
-                  background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
-                }}
-              >
-                Start Solo Adventure
-              </button>
-            </form>
-            <p data-form-message className="text-sm" />
-            <p className="text-slate-500 text-sm">Free beta access - no credit card required</p>
+              No Group Required
+            </span>
           </div>
-        </div>
 
-        {/* Decorative Dice */}
-        <div className="absolute right-10 top-1/3 text-orange-500/10 text-9xl hidden xl:block select-none" aria-hidden="true">
-          &#x1F3B2;
+          {/* H1 - SEO Focus */}
+          <h1
+            className="font-display"
+            style={{
+              fontSize: 'clamp(2.5rem, 7vw, 4rem)',
+              lineHeight: 1.1,
+              marginBottom: '1.5rem',
+            }}
+          >
+            <span
+              className="glow-gold"
+              style={{ color: '#fb923c' }}
+            >
+              Solo Tabletop RPG
+            </span>
+            <br />
+            <span
+              className="font-elegant"
+              style={{
+                fontSize: 'clamp(1.5rem, 4vw, 2.25rem)',
+                color: 'var(--text-primary)',
+                fontWeight: 400,
+              }}
+            >
+              Epic Adventures, Party of One
+            </span>
+          </h1>
+
+          {/* AEO-Optimized Content */}
+          <p
+            className="font-elegant"
+            style={{
+              fontSize: '1.25rem',
+              lineHeight: 1.7,
+              color: 'var(--text-secondary)',
+              marginBottom: '1rem',
+              maxWidth: '700px',
+            }}
+          >
+            <strong style={{ color: '#fb923c' }}>Yes, you can play tabletop RPG alone</strong> — and
+            it's incredible. With an AI Game Master like Infinite Realms, you get the full tabletop
+            experience: character creation, exploration, combat, and storytelling on your schedule.
+          </p>
+
+          <p
+            style={{
+              fontSize: '1.1rem',
+              lineHeight: 1.7,
+              color: 'var(--text-muted)',
+              marginBottom: '2.5rem',
+              maxWidth: '650px',
+            }}
+          >
+            No more scheduling conflicts. No more canceled sessions. No more waiting for your group.
+            Your adventure is always ready when you are.
+          </p>
+
+          {/* CTA Form */}
+          <form
+            data-waitlist-form
+            data-source="solo-rpg-hero"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              marginBottom: '1rem',
+              maxWidth: '500px',
+            }}
+          >
+            <input
+              type="email"
+              name="email"
+              placeholder="Enter your email..."
+              required
+              className="input-arcane"
+              style={{ flex: '1 1 250px' }}
+            />
+            <button
+              type="submit"
+              data-track-cta="solo-rpg-hero"
+              className="btn-primary"
+              style={{
+                background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
+              }}
+            >
+              Start Solo Adventure
+            </button>
+          </form>
+          <p data-form-message style={{ fontSize: '0.875rem' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            Free beta access — no credit card required
+          </p>
         </div>
       </section>
 
-      {/* Quick Answer Box */}
-      <section className="relative section pt-0">
-        <div className="container max-w-4xl mx-auto">
-          <div className="answer-box" style={{ borderColor: 'rgba(251, 146, 60, 0.3)' }}>
-            <h2 className="font-display text-xl font-bold text-orange-400 mb-4">
+      {/* ========== ANSWER BOX (AEO) ========== */}
+      <section className="section" style={{ paddingTop: 0, position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '800px' }}>
+          <div className="answer-box" style={{ borderLeftColor: '#ea580c' }}>
+            <h2
+              className="font-display"
+              style={{
+                fontSize: '1.5rem',
+                color: '#fb923c',
+                marginBottom: '1.25rem',
+              }}
+            >
               Can You Play Tabletop RPG Alone? Absolutely.
             </h2>
-            <p className="text-lg text-slate-200 mb-4">
+            <p
+              style={{
+                fontSize: '1.1rem',
+                color: 'var(--text-primary)',
+                marginBottom: '1rem',
+                lineHeight: 1.7,
+              }}
+            >
               Solo tabletop RPG is a growing hobby with thousands of players worldwide.
               Here's what you need to know:
             </p>
-            <ul className="text-slate-300 space-y-2">
-              <li className="flex items-start gap-3">
-                <span className="text-orange-400 mt-1">&#x2713;</span>
-                <span>Full RPG experience - same character creation, exploration, and combat</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-orange-400 mt-1">&#x2713;</span>
-                <span>AI Game Master handles storytelling, NPCs, and rules</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-orange-400 mt-1">&#x2713;</span>
-                <span>Play anytime - 10 minutes or 10 hours, your choice</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-orange-400 mt-1">&#x2713;</span>
-                <span>No experience required - perfect for newcomers</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-orange-400 mt-1">&#x2713;</span>
-                <span>Your world persists - continue your story across sessions</span>
-              </li>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {[
+                'Full RPG experience — same character creation, exploration, and combat',
+                'AI Game Master handles storytelling, NPCs, and rules',
+                'Play anytime — 10 minutes or 10 hours, your choice',
+                'No experience required — perfect for newcomers',
+                'Your world persists — continue your story across sessions',
+              ].map((item, i) => (
+                <li
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.75rem',
+                    marginBottom: '0.6rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <span style={{ color: '#ea580c', marginTop: '0.2rem' }}>✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
       </section>
 
-      {/* Why Solo RPG Section */}
-      <section className="relative section">
-        <div className="container max-w-5xl mx-auto">
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-white text-center mb-4">
-            Why Play Tabletop RPG Solo?
-          </h2>
-          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">
-            Solo gaming offers a unique experience that group play can't match
-          </p>
+      {/* ========== WHY SOLO SECTION ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '1000px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
+              Why Play Tabletop RPG Solo?
+            </h2>
+            <p className="font-elegant" style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+              Solo gaming offers a unique experience that group play can't match
+            </p>
+          </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '1.5rem',
+            }}
+          >
             {[
               {
-                icon: '&#x23F0;',
+                icon: '⏰',
                 title: 'Play on Your Schedule',
-                description: 'No more coordinating calendars with 4-6 people. Your adventure is ready whenever you have 10 minutes or 10 hours.',
+                description:
+                  'No more coordinating calendars with 4-6 people. Your adventure is ready whenever you have 10 minutes or 10 hours.',
               },
               {
-                icon: '&#x1F3AD;',
+                icon: '🎭',
                 title: 'Deep Character Immersion',
-                description: 'Fully inhabit your character without distractions. Explore their motivations, make tough choices, develop their arc.',
+                description:
+                  'Fully inhabit your character without distractions. Explore motivations, make tough choices, develop their arc.',
               },
               {
-                icon: '&#x1F6E4;',
+                icon: '🛤️',
                 title: 'Your Story, Your Pace',
-                description: 'Spend an hour in the tavern gathering rumors, or rush into the dungeon. No pressure from other players.',
+                description:
+                  'Spend an hour in the tavern gathering rumors, or rush into the dungeon. No pressure from other players.',
               },
               {
-                icon: '&#x1F4D6;',
+                icon: '📖',
                 title: 'Learn at Your Speed',
-                description: 'New to tabletop RPG? Practice rules, try different strategies, and learn without judgment.',
+                description:
+                  'New to tabletop RPG? Practice rules, try different strategies, and learn without judgment.',
               },
               {
-                icon: '&#x1F30D;',
+                icon: '🌍',
                 title: 'Explore Freely',
-                description: 'Go off the beaten path. Investigate that mysterious ruin. Follow your curiosity wherever it leads.',
+                description:
+                  'Go off the beaten path. Investigate that mysterious ruin. Follow your curiosity wherever it leads.',
               },
               {
-                icon: '&#x1F4AB;',
+                icon: '✨',
                 title: 'Consistent World',
-                description: 'The AI remembers everything. NPCs recall your deeds. Your choices matter and persist forever.',
+                description:
+                  'The AI remembers everything. NPCs recall your deeds. Your choices matter and persist forever.',
+              },
+            ].map((item, index) => (
+              <div key={index} className="feature-card">
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>{item.icon}</div>
+                <h3
+                  className="font-display"
+                  style={{
+                    fontSize: '1.125rem',
+                    color: 'var(--parchment)',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  {item.title}
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ========== HOW IT WORKS ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '800px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.25rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
+              How Solo Tabletop RPG Works
+            </h2>
+            <p className="font-elegant" style={{ fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+              With Infinite Realms, getting started is simple
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {[
+              {
+                step: 'I',
+                title: 'Create Your Character',
+                description:
+                  'Build your hero with our guided character creator. Choose your class, background, and personality — or let the AI surprise you.',
+              },
+              {
+                step: 'II',
+                title: 'Set Your Adventure',
+                description:
+                  'Pick a campaign setting or describe the world you want to explore. The AI adapts to create the perfect adventure for you.',
+              },
+              {
+                step: 'III',
+                title: 'Play Your Way',
+                description:
+                  'Type your actions, make choices, roll dice. The AI Game Master responds with vivid descriptions, NPC dialogue, and dynamic encounters.',
+              },
+              {
+                step: 'IV',
+                title: 'Continue Anytime',
+                description:
+                  'Your world is saved automatically. Pick up your adventure whenever inspiration strikes — the story remembers where you left off.',
               },
             ].map((item, index) => (
               <div
                 key={index}
-                className="flex gap-5 p-6 rounded-xl bg-slate-800/30 border border-slate-700/50 hover:border-orange-500/30 transition-all duration-300 hover:-translate-y-1"
+                style={{
+                  display: 'flex',
+                  gap: '1.5rem',
+                  alignItems: 'flex-start',
+                }}
               >
-                <div className="text-4xl flex-shrink-0" dangerouslySetInnerHTML={{ __html: item.icon }} />
-                <div>
-                  <h3 className="font-display text-lg font-semibold text-white mb-2">{item.title}</h3>
-                  <p className="text-slate-400">{item.description}</p>
+                <div
+                  style={{
+                    width: '3.5rem',
+                    height: '3.5rem',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid #fb923c',
+                    background: 'rgba(251, 146, 60, 0.1)',
+                  }}
+                >
+                  <span className="font-display" style={{ fontSize: '1.25rem', color: '#fb923c' }}>
+                    {item.step}
+                  </span>
+                </div>
+                <div style={{ paddingTop: '0.25rem' }}>
+                  <h3
+                    className="font-display"
+                    style={{
+                      fontSize: '1.25rem',
+                      color: 'var(--parchment)',
+                      marginBottom: '0.5rem',
+                    }}
+                  >
+                    {item.title}
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>{item.description}</p>
                 </div>
               </div>
             ))}
@@ -207,137 +419,119 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="relative section">
-        <div className="container max-w-4xl mx-auto">
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-white text-center mb-4">
-            How Solo Tabletop RPG Works
-          </h2>
-          <p className="text-slate-400 text-center mb-12">
-            With Infinite Realms, getting started is simple
-          </p>
-
-          <div className="relative">
-            {/* Vertical Line */}
-            <div className="absolute left-8 top-0 bottom-0 w-px bg-gradient-to-b from-orange-500/50 via-orange-500/20 to-transparent hidden md:block" />
-
-            <div className="space-y-8">
-              {[
-                {
-                  step: '1',
-                  title: 'Create Your Character',
-                  description: 'Build your hero with our guided character creator. Choose your class, background, and personality - or let the AI surprise you.',
-                },
-                {
-                  step: '2',
-                  title: 'Set Your Adventure',
-                  description: 'Pick a campaign setting or describe the world you want to explore. The AI adapts to create the perfect adventure for you.',
-                },
-                {
-                  step: '3',
-                  title: 'Play Your Way',
-                  description: 'Type your actions, make choices, roll dice. The AI Game Master responds with vivid descriptions, NPC dialogue, and dynamic encounters.',
-                },
-                {
-                  step: '4',
-                  title: 'Continue Anytime',
-                  description: 'Your world is saved automatically. Pick up your adventure whenever inspiration strikes - the story remembers where you left off.',
-                },
-              ].map((item, index) => (
-                <div key={index} className="flex gap-6 items-start">
-                  <div
-                    className="relative z-10 w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg"
-                    style={{
-                      background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
-                    }}
-                  >
-                    <span className="font-display text-2xl font-bold text-white">{item.step}</span>
-                  </div>
-                  <div className="pt-3">
-                    <h3 className="font-display text-xl font-semibold text-white mb-2">{item.title}</h3>
-                    <p className="text-slate-400 leading-relaxed">{item.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonial/Quote Section */}
-      <section className="relative section">
-        <div className="container max-w-3xl mx-auto">
+      {/* ========== QUOTE SECTION ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '700px' }}>
           <blockquote
-            className="text-center p-8 rounded-2xl"
+            className="tome-border"
             style={{
-              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(251, 146, 60, 0.02) 100%)',
-              border: '1px solid rgba(251, 146, 60, 0.2)',
+              textAlign: 'center',
+              padding: '2.5rem 2rem',
+              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
             }}
           >
-            <p className="text-2xl md:text-3xl font-display text-slate-200 italic mb-6">
-              "Solo RPG isn't a compromise - it's a different kind of magic. A chance to lose yourself
+            <p
+              className="font-elegant"
+              style={{
+                fontSize: 'clamp(1.25rem, 3vw, 1.75rem)',
+                color: 'var(--text-primary)',
+                fontStyle: 'italic',
+                marginBottom: '1.5rem',
+                lineHeight: 1.6,
+              }}
+            >
+              "Solo RPG isn't a compromise — it's a different kind of magic. A chance to lose yourself
               completely in another world, on your terms."
             </p>
-            <cite className="text-orange-400 not-italic">
+            <cite
+              style={{
+                color: '#fb923c',
+                fontStyle: 'normal',
+                fontSize: '0.9rem',
+                letterSpacing: '0.05em',
+              }}
+            >
               — The Solo RPG Community
             </cite>
           </blockquote>
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section className="relative section" id="faq">
-        <div className="container max-w-3xl mx-auto">
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-white text-center mb-4">
-            Solo Tabletop RPG FAQ
-          </h2>
-          <p className="text-slate-400 text-center mb-12">
-            Everything you need to know about playing alone
-          </p>
+      {/* ========== FAQ SECTION ========== */}
+      <section className="section" id="faq" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2
+              className="font-display"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.25rem)',
+                color: 'var(--parchment)',
+                marginBottom: '0.75rem',
+              }}
+            >
+              Solo Tabletop RPG FAQ
+            </h2>
+            <p style={{ color: 'var(--text-muted)' }}>Everything you need to know about playing alone</p>
+          </div>
 
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {faqItems.map((item, index) => (
-              <details
-                key={index}
-                className="faq-item group rounded-xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm overflow-hidden"
-              >
-                <summary className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-700/20 transition-colors">
-                  <span className="font-semibold text-white pr-4">{item.question}</span>
+              <details key={index} className="faq-item">
+                <summary>
+                  <span className="font-elegant" style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                    {item.question}
+                  </span>
                   <svg
-                    className="faq-chevron w-5 h-5 text-orange-400 flex-shrink-0 transition-transform duration-200"
+                    className="faq-chevron"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    strokeWidth="2"
+                    style={{ color: '#fb923c' }}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path d="M6 9l6 6 6-6" />
                   </svg>
                 </summary>
-                <div className="px-6 pb-6 text-slate-300 leading-relaxed">
-                  {item.answer}
-                </div>
+                <div className="faq-content">{item.answer}</div>
               </details>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="relative section pb-32">
-        <div className="container max-w-4xl mx-auto">
+      {/* ========== FINAL CTA ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}>
+        <div className="container" style={{ maxWidth: '700px' }}>
           <div
-            className="relative rounded-3xl p-8 md:p-12 text-center overflow-hidden"
+            className="tome-border"
             style={{
-              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(234, 88, 12, 0.1) 100%)',
-              border: '1px solid rgba(251, 146, 60, 0.3)',
+              textAlign: 'center',
+              padding: '3rem 2rem',
+              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(234, 88, 12, 0.05) 100%)',
             }}
           >
-            {/* Decorative */}
-            <div className="absolute top-4 right-8 text-6xl opacity-10" aria-hidden="true">&#x1F3B2;</div>
-
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-white mb-4">
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.5rem, 4vw, 2.25rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
               Ready for Solo Adventure?
             </h2>
-            <p className="text-slate-300 text-lg mb-8 max-w-xl mx-auto">
+            <p
+              className="font-elegant"
+              style={{
+                fontSize: '1.1rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '2rem',
+                maxWidth: '500px',
+                margin: '0 auto 2rem',
+              }}
+            >
               Join the beta waitlist and start your solo tabletop RPG journey with an AI Game Master
               that's always ready to play.
             </p>
@@ -345,19 +539,27 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
             <form
               data-waitlist-form
               data-source="solo-rpg-footer"
-              className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto mb-6"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: '1rem',
+                maxWidth: '450px',
+                margin: '0 auto 1rem',
+              }}
             >
               <input
                 type="email"
                 name="email"
                 placeholder="your@email.com"
                 required
-                className="flex-1 px-5 py-4 bg-slate-800/80 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                className="input-arcane"
+                style={{ flex: '1 1 200px' }}
               />
               <button
                 type="submit"
                 data-track-cta="solo-rpg-footer"
-                className="px-8 py-4 font-semibold text-white rounded-lg transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/25"
+                className="btn-primary"
                 style={{
                   background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
                 }}
@@ -365,33 +567,62 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 Join Waitlist
               </button>
             </form>
-            <p data-form-message className="text-sm" />
+            <p data-form-message style={{ fontSize: '0.875rem' }} />
 
-            <p className="text-slate-500 text-sm">
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '1rem' }}>
               No group required. No experience needed.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative border-t border-slate-800 py-12">
-        <div className="container max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <span className="font-display text-xl font-bold text-white">{site.name}</span>
-            </div>
+      {/* ========== FOOTER ========== */}
+      <footer
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          borderTop: '1px solid rgba(184, 134, 11, 0.1)',
+          padding: '3rem 1.5rem',
+        }}
+      >
+        <div className="container" style={{ maxWidth: '1100px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.5rem',
+            }}
+          >
+            <a href="/" className="font-display" style={{ fontSize: '1.25rem', color: 'var(--parchment)', textDecoration: 'none' }}>
+              {site.name}
+            </a>
 
-            <nav className="flex items-center gap-6 text-sm text-slate-400">
-              <a href="/" className="hover:text-orange-400 transition-colors">Home</a>
-              <a href="/ai-game-master" className="hover:text-orange-400 transition-colors">AI Game Master</a>
-              <a href="/blog" className="hover:text-orange-400 transition-colors">Blog</a>
-              <a href="/privacy" className="hover:text-orange-400 transition-colors">Privacy</a>
+            <nav style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+              {[
+                { href: '/', label: 'Home' },
+                { href: '/ai-game-master', label: 'AI Game Master' },
+                { href: '/blog', label: 'Blog' },
+                { href: '/privacy', label: 'Privacy' },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  style={{
+                    color: 'var(--text-muted)',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {link.label}
+                </a>
+              ))}
             </nav>
 
-            <p className="text-sm text-slate-500">
-              &copy; {new Date().getFullYear()} {site.name}
-            </p>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              © {new Date().getFullYear()} {site.name}
+            </span>
           </div>
         </div>
       </footer>

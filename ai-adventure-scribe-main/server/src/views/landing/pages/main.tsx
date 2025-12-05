@@ -8,275 +8,509 @@ interface MainLandingPageProps {
 
 export function MainLandingPage({ site, faqItems }: MainLandingPageProps) {
   return (
-    <div className="relative overflow-hidden">
-      {/* Atmospheric Background */}
+    <div style={{ position: 'relative', minHeight: '100vh' }}>
+      {/* Atmospheric Background with Mystical Gradients */}
       <div
-        className="fixed inset-0 pointer-events-none"
         style={{
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
           background: `
-            radial-gradient(ellipse 80% 50% at 50% -20%, rgba(251, 191, 36, 0.15), transparent),
-            radial-gradient(ellipse 60% 40% at 80% 60%, rgba(139, 92, 246, 0.08), transparent),
-            radial-gradient(ellipse 70% 50% at 20% 80%, rgba(59, 130, 246, 0.06), transparent),
-            linear-gradient(180deg, #0f172a 0%, #020617 100%)
+            radial-gradient(ellipse 100% 80% at 50% -20%, rgba(127, 29, 29, 0.25) 0%, transparent 60%),
+            radial-gradient(ellipse 80% 60% at 80% 50%, rgba(184, 134, 11, 0.08) 0%, transparent 50%),
+            radial-gradient(ellipse 60% 50% at 10% 80%, rgba(76, 29, 149, 0.06) 0%, transparent 50%),
+            linear-gradient(180deg, #050505 0%, #0a0a0a 40%, #050505 100%)
           `,
         }}
       />
 
-      {/* Noise Texture Overlay */}
+      {/* Floating Arcane Particles */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.03]"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
+          opacity: 0.4,
+          backgroundImage: `
+            radial-gradient(1.5px 1.5px at 100px 50px, rgba(184, 134, 11, 0.8), transparent),
+            radial-gradient(1px 1px at 200px 150px, rgba(184, 134, 11, 0.5), transparent),
+            radial-gradient(1.5px 1.5px at 50px 200px, rgba(127, 29, 29, 0.6), transparent),
+            radial-gradient(1px 1px at 300px 100px, rgba(184, 134, 11, 0.4), transparent),
+            radial-gradient(2px 2px at 400px 300px, rgba(184, 134, 11, 0.7), transparent),
+            radial-gradient(1px 1px at 500px 50px, rgba(127, 29, 29, 0.5), transparent)
+          `,
+          backgroundSize: '550px 400px',
         }}
       />
 
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center px-6 py-20">
-        {/* Decorative Runes */}
-        <div className="absolute top-20 left-10 text-amber-500/20 text-6xl font-display select-none" aria-hidden="true">
-          &#x2726;
+      {/* ========== HERO SECTION ========== */}
+      <section
+        style={{
+          position: 'relative',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '6rem 1.5rem',
+          zIndex: 2,
+        }}
+      >
+        {/* Decorative Corner Flourishes */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '2rem',
+            left: '2rem',
+            fontSize: '3rem',
+            color: 'rgba(184, 134, 11, 0.15)',
+            fontFamily: 'serif',
+          }}
+          aria-hidden="true"
+        >
+          ❧
         </div>
-        <div className="absolute bottom-32 right-16 text-amber-500/15 text-8xl font-display select-none rotate-12" aria-hidden="true">
-          &#x2736;
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '2rem',
+            right: '2rem',
+            fontSize: '3rem',
+            color: 'rgba(184, 134, 11, 0.15)',
+            fontFamily: 'serif',
+            transform: 'rotate(180deg)',
+          }}
+          aria-hidden="true"
+        >
+          ❧
         </div>
 
-        <div className="container max-w-5xl mx-auto text-center relative z-10">
+        <div style={{ maxWidth: '900px', textAlign: 'center' }}>
+          {/* Arcane Symbol */}
+          <div
+            className="animate-pulse-glow"
+            style={{
+              fontSize: '1rem',
+              letterSpacing: '0.5em',
+              color: 'var(--gold)',
+              marginBottom: '1.5rem',
+              opacity: 0.8,
+            }}
+          >
+            ✧ ─────── ✦ ─────── ✧
+          </div>
+
           {/* Beta Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-amber-500/30 bg-amber-500/10 backdrop-blur-sm">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-amber-200 text-sm font-medium tracking-wide">
-              Closed Beta: Coming Soon
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.5rem 1.25rem',
+              marginBottom: '2rem',
+              border: '1px solid rgba(127, 29, 29, 0.4)',
+              background: 'rgba(127, 29, 29, 0.1)',
+            }}
+          >
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: 'var(--ember)',
+                animation: 'pulse-glow 2s ease-in-out infinite',
+              }}
+            />
+            <span
+              className="font-elegant"
+              style={{
+                fontSize: '0.875rem',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                color: 'var(--ember)',
+              }}
+            >
+              Closed Beta — Coming Soon
             </span>
           </div>
 
           {/* Main Headline */}
           <h1
-            className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
+            className="font-display glow-gold"
             style={{
-              background: 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #d97706 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              fontSize: 'clamp(2.5rem, 8vw, 5rem)',
+              lineHeight: 1.1,
+              marginBottom: '1.5rem',
+              color: 'var(--parchment)',
             }}
           >
-            Your AI Game Master Awaits
+            Your AI Game Master
+            <br />
+            <span style={{ color: 'var(--gold)' }}>Awaits</span>
           </h1>
 
-          {/* Subheadline */}
-          <p className="text-xl md:text-2xl text-slate-300 mb-4 max-w-3xl mx-auto leading-relaxed">
-            Play solo tabletop RPG adventures with an AI that{' '}
-            <span className="text-amber-400 font-semibold">remembers every choice</span>,{' '}
-            <span className="text-amber-400 font-semibold">evolves NPCs</span>, and{' '}
-            <span className="text-amber-400 font-semibold">crafts cinematic stories</span> tailored to you.
+          {/* Elegant Subheadline */}
+          <p
+            className="font-elegant"
+            style={{
+              fontSize: 'clamp(1.125rem, 2.5vw, 1.5rem)',
+              lineHeight: 1.6,
+              color: 'var(--text-secondary)',
+              marginBottom: '1rem',
+              maxWidth: '700px',
+              margin: '0 auto 1rem',
+            }}
+          >
+            Embark on solo tabletop RPG adventures with an AI that{' '}
+            <em style={{ color: 'var(--gold)', fontStyle: 'italic' }}>remembers every choice</em>,{' '}
+            <em style={{ color: 'var(--gold)', fontStyle: 'italic' }}>evolves your world</em>, and{' '}
+            <em style={{ color: 'var(--gold)', fontStyle: 'italic' }}>crafts legends</em> unique to you.
           </p>
 
           {/* Value Prop */}
-          <p className="text-lg text-slate-400 mb-10 max-w-2xl mx-auto">
-            No scheduling. No prep. No waiting. Epic adventures on your time.
+          <p
+            style={{
+              fontSize: '1.125rem',
+              color: 'var(--text-muted)',
+              marginBottom: '3rem',
+              letterSpacing: '0.02em',
+            }}
+          >
+            No scheduling. No prep. No waiting. Your quest begins now.
           </p>
 
-          {/* CTA Section with Magical Glow */}
-          <div className="relative inline-block mb-8">
+          {/* Waitlist Form with Mystical Glow */}
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: '2rem' }}>
             {/* Glow Effect */}
             <div
-              className="absolute -inset-4 rounded-2xl opacity-50 blur-xl"
               style={{
-                background: 'radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, transparent 70%)',
+                position: 'absolute',
+                inset: '-20px',
+                background: 'radial-gradient(circle, rgba(184, 134, 11, 0.2) 0%, transparent 70%)',
+                filter: 'blur(20px)',
+                pointerEvents: 'none',
               }}
             />
 
-            {/* Waitlist Form */}
             <form
               data-waitlist-form
               data-source="hero"
-              className="relative flex flex-col sm:flex-row gap-3 bg-slate-900/80 backdrop-blur-sm p-2 rounded-xl border border-slate-700/50"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem',
+                padding: '1.5rem',
+                background: 'rgba(10, 10, 10, 0.8)',
+                border: '1px solid rgba(184, 134, 11, 0.2)',
+              }}
             >
-              <input
-                type="email"
-                name="email"
-                placeholder="Enter your email"
-                required
-                className="flex-1 px-5 py-4 bg-slate-800/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20 transition-all min-w-[280px]"
-              />
-              <button
-                type="submit"
-                data-track-cta="hero-waitlist"
-                className="px-8 py-4 font-semibold text-slate-900 rounded-lg transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/25"
-                style={{
-                  background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
-                }}
-              >
-                Join the Quest
-              </button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Enter your email to join the quest..."
+                  required
+                  className="input-arcane"
+                  style={{ flex: '1 1 280px' }}
+                />
+                <button
+                  type="submit"
+                  data-track-cta="hero-waitlist"
+                  className="btn-primary"
+                >
+                  Request Access
+                </button>
+              </div>
             </form>
-            <p data-form-message className="mt-3 text-sm" />
+            <p data-form-message style={{ marginTop: '0.75rem', fontSize: '0.875rem' }} />
           </div>
 
           {/* Trust Indicator */}
-          <p className="text-slate-500 text-sm flex items-center justify-center gap-2">
-            <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-            Join 500+ adventurers on the waitlist
+          <p
+            style={{
+              fontSize: '0.9rem',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <span style={{ color: 'var(--gold)' }}>★</span>
+            <span>Join 500+ adventurers awaiting the beta</span>
           </p>
         </div>
 
         {/* Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-500 animate-bounce">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
+        <div className="scroll-indicator">
+          <span style={{ fontFamily: "'Cormorant Garamond', serif", letterSpacing: '0.1em' }}>
+            DISCOVER
+          </span>
         </div>
       </section>
 
-      {/* AEO Answer Box Section */}
-      <section className="relative section">
-        <div className="container max-w-4xl mx-auto">
+      {/* ========== ANSWER BOX (AEO) ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '800px' }}>
+          {/* Section Divider */}
+          <div className="divider-rune" style={{ marginBottom: '4rem' }}>
+            ✦
+          </div>
+
           <div className="answer-box">
-            <h2 className="font-display text-2xl md:text-3xl font-bold text-amber-400 mb-4">
+            <h2
+              className="font-display"
+              style={{
+                fontSize: '1.75rem',
+                color: 'var(--gold)',
+                marginBottom: '1.5rem',
+              }}
+            >
               What is an AI Game Master?
             </h2>
-            <p className="text-lg text-slate-200 mb-6 leading-relaxed">
-              An AI Game Master is an artificial intelligence that runs tabletop roleplaying games for you.
-              It handles storytelling, rules, NPCs, and combat - available 24/7 without scheduling.
-              Infinite Realms creates an intelligent GM that understands classic fantasy RPG rules,
-              crafts adaptive narratives based on your choices, and brings NPCs to life with distinct personalities.
+            <p
+              style={{
+                fontSize: '1.125rem',
+                color: 'var(--text-primary)',
+                marginBottom: '1.5rem',
+                lineHeight: 1.8,
+              }}
+            >
+              An <strong style={{ color: 'var(--gold)' }}>AI Game Master</strong> is an artificial
+              intelligence that runs tabletop roleplaying games. It handles storytelling, rules, NPCs,
+              and combat—available 24/7 without scheduling. Infinite Realms creates an intelligent GM
+              that understands classic fantasy RPG rules, crafts adaptive narratives, and brings
+              characters to life with distinct personalities.
             </p>
-            <ul className="text-slate-300 space-y-2">
-              <li className="flex items-start gap-3">
-                <span className="text-amber-500 mt-1">&#x2726;</span>
-                <span>Available anytime - no scheduling, no waiting for your group</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-amber-500 mt-1">&#x2726;</span>
-                <span>Remembers every character, choice, and consequence across sessions</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-amber-500 mt-1">&#x2726;</span>
-                <span>Handles all rules and dice mechanics automatically</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="text-amber-500 mt-1">&#x2726;</span>
-                <span>Creates adaptive, personalized stories that evolve with you</span>
-              </li>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {[
+                'Available anytime—no scheduling, no waiting for your group',
+                'Remembers every character, choice, and consequence across sessions',
+                'Handles all rules and dice mechanics automatically',
+                'Creates adaptive stories that evolve with your decisions',
+              ].map((item, i) => (
+                <li
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '1rem',
+                    marginBottom: '0.75rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <span style={{ color: 'var(--blood)', marginTop: '0.25rem' }}>◆</span>
+                  <span>{item}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="relative section">
-        <div className="container max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-white mb-4">
-              What We're Building
+      {/* ========== FEATURES SECTION ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '1100px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
+              What We're Forging
             </h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+            <p
+              className="font-elegant"
+              style={{
+                fontSize: '1.25rem',
+                color: 'var(--text-muted)',
+                maxWidth: '500px',
+                margin: '0 auto',
+              }}
+            >
               Features in active development for our beta launch
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '1.5rem',
+            }}
+          >
             {[
               {
-                icon: '&#x1F9E0;',
-                title: 'Stories That Remember You',
-                description: "Every choice creates ripples that last forever. Save a village and they'll erect statues. Betray an ally and face consequences sessions later.",
+                icon: '📜',
+                title: 'Stories That Remember',
+                description:
+                  'Every choice creates ripples. Save a village and they erect statues. Betray an ally and face consequences sessions later.',
                 status: 'In Development',
               },
               {
-                icon: '&#x1F3AD;',
-                title: 'NPCs With Real Memory',
-                description: 'Build relationships that evolve like real friendships. NPCs remember your heroic sacrifices, betrayals, and moments of kindness.',
+                icon: '🎭',
+                title: 'NPCs With Memory',
+                description:
+                  'Build relationships that evolve. NPCs remember your heroic sacrifices, betrayals, and moments of kindness.',
                 status: 'Beta',
               },
               {
-                icon: '&#x1F4D6;',
-                title: 'Seamless RPG Rules',
-                description: 'Focus on story and roleplay while the AI handles mechanics, spell interactions, and combat calculations perfectly.',
+                icon: '⚔️',
+                title: 'Seamless Rules',
+                description:
+                  'Focus on story and roleplay. The AI handles mechanics, spell interactions, and combat calculations perfectly.',
                 status: 'In Development',
               },
               {
-                icon: '&#x1F5BC;',
-                title: 'Living Fantasy Worlds',
-                description: 'Watch your adventures come alive with cinematic visuals. Every shadowy tavern and ancient ruin rendered in stunning detail.',
+                icon: '🖼️',
+                title: 'Living Worlds',
+                description:
+                  'Watch adventures come alive with cinematic visuals. Every shadowy tavern and ancient ruin rendered beautifully.',
                 status: 'Planned',
               },
               {
-                icon: '&#x1F399;',
-                title: 'Immersive Voice Acting',
-                description: 'Hear your adventures with professional narration. Distinct character voices bring NPCs to life in every scene.',
+                icon: '🎙️',
+                title: 'Voice Acting',
+                description:
+                  'Hear your adventures with professional narration. Distinct character voices bring NPCs to life.',
                 status: 'Planned',
               },
               {
-                icon: '&#x1F4DA;',
-                title: 'Your Campaign as a Book',
-                description: 'Transform your adventure into a beautiful storybook. Share your legend with artwork, maps, and narrative summaries.',
+                icon: '📚',
+                title: 'Campaign as a Book',
+                description:
+                  'Transform your adventure into a beautiful storybook. Share your legend with artwork and narrative summaries.',
                 status: 'Coming Soon',
               },
             ].map((feature, index) => (
-              <div
-                key={index}
-                className="feature-card group"
-              >
-                <div className="text-4xl mb-4" dangerouslySetInnerHTML={{ __html: feature.icon }} />
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-display text-xl font-semibold text-white group-hover:text-amber-400 transition-colors">
-                    {feature.title}
-                  </h3>
-                </div>
-                <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-slate-700/50 text-slate-300 mb-3">
+              <div key={index} className="feature-card">
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>{feature.icon}</div>
+                <h3
+                  className="font-display"
+                  style={{
+                    fontSize: '1.25rem',
+                    color: 'var(--parchment)',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  {feature.title}
+                </h3>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    padding: '0.25rem 0.75rem',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    color: 'var(--blood)',
+                    border: '1px solid rgba(127, 29, 29, 0.3)',
+                    marginBottom: '1rem',
+                  }}
+                >
                   {feature.status}
                 </span>
-                <p className="text-slate-400 leading-relaxed">
-                  {feature.description}
-                </p>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>{feature.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="relative section">
-        <div className="container max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-white mb-4">
-              Your Journey Begins Here
+      {/* ========== HOW IT WORKS ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '900px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
+              Your Journey Begins
             </h2>
-            <p className="text-slate-400 text-lg">
-              Three simple steps to join the beta
+            <p className="font-elegant" style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>
+              Three steps to join the beta
             </p>
           </div>
 
-          <div className="relative">
+          <div style={{ position: 'relative' }}>
             {/* Connecting Line */}
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent hidden md:block" />
+            <div
+              style={{
+                position: 'absolute',
+                top: '2rem',
+                left: '50%',
+                right: '0',
+                height: '1px',
+                background: 'linear-gradient(90deg, transparent, var(--gold), transparent)',
+                opacity: 0.3,
+                display: 'none',
+              }}
+              className="md-show"
+            />
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                gap: '3rem',
+              }}
+            >
               {[
                 {
-                  step: '01',
+                  step: 'I',
                   title: 'Join the Waitlist',
-                  description: "Sign up with your email to get on our exclusive beta access list. We'll notify you as soon as spots open.",
+                  description: "Sign up with your email. We'll notify you when spots open.",
                 },
                 {
-                  step: '02',
-                  title: 'Get Early Access',
-                  description: "Once approved, you'll receive an invitation to create your account and start building your campaign world.",
+                  step: 'II',
+                  title: 'Receive Your Invitation',
+                  description: 'Get early access to create your account and build your world.',
                 },
                 {
-                  step: '03',
+                  step: 'III',
                   title: 'Shape the Future',
-                  description: 'Playtest new features, provide feedback, and help us build the ultimate AI Game Master together.',
+                  description: 'Playtest features, provide feedback, and help forge the ultimate AI GM.',
                 },
               ].map((item, index) => (
-                <div key={index} className="relative text-center">
-                  <div className="relative z-10 w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                    <span className="font-display text-xl font-bold text-slate-900">{item.step}</span>
+                <div key={index} style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      width: '4rem',
+                      height: '4rem',
+                      margin: '0 auto 1.5rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid var(--gold)',
+                      background: 'rgba(184, 134, 11, 0.1)',
+                    }}
+                  >
+                    <span
+                      className="font-display"
+                      style={{ fontSize: '1.5rem', color: 'var(--gold)' }}
+                    >
+                      {item.step}
+                    </span>
                   </div>
-                  <h3 className="font-display text-xl font-semibold text-white mb-3">{item.title}</h3>
-                  <p className="text-slate-400">{item.description}</p>
+                  <h3
+                    className="font-display"
+                    style={{
+                      fontSize: '1.25rem',
+                      color: 'var(--parchment)',
+                      marginBottom: '0.75rem',
+                    }}
+                  >
+                    {item.title}
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)' }}>{item.description}</p>
                 </div>
               ))}
             </div>
@@ -284,121 +518,181 @@ export function MainLandingPage({ site, faqItems }: MainLandingPageProps) {
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section className="relative section" id="faq">
-        <div className="container max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-white mb-4">
+      {/* ========== FAQ SECTION ========== */}
+      <section className="section" id="faq" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <h2
+              className="font-display"
+              style={{
+                fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
               Frequently Asked Questions
             </h2>
-            <p className="text-slate-400 text-lg">
-              Everything you need to know about Infinite Realms
-            </p>
           </div>
 
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {faqItems.map((item, index) => (
-              <details
-                key={index}
-                className="faq-item group rounded-xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm overflow-hidden"
-              >
-                <summary className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-700/20 transition-colors">
-                  <span className="font-semibold text-white pr-4">{item.question}</span>
+              <details key={index} className="faq-item">
+                <summary>
+                  <span
+                    className="font-elegant"
+                    style={{ fontSize: '1.125rem', color: 'var(--text-primary)' }}
+                  >
+                    {item.question}
+                  </span>
                   <svg
-                    className="faq-chevron w-5 h-5 text-amber-500 flex-shrink-0 transition-transform duration-200"
+                    className="faq-chevron"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    strokeWidth="2"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path d="M6 9l6 6 6-6" />
                   </svg>
                 </summary>
-                <div className="px-6 pb-6 text-slate-300 leading-relaxed">
-                  {item.answer}
-                </div>
+                <div className="faq-content">{item.answer}</div>
               </details>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Final CTA Section */}
-      <section className="relative section pb-32">
-        <div className="container max-w-4xl mx-auto">
+      {/* ========== FINAL CTA ========== */}
+      <section className="section" style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}>
+        <div className="container" style={{ maxWidth: '700px' }}>
           <div
-            className="relative rounded-3xl p-8 md:p-12 text-center overflow-hidden"
+            className="tome-border"
             style={{
-              background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%)',
-              border: '1px solid rgba(251, 191, 36, 0.2)',
+              textAlign: 'center',
+              padding: '3rem 2rem',
+              background: 'linear-gradient(135deg, rgba(127, 29, 29, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
             }}
           >
-            {/* Decorative Elements */}
-            <div className="absolute top-4 left-4 text-amber-500/20 text-4xl" aria-hidden="true">&#x2726;</div>
-            <div className="absolute bottom-4 right-4 text-amber-500/20 text-4xl" aria-hidden="true">&#x2726;</div>
-
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-white mb-4">
+            <h2
+              className="font-display glow-gold"
+              style={{
+                fontSize: 'clamp(1.5rem, 4vw, 2.25rem)',
+                color: 'var(--parchment)',
+                marginBottom: '1rem',
+              }}
+            >
               Your Adventure Awaits
             </h2>
-            <p className="text-slate-300 text-lg mb-8 max-w-xl mx-auto">
-              Spots for the closed beta are limited. Join the waitlist now to be among the first
-              to experience the AI Game Master.
+            <p
+              className="font-elegant"
+              style={{
+                fontSize: '1.125rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '2rem',
+                maxWidth: '500px',
+                margin: '0 auto 2rem',
+              }}
+            >
+              Beta spots are limited. Claim your place among the first to experience the AI Game Master.
             </p>
 
             <form
               data-waitlist-form
               data-source="footer"
-              className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto mb-6"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: '1rem',
+                maxWidth: '450px',
+                margin: '0 auto 1.5rem',
+              }}
             >
               <input
                 type="email"
                 name="email"
                 placeholder="your@email.com"
                 required
-                className="flex-1 px-5 py-4 bg-slate-800/80 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                className="input-arcane"
+                style={{ flex: '1 1 200px' }}
               />
-              <button
-                type="submit"
-                data-track-cta="footer-waitlist"
-                className="px-8 py-4 font-semibold text-slate-900 rounded-lg transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/25"
-                style={{
-                  background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)',
-                }}
-              >
-                Request Access
+              <button type="submit" data-track-cta="footer-waitlist" className="btn-primary">
+                Join the Quest
               </button>
             </form>
-            <p data-form-message className="text-sm" />
+            <p data-form-message style={{ fontSize: '0.875rem' }} />
 
-            <p className="text-slate-500 text-sm">
-              Join 500+ adventurers already on the waitlist
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '1rem' }}>
+              <span style={{ color: 'var(--gold)' }}>★</span> 500+ adventurers already waiting
             </p>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative border-t border-slate-800 py-12">
-        <div className="container max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <span className="font-display text-xl font-bold text-white">{site.name}</span>
-            </div>
+      {/* ========== FOOTER ========== */}
+      <footer
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          borderTop: '1px solid rgba(184, 134, 11, 0.1)',
+          padding: '3rem 1.5rem',
+        }}
+      >
+        <div className="container" style={{ maxWidth: '1100px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1.5rem',
+            }}
+          >
+            <span className="font-display" style={{ fontSize: '1.25rem', color: 'var(--parchment)' }}>
+              {site.name}
+            </span>
 
-            <nav className="flex items-center gap-6 text-sm text-slate-400">
-              <a href="/ai-game-master" className="hover:text-amber-400 transition-colors">AI Game Master</a>
-              <a href="/solo-tabletop-rpg" className="hover:text-amber-400 transition-colors">Solo RPG</a>
-              <a href="/blog" className="hover:text-amber-400 transition-colors">Blog</a>
-              <a href="/privacy" className="hover:text-amber-400 transition-colors">Privacy</a>
-              <a href="/terms" className="hover:text-amber-400 transition-colors">Terms</a>
+            <nav style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+              {[
+                { href: '/ai-game-master', label: 'AI Game Master' },
+                { href: '/solo-tabletop-rpg', label: 'Solo RPG' },
+                { href: '/blog', label: 'Blog' },
+                { href: '/privacy', label: 'Privacy' },
+                { href: '/terms', label: 'Terms' },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  style={{
+                    color: 'var(--text-muted)',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                    transition: 'color 0.3s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                >
+                  {link.label}
+                </a>
+              ))}
             </nav>
 
-            <p className="text-sm text-slate-500">
-              &copy; {new Date().getFullYear()} {site.name}. All rights reserved.
-            </p>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              © {new Date().getFullYear()} {site.name}
+            </span>
           </div>
 
-          <p className="text-xs text-slate-600 text-center mt-8">
-            Infinite Realms is not affiliated with Wizards of the Coast. All game content uses SRD/OGL licensed material where applicable.
+          <p
+            style={{
+              textAlign: 'center',
+              color: 'rgba(107, 101, 96, 0.6)',
+              fontSize: '0.75rem',
+              marginTop: '2rem',
+            }}
+          >
+            Infinite Realms is not affiliated with Wizards of the Coast. All game content uses SRD/OGL
+            licensed material where applicable.
           </p>
         </div>
       </footer>

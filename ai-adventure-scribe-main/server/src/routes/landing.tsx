@@ -7,108 +7,17 @@ import {
   createFAQSchema,
   createWebPageSchema,
   createSoftwareAppSchema,
-  createOrganizationSchema,
-  createHowToSchema,
   combineSchemas,
   type FAQItem,
 } from '../views/landing/schema.js';
-import { MainLandingPage } from '../views/landing/pages/main.js';
 import { AIGameMasterPage } from '../views/landing/pages/ai-game-master.js';
 import { SoloTabletopRPGPage } from '../views/landing/pages/solo-tabletop-rpg.js';
 
 export function landingRouter() {
   const router = Router();
 
-  // Main landing page - SSR version of LaunchPage
-  router.get('/', async (_req, res) => {
-    try {
-      const [assets] = await Promise.all([
-        resolveAssetsForEntries(['index.html', 'src/landing-client.ts']),
-      ]);
-      const site = getSiteConfig();
-
-      const meta = {
-        title: 'Infinite Realms | AI Game Master for Solo Tabletop RPG Adventures',
-        description:
-          'Play tabletop RPG adventures anytime with an AI Game Master that remembers your story. No scheduling, no prep. Join the beta waitlist for Infinite Realms.',
-        canonicalUrl: site.url,
-        keywords: [
-          'AI Game Master',
-          'solo tabletop RPG',
-          'AI GM',
-          'fantasy RPG',
-          'solo RPG',
-          'tabletop roleplaying',
-          'AI storytelling',
-        ],
-      };
-
-      const faqItems: FAQItem[] = [
-        {
-          question: 'What is an AI Game Master?',
-          answer:
-            'An AI Game Master is an artificial intelligence that runs tabletop roleplaying games for you. It handles storytelling, rules, NPCs, and combat - available 24/7 without scheduling.',
-        },
-        {
-          question: 'How does it solve scheduling issues?',
-          answer:
-            'Play solo or async - your world persists, so you can pick up anytime without coordinating groups or waiting for a human GM.',
-        },
-        {
-          question: 'Will NPCs really remember my choices?',
-          answer:
-            'Yes. Our AI remembers every decision you make. Steal from a merchant? They will spread rumors affecting future encounters. Save a village? Expect lasting gratitude.',
-        },
-        {
-          question: 'Do I need tabletop RPG experience?',
-          answer:
-            'No experience needed. The AI handles all rules and mechanics. You focus on choices and roleplay - perfect for newcomers and veterans alike.',
-        },
-        {
-          question: 'Is Infinite Realms free?',
-          answer:
-            'We are currently in closed beta. Join the waitlist for free early access and help shape the future of AI-powered tabletop gaming.',
-        },
-      ];
-
-      const howToSteps = [
-        { name: 'Join the Waitlist', text: 'Sign up with your email to get on our exclusive beta access list.' },
-        { name: 'Get Early Access', text: 'Once approved, create your account and start building your campaign world.' },
-        { name: 'Shape the Future', text: 'Playtest new features, provide feedback, and help us build the ultimate AI Game Master.' },
-      ];
-
-      const structuredData = [
-        combineSchemas(
-          createWebPageSchema(site, {
-            ...meta,
-            datePublished: '2024-01-01',
-            dateModified: new Date().toISOString().split('T')[0],
-          }),
-          createSoftwareAppSchema(site),
-          createOrganizationSchema(site),
-          createFAQSchema(faqItems),
-          createHowToSchema(
-            'How to Play Tabletop RPG with an AI Game Master',
-            'Get started with Infinite Realms in three simple steps',
-            howToSteps
-          )
-        ),
-      ];
-
-      streamReactResponse(
-        res,
-        <LandingDocument site={site} assets={assets} meta={meta} structuredData={structuredData}>
-          <MainLandingPage site={site} faqItems={faqItems} />
-        </LandingDocument>,
-        {
-          headers: createCacheHeaders({ maxAge: 600, staleWhileRevalidate: 3600 }),
-        }
-      );
-    } catch (error) {
-      console.error('Failed to render main landing page', error);
-      res.status(500).send('Failed to render landing page');
-    }
-  });
+  // NOTE: The main landing page (/) is handled by the SPA (LaunchPage.tsx)
+  // Only /ai-game-master and /solo-tabletop-rpg are SSR landing pages
 
   // AI Game Master keyword page
   router.get('/ai-game-master', async (_req, res) => {
