@@ -52,3 +52,6 @@ export * from './drawings.js';
 
 // Export all token tables and types
 export * from './tokens.js';
+
+// Export all lore keeper tables and types
+export * from './lore-keeper.js';
