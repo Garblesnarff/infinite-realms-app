@@ -60,8 +60,18 @@ ai-adventure-scribe-main/
 │   ├── rules-interpreter-execute/
 │   └── chat-ai/
 ├── server/src/                # Express/Node backup API
+│   ├── routes/blog.tsx        # Blog SSR routes
+│   ├── views/blog/            # Blog React SSR pages
+│   │   ├── index.tsx          # Blog listing page
+│   │   ├── post.tsx           # Individual blog post
+│   │   └── document.tsx       # Blog HTML wrapper
+│   └── services/
+│       ├── blog-service.ts    # Blog CRUD operations
+│       ├── blog-scheduler.ts  # Scheduled post publishing
+│       └── blog-content-generator.ts  # AI content generation
 ├── src/
 │   ├── components/           # React components (kebab-case files)
+│   │   └── blog-admin/       # Blog admin UI components
 │   ├── services/            # Frontend services (combat, AI, passive skills)
 │   ├── data/                # D&D reference data (spells, feats, levels)
 │   ├── agents/              # Multi-agent system
@@ -70,7 +80,9 @@ ai-adventure-scribe-main/
 └── CLAUDE.md                # This file
 ```
 
-**Important**: `supabase/functions/` is **Deno**, not Node.js. Cannot use `@/` imports there.
+**Important**:
+- `supabase/functions/` is **Deno**, not Node.js. Cannot use `@/` imports there.
+- Blog uses **server-side rendering (SSR)** via Express, not the React SPA
 
 ---
 
@@ -132,7 +144,37 @@ bd close bead-id --reason "Fixed: description"
 
 **Observant feat**: +5 to Passive Perception/Investigation (must detect and apply)
 
-### 4. AI Education Pattern
+### 4. Blog System (blog.infiniterealms.app)
+**Architecture**: SSR with Express, served on subdomain
+
+**Database tables** (Supabase):
+- `blog_posts` - Post content, metadata, status
+- `blog_authors` - Author information
+- `blog_categories` / `blog_tags` - Post organization
+- **Permissions**: `service_role` and `authenticated` roles have full access
+
+**URLs**:
+- Blog: `https://blog.infiniterealms.app` (proxied via Cloudflare)
+- Admin: `https://infiniterealms.app/admin/blog` (in main app)
+
+**Common issues**:
+- **Cloudflare caching**: Purge cache after content changes (Development Mode for testing)
+- **DNS**: blog subdomain points to 91.98.173.12 (gray cloud = direct, orange = proxied)
+- **SSL**: Managed by Let's Encrypt (auto-renews), cert at `/etc/letsencrypt/live/blog.infiniterealms.app/`
+- **nginx**: Separate server block for blog subdomain, sets `X-Blog-Subdomain: true` header
+
+**Content generation**:
+- AI-powered via `blog-content-generator.ts` (uses Claude API)
+- Generates changelogs, dev diaries, and SEO posts from git commits
+- Posts created with `status='review'` - require human approval before publishing
+- Endpoint: `POST /internal/generate-commit-post`
+
+**Scheduled publishing**:
+- `BlogScheduler` runs every 60 seconds in production
+- Publishes posts where `status='scheduled'` AND `scheduled_for <= now()`
+- Started automatically in `server/src/index.ts`
+
+### 5. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
 
 1. Add section to `promptBuilder.ts` with XML tags: `<rule_name>`
@@ -204,6 +246,36 @@ git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 3. Verify Deno-compatible imports (no `@/`, use relative)
 4. Test locally: `npx supabase functions serve`
 
+### Publish Blog Post
+1. **Create post via admin UI**: `https://infiniterealms.app/admin/blog`
+2. **Set status**:
+   - `draft` - Work in progress, auto-saved every 30s
+   - `review` - Ready for approval (AI-generated posts start here)
+   - `scheduled` - Will publish at `scheduled_for` timestamp
+   - `published` - Live on blog
+3. **Test locally**: Visit `http://localhost:8888/blog` or blog subdomain
+4. **Cloudflare cache**: Purge after publishing (or enable Development Mode)
+
+### Generate AI Blog Content
+```bash
+# Via API (from commits)
+curl -X POST http://localhost:8888/internal/generate-commit-post \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commits": [{"message": "...", "author": "...", "date": "..."}],
+    "version": "1.2.0",
+    "type": "both"
+  }'
+```
+
+**Types**: `changelog` | `dev-diary` | `both`
+
+**Process**:
+1. AI generates content via Claude API
+2. Post created with `status='review'`
+3. Human reviews/edits in admin panel
+4. Publish or schedule
+
 ---
 
 ## Where to Find Things
@@ -222,6 +294,17 @@ git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 - Combat: `src/services/combat/`
 - AI integration: `src/services/ai/`
 - Passive skills: `src/services/passive-skills-service.ts`
+
+**Blog System**:
+- SSR routes: `server/src/routes/blog.tsx`
+- SSR views: `server/src/views/blog/` (index, post, document)
+- Blog service: `server/src/services/blog-service.ts`
+- AI generator: `server/src/services/blog-content-generator.ts`
+- Scheduler: `server/src/services/blog-scheduler.ts`
+- Admin UI: `src/components/blog-admin/`
+- Database: Supabase tables (blog_posts, blog_authors, blog_categories, blog_tags)
+- nginx config: `/etc/nginx/sites-available/infiniterealms` (blog subdomain block)
+- SSL certs: `/etc/letsencrypt/live/blog.infiniterealms.app/`
 
 ---
 
@@ -299,6 +382,7 @@ The user (project owner) may not be a developer:
 
 ---
 
-**Last Updated**: 2025-01
+**Last Updated**: 2025-12-06
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based services
+**Blog**: https://blog.infiniterealms.app (SSR, Cloudflare-proxied, Let's Encrypt SSL)
