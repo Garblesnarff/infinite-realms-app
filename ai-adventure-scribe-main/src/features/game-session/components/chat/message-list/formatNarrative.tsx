@@ -126,10 +126,29 @@ export const formatNarrative = (
 
   const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
 
-  const rawParagraphs = trimmed
+  let rawParagraphs = trimmed
     .split(/\n\s*\n/)
     .map((block) => block.trim())
     .filter(Boolean);
+
+  // Deduplicate accumulated paragraphs
+  // Pattern: "Block A" followed by "Block A Block B" - keep only "Block A Block B"
+  // This happens when streaming accumulates content incorrectly
+  if (rawParagraphs.length > 1) {
+    const deduped: string[] = [];
+    for (let i = 0; i < rawParagraphs.length; i++) {
+      const current = normalize(rawParagraphs[i]);
+      const next = i < rawParagraphs.length - 1 ? normalize(rawParagraphs[i + 1]) : null;
+
+      // Skip if the next paragraph starts with this one (it's an accumulated version)
+      if (next && next.startsWith(current) && next.length > current.length) {
+        continue; // Skip the shorter prefix version
+      }
+
+      deduped.push(rawParagraphs[i]);
+    }
+    rawParagraphs = deduped;
+  }
 
   if (rawParagraphs.length > 1) {
     const last = rawParagraphs[rawParagraphs.length - 1];
