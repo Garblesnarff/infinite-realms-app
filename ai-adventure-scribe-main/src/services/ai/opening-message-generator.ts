@@ -15,6 +15,46 @@ import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 
 /**
+ * Extract narrative and options from XML-tagged AI response
+ * Filters out brainstorming/internal reasoning to return only player-facing content
+ */
+function extractNarrativeFromXML(response: string): string {
+  // Extract narrative section
+  const narrativeMatch = response.match(/<narrative>([\s\S]*?)<\/narrative>/i);
+  const narrative = narrativeMatch?.[1]?.trim() || '';
+
+  // Extract options section
+  const optionsMatch = response.match(/<options>([\s\S]*?)<\/options>/i);
+  const options = optionsMatch?.[1]?.trim() || '';
+
+  // If we found XML-tagged content, combine narrative + options
+  if (narrative) {
+    logger.debug('XML extraction successful - filtered brainstorming content');
+    return options ? `${narrative}\n\n${options}` : narrative;
+  }
+
+  // Fallback: if no XML tags, try to extract after common brainstorming markers
+  const fallbackPatterns = [
+    /^[\s\S]*?(?:Selected:|Chosen:|Final selection:|I'll go with:)[^\n]*\n+/i,
+    /^[\s\S]*?(?:Opening Scene:|Final Opening:)[^\n]*\n+/i,
+  ];
+
+  for (const pattern of fallbackPatterns) {
+    if (pattern.test(response)) {
+      const cleaned = response.replace(pattern, '').trim();
+      if (cleaned.length > 100) {
+        logger.debug('XML fallback extraction - used brainstorming marker pattern');
+        return cleaned;
+      }
+    }
+  }
+
+  // Last resort: return original response (existing deduplication will handle it)
+  logger.debug('XML extraction fallback - no tags found, returning original');
+  return response;
+}
+
+/**
  * Generate an opening message for a new campaign session
  *
  * Creates an engaging introduction based on campaign and character context.
@@ -122,6 +162,38 @@ Select the scenario that best balances ${campaignTone} tone with memorable engag
 </selection_criteria>
 </verbalized_sampling_technique>
 
+<output_format>
+CRITICAL: Structure your response using XML tags to separate internal brainstorming from player-facing content:
+
+1. Wrap ALL brainstorming and internal reasoning in <brainstorming>...</brainstorming>
+2. Wrap your final narrative scene in <narrative>...</narrative>
+3. Wrap the action options in <options>...</options>
+
+The player will ONLY see content inside <narrative> and <options> tags.
+Your <brainstorming> section is for your internal creative process only and will be filtered out.
+
+Example structure:
+<brainstorming>
+Internal exploration:
+1. Tavern scene (prob: 0.85) - Classic but overdone
+2. Ambush encounter (prob: 0.60) - Action-focused
+3. Strange location (prob: 0.40) - Mystery hook
+Selected: Scenario 3 for novelty
+</brainstorming>
+
+<narrative>
+The cold stone beneath your fingertips tells you nothing of how you arrived here...
+[Rest of the immersive scene description]
+...What do you do?
+</narrative>
+
+<options>
+A. **Examine your surroundings**, looking for clues about your location
+B. **Call out cautiously**, announcing your presence
+C. **Search your belongings**, checking what equipment you still have
+</options>
+</output_format>
+
 Create an immersive opening scene that:
 1. **Immediate Engagement**: Start in the middle of an intriguing situation, not just "you enter a tavern"
 2. **Sensory Rich**: Include what you see, hear, smell, feel, and taste
@@ -162,7 +234,10 @@ Remember: You're not just describing a scene - you're launching an epic story wh
 
       const response = await model.generateContent(contextPrompt);
       const result = await response.response;
-      return result.text();
+      const rawText = result.text();
+
+      // Extract narrative content, filtering out brainstorming
+      return extractNarrativeFromXML(rawText);
     });
 
     logger.info('Successfully generated opening message');

@@ -332,6 +332,42 @@ ${combatContext?.inCombat ? `
 `}
 </response_mode>
 
+<output_format_for_narrative>
+CRITICAL: When using verbalized sampling for narrative content, structure your response using XML tags:
+
+1. Wrap ALL internal brainstorming, probability scoring, and creative exploration in <brainstorming>...</brainstorming>
+2. Wrap your final player-facing narrative in <narrative>...</narrative>
+3. Wrap action choices/options in <options>...</options>
+
+The player will ONLY see content inside <narrative> and <options> tags.
+Your <brainstorming> section is for internal creative process and will be filtered out.
+
+Example output structure:
+<brainstorming>
+Considering approaches:
+1. Direct confrontation (prob: 0.80) - Standard but engaging
+2. Subtle investigation (prob: 0.55) - Mystery-focused
+3. Unexpected ally appears (prob: 0.35) - Subverts expectations
+Selected: Option 3 for narrative variety
+</brainstorming>
+
+<narrative>
+The creaking floorboards announce your presence before you can react. From the shadows emerges not the enemy you expected, but a haggard figure in torn robes...
+
+[Rest of narrative scene description]
+
+...the stranger's eyes meet yours with unexpected recognition.
+</narrative>
+
+<options>
+A. **Question the stranger**, demanding to know who they are and why they're here
+B. **Keep your weapon ready**, maintaining a defensive posture while listening
+C. **Offer assistance**, showing your intentions are peaceful
+</options>
+
+NOTE: For combat mechanics, dice roll requests, and rules questions - do NOT use XML tags. Only use this format for creative narrative responses.
+</output_format_for_narrative>
+
 **CRITICAL: INTERACTIVE DICE ROLL SYSTEM**
 
 <dice_roll_system>
