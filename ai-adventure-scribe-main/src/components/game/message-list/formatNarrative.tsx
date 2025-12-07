@@ -129,29 +129,32 @@ export const formatNarrative = (
     .filter(Boolean);
 
   // Deduplicate accumulated paragraphs
-  // Pattern: Paragraphs 1,2,3,4 followed by a block that equals (1+2+3+4 joined)
-  // The accumulated block should be removed since it duplicates content
+  // Pattern: Paragraphs appear individually, then a combined version appears
+  // E.g., Para1, Para2, Para3, then (Para1+Para2+Para3) as one block
+  // The combined block should be removed since it duplicates content
   if (rawParagraphs.length > 1) {
     const result: string[] = [];
-    const accumulatedBuffer: string[] = [];
 
     for (let i = 0; i < rawParagraphs.length; i++) {
-      const current = rawParagraphs[i];
-      const currentNorm = normalize(current);
+      const currentNorm = normalize(rawParagraphs[i]);
+      let isDuplicate = false;
 
-      // Check if current paragraph equals all accumulated paragraphs joined
-      if (accumulatedBuffer.length > 0) {
-        const bufferJoined = normalize(accumulatedBuffer.join(' '));
-        if (currentNorm === bufferJoined) {
-          // Current is a duplicate of previous paragraphs combined - SKIP it
-          accumulatedBuffer.length = 0; // Reset buffer for next group
-          continue;
+      // Check if current equals ANY contiguous subsequence of previous paragraphs
+      // This handles cases where the duplicate might not start from paragraph 0
+      for (let j = 0; j < i && !isDuplicate; j++) {
+        const subsequence = rawParagraphs.slice(j, i);
+        if (subsequence.length >= 2) {
+          // Only check if combining 2+ paragraphs
+          const joinedNorm = normalize(subsequence.join(' '));
+          if (currentNorm === joinedNorm) {
+            isDuplicate = true;
+          }
         }
       }
 
-      // Not a duplicate - add to result and buffer
-      result.push(current);
-      accumulatedBuffer.push(current);
+      if (!isDuplicate) {
+        result.push(rawParagraphs[i]);
+      }
     }
 
     rawParagraphs = result;
