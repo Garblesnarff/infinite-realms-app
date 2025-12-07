@@ -129,9 +129,9 @@ export const formatNarrative = (
     .filter(Boolean);
 
   // Deduplicate accumulated paragraphs
-  // Pattern: Paragraphs appear individually, then a combined version appears
-  // E.g., Para1, Para2, Para3, then (Para1+Para2+Para3) as one block
-  // The combined block should be removed since it duplicates content
+  // Pattern: AI streams paragraphs individually, then repeats them combined with expansions
+  // E.g., Para1, Para2, then "Para1 [extra text]. Para2 [extra text]."
+  // The combined/expanded paragraph should be removed since it duplicates content
   if (rawParagraphs.length > 1) {
     const result: string[] = [];
 
@@ -139,15 +139,38 @@ export const formatNarrative = (
       const currentNorm = normalize(rawParagraphs[i]);
       let isDuplicate = false;
 
-      // Check if current equals ANY contiguous subsequence of previous paragraphs
-      // This handles cases where the duplicate might not start from paragraph 0
-      for (let j = 0; j < i && !isDuplicate; j++) {
-        const subsequence = rawParagraphs.slice(j, i);
-        if (subsequence.length >= 2) {
-          // Only check if combining 2+ paragraphs
-          const joinedNorm = normalize(subsequence.join(' '));
-          if (currentNorm === joinedNorm) {
+      // Check if current paragraph STARTS WITH the first previous paragraph
+      // AND contains the start of subsequent paragraphs (indicates accumulated/expanded duplicate)
+      if (i >= 2) {
+        const firstPrevNorm = normalize(rawParagraphs[0]);
+        const firstPrevStart = firstPrevNorm.slice(0, 50); // First 50 chars
+
+        // If current starts with first paragraph's beginning
+        if (currentNorm.startsWith(firstPrevStart)) {
+          // Check if it also contains starts of other previous paragraphs
+          let containsAllPrevious = true;
+          for (let j = 1; j < i && containsAllPrevious; j++) {
+            const prevNorm = normalize(rawParagraphs[j]);
+            const prevStart = prevNorm.slice(0, 40); // First 40 chars
+            if (!currentNorm.includes(prevStart)) {
+              containsAllPrevious = false;
+            }
+          }
+          if (containsAllPrevious) {
             isDuplicate = true;
+          }
+        }
+      }
+
+      // Also check exact match of joined previous paragraphs (original algorithm)
+      if (!isDuplicate) {
+        for (let j = 0; j < i && !isDuplicate; j++) {
+          const subsequence = rawParagraphs.slice(j, i);
+          if (subsequence.length >= 2) {
+            const joinedNorm = normalize(subsequence.join(' '));
+            if (currentNorm === joinedNorm) {
+              isDuplicate = true;
+            }
           }
         }
       }
