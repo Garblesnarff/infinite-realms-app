@@ -132,22 +132,32 @@ export const formatNarrative = (
     .filter(Boolean);
 
   // Deduplicate accumulated paragraphs
-  // Pattern: "Block A" followed by "Block A Block B" - keep only "Block A Block B"
-  // This happens when streaming accumulates content incorrectly
+  // Pattern: Paragraphs 1,2,3,4 followed by a block that equals (1+2+3+4 joined)
+  // The accumulated block should be removed since it duplicates content
   if (rawParagraphs.length > 1) {
-    const deduped: string[] = [];
-    for (let i = 0; i < rawParagraphs.length; i++) {
-      const current = normalize(rawParagraphs[i]);
-      const next = i < rawParagraphs.length - 1 ? normalize(rawParagraphs[i + 1]) : null;
+    const result: string[] = [];
+    const accumulatedBuffer: string[] = [];
 
-      // Skip if the next paragraph starts with this one (it's an accumulated version)
-      if (next && next.startsWith(current) && next.length > current.length) {
-        continue; // Skip the shorter prefix version
+    for (let i = 0; i < rawParagraphs.length; i++) {
+      const current = rawParagraphs[i];
+      const currentNorm = normalize(current);
+
+      // Check if current paragraph equals all accumulated paragraphs joined
+      if (accumulatedBuffer.length > 0) {
+        const bufferJoined = normalize(accumulatedBuffer.join(' '));
+        if (currentNorm === bufferJoined) {
+          // Current is a duplicate of previous paragraphs combined - SKIP it
+          accumulatedBuffer.length = 0; // Reset buffer for next group
+          continue;
+        }
       }
 
-      deduped.push(rawParagraphs[i]);
+      // Not a duplicate - add to result and buffer
+      result.push(current);
+      accumulatedBuffer.push(current);
     }
-    rawParagraphs = deduped;
+
+    rawParagraphs = result;
   }
 
   if (rawParagraphs.length > 1) {
