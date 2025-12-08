@@ -14,6 +14,60 @@ const corsHeaders = {
 const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash-lite';
 
+/**
+ * Verbalized Sampling: Parse structured response and sample based on probabilities
+ * Based on Stanford/Northeastern research: https://arxiv.org/abs/2510.01171
+ *
+ * The model outputs multiple <response> tags with <probability> and <text>.
+ * We sample ONE response based on the probability distribution.
+ */
+function sampleFromVerbalizedResponse(rawResponse: string): string {
+  // Try to parse verbalized sampling format
+  const responsePattern = /<response>\s*<probability>([\d.]+)<\/probability>\s*<text>([\s\S]*?)<\/text>\s*<\/response>/gi;
+  const matches: { probability: number; text: string }[] = [];
+
+  let match;
+  while ((match = responsePattern.exec(rawResponse)) !== null) {
+    const probability = parseFloat(match[1]);
+    const text = match[2].trim();
+    if (!isNaN(probability) && text) {
+      matches.push({ probability, text });
+    }
+  }
+
+  // If no structured responses found, return raw response (fallback)
+  if (matches.length === 0) {
+    // Clean any partial XML tags that might have leaked
+    return rawResponse
+      .replace(/<\/?response>/gi, '')
+      .replace(/<\/?probability>/gi, '')
+      .replace(/<\/?text>/gi, '')
+      .trim();
+  }
+
+  // Normalize probabilities to sum to 1
+  const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
+  const normalized = matches.map(m => ({
+    ...m,
+    probability: totalProb > 0 ? m.probability / totalProb : 1 / matches.length
+  }));
+
+  // Sample based on probability distribution
+  const random = Math.random();
+  let cumulative = 0;
+
+  for (const response of normalized) {
+    cumulative += response.probability;
+    if (random <= cumulative) {
+      console.log(`[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`);
+      return response.text;
+    }
+  }
+
+  // Fallback to last response if rounding issues
+  return normalized[normalized.length - 1].text;
+}
+
 const GEMINI_PRIMARY_MODEL = (Deno.env.get('GEMINI_TEXT_MODEL') ?? DEFAULT_PRIMARY_MODEL).trim() || DEFAULT_PRIMARY_MODEL;
 const GEMINI_FALLBACK_MODEL = (Deno.env.get('GEMINI_TEXT_FALLBACK') ?? DEFAULT_FALLBACK_MODEL).trim() || DEFAULT_FALLBACK_MODEL;
 const GEMINI_VARIANT_MODELS = (Deno.env.get('GEMINI_MODEL_VARIANTS') ?? '')
@@ -249,13 +303,17 @@ serve(async (req) => {
       console.warn(`[DM Agent] Gemini model fallback engaged. Requested "${GEMINI_PRIMARY_MODEL}", using "${chosenModel}"`, { requestId });
     }
 
+    // Apply verbalized sampling - parse structured responses and sample one
+    const sampledResponse = sampleFromVerbalizedResponse(rawResponse);
+    console.log('[DM Agent] Applied verbalized sampling, response length:', sampledResponse.length, { requestId });
+
     // Parse structured response if voice context provided
-    let narrativeText = rawResponse;
+    let narrativeText = sampledResponse;
     let narrationSegments: NarrationSegment[] | undefined;
 
     if (voiceContext) {
       try {
-        const structuredResponse: StructuredDMResponse = JSON.parse(rawResponse);
+        const structuredResponse: StructuredDMResponse = JSON.parse(sampledResponse);
         narrativeText = structuredResponse.text;
         narrationSegments = structuredResponse.narration_segments;
         console.log('Successfully parsed structured response with', narrationSegments?.length, 'segments', { requestId });

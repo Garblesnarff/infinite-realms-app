@@ -15,6 +15,54 @@ import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 
 /**
+ * Verbalized Sampling: Parse structured response and sample based on probabilities
+ * Based on Stanford/Northeastern research: https://arxiv.org/abs/2510.01171
+ */
+function sampleFromVerbalizedResponse(rawResponse: string): string {
+  const responsePattern = /<response>\s*<probability>([\d.]+)<\/probability>\s*<text>([\s\S]*?)<\/text>\s*<\/response>/gi;
+  const matches: { probability: number; text: string }[] = [];
+
+  let match;
+  while ((match = responsePattern.exec(rawResponse)) !== null) {
+    const probability = parseFloat(match[1]);
+    const text = match[2].trim();
+    if (!isNaN(probability) && text) {
+      matches.push({ probability, text });
+    }
+  }
+
+  if (matches.length === 0) {
+    // Fallback: clean any partial XML tags
+    return rawResponse
+      .replace(/<\/?response>/gi, '')
+      .replace(/<\/?probability>/gi, '')
+      .replace(/<\/?text>/gi, '')
+      .trim();
+  }
+
+  // Normalize probabilities
+  const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
+  const normalized = matches.map(m => ({
+    ...m,
+    probability: totalProb > 0 ? m.probability / totalProb : 1 / matches.length
+  }));
+
+  // Sample based on probability distribution
+  const random = Math.random();
+  let cumulative = 0;
+
+  for (const response of normalized) {
+    cumulative += response.probability;
+    if (random <= cumulative) {
+      logger.info(`[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`);
+      return response.text;
+    }
+  }
+
+  return normalized[normalized.length - 1].text;
+}
+
+/**
  * Generate an opening message for a new campaign session
  *
  * Creates an engaging introduction based on campaign and character context.
@@ -88,46 +136,43 @@ export async function generateOpeningMessage(params: { context: GameContext }): 
 
       contextPrompt += `\n\nCampaign Tone: ${campaignTone}
 
-<verbalized_sampling_technique>
-<instruction>
-Before generating the final opening scene, internally brainstorm 3-4 distinct opening scenario concepts with probability scores (0.0-1.0) representing how typical each approach is for ${params.context.campaignDetails?.name || 'this campaign'}.
-</instruction>
+<verbalized_sampling_output>
+Generate 3 COMPLETE opening scene responses, each within a separate <response> tag.
+Each <response> MUST include:
+- A <probability> tag with a decimal value (all should sum to ~1.0)
+- A <text> tag containing the COMPLETE opening scene
 
-<diversity_dimensions>
-Vary your opening scenarios across these dimensions:
-- **Setting**: Familiar location (tavern, road) vs. Unusual location (mid-ritual, aboard airship, underwater)
-- **Pacing**: Slow tension build (0.75) vs. Immediate danger (0.45) vs. Mysterious calm before storm (0.30)
-- **NPC Approach**: Helpful guide (0.80) vs. Morally ambiguous contact (0.50) vs. Unexpected ally (0.30)
-- **Tone**: Straightforward adventure start (0.85) vs. Subverted expectation (0.40) vs. Wild card setup (≤0.30)
-- **Player Agency**: Clear objective (0.75) vs. Mystery to unravel (0.50) vs. Moral dilemma (0.35)
-</diversity_dimensions>
+Vary approaches across these dimensions:
+- **Setting**: Classic (tavern) vs. Unusual (mid-action, unique location)
+- **Pacing**: Slow build vs. Immediate tension vs. Mystery
+- **Tone**: Match ${campaignTone} tone appropriately
 
-<example_process>
-Campaign: ${params.context.campaignDetails?.name || 'Fantasy Adventure'}, Tone: ${campaignTone}
+FORMAT EXACTLY LIKE THIS:
+<response>
+<probability>0.5</probability>
+<text>
+[Complete opening scene - 2-3 paragraphs, NPC dialogue, action options A/B/C]
+</text>
+</response>
+<response>
+<probability>0.3</probability>
+<text>
+[Different approach - complete scene with dialogue and options]
+</text>
+</response>
+<response>
+<probability>0.2</probability>
+<text>
+[Creative/unexpected approach - complete scene with dialogue and options]
+</text>
+</response>
 
-Internal brainstorming:
-1. Start in tavern with quest-giver (prob: 0.85) - Classic, reliable
-2. Mid-journey ambush by ${campaignTone === 'dark' ? 'desperate refugees' : 'mysterious strangers'} (prob: 0.60) - Action-focused
-3. Wake up in strange location with amnesia clue (prob: 0.40) - Mystery hook
-4. (Wild Card) Attending a festival when disaster strikes (prob: 0.25) - Subverts expectations, high contrast
-
-Select the scenario that best balances ${campaignTone} tone with memorable engagement.
-</example_process>
-
-<selection_criteria>
-- Choose scenario that immediately reveals character class value (${params.context.characterDetails?.class || 'adventurer'} abilities useful)
-- Must include at least one sensory detail unique to ${params.context.campaignDetails?.name || 'the campaign world'}
-- Wild card scenarios (prob ≤0.30) preferred when they match campaign tone
-- Avoid "you wake up" or "you enter a tavern" unless subverted creatively
-</selection_criteria>
-
-<output_rule>
-CRITICAL: Your brainstorming process is INTERNAL ONLY.
-DO NOT include any numbered scenarios, probability scores, "Selected:", or brainstorming text in your response.
-Output ONLY the final narrative scene and action options - nothing else.
-The player should never see your selection process.
-</output_rule>
-</verbalized_sampling_technique>
+CRITICAL:
+- Each <text> must be a COMPLETE, STANDALONE opening scene
+- Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
+- Do NOT output anything outside the <response> tags
+- The system will randomly select ONE response based on probabilities
+</verbalized_sampling_output>
 
 Create an immersive opening scene that:
 1. **Immediate Engagement**: Start in the middle of an intriguing situation, not just "you enter a tavern"
@@ -171,7 +216,9 @@ Remember: You're not just describing a scene - you're launching an epic story wh
       const result = await response.response;
       const rawText = result.text();
 
-      return rawText;
+      // Apply verbalized sampling - parse and select one response
+      const sampledText = sampleFromVerbalizedResponse(rawText);
+      return sampledText;
     });
 
     logger.info('Successfully generated opening message');

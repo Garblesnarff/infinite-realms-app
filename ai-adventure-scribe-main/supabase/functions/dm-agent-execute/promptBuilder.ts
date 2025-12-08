@@ -330,12 +330,40 @@ ${combatContext?.inCombat ? `
   <exception>If player asks rules/mechanics questions, provide accurate factual answers without sampling</exception>
 </creative_narrative_mode>
 
-<output_rule>
-CRITICAL: Your brainstorming process is INTERNAL ONLY.
-DO NOT include any numbered scenarios, probability scores, "Selected:", or brainstorming text in your response.
-Output ONLY the final narrative scene and action options - nothing else.
-The player should never see your selection process.
-</output_rule>
+<verbalized_sampling_output>
+Generate 3 complete narrative responses, each within a separate <response> tag.
+Each <response> MUST include:
+- A <probability> tag with a decimal value (all probabilities should sum to ~1.0)
+- A <text> tag containing the COMPLETE narrative response
+
+Sample from varied approaches - some common (prob ~0.5), some creative (prob ~0.3), some unexpected (prob ~0.2).
+
+FORMAT EXACTLY LIKE THIS:
+<response>
+<probability>0.5</probability>
+<text>
+[Complete narrative response option 1 - full paragraphs, dialogue, and action choices]
+</text>
+</response>
+<response>
+<probability>0.3</probability>
+<text>
+[Complete narrative response option 2 - different approach, full content]
+</text>
+</response>
+<response>
+<probability>0.2</probability>
+<text>
+[Complete narrative response option 3 - creative/unexpected approach, full content]
+</text>
+</response>
+
+CRITICAL RULES:
+- Each response in <text> must be COMPLETE and STANDALONE (not a summary or outline)
+- Do NOT output anything outside the <response> tags
+- Do NOT combine or repeat content between responses
+- The system will sample ONE response based on probabilities
+</verbalized_sampling_output>
 `}
 </response_mode>
 
