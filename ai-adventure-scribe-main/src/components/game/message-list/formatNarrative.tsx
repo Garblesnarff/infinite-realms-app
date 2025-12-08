@@ -169,26 +169,32 @@ export const formatNarrative = (
       const currentNorm = normalize(rawParagraphs[i]);
       let isDuplicate = false;
 
-      // NEW ALGORITHM: Check if paragraph N contains the starts of ALL previous paragraphs
-      // This catches accumulated duplicates even when AI rewords slightly
-      // Requires at least 2 previous paragraphs to avoid false positives
+      // FIXED ALGORITHM: Check if paragraph N contains 2+ CONSECUTIVE previous paragraphs IN ORDER
+      // This catches accumulated duplicates at ANY position, not just from paragraph 0
+      // Example: [Para1, Para2, Para3, Combined(1-3), Para5, Para6, Combined(5-6)]
+      // Old algorithm missed Combined(5-6) because it doesn't contain Para1
       if (i >= 2) {
-        const firstPrevNorm = normalize(rawParagraphs[0]);
-        const firstPrevStart = firstPrevNorm.slice(0, 50);
+        // Try each possible starting position for a consecutive sequence
+        for (let startIdx = 0; startIdx <= i - 2 && !isDuplicate; startIdx++) {
+          let lastFoundIndex = -1;
+          let consecutiveCount = 0;
 
-        // Check if current STARTS WITH first paragraph's start (original check)
-        // OR if current CONTAINS first paragraph's start (handles rewording)
-        if (currentNorm.startsWith(firstPrevStart) || currentNorm.includes(firstPrevStart)) {
-          // Check if it also contains starts of ALL other previous paragraphs
-          let containsAllPrevious = true;
-          for (let j = 1; j < i && containsAllPrevious; j++) {
+          for (let j = startIdx; j < i; j++) {
             const prevNorm = normalize(rawParagraphs[j]);
             const prevStart = prevNorm.slice(0, 40);
-            if (!currentNorm.includes(prevStart)) {
-              containsAllPrevious = false;
+            const foundIndex = currentNorm.indexOf(prevStart);
+
+            // Must be found AND appear after previous match (ensures correct order)
+            if (foundIndex !== -1 && foundIndex > lastFoundIndex) {
+              consecutiveCount++;
+              lastFoundIndex = foundIndex;
+            } else {
+              break; // Sequence broken
             }
           }
-          if (containsAllPrevious) {
+
+          // If 2+ consecutive paragraph starts found in order, it's a duplicate
+          if (consecutiveCount >= 2) {
             isDuplicate = true;
           }
         }
