@@ -6,23 +6,19 @@ import type { Memory } from './memory-manager';
 import { WorldBuilderService } from './world-builders/world-builder-service';
 import { voiceConsistencyService } from './voice-consistency-service';
 import type { SessionVoiceContext } from './voice-consistency-service';
-import {
-  detectCombatFromText,
-  type CombatDetectionResult,
-  type DetectedEnemy,
-  type DetectedCombatAction,
-} from '@/utils/combatDetection';
+import { detectCombatFromText, type CombatDetectionResult } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
-import { PassiveSkillsService, getCharacterPassiveScores } from './passive-skills-service';
-import type { Character } from '@/types/character';
-// Lazy import for LangGraph to avoid loading dependencies when feature is disabled
-// import { getLegacyCompatibilityAdapter } from '@/agents/langgraph/adapters/legacy-compatibility';
-// import type { LegacyChatMessage } from '@/agents/langgraph/adapters/legacy-compatibility';
 import migrationMonitoringService from './migration-monitoring';
+
+// Extracted modules for better maintainability
+import { buildPaymentRequiredFallback } from './ai/roll-fallback';
+import { parseXMLTagsFromResponse } from './ai/xml-parser';
+import { getClassEquipment } from './ai/class-equipment';
+import { buildDMContextPrompt, formatCombatContext } from './ai/dm-prompt-builder';
 
 // Type-only import for LegacyChatMessage (doesn't load the module)
 type LegacyChatMessage = {
@@ -37,440 +33,9 @@ type LegacyChatMessage = {
 const inFlight = new Map<string, { ts: number; promise: Promise<any> }>();
 const DEDUPE_MS = 2000;
 
-const PAYMENT_REQUIRED_PATTERN = /402|payment required/i;
-
-type FallbackRollRequest = RollRequest & {
-  skill?: string;
-  ability?: string;
-};
-
-const ROLL_KEYWORDS: Array<{
-  keywords: string[];
-  build: () => FallbackRollRequest;
-}> = [
-  // Combat - Attack rolls
-  {
-    keywords: ['attack', 'strike', 'swing', 'slash', 'stab', 'shoot', 'fire', 'charge', 'snipe', 'punch', 'kick', 'hit', 'fight'],
-    build: () => ({
-      type: 'attack',
-      formula: '1d20+attack_bonus',
-      purpose: 'Attack roll to resolve your strike',
-      ac: 13,
-    }),
-  },
-  // Stealth (DEX) - expanded synonyms and phrases
-  {
-    keywords: ['stealth', 'sneak', 'hide', 'creep', 'quietly', 'silently', 'slip past', 'avoid detection', 'stay hidden', 'move unseen', 'shadows', 'unnoticed'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+dexterity_mod',
-      purpose: 'Stealth check to stay hidden',
-      dc: 14,
-      skill: 'stealth',
-      ability: 'dexterity',
-    }),
-  },
-  // Deception (CHA) - NEW
-  {
-    keywords: ['deceive', 'lie', 'bluff', 'mislead', 'disguise', 'pretend', 'fake', 'trick', 'fool', 'con'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+charisma_mod',
-      purpose: 'Deception check to mislead your target',
-      dc: 15,
-      skill: 'deception',
-      ability: 'charisma',
-    }),
-  },
-  // Persuasion (CHA) - expanded
-  {
-    keywords: ['persuade', 'convince', 'charm', 'negotiate', 'diplomacy', 'bargain', 'plead', 'appeal', 'sway', 'win over', 'reason with'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+charisma_mod',
-      purpose: 'Persuasion check to influence the NPC',
-      dc: 15,
-      skill: 'persuasion',
-      ability: 'charisma',
-    }),
-  },
-  // Intimidation (CHA) - expanded
-  {
-    keywords: ['intimidate', 'threaten', 'menace', 'coerce', 'scare', 'frighten', 'bully', 'pressure', 'interrogate'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+charisma_mod',
-      purpose: 'Intimidation check to cow your target',
-      dc: 15,
-      skill: 'intimidation',
-      ability: 'charisma',
-    }),
-  },
-  // Investigation (INT) - expanded
-  {
-    keywords: ['investigate', 'inspect', 'search', 'study', 'analyze', 'deduce', 'examine closely', 'find clues', 'look for'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+intelligence_mod',
-      purpose: 'Investigation check to uncover details',
-      dc: 14,
-      skill: 'investigation',
-      ability: 'intelligence',
-    }),
-  },
-  // Acrobatics (DEX) - expanded
-  {
-    keywords: ['acrobatic', 'flip', 'tumble', 'dodge', 'leap', 'balance', 'cartwheel', 'somersault', 'tight-rope', 'nimble'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+dexterity_mod',
-      purpose: 'Acrobatics check to keep your footing',
-      dc: 13,
-      skill: 'acrobatics',
-      ability: 'dexterity',
-    }),
-  },
-  // Athletics (STR) - expanded
-  {
-    keywords: ['climb', 'heave', 'lift', 'push', 'force', 'shove', 'grapple', 'swim', 'jump', 'sprint', 'wrestle', 'break down'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+strength_mod',
-      purpose: 'Athletics check to power through the challenge',
-      dc: 15,
-      skill: 'athletics',
-      ability: 'strength',
-    }),
-  },
-  // Perception (WIS) - expanded
-  {
-    keywords: ['perceive', 'spot', 'notice', 'scan', 'watch', 'listen', 'hear', 'look around', 'keep an eye', 'on guard', 'aware'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+wisdom_mod',
-      purpose: 'Perception check to notice hidden details',
-      dc: 13,
-      skill: 'perception',
-      ability: 'wisdom',
-    }),
-  },
-  // Insight (WIS) - expanded
-  {
-    keywords: ['insight', 'sense motive', 'judge', 'read', 'tell if', 'detect lies', 'trustworthy', 'honest', 'true intentions'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+wisdom_mod',
-      purpose: 'Insight check to read intentions',
-      dc: 13,
-      skill: 'insight',
-      ability: 'wisdom',
-    }),
-  },
-  // Sleight of Hand (DEX) - NEW
-  {
-    keywords: ['pickpocket', 'palm', 'steal', 'swipe', 'pilfer', 'sleight of hand', 'conceal', 'plant'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+dexterity_mod',
-      purpose: 'Sleight of Hand check',
-      dc: 14,
-      skill: 'sleight_of_hand',
-      ability: 'dexterity',
-    }),
-  },
-  // Survival (WIS) - NEW
-  {
-    keywords: ['track', 'forage', 'survive', 'hunt', 'follow trail', 'navigate', 'find path', 'wilderness'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+wisdom_mod',
-      purpose: 'Survival check',
-      dc: 13,
-      skill: 'survival',
-      ability: 'wisdom',
-    }),
-  },
-  // Medicine (WIS) - NEW
-  {
-    keywords: ['heal', 'stabilize', 'treat wound', 'diagnose', 'first aid', 'medicine', 'bandage'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+wisdom_mod',
-      purpose: 'Medicine check',
-      dc: 10,
-      skill: 'medicine',
-      ability: 'wisdom',
-    }),
-  },
-  // Animal Handling (WIS) - NEW
-  {
-    keywords: ['calm animal', 'tame', 'ride', 'control mount', 'animal handling', 'soothe beast'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+wisdom_mod',
-      purpose: 'Animal Handling check',
-      dc: 13,
-      skill: 'animal_handling',
-      ability: 'wisdom',
-    }),
-  },
-  // Performance (CHA) - NEW
-  {
-    keywords: ['perform', 'sing', 'dance', 'act', 'play music', 'entertain', 'distract with'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+charisma_mod',
-      purpose: 'Performance check',
-      dc: 12,
-      skill: 'performance',
-      ability: 'charisma',
-    }),
-  },
-  // Arcana (INT) - NEW
-  {
-    keywords: ['arcana', 'identify spell', 'magical knowledge', 'recognize magic', 'recall arcane'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+intelligence_mod',
-      purpose: 'Arcana check to recall magical knowledge',
-      dc: 15,
-      skill: 'arcana',
-      ability: 'intelligence',
-    }),
-  },
-  // History (INT) - NEW
-  {
-    keywords: ['history', 'recall', 'remember', 'know about', 'heard of', 'historical'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+intelligence_mod',
-      purpose: 'History check to recall knowledge',
-      dc: 13,
-      skill: 'history',
-      ability: 'intelligence',
-    }),
-  },
-  // Nature (INT) - NEW
-  {
-    keywords: ['nature', 'identify plant', 'identify creature', 'natural knowledge', 'recognize beast'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+intelligence_mod',
-      purpose: 'Nature check',
-      dc: 13,
-      skill: 'nature',
-      ability: 'intelligence',
-    }),
-  },
-  // Religion (INT) - NEW
-  {
-    keywords: ['religion', 'divine knowledge', 'recognize deity', 'holy', 'unholy', 'undead lore'],
-    build: () => ({
-      type: 'skill_check',
-      formula: '1d20+intelligence_mod',
-      purpose: 'Religion check',
-      dc: 13,
-      skill: 'religion',
-      ability: 'intelligence',
-    }),
-  },
-];
-
-function isPaymentRequiredError(error: unknown): boolean {
-  if (!error) {
-    return false;
-  }
-
-  const status = (error as any)?.status ?? (error as any)?.response?.status;
-  if (status === 402) {
-    return true;
-  }
-
-  const message = (error as any)?.message ?? (error as any)?.response?.data?.error ?? '';
-  return typeof message === 'string' && PAYMENT_REQUIRED_PATTERN.test(message);
-}
-
-function determineFallbackRoll(
-  playerText: string,
-  combatDetection: CombatDetectionResult,
-): FallbackRollRequest | null {
-  if (!playerText) {
-    return combatDetection.isCombat
-      ? {
-          type: 'attack',
-          formula: '1d20+attack_bonus',
-          purpose: 'Attack roll as combat breaks out',
-          ac: 13,
-        }
-      : null;
-  }
-
-  const lower = playerText.toLowerCase();
-  for (const mapping of ROLL_KEYWORDS) {
-    if (mapping.keywords.some((keyword) => lower.includes(keyword))) {
-      return mapping.build();
-    }
-  }
-
-  if (combatDetection.isCombat) {
-    return {
-      type: 'attack',
-      formula: '1d20+attack_bonus',
-      purpose: 'Attack roll to press the fight',
-      ac: 13,
-    };
-  }
-
-  return null;
-}
-
-function formatRollInstruction(roll: FallbackRollRequest): string {
-  const base = `Please roll ${roll.formula} for ${roll.purpose}`;
-  const target = roll.dc ? ` (DC ${roll.dc})` : roll.ac ? ` (AC ${roll.ac})` : '';
-  const adv = roll.advantage ? ' with advantage' : roll.disadvantage ? ' with disadvantage' : '';
-  return `${base}${target}${adv}.`;
-}
-
-function serializeRollForBlock(roll: FallbackRollRequest) {
-  const payload: Record<string, unknown> = {
-    type: roll.type,
-    formula: roll.formula,
-    purpose: roll.purpose,
-  };
-
-  if (roll.dc !== undefined) payload.dc = roll.dc;
-  if (roll.ac !== undefined) payload.ac = roll.ac;
-  if (roll.advantage !== undefined) payload.advantage = roll.advantage;
-  if (roll.disadvantage !== undefined) payload.disadvantage = roll.disadvantage;
-  if (roll.skill) payload.skill = roll.skill;
-  if (roll.ability) payload.ability = roll.ability;
-
-  return payload;
-}
-
-function buildPaymentRequiredFallback(playerText: string, combatDetection: CombatDetectionResult) {
-  const roll = determineFallbackRoll(playerText, combatDetection);
-  const narration = `The Dungeon Master pauses for a heartbeat, collecting their thoughts before continuing the scene.`;
-  const tension = combatDetection.isCombat
-    ? `Steel clashes in your imagination as the unresolved action hangs in the air.`
-    : `The world around you seems to hold its breath, waiting for your next move.`;
-  const rollLine = roll
-    ? formatRollInstruction(roll)
-    : `No roll is required yet—choose your approach.`;
-
-  const options = [
-    'A. **Stay the course**, following through exactly as you intended.',
-    'B. **Adjust your tactics**, taking a more cautious, observant approach.',
-    'C. **Try something unexpected**, improvising a bold alternative.',
-  ];
-
-  const rollsBlock = `\n\n\`\`\`ROLL_REQUESTS_V1\n${JSON.stringify({ rolls: roll ? [serializeRollForBlock(roll)] : [] }, null, 2)}\n\`\`\`\n`;
-
-  const normalizedRoll: RollRequest | null = roll
-    ? {
-        type: roll.type,
-        formula: roll.formula,
-        purpose: roll.purpose,
-        dc: roll.dc,
-        ac: roll.ac,
-        advantage: roll.advantage,
-        disadvantage: roll.disadvantage,
-      }
-    : null;
-
-  return {
-    text: `${narration}\n\n${tension}\n${rollLine}\n\n${options.join('\n')}${rollsBlock}`,
-    roll_requests: normalizedRoll ? [normalizedRoll] : [],
-  };
-}
-
+// Helper for request deduplication key
 function keyFor(sessionId: string | undefined, message: string, historyLen: number) {
   return `${sessionId || 'nosession'}|${message.slice(0, 256)}|${historyLen}`;
-}
-
-/**
- * Parse XML tags from DM response for memories and world updates
- * This allows single-call extraction instead of separate API calls
- */
-interface ParsedXMLTags {
-  narrative: string;
-  memories: string[];
-  worldUpdates: {
-    npcs: Array<{ name: string; description: string; location: string }>;
-    locations: Array<{ name: string; description: string; status: string }>;
-    quests: Array<{ name: string; update: string }>;
-  };
-  hadTags: boolean;
-}
-
-function parseXMLTagsFromResponse(rawResponse: string): ParsedXMLTags {
-  // Extract narrative (everything before XML tags)
-  let narrative = rawResponse
-    .replace(/<memories>[\s\S]*?<\/memories>/gi, '')
-    .replace(/<world_updates>[\s\S]*?<\/world_updates>/gi, '')
-    .trim();
-
-  // Extract memories
-  const memoriesMatch = rawResponse.match(/<memories>([\s\S]*?)<\/memories>/i);
-  const memories = memoriesMatch
-    ? memoriesMatch[1]
-        .split('\n')
-        .map((line) => line.replace(/^-\s*/, '').trim())
-        .filter((line) => line.length > 0)
-    : [];
-
-  // Extract world updates
-  const worldMatch = rawResponse.match(/<world_updates>([\s\S]*?)<\/world_updates>/i);
-  const worldUpdates: ParsedXMLTags['worldUpdates'] = {
-    npcs: [],
-    locations: [],
-    quests: [],
-  };
-
-  if (worldMatch) {
-    const lines = worldMatch[1].split('\n').filter((line) => line.trim().length > 0);
-    for (const line of lines) {
-      const trimmed = line.replace(/^-\s*/, '').trim();
-
-      // Parse NPC: "npc: Name | Description | Location"
-      const npcMatch = trimmed.match(/^npc:\s*([^|]+)\|([^|]+)\|(.+)$/i);
-      if (npcMatch) {
-        worldUpdates.npcs.push({
-          name: npcMatch[1].trim(),
-          description: npcMatch[2].trim(),
-          location: npcMatch[3].trim(),
-        });
-        continue;
-      }
-
-      // Parse Location: "location: Name | Description | Status"
-      const locMatch = trimmed.match(/^location:\s*([^|]+)\|([^|]+)\|(.+)$/i);
-      if (locMatch) {
-        worldUpdates.locations.push({
-          name: locMatch[1].trim(),
-          description: locMatch[2].trim(),
-          status: locMatch[3].trim(),
-        });
-        continue;
-      }
-
-      // Parse Quest: "quest: Name | Update"
-      const questMatch = trimmed.match(/^quest:\s*([^|]+)\|(.+)$/i);
-      if (questMatch) {
-        worldUpdates.quests.push({
-          name: questMatch[1].trim(),
-          update: questMatch[2].trim(),
-        });
-      }
-    }
-  }
-
-  return {
-    narrative,
-    memories,
-    worldUpdates,
-    hadTags: memoriesMatch !== null || worldMatch !== null,
-  };
 }
 
 export interface ChatMessage {
@@ -673,54 +238,7 @@ export class AIService {
     return generateCampaignName(params);
   }
 
-  /**
-   * Format combat detection context for the prompt
-   */
-  private static formatCombatContext(combatDetection: CombatDetectionResult): string {
-    if (!combatDetection.isCombat) return '';
-
-    let combatText = `\n\nCOMBAT CONTEXT DETECTED:
-Combat Type: ${combatDetection.combatType}
-Confidence: ${Math.round(combatDetection.confidence * 100)}%
-Should Start Combat: ${combatDetection.shouldStartCombat ? 'YES' : 'NO'}
-Should End Combat: ${combatDetection.shouldEndCombat ? 'YES' : 'NO'}`;
-
-    // Add detected enemies
-    if (combatDetection.enemies && combatDetection.enemies.length > 0) {
-      combatText += `\n\nDETECTED ENEMIES:`;
-      combatDetection.enemies.forEach((enemy: DetectedEnemy) => {
-        combatText += `\n- ${enemy.name} (${enemy.type}, CR ${enemy.estimatedCR})
-  HP: ${enemy.suggestedHP}, AC: ${enemy.suggestedAC}
-  Description: ${enemy.description}`;
-      });
-    }
-
-    // Add detected combat actions
-    if (combatDetection.combatActions && combatDetection.combatActions.length > 0) {
-      combatText += `\n\nDETECTED COMBAT ACTIONS:`;
-      combatDetection.combatActions.forEach((action: DetectedCombatAction) => {
-        combatText += `\n- ${action.actor} performs ${action.action}${action.target ? ` against ${action.target}` : ''}${action.weapon ? ` with ${action.weapon}` : ''}
-  Roll Type: ${action.rollType}, Needs Roll: ${action.rollNeeded ? 'YES' : 'NO'}`;
-      });
-    }
-
-    combatText += `\n\n**COMBAT RESPONSE REQUIREMENTS:**
-When combat is detected, you MUST:
-1. **REQUEST** dice rolls for player actions using ROLL_REQUESTS_V1 (DO NOT roll for the player)
-2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with "autoExecute": true
-3. Describe combat actions cinematically but maintain mechanical accuracy
-4. Make tactical decisions for NPCs based on their intelligence and experience
-5. Consider environmental factors and positioning
-6. After receiving roll results, narrate the consequences dramatically
-
-**CRITICAL COMBAT FLOW:**
-- Player attacks → Request attack + damage rolls via ROLL_REQUESTS_V1, STOP after the block
-- Enemy attacks → Include in ROLL_REQUESTS_V1 with "autoExecute": true, "actorName": "Enemy Name"
-- DO NOT narrate outcomes before rolls are resolved
-- DO NOT roll dice for the player - always request rolls`;
-
-    return combatText;
-  }
+  // NOTE: formatCombatContext is now imported from ./ai/dm-prompt-builder
 
   /**
    * Simplified chat with AI DM for MVP with fallback and streaming support
@@ -1701,7 +1219,7 @@ STR ${stats.strength}(${Math.floor((stats.strength - 10) / 2) >= 0 ? '+' : ''}${
             }
 
             // Add default equipment for class-based damage rolls
-            const classEquipment = this.getClassEquipment(
+            const classEquipment = getClassEquipment(
               char.class?.name || char.class || 'Fighter',
             );
             contextPrompt += `
@@ -1843,7 +1361,7 @@ CRITICAL RULES:
           }
 
           // Add combat context if detected
-          contextPrompt += this.formatCombatContext(combatDetection);
+          contextPrompt += formatCombatContext(combatDetection);
 
           // Add specific dice roll requirements for combat
           if (combatDetection.isCombat) {
@@ -1866,7 +1384,9 @@ Based on the detected combat scenario, you MUST REQUEST these dice rolls using R
           }
 
           // Add voice context for multi-voice narration
-          if (voiceContext) {
+          // IMPORTANT: Skip voice context for opening scenes (first message) to avoid conflicting
+          // with verbalized sampling XML format. Voice segments can be processed separately if needed.
+          if (voiceContext && !isFirstMessage) {
             contextPrompt += `<voice_optimization_format>
 <title>CRITICAL: VOICE-OPTIMIZED RESPONSE FORMAT</title>
 You MUST respond with JSON containing both display text AND pre-segmented narration for multi-voice synthesis.
@@ -1961,7 +1481,7 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
 </final_prompt>
 </response_structure>`;
 
-          if (voiceContext) {
+          if (voiceContext && !isFirstMessage) {
             contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
           }
 
@@ -2058,7 +1578,9 @@ Your narrative response here...
             const rawResponse = result.text();
 
             // Apply verbalized sampling for opening scenes (first message)
-            if (isFirstMessage && !voiceContext) {
+            // ALWAYS use verbalized sampling for opening scenes regardless of voice context
+            // Voice context prompt is already skipped for first messages to avoid conflicting formats
+            if (isFirstMessage) {
               logger.info('[Opening Message] Raw AI response length:', rawResponse.length);
               logger.debug('[Opening Message] Raw AI response (first 500 chars):', rawResponse.slice(0, 500));
               const sampledText = sampleFromVerbalizedResponse(rawResponse);
@@ -2451,93 +1973,7 @@ Your narrative response here...
     return (response as any)?.text || (response as any)?.content || 'Welcome to your adventure!';
   }
 
-  /**
-   * Get default equipment for a character class
-   * Used to provide the AI with weapon damage dice information
-   */
-  private static getClassEquipment(className: string): { weapons: string[]; armor: string } {
-    const classLower = className.toLowerCase();
-
-    switch (classLower) {
-      case 'fighter':
-        return {
-          weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Handaxe (1d6)', 'Light Crossbow (1d8)'],
-          armor: 'Chain mail (AC 16)',
-        };
-
-      case 'rogue':
-        return {
-          weapons: ['Shortsword (1d6)', 'Dagger (1d4)', 'Shortbow (1d6)', 'Rapier (1d8)'],
-          armor: 'Leather armor (AC 11)',
-        };
-
-      case 'ranger':
-        return {
-          weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Longbow (1d8)', 'Handaxe (1d6)'],
-          armor: 'Studded leather (AC 12)',
-        };
-
-      case 'barbarian':
-        return {
-          weapons: ['Greataxe (1d12)', 'Handaxe (1d6)', 'Javelin (1d6)'],
-          armor: 'Unarmored (AC 10 + Dex + Con)',
-        };
-
-      case 'wizard':
-        return {
-          weapons: ['Dagger (1d4)', 'Dart (1d4)', 'Light Crossbow (1d8)', 'Quarterstaff (1d6)'],
-          armor: 'No armor (AC 10)',
-        };
-
-      case 'sorcerer':
-        return {
-          weapons: ['Dagger (1d4)', 'Dart (1d4)', 'Light Crossbow (1d8)', 'Quarterstaff (1d6)'],
-          armor: 'No armor (AC 10)',
-        };
-
-      case 'warlock':
-        return {
-          weapons: ['Dagger (1d4)', 'Light Crossbow (1d8)', 'Scimitar (1d6)'],
-          armor: 'Leather armor (AC 11)',
-        };
-
-      case 'cleric':
-        return {
-          weapons: ['Mace (1d6)', 'Warhammer (1d8)', 'Light Crossbow (1d8)', 'Shield'],
-          armor: 'Scale mail (AC 14)',
-        };
-
-      case 'druid':
-        return {
-          weapons: ['Scimitar (1d6)', 'Shield', 'Dart (1d4)', 'Javelin (1d6)'],
-          armor: 'Leather armor (AC 11)',
-        };
-
-      case 'paladin':
-        return {
-          weapons: ['Longsword (1d8)', 'Javelin (1d6)', 'Shield'],
-          armor: 'Chain mail (AC 16)',
-        };
-
-      case 'bard':
-        return {
-          weapons: ['Rapier (1d8)', 'Shortsword (1d6)', 'Dagger (1d4)', 'Hand Crossbow (1d6)'],
-          armor: 'Leather armor (AC 11)',
-        };
-
-      case 'monk':
-        return {
-          weapons: ['Shortsword (1d6)', 'Dart (1d4)', 'Unarmed Strike (1d4)'],
-          armor: 'Unarmored (AC 10 + Dex + Wis)',
-        };
-
-      default:
-        return {
-          weapons: ['Longsword (1d8)', 'Shortsword (1d6)', 'Dagger (1d4)'],
-          armor: 'Leather armor (AC 11)',
-        };
-    }
-  }
+  // NOTE: getClassEquipment is now imported from ./ai/class-equipment
 
   /**
    * Get Gemini API manager statistics (for debugging)

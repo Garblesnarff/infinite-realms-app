@@ -133,7 +133,9 @@ Based on the detected combat scenario, you MUST include these dice rolls in your
     }
 
     // Add voice context for multi-voice narration
-    if (voiceContext) {
+    // IMPORTANT: Skip voice context for opening scenes (first message) to avoid conflicting
+    // with verbalized sampling XML format. Voice segments can be processed separately if needed.
+    if (voiceContext && !isFirstMessage) {
       contextPrompt += `<voice_optimization_format>
 <title>CRITICAL: VOICE-OPTIMIZED RESPONSE FORMAT</title>
 You MUST respond with JSON containing both display text AND pre-segmented narration for multi-voice synthesis.
@@ -172,7 +174,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 
     contextPrompt += buildResponseStructurePrompt();
 
-    if (voiceContext) {
+    if (voiceContext && !isFirstMessage) {
       contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
     }
 
@@ -220,7 +222,9 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
       const rawResponse = result.text();
 
       // Apply verbalized sampling for opening scenes (first message)
-      if (isFirstMessage && !voiceContext) {
+      // ALWAYS use verbalized sampling for opening scenes regardless of voice context
+      // Voice context prompt is already skipped for first messages to avoid conflicting formats
+      if (isFirstMessage) {
         return { text: sampleFromVerbalizedResponse(rawResponse) };
       }
 

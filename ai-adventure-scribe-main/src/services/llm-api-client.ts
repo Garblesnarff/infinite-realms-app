@@ -77,12 +77,12 @@ class LlmApiClient {
       (import.meta.env.VITE_LLM_PROVIDER as 'openrouter' | 'gemini' | undefined) ||
       'openrouter';
 
-    const makeReq = async (provider: 'openrouter' | 'gemini') =>
+    const makeReq = async (provider: 'openrouter' | 'gemini', model?: string) =>
       this.fetchWithAuth('/v1/llm/generate', {
         method: 'POST',
         body: JSON.stringify({
           prompt: params.prompt,
-          model: params.model,
+          model: model || params.model,
           maxTokens: params.maxTokens,
           temperature: params.temperature,
           history: params.history,
@@ -99,6 +99,7 @@ class LlmApiClient {
       const msg = String(err?.message || '');
       const isConfigErr = /Server not configured for OpenRouter/i.test(msg);
       const isGeminiConfigErr = /Server not configured for Gemini/i.test(msg);
+      const isRateLimitErr = /429|rate\s*limit|too\s*many\s*requests|quota\s*exceeded/i.test(msg);
 
       if (preferredProvider === 'openrouter' && isConfigErr) {
         const res = await makeReq('gemini');
@@ -109,6 +110,30 @@ class LlmApiClient {
         const res = await makeReq('openrouter');
         const data = await res.json();
         return data?.text ?? '';
+      }
+      // Rate limit on Gemini - fall back to OpenRouter free model (DeepSeek V3)
+      if (isRateLimitErr && preferredProvider === 'gemini') {
+        console.warn('[LLMApiClient] Gemini rate limited, falling back to DeepSeek V3 free tier');
+        try {
+          const res = await makeReq('openrouter', 'deepseek/deepseek-chat-v3-0324:free');
+          const data = await res.json();
+          return data?.text ?? '';
+        } catch (fallbackErr) {
+          console.error('[LLMApiClient] OpenRouter fallback also failed:', fallbackErr);
+          throw err; // Throw original error
+        }
+      }
+      // Rate limit on OpenRouter - try the free model explicitly
+      if (isRateLimitErr && preferredProvider === 'openrouter') {
+        console.warn('[LLMApiClient] OpenRouter rate limited, trying DeepSeek V3 free tier');
+        try {
+          const res = await makeReq('openrouter', 'deepseek/deepseek-chat-v3-0324:free');
+          const data = await res.json();
+          return data?.text ?? '';
+        } catch (fallbackErr) {
+          console.error('[LLMApiClient] DeepSeek V3 free tier also failed:', fallbackErr);
+          throw err; // Throw original error
+        }
       }
       throw err;
     }

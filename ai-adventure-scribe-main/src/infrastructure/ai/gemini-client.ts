@@ -398,6 +398,14 @@ export class GeminiApiManager {
           logger.warn(
             '[GeminiApiManager] Direct mode disabled after model availability error, falling back to proxy',
           );
+        } else if (
+          /429|rate\s*limit|too\s*many\s*requests|quota\s*exceeded|resource\s*exhausted/i.test(message)
+        ) {
+          // Rate limit hit - fall back to OpenRouter free tier
+          logger.warn(
+            '[GeminiApiManager] Rate limit hit on direct Gemini API, falling back to OpenRouter proxy',
+          );
+          // Don't disable direct mode permanently - just fall through to proxy for this request
         } else {
           throw error;
         }
