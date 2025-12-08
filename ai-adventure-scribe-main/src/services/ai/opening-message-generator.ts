@@ -172,45 +172,21 @@ CRITICAL:
 - Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
-</verbalized_sampling_output>
 
-Create an immersive opening scene that:
-1. **Immediate Engagement**: Start in the middle of an intriguing situation, not just "you enter a tavern"
-2. **Sensory Rich**: Include what you see, hear, smell, feel, and taste
-3. **Character Integration**: Reference their ${params.context.characterDetails?.class || 'character'} abilities, equipment, or background naturally
-4. **Decision Point**: End with a compelling choice between 2-3 distinct actions with clear stakes
-5. **NPC Interaction**: Include at least one interesting NPC with direct quoted dialogue
-6. **World Details**: Add unique elements that make this world feel alive and distinct
-7. **Foreshadowing**: Hint at larger mysteries or conflicts without revealing everything
-8. **Clear Stakes**: Make it obvious why this moment matters
+SCENE REQUIREMENTS (include in each <text>):
+1. Start in the middle of action, not "you enter a tavern"
+2. Include sensory details (sight, sound, smell)
+3. Reference character's ${params.context.characterDetails?.class || 'class'} and ${params.context.characterDetails?.background || 'background'}
+4. Include at least one NPC with QUOTED dialogue (e.g., "Help me!" not 'someone calls for help')
+5. End with 2-3 action options in this EXACT format:
+   A. **Action Name**, brief description
+   B. **Action Name**, brief description
+   C. **Action Name**, brief description
 
-**CRITICAL: NPC Dialogue Requirements**
-- ALL NPC interactions MUST use direct quoted speech
-- Examples: "Stranger, you look like you've seen trouble," or "Help me! The bandits took everything!"
-- NEVER describe speech indirectly (e.g., "A merchant greets you" or "Someone calls for help")
-- Every speaking NPC should have actual quoted words that reveal personality and plot
+TONE: ${campaignTone === 'dark' ? 'Atmospheric, tension-filled, morally ambiguous' : campaignTone === 'lighthearted' ? 'Humorous, whimsical, optimistic' : campaignTone === 'epic' ? 'Grand, inspiring, heroic' : 'Balanced, realistic, hopeful'}
 
-**CRITICAL: ACTION OPTIONS FORMATTING**
-When providing choices to the player, you MUST format them as lettered options with bold action names:
-
-Format: A. **Action Name**, brief description of what this choice involves
-
-Examples:
-- A. **Approach cautiously**, moving carefully to avoid detection while gathering information
-- B. **Charge forward boldly**, relying on speed and surprise to overcome obstacles
-- C. **Attempt to negotiate**, using your diplomatic skills to find a peaceful solution
-
-This formatting is REQUIRED for the options to appear as clickable buttons in the game interface. Always include 2-3 options formatted this way at the end of your response.
-
-TONE GUIDELINES:
-- ${campaignTone === 'dark' ? 'Use atmospheric, tension-filled language. Emphasize danger and moral ambiguity.' : ''}
-- ${campaignTone === 'lighthearted' ? 'Include moments of humor and whimsy. Keep things optimistic and fun.' : ''}
-- ${campaignTone === 'epic' ? 'Use grand, inspiring language. Make the player feel heroic and destined for greatness.' : ''}
-- ${campaignTone === 'balanced' ? 'Balance serious moments with lighter touches. Create realistic but hopeful atmosphere.' : ''}
-
-FORMAT: Write 2-3 paragraphs in second person ("you"). End with a specific question about what the player wants to do, offering multiple viable options formatted as described above.
-
-Remember: You're not just describing a scene - you're launching an epic story where the player is the hero. Make them excited to take their first action!`;
+Write 2-3 paragraphs in second person ("you").
+</verbalized_sampling_output>`;
 
       const response = await model.generateContent(contextPrompt);
       const result = await response.response;
