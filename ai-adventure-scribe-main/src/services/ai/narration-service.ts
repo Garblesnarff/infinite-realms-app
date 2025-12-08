@@ -260,4 +260,3 @@ async function postProcessResponse(params: ChatParams, responseText: string): Pr
 
 // Due to length constraints, generateGeminiResponse is continued in narration-service-impl.ts
 export { generateGeminiResponse } from './narration-service-impl';
-export { generateOpeningMessage } from './opening-message-generator';

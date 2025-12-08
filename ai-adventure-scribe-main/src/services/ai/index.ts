@@ -21,7 +21,7 @@ export type {
 export { generateCampaignDescription } from './campaign-generator';
 
 // Export narration and DM services
-export { chatWithDM, generateOpeningMessage } from './narration-service';
+export { chatWithDM } from './narration-service';
 
 // Export conversation management
 export { saveChatMessage, getConversationHistory } from './conversation-service';
@@ -100,10 +100,19 @@ export class AIService {
 
   /**
    * Generate an opening message for a new campaign session
+   * Uses chatWithDM with empty message to trigger first message flow
    */
   static async generateOpeningMessage(params: { context: any }): Promise<string> {
-    const { generateOpeningMessage: generate } = await import('./narration-service');
-    return generate(params);
+    const { chatWithDM } = await import('./narration-service');
+    const response = await chatWithDM({
+      message: '',
+      context: params.context,
+      conversationHistory: [],
+    });
+    if (typeof response === 'string') {
+      return response;
+    }
+    return (response as any)?.text || (response as any)?.content || 'Welcome to your adventure!';
   }
 
   /**

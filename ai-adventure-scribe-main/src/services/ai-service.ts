@@ -14,7 +14,6 @@ import {
 } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
-import { generateOpeningMessage } from './ai/opening-message-generator';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
@@ -1781,22 +1780,6 @@ CRITICAL RULES:
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
 </verbalized_sampling_output>
-
-<scene_requirements>
-1. **Scene Setting**: Location, atmosphere, sensory details (sights, sounds, smells)
-2. **Character Integration**: Connect background/skills to the scenario naturally
-3. **Active NPC**: Include at least one speaking NPC with quoted dialogue
-4. **Immediate Hook**: Compelling problem, opportunity, or mystery requiring action
-5. **Clear Choices**: End with 2-3 action options in A/B/C format with bold action names
-</scene_requirements>
-
-<action_format>
-Format choices as: A. **Action Name**, brief description
-Example:
-A. **Approach the stranger**, introducing yourself and asking about the commotion
-B. **Observe from the shadows**, gathering information before revealing yourself
-C. **Check for danger**, scanning the room for potential threats
-</action_format>
 </opening_scene_requirements>`;
           }
 
@@ -2390,11 +2373,19 @@ Your narrative response here...
 
   /**
    * Generate an opening message for a new campaign session
-   * Delegates to modular opening-message-generator.ts which includes verbalized sampling
+   * Uses chatWithDM with empty message/history to trigger first message flow
    */
   static async generateOpeningMessage(params: { context: GameContext }): Promise<string> {
-    // Delegate to modular opening message generator (includes verbalized sampling)
-    return generateOpeningMessage(params);
+    const response = await AIService.chatWithDM({
+      message: '',
+      context: params.context,
+      conversationHistory: [],
+    });
+
+    if (typeof response === 'string') {
+      return response;
+    }
+    return (response as any)?.text || (response as any)?.content || 'Welcome to your adventure!';
   }
 
   /**
