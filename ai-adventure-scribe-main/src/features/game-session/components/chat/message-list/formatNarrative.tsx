@@ -3,6 +3,29 @@ import React from 'react';
 const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
 const BULLET_PATTERN = /^[-•]/;
 
+/**
+ * Remove leaked verbalized sampling brainstorming patterns from AI response.
+ * Safety filter to catch any internal reasoning that slips through.
+ */
+const cleanBrainstorming = (text: string): string => {
+  let cleaned = text;
+
+  // Remove numbered scenario lists with probabilities
+  // Pattern: "1. Scenario description (prob: 0.XX)"
+  cleaned = cleaned.replace(/^\d+\.\s+[^(]+\(prob:\s*0\.\d+\)[^\n]*\n?/gm, '');
+
+  // Remove "Selected:" or "Chosen:" lines
+  cleaned = cleaned.replace(
+    /^(?:Selected|Chosen|Final selection|I'll go with|Internal brainstorming):[^\n]*\n?/gim,
+    '',
+  );
+
+  // Remove any remaining XML-like tags from verbalized sampling
+  cleaned = cleaned.replace(/<\/?(?:brainstorming|narrative|options)>/gi, '');
+
+  return cleaned.trim();
+};
+
 const splitIntoSentences = (block: string): string[] => {
   const sentences: string[] = [];
   const regex = /[^.!?]+[.!?]+["”']?\s*/g;
@@ -118,7 +141,14 @@ const renderBlock = (block: string, index: number): React.ReactNode => {
 export const formatNarrative = (
   text: string,
 ): { content: React.ReactNode; charCount: number; paragraphCount: number } => {
-  const trimmed = text?.trim?.() ?? '';
+  const rawText = text?.trim?.() ?? '';
+
+  if (!rawText) {
+    return { content: null, charCount: 0, paragraphCount: 0 };
+  }
+
+  // Clean any leaked brainstorming patterns before processing
+  const trimmed = cleanBrainstorming(rawText);
 
   if (!trimmed) {
     return { content: null, charCount: 0, paragraphCount: 0 };

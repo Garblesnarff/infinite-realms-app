@@ -6,57 +6,6 @@ import { buildPrompt } from "./promptBuilder.ts";
 import { DMResponse, StructuredDMResponse, VoiceContext, NarrationSegment } from "./types.ts";
 import { calculatePassiveScores } from "./passiveSkillsEvaluator.ts";
 
-/**
- * Extract narrative and options from XML-tagged AI response
- * Filters out brainstorming/internal reasoning to return only player-facing content
- */
-function extractNarrativeFromXML(response: string, requestId: string): string {
-  // Extract narrative section
-  const narrativeMatch = response.match(/<narrative>([\s\S]*?)<\/narrative>/i);
-  const narrative = narrativeMatch?.[1]?.trim() || '';
-
-  // Extract options section
-  const optionsMatch = response.match(/<options>([\s\S]*?)<\/options>/i);
-  const options = optionsMatch?.[1]?.trim() || '';
-
-  // If we found XML-tagged content, combine narrative + options
-  if (narrative) {
-    console.log('[DM Agent] XML extraction successful - filtered brainstorming content', { requestId });
-    return options ? `${narrative}\n\n${options}` : narrative;
-  }
-
-  // Check if there's brainstorming content without proper narrative tags
-  const hasBrainstorming = /<brainstorming>/i.test(response);
-  if (hasBrainstorming) {
-    // Remove brainstorming section and return the rest
-    const withoutBrainstorming = response.replace(/<brainstorming>[\s\S]*?<\/brainstorming>/gi, '').trim();
-    if (withoutBrainstorming.length > 50) {
-      console.log('[DM Agent] XML extraction - removed brainstorming section', { requestId });
-      return withoutBrainstorming;
-    }
-  }
-
-  // Fallback: if no XML tags, try to extract after common brainstorming markers
-  const fallbackPatterns = [
-    /^[\s\S]*?(?:Selected:|Chosen:|Final selection:|I'll go with:)[^\n]*\n+/i,
-    /^[\s\S]*?(?:Final Response:|Final Narrative:)[^\n]*\n+/i,
-  ];
-
-  for (const pattern of fallbackPatterns) {
-    if (pattern.test(response)) {
-      const cleaned = response.replace(pattern, '').trim();
-      if (cleaned.length > 100) {
-        console.log('[DM Agent] XML fallback extraction - used brainstorming marker pattern', { requestId });
-        return cleaned;
-      }
-    }
-  }
-
-  // Last resort: return original response (existing deduplication will handle it)
-  console.log('[DM Agent] XML extraction - no tags found, returning original', { requestId });
-  return response;
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
@@ -315,10 +264,6 @@ serve(async (req) => {
         // Keep narrativeText as rawResponse for backward compatibility
       }
     }
-
-    // Apply XML extraction to filter out brainstorming content
-    // This preserves the verbalized sampling technique while removing internal reasoning
-    narrativeText = extractNarrativeFromXML(narrativeText, requestId);
 
     // Generate environment and interactions using the AI response
     const environment = environmentGen.generateEnvironment(campaignDetails, characterDetails);
