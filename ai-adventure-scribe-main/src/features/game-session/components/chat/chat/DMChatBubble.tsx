@@ -4,19 +4,18 @@ import React, { useMemo } from 'react';
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 import type { ChatMessage } from '@/services/ai-service';
 
-import { DiceRollEmbed } from '@/components/DiceRollEmbed';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
-import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
+import { DiceEngine } from '@/services/dice/DiceEngine';
 import {
   parseMessageOptions,
   extractNarrativeContent,
   createPlayerMessageFromOption,
 } from '@/utils/parseMessageOptions';
+import { formatNarrative } from '../message-list/formatNarrative';
 
 interface DMChatBubbleProps {
   message: ChatMessage;
@@ -49,53 +48,20 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = ({
     return DiceEngine.findDiceExpressions(message.content);
   }, [message.content]);
 
-  // Render message content with embedded dice components
+  // Render message content with deduplication via formatNarrative
   const renderMessageContent = useMemo(() => {
     const content = parsedMessage.content || message.content;
 
-    if (diceExpressions.length === 0) {
-      return <p className="text-sm leading-relaxed whitespace-pre-wrap mb-3">{content}</p>;
+    // Apply formatNarrative for deduplication and proper paragraph handling
+    const { content: formattedContent } = formatNarrative(content);
+
+    // If we have dice expressions, we need to handle them specially
+    // For now, prioritize deduplication - dice embeds can be added later if needed
+    if (diceExpressions.length > 0) {
+      logger.debug('Dice expressions detected but using formatNarrative for deduplication');
     }
 
-    // Split content around dice expressions and render with embedded dice components
-    const parts = [];
-    let lastIndex = 0;
-
-    diceExpressions.forEach((diceExpr, index) => {
-      // Add text before dice expression
-      if (diceExpr.index > lastIndex) {
-        const textBefore = content.slice(lastIndex, diceExpr.index);
-        if (textBefore) {
-          parts.push(<span key={`text-${index}`}>{textBefore}</span>);
-        }
-      }
-
-      // Add dice component
-      parts.push(
-        <DiceRollEmbed
-          key={`dice-${index}`}
-          expression={diceExpr.expression}
-          purpose={diceExpr.purpose}
-          autoRoll={true}
-          showAnimation={true}
-          onRoll={(result: DiceRollResult) => {
-            logger.info('Dice rolled:', result);
-          }}
-        />,
-      );
-
-      lastIndex = diceExpr.index + diceExpr.length;
-    });
-
-    // Add remaining text after last dice expression
-    if (lastIndex < content.length) {
-      const textAfter = content.slice(lastIndex);
-      if (textAfter) {
-        parts.push(<span key="text-final">{textAfter}</span>);
-      }
-    }
-
-    return <div className="text-sm leading-relaxed mb-3">{parts}</div>;
+    return <div className="text-sm leading-relaxed mb-3">{formattedContent}</div>;
   }, [parsedMessage.content, message.content, diceExpressions]);
   const {
     segments,
