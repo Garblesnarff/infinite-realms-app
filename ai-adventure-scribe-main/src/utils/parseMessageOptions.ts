@@ -156,7 +156,8 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
     const lastSentence = sentences[sentences.length - 1];
 
     // If last sentence doesn't end with punctuation, remove it
-    if (lastSentence && !lastSentence.match(/[.!?]\s*$/)) {
+    // Allow for quotes/asterisks after punctuation (e.g., `."` or `.*`)
+    if (lastSentence && !lastSentence.match(/[.!?]["'*]?\s*$/)) {
       sentences.pop();
       narrativeContent = sentences.join(' ');
     }
