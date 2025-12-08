@@ -502,6 +502,57 @@ export interface GameContext {
   characterDetails?: Record<string, unknown>;
 }
 
+/**
+ * Verbalized Sampling: Parse structured response and sample based on probabilities
+ * Based on Stanford/Northeastern research: https://arxiv.org/abs/2510.01171
+ */
+function sampleFromVerbalizedResponse(rawResponse: string): string {
+  const responsePattern =
+    /<response>\s*<probability>([\d.]+)<\/probability>\s*<text>([\s\S]*?)<\/text>\s*<\/response>/gi;
+  const matches: { probability: number; text: string }[] = [];
+
+  let match;
+  while ((match = responsePattern.exec(rawResponse)) !== null) {
+    const probability = parseFloat(match[1]);
+    const text = match[2].trim();
+    if (!isNaN(probability) && text) {
+      matches.push({ probability, text });
+    }
+  }
+
+  if (matches.length === 0) {
+    // Fallback: clean any partial XML tags
+    return rawResponse
+      .replace(/<\/?response>/gi, '')
+      .replace(/<\/?probability>/gi, '')
+      .replace(/<\/?text>/gi, '')
+      .trim();
+  }
+
+  // Normalize probabilities
+  const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
+  const normalized = matches.map((m) => ({
+    ...m,
+    probability: totalProb > 0 ? m.probability / totalProb : 1 / matches.length,
+  }));
+
+  // Sample based on probability distribution
+  const random = Math.random();
+  let cumulative = 0;
+
+  for (const response of normalized) {
+    cumulative += response.probability;
+    if (random <= cumulative) {
+      logger.info(
+        `[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`,
+      );
+      return response.text;
+    }
+  }
+
+  return normalized[normalized.length - 1].text;
+}
+
 export class AIService {
   /**
    * Get the shared Gemini API manager instance
@@ -1691,32 +1742,61 @@ Reference these memories naturally to maintain story continuity.`;
 
           if (isFirstMessage) {
             contextPrompt += `<opening_scene_requirements>
-<title>CAMPAIGN OPENING - FIRST MESSAGE REQUIREMENTS</title>
-This is the campaign's opening scene. Create an engaging D&D adventure start that hooks the player immediately.
+<title>CAMPAIGN OPENING - FIRST MESSAGE</title>
 
-<structure>
-1. **Scene Setting**: Establish location, atmosphere, and immediate situation using rich sensory details.
-2. **Character Integration**: Connect the character's background and skills to the opening scenario.
-3. **Active NPC**: Include at least one speaking NPC with quoted dialogue and clear personality.
-4. **Immediate Hook**: Present a compelling problem, opportunity, or mystery requiring action.
-5. **Clear Choices**: End with 2-3 specific action options with different approaches and consequences.
-</structure>
+<verbalized_sampling_output>
+Generate 3 COMPLETE opening scenes, each in a separate <response> tag.
+Each <response> MUST include:
+- A <probability> tag with a decimal value (all should sum to ~1.0)
+- A <text> tag containing the COMPLETE opening scene
 
-<mechanics>
-- If uncertain outcomes occur, specify needed dice rolls: "Make a Perception check (d20 + Wisdom modifier)".
-- Reference character abilities that might be relevant: "Your training might help here".
-- Include environmental details that suggest skill applications or tactical options.
-- Set up potential ability checks, combat, or social interactions.
-</mechanics>
+Vary approaches across dimensions:
+- **Setting**: Classic (tavern) vs. Unusual (mid-action, unique location)
+- **Pacing**: Slow atmospheric build vs. Immediate tension vs. Mystery
+- **Hook**: NPC encounter vs. Discovery vs. Danger
 
-<elements>
-- Use appropriate atmosphere and tone throughout.
-- Make the character feel central to unfolding events.
-- Create both immediate and long-term stakes.
-- Include sensory details (sights, sounds, smells, textures).
-- Show why this character is the right person for this adventure.
-- End with a clear "What do you do?" moment.
-</elements>
+FORMAT EXACTLY LIKE THIS:
+<response>
+<probability>0.5</probability>
+<text>
+[Complete opening scene - 2-3 paragraphs with sensory details, NPC dialogue in quotes, ends with A/B/C action options]
+</text>
+</response>
+<response>
+<probability>0.3</probability>
+<text>
+[Different approach - complete scene with dialogue and A/B/C options]
+</text>
+</response>
+<response>
+<probability>0.2</probability>
+<text>
+[Creative/unexpected approach - complete scene with dialogue and A/B/C options]
+</text>
+</response>
+
+CRITICAL RULES:
+- Each <text> MUST be a COMPLETE, STANDALONE opening scene
+- Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
+- Do NOT output anything outside the <response> tags
+- The system will randomly select ONE response based on probabilities
+</verbalized_sampling_output>
+
+<scene_requirements>
+1. **Scene Setting**: Location, atmosphere, sensory details (sights, sounds, smells)
+2. **Character Integration**: Connect background/skills to the scenario naturally
+3. **Active NPC**: Include at least one speaking NPC with quoted dialogue
+4. **Immediate Hook**: Compelling problem, opportunity, or mystery requiring action
+5. **Clear Choices**: End with 2-3 action options in A/B/C format with bold action names
+</scene_requirements>
+
+<action_format>
+Format choices as: A. **Action Name**, brief description
+Example:
+A. **Approach the stranger**, introducing yourself and asking about the commotion
+B. **Observe from the shadows**, gathering information before revealing yourself
+C. **Check for danger**, scanning the room for potential threats
+</action_format>
 </opening_scene_requirements>`;
           }
 
@@ -1918,7 +1998,8 @@ Your narrative response here...
           });
 
           // Use streaming if callback provided (note: streaming won't work with JSON parsing)
-          if (params.onStream && !voiceContext) {
+          // IMPORTANT: Disable streaming for first messages to enable verbalized sampling
+          if (params.onStream && !voiceContext && !isFirstMessage) {
             const response = await chat.sendMessageStream(params.message);
             let fullResponse = '';
 
@@ -1933,6 +2014,12 @@ Your narrative response here...
             const response = await chat.sendMessage(params.message);
             const result = await response.response;
             const rawResponse = result.text();
+
+            // Apply verbalized sampling for opening scenes (first message)
+            if (isFirstMessage && !voiceContext) {
+              const sampledText = sampleFromVerbalizedResponse(rawResponse);
+              return { text: sampledText };
+            }
 
             // Try to parse structured response if voice context is available
             if (voiceContext) {
