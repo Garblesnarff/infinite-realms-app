@@ -521,12 +521,15 @@ function sampleFromVerbalizedResponse(rawResponse: string): string {
 
   if (matches.length === 0) {
     // Fallback: clean any partial XML tags
+    logger.warn('[Verbalized Sampling] No valid <response> tags found, using fallback cleanup');
     return rawResponse
       .replace(/<\/?response>/gi, '')
       .replace(/<\/?probability>/gi, '')
       .replace(/<\/?text>/gi, '')
       .trim();
   }
+
+  logger.info(`[Verbalized Sampling] Found ${matches.length} response options`);
 
   // Normalize probabilities
   const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
@@ -2000,7 +2003,11 @@ Your narrative response here...
 
             // Apply verbalized sampling for opening scenes (first message)
             if (isFirstMessage && !voiceContext) {
+              logger.info('[Opening Message] Raw AI response length:', rawResponse.length);
+              logger.debug('[Opening Message] Raw AI response (first 500 chars):', rawResponse.slice(0, 500));
               const sampledText = sampleFromVerbalizedResponse(rawResponse);
+              logger.info('[Opening Message] Sampled text length:', sampledText.length);
+              logger.debug('[Opening Message] Sampled text (first 500 chars):', sampledText.slice(0, 500));
               return { text: sampledText };
             }
 
