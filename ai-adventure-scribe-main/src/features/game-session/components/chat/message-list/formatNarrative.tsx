@@ -172,19 +172,21 @@ export const formatNarrative = (
       const currentNorm = normalize(rawParagraphs[i]);
       let isDuplicate = false;
 
-      // Check if current paragraph STARTS WITH the first previous paragraph
-      // AND contains the start of subsequent paragraphs (indicates accumulated/expanded duplicate)
+      // NEW ALGORITHM: Check if paragraph N contains the starts of ALL previous paragraphs
+      // This catches accumulated duplicates even when AI rewords slightly
+      // Requires at least 2 previous paragraphs to avoid false positives
       if (i >= 2) {
         const firstPrevNorm = normalize(rawParagraphs[0]);
-        const firstPrevStart = firstPrevNorm.slice(0, 50); // First 50 chars
+        const firstPrevStart = firstPrevNorm.slice(0, 50);
 
-        // If current starts with first paragraph's beginning
-        if (currentNorm.startsWith(firstPrevStart)) {
-          // Check if it also contains starts of other previous paragraphs
+        // Check if current STARTS WITH first paragraph's start (original check)
+        // OR if current CONTAINS first paragraph's start (handles rewording)
+        if (currentNorm.startsWith(firstPrevStart) || currentNorm.includes(firstPrevStart)) {
+          // Check if it also contains starts of ALL other previous paragraphs
           let containsAllPrevious = true;
           for (let j = 1; j < i && containsAllPrevious; j++) {
             const prevNorm = normalize(rawParagraphs[j]);
-            const prevStart = prevNorm.slice(0, 40); // First 40 chars
+            const prevStart = prevNorm.slice(0, 40);
             if (!currentNorm.includes(prevStart)) {
               containsAllPrevious = false;
             }
