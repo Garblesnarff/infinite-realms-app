@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -275,6 +276,9 @@ export function TextAnnotation({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add Text Annotation</DialogTitle>
+            <DialogDescription>
+              Enter text and customize its appearance on the battle map
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">

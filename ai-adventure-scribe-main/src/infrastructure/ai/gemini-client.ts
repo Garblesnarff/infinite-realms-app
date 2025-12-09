@@ -69,7 +69,7 @@ export class GeminiApiManager {
     if (input && Array.isArray(input.contents)) {
       const parts = input.contents as Array<{ role?: string; parts?: Array<{ text?: string }> }>;
       const texts: string[] = [];
-      const history: GeminiHistoryEntry[] = [];
+      let history: GeminiHistoryEntry[] = [];
 
       for (const item of parts) {
         const t = (item.parts || [])
@@ -89,7 +89,19 @@ export class GeminiApiManager {
         }
       }
 
-      return { prompt: texts.join('\n\n'), history };
+      let prompt = texts.join('\n\n');
+
+      // If prompt is empty but we have history, use the last user message as prompt
+      if (!prompt && history.length > 0) {
+        const lastUserIndex = [...history].reverse().findIndex(h => h.role === 'user');
+        if (lastUserIndex >= 0) {
+          const actualIndex = history.length - 1 - lastUserIndex;
+          prompt = history[actualIndex].content;
+          history = [...history.slice(0, actualIndex), ...history.slice(actualIndex + 1)];
+        }
+      }
+
+      return { prompt, history };
     }
 
     try {

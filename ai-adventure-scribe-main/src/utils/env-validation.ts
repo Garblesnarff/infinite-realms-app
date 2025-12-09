@@ -29,7 +29,7 @@ const ENV_VARIABLES: EnvVariable[] = [
     key: 'VITE_SUPABASE_URL',
     description: 'Supabase project URL',
     required: true,
-    validator: (value) => value.startsWith('https://') && value.includes('supabase.co'),
+    validator: (value) => value.startsWith('https://') && (value.includes('supabase.co') || value.includes('api.infiniterealms.app')),
   },
   {
     key: 'VITE_SUPABASE_ANON_KEY',

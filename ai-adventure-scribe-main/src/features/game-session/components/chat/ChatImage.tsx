@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import React from 'react';
 
-import { Dialog, DialogTrigger, DialogContent, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogTrigger, DialogContent, DialogClose, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 type Props = {
   url: string;
@@ -28,6 +28,9 @@ export const ChatImage: React.FC<Props> = ({ url, alt = 'Scene image', className
         />
       </DialogTrigger>
       <DialogContent className="p-0 bg-transparent border-0 shadow-none w-[96vw] max-w-[96vw] max-h-[96vh]">
+        {/* Visually hidden accessibility labels */}
+        <DialogTitle className="sr-only">Image Preview</DialogTitle>
+        <DialogDescription className="sr-only">Full size view of {alt}</DialogDescription>
         {/* Centering wrapper to avoid layout shift when close button is present */}
         <div className="relative mx-auto max-w-[95vw] max-h-[90vh]">
           <img

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { CharacterSelectionSkeleton } from '@/components/skeletons/CharacterSelectionSkeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isCampaignCharacterFlowEnabled } from '@/config/featureFlags';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,9 +120,9 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Choose Your Character</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Select a character to play in "{campaignName}"
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="mt-4">

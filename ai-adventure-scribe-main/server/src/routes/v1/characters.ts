@@ -320,6 +320,10 @@ export default function characterRouter() {
   });
 
   // Get character spells with full spell data
+  // Note: Spells are stored as JSON strings in the characters table columns:
+  // - cantrips: comma-separated spell names/IDs
+  // - known_spells: comma-separated spell names/IDs
+  // - prepared_spells: comma-separated spell names/IDs
   router.get('/:id/spells', async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const characterId = req.params.id;
@@ -331,7 +335,7 @@ export default function characterRouter() {
     });
 
     try {
-      // Single query to get character and spells (eliminates N+1 query)
+      // Query character data including spell columns from characters table
       const { data: character, error: charError } = await supabaseService
         .from('characters')
         .select(`
@@ -339,28 +343,9 @@ export default function characterRouter() {
           class,
           level,
           user_id,
-          character_spells (
-            spell_id,
-            is_prepared,
-            source_feature,
-            spells (
-              id,
-              name,
-              level,
-              school,
-              casting_time,
-              range_text,
-              components_verbal,
-              components_somatic,
-              components_material,
-              material_components,
-              duration,
-              concentration,
-              ritual,
-              description,
-              higher_level_text
-            )
-          )
+          cantrips,
+          known_spells,
+          prepared_spells
         `)
         .eq('id', characterId)
         .eq('user_id', userId)
@@ -383,28 +368,30 @@ export default function characterRouter() {
         ownerId: character.user_id
       });
 
-      // Extract character spells from the joined result
-      const characterSpells = character.character_spells || [];
+      // Parse spell strings (stored as comma-separated values or JSON arrays)
+      const parseSpellString = (value: string | string[] | null): string[] => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value.filter(Boolean);
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : [value];
+          } catch {
+            return value.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+        return [];
+      };
 
-      console.log('[CHARACTER_SPELLS] Raw spells data:', {
-        spellCount: characterSpells?.length || 0,
-        spells: characterSpells?.map((cs: any) => ({
-          spellName: Array.isArray(cs.spells) ? cs.spells[0]?.name : cs.spells?.name,
-          level: Array.isArray(cs.spells) ? cs.spells[0]?.level : cs.spells?.level,
-          prepared: cs.is_prepared
-        }))
+      const cantrips = parseSpellString(character.cantrips);
+      const knownSpells = parseSpellString(character.known_spells);
+      const preparedSpells = parseSpellString(character.prepared_spells);
+
+      console.log('[CHARACTER_SPELLS] Parsed spells:', {
+        cantripCount: cantrips.length,
+        knownSpellCount: knownSpells.length,
+        preparedSpellCount: preparedSpells.length
       });
-
-      // Transform the data to a more usable format
-      const spells = characterSpells?.map((cs: any) => ({
-        ...cs.spells,
-        is_prepared: cs.is_prepared,
-        source_feature: cs.source_feature
-      })) || [];
-
-      // Separate cantrips (level 0) from leveled spells
-      const cantrips = spells.filter((spell: any) => spell.level === 0);
-      const leveledSpells = spells.filter((spell: any) => spell.level > 0);
 
       const response = {
         character: {
@@ -412,9 +399,12 @@ export default function characterRouter() {
           class: character.class,
           level: character.level
         },
-        cantrips,
-        spells: leveledSpells,
-        total_spells: spells.length
+        cantrips: cantrips.map(name => ({ name, level: 0 })),
+        spells: knownSpells.map(name => ({
+          name,
+          is_prepared: preparedSpells.includes(name)
+        })),
+        total_spells: cantrips.length + knownSpells.length
       };
 
       console.log('[CHARACTER_SPELLS] Response:', {
