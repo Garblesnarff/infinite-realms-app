@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
-import { DMChatBubble } from '../features/game-session/components/chat/chat/DMChatBubble';
-import { DiceRollEmbed } from '../features/game-session/components/dice/DiceRollEmbed';
+import { DMChatBubble } from '@/components/game/chat/DMChatBubble';
+import { DiceRollEmbed } from '@/components/DiceRollEmbed';
 import { logger } from '../lib/logger';
 import { type ChatMessage } from '../services/ai-service';
 

@@ -6,7 +6,7 @@ import { Toaster } from 'sonner';
 import { AuthProvider } from './contexts/AuthContext';
 import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
-import ProtectedRoute from './features/auth/components/ProtectedRoute';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useTelemetry } from './hooks/use-telemetry';
 import { TRPCProvider } from './lib/trpc/Provider';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
