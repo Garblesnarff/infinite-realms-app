@@ -12,6 +12,11 @@ import { CombatHPService } from '../../services/combat-hp-service.js';
 import { CombatAttackService } from '../../services/combat-attack-service.js';
 import { ConditionsService } from '../../services/conditions-service.js';
 import { supabaseService } from '../../lib/supabase.js';
+import {
+  verifyEncounterOwnership,
+  verifySessionOwnership,
+  sendVerificationError,
+} from './combat-helpers.js';
 import type {
   CreateParticipantInput,
   AttackRollInput,
@@ -119,28 +124,10 @@ export default function combatRouter() {
     const userId = req.user!.userId;
 
     try {
-      // Validate sessionId
-      if (!sessionId) {
-        return res.status(400).json({ error: 'sessionId is required' });
-      }
-
       // Verify user owns the session
-      const { data: session, error: sessionErr } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionErr || !session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Verify ownership
-      const campaignOwner = (session as any).campaigns?.user_id;
-      const characterOwner = (session as any).characters?.user_id;
-
-      if (campaignOwner !== userId && characterOwner !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
+      const verification = await verifySessionOwnership(sessionId, userId);
+      if (!verification.success) {
+        return sendVerificationError(res, verification.error!);
       }
 
       // Validate participants
@@ -148,9 +135,9 @@ export default function combatRouter() {
         return res.status(400).json({ error: 'Participants array is required and must not be empty' });
       }
 
-      // Start combat
+      // Start combat - sessionId is validated by verifySessionOwnership
       const combatState = await CombatInitiativeService.startCombat(
-        sessionId,
+        sessionId!,
         participants,
         surpriseRound || false
       );
@@ -224,34 +211,10 @@ export default function combatRouter() {
     const userId = req.user!.userId;
 
     try {
-      // Validate encounterId
-      if (!encounterId) {
-        return res.status(400).json({ error: 'encounterId is required' });
-      }
-
-      // Get encounter and verify ownership
-      const encounter = await CombatInitiativeService.getEncounterById(encounterId);
-      if (!encounter) {
-        return res.status(404).json({ error: 'Encounter not found' });
-      }
-
-      // Verify user owns the session
-      const { data: session, error: sessionErr } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-        .eq('id', encounter.sessionId)
-        .single();
-
-      if (sessionErr || !session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Verify ownership
-      const campaignOwner = (session as any).campaigns?.user_id;
-      const characterOwner = (session as any).characters?.user_id;
-
-      if (campaignOwner !== userId && characterOwner !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
+      // Verify user owns the encounter
+      const verification = await verifyEncounterOwnership(encounterId, userId);
+      if (!verification.success) {
+        return sendVerificationError(res, verification.error!);
       }
 
       // Validate input
@@ -263,9 +226,9 @@ export default function combatRouter() {
         return res.status(400).json({ error: 'roll must be between 1 and 20' });
       }
 
-      // Roll initiative
+      // Roll initiative - encounterId is validated by verifyEncounterOwnership
       const result = await CombatInitiativeService.rollInitiative(
-        encounterId,
+        encounterId!,
         participantId,
         roll,
         modifier
@@ -312,38 +275,14 @@ export default function combatRouter() {
     const userId = req.user!.userId;
 
     try {
-      // Validate encounterId
-      if (!encounterId) {
-        return res.status(400).json({ error: 'encounterId is required' });
+      // Verify user owns the encounter
+      const verification = await verifyEncounterOwnership(encounterId, userId);
+      if (!verification.success) {
+        return sendVerificationError(res, verification.error!);
       }
 
-      // Get encounter and verify ownership
-      const encounter = await CombatInitiativeService.getEncounterById(encounterId);
-      if (!encounter) {
-        return res.status(404).json({ error: 'Encounter not found' });
-      }
-
-      // Verify user owns the session
-      const { data: session, error: sessionErr } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-        .eq('id', encounter.sessionId)
-        .single();
-
-      if (sessionErr || !session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Verify ownership
-      const campaignOwner = (session as any).campaigns?.user_id;
-      const characterOwner = (session as any).characters?.user_id;
-
-      if (campaignOwner !== userId && characterOwner !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
-      // Advance turn
-      const result = await CombatInitiativeService.advanceTurn(encounterId);
+      // Advance turn - encounterId is validated by verifyEncounterOwnership
+      const result = await CombatInitiativeService.advanceTurn(encounterId!);
 
       return res.json(result);
     } catch (e) {
@@ -411,34 +350,10 @@ export default function combatRouter() {
     const userId = req.user!.userId;
 
     try {
-      // Validate encounterId
-      if (!encounterId) {
-        return res.status(400).json({ error: 'encounterId is required' });
-      }
-
-      // Get encounter and verify ownership
-      const encounter = await CombatInitiativeService.getEncounterById(encounterId);
-      if (!encounter) {
-        return res.status(404).json({ error: 'Encounter not found' });
-      }
-
-      // Verify user owns the session
-      const { data: session, error: sessionErr } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-        .eq('id', encounter.sessionId)
-        .single();
-
-      if (sessionErr || !session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Verify ownership
-      const campaignOwner = (session as any).campaigns?.user_id;
-      const characterOwner = (session as any).characters?.user_id;
-
-      if (campaignOwner !== userId && characterOwner !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
+      // Verify user owns the encounter
+      const verification = await verifyEncounterOwnership(encounterId, userId);
+      if (!verification.success) {
+        return sendVerificationError(res, verification.error!);
       }
 
       // Validate input
@@ -446,11 +361,11 @@ export default function combatRouter() {
         return res.status(400).json({ error: 'participantId and newInitiative are required' });
       }
 
-      // Reorder initiative
-      await CombatInitiativeService.reorderInitiative(encounterId, participantId, newInitiative);
+      // Reorder initiative - encounterId is validated by verifyEncounterOwnership
+      await CombatInitiativeService.reorderInitiative(encounterId!, participantId, newInitiative);
 
       // Get updated combat state
-      const combatState = await CombatInitiativeService.getCombatState(encounterId);
+      const combatState = await CombatInitiativeService.getCombatState(encounterId!);
 
       return res.json(combatState);
     } catch (e) {

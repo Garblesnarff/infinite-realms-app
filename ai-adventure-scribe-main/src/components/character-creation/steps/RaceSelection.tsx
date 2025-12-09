@@ -1,16 +1,4 @@
-import {
-  Check,
-  Users,
-  Zap,
-  Globe,
-  Search,
-  Filter,
-  Grid,
-  List,
-  Heart,
-  Star,
-  Eye,
-} from 'lucide-react';
+import { Search, Grid, List, Eye, Check, Users, Zap, Globe } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 import { HalfElfAbilityChoice } from '../modals/HalfElfAbilityChoice';
 import { VariantHumanChoice } from '../modals/VariantHumanChoice';
@@ -27,6 +15,12 @@ import { baseRaces } from '@/data/raceOptions';
 import logger from '@/lib/logger';
 import type { CharacterRace, Subrace } from '@/types/character';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import {
+  RaceCardListView,
+  RaceCardCompactView,
+  RaceCardGridView,
+} from './race-selection/RaceCard';
+import { buildRaceCategories, filterRaces } from './race-selection/raceFilters';
 
 const RaceSelection: React.FC = () => {
   const { state, dispatch } = useCharacter();
@@ -50,59 +44,14 @@ const RaceSelection: React.FC = () => {
   // Variant Human ability + feat choice modal state
   const [showVariantHumanModal, setShowVariantHumanModal] = useState(false);
 
-  // Race categories for filtering
-  const raceCategories = [
-    { id: 'all', name: 'All Races', count: baseRaces.length },
-    {
-      id: 'core',
-      name: 'Core Races',
-      count: baseRaces.filter((r) =>
-        ['human', 'elf', 'dwarf', 'halfling', 'dragonborn', 'half-elf', 'half-orc'].includes(r.id),
-      ).length,
-    },
-    {
-      id: 'exotic',
-      name: 'Exotic Races',
-      count: baseRaces.filter((r) =>
-        ['tiefling', 'gnome', 'elementalborn', 'celestialborn', 'astralborn'].includes(r.id),
-      ).length,
-    },
-    {
-      id: 'planar',
-      name: 'Planar Races',
-      count: baseRaces.filter((r) => ['celestialborn', 'astralborn', 'tiefling'].includes(r.id))
-        .length,
-    },
-  ];
+  // Race categories for filtering (using extracted utility)
+  const raceCategories = useMemo(() => buildRaceCategories(baseRaces), []);
 
-  // Filter and search logic
-  const filteredRaces = useMemo(() => {
-    let filtered = baseRaces;
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(
-        (race) =>
-          race.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          race.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          race.traits.some((trait) => trait.toLowerCase().includes(searchQuery.toLowerCase())),
-      );
-    }
-
-    // Apply category filter
-    if (selectedCategory !== 'all') {
-      const categoryRaces = {
-        core: ['human', 'elf', 'dwarf', 'halfling', 'dragonborn', 'half-elf', 'half-orc'],
-        exotic: ['tiefling', 'gnome', 'elementalborn', 'celestialborn', 'astralborn'],
-        planar: ['celestialborn', 'astralborn', 'tiefling'],
-      };
-      filtered = filtered.filter((race) =>
-        categoryRaces[selectedCategory as keyof typeof categoryRaces]?.includes(race.id),
-      );
-    }
-
-    return filtered;
-  }, [searchQuery, selectedCategory]);
+  // Filter and search logic (using extracted utility)
+  const filteredRaces = useMemo(
+    () => filterRaces(baseRaces, searchQuery, selectedCategory),
+    [searchQuery, selectedCategory]
+  );
 
   // Helper functions
   const toggleFavorite = (raceId: string) => {
@@ -327,368 +276,29 @@ const RaceSelection: React.FC = () => {
             {filteredRaces.map((baseRace) => {
               const isSelected = state.character?.race?.id === baseRace.id;
               const isFavorite = favorites.has(baseRace.id);
-              const isHovered = hoveredRaceId === baseRace.id;
+              const canAddToComparison = comparisonRaces.length < 3 || comparisonRaces.some((r) => r.id === baseRace.id);
 
-              // Different card layouts based on view mode
+              const cardProps = {
+                race: baseRace,
+                isSelected,
+                isFavorite,
+                onSelect: handleBaseRaceSelect,
+                onToggleFavorite: toggleFavorite,
+                onAddToComparison: addToComparison,
+                canAddToComparison,
+                onHover: setHoveredRaceId,
+              };
+
               if (viewMode === 'list') {
-                return (
-                  <Card
-                    key={baseRace.id}
-                    className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 shadow-lg'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => handleBaseRaceSelect(baseRace)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        handleBaseRaceSelect(baseRace);
-                      }
-                    }}
-                    style={
-                      baseRace.backgroundImage
-                        ? {
-                            backgroundImage: `url(${baseRace.backgroundImage})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                          }
-                        : undefined
-                    }
-                  >
-                    {baseRace.backgroundImage && (
-                      <div className="absolute inset-0 bg-black/60 z-0" />
-                    )}
-                    <CardContent
-                      className={`p-4 relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${baseRace.backgroundImage ? 'text-white' : ''}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Users
-                              className={`w-5 h-5 flex-shrink-0 ${baseRace.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
-                            />
-                            <h3 className="text-xl font-bold truncate">{baseRace.name}</h3>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {Object.entries(baseRace.abilityScoreIncrease).map(
-                              ([ability, bonus]) => (
-                                <Badge
-                                  key={ability}
-                                  variant="secondary"
-                                  className={`text-xs ${baseRace.backgroundImage ? 'bg-black/60 text-white border-white/20 backdrop-blur-sm' : ''}`}
-                                >
-                                  {ability.substring(0, 3)} +{bonus}
-                                </Badge>
-                              ),
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFavorite(baseRace.id);
-                            }}
-                            className="p-1"
-                          >
-                            <Heart
-                              className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`}
-                            />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              addToComparison(baseRace);
-                            }}
-                            className="p-1"
-                            disabled={
-                              comparisonRaces.length >= 3 &&
-                              !comparisonRaces.find((r) => r.id === baseRace.id)
-                            }
-                          >
-                            <Star className="w-4 h-4" />
-                          </Button>
-                          {isSelected && (
-                            <div className="bg-primary text-primary-foreground rounded-full p-1">
-                              <Check className="w-4 h-4" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <p
-                        className={`text-sm mt-2 line-clamp-2 ${baseRace.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
-                      >
-                        {baseRace.description}
-                      </p>
-                      <div
-                        className={`flex items-center gap-4 mt-2 text-xs ${baseRace.backgroundImage ? 'text-gray-300' : 'text-muted-foreground'}`}
-                      >
-                        <span>Speed: {baseRace.speed}ft</span>
-                        <span>{baseRace.languages.length} languages</span>
-                        {baseRace.subraces && baseRace.subraces.length > 0 && (
-                          <span>{baseRace.subraces.length} subraces</span>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
+                return <RaceCardListView key={baseRace.id} {...cardProps} />;
               }
 
               if (viewMode === 'compact') {
-                return (
-                  <Card
-                    key={baseRace.id}
-                    className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 relative overflow-hidden ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 shadow-lg ring-4 ring-primary/20'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => handleBaseRaceSelect(baseRace)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        handleBaseRaceSelect(baseRace);
-                      }
-                    }}
-                    style={
-                      baseRace.backgroundImage
-                        ? {
-                            backgroundImage: `url(${baseRace.backgroundImage})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                          }
-                        : undefined
-                    }
-                  >
-                    {baseRace.backgroundImage && (
-                      <div className="absolute inset-0 bg-black/60 z-0" />
-                    )}
-                    <div className="p-4">
-                      <div
-                        className={`flex items-center justify-between mb-3 relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${baseRace.backgroundImage ? 'text-white' : ''}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users
-                            className={`w-5 h-5 ${baseRace.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
-                          />
-                          <h3 className="font-bold text-lg">{baseRace.name}</h3>
-                        </div>
-                        {isSelected && (
-                          <div className="bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
-                            <Check className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                      <div
-                        className={`flex flex-wrap gap-1.5 mb-3 relative z-[${Z_INDEX.OVERLAY_EFFECT}]`}
-                      >
-                        {Object.entries(baseRace.abilityScoreIncrease).map(([ability, bonus]) => (
-                          <Badge
-                            key={ability}
-                            variant="secondary"
-                            className={`text-xs font-semibold ${baseRace.backgroundImage ? 'bg-black/60 text-white border-white/20 backdrop-blur-sm' : ''}`}
-                          >
-                            +{bonus} {ability.substring(0, 3)}
-                          </Badge>
-                        ))}
-                      </div>
-                      <p
-                        className={`text-sm line-clamp-2 relative z-[${Z_INDEX.OVERLAY_EFFECT}] leading-relaxed ${baseRace.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
-                      >
-                        {baseRace.description}
-                      </p>
-                      {baseRace.subraces && baseRace.subraces.length > 0 && (
-                        <div
-                          className={`text-xs text-center mt-3 pt-2 border-t relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${baseRace.backgroundImage ? 'text-gray-300 border-gray-400' : 'text-muted-foreground border-border'}`}
-                        >
-                          {baseRace.subraces.length} subrace
-                          {baseRace.subraces.length > 1 ? 's' : ''} available
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                );
+                return <RaceCardCompactView key={baseRace.id} {...cardProps} />;
               }
 
               // Default grid view
-              return (
-                <Card
-                  key={baseRace.id}
-                  className={`race-card group cursor-pointer transition-all hover:shadow-xl border-2 relative overflow-hidden aspect-square ${
-                    isSelected
-                      ? 'border-primary shadow-lg'
-                      : 'border-border/30 hover:border-infinite-purple/50'
-                  }`}
-                  style={{
-                    padding: 0,
-                    ...(baseRace.backgroundImage
-                      ? {
-                          backgroundImage: `url(${baseRace.backgroundImage})`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }
-                      : {}),
-                  }}
-                  onClick={() => handleBaseRaceSelect(baseRace)}
-                  onMouseEnter={() => setHoveredRaceId(baseRace.id)}
-                  onMouseLeave={() => setHoveredRaceId(null)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleBaseRaceSelect(baseRace);
-                    }
-                  }}
-                >
-                  {/* Edge blur overlay - creates vignette effect without color */}
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      boxShadow: 'inset 0 0 60px 20px rgba(0, 0, 0, 0.3)',
-                    }}
-                  />
-
-                  {/* Top-right indicators */}
-                  <div
-                    className={`absolute top-3 right-3 z-[${Z_INDEX.CARD_HOVER}] flex items-center gap-2`}
-                  >
-                    {/* Favorite and comparison buttons */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(baseRace.id);
-                      }}
-                      className="p-1 bg-white/10 hover:bg-white/20"
-                    >
-                      <Heart
-                        className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`}
-                      />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToComparison(baseRace);
-                      }}
-                      className="p-1 bg-white/10 hover:bg-white/20"
-                      disabled={
-                        comparisonRaces.length >= 3 &&
-                        !comparisonRaces.find((r) => r.id === baseRace.id)
-                      }
-                    >
-                      <Star className="w-4 h-4 text-white" />
-                    </Button>
-
-                    {/* Selected indicator */}
-                    {isSelected && (
-                      <div className="bg-primary text-primary-foreground rounded-full p-1">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Hover popup */}
-                  <div
-                    className={`hover-popup ${isHovered ? `opacity-100 scale-100 pointer-events-auto z-[${Z_INDEX.CARD_HOVER}]` : 'opacity-0 scale-95 pointer-events-none'} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out`}
-                  >
-                    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-xl border border-border w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto">
-                      {/* Race name */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <Users className="w-4 h-4 text-infinite-purple flex-shrink-0" />
-                        <h3 className="text-lg font-bold text-foreground">{baseRace.name}</h3>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-xs text-foreground mb-2 leading-snug">
-                        {baseRace.description}
-                      </p>
-
-                      {/* Ability Score Increases */}
-                      <div className="mb-2">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Zap className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                          <h4 className="font-semibold text-foreground text-xs">
-                            Ability Score Increases
-                          </h4>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(baseRace.abilityScoreIncrease).map(([ability, bonus]) => (
-                            <Badge
-                              key={ability}
-                              variant="secondary"
-                              className="capitalize text-xs py-0 px-1.5"
-                            >
-                              {ability.substring(0, 3)} +{bonus}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Speed */}
-                      <p className="text-xs text-foreground mb-2">
-                        <span className="font-medium">Speed:</span> {baseRace.speed} feet
-                      </p>
-
-                      {/* Languages */}
-                      {baseRace.languages.length > 0 && (
-                        <div className="mb-2">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Globe className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                            <h4 className="font-semibold text-foreground text-xs">Languages</h4>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {baseRace.languages.map((language: string, index: number) => (
-                              <Badge key={index} variant="outline" className="text-xs py-0 px-1.5">
-                                {language}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Racial Traits */}
-                      <div className="mb-2">
-                        <h4 className="font-semibold text-foreground text-xs mb-1">
-                          Racial Traits
-                        </h4>
-                        <div className="space-y-1">
-                          {baseRace.traits.map((trait: string, index: number) => (
-                            <div
-                              key={index}
-                              className="text-xs p-1.5 bg-muted/30 rounded leading-snug"
-                            >
-                              <span className="font-medium">{trait.split(':')[0]}</span>
-                              {trait.includes(':') && (
-                                <span className="text-muted-foreground">
-                                  : {trait.split(':').slice(1).join(':')}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Subraces Indicator */}
-                      {baseRace.subraces && baseRace.subraces.length > 0 && (
-                        <div className="text-xs text-center pt-1.5 border-t text-muted-foreground">
-                          Has {baseRace.subraces.length} subrace
-                          {baseRace.subraces.length > 1 ? 's' : ''} available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
+              return <RaceCardGridView key={baseRace.id} {...cardProps} />;
             })}
           </div>
         ) : (

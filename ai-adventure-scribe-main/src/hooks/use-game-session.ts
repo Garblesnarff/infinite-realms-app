@@ -36,25 +36,26 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // ============================
 // External integrations
 // ============================
-import type { GameSession } from '@/types/game';
-
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-
-// ============================
-// Project hooks
-// ============================
-
-// ============================
-// Project types
-// ============================
 import logger from '@/lib/logger';
 
-// Session expiry times
-// Free tier: 7 days
-// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
-const SESSION_EXPIRY_TIME = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
-const CLEANUP_INTERVAL = 1000 * 60 * 15; // Check every 15 minutes
+// ============================
+// Session utilities (extracted)
+// ============================
+import {
+  type ExtendedGameSession,
+  type SessionStateUpdater,
+  SESSION_EXPIRY_TIME,
+  CLEANUP_INTERVAL,
+  isValidSession,
+  sanitizeSessionPatch,
+  isSessionExpired,
+  generateSessionSummary,
+} from './game-session/session-utils';
+
+// Re-export types for consumers of this hook
+export type { ExtendedGameSession, SessionStateUpdater };
 
 /**
  * React hook for managing game sessions, including creation, expiration, cleanup, and summary generation.
@@ -86,44 +87,6 @@ const CLEANUP_INTERVAL = 1000 * 60 * 15; // Check every 15 minutes
  *   isSessionReady: () => boolean
  * }} Session state and control functions
  */
-export interface ExtendedGameSession extends GameSession {
-  current_scene_description?: string | null;
-  session_notes?: string | null;
-  turn_count?: number | null;
-  campaign_id?: string | null;
-  character_id?: string | null;
-}
-
-export type SessionStateUpdater =
-  | Partial<ExtendedGameSession>
-  | ((prev: ExtendedGameSession) => Partial<ExtendedGameSession> | null | undefined);
-
-const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | string>([
-  'id',
-  'campaign_id',
-  'character_id',
-  'created_at',
-  'updated_at',
-  'sequence_number',
-]);
-
-function sanitizeSessionPatch(patch: Partial<ExtendedGameSession>) {
-  const sanitized: Partial<ExtendedGameSession> = {};
-  const removed: string[] = [];
-
-  for (const [key, value] of Object.entries(patch)) {
-    if (IMMUTABLE_SESSION_FIELDS.has(key)) {
-      removed.push(key);
-      continue;
-    }
-
-    sanitized[key as keyof ExtendedGameSession] =
-      value as ExtendedGameSession[keyof ExtendedGameSession];
-  }
-
-  return { sanitized, removed };
-}
-
 export const useGameSession = (
   campaignId?: string,
   characterId?: string,
@@ -137,17 +100,6 @@ export const useGameSession = (
   const { toast } = useToast();
 
   const currentSessionId = sessionData?.id || null;
-
-  /**
-   * Validates that a session object has required properties.
-   * Used internally to ensure session data integrity.
-   *
-   * @param {any} session - The session object to validate
-   * @returns {boolean} True if session has required properties
-   */
-  const isValidSession = (session: any): session is ExtendedGameSession => {
-    return session && typeof session === 'object' && typeof session.id === 'string';
-  };
 
   /**
    * Safe setter for session data with validation.
@@ -294,98 +246,6 @@ export const useGameSession = (
     },
     [],
   ); // Stable dependencies - uses refs and parameters instead
-
-  /**
-   * Generates a summary string for the session based on dialogue history.
-   *
-   * Validation:
-   * - Requires valid sessionId parameter
-   * - Returns fallback message if sessionId is invalid
-   * - Returns fallback message on database errors
-   *
-   * Note: This function does not perform state updates, so it's inherently
-   * safe from cleanup issues.
-   *
-   * @param {string} sessionId - The session ID
-   * @returns {Promise<string>} The generated summary
-   */
-  const generateSessionSummary = async (sessionId: string): Promise<string> => {
-    // Guard: Validate sessionId parameter
-    if (!sessionId) {
-      logger.warn('⚠️ [generateSessionSummary] Called without valid sessionId');
-      return 'No activity recorded in this session';
-    }
-
-    try {
-      const { data: messages, error } = await supabase
-        .from('dialogue_history')
-        .select('message, speaker_type, context')
-        .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: true });
-
-      if (error) {
-        logger.error('[generateSessionSummary] Error fetching dialogue history:', error);
-        return 'No activity recorded in this session';
-      }
-
-      if (!messages?.length) {
-        logger.info('[generateSessionSummary] No messages found for session:', sessionId);
-        return 'No activity recorded in this session';
-      }
-
-      // Simple summary generation - can be enhanced with AI later
-      const messageCount = messages.length;
-      const playerActions = messages.filter((m) => m.speaker_type === 'player').length;
-      const dmResponses = messages.filter((m) => m.speaker_type === 'dm').length;
-
-      return `Session completed with ${messageCount} total interactions: ${playerActions} player actions and ${dmResponses} DM responses.`;
-    } catch (err) {
-      logger.error('[generateSessionSummary] Error generating session summary:', err);
-      return 'No activity recorded in this session';
-    }
-  };
-
-  /**
-   * Checks if a session has expired based on start time.
-   *
-   * Validation:
-   * - Requires valid session object with id
-   * - Uses current time as fallback if start_time is missing
-   *
-   * @param {ExtendedGameSession} session - The session object
-   * @returns {boolean} True if expired, false otherwise
-   */
-  const isSessionExpired = (session: ExtendedGameSession): boolean => {
-    // Guard: Validate session parameter
-    if (!session || !session.id) {
-      logger.warn('⚠️ [isSessionExpired] Called without valid session');
-      return false;
-    }
-
-    const startTime = session.start_time ? new Date(session.start_time).getTime() : Date.now();
-    const currentTime = Date.now();
-    const elapsed = currentTime - startTime;
-    const isExpired = elapsed > SESSION_EXPIRY_TIME;
-
-    if (isExpired) {
-      logger.info(`⏰ Session ${session.id} expired:`, {
-        sessionId: session.id,
-        startTime: new Date(startTime).toISOString(),
-        currentTime: new Date(currentTime).toISOString(),
-        elapsedHours: Math.round((elapsed / (1000 * 60 * 60)) * 100) / 100,
-        expiryHours: SESSION_EXPIRY_TIME / (1000 * 60 * 60),
-      });
-    } else {
-      logger.info(`✅ Session ${session.id} still active:`, {
-        sessionId: session.id,
-        elapsedHours: Math.round((elapsed / (1000 * 60 * 60)) * 100) / 100,
-        remainingHours:
-          Math.round(((SESSION_EXPIRY_TIME - elapsed) / (1000 * 60 * 60)) * 100) / 100,
-      });
-    }
-
-    return isExpired;
-  };
 
   /**
    * Cleans up an expired session, generates a summary, and updates status.

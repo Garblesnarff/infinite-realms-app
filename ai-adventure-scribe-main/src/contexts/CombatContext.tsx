@@ -20,32 +20,37 @@ import type {
   CombatContextValue,
   DamageType,
   DiceRoll,
-  FightingStyleName,
   ReactionOpportunity,
   ActionType,
   Equipment,
 } from '@/types/combat';
-import type { SpellSlotLevel } from '@/utils/spell-management';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { CombatEvent } from '@/types/combat';
-import { activateRage, deactivateRage } from '@/utils/classFeatures';
 import {
-  getConditionModifiers,
   applyConditionEffects,
   removeConditionEffects,
-  handleConditionSave,
-  hasCondition,
 } from '@/utils/conditionEffects';
 import { rollDie } from '@/utils/diceRolls';
 import { calculateDamage } from '@/utils/diceUtils';
 import { processMovementAction } from '@/utils/movementUtils';
 import { checkReactionTriggers } from '@/utils/reactionSystem';
-import { castSpell, checkConcentration } from '@/utils/spell-management';
-import { processShortRestCombat, processLongRestCombat } from '@/utils/restMechanics';
-import { attemptHide, applyHiddenCondition, removeHiddenCondition } from '@/utils/stealthUtils';
-import { FIGHTING_STYLES } from '@/utils/fightingStyles';
+import { checkConcentration } from '@/utils/spell-management';
+import {
+  createCombatParticipant,
+  sortByInitiative,
+  type CharacterData,
+} from './combat/participant-factory';
+import {
+  handleSpellCast,
+  handleDivineSmite,
+  handleRageActivation,
+  handleRageDeactivation,
+  handleShortRest,
+  handleLongRest,
+  handleHideAction,
+} from './combat/action-handlers';
 
 // ===========================
 // Supabase Client
@@ -406,83 +411,37 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
     async (sessionId: string, initialParticipants: Partial<CombatParticipant>[]) => {
       const encounterId = crypto.randomUUID();
 
-      // Roll initiative for all participants
-      const participantsWithInitiative = initialParticipants.map((p) => {
-        const participant: CombatParticipant = {
-          id: p.id || crypto.randomUUID(),
-          participantType: p.participantType || 'monster',
-          name: p.name || 'Unknown',
-          characterId: p.characterId,
-          initiative: rollDie(20) + (p.initiative || 0),
-          armorClass: p.armorClass || 10,
-          maxHitPoints: p.maxHitPoints || 1,
-          currentHitPoints: p.currentHitPoints || p.maxHitPoints || 1,
-          temporaryHitPoints: 0,
-          position: p.position,
-          conditions: [],
-          deathSaves: { successes: 0, failures: 0 },
-          actionTaken: false,
-          bonusActionTaken: false,
-          reactionTaken: false,
-          movementUsed: 0,
-          reactionOpportunities: [],
-          monsterData: p.monsterData,
-          spellSlots: undefined,
-          activeConcentration: null,
-          // Damage resistances, immunities, and vulnerabilities
-          damageResistances: p.damageResistances || [],
-          damageImmunities: p.damageImmunities || [],
-          damageVulnerabilities: p.damageVulnerabilities || [],
-          // Fighting styles
-          fightingStyles: p.fightingStyles || [],
-          // Weapons
-          mainHandWeapon: p.mainHandWeapon,
-          offHandWeapon: p.offHandWeapon,
-          // Vision and stealth
-          visionTypes: p.visionTypes || [],
-          obscurement: p.obscurement || 'clear',
-          isHidden: p.isHidden || false,
-          stealthCheckBonus: p.stealthCheckBonus || 0,
-        };
+      // Build character data for enriching player participants
+      const characterData: CharacterData | null = characterState.character ? {
+        id: characterState.character.id,
+        spellSlots: characterState.character.spellSlots,
+        preparedSpells: characterState.character.preparedSpells,
+        activeConcentration: characterState.character.activeConcentration,
+        damageResistances: characterState.character.damageResistances,
+        damageImmunities: characterState.character.damageImmunities,
+        damageVulnerabilities: characterState.character.damageVulnerabilities,
+        fightingStyles: characterState.character.fightingStyles,
+        visionTypes: characterState.character.visionTypes,
+        obscurement: characterState.character.obscurement,
+        isHidden: characterState.character.isHidden,
+        stealthCheckBonus: characterState.character.stealthCheckBonus,
+      } : null;
 
-        // For player characters, copy spell slots, prepared spells, and damage resistances from CharacterContext
-        if (
-          p.participantType === 'player' &&
-          p.characterId &&
-          characterState.character?.id === p.characterId
-        ) {
-          participant.spellSlots = characterState.character.spellSlots;
-          participant.preparedSpells = characterState.character.preparedSpells;
-          participant.activeConcentration = characterState.character.activeConcentration;
-          participant.damageResistances = characterState.character.damageResistances || [];
-          participant.damageImmunities = characterState.character.damageImmunities || [];
-          participant.damageVulnerabilities = characterState.character.damageVulnerabilities || [];
-          participant.fightingStyles =
-            characterState.character.fightingStyles?.map((style) => {
-              // Convert string to FightingStyle object
-              const styleName = style as FightingStyleName;
-              return FIGHTING_STYLES[styleName] || { name: styleName, description: '', effect: {} };
-            }) || [];
-          // Copy vision and stealth properties from character
-          participant.visionTypes = characterState.character.visionTypes || [];
-          participant.obscurement = characterState.character.obscurement || 'clear';
-          participant.isHidden = characterState.character.isHidden || false;
-          participant.stealthCheckBonus = characterState.character.stealthCheckBonus || 0;
-        }
-
-        return participant;
-      }) as CombatParticipant[];
+      // Create participants using the factory function
+      const participantsWithInitiative = initialParticipants.map((p) =>
+        createCombatParticipant(p, { rollInitiative: true, characterData })
+      );
 
       // Sort by initiative (highest first)
-      participantsWithInitiative.sort((a, b) => b.initiative - a.initiative);
+      const sortedParticipants = sortByInitiative(participantsWithInitiative);
 
       const encounter: CombatEncounter = {
         id: encounterId,
         sessionId,
         phase: 'active',
         currentRound: 1,
-        currentTurnParticipantId: participantsWithInitiative[0]?.id,
-        participants: participantsWithInitiative,
+        currentTurnParticipantId: sortedParticipants[0]?.id,
+        participants: sortedParticipants,
         actions: [],
         roundsElapsed: 1,
         startTime: new Date(),
@@ -577,200 +536,48 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       );
       if (!participant) return;
 
-      // Handle spell casting
+      // Handle action based on type using extracted handlers
+      let handlerResult;
+
       if (action.actionType === 'cast_spell' && participant.participantType === 'player') {
-        try {
-          const spellLevel = (action.spellLevel as SpellSlotLevel) || 1;
-          const spellName = action.spellName || 'Unknown Spell';
-          const { updatedParticipant, updatedAction } = castSpell(
-            action,
-            participant,
-            spellName,
-            spellLevel,
-          );
-
-          // Update participant in combat
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId!,
-            updates: {
-              spellSlots: updatedParticipant.spellSlots,
-              activeConcentration: updatedParticipant.activeConcentration,
-              actionTaken: true, // Casting a spell uses the action
-            },
-          });
-
-          fullAction = { ...fullAction, ...updatedAction };
-        } catch (error) {
-          logger.error('Spell casting failed:', error);
-          // Still add the action but mark as failed
-          fullAction.description += ` (Failed: ${(error as Error).message})`;
+        handlerResult = handleSpellCast(action, participant);
+        if (handlerResult.actionUpdates) {
+          fullAction = { ...fullAction, ...handlerResult.actionUpdates };
         }
+      } else if (action.actionType === 'divine_smite') {
+        handlerResult = handleDivineSmite(action, participant);
+      } else if (action.actionType === 'use_class_feature' && action.featureUsed === 'rage') {
+        handlerResult = handleRageActivation(action, participant);
+      } else if (action.actionType === 'end_rage') {
+        handlerResult = handleRageDeactivation(participant);
+      } else if (action.actionType === 'short_rest') {
+        handlerResult = handleShortRest(participant, 1);
+      } else if (action.actionType === 'long_rest') {
+        handlerResult = handleLongRest(participant);
+      } else if (action.actionType === 'hide') {
+        handlerResult = handleHideAction(participant);
       }
-      // Handle divine smite
-      else if (action.actionType === 'divine_smite') {
-        try {
-          // Check if participant is a paladin with spell slots
-          if (participant.characterClass !== 'paladin' || !participant.spellSlots) {
-            throw new Error('Only paladins can use Divine Smite');
-          }
 
-          // Find the lowest available spell slot (at least 1st level)
-          let spellSlotLevel: SpellSlotLevel | null = null;
-          for (let i = 1; i <= 5; i++) {
-            // Check up to 5th level slots
-            if (participant.spellSlots[i as SpellSlotLevel]?.current > 0) {
-              spellSlotLevel = i as SpellSlotLevel;
-              break;
-            }
-          }
-
-          if (!spellSlotLevel) {
-            throw new Error('No available spell slots for Divine Smite');
-          }
-
-          // Deduct the spell slot
-          const updatedSlots = { ...participant.spellSlots };
-          updatedSlots[spellSlotLevel] = {
-            ...updatedSlots[spellSlotLevel],
-            current: updatedSlots[spellSlotLevel].current - 1,
-          };
-
-          // Update participant in combat
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId!,
-            updates: {
-              spellSlots: updatedSlots,
-              actionTaken: true, // Using Divine Smite uses the action
-            },
-          });
-
-          fullAction.description = `${participant.name} uses Divine Smite with a level ${spellSlotLevel} spell slot`;
-        } catch (error) {
-          logger.error('Divine Smite failed:', error);
-          fullAction.description += ` (Failed: ${(error as Error).message})`;
-        }
-      }
-      // Handle rage activation
-      else if (action.actionType === 'use_class_feature' && action.featureUsed === 'rage') {
-        try {
-          if (!participant.resources) {
-            throw new Error('Participant has no resources');
-          }
-
-          const { updatedParticipant, updatedResources, rageDamageBonus } = activateRage(
-            participant,
-            participant.resources,
-          );
-
-          // Update participant in combat
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId!,
-            updates: {
-              ...updatedParticipant,
-              resources: updatedResources,
-              actionTaken: true, // Using rage uses the action
-            },
-          });
-
-          fullAction.description = `${participant.name} enters a rage, gaining resistance to bludgeoning, piercing, and slashing damage and +${rageDamageBonus} damage to melee attacks`;
-        } catch (error) {
-          logger.error('Rage activation failed:', error);
-          fullAction.description += ` (Failed: ${(error as Error).message})`;
-        }
-      }
-      // Handle rage deactivation
-      else if (action.actionType === 'end_rage') {
-        try {
-          const updatedParticipant = deactivateRage(participant);
-
-          // Update participant in combat
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId!,
-            updates: {
-              ...updatedParticipant,
-              actionTaken: true, // Ending rage uses the action
-            },
-          });
-
-          fullAction.description = `${participant.name} stops raging`;
-        } catch (error) {
-          logger.error('Rage deactivation failed:', error);
-          fullAction.description += ` (Failed: ${(error as Error).message})`;
-        }
-      }
-      // Handle short rest
-      else if (action.actionType === 'short_rest') {
-        // Process short rest for the participant
-        const updatedParticipant = processShortRestCombat(participant, 1); // Default to rolling 1 hit die
-
-        // Update participant in combat
+      // Apply handler result if present
+      if (handlerResult) {
         dispatch({
           type: 'UPDATE_PARTICIPANT',
           participantId: action.participantId!,
-          updates: {
-            ...updatedParticipant,
-            actionTaken: true, // Taking a short rest uses the action
-          },
+          updates: handlerResult.participantUpdates,
         });
-
-        fullAction.description = `${participant.name} takes a short rest`;
-      }
-      // Handle long rest
-      else if (action.actionType === 'long_rest') {
-        // Process long rest for the participant
-        const updatedParticipant = processLongRestCombat(participant);
-
-        // Update participant in combat
+        if (handlerResult.actionUpdates.description) {
+          fullAction.description = handlerResult.actionUpdates.description;
+        }
+        if (handlerResult.actionUpdates.attackRoll) {
+          fullAction.attackRoll = handlerResult.actionUpdates.attackRoll;
+        }
+      } else if (action.participantId) {
+        // Default: mark participant as having taken action
         dispatch({
           type: 'UPDATE_PARTICIPANT',
-          participantId: action.participantId!,
-          updates: {
-            ...updatedParticipant,
-            actionTaken: true, // Taking a long rest uses the action
-          },
+          participantId: action.participantId,
+          updates: { actionTaken: true },
         });
-
-        fullAction.description = `${participant.name} takes a long rest`;
-      }
-      // Handle hide action
-      else if (action.actionType === 'hide') {
-        try {
-          // Attempt to hide
-          const hideResult = attemptHide(participant);
-
-          // Update participant in combat
-          const updatedParticipant = hideResult.success
-            ? applyHiddenCondition(participant)
-            : removeHiddenCondition(participant);
-
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId!,
-            updates: {
-              ...updatedParticipant,
-              actionTaken: true, // Hiding uses the action
-            },
-          });
-
-          fullAction.description = hideResult.description;
-          fullAction.attackRoll = hideResult.roll;
-        } catch (error) {
-          logger.error('Hide action failed:', error);
-          fullAction.description += ` (Failed: ${(error as Error).message})`;
-        }
-      } else {
-        // Mark participant as having taken action for other actions
-        if (action.participantId) {
-          dispatch({
-            type: 'UPDATE_PARTICIPANT',
-            participantId: action.participantId,
-            updates: { actionTaken: true },
-          });
-        }
       }
 
       dispatch({ type: 'ADD_ACTION', action: fullAction });
@@ -981,68 +788,26 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
 
   const addParticipant = useCallback(
     async (participant: Partial<CombatParticipant>) => {
-      const fullParticipant: CombatParticipant = {
-        id: participant.id || crypto.randomUUID(),
-        participantType: participant.participantType || 'monster',
-        name: participant.name || 'Unknown',
-        characterId: participant.characterId,
-        initiative: participant.initiative || rollDie(20),
-        armorClass: participant.armorClass || 10,
-        maxHitPoints: participant.maxHitPoints || 1,
-        currentHitPoints: participant.currentHitPoints || participant.maxHitPoints || 1,
-        temporaryHitPoints: 0,
-        position: participant.position,
-        conditions: [],
-        deathSaves: { successes: 0, failures: 0 },
-        actionTaken: false,
-        bonusActionTaken: false,
-        reactionTaken: false,
-        movementUsed: 0,
-        reactionOpportunities: [],
-        monsterData: participant.monsterData,
-        spellSlots: undefined,
-        activeConcentration: null,
-        // Damage resistances, immunities, and vulnerabilities
-        damageResistances: participant.damageResistances || [],
-        damageImmunities: participant.damageImmunities || [],
-        damageVulnerabilities: participant.damageVulnerabilities || [],
-        // Fighting styles
-        fightingStyles: participant.fightingStyles || [],
-        // Weapons
-        mainHandWeapon: participant.mainHandWeapon,
-        offHandWeapon: participant.offHandWeapon,
-        // Vision and stealth
-        visionTypes: participant.visionTypes || [],
-        obscurement: participant.obscurement || 'clear',
-        isHidden: participant.isHidden || false,
-        stealthCheckBonus: participant.stealthCheckBonus || 0,
-      };
+      // Build character data for enriching player participants
+      const characterData: CharacterData | null = characterState.character ? {
+        id: characterState.character.id,
+        spellSlots: characterState.character.spellSlots,
+        preparedSpells: characterState.character.preparedSpells,
+        activeConcentration: characterState.character.activeConcentration,
+        damageResistances: characterState.character.damageResistances,
+        damageImmunities: characterState.character.damageImmunities,
+        damageVulnerabilities: characterState.character.damageVulnerabilities,
+        fightingStyles: characterState.character.fightingStyles,
+        visionTypes: characterState.character.visionTypes,
+        obscurement: characterState.character.obscurement,
+        isHidden: characterState.character.isHidden,
+        stealthCheckBonus: characterState.character.stealthCheckBonus,
+      } : null;
 
-      // For player characters, copy data from CharacterContext if available
-      if (
-        participant.participantType === 'player' &&
-        participant.characterId &&
-        characterState.character?.id === participant.characterId
-      ) {
-        fullParticipant.spellSlots = characterState.character.spellSlots;
-        fullParticipant.preparedSpells = characterState.character.preparedSpells;
-        fullParticipant.activeConcentration = characterState.character.activeConcentration;
-        fullParticipant.damageResistances = characterState.character.damageResistances || [];
-        fullParticipant.damageImmunities = characterState.character.damageImmunities || [];
-        fullParticipant.damageVulnerabilities =
-          characterState.character.damageVulnerabilities || [];
-        fullParticipant.fightingStyles =
-          characterState.character.fightingStyles?.map((style) => {
-            // Convert string to FightingStyle object
-            const styleName = style as FightingStyleName;
-            return FIGHTING_STYLES[styleName] || { name: styleName, description: '', effect: {} };
-          }) || [];
-        // Copy vision and stealth properties from character
-        fullParticipant.visionTypes = characterState.character.visionTypes || [];
-        fullParticipant.obscurement = characterState.character.obscurement || 'clear';
-        fullParticipant.isHidden = characterState.character.isHidden || false;
-        fullParticipant.stealthCheckBonus = characterState.character.stealthCheckBonus || 0;
-      }
+      const fullParticipant = createCombatParticipant(participant, {
+        rollInitiative: !participant.initiative,
+        characterData,
+      });
 
       dispatch({ type: 'ADD_PARTICIPANT', participant: fullParticipant });
     },
