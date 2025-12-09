@@ -15,8 +15,6 @@ import type { PgDb as Db } from '../../src/infrastructure/database/index.js';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './trpc/root.js';
 import { createContext } from './trpc/context.js';
-import { db } from '../../db/client.js';
-import { sql } from 'drizzle-orm';
 
 export function createApp(_db?: Db) {
   const app = express();
@@ -75,24 +73,14 @@ export function createApp(_db?: Db) {
     res.end(await register.metrics());
   });
 
-  // Enhanced health check endpoint
-  app.get('/health', async (_req, res) => {
-    try {
-      // Check database connection
-      await db.execute(sql`SELECT 1`);
-
-      res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-      });
-    } catch (error) {
-      res.status(503).json({
-        status: 'unhealthy',
-        error: (error as Error).message,
-      });
-    }
+  // Health check endpoint
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+    });
   });
 
   // Mount tRPC API at /api/trpc

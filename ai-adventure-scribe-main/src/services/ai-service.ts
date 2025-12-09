@@ -9,6 +9,7 @@ import type { SessionVoiceContext } from './voice-consistency-service';
 import { detectCombatFromText, type CombatDetectionResult } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
+import { sampleFromVerbalizedResponse } from './ai/shared/verbalized-sampling';
 import { SessionStateService } from './session-state-service';
 import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
@@ -120,61 +121,8 @@ function deduplicateParagraphs(text: string): string {
   return result.join('\n\n');
 }
 
-/**
- * Verbalized Sampling: Parse structured response and sample based on probabilities
- * Based on Stanford/Northeastern research: https://arxiv.org/abs/2510.01171
- */
-function sampleFromVerbalizedResponse(rawResponse: string): string {
-  const responsePattern =
-    /<response>\s*<probability>([\d.]+)<\/probability>\s*<text>([\s\S]*?)<\/text>\s*<\/response>/gi;
-  const matches: { probability: number; text: string }[] = [];
-
-  let match;
-  while ((match = responsePattern.exec(rawResponse)) !== null) {
-    const probability = parseFloat(match[1]);
-    const text = match[2].trim();
-    if (!isNaN(probability) && text) {
-      matches.push({ probability, text });
-    }
-  }
-
-  if (matches.length === 0) {
-    // Fallback: clean any partial XML tags
-    logger.warn('[Verbalized Sampling] No valid <response> tags found, using fallback cleanup');
-    return rawResponse
-      .replace(/<\/?response>/gi, '')
-      .replace(/<\/?probability>/gi, '')
-      .replace(/<\/?text>/gi, '')
-      .trim();
-  }
-
-  logger.info(`[Verbalized Sampling] Found ${matches.length} response options`);
-
-  // Normalize probabilities
-  const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
-  const normalized = matches.map((m) => ({
-    ...m,
-    probability: totalProb > 0 ? m.probability / totalProb : 1 / matches.length,
-  }));
-
-  // Sample based on probability distribution
-  const random = Math.random();
-  let cumulative = 0;
-
-  for (const response of normalized) {
-    cumulative += response.probability;
-    if (random <= cumulative) {
-      logger.info(
-        `[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`,
-      );
-      // Apply deduplication to remove any accumulated paragraphs
-      return deduplicateParagraphs(response.text);
-    }
-  }
-
-  // Apply deduplication to remove any accumulated paragraphs
-  return deduplicateParagraphs(normalized[normalized.length - 1].text);
-}
+// sampleFromVerbalizedResponse is now imported from ./ai/shared/verbalized-sampling
+// It provides robust multi-strategy parsing with safe fallback to prevent duplicates
 
 export class AIService {
   /**

@@ -17,6 +17,7 @@ import {
   buildOpeningScenePrompt,
 } from './shared/prompts';
 import { getGeminiManager, addEquipmentContext } from './shared/utils';
+import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
 
 import type { Memory, MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
@@ -25,56 +26,8 @@ import type { ChatMessage, GameContext, AIResponse, NarrationSegment } from './s
 import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 
-/**
- * Verbalized Sampling: Parse structured response and sample based on probabilities
- * Based on Stanford/Northeastern research: https://arxiv.org/abs/2510.01171
- */
-function sampleFromVerbalizedResponse(rawResponse: string): string {
-  const responsePattern =
-    /<response>\s*<probability>([\d.]+)<\/probability>\s*<text>([\s\S]*?)<\/text>\s*<\/response>/gi;
-  const matches: { probability: number; text: string }[] = [];
-
-  let match;
-  while ((match = responsePattern.exec(rawResponse)) !== null) {
-    const probability = parseFloat(match[1]);
-    const text = match[2].trim();
-    if (!isNaN(probability) && text) {
-      matches.push({ probability, text });
-    }
-  }
-
-  if (matches.length === 0) {
-    // Fallback: clean any partial XML tags
-    return rawResponse
-      .replace(/<\/?response>/gi, '')
-      .replace(/<\/?probability>/gi, '')
-      .replace(/<\/?text>/gi, '')
-      .trim();
-  }
-
-  // Normalize probabilities
-  const totalProb = matches.reduce((sum, m) => sum + m.probability, 0);
-  const normalized = matches.map((m) => ({
-    ...m,
-    probability: totalProb > 0 ? m.probability / totalProb : 1 / matches.length,
-  }));
-
-  // Sample based on probability distribution
-  const random = Math.random();
-  let cumulative = 0;
-
-  for (const response of normalized) {
-    cumulative += response.probability;
-    if (random <= cumulative) {
-      logger.info(
-        `[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`,
-      );
-      return response.text;
-    }
-  }
-
-  return normalized[normalized.length - 1].text;
-}
+// sampleFromVerbalizedResponse is now imported from ./shared/verbalized-sampling
+// It provides robust multi-strategy parsing with safe fallback to prevent duplicates
 
 /**
  * Generate response using Gemini API
@@ -205,8 +158,13 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
     });
 
     // Use streaming if callback provided (note: streaming won't work with JSON parsing)
+    // For opening scenes (first message), use a prompt to trigger scene generation
+    const messageToSend = isFirstMessage
+      ? 'Begin the adventure. Generate the opening scene for this campaign.'
+      : params.message;
+
     if (params.onStream && !voiceContext) {
-      const response = await chat.sendMessageStream(params.message);
+      const response = await chat.sendMessageStream(messageToSend);
       let fullResponse = '';
 
       for await (const chunk of response.stream) {
@@ -217,7 +175,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 
       return { text: fullResponse };
     } else {
-      const response = await chat.sendMessage(params.message);
+      const response = await chat.sendMessage(messageToSend);
       const result = await response.response;
       const rawResponse = result.text();
 
