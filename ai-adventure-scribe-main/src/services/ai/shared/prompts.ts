@@ -529,6 +529,8 @@ CRITICAL RULES:
 - Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
+- NEVER repeat or rephrase paragraphs within a single response - each paragraph should appear exactly ONCE
+- Do NOT write draft paragraphs followed by expanded versions - write final content only
 </verbalized_sampling_output>
 
 <scene_requirements>

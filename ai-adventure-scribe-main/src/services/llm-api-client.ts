@@ -111,29 +111,31 @@ class LlmApiClient {
         const data = await res.json();
         return data?.text ?? '';
       }
-      // Rate limit on Gemini - fall back to OpenRouter free model (DeepSeek V3)
-      if (isRateLimitErr && preferredProvider === 'gemini') {
-        console.warn('[LLMApiClient] Gemini rate limited, falling back to DeepSeek V3 free tier');
-        try {
-          const res = await makeReq('openrouter', 'deepseek/deepseek-chat-v3-0324:free');
-          const data = await res.json();
-          return data?.text ?? '';
-        } catch (fallbackErr) {
-          console.error('[LLMApiClient] OpenRouter fallback also failed:', fallbackErr);
-          throw err; // Throw original error
+      // Rate limit - try multiple free fallback models
+      if (isRateLimitErr) {
+        const fallbackModels = [
+          'deepseek/deepseek-chat-v3-0324:free',
+          'google/gemini-2.0-flash-exp:free',
+          'meta-llama/llama-3.3-70b-instruct:free',
+        ];
+        console.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
+
+        for (const fallbackModel of fallbackModels) {
+          try {
+            console.info(`[LLMApiClient] Trying fallback: ${fallbackModel}`);
+            const res = await makeReq('openrouter', fallbackModel);
+            const data = await res.json();
+            if (data?.text) {
+              console.info(`[LLMApiClient] Fallback succeeded: ${fallbackModel}`);
+              return data.text;
+            }
+          } catch (fallbackErr) {
+            console.warn(`[LLMApiClient] Fallback ${fallbackModel} failed:`, fallbackErr);
+            // Continue to next fallback
+          }
         }
-      }
-      // Rate limit on OpenRouter - try the free model explicitly
-      if (isRateLimitErr && preferredProvider === 'openrouter') {
-        console.warn('[LLMApiClient] OpenRouter rate limited, trying DeepSeek V3 free tier');
-        try {
-          const res = await makeReq('openrouter', 'deepseek/deepseek-chat-v3-0324:free');
-          const data = await res.json();
-          return data?.text ?? '';
-        } catch (fallbackErr) {
-          console.error('[LLMApiClient] DeepSeek V3 free tier also failed:', fallbackErr);
-          throw err; // Throw original error
-        }
+        console.error('[LLMApiClient] All fallback models failed');
+        throw err; // Throw original error if all fallbacks fail
       }
       throw err;
     }

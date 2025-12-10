@@ -28,14 +28,17 @@ const cleanBrainstorming = (text: string): string => {
 
 const splitIntoSentences = (block: string): string[] => {
   const sentences: string[] = [];
-  const regex = /[^.!?]+[.!?]+["”']?\s*/g;
+  const regex = /[^.!?]+[.!?]+[""']?\s*/g;
   let match: RegExpExecArray | null;
+  let lastMatchEnd = 0;
 
   while ((match = regex.exec(block)) !== null) {
     sentences.push(match[0].trim());
+    lastMatchEnd = regex.lastIndex;  // Track position BEFORE lastIndex resets to 0
   }
 
-  const remainder = block.slice(regex.lastIndex).trim();
+  // Use our tracked position, not regex.lastIndex (which resets to 0 after loop)
+  const remainder = block.slice(lastMatchEnd).trim();
   if (remainder) {
     sentences.push(remainder);
   }
@@ -154,69 +157,89 @@ export const formatNarrative = (
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
-  const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+  // Normalize for comparison - handles quotes, dashes, and whitespace
+  const normalize = (value: string) =>
+    value
+      .replace(/[\u2018\u2019\u201C\u201D]/g, "'") // Smart quotes to straight
+      .replace(/[\u2013\u2014]/g, '-') // En/em dashes to hyphen
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
 
   let rawParagraphs = trimmed
     .split(/\n\s*\n/)
     .map((block) => block.trim())
     .filter(Boolean);
 
-  // Deduplicate accumulated paragraphs
-  // Pattern: AI streams paragraphs individually, then repeats them combined with expansions
-  // E.g., Para1, Para2, then "Para1 [extra text]. Para2 [extra text]."
-  // The combined/expanded paragraph should be removed since it duplicates content
   if (rawParagraphs.length > 1) {
     const result: string[] = [];
+    const seenStarts: string[] = [];
 
     for (let i = 0; i < rawParagraphs.length; i++) {
       const currentNorm = normalize(rawParagraphs[i]);
+      const currentStart = currentNorm.slice(0, 60);
       let isDuplicate = false;
+      let duplicateReason = '';
 
-      // FIXED ALGORITHM: Check if paragraph N contains 2+ CONSECUTIVE previous paragraphs IN ORDER
-      // This catches accumulated duplicates at ANY position, not just from paragraph 0
-      // Example: [Para1, Para2, Para3, Combined(1-3), Para5, Para6, Combined(5-6)]
-      // Old algorithm missed Combined(5-6) because it doesn't contain Para1
-      if (i >= 2) {
-        // Try each possible starting position for a consecutive sequence
-        for (let startIdx = 0; startIdx <= i - 2 && !isDuplicate; startIdx++) {
-          let lastFoundIndex = -1;
-          let consecutiveCount = 0;
+      // Check 1: This paragraph starts the same as a previous one (simple dup)
+      if (seenStarts.some((s) => s === currentStart)) {
+        isDuplicate = true;
+      }
 
-          for (let j = startIdx; j < i; j++) {
-            const prevNorm = normalize(rawParagraphs[j]);
-            const prevStart = prevNorm.slice(0, 40);
-            const foundIndex = currentNorm.indexOf(prevStart);
-
-            // Must be found AND appear after previous match (ensures correct order)
-            if (foundIndex !== -1 && foundIndex > lastFoundIndex) {
-              consecutiveCount++;
-              lastFoundIndex = foundIndex;
-            } else {
-              break; // Sequence broken
+      // Check 2: This paragraph contains a previous paragraph's substantial content
+      if (!isDuplicate && result.length >= 1) {
+        for (const prev of result) {
+          const prevNorm = normalize(prev);
+          // If current contains the first 80 chars of a previous paragraph
+          if (prevNorm.length > 60 && currentNorm.includes(prevNorm.slice(0, 80))) {
+            // And current is significantly longer (it's an accumulated version)
+            if (currentNorm.length > prevNorm.length * 1.3) {
+              isDuplicate = true;
+              break;
             }
           }
+          // Or if current contains the middle portion of a previous paragraph
+          if (prevNorm.length > 100) {
+            const prevMiddle = prevNorm.slice(30, 90);
+            if (currentNorm.includes(prevMiddle) && currentNorm !== prevNorm) {
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+      }
 
-          // If 2+ consecutive paragraph starts found in order, it's a duplicate
-          if (consecutiveCount >= 2) {
+      // Check 3: This paragraph is two+ previous paragraphs joined together
+      if (!isDuplicate && i >= 2) {
+        for (let j = 0; j < i - 1 && !isDuplicate; j++) {
+          const subsequence = rawParagraphs.slice(j, j + 2);
+          const joinedNorm = normalize(subsequence.join(' '));
+          // Check if current equals or contains the joined content
+          if (currentNorm === joinedNorm || currentNorm.includes(joinedNorm)) {
             isDuplicate = true;
           }
         }
       }
 
-      // Also check exact match of joined previous paragraphs (original algorithm)
-      if (!isDuplicate) {
-        for (let j = 0; j < i && !isDuplicate; j++) {
-          const subsequence = rawParagraphs.slice(j, i);
-          if (subsequence.length >= 2) {
-            const joinedNorm = normalize(subsequence.join(' '));
-            if (currentNorm === joinedNorm) {
-              isDuplicate = true;
-            }
+      // Check 4: Multiple previous paragraph starts appear in order in this paragraph
+      if (!isDuplicate && i >= 2) {
+        let foundCount = 0;
+        let lastPos = -1;
+        for (let j = Math.max(0, i - 4); j < i; j++) {
+          const prevStart = normalize(rawParagraphs[j]).slice(0, 50);
+          const pos = currentNorm.indexOf(prevStart);
+          if (pos !== -1 && pos > lastPos) {
+            foundCount++;
+            lastPos = pos;
           }
+        }
+        if (foundCount >= 2) {
+          isDuplicate = true;
         }
       }
 
       if (!isDuplicate) {
+        seenStarts.push(currentStart);
         result.push(rawParagraphs[i]);
       }
     }

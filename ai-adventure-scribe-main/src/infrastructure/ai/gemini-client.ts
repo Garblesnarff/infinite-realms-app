@@ -335,9 +335,26 @@ export class GeminiApiManager {
 
             return {
               async sendMessage(message: string) {
+                // If message is empty but there's history, extract a prompt from the last user entry
+                let effectivePrompt = message;
+                let effectiveHistory = hist;
+
+                if (!effectivePrompt && hist.length > 0) {
+                  // Find the last user message in history to use as the prompt
+                  const lastUserIndex = hist.map(h => h.role).lastIndexOf('user');
+                  if (lastUserIndex >= 0) {
+                    effectivePrompt = hist[lastUserIndex].content;
+                    effectiveHistory = hist.filter((_, i) => i !== lastUserIndex);
+                  } else {
+                    // No user message in history - use all history as context in prompt
+                    effectivePrompt = hist.map(h => `[${h.role}]: ${h.content}`).join('\n\n');
+                    effectiveHistory = [];
+                  }
+                }
+
                 const text = await callText({
-                  prompt: message,
-                  history: hist,
+                  prompt: effectivePrompt,
+                  history: effectiveHistory,
                   maxTokens: effMax,
                   temperature: effTemp,
                 });
@@ -345,9 +362,24 @@ export class GeminiApiManager {
               },
 
               async sendMessageStream(message: string) {
+                // Same logic for streaming
+                let effectivePrompt = message;
+                let effectiveHistory = hist;
+
+                if (!effectivePrompt && hist.length > 0) {
+                  const lastUserIndex = hist.map(h => h.role).lastIndexOf('user');
+                  if (lastUserIndex >= 0) {
+                    effectivePrompt = hist[lastUserIndex].content;
+                    effectiveHistory = hist.filter((_, i) => i !== lastUserIndex);
+                  } else {
+                    effectivePrompt = hist.map(h => `[${h.role}]: ${h.content}`).join('\n\n');
+                    effectiveHistory = [];
+                  }
+                }
+
                 const fullText = await callText({
-                  prompt: message,
-                  history: hist,
+                  prompt: effectivePrompt,
+                  history: effectiveHistory,
                   maxTokens: effMax,
                   temperature: effTemp,
                 });

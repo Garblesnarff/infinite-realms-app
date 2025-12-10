@@ -262,6 +262,18 @@ function extractFirstSection(text: string): string {
 }
 
 /**
+ * Normalize text for comparison - handles different dash/quote variants
+ */
+function normalizeForComparison(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201C\u201D]/g, "'") // Smart quotes to straight
+    .replace(/[\u2013\u2014]/g, '-') // En/em dashes to hyphen
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
  * Validate and clean a selected response to remove any accumulated duplicates
  */
 function validateAndCleanResponse(text: string): string {
@@ -270,32 +282,55 @@ function validateAndCleanResponse(text: string): string {
   if (paragraphs.length < 2) return text;
 
   // Detect if later paragraphs contain accumulated earlier content
-  const seen = new Set<string>();
+  const seen: string[] = [];
   const unique: string[] = [];
 
   for (const para of paragraphs) {
-    const normalized = para.replace(/\s+/g, ' ').trim();
+    const normalized = normalizeForComparison(para);
     const signature = normalized.substring(0, 60);
 
-    // Check if this paragraph contains multiple previous paragraph starts (accumulation pattern)
-    let isAccumulated = false;
-    if (unique.length >= 2) {
-      const recentStarts = unique.slice(-3).map((p) => p.substring(0, 40));
+    // Check 1: Exact signature match (same start)
+    let isDuplicate = seen.some(s => s === signature);
+
+    // Check 2: This paragraph is a superset containing previous content
+    if (!isDuplicate && unique.length >= 1) {
+      for (const prevPara of unique) {
+        const prevNormalized = normalizeForComparison(prevPara);
+        // If this paragraph contains most of a previous paragraph, it's accumulated content
+        if (prevNormalized.length > 50 && normalized.includes(prevNormalized.substring(0, 100))) {
+          isDuplicate = true;
+          logger.debug('[Verbalized Sampling] Detected paragraph containing previous content, removing');
+          break;
+        }
+        // Or if a previous paragraph's significant portion appears in this one
+        if (prevNormalized.length > 100) {
+          const prevMiddle = prevNormalized.substring(20, 80);
+          if (normalized.includes(prevMiddle) && normalized !== prevNormalized) {
+            isDuplicate = true;
+            logger.debug('[Verbalized Sampling] Detected overlapping content, removing');
+            break;
+          }
+        }
+      }
+    }
+
+    // Check 3: This paragraph contains multiple previous paragraph starts (accumulation pattern)
+    if (!isDuplicate && unique.length >= 2) {
+      const recentStarts = unique.slice(-3).map((p) => normalizeForComparison(p).substring(0, 40));
       let containsCount = 0;
       for (const start of recentStarts) {
         if (normalized.includes(start)) {
           containsCount++;
         }
       }
-      // If this paragraph contains 2+ previous paragraph starts, it's accumulated
       if (containsCount >= 2) {
-        isAccumulated = true;
+        isDuplicate = true;
         logger.debug('[Verbalized Sampling] Detected accumulated paragraph, removing');
       }
     }
 
-    if (!seen.has(signature) && !isAccumulated) {
-      seen.add(signature);
+    if (!isDuplicate) {
+      seen.push(signature);
       unique.push(para);
     }
   }
