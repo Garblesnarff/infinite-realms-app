@@ -498,6 +498,16 @@ export interface AttackRollInput {
   advantage?: boolean;
   disadvantage?: boolean;
   damageRoll?: number;
+  /**
+   * Target's active conditions (e.g., ['paralyzed', 'poisoned'])
+   * Used for auto-crit detection (paralyzed/unconscious within 5ft)
+   */
+  targetConditions?: string[];
+  /**
+   * Distance to target in feet
+   * Used for auto-crit detection (must be within 5ft for paralyzed/unconscious)
+   */
+  distanceInFeet?: number;
 }
 
 /**
@@ -536,6 +546,16 @@ export interface SpellAttackInput {
   damageDice?: string;
   damageType?: DamageType;
   isCritical?: boolean;
+  /**
+   * Target conditions by target ID (e.g., { 'target-id': ['paralyzed'] })
+   * Used for auto-crit detection (paralyzed/unconscious within 5ft)
+   */
+  targetConditionsByTargetId?: Record<string, string[]>;
+  /**
+   * Distance to each target in feet by target ID
+   * Used for auto-crit detection (must be within 5ft for paralyzed/unconscious)
+   */
+  distanceByTargetId?: Record<string, number>;
 }
 
 /**

@@ -213,6 +213,8 @@ export class CombatAttackService {
       advantage = false,
       disadvantage = false,
       damageRoll,
+      targetConditions,
+      distanceInFeet,
     } = input;
 
     // Get target's AC and resistances
@@ -256,7 +258,9 @@ export class CombatAttackService {
     }
 
     // Hit - calculate damage
-    const isCrit = forceCritical || hitCheck.isCritical;
+    // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
+    const autoCrit = this.checkAutoCrit(targetConditions, distanceInFeet);
+    const isCrit = forceCritical || hitCheck.isCritical || autoCrit;
 
     if (!weapon) {
       // No weapon - return hit with no damage calculated
@@ -338,6 +342,8 @@ export class CombatAttackService {
       damageDice,
       damageType,
       isCritical = false,
+      targetConditionsByTargetId,
+      distanceByTargetId,
     } = input;
 
     const results: AttackResult[] = [];
@@ -374,11 +380,17 @@ export class CombatAttackService {
 
         // Hit - calculate damage
         if (damageDice && damageType) {
+          // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
+          const targetConditions = targetConditionsByTargetId?.[targetId];
+          const distanceInFeet = distanceByTargetId?.[targetId];
+          const autoCrit = this.checkAutoCrit(targetConditions, distanceInFeet);
+          const spellIsCrit = hitCheck.isCritical || isCritical || autoCrit;
+
           const damageCalc = this.calculateDamage({
             damageDice,
             damageBonus: 0,
             damageType,
-            isCritical: hitCheck.isCritical || isCritical,
+            isCritical: spellIsCrit,
             resistances: (targetStats.resistances || []) as DamageType[],
             vulnerabilities: (targetStats.vulnerabilities || []) as DamageType[],
             immunities: (targetStats.immunities || []) as DamageType[],
@@ -410,7 +422,7 @@ export class CombatAttackService {
               targetNewHp: hpResult.newCurrentHp,
               targetIsConscious: hpResult.isConscious,
               targetIsDead: hpResult.isDead,
-              isCritical: hitCheck.isCritical || isCritical,
+              isCritical: spellIsCrit,
               isNaturalOne: hitCheck.isNaturalOne,
               isNaturalTwenty: hitCheck.isNaturalTwenty,
             });
@@ -556,6 +568,40 @@ export class CombatAttackService {
     });
 
     return stats || null;
+  }
+
+  /**
+   * D&D 5E Auto-Crit Detection
+   *
+   * Per PHB: Attacks against paralyzed or unconscious creatures
+   * are automatic critical hits if the attacker is within 5 feet.
+   *
+   * @param targetConditions - Array of condition names on the target
+   * @param distanceInFeet - Distance to target (undefined = assume melee/within 5ft)
+   * @returns true if the attack should be an automatic critical hit
+   */
+  checkAutoCrit(targetConditions?: string[], distanceInFeet?: number): boolean {
+    if (!targetConditions || targetConditions.length === 0) {
+      return false;
+    }
+
+    // D&D 5E conditions that grant auto-crit within 5ft
+    const autoCritConditions = ['paralyzed', 'unconscious'];
+
+    // Check if target has any auto-crit conditions
+    const hasAutoCritCondition = targetConditions.some(condition =>
+      autoCritConditions.includes(condition.toLowerCase())
+    );
+
+    if (!hasAutoCritCondition) {
+      return false;
+    }
+
+    // Auto-crit only applies within 5ft
+    // If distance not specified, assume melee range (within 5ft)
+    const isWithin5Feet = distanceInFeet === undefined || distanceInFeet <= 5;
+
+    return isWithin5Feet;
   }
 
   /**
