@@ -45,6 +45,7 @@ export interface DamageResult {
   wasVulnerable: boolean;
   wasImmune: boolean;
   massiveDamage: boolean; // Instant death from massive damage
+  deathSaveFailuresAdded: number; // D&D 5E: damage at 0 HP adds failures (crit = 2)
 }
 
 /**
@@ -77,6 +78,21 @@ export interface DeathSaveResult {
 }
 
 /**
+ * Result of a stabilization attempt
+ * D&D 5E: DC 10 Wisdom (Medicine) check to stabilize a dying creature
+ */
+export interface StabilizationResult {
+  participantId: string;
+  success: boolean;
+  dc: number;
+  roll: number;
+  modifier: number;
+  total: number;
+  isStabilized: boolean;
+  message: string;
+}
+
+/**
  * Options for applying damage
  */
 export interface ApplyDamageOptions {
@@ -86,6 +102,8 @@ export interface ApplyDamageOptions {
   sourceDescription?: string;
   ignoreResistances?: boolean;
   ignoreImmunities?: boolean;
+  /** D&D 5E: Critical hits at 0 HP cause 2 death save failures instead of 1 */
+  isCriticalHit?: boolean;
 }
 
 /**
@@ -111,6 +129,7 @@ export class CombatHPService {
       sourceDescription,
       ignoreResistances = false,
       ignoreImmunities = false,
+      isCriticalHit = false,
     } = options;
 
     // Get participant and status
@@ -182,7 +201,29 @@ export class CombatHPService {
     // Check for massive damage (instant death)
     // Massive damage = taking damage >= max HP while at 0 HP
     const massiveDamage = status.currentHp === 0 && hpLost >= status.maxHp;
-    const isDead = massiveDamage || status.deathSavesFailures >= 3;
+
+    // D&D 5E Rule: Damage at 0 HP causes death save failures
+    // PHB p.197: "If you take any damage while you have 0 hit points, you suffer a death saving throw failure.
+    // If the damage is from a critical hit, you suffer two failures instead."
+    let deathSaveFailuresAdded = 0;
+    let newDeathSavesFailures = status.deathSavesFailures;
+
+    // Check if participant was already unconscious (at 0 HP) and took damage
+    // Note: This is DIFFERENT from dropping to 0 HP (which just makes you unconscious)
+    const wasAlreadyUnconscious = status.currentHp === 0 && !status.isConscious;
+
+    if (wasAlreadyUnconscious && hpLost > 0 && !massiveDamage) {
+      // D&D 5E: Critical hit = 2 failures, normal damage = 1 failure
+      deathSaveFailuresAdded = isCriticalHit ? 2 : 1;
+      newDeathSavesFailures = Math.min(3, newDeathSavesFailures + deathSaveFailuresAdded);
+    }
+
+    // Massive damage sets failures to 3 (instant death)
+    if (massiveDamage) {
+      newDeathSavesFailures = 3;
+    }
+
+    const isDead = newDeathSavesFailures >= 3;
 
     // Update status
     const [updatedStatus] = await db
@@ -191,7 +232,7 @@ export class CombatHPService {
         currentHp: newCurrentHp,
         tempHp: newTempHp,
         isConscious,
-        deathSavesFailures: massiveDamage ? 3 : status.deathSavesFailures,
+        deathSavesFailures: newDeathSavesFailures,
         updatedAt: new Date(),
       })
       .where(eq(combatParticipantStatus.participantId, participantId))
@@ -228,6 +269,7 @@ export class CombatHPService {
       wasVulnerable,
       wasImmune,
       massiveDamage,
+      deathSaveFailuresAdded,
     };
   }
 
@@ -533,5 +575,75 @@ export class CombatHPService {
     }
 
     return status;
+  }
+
+  /**
+   * Stabilize a dying creature with a Medicine check
+   * D&D 5E PHB p.197: "You can use your action to administer first aid to an unconscious creature
+   * and attempt to stabilize it, which requires a successful DC 10 Wisdom (Medicine) check."
+   *
+   * A stable creature:
+   * - Is still at 0 HP and unconscious
+   * - No longer makes death saves
+   * - Will regain 1 HP after 1d4 hours (if not healed sooner)
+   */
+  static async stabilizeWithMedicine(
+    participantId: string,
+    roll: number,
+    modifier: number
+  ): Promise<StabilizationResult> {
+    const DC = 10;
+    const total = roll + modifier;
+    const success = total >= DC;
+
+    const participant = await db.query.combatParticipants.findFirst({
+      where: eq(combatParticipants.id, participantId),
+      with: {
+        status: true,
+      },
+    });
+
+    if (!participant || !participant.status) {
+      throw new NotFoundError('Participant', participantId);
+    }
+
+    const status = participant.status;
+
+    // Can only stabilize unconscious creatures at 0 HP
+    if (status.isConscious || status.currentHp > 0) {
+      throw new BusinessLogicError('Cannot stabilize a conscious creature', { participantId });
+    }
+
+    // Check if already dead
+    if (status.deathSavesFailures >= 3) {
+      throw new BusinessLogicError('Cannot stabilize a dead creature', { participantId });
+    }
+
+    if (success) {
+      // Stabilize: clear death saves, mark as stable (still unconscious at 0 HP)
+      await db
+        .update(combatParticipantStatus)
+        .set({
+          deathSavesSuccesses: 0,
+          deathSavesFailures: 0,
+          // Note: isConscious stays false, currentHp stays 0
+          // The creature is stable but still unconscious
+          updatedAt: new Date(),
+        })
+        .where(eq(combatParticipantStatus.participantId, participantId));
+    }
+
+    return {
+      participantId,
+      success,
+      dc: DC,
+      roll,
+      modifier,
+      total,
+      isStabilized: success,
+      message: success
+        ? 'Successfully stabilized! The creature is unconscious but no longer dying.'
+        : `Stabilization failed (DC ${DC}, rolled ${total}). The creature is still dying.`,
+    };
   }
 }
