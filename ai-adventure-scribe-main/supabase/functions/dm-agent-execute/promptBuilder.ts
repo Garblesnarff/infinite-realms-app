@@ -219,6 +219,189 @@ Before responding, verify:
   return contextText;
 }
 
+function buildCombatRulesReference(): string {
+  return `
+<dnd5e_combat_rules_reference>
+<title>D&D 5E COMBAT RULES - AUTHORITATIVE REFERENCE</title>
+<note>The game validates these rules in code. Be accurate to maintain consistency.</note>
+
+<attack_modifiers>
+<ranged_in_melee>
+❌ RANGED WITHIN 5FT: Making a ranged attack when a hostile creature is within 5 feet grants DISADVANTAGE on the attack roll.
+This applies to both ranged weapon attacks and ranged spell attacks.
+✅ "The goblin is right in your face - you have disadvantage on this bow shot."
+</ranged_in_melee>
+
+<prone_targets>
+ATTACKING PRONE TARGETS:
+- Melee attack within 5ft: ADVANTAGE on attack roll
+- Ranged attack beyond 5ft: DISADVANTAGE on attack roll
+✅ "The orc is prone - you have advantage on your sword attack from this close."
+✅ "The prone archer is 30ft away - you have disadvantage on your longbow shot."
+</prone_targets>
+
+<cover>
+COVER BONUSES TO AC:
+- Half cover: +2 AC (low wall, furniture, another creature)
+- Three-quarters cover: +5 AC (arrow slit, thick tree trunk)
+- Total cover: Cannot be targeted directly
+✅ "The bandit ducks behind the overturned table (half cover, +2 AC) - she's now AC 15."
+</cover>
+</attack_modifiers>
+
+<conditions_mechanical_effects>
+<blinded>
+BLINDED:
+- Disadvantage on attack rolls
+- Attack rolls against you have advantage
+- Auto-fail sight-based ability checks
+</blinded>
+
+<paralyzed>
+PARALYZED (CODE VALIDATES THIS):
+- Incapacitated (can't take actions or reactions)
+- Auto-fail Strength and Dexterity saving throws
+- Attack rolls against have advantage
+- ⚠️ CRITICAL: Melee attacks within 5ft are AUTOMATIC CRITICAL HITS if they hit
+✅ "The hold person takes effect! The guard is paralyzed - your next melee attack will be an automatic crit if it hits!"
+</paralyzed>
+
+<unconscious>
+UNCONSCIOUS (CODE VALIDATES THIS):
+- Incapacitated, drops what it's holding, falls prone
+- Auto-fail Strength and Dexterity saving throws
+- Attack rolls against have advantage
+- ⚠️ CRITICAL: Melee attacks within 5ft are AUTOMATIC CRITICAL HITS if they hit
+✅ "The fighter is unconscious at 0 HP. The assassin's dagger strike is an automatic critical hit!"
+</unconscious>
+
+<stunned>
+STUNNED:
+- Incapacitated (can't take actions or reactions)
+- Can only speak falteringly
+- Auto-fail Strength and Dexterity saving throws
+- Attack rolls against have advantage
+</stunned>
+
+<restrained>
+RESTRAINED:
+- Speed becomes 0
+- Disadvantage on attack rolls
+- Disadvantage on Dexterity saving throws
+- Attack rolls against have advantage
+</restrained>
+
+<poisoned>
+POISONED:
+- Disadvantage on attack rolls
+- Disadvantage on ability checks
+</poisoned>
+
+<prone>
+PRONE:
+- Can only crawl (costs extra movement to stand)
+- Disadvantage on attack rolls
+- Melee attacks within 5ft have advantage
+- Ranged attacks beyond 5ft have disadvantage
+</prone>
+
+<frightened>
+FRIGHTENED:
+- Disadvantage on ability checks and attack rolls while source of fear is visible
+- Cannot willingly move closer to source of fear
+</frightened>
+</conditions_mechanical_effects>
+
+<death_and_dying>
+<death_saves_at_0hp>
+DEATH SAVING THROWS (CODE VALIDATES THIS):
+When a character starts their turn at 0 HP:
+- Must make a death saving throw (d20, no modifiers)
+- DC 10: Roll 10+ = success, below 10 = failure
+- 3 successes = stable (unconscious, not dying)
+- 3 failures = death
+- Natural 1 = TWO failures
+- Natural 20 = regain 1 HP and become conscious
+✅ "You're at 0 HP - make a death saving throw (d20, need 10 or higher)."
+</death_saves_at_0hp>
+
+<damage_at_0hp>
+DAMAGE AT 0 HP (CODE VALIDATES THIS):
+⚠️ CRITICAL RULE: Taking damage while at 0 HP causes death save FAILURES:
+- Any damage = 1 death save failure
+- Critical hit = 2 death save failures
+- Massive damage (remaining damage ≥ max HP) = instant death
+✅ "The goblin's attack hits the unconscious rogue - that's 1 death save failure!"
+✅ "The assassin's sneak attack CRITS the dying wizard - that's 2 death save failures!"
+</damage_at_0hp>
+
+<stabilization>
+STABILIZATION:
+- DC 10 Medicine check to stabilize a dying creature
+- Stable creature is unconscious but no longer making death saves
+- After 1d4 hours, stable creature regains 1 HP
+✅ "Make a Medicine check (DC 10) to stabilize your fallen companion."
+</stabilization>
+</death_and_dying>
+
+<action_economy>
+<two_weapon_fighting>
+TWO-WEAPON FIGHTING (CODE VALIDATES THIS):
+When attacking with a light melee weapon in main hand:
+- Can use bonus action to attack with different light weapon in off-hand
+- ⚠️ OFF-HAND DAMAGE: Does NOT add ability modifier (unless negative or has Fighting Style)
+✅ "Bonus action attack with your off-hand dagger - roll 1d4 damage (no modifier without TWF Fighting Style)."
+❌ "Roll 1d4+3 for your off-hand" (WRONG unless they have Fighting Style!)
+</two_weapon_fighting>
+
+<bonus_action_spells>
+BONUS ACTION SPELL RESTRICTION (CODE VALIDATES THIS):
+⚠️ CRITICAL: If you cast a spell as a bonus action:
+- Your action can ONLY be used to cast a CANTRIP
+- Cannot cast another leveled spell as action
+✅ "You cast Healing Word as a bonus action. You can still cast a cantrip like Fire Bolt."
+❌ "You cast Healing Word as a bonus action and Fireball as your action." (INVALID!)
+</bonus_action_spells>
+
+<reaction_limits>
+REACTIONS:
+- One reaction per round (resets at start of your turn)
+- Common reactions: Opportunity attack, Shield spell, Counterspell
+</reaction_limits>
+</action_economy>
+
+<exhaustion_system>
+EXHAUSTION LEVELS (cumulative effects):
+- Level 1: Disadvantage on ability checks
+- Level 2: Speed halved
+- Level 3: Disadvantage on attack rolls and saving throws
+- Level 4: Hit point maximum halved
+- Level 5: Speed reduced to 0
+- Level 6: DEATH
+
+Common causes: Forced march, starvation, dehydration, berserker frenzy
+Recovery: Long rest reduces exhaustion by 1 level (if food/drink consumed)
+</exhaustion_system>
+
+<critical_hits>
+CRITICAL HITS (Natural 20):
+- Roll ALL damage dice twice (not modifiers)
+- Add modifiers once after doubling dice
+✅ "Critical hit! Roll 2d8+3 for your longsword (doubled dice, modifier once)."
+❌ "Critical hit! Roll 1d8+6" (WRONG - dice double, not modifier!)
+</critical_hits>
+
+<remember>
+⚠️ CRITICAL REMINDERS:
+1. Paralyzed/Unconscious + within 5ft = AUTO-CRIT (code enforces this)
+2. Damage at 0 HP = death save failures (code enforces this)
+3. TWF off-hand = no ability mod without Fighting Style (code enforces this)
+4. BA spell = action limited to cantrip (code enforces this)
+5. Death saves at 0 HP are REQUIRED (code tracks this)
+</remember>
+</dnd5e_combat_rules_reference>`;
+}
+
 function buildPassiveSkillsPrompt(): string {
   return `
 <passive_skills_rules>
@@ -481,6 +664,8 @@ CRITICAL: These scores are automatic. NEVER request rolls for passive skills. Us
 </character>
 
 ${buildPassiveSkillsPrompt()}
+
+${buildCombatRulesReference()}
 
 ${isFirstMessage ? `
 <opening_scene>
