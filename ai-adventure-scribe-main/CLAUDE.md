@@ -382,7 +382,55 @@ The user (project owner) may not be a developer:
 
 ---
 
-**Last Updated**: 2025-12-06
+---
+
+## Browser Testing (Dev-Browser)
+
+Headless browser automation is available for testing the production site.
+
+**Server Location**: `~/.claude/skills/dev-browser/`
+
+### Starting the Browser Server
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
+cd ~/.claude/skills/dev-browser
+./server.sh --headless &
+```
+Wait for "Ready" message before running scripts.
+
+### Quick Test Script
+```bash
+cd ~/.claude/skills/dev-browser && bun x tsx <<'EOF'
+import { connect, waitForPageLoad } from "@/client.js";
+
+const client = await connect("http://localhost:9222");
+const page = await client.page("main");
+
+await page.goto("https://infiniterealms.app");
+await waitForPageLoad(page);
+
+await page.screenshot({ path: "tmp/screenshot.png" });
+console.log({ title: await page.title(), url: page.url() });
+
+await client.disconnect();
+EOF
+```
+
+### Key Commands
+- **Navigate**: `await page.goto("https://infiniterealms.app")`
+- **Screenshot**: `await page.screenshot({ path: "tmp/screenshot.png" })`
+- **Get ARIA snapshot**: `await client.getAISnapshot("main")` (for element discovery)
+- **Click element by ref**: `await client.selectSnapshotRef("main", "e5")`
+
+### Server Ports
+- HTTP API: `http://localhost:9222`
+- CDP WebSocket: `ws://127.0.0.1:9223`
+
+See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
+
+---
+
+**Last Updated**: 2025-12-12
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based services
 **Blog**: https://blog.infiniterealms.app (SSR, Cloudflare-proxied, Let's Encrypt SSL)
