@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import url from 'url';
-import { verifySupabaseToken } from '../../src/infrastructure/database/index.js';
+import { verifyWorkOSToken } from './services/workos.js';
 
 type RoomId = string;
 
@@ -126,11 +126,8 @@ export function registerWebsocketHandlers(wss: WebSocketServer) {
         ws.close(4001, 'Missing token');
         return;
       }
-      // Verify Supabase JWT
-      // Note: if you need to support legacy tokens, extend this with a fallback
-      // to custom verification.
-      // For unified DB, we accept Supabase tokens only.
-      const user = await verifySupabaseToken(token);
+      // Verify WorkOS JWT token
+      const user = await verifyWorkOSToken(token);
       if (!user) {
         ws.close(4000, 'Unauthorized');
         return;

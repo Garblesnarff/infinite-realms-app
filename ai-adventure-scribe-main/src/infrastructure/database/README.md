@@ -28,7 +28,7 @@ src/infrastructure/database/
 For authentication, real-time subscriptions, and user data:
 
 ```typescript
-import { supabase, supabaseService, verifySupabaseToken } from '@/infrastructure/database';
+import { supabase, supabaseService } from '@/infrastructure/database';
 
 // Standard client (anon key)
 const { data, error } = await supabase
@@ -41,9 +41,6 @@ const { data } = await supabaseService
   .from('users')
   .update({ role: 'admin' })
   .eq('id', userId);
-
-// Token verification
-const user = await verifySupabaseToken(authToken);
 ```
 
 ### Drizzle ORM
@@ -101,7 +98,6 @@ PGPOOL_MAX=10                 # Max connections (optional)
 |--------|------|-------------|
 | `supabase` | Client | Supabase client with anon key |
 | `supabaseService` | Client | Supabase client with service role key |
-| `verifySupabaseToken` | Function | JWT token verification utility |
 | `db` | DrizzleDb | Drizzle ORM instance with session schema |
 | `pgPool` | Pool | PostgreSQL connection pool from Drizzle |
 | `createPgClient` | Function | Factory for new PostgreSQL pools |
@@ -110,8 +106,8 @@ PGPOOL_MAX=10                 # Max connections (optional)
 
 ### Supabase Client (`supabase-client.ts`)
 - Provides two clients: standard (`supabase`) and service role (`supabaseService`)
-- Includes JWT verification with fallback to Supabase auth
 - Service role client used for admin operations that bypass RLS
+- Authentication is handled by WorkOS (see `server/src/services/workos.ts`)
 
 ### Drizzle Client (`drizzle-client.ts`)
 - Configured with session schema for type-safe queries

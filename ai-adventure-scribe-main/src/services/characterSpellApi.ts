@@ -1,6 +1,5 @@
 import type { Spell } from '../types/character';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 export interface CharacterSpellData extends Spell {
@@ -32,27 +31,14 @@ export interface SaveSpellsResponse {
 class CharacterSpellService {
   private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
-  private async getAccessToken(forceRefresh = false): Promise<string> {
+  private async getAccessToken(): Promise<string> {
     // Get WorkOS token from localStorage
     const token = window.localStorage.getItem('workos_access_token');
     if (token) {
       return token;
     }
 
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-
-    if (refreshError) {
-      logger.error('[CharacterSpellService] Error refreshing token:', refreshError);
-      throw new Error('Failed to refresh authentication. Please log in again.');
-    }
-
-    const refreshedToken = refreshData.session?.access_token;
-
-    if (!refreshedToken) {
-      throw new Error('No authentication token found. Please log in.');
-    }
-
-    return refreshedToken;
+    throw new Error('No authentication token found. Please log in.');
   }
 
   private async executeRequest(
@@ -86,35 +72,13 @@ class CharacterSpellService {
     return typeof rawMessage === 'string' ? rawMessage : 'Unknown error';
   }
 
-  private async fetchWithAuth(
-    url: string,
-    options: RequestInit = {},
-    allowRetry = true,
-  ): Promise<Response> {
+  private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     try {
-      const initialToken = await this.getAccessToken();
-      let response = await this.executeRequest(url, options, initialToken);
+      const token = await this.getAccessToken();
+      const response = await this.executeRequest(url, options, token);
 
-      if (response.status === 401 && allowRetry) {
-        logger.warn('[CharacterSpellService] Got 401, attempting token refresh...');
-        try {
-          const refreshedToken = await this.getAccessToken(true);
-          response = await this.executeRequest(url, options, refreshedToken);
-        } catch (error) {
-          logger.warn('[CharacterSpellService] Token refresh failed, signing out user.');
-          await supabase.auth.signOut();
-          throw error instanceof Error
-            ? error
-            : new Error('Authentication expired. Please log in again.');
-        }
-
-        if (response.status === 401) {
-          logger.warn(
-            '[CharacterSpellService] Token refresh did not resolve 401, signing out user.',
-          );
-          await supabase.auth.signOut();
-          throw new Error('Your session has expired. Please sign in again.');
-        }
+      if (response.status === 401) {
+        throw new Error('Your session has expired. Please sign in again.');
       }
 
       if (!response.ok) {

@@ -5,10 +5,13 @@ import { createApp } from '../src/app';
 process.env.SITE_URL = 'https://example.com';
 process.env.BLOG_MEDIA_BUCKET = 'blog-media';
 
-const fromMock = vi.fn();
-const storageFromMock = vi.fn();
-const getUserByIdMock = vi.fn();
-const verifySupabaseTokenMock = vi.fn();
+// Use vi.hoisted for mocks that need to be available in vi.mock factories
+const { fromMock, storageFromMock, getUserByIdMock, verifyWorkOSTokenMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  storageFromMock: vi.fn(),
+  getUserByIdMock: vi.fn(),
+  verifyWorkOSTokenMock: vi.fn(),
+}));
 
 const fromQueues: Record<string, any[]> = {};
 const storageBuckets: Record<string, any> = {};
@@ -71,8 +74,13 @@ vi.mock('../src/lib/supabase.js', () => ({
     storage: { from: storageFromMock },
     auth: { admin: { getUserById: getUserByIdMock } },
   },
-  verifySupabaseToken: verifySupabaseTokenMock,
   supabase: {},
+}));
+
+vi.mock('../src/services/workos.js', () => ({
+  verifyWorkOSToken: verifyWorkOSTokenMock,
+  workos: {},
+  authConfig: { clientId: 'test', redirectUri: 'http://localhost/callback' },
 }));
 
 let agent: request.SuperTest<request.Test>;
@@ -88,7 +96,7 @@ describe('Blog router', () => {
     fromMock.mockClear();
     storageFromMock.mockClear();
     getUserByIdMock.mockReset();
-    verifySupabaseTokenMock.mockReset();
+    verifyWorkOSTokenMock.mockReset();
     process.env.SITE_URL = 'https://example.com';
     process.env.BLOG_MEDIA_BUCKET = 'blog-media';
 
@@ -174,7 +182,7 @@ describe('Blog router', () => {
   });
 
   it('creates a post as blog admin', async () => {
-    verifySupabaseTokenMock.mockResolvedValue({ userId: 'admin-1', email: 'admin@example.com' });
+    verifyWorkOSTokenMock.mockResolvedValue({ userId: 'admin-1', email: 'admin@example.com' });
     getUserByIdMock.mockResolvedValue({ data: { user: { id: 'admin-1', app_metadata: { blogRoles: ['admin'] } } }, error: null });
 
     const insertBuilder = createBuilder({ data: { id: 'new-post' }, error: null });
@@ -230,7 +238,7 @@ describe('Blog router', () => {
   });
 
   it('rejects non-admin users for protected routes', async () => {
-    verifySupabaseTokenMock.mockResolvedValue({ userId: 'user-2', email: 'user@example.com' });
+    verifyWorkOSTokenMock.mockResolvedValue({ userId: 'user-2', email: 'user@example.com' });
     getUserByIdMock.mockResolvedValue({ data: { user: { id: 'user-2', app_metadata: { blogRoles: [] } } }, error: null });
 
     const response = await agent
@@ -243,7 +251,7 @@ describe('Blog router', () => {
   });
 
   it('generates signed upload URLs for media', async () => {
-    verifySupabaseTokenMock.mockResolvedValue({ userId: 'admin-1', email: 'admin@example.com' });
+    verifyWorkOSTokenMock.mockResolvedValue({ userId: 'admin-1', email: 'admin@example.com' });
     getUserByIdMock.mockResolvedValue({ data: { user: { id: 'admin-1', app_metadata: { blogRoles: ['admin'] } } }, error: null });
 
     const storageHandler = {
