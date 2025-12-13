@@ -1,0 +1,54 @@
+server-bun/
+├── package.json                    # Bun package configuration with Elysia dependencies
+├── tsconfig.json                   # TypeScript configuration (ESNext, strict mode)
+├── .env.example                    # Environment variable template
+├── .env                            # Environment variables (gitignored)
+├── .gitignore                      # Git ignore rules
+├── README.md                       # Project documentation
+├── MIGRATION.md                    # Migration tracking and checklist
+├── test-server.sh                  # Simple test script for endpoints
+│
+├── src/
+│   ├── index.ts                    # Server entry point, graceful shutdown
+│   ├── app.ts                      # Main Elysia application setup
+│   │
+│   └── lib/
+│       ├── logger.ts               # Pino logger (replaces Winston)
+│       ├── metrics.ts              # Prometheus metrics (prom-client)
+│       ├── env.ts                  # Environment variable validation
+│       ├── db.ts                   # PostgreSQL client (postgres.js)
+│       └── drizzle.ts              # Drizzle ORM configuration
+│
+└── node_modules/                   # Dependencies (gitignored)
+
+CREATED FILES (by this task):
+✓ package.json
+✓ tsconfig.json
+✓ .env.example
+✓ .gitignore
+✓ src/index.ts
+✓ src/app.ts
+✓ src/lib/logger.ts
+✓ src/lib/metrics.ts
+✓ README.md
+✓ MIGRATION.md
+✓ test-server.sh
+
+PRE-EXISTING FILES (already in repo):
+- src/lib/env.ts
+- src/lib/db.ts
+- src/lib/drizzle.ts
+
+ENDPOINTS AVAILABLE:
+✓ GET /health          - Health check with uptime/memory
+✓ GET /metrics         - Prometheus metrics
+✓ GET /swagger         - Swagger UI documentation
+✓ GET /assets/*        - Static file serving
+
+TODO (Future work):
+- tRPC integration (@elysiajs/trpc)
+- WebSocket support
+- Authentication middleware
+- Database migrations
+- API route handlers
+- Blog SSR routes

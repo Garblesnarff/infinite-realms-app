@@ -1,0 +1,7 @@
+[install]
+# Use existing lockfile
+frozen = false
+
+[run]
+# Enable hot reloading
+watch = ["server-bun/src/**/*.ts"]
