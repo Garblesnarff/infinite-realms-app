@@ -316,7 +316,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
  */
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const { state: combatState } = useCombat();
+  const { state: combatState, dealDamage } = useCombat();
 
   // Track previous combat state values to prevent infinite loops
   // This ref stores the last combat state values we synchronized with GameContext
@@ -519,7 +519,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     (rollRequests: any[]) => {
       logger.info('🤖 Processing AI response with roll requests:', rollRequests);
 
-      if (!rollRequests || !Array.isArray(rollRequests)) return;
+      if (!rollRequests || !Array.isArray(rollRequests)) {
+        logger.warn('🎲 No valid roll requests to process');
+        return;
+      }
+
+      // Log initiative rolls specifically for debugging
+      const initiativeRolls = rollRequests.filter((r: any) => r.type === 'initiative');
+      if (initiativeRolls.length > 0) {
+        logger.info('🎯 Processing INITIATIVE roll request(s):', initiativeRolls);
+      }
 
       // Generate batchId if multiple rolls are requested
       const batchId = rollRequests.length > 1 ? uuidv4() : undefined;
@@ -552,6 +561,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             batchId, // Assign batch ID
             dc: request.dc, // Extract DC for skill checks and saves
             ac: request.ac, // Extract AC for attack rolls
+            // Fields for damage_taken type (incoming damage to player)
+            target: request.target, // "player" or NPC name
+            damageType: request.damageType, // fire, cold, slashing, etc.
           };
 
           const dedupeKey = [
@@ -641,6 +653,57 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     [processAiResponse],
   ); // 500ms - AI responses are async and don't need immediate processing
 
+  // Track which damage_taken rolls have been applied to prevent double-application
+  const appliedDamageRollsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Auto-apply damage_taken rolls to player HP when they complete
+   * This bridges the AI DM's damage requests with the combat HP system
+   */
+  useEffect(() => {
+    // Find completed damage_taken rolls that haven't been applied yet
+    const completedDamageRolls = state.diceRollQueue.pendingRolls.filter(
+      (roll) =>
+        roll.requestType === 'damage_taken' &&
+        roll.status === 'completed' &&
+        roll.target === 'player' &&
+        roll.result?.total &&
+        !appliedDamageRollsRef.current.has(roll.id)
+    );
+
+    // Apply each damage roll
+    completedDamageRolls.forEach(async (roll) => {
+      const damageAmount = roll.result?.total || 0;
+      if (damageAmount > 0) {
+        logger.info(`💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player`);
+
+        // Mark as applied to prevent double-application
+        appliedDamageRollsRef.current.add(roll.id);
+
+        // If in combat, apply via CombatContext
+        if (combatState.isInCombat && combatState.activeEncounter) {
+          // Find player participant
+          const playerParticipant = combatState.activeEncounter.participants.find(
+            (p) => p.participantType === 'player'
+          );
+          if (playerParticipant) {
+            logger.info(`⚔️ Applying ${damageAmount} damage to ${playerParticipant.name} in combat via dealDamage`);
+            try {
+              await dealDamage(playerParticipant.id, damageAmount, roll.damageType);
+              logger.info(`✅ Damage applied successfully to ${playerParticipant.name}`);
+            } catch (error) {
+              logger.error(`❌ Failed to apply damage:`, error);
+            }
+          }
+        } else {
+          // Outside of combat, log for manual tracking
+          // Future enhancement: Could update character HP directly in database
+          logger.info(`📝 Damage taken outside combat: ${damageAmount} ${roll.damageType || 'untyped'} damage (HP tracking not active outside combat)`);
+        }
+      }
+    });
+  }, [state.diceRollQueue.pendingRolls, combatState.isInCombat, combatState.activeEncounter, dealDamage]);
+
   const contextValue: GameContextValue = {
     state,
     dispatch,
@@ -677,17 +740,32 @@ function parseRollFormula(formula?: string): Partial<DiceRollRequest['rollConfig
   if (!formula) return {};
 
   try {
-    // Match patterns like "1d20+5", "2d6", "1d8-2", etc.
-    const match = formula.match(/^(\d+)?d(\d+)([-+]\d+)?$/);
-    if (!match) return {};
+    // Match patterns like "1d20+5", "2d6", "1d8-2", etc. (numeric modifiers)
+    const numericMatch = formula.match(/^(\d+)?d(\d+)([-+]\d+)?$/);
+    if (numericMatch) {
+      const [, countStr, dieTypeStr, modifierStr] = numericMatch;
+      return {
+        count: countStr ? parseInt(countStr) : 1,
+        dieType: parseInt(dieTypeStr),
+        modifier: modifierStr ? parseInt(modifierStr) : 0,
+      };
+    }
 
-    const [, countStr, dieTypeStr, modifierStr] = match;
+    // Match patterns like "1d20+dex", "1d20+str", etc. (symbolic modifiers)
+    // These will be resolved by the DiceRollRequest component using character stats
+    const symbolicMatch = formula.match(/^(\d+)?d(\d+)([-+]\w+)?$/);
+    if (symbolicMatch) {
+      const [, countStr, dieTypeStr] = symbolicMatch;
+      logger.info('🎲 Parsed roll with symbolic modifier:', formula, '→ using defaults, component will calculate');
+      return {
+        count: countStr ? parseInt(countStr) : 1,
+        dieType: parseInt(dieTypeStr),
+        modifier: 0, // Component will calculate actual modifier from character stats
+      };
+    }
 
-    return {
-      count: countStr ? parseInt(countStr) : 1,
-      dieType: parseInt(dieTypeStr),
-      modifier: modifierStr ? parseInt(modifierStr) : 0,
-    };
+    logger.warn('🎲 Could not parse roll formula:', formula);
+    return {};
   } catch (error) {
     logger.warn('Failed to parse roll formula:', formula, error);
     return {};

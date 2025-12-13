@@ -24,7 +24,7 @@ import {
 } from '@/utils/characterModifiers';
 
 export interface RollRequest {
-  type: 'attack' | 'save' | 'check' | 'damage' | 'initiative' | 'skill_check';
+  type: 'attack' | 'save' | 'check' | 'damage' | 'damage_taken' | 'initiative' | 'skill_check';
   formula: string; // "1d20+5" or "1d20+modifier" or "1d20+str"
   purpose: string; // "Arcana check to understand the mechanism"
   dc?: number; // Target DC if applicable
@@ -35,6 +35,9 @@ export interface RollRequest {
   // NEW: Flag for auto-executing NPC rolls (DM rolling "behind the screen")
   autoExecute?: boolean;
   actorName?: string; // Name of who's rolling (e.g., "Goblin Archer", "Orc Warrior")
+  // Target for damage_taken rolls
+  target?: string; // "player" or NPC name
+  damageType?: string; // fire, cold, etc.
 }
 
 interface DiceRollRequestProps {
@@ -188,6 +191,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
         return 'border-blue-200 bg-blue-50';
       case 'damage':
         return 'border-purple-200 bg-purple-50';
+      case 'damage_taken':
+        return 'border-red-300 bg-red-100'; // More intense red for incoming damage
       case 'initiative':
         return 'border-green-200 bg-green-50';
       default:
@@ -203,6 +208,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
         return <AlertCircle className="w-4 h-4" />;
       case 'initiative':
         return <Zap className="w-4 h-4" />;
+      case 'damage_taken':
+        return <AlertCircle className="w-4 h-4 text-red-600" />;
       default:
         return <Dice6 className="w-4 h-4" />;
     }
@@ -220,6 +227,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
         return 'Skill Check';
       case 'damage':
         return 'Damage Roll';
+      case 'damage_taken':
+        return 'Incoming Damage';
       case 'initiative':
         return 'Initiative';
       default:

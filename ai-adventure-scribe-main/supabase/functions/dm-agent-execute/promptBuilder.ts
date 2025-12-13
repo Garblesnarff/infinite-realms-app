@@ -214,7 +214,34 @@ Before responding, verify:
 □ Did attack hit? → Request damage with modifiers
 □ Is this a critical? → Double the weapon dice
 □ Did I include AC/DC numbers? → Always include targets
-□ Did I include modifiers? → Damage must have +modifier`;
+□ Did I include modifiers? → Damage must have +modifier
+
+**ENEMY DAMAGE TO PLAYER (CRITICAL - HP TRACKING):**
+When an enemy deals damage to the player, you MUST use a structured roll request with type "damage_taken":
+
+✅ CORRECT - Use damage_taken roll for incoming damage:
+\`\`\`ROLL_REQUESTS_V1
+{"rolls":[{"type":"damage_taken","formula":"1d8+3","purpose":"Goblin arrow damage to you","damageType":"piercing","target":"player"}]}
+\`\`\`
+"The goblin's arrow strikes true!"
+
+✅ CORRECT - After player confirms damage roll:
+"The arrow deals 7 piercing damage! You feel the sharp pain as it lodges in your shoulder."
+
+❌ WRONG - Just narrating damage without roll request:
+"The goblin hits you for 8 damage." (HP won't update!)
+
+❌ WRONG - Using "damage" type instead of "damage_taken":
+{"type":"damage","formula":"1d8+3"...} (This is for player's attack damage, not incoming!)
+
+**WHEN TO USE damage_taken:**
+- Enemy melee attack hits player → damage_taken
+- Enemy ranged attack hits player → damage_taken
+- Spell damage to player → damage_taken
+- Trap or environmental damage → damage_taken
+- Fall damage → damage_taken
+
+The game system will automatically update the player's HP based on the damage_taken roll result.`;
 
   return contextText;
 }

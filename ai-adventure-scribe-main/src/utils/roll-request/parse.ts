@@ -36,6 +36,9 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
               ac: roll.ac,
               advantage: roll.advantage,
               disadvantage: roll.disadvantage,
+              // Additional fields for damage_taken type
+              target: roll.target,
+              damageType: roll.damageType,
               originalText: `ROLL_REQUESTS_V1: ${roll.purpose}`,
               confidence: 1.0, // Structured data is highest confidence
             });

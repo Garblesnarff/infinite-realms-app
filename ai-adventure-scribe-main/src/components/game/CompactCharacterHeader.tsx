@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 
 /**
@@ -20,6 +21,7 @@ import logger from '@/lib/logger';
  */
 export const CompactCharacterHeader: React.FC = () => {
   const { state: characterState } = useCharacter();
+  const { state: combatState } = useCombat();
   const character = characterState.character || ({} as any);
 
   // Debug logging
@@ -29,8 +31,9 @@ export const CompactCharacterHeader: React.FC = () => {
       avatar_url: character?.avatar_url,
       image_url: character?.image_url,
       background_image: character?.background_image,
+      inCombat: combatState.isInCombat,
     });
-  }, [character]);
+  }, [character, combatState.isInCombat]);
 
   if (!character) {
     return (
@@ -45,6 +48,23 @@ export const CompactCharacterHeader: React.FC = () => {
   const hitDie = character.class?.hitDie ?? 8;
   const conMod = character?.abilityScores?.constitution?.modifier ?? 0;
   const maxHp = Math.max(1, lvl * hitDie + conMod * lvl);
+
+  // Get current HP from combat state if in combat
+  const combatCurrentHp = (() => {
+    if (combatState.isInCombat && combatState.activeEncounter) {
+      const playerParticipant = combatState.activeEncounter.participants.find(
+        (p) => p.participantType === 'player'
+      );
+      if (playerParticipant) {
+        return playerParticipant.currentHitPoints;
+      }
+    }
+    return null;
+  })();
+
+  // Use combat HP if available, otherwise max HP (assumes full health outside combat)
+  const currentHp = combatCurrentHp ?? maxHp;
+  const isInjured = currentHp < maxHp;
 
   // Calculate AC with unarmored defense support
   const armorClass = (() => {
@@ -135,9 +155,11 @@ export const CompactCharacterHeader: React.FC = () => {
         {/* HP and AC */}
         <div className="flex gap-4 text-sm justify-center text-white">
           <div className="flex items-center gap-1">
-            <Heart className="w-4 h-4 text-red-400" />
+            <Heart className={`w-4 h-4 ${isInjured ? 'text-red-500 animate-pulse' : 'text-red-400'}`} />
             <span className="font-semibold">HP:</span>
-            <span>{maxHp}</span>
+            <span className={isInjured ? 'text-red-400 font-bold' : ''}>
+              {currentHp}/{maxHp}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <Shield className="w-4 h-4 text-blue-400" />

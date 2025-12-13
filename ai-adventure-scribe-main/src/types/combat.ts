@@ -511,6 +511,7 @@ export type DiceRollRequestType =
   | 'initiative'
   | 'attack'
   | 'damage'
+  | 'damage_taken' // Player receives damage from enemy - triggers HP update
   | 'saving_throw'
   | 'death_save'
   | 'concentration_save'
@@ -535,6 +536,9 @@ export interface DiceRollRequest {
   batchId?: string; // Groups multiple rolls from same AI request for batching
   dc?: number; // Target DC for ability checks and saving throws
   ac?: number; // Target AC for attack rolls
+  // Fields for damage_taken type (incoming damage to player)
+  target?: string; // "player" or NPC name - who receives the damage
+  damageType?: DamageType; // Type of damage (fire, cold, slashing, etc.)
 }
 
 export interface DiceRollQueue {
