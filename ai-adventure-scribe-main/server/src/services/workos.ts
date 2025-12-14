@@ -1,32 +1,92 @@
 import { WorkOS } from '@workos-inc/node';
-import jwt from 'jsonwebtoken';
+import { jwtVerify, createRemoteJWKSet, JWTPayload } from 'jose';
 
-// Initialize WorkOS client with API key
-export const workos = new WorkOS(process.env.WORKOS_API_KEY!);
+// Lazy initialization - WorkOS client is created on first use
+// This allows env vars to be loaded before initialization
+let _workos: WorkOS | null = null;
 
-// Auth configuration
-export const authConfig = {
-  clientId: process.env.WORKOS_CLIENT_ID!,
-  redirectUri: process.env.WORKOS_REDIRECT_URI || 'https://infiniterealms.app/auth/callback',
+export function getWorkOS(): WorkOS {
+  if (!_workos) {
+    const apiKey = process.env.WORKOS_API_KEY;
+    if (!apiKey) {
+      throw new Error('WORKOS_API_KEY environment variable is not set');
+    }
+    _workos = new WorkOS(apiKey);
+  }
+  return _workos;
+}
+
+// Lazy getter for backward compatibility
+export const workos = {
+  get userManagement() {
+    return getWorkOS().userManagement;
+  },
 };
 
-// Verify WorkOS JWT access token
+// Auth configuration - also lazy to ensure env vars are loaded
+let _authConfig: { clientId: string; redirectUri: string } | null = null;
+
+export function getAuthConfig() {
+  if (!_authConfig) {
+    _authConfig = {
+      clientId: process.env.WORKOS_CLIENT_ID!,
+      redirectUri: process.env.WORKOS_REDIRECT_URI || 'https://infiniterealms.app/auth/callback',
+    };
+  }
+  return _authConfig;
+}
+
+// For backward compatibility, export authConfig as a getter
+export const authConfig = {
+  get clientId() {
+    return getAuthConfig().clientId;
+  },
+  get redirectUri() {
+    return getAuthConfig().redirectUri;
+  },
+};
+
+// Create JWKS for WorkOS token verification - lazy initialization
+let _JWKS: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJWKS() {
+  if (!_JWKS) {
+    _JWKS = createRemoteJWKSet(
+      new URL(`https://api.workos.com/sso/jwks/${authConfig.clientId}`),
+      {
+        cooldownDuration: 1000 * 60 * 5, // 5 minutes cooldown for JWKS refresh
+      }
+    );
+  }
+  return _JWKS;
+}
+
+// Verify WorkOS JWT access token with signature verification
 export async function verifyWorkOSToken(accessToken: string) {
   try {
-    // Decode the JWT without verification (WorkOS tokens are signed by WorkOS)
-    // For production, you should verify the signature using WorkOS's public key
-    const decoded = jwt.decode(accessToken) as any;
+    // Verify JWT signature using WorkOS JWKS endpoint
+    // WorkOS User Management tokens have issuer: https://api.workos.com/user_management/{clientId}
+    const { payload } = await jwtVerify(accessToken, getJWKS(), {
+      issuer: `https://api.workos.com/user_management/${authConfig.clientId}`,
+    });
 
-    if (!decoded || !decoded.sub) {
+    // Extract user information from verified token
+    if (!payload.sub) {
+      console.error('WorkOS token missing sub claim');
       return null;
     }
 
     return {
-      userId: decoded.sub as string,
-      email: decoded.email as string,
+      userId: payload.sub as string,
+      email: payload.email as string,
     };
   } catch (error) {
-    console.error('WorkOS token verification failed:', error);
+    // Log specific error for debugging
+    if (error instanceof Error) {
+      console.error('WorkOS token verification failed:', error.message);
+    } else {
+      console.error('WorkOS token verification failed:', error);
+    }
     return null;
   }
 }

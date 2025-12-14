@@ -35,9 +35,9 @@ const JWKS = createRemoteJWKSet(
 export async function verifyWorkOSToken(accessToken: string) {
   try {
     // Verify JWT signature using WorkOS JWKS endpoint
+    // WorkOS User Management tokens have issuer: https://api.workos.com/user_management/{clientId}
     const { payload } = await jwtVerify(accessToken, JWKS, {
-      // WorkOS issues tokens, so we expect the issuer to be api.workos.com
-      issuer: 'https://api.workos.com',
+      issuer: `https://api.workos.com/user_management/${authConfig.clientId}`,
     });
 
     // Extract user information from verified token

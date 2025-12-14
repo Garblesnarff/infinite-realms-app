@@ -19,7 +19,7 @@
 - **NEVER commit `.env` files** - they contain API keys, passwords, database URLs
 - **Check `.gitignore`** before committing - verify sensitive files are excluded
 - **Files with secrets** (already gitignored, DO NOT commit):
-  - `.env`, `.env.local`, `server/.env`, `crewai-service/.env`
+  - `.env`, `.env.local`, `server/.env`, `server-bun/.env`, `crewai-service/.env`
 - **Safe to commit**: `.env.example` (no real secrets)
 - **If you see secrets in code**: Use `Deno.env.get('KEY_NAME')` or `process.env.KEY_NAME`
 - **Before committing**: Run `git status --ignored` to verify .env files aren't staged
@@ -158,8 +158,9 @@ ai-adventure-scribe-main/
 ```
 
 **Important**:
-- `supabase/functions/` is **Deno**, not Node.js. Cannot use `@/` imports there.
-- Blog uses **server-side rendering (SSR)** via Express, not the React SPA
+- `supabase/functions/` is **Deno**, not Bun. Cannot use `@/` imports there.
+- `server-bun/` is **Bun/Elysia** - the production API server
+- Blog uses **server-side rendering (SSR)** via Bun/Elysia, not the React SPA
 
 ---
 
@@ -196,16 +197,21 @@ bd close bead-id --reason "Fixed: description"
 - **Supabase is local**: Running in Docker, not Supabase Cloud
 - **User may not be technical**: Explain clearly, verify assumptions
 
-### 2. Deno vs Node.js
+### 2. Deno vs Bun (Two Different Runtimes!)
 - **Supabase Edge Functions** (`supabase/functions/`) = **Deno**
-- **Express Server** (`server/src/`) = **Node.js**
+- **API Server** (`server-bun/src/`) = **Bun + Elysia**
 
-**Deno constraints**:
+**Deno constraints** (edge functions only):
 - ❌ No `import from '@/...'` (no path aliases)
 - ❌ No `require()`
 - ✅ Use relative imports: `./types.ts`
 - ✅ Use URLs: `https://deno.land/std/...` or `npm:package`
-- ✅ Inline data if you can't import (e.g., proficiency bonus table)
+
+**Bun constraints** (API server):
+- ✅ Supports `@/` path aliases (configured in tsconfig)
+- ✅ Native TypeScript (no compilation needed)
+- ✅ Loads `.env` files automatically
+- ✅ Use `bun run` instead of `npm run` for server-bun
 
 ### 3. D&D 5E Passive Skills
 **Common AI DM bug**: Requesting "Make a Passive Perception check"
@@ -222,7 +228,7 @@ bd close bead-id --reason "Fixed: description"
 **Observant feat**: +5 to Passive Perception/Investigation (must detect and apply)
 
 ### 4. Blog System (blog.infiniterealms.app)
-**Architecture**: SSR with Express, served on subdomain
+**Architecture**: SSR with Bun/Elysia, served on subdomain
 
 **Database tables** (Supabase):
 - `blog_posts` - Post content, metadata, status
@@ -249,7 +255,7 @@ bd close bead-id --reason "Fixed: description"
 **Scheduled publishing**:
 - `BlogScheduler` runs every 60 seconds in production
 - Publishes posts where `status='scheduled'` AND `scheduled_for <= now()`
-- Started automatically in `server/src/index.ts`
+- Started automatically in `server-bun/src/index.ts`
 
 ### 5. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
@@ -265,18 +271,22 @@ When AI does something wrong, **educate via prompts** (fastest fix):
 
 ```bash
 # Build (ALWAYS run before pushing to production!)
-npm run build
+npm run build             # Frontend build
+cd server-bun && bun run src/index.ts  # Test Bun server
 
 # Run dev environment
-npm run dev
+npm run dev               # Frontend only
+npm run bun:dev           # Bun API server (dev mode with watch)
+
+# Bun Server (PRODUCTION)
+pm2 status                            # Check server status
+pm2 restart infiniterealms-bun        # Restart Bun server
+pm2 logs infiniterealms-bun           # View server logs
+cd server-bun && bun run dev          # Dev mode with hot reload
 
 # Supabase (local Docker instance)
 npx supabase functions serve           # Test edge functions locally
 npx supabase functions deploy dm-agent-execute  # Deploy to local Supabase
-
-# Server
-npm run server:dev        # Express on port 8888
-npm run server:test       # Run tests
 
 # Docker (Supabase local stack)
 docker ps                           # See all 13 Supabase containers
@@ -372,16 +382,24 @@ curl -X POST http://localhost:8888/internal/generate-commit-post \
 - AI integration: `src/services/ai/`
 - Passive skills: `src/services/passive-skills-service.ts`
 
-**Blog System**:
-- SSR routes: `server/src/routes/blog.tsx`
-- SSR views: `server/src/views/blog/` (index, post, document)
-- Blog service: `server/src/services/blog-service.ts`
+**Blog System** (Bun/Elysia):
+- SSR routes: `server-bun/src/routes/blog.tsx`
+- SSR views: `server/src/views/blog/` (index, post, document - shared)
+- Blog service: `server/src/services/blog-service.ts` (shared with Bun)
 - AI generator: `server/src/services/blog-content-generator.ts`
-- Scheduler: `server/src/services/blog-scheduler.ts`
 - Admin UI: `src/components/blog-admin/`
 - Database: Supabase tables (blog_posts, blog_authors, blog_categories, blog_tags)
 - nginx config: `/etc/nginx/sites-available/infiniterealms` (blog subdomain block)
 - SSL certs: `/etc/letsencrypt/live/blog.infiniterealms.app/`
+
+**Bun Server**:
+- Entry point: `server-bun/src/index.ts`
+- App setup: `server-bun/src/app.ts`
+- WebSocket: `server-bun/src/ws.ts` (Foundry VTT real-time)
+- tRPC context: `server-bun/src/trpc/context.ts`
+- Middleware: `server-bun/src/middleware/` (auth, rate-limit, metrics)
+- Database: `server-bun/src/lib/db.ts` (postgres.js)
+- PM2 config: `ecosystem.bun.config.cjs`
 
 ---
 
@@ -430,10 +448,12 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 ## Resources
 
 - **AGENTS.md**: Full architecture and development patterns
+- **Bun Docs**: https://bun.sh/docs
+- **Elysia Docs**: https://elysiajs.com/introduction.html
 - **D&D 5E SRD**: https://dnd.wizards.com/resources/systems-reference-document
 - **Supabase Edge Functions**: https://supabase.com/docs/guides/functions
 - **Deno Manual**: https://deno.land/manual
-- **Builder.io AGENTS.md guide**: https://www.builder.io/blog/agents-md
+- **postgres.js**: https://github.com/porsager/postgres
 
 ---
 
@@ -507,7 +527,8 @@ See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
 
 ---
 
-**Last Updated**: 2025-12-12
+**Last Updated**: 2025-12-14
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
-**Environment**: Hetzner VPS, Production, Docker-based services
-**Blog**: https://blog.infiniterealms.app (SSR, Cloudflare-proxied, Let's Encrypt SSL)
+**Environment**: Hetzner VPS, Production, Docker-based Supabase, **Bun 1.3.4 + Elysia**
+**Blog**: https://blog.infiniterealms.app (SSR via Bun/Elysia, Cloudflare-proxied, Let's Encrypt SSL)
+**API Server**: `infiniterealms-bun` (PM2 managed, port 8888)

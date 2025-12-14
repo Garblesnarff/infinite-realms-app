@@ -11,6 +11,7 @@ import { wsPlugin } from './ws';
 import { blogRoutes } from './routes/blog.js';
 import { landingRoutes } from './routes/landing.js';
 import { seoRoutes } from './routes/seo.js';
+import { authRoutes } from './routes/v1/auth';
 
 export function createApp() {
   const app = new Elysia()
@@ -174,6 +175,9 @@ export function createApp() {
         },
       }
     );
+
+  // Auth routes (REST API for OAuth flow)
+  app.use(authRoutes);
 
   // tRPC integration
   // Mount tRPC at /api/trpc endpoint with context creation
