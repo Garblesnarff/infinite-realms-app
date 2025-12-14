@@ -21,7 +21,7 @@ import {
   type TokenConfiguration,
   type NewTokenConfiguration,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 /**
