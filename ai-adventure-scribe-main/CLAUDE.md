@@ -24,6 +24,41 @@
 - **If you see secrets in code**: Use `Deno.env.get('KEY_NAME')` or `process.env.KEY_NAME`
 - **Before committing**: Run `git status --ignored` to verify .env files aren't staged
 
+### 🔐 Authentication: WorkOS AuthKit (NOT Supabase Auth)
+This project uses **WorkOS AuthKit** for authentication, NOT Supabase Auth.
+
+**Key implications:**
+- `supabase.auth.getUser()` returns `null` - DO NOT USE
+- `supabase.auth.onAuthStateChange()` never fires - DO NOT USE
+- User info comes from `useAuth()` hook from `@/contexts/AuthContext`
+- WorkOS user IDs are strings like `user_01KAT5E3WFD7NGE3C0TDHX2T5G` (not UUIDs)
+- Tokens stored in localStorage: `workos_access_token`, `workos_refresh_token`
+
+**Correct pattern:**
+```typescript
+import { useAuth } from '@/contexts/AuthContext';
+const { user, session } = useAuth();
+```
+
+### ⚠️ Database: Row Level Security (RLS) is DISABLED
+RLS is disabled on most tables. **App-level filtering is REQUIRED for security!**
+
+**ALWAYS add user_id filter to queries:**
+```typescript
+// CORRECT - filters by user
+const { data } = await supabase
+  .from('campaigns')
+  .select('*')
+  .eq('user_id', user.id);  // SECURITY: Required!
+
+// WRONG - exposes all users' data
+const { data } = await supabase
+  .from('campaigns')
+  .select('*');
+```
+
+**Tables requiring user_id filtering:** campaigns, characters, game_sessions, quests, npcs, locations
+
 ### Infrastructure (Verified)
 - **Server**: Hetzner VPS (Nuremberg datacenter, Ubuntu 24.04 LTS)
 - **Hostname**: `ubuntu-16gb-nbg1-1`
@@ -33,6 +68,42 @@
   - Kong API gateway on ports 8001/8444
 - **Location**: `/var/www/infiniterealms/ai-adventure-scribe-main/`
 - **Docker**: All Supabase services containerized, up 5-12 days
+
+### 🚀 Bun + Elysia Server (NEW - December 2025)
+Production API server migrated from Node.js/Express to **Bun/Elysia** following Anthropic's acquisition of Bun.
+
+**Key Details:**
+- **Server Location**: `server-bun/src/` (Elysia framework)
+- **Old Server**: `server/src/` (Express - deprecated, kept for reference)
+- **Runtime**: Bun 1.3.4 (2-3x faster than Node.js)
+- **Port**: 8888 (same as before)
+- **PM2 Process**: `infiniterealms-bun`
+
+**Commands:**
+```bash
+# Development
+cd server-bun && bun run dev
+
+# Production (via PM2)
+pm2 restart infiniterealms-bun
+pm2 logs infiniterealms-bun
+
+# Direct run
+cd server-bun && bun run src/index.ts
+```
+
+**What Changed:**
+- Express → Elysia (Bun-native framework)
+- pg driver → postgres.js (Bun-optimized)
+- ws library → Bun native WebSocket
+- Node streams → Web streams for SSR
+- Winston → Pino for logging
+
+**What Stayed the Same:**
+- tRPC routers (framework-agnostic)
+- Drizzle ORM (same schema)
+- All API endpoints
+- Supabase Edge Functions (still Deno)
 
 ### Workflow
 1. Make changes
@@ -47,7 +118,7 @@
 
 Solo fantasy RPG with AI-powered Dungeon Master. Players create campaigns with persistent worlds and long-term memory.
 
-**Tech Stack**: React + TypeScript + Vite (frontend), Supabase Edge Functions (Deno) + Express (Node), PostgreSQL, Gemini AI
+**Tech Stack**: React + TypeScript + Vite (frontend), **Bun + Elysia** (API server), Supabase Edge Functions (Deno), PostgreSQL, Gemini AI
 
 ---
 
@@ -59,7 +130,13 @@ ai-adventure-scribe-main/
 │   ├── dm-agent-execute/      # Main DM agent (Gemini AI)
 │   ├── rules-interpreter-execute/
 │   └── chat-ai/
-├── server/src/                # Express/Node backup API
+├── server-bun/src/            # Bun/Elysia API server (PRODUCTION)
+│   ├── app.ts                 # Elysia app setup
+│   ├── ws.ts                  # WebSocket (Foundry VTT)
+│   ├── routes/                # SSR routes (blog, landing)
+│   ├── trpc/                  # tRPC context
+│   └── middleware/            # Auth, rate-limit, metrics
+├── server/src/                # Express/Node (DEPRECATED - reference only)
 │   ├── routes/blog.tsx        # Blog SSR routes
 │   ├── views/blog/            # Blog React SSR pages
 │   │   ├── index.tsx          # Blog listing page
