@@ -64,11 +64,24 @@ export class CombatInitiativeService {
       throw new InternalServerError('Failed to create combat encounter');
     }
 
-    // Add participants
-    const participants: CombatParticipant[] = [];
-    for (const input of participantInputs) {
-      const participant = await this.addParticipant(encounter.id, input);
-      participants.push(participant);
+    // Batch insert all participants (single query instead of N queries)
+    if (participantInputs.length > 0) {
+      const participantValues = participantInputs.map(input => {
+        const roll = rollD20();
+        const initiative = roll + input.initiativeModifier;
+        return {
+          encounterId: encounter.id,
+          characterId: input.characterId || null,
+          npcId: input.npcId || null,
+          name: input.name,
+          initiative,
+          initiativeModifier: input.initiativeModifier,
+          turnOrder: 0, // Will be recalculated
+          participantType: input.characterId ? 'player' as const : input.npcId ? 'npc' as const : 'other' as const,
+        };
+      });
+
+      await db.insert(combatParticipants).values(participantValues);
     }
 
     // Calculate initial turn order
@@ -188,16 +201,22 @@ export class CombatInitiativeService {
       return b.initiativeModifier - a.initiativeModifier;
     });
 
-    // Update turn order for each participant
-    for (let i = 0; i < sorted.length; i++) {
-      const sortedParticipant = sorted[i];
-      if (sortedParticipant) {
-        await db
-          .update(combatParticipants)
-          .set({ turnOrder: i })
-          .where(eq(combatParticipants.id, sortedParticipant.id));
-      }
-    }
+    // Skip if no participants to update
+    if (sorted.length === 0) return;
+
+    // Build batch update using SQL CASE statement (single query instead of N queries)
+    const caseStatements = sorted.map((p, i) =>
+      sql`WHEN ${p.id} THEN ${i}`
+    );
+    const participantIds = sorted.map(p => p.id);
+
+    await db.execute(sql`
+      UPDATE combat_participants
+      SET turn_order = CASE id
+        ${sql.join(caseStatements, sql` `)}
+      END
+      WHERE id IN ${participantIds}
+    `);
   }
 
   /**

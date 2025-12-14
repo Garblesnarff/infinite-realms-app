@@ -332,21 +332,18 @@ export class TokenService {
     // Verify character ownership
     await this.verifyCharacterOwnership(characterId, userId);
 
-    // Get all token IDs linked to this character
+    // Get all tokens linked to this character using relation (single query instead of 2)
     const links = await db.query.characterTokens.findMany({
       where: eq(characterTokens.characterId, characterId),
+      with: {
+        token: true,
+      },
     });
 
-    if (links.length === 0) return [];
-
-    const tokenIds = links.map((link: any) => link.tokenId);
-
-    // Get all tokens
-    const characterTokensList = await db.query.tokens.findMany({
-      where: inArray(tokens.id, tokenIds),
-    });
-
-    return characterTokensList;
+    // Extract tokens from the links, filtering out any null tokens
+    return links
+      .map((link: { token: Token | null }) => link.token)
+      .filter((token): token is Token => token !== null);
   }
 
   /**
