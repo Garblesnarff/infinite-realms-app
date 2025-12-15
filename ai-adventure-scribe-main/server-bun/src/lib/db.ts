@@ -22,8 +22,15 @@ const config: postgres.Options<{}> = {
 };
 
 // Add SSL configuration if enabled
+// Note: rejectUnauthorized is false because Supabase runs locally in Docker
+// with a self-signed certificate. In a cloud Supabase deployment, the SSL
+// would use a proper certificate and rejectUnauthorized should be true.
+// This is acceptable because traffic is localhost (same server).
 if (env.PGSSL === 'true') {
-  config.ssl = { rejectUnauthorized: false };
+  // For local Docker: self-signed cert, can't validate
+  // For cloud Supabase: cert is trusted, should validate
+  const isLocalSupabase = env.DATABASE_URL?.includes('localhost') || env.DATABASE_URL?.includes('127.0.0.1');
+  config.ssl = { rejectUnauthorized: !isLocalSupabase };
 }
 
 /**
