@@ -599,6 +599,7 @@ describe('CombatAttackService', () => {
         wasVulnerable: false,
         wasImmune: false,
         massiveDamage: false,
+        deathSaveFailuresAdded: 0,
       });
 
       const result = await service.resolveAttack('encounter-1', {
@@ -748,6 +749,7 @@ describe('CombatAttackService', () => {
         wasVulnerable: false,
         wasImmune: false,
         massiveDamage: false,
+        deathSaveFailuresAdded: 0,
       });
 
       const result = await service.resolveAttack('encounter-1', {
@@ -797,6 +799,7 @@ describe('CombatAttackService', () => {
         wasVulnerable: false,
         wasImmune: false,
         massiveDamage: false,
+        deathSaveFailuresAdded: 0,
       });
 
       const result = await service.resolveSpellAttack('encounter-1', {
