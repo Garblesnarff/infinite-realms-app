@@ -83,6 +83,40 @@ export function createApp() {
         message: process.env.NODE_ENV === 'production' ? undefined : (error instanceof Error ? error.message : String(error)),
       };
     })
+    // Security headers middleware
+    .onBeforeHandle(({ set }) => {
+      // Prevent MIME type sniffing
+      set.headers['X-Content-Type-Options'] = 'nosniff';
+
+      // Prevent clickjacking
+      set.headers['X-Frame-Options'] = 'DENY';
+
+      // XSS protection (legacy but still useful)
+      set.headers['X-XSS-Protection'] = '1; mode=block';
+
+      // Referrer policy for privacy
+      set.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+
+      // Content Security Policy - allow self and common CDNs
+      set.headers['Content-Security-Policy'] = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: blob: https:",
+        "connect-src 'self' https: wss:",
+        "frame-ancestors 'none'",
+      ].join('; ');
+
+      // HTTPS enforcement (Strict Transport Security)
+      // Only set in production to avoid issues with local development
+      if (process.env.NODE_ENV === 'production') {
+        set.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload';
+      }
+
+      // Permissions policy (restrict browser features)
+      set.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()';
+    })
     // CORS configuration (matching Express setup)
     // Allow localhost on any port for development, and production origins from env
     .use(
