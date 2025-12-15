@@ -4,8 +4,12 @@
  * Database tables for core D&D game elements.
  * Includes campaigns, characters, character stats, and game sessions.
  */
-import { pgTable, uuid, text, timestamp, jsonb, index, integer, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { pgTable, uuid, text, timestamp, jsonb, index, integer, boolean, pgEnum } from 'drizzle-orm/pg-core';
+/**
+ * Enums
+ */
+export const sharingModeEnum = pgEnum('sharing_mode', ['private', 'view_only', 'can_edit', 'co_owner']);
 /**
  * Campaigns Table
  * Stores D&D campaign configurations and settings
@@ -68,6 +72,11 @@ export const characters = pgTable('characters', {
     visionTypes: text('vision_types').array(),
     obscurement: text('obscurement'),
     isHidden: boolean('is_hidden').default(false),
+    // Sharing and permissions (Phase 1.5 - Foundry VTT integration)
+    ownerId: text('owner_id'), // References auth.users(id) - defaults to user_id for backward compatibility
+    isPublic: boolean('is_public').default(false).notNull(),
+    sharingMode: sharingModeEnum('sharing_mode').default('private').notNull(),
+    folderId: uuid('folder_id'), // References character_folders table
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
@@ -76,6 +85,9 @@ export const characters = pgTable('characters', {
     campaignIdIdx: index('idx_characters_campaign_id').on(table.campaignId),
     nameIdx: index('idx_characters_name').on(table.name),
     createdAtIdx: index('idx_characters_created_at').on(table.createdAt),
+    ownerIdIdx: index('idx_characters_owner_id').on(table.ownerId),
+    isPublicIdx: index('idx_characters_is_public').on(table.isPublic),
+    folderIdIdx: index('idx_characters_folder_id').on(table.folderId),
 }));
 /**
  * Character Stats Table

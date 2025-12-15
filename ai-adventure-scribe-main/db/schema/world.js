@@ -5,7 +5,7 @@
  * Includes NPCs, locations, quests, and AI agent memories.
  */
 import { pgTable, uuid, text, timestamp, jsonb, index, integer } from 'drizzle-orm/pg-core';
-import { campaigns, gameSessions } from './game';
+import { campaigns, gameSessions } from './game.js';
 /**
  * NPCs Table
  * Non-player characters in campaigns
