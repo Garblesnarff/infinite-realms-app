@@ -15,8 +15,29 @@ import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';
 import { handleAsyncError } from '@/utils/error-handler';
 
+/**
+ * Context for dice roll messages to preserve intent through the message flow
+ */
+export interface DiceRollContext {
+  intent: 'dice_roll';
+  diceRoll?: {
+    formula: string;
+    count: number;
+    dieType: number;
+    modifier: number;
+    advantage?: boolean;
+    disadvantage?: boolean;
+    results?: number[];
+    keptResults?: number[];
+    total: number;
+    naturalRoll?: number;
+    critical?: boolean;
+    timestamp?: string;
+  };
+}
+
 interface MessageListProps {
-  onSendFullMessage?: (message: string) => Promise<void>;
+  onSendFullMessage?: (message: string, context?: DiceRollContext) => Promise<void>;
   sessionId?: string;
   containerRef?: React.RefObject<HTMLDivElement>;
   suppressEmptyState?: boolean;

@@ -3,6 +3,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { MessageRenderer } from './MessageRenderer';
 
 import type { ChatMessage } from '@/types/game';
+import type { DiceRollContext } from '../MessageList';
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
@@ -23,7 +24,7 @@ interface MessageListContainerProps {
   onGenerateScene: (message: ChatMessage & { id?: string; timestamp?: string }) => Promise<void>;
   onOptionSelect: (optionText: string) => Promise<void>;
   onSendMessage: (message: ChatMessage) => Promise<void>;
-  onSendFullMessage?: (message: string) => Promise<void>;
+  onSendFullMessage?: (message: string, context?: DiceRollContext) => Promise<void>;
   isFetchingMore?: boolean;
   hasMore?: boolean;
   suppressEmptyState?: boolean;
@@ -270,7 +271,12 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           // onSendFullMessage persists AND triggers AI response
           if (onSendFullMessage) {
             logger.info('[MessageListContainer] Triggering AI response after roll(s) complete');
-            await onSendFullMessage(formattedRoll);
+            // CRITICAL FIX: Pass dice roll context to preserve intent through message flow
+            // This enables the roll suppression logic in use-ai-response.ts
+            await onSendFullMessage(formattedRoll, {
+              intent: 'dice_roll',
+              diceRoll: diceRollMessage.context?.diceRoll,
+            });
           } else {
             // Fallback if onSendFullMessage not available
             await onSendMessage(diceRollMessage);
@@ -378,7 +384,21 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
           // Single roll OR last roll in batch - trigger AI (which also persists)
           if (onSendFullMessage) {
             logger.info('[MessageListContainer] Triggering AI response after manual roll(s) complete');
-            await onSendFullMessage(formattedRoll);
+            // CRITICAL FIX: Pass dice roll context to preserve intent through message flow
+            // This enables the roll suppression logic in use-ai-response.ts
+            await onSendFullMessage(formattedRoll, {
+              intent: 'dice_roll',
+              diceRoll: {
+                formula: `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
+                count: currentRoll.rollConfig.count,
+                dieType: currentRoll.rollConfig.dieType,
+                modifier: currentRoll.rollConfig.modifier,
+                advantage: currentRoll.rollConfig.advantage,
+                disadvantage: currentRoll.rollConfig.disadvantage,
+                total: numericResult,
+                timestamp: new Date().toISOString(),
+              },
+            });
           } else {
             // Fallback if onSendFullMessage not available
             const playerMessage: ChatMessage = {

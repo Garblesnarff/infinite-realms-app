@@ -3,6 +3,7 @@ import React from 'react';
 import { useSessionValidator } from '../session/SessionValidator';
 
 import type { ChatMessage } from '@/types/game';
+import type { DiceRollContext } from '../../chat/MessageList';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
@@ -26,7 +27,7 @@ interface MessageHandlerProps {
   updateGameSessionState: (newState: Partial<any>) => Promise<void>; // Replace 'any' with ExtendedGameSession if possible
   onAIResponse?: (message: ChatMessage) => Promise<void>; // Callback for processing AI responses (e.g., combat detection)
   children: (props: {
-    handleSendMessage: (message: string) => Promise<void>;
+    handleSendMessage: (message: string, context?: DiceRollContext) => Promise<void>;
     isProcessing: boolean;
   }) => React.ReactNode;
 }
@@ -59,6 +60,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
   const sendQueueRef = React.useRef<
     Array<{
       message: string;
+      context?: DiceRollContext;
       resolve: (value: void | PromiseLike<void>) => void;
       reject: (error: any) => void;
     }>
@@ -110,10 +112,10 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
     }
 
     isSendingRef.current = true;
-    const { message: playerInput, resolve, reject } = sendQueueRef.current[0];
+    const { message: playerInput, context, resolve, reject } = sendQueueRef.current[0];
 
     try {
-      await actualSendMessage(playerInput);
+      await actualSendMessage(playerInput, context);
       resolve();
     } catch (error) {
       reject(error);
@@ -131,7 +133,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
   }, []); // actualSendMessage uses refs so no deps needed
 
   // The actual message sending logic (extracted from handleSendMessage)
-  const actualSendMessage = async (playerInput: string) => {
+  const actualSendMessage = async (playerInput: string, providedContext?: DiceRollContext) => {
     try {
       // Check if game is paused and this isn't a resume command
       const trimmedInput = playerInput.trim().toLowerCase();
@@ -296,12 +298,15 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       const isFirstMessage = currentMessages.length === 0;
 
       // Add player message
+      // CRITICAL FIX: Use provided context if available (for dice roll results)
+      // This preserves the 'dice_roll' intent through the message flow,
+      // enabling the roll suppression logic in use-ai-response.ts
       const playerMessage: ChatMessage = {
         text: playerInput,
         sender: 'player',
         characterName: character?.name,
         characterAvatar: character?.avatar_url,
-        context: {
+        context: providedContext ?? {
           intent: isFirstMessage ? 'first_action' : 'query',
           isFirstMessage,
         },
@@ -519,11 +524,12 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
 
   // Public handleSendMessage that queues messages
   const handleSendMessage = React.useCallback(
-    async (playerInput: string): Promise<void> => {
+    async (playerInput: string, context?: DiceRollContext): Promise<void> => {
       return new Promise<void>((resolve, reject) => {
-        // Add to queue
+        // Add to queue with optional context (for dice roll results)
         sendQueueRef.current.push({
           message: playerInput,
+          context,
           resolve,
           reject,
         });
