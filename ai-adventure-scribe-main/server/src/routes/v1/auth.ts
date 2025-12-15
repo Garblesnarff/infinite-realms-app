@@ -1,8 +1,14 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { workos, authConfig } from '../../services/workos.js';
 import { db } from '../../../../db/client.js';
 import { users } from '../../../../db/schema/index.js';
 import { eq } from 'drizzle-orm';
+
+// Test auth secret - for automated testing only
+// SECURITY: No default secret - must be explicitly set in environment
+const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;
+const TEST_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
 
 export default function authRouter() {
   const router = Router();
@@ -86,6 +92,78 @@ export default function authRouter() {
       console.error('OAuth callback error:', error);
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
       res.redirect(`${frontendUrl}/?error=auth_failed`);
+    }
+  });
+
+  /**
+   * Test authentication endpoint for automated testing
+   * GET /v1/auth/test-login?secret=xxx
+   *
+   * Returns tokens for the test user without going through WorkOS OAuth.
+   * Only works with correct secret to prevent abuse.
+   *
+   * SECURITY: Disabled in production unless explicitly enabled.
+   */
+  router.get('/test-login', async (req, res) => {
+    // SECURITY: Disable in production environment
+    if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_AUTH) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    // SECURITY: Require the secret to be explicitly set (no default)
+    if (!TEST_AUTH_SECRET) {
+      res.status(403).json({ error: 'Test auth not configured' });
+      return;
+    }
+
+    const { secret } = req.query;
+
+    // Verify test auth secret
+    if (secret !== TEST_AUTH_SECRET) {
+      res.status(403).json({ error: 'Invalid test auth secret' });
+      return;
+    }
+
+    try {
+      // Get test user from database
+      const testUser = await db.query.users.findFirst({
+        where: eq(users.id, TEST_USER_ID),
+      });
+
+      if (!testUser) {
+        res.status(404).json({ error: 'Test user not found in database' });
+        return;
+      }
+
+      // Generate a pseudo-JWT token that our verifyWorkOSToken will accept
+      // (it only decodes, doesn't verify signature)
+      const accessToken = jwt.sign(
+        {
+          sub: testUser.id,
+          email: testUser.email,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+        },
+        'test_secret_key', // Any secret works since we don't verify signature
+        { algorithm: 'HS256' }
+      );
+
+      const refreshToken = jwt.sign(
+        { sub: testUser.id, type: 'refresh' },
+        'test_secret_key',
+        { algorithm: 'HS256', expiresIn: '7d' }
+      );
+
+      // Redirect to frontend callback with tokens (same as normal OAuth flow)
+      const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
+      const redirectUrl = `${frontendUrl}/auth/callback#access_token=${accessToken}&refresh_token=${refreshToken}`;
+
+      console.log('[TEST AUTH] Generated tokens for test user:', testUser.email);
+      res.redirect(redirectUrl);
+    } catch (error) {
+      console.error('Test login error:', error);
+      res.status(500).json({ error: 'Failed to generate test tokens' });
     }
   });
 
