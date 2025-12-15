@@ -364,39 +364,75 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
         return; // Skip persistence when feature not enabled to avoid 400 errors on missing tables
       }
 
+      // Find current turn order index
+      const currentTurnOrder = encounter.participants.findIndex(
+        (p) => p.id === encounter.currentTurnParticipantId
+      );
+
+      // Save combat encounter (matches actual schema)
       await supabase.from('combat_encounters').upsert({
         id: encounter.id,
         session_id: encounter.sessionId,
-        description: `Combat at ${encounter.location}`,
         status: encounter.phase,
         current_round: encounter.currentRound,
-        current_turn:
-          encounter.participants.findIndex((p) => p.id === encounter.currentTurnParticipantId) + 1,
-        current_participant_id: encounter.currentTurnParticipantId,
-        initiative_order: encounter.participants.map((p) => ({
-          id: p.id,
-          initiative: p.initiative,
-          name: p.name,
-        })),
-        created_at: encounter.startTime.toISOString(),
+        current_turn_order: currentTurnOrder >= 0 ? currentTurnOrder : 0,
+        location: encounter.location || null,
+        started_at: encounter.startTime.toISOString(),
         updated_at: new Date().toISOString(),
       });
 
-      // Save participants
-      for (const participant of encounter.participants) {
+      // Save participants and their status
+      for (let i = 0; i < encounter.participants.length; i++) {
+        const participant = encounter.participants[i];
+
+        // Save participant (static combat data)
         await supabase.from('combat_participants').upsert({
           id: participant.id,
           encounter_id: encounter.id,
+          character_id: participant.characterId || null,
+          npc_id: null, // Could be enhanced to support NPC references
+          name: participant.name,
           participant_type: participant.participantType,
-          participant_id: participant.characterId || participant.id,
           initiative: participant.initiative,
+          initiative_modifier: participant.initiativeBonus || 0,
+          turn_order: i,
+          is_active: participant.currentHitPoints > 0,
+          armor_class: participant.armorClass,
+          max_hp: participant.maxHitPoints,
+          speed: 30, // Default speed
+          damage_resistances: [],
+          damage_immunities: [],
+          damage_vulnerabilities: [],
+          updated_at: new Date().toISOString(),
+        });
+
+        // Save participant status (HP, temp HP, death saves)
+        await supabase.from('combat_participant_status').upsert({
+          participant_id: participant.id,
           current_hp: participant.currentHitPoints,
           max_hp: participant.maxHitPoints,
-          temporary_hp: participant.temporaryHitPoints,
-          armor_class: participant.armorClass,
-          conditions: participant.conditions,
-          is_active: participant.currentHitPoints > 0,
+          temp_hp: participant.temporaryHitPoints || 0,
+          is_conscious: participant.currentHitPoints > 0,
+          death_saves_successes: participant.deathSaves?.successes || 0,
+          death_saves_failures: participant.deathSaves?.failures || 0,
+          updated_at: new Date().toISOString(),
         });
+
+        // Save conditions if any
+        if (participant.conditions && participant.conditions.length > 0) {
+          for (const condition of participant.conditions) {
+            await supabase.from('combat_participant_conditions').upsert({
+              participant_id: participant.id,
+              condition_name: condition.name,
+              source: condition.source || 'unknown',
+              duration_rounds: condition.remainingDuration || null,
+              save_dc: null,
+              save_type: null,
+              is_active: true,
+              applied_at: new Date().toISOString(),
+            });
+          }
+        }
       }
     } catch (error) {
       logger.error('Error saving encounter to database:', error);
