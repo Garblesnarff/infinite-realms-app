@@ -9,7 +9,7 @@ import {
 import { generateAIResponse } from './ai-handler.ts';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://infiniterealms.app',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
 };
 
