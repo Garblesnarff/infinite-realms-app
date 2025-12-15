@@ -1,6 +1,7 @@
 import { ArrowLeft, Calendar, Clock, User, Tag, Home } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import sanitizeHtml from 'sanitize-html';
 
 import type { BlogPost } from '@/types/blog';
 
@@ -9,9 +10,44 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBlogPostBySlug } from '@/hooks/blog/useBlogPosts';
 
+// Sanitization options for blog content - allows safe HTML for blog posts
+const sanitizeOptions: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
+    'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+    'strong', 'em', 'b', 'i', 'u', 's', 'strike',
+    'a', 'img', 'figure', 'figcaption',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'div', 'span', 'article', 'section',
+  ],
+  allowedAttributes: {
+    'a': ['href', 'target', 'rel', 'title'],
+    'img': ['src', 'alt', 'title', 'width', 'height', 'loading'],
+    '*': ['class', 'id'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  transformTags: {
+    // Force external links to open in new tab with security attributes
+    'a': (tagName, attribs) => ({
+      tagName,
+      attribs: {
+        ...attribs,
+        target: attribs.href?.startsWith('http') ? '_blank' : attribs.target,
+        rel: attribs.href?.startsWith('http') ? 'noopener noreferrer' : attribs.rel,
+      },
+    }),
+  },
+};
+
 const BlogPost: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { data: post, isLoading, error } = useBlogPostBySlug(slug);
+
+  // Sanitize HTML content to prevent XSS attacks
+  const sanitizedContent = useMemo(() => {
+    const rawContent = post?.content || post?.excerpt || 'Content not available';
+    return sanitizeHtml(rawContent, sanitizeOptions);
+  }, [post?.content, post?.excerpt]);
 
   if (isLoading) {
     return (
@@ -136,7 +172,7 @@ const BlogPost: React.FC = () => {
           <div
             className="leading-relaxed prose-headings:font-heading prose-headings:tracking-tight prose-headings:text-amber-50 prose-p:text-slate-300 prose-a:text-amber-400 prose-a:no-underline hover:prose-a:text-amber-300 hover:prose-a:underline prose-strong:text-slate-200 prose-code:rounded prose-code:bg-slate-900/60 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-amber-300"
             dangerouslySetInnerHTML={{
-              __html: post.content || post.excerpt || 'Content not available',
+              __html: sanitizedContent,
             }}
           />
         </div>
