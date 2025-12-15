@@ -24,6 +24,36 @@
 - **If you see secrets in code**: Use `Deno.env.get('KEY_NAME')` or `process.env.KEY_NAME`
 - **Before committing**: Run `git status --ignored` to verify .env files aren't staged
 
+### 🚨 SECRETS PROTECTION - CRITICAL AI RULES
+
+**This section exists because Claude models have accidentally exposed secrets multiple times. Follow these rules strictly.**
+
+**NEVER DO:**
+- ❌ Read `.env` files (use `.env.example` for understanding config structure)
+- ❌ Output, echo, print, or log environment variable VALUES
+- ❌ Hardcode API keys, tokens, passwords, or secrets in ANY file
+- ❌ Create "example" code with real credential values
+- ❌ Include secrets in error messages, comments, or documentation
+- ❌ Copy-paste values from `.env` into code or responses
+
+**ALWAYS DO:**
+- ✅ Use `process.env.VARIABLE_NAME` or `Deno.env.get('VARIABLE_NAME')` for runtime access
+- ✅ Reference `.env.example` for variable NAMES only (never values)
+- ✅ Use placeholder values like `your-api-key-here` or `<REDACTED>` in examples
+- ✅ Redact any secrets if you accidentally see them: `sk-...REDACTED`
+- ✅ When modifying `.env`, ask user to provide new values rather than reading old ones
+
+**If You Accidentally See Secrets:**
+1. Do NOT repeat them in your response
+2. Do NOT include them in code or documentation
+3. Warn the user that secrets are exposed in plain text
+4. Recommend immediate key rotation if secrets were displayed externally
+
+**Why This Matters:**
+- Exposed API keys can be used by attackers to deplete quotas or access data
+- Even "safe" output (like terminal logs) can be scraped
+- Keys have been accidentally exposed to users/logs multiple times - this must stop
+
 ### 🔐 Authentication: WorkOS AuthKit (NOT Supabase Auth)
 This project uses **WorkOS AuthKit** for authentication, NOT Supabase Auth.
 
