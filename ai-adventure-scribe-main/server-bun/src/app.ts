@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
 import { swagger } from '@elysiajs/swagger';
-import { trpc } from '@elysiajs/trpc';
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { logger } from './lib/logger';
 import { register, httpRequestCounter, httpRequestDuration } from './lib/metrics';
 import { randomUUID } from 'crypto';
@@ -217,16 +217,16 @@ export function createApp() {
   // Blog admin auth routes (separate from WorkOS)
   app.use(blogAdminAuthRoutes);
 
-  // tRPC integration
-  // Mount tRPC at /api/trpc endpoint with context creation
-  app.use(
-    trpc(appRouter, {
+  // tRPC integration using native fetch adapter (compatible with tRPC v11)
+  // Mount tRPC at /api/trpc/* endpoint with context creation
+  app.all('/api/trpc/*', async ({ request }) => {
+    return fetchRequestHandler({
       endpoint: '/api/trpc',
-      createContext: async ({ req, resHeaders }) => {
-        return createContext({ req, resHeaders });
-      },
-    })
-  );
+      req: request,
+      router: appRouter,
+      createContext: ({ req, resHeaders }) => createContext({ req, resHeaders }),
+    });
+  });
 
   // SSR routes (React Server-Side Rendering with Web Streams)
   app.use(blogRoutes);

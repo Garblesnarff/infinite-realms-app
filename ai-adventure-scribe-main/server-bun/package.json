@@ -12,6 +12,7 @@
     "@elysiajs/static": "^1.0.0",
     "@elysiajs/swagger": "^1.0.0",
     "@elysiajs/trpc": "^1.0.0",
+    "@trpc/server": "^11.7.1",
     "@workos-inc/node": "^7.77.0",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.44.7",
