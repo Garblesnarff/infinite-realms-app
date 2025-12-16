@@ -233,7 +233,7 @@ export const BlogPostsList: React.FC = () => {
             Manage drafts, scheduled entries, and published stories for Infinite Realms.
           </CardDescription>
         </div>
-        <Button onClick={() => navigate('/app/blog/posts/new')} className="gap-2" size="sm">
+        <Button onClick={() => navigate('/admin/blog/new')} className="gap-2" size="sm">
           <Plus className="h-4 w-4" />
           New Post
         </Button>
@@ -350,7 +350,7 @@ export const BlogPostsList: React.FC = () => {
                 : 'No posts yet. Create your first entry to begin sharing your worlds.'}
             </p>
             {!hasActiveFilters ? (
-              <Button onClick={() => navigate('/app/blog/posts/new')} className="mt-4 gap-2">
+              <Button onClick={() => navigate('/admin/blog/new')} className="mt-4 gap-2">
                 <Plus className="h-4 w-4" />
                 Create your first post
               </Button>
@@ -442,7 +442,7 @@ export const BlogPostsList: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => navigate(`/app/blog/posts/${post.id}`)}
+                                onClick={() => navigate(`/admin/blog/edit/${post.id}`)}
                                 aria-label={`Edit ${post.title}`}
                                 disabled={isPending}
                               >
@@ -451,12 +451,15 @@ export const BlogPostsList: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener')
-                                }
+                                onClick={() => {
+                                  if (post.status !== 'published') {
+                                    toast.info('Post must be published to view on the public blog. Click Publish first.');
+                                  } else {
+                                    window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener');
+                                  }
+                                }}
                                 aria-label={`View ${post.title} on blog`}
-                                disabled={isPending || post.status !== 'published'}
-                                title={post.status !== 'published' ? 'Publish to view on blog' : undefined}
+                                disabled={isPending}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -544,7 +547,7 @@ export const BlogPostsList: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => navigate(`/app/blog/posts/${post.id}`)}
+                        onClick={() => navigate(`/admin/blog/edit/${post.id}`)}
                         disabled={isPending}
                       >
                         <Edit className="mr-2 h-4 w-4" />
@@ -554,9 +557,14 @@ export const BlogPostsList: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener')}
-                        disabled={isPending || post.status !== 'published'}
-                        title={post.status !== 'published' ? 'Publish to view on blog' : undefined}
+                        onClick={() => {
+                          if (post.status !== 'published') {
+                            toast.info('Post must be published to view on the public blog. Click Publish first.');
+                          } else {
+                            window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener');
+                          }
+                        }}
+                        disabled={isPending}
                       >
                         <Eye className="mr-2 h-4 w-4" />
                         View
