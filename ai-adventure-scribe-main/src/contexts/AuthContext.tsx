@@ -199,19 +199,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const fetchBlogRole = useCallback(async () => {
-    if (!user) {
-      setBlogRole(null);
-      setBlogRoleLoading(false);
-      return;
-    }
-
-    if (isOffline()) {
-      setBlogRoleLoading(false);
-      return;
-    }
-
     setBlogRoleLoading(true);
     try {
+      // Check for separate blog admin token first (independent of WorkOS auth)
+      const blogAdminToken = localStorage.getItem('blog_admin_token');
+      if (blogAdminToken) {
+        try {
+          // Decode JWT to check expiration (server will verify signature)
+          const payload = JSON.parse(atob(blogAdminToken.split('.')[1]));
+          const now = Math.floor(Date.now() / 1000);
+          if (payload.exp > now && payload.type === 'blog_admin' && payload.role === 'admin') {
+            setBlogRole('admin');
+            return;
+          }
+        } catch {
+          // Invalid token, remove it
+          localStorage.removeItem('blog_admin_token');
+        }
+      }
+
+      // If no user is logged in via WorkOS, check is complete
+      if (!user) {
+        setBlogRole(null);
+        setBlogRoleLoading(false);
+        return;
+      }
+
+      if (isOffline()) {
+        setBlogRoleLoading(false);
+        return;
+      }
+
       // Dev override: allow admin access in non-production without email setup
       const devAdminEmail = (import.meta as any)?.env?.VITE_DEV_BLOG_ADMIN_EMAIL as
         | string
@@ -239,8 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // TODO: Implement blog role fetching via tRPC or API call
-      // For now, default to null
+      // Default to null if no admin access granted
       setBlogRole(null);
     } catch (error) {
       logger.warn('Failed to load blog role', error);
@@ -286,10 +303,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, session]);
 
+  // Check blog role on mount (for blog admin token) and when user changes
   useEffect(() => {
-    if (!user) return;
     fetchBlogRole();
   }, [user?.id]);
+
+  // Re-check blog role when localStorage changes (for blog admin login/logout)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'blog_admin_token') {
+        fetchBlogRole();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [fetchBlogRole]);
 
   useEffect(() => {
     if (!user) return;

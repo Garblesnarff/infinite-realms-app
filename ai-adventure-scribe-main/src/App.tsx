@@ -34,6 +34,9 @@ const CampaignHubWithErrorBoundary = lazy(
 );
 const SceneManagementPage = lazy(() => import('./pages/SceneManagementPage'));
 const BattleMapPage = lazy(() => import('./pages/BattleMapPage'));
+const BlogAdminLogin = lazy(() => import('./pages/BlogAdminLogin'));
+const BlogAdmin = lazy(() => import('./pages/BlogAdmin'));
+const BlogEditor = lazy(() => import('./pages/BlogEditor'));
 
 // TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;
@@ -96,6 +99,42 @@ function App() {
                         element={
                           <Suspense fallback={<RouteLoading />}>
                             <CallbackPage />
+                          </Suspense>
+                        }
+                      />
+
+                      {/* Blog Admin Login (public - separate from WorkOS auth) */}
+                      <Route
+                        path="/admin/blog/login"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <BlogAdminLogin />
+                          </Suspense>
+                        }
+                      />
+
+                      {/* Blog Admin Panel (separate auth from WorkOS) */}
+                      <Route
+                        path="/admin/blog"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <BlogAdmin />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/admin/blog/edit/:id"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <BlogEditor />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/admin/blog/new"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <BlogEditor />
                           </Suspense>
                         }
                       />
@@ -201,6 +240,31 @@ function App() {
                                   element={
                                     <Suspense fallback={<RouteLoading />}>
                                       <GameContentWithErrorBoundary />
+                                    </Suspense>
+                                  }
+                                />
+                                {/* Blog Admin Panel */}
+                                <Route
+                                  path="/blog"
+                                  element={
+                                    <Suspense fallback={<RouteLoading />}>
+                                      <BlogAdmin />
+                                    </Suspense>
+                                  }
+                                />
+                                <Route
+                                  path="/blog/edit/:id"
+                                  element={
+                                    <Suspense fallback={<RouteLoading />}>
+                                      <BlogEditor />
+                                    </Suspense>
+                                  }
+                                />
+                                <Route
+                                  path="/blog/new"
+                                  element={
+                                    <Suspense fallback={<RouteLoading />}>
+                                      <BlogEditor />
                                     </Suspense>
                                   }
                                 />

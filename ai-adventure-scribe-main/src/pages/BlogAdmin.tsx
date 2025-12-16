@@ -1,37 +1,68 @@
-import { FileText, FolderTree, Tags, Image } from 'lucide-react';
+import { FileText, FolderTree, Tags, Image, LogOut } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 import { BlogCategoryManager } from '@/components/blog-admin/blog-category-manager';
 import { BlogMediaManager } from '@/components/blog-admin/blog-media-manager';
 import { BlogPostsList } from '@/components/blog-admin/blog-posts-list';
 import { BlogTagManager } from '@/components/blog-admin/blog-tag-manager';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
+import { clearBlogAdminToken } from './BlogAdminLogin';
 
 const BlogAdmin: React.FC = () => {
-  const { isBlogAdmin } = useAuth();
+  const { isBlogAdmin, refreshBlogRole } = useAuth();
+
+  const handleLogout = () => {
+    clearBlogAdminToken();
+    // Trigger re-check of blog role
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'blog_admin_token',
+      newValue: null,
+    }));
+    refreshBlogRole();
+  };
 
   if (!isBlogAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+        <div className="w-full max-w-md rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
           <h1 className="mb-2 text-xl font-semibold text-destructive">Access Denied</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="mb-4 text-sm text-muted-foreground">
             Blog admin privileges are required to access this area.
           </p>
+          <Link to="/admin/blog/login">
+            <Button variant="outline">Sign In to Blog Admin</Button>
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Blog Administration</h1>
-        <p className="mt-2 text-muted-foreground">
-          Manage posts, categories, tags, and media for the Infinite Realms blog.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <span className="font-semibold">Blog Admin</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </Button>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">Blog Administration</h1>
+          <p className="mt-2 text-muted-foreground">
+            Manage posts, categories, tags, and media for the Infinite Realms blog.
+          </p>
+        </div>
 
       <Tabs defaultValue="posts" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-4">
@@ -69,6 +100,7 @@ const BlogAdmin: React.FC = () => {
           <BlogMediaManager />
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 };
