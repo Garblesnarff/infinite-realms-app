@@ -452,10 +452,11 @@ export const BlogPostsList: React.FC = () => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() =>
-                                  window.open(`/blog/${post.slug}`, '_blank', 'noopener')
+                                  window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener')
                                 }
-                                aria-label={`Preview ${post.title}`}
-                                disabled={isPending}
+                                aria-label={`View ${post.title} on blog`}
+                                disabled={isPending || post.status !== 'published'}
+                                title={post.status !== 'published' ? 'Publish to view on blog' : undefined}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -553,11 +554,12 @@ export const BlogPostsList: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => window.open(`/blog/${post.slug}`, '_blank', 'noopener')}
-                        disabled={isPending}
+                        onClick={() => window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener')}
+                        disabled={isPending || post.status !== 'published'}
+                        title={post.status !== 'published' ? 'Publish to view on blog' : undefined}
                       >
                         <Eye className="mr-2 h-4 w-4" />
-                        Preview
+                        View
                       </Button>
                       {post.status === 'published' ? (
                         <Button
