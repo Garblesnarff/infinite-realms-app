@@ -12,6 +12,8 @@ import { blogRoutes } from './routes/blog.js';
 import { landingRoutes } from './routes/landing.js';
 import { seoRoutes } from './routes/seo.js';
 import { authRoutes } from './routes/v1/auth';
+import { charactersRoutes } from './routes/v1/characters';
+import { llmRoutes } from './routes/v1/llm';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 
 export function createApp() {
@@ -213,6 +215,12 @@ export function createApp() {
 
   // Auth routes (REST API for OAuth flow)
   app.use(authRoutes);
+
+  // Character routes (spell data, etc.)
+  app.use(charactersRoutes);
+
+  // LLM routes (AI text generation)
+  app.use(llmRoutes);
 
   // Blog admin auth routes (separate from WorkOS)
   app.use(blogAdminAuthRoutes);
