@@ -57,8 +57,9 @@ function getBearerToken(authHeader?: string | null): string | null {
 async function verifyWorkOSToken(accessToken: string) {
   try {
     // Verify JWT signature using WorkOS JWKS endpoint
+    // WorkOS User Management tokens use issuer with client ID
     const { payload } = await jwtVerify(accessToken, JWKS, {
-      issuer: 'https://api.workos.com',
+      issuer: `https://api.workos.com/user_management/${env.WORKOS_CLIENT_ID}`,
     });
 
     // Extract user information from verified token

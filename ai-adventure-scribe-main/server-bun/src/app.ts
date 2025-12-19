@@ -14,6 +14,7 @@ import { seoRoutes } from './routes/seo.js';
 import { authRoutes } from './routes/v1/auth';
 import { charactersRoutes } from './routes/v1/characters';
 import { llmRoutes } from './routes/v1/llm';
+import { imageRoutes } from './routes/v1/images';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 
 export function createApp() {
@@ -221,6 +222,9 @@ export function createApp() {
 
   // LLM routes (AI text generation)
   app.use(llmRoutes);
+
+  // Image routes (AI image generation)
+  app.use(imageRoutes);
 
   // Blog admin auth routes (separate from WorkOS)
   app.use(blogAdminAuthRoutes);
