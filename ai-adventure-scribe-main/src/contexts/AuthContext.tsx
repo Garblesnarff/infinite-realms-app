@@ -268,7 +268,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const fetchUserPlan = useCallback(async () => {
-    if (!user || !session?.access_token) {
+    if (!user) {
+      setUserPlan(null);
+      setUserPlanLoading(false);
+      return;
+    }
+
+    // Read token fresh from localStorage to avoid stale closure issues
+    const freshToken = window.localStorage.getItem('workos_access_token');
+    if (!freshToken) {
       setUserPlan(null);
       setUserPlanLoading(false);
       return;
@@ -284,7 +292,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
       const response = await fetch(`${apiUrl}/v1/llm/quota`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${freshToken}`,
           'Content-Type': 'application/json',
         },
       });
@@ -301,7 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setUserPlanLoading(false);
     }
-  }, [user, session]);
+  }, [user]);
 
   // Check blog role on mount (for blog admin token) and when user changes
   useEffect(() => {
@@ -319,10 +327,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchBlogRole]);
 
+  // Fetch user plan only after auth is fully loaded (not during refresh)
   useEffect(() => {
+    // Don't fetch while still loading/refreshing auth - prevents race condition
+    // where we might use stale tokens
+    if (loading) return;
     if (!user) return;
     fetchUserPlan();
-  }, [user?.id, session?.access_token]);
+  }, [user?.id, loading, fetchUserPlan]);
 
   // WorkOS uses hosted UI - these functions redirect to WorkOS
   const signUp = async (email: string, password: string) => {
