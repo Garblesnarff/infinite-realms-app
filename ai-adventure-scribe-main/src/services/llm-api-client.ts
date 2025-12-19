@@ -1,3 +1,4 @@
+import { waitForAuth } from '@/lib/auth-gate';
 import { supabase } from '@/integrations/supabase/client';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
@@ -45,6 +46,10 @@ class LlmApiClient {
     if (this.useOfflineFallback) {
       throw new Error('API unavailable');
     }
+
+    // Wait for auth verification to complete before making API calls
+    // This prevents 401 errors from expired tokens during page load
+    await waitForAuth();
 
     // Get WorkOS token from localStorage
     const token = window.localStorage.getItem('workos_access_token');

@@ -2,6 +2,7 @@ import { localSpellService } from './localSpellService';
 
 import type { Spell } from '@/types/character';
 
+import { waitForAuth } from '@/lib/auth-gate';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
@@ -124,6 +125,9 @@ class SpellApiService {
     if (this.useLocalFallback) {
       throw new Error('API unavailable, using local fallback');
     }
+
+    // Wait for auth verification to complete before making API calls
+    await waitForAuth();
 
     // Get WorkOS token from localStorage
     const token = window.localStorage.getItem('workos_access_token');

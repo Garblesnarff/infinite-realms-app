@@ -1,5 +1,6 @@
 import type { Spell } from '../types/character';
 
+import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 
 export interface CharacterSpellData extends Spell {
@@ -74,6 +75,9 @@ class CharacterSpellService {
 
   private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     try {
+      // Wait for auth verification to complete before making API calls
+      await waitForAuth();
+
       const token = await this.getAccessToken();
       const response = await this.executeRequest(url, options, token);
 

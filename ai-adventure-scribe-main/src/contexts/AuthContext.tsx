@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 
+import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import { trpc } from '@/lib/trpc/client';
 import { addNetworkListener, isOffline } from '@/utils/network';
@@ -110,11 +111,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Verify session and load user data
   const refreshAuth = useCallback(async () => {
+    // Block all API calls until auth verification completes
+    resetAuthGate();
     setLoading(true);
     const cachedSession = loadCachedSession();
 
     if (!cachedSession) {
       setLoading(false);
+      markAuthReady(); // Unblock API calls - no session means user needs to login
       return;
     }
 
@@ -134,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(null);
         setUser(null);
         setLoading(false);
+        markAuthReady(); // Unblock API calls - invalid token, user needs to login
         return;
       }
 
@@ -153,10 +158,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth-ready', { detail: { user: userData } }));
         }
+
+        markAuthReady(); // Unblock API calls - valid session established
+      } else {
+        markAuthReady(); // Unblock API calls - no user data, app will redirect to login
       }
     } catch (error) {
       logger.error('Error verifying session:', error);
       persistSession(null);
+      markAuthReady(); // Unblock API calls even on error
     } finally {
       setLoading(false);
     }
