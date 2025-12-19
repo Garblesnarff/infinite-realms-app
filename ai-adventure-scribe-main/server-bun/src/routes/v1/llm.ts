@@ -9,7 +9,7 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { requireAuth, type AuthTokenPayload } from '../../middleware/auth.js';
+import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
@@ -114,29 +114,28 @@ const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
 };
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
-  .use(requireAuth)
-  .use(planRateLimit('llm'))
 
   /**
    * Get current quota status
    * GET /v1/llm/quota
    */
-  .get('/quota', async (ctx) => {
-    const { set } = ctx;
-    const user = (ctx as any).user as AuthTokenPayload | null;
-    const userId = user?.userId;
-    const plan = user?.plan || 'free';
-
-    if (!userId) {
+  .get('/quota', async ({ request, set }) => {
+    // Direct auth check - bypasses Elysia plugin context issues
+    const { user, error } = await authenticateRequest(request);
+    if (error || !user) {
       set.status = 401;
-      return { error: 'Unauthorized' };
+      return { error: error || 'Unauthorized' };
     }
 
     try {
-      const quotaStatus = await AIUsageService.getQuotaStatus({ userId, plan, type: 'llm' });
+      const quotaStatus = await AIUsageService.getQuotaStatus({
+        userId: user.userId,
+        plan: user.plan,
+        type: 'llm',
+      });
       return quotaStatus;
-    } catch (error) {
-      logger.error({ msg: 'LLM_QUOTA_ERROR', error });
+    } catch (err) {
+      logger.error({ msg: 'LLM_QUOTA_ERROR', error: err });
       set.status = 500;
       return { error: 'Failed to fetch quota status' };
     }
@@ -148,9 +147,14 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
    */
   .post(
     '/generate',
-    async (ctx) => {
-      const { body, set } = ctx;
-      const user = (ctx as any).user as AuthTokenPayload | null;
+    async ({ request, body, set }) => {
+      // Direct auth check - bypasses Elysia plugin context issues
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
+        set.status = 401;
+        return { error: authError || 'Unauthorized' };
+      }
+
       const {
         prompt,
         model,
@@ -166,13 +170,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: 'Missing prompt' };
       }
 
-      const userId = user?.userId;
-      const plan = user?.plan || 'free';
-
-      if (!userId) {
-        set.status = 401;
-        return { error: 'Unauthorized' };
-      }
+      const userId = user.userId;
+      const plan = user.plan;
 
       // Quota check
       const quotaType: UsageType = requestType === 'system' ? 'llm_system' : 'llm';
@@ -204,7 +203,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             return { error: 'Server not configured for OpenRouter' };
           }
 
-          const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.0-flash-exp:free';
+          const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.5-pro-exp-03-25:free';
           const messages: ChatMessage[] = [];
 
           if (Array.isArray(history)) {

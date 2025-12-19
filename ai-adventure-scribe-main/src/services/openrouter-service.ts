@@ -45,7 +45,7 @@ export class OpenRouterService {
 
   private textModels: ModelConfig[] = [
     {
-      id: import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free',
+      id: import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-pro-exp-03-25:free',
       isFree: true,
       dailyLimit: 1000,
     },

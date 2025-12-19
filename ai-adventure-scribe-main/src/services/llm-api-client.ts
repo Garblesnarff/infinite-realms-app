@@ -119,9 +119,10 @@ class LlmApiClient {
       // Rate limit - try multiple free fallback models
       if (isRateLimitErr) {
         const fallbackModels = [
-          'deepseek/deepseek-chat-v3-0324:free',
-          'google/gemini-2.0-flash-exp:free',
-          'meta-llama/llama-3.3-70b-instruct:free',
+          'google/gemini-2.5-pro-exp-03-25:free',  // Gemini 2.5 Pro
+          'deepseek/deepseek-r1:free',              // DeepSeek R1 reasoning model
+          'moonshotai/kimi-k2:free',                // Kimi K2 - 1T params
+          'nvidia/llama-3.1-nemotron-ultra-253b-v1:free', // Nvidia Nemotron (backup)
         ];
         console.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
 

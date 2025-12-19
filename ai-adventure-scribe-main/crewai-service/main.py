@@ -449,8 +449,8 @@ def respond(req: DMRequest):
             models_to_try = []
             if requested_model:
                 models_to_try.append(requested_model)
-            if "google/gemini-2.0-flash-exp:free" not in models_to_try:
-                models_to_try.append("google/gemini-2.0-flash-exp:free")
+            if "google/gemini-2.5-pro-exp-03-25:free" not in models_to_try:
+                models_to_try.append("google/gemini-2.5-pro-exp-03-25:free")
 
             with httpx.Client(timeout=30.0) as client:
                 last_err = None

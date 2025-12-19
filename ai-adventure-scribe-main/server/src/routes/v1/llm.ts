@@ -156,7 +156,7 @@ export default function llmRouter() {
           return res.status(500).json({ error: 'Server not configured for OpenRouter' });
         }
 
-        const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.0-flash-exp:free';
+        const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.5-pro-exp-03-25:free';
         const messages: ChatMessage[] = [];
 
         if (Array.isArray(history)) {

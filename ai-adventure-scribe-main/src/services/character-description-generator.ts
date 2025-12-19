@@ -121,7 +121,7 @@ export class CharacterDescriptionGenerator {
 
         const response = await openRouterService.generateText({
           prompt,
-          model: 'google/gemini-2.0-flash-exp:free',
+          model: 'google/gemini-2.5-pro-exp-03-25:free',
           maxTokens: 1000,
           temperature: 0.8,
         });
@@ -646,7 +646,7 @@ export class CharacterDescriptionGenerator {
 
         const response = await openRouterService.generateText({
           prompt,
-          model: 'google/gemini-2.0-flash-exp:free',
+          model: 'google/gemini-2.5-pro-exp-03-25:free',
           maxTokens: 100,
           temperature: 0.7,
         });
