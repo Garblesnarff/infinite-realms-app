@@ -184,6 +184,14 @@ export function createApp() {
         alwaysStatic: true,
       })
     )
+    // Static file serving for blog assets (uses absolute path from project root)
+    .use(
+      staticPlugin({
+        assets: '/var/www/infiniterealms/ai-adventure-scribe-main/dist/blog-assets',
+        prefix: '/blog-assets',
+        alwaysStatic: true,
+      })
+    )
     // Health check endpoint
     .get(
       '/health',
