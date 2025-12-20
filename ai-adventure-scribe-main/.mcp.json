@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "infiniterealms-discord": {
+      "type": "stdio",
+      "command": "/var/www/infiniterealms/discord-mcp/.venv/bin/python",
+      "args": [
+        "/var/www/infiniterealms/discord-mcp/discord_mcp.py"
+      ]
+    }
+  }
+}
