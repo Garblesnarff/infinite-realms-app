@@ -104,6 +104,40 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   })
 
   /**
+   * Refresh access token using refresh token
+   * POST /v1/auth/refresh
+   *
+   * WorkOS access tokens expire after ~5 minutes by default.
+   * Use this endpoint to get a new access token without requiring re-login.
+   */
+  .post('/refresh', async ({ body, set }) => {
+    const refreshToken = (body as any)?.refreshToken as string | undefined;
+
+    if (!refreshToken) {
+      set.status = 400;
+      return { error: 'Missing refresh token' };
+    }
+
+    try {
+      // Exchange refresh token for new access token
+      const { accessToken, refreshToken: newRefreshToken } =
+        await workos.userManagement.authenticateWithRefreshToken({
+          refreshToken,
+          clientId: authConfig.clientId,
+        });
+
+      return {
+        accessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      set.status = 401;
+      return { error: 'Failed to refresh token - please log in again' };
+    }
+  })
+
+  /**
    * Sign out and clear WorkOS session
    * GET /v1/auth/logout?session_id=xxx
    */

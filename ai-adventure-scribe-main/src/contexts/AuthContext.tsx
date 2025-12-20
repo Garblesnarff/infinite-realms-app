@@ -48,8 +48,60 @@ interface AuthContextType {
 }
 
 const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
+const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 1 minute before expiry
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Decode JWT and extract expiration time
+ */
+const getTokenExpiry = (token: string): number | null => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.exp ? payload.exp * 1000 : null; // Convert to milliseconds
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Check if token is expired or about to expire
+ */
+const isTokenExpiringSoon = (token: string): boolean => {
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return true; // Treat unparseable tokens as expired
+  return Date.now() >= expiry - TOKEN_REFRESH_MARGIN_MS;
+};
+
+/**
+ * Refresh the access token using the refresh token
+ */
+const refreshAccessToken = async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> => {
+  try {
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    const response = await fetch(`${apiUrl}/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      logger.warn('Token refresh failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    };
+  } catch (error) {
+    logger.error('Error refreshing token:', error);
+    return null;
+  }
+};
 
 const loadCachedSession = (): WorkOSSession | null => {
   if (typeof window === 'undefined') return null;
@@ -192,6 +244,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('auth-tokens-updated', handleTokensUpdated);
     };
   }, [refreshAuth]);
+
+  // Auto-refresh token before it expires (WorkOS tokens expire every ~5 minutes)
+  useEffect(() => {
+    if (!session?.access_token || !session?.refresh_token) return;
+
+    const checkAndRefresh = async () => {
+      if (!session?.access_token || !session?.refresh_token) return;
+
+      if (isTokenExpiringSoon(session.access_token)) {
+        logger.info('Access token expiring soon, refreshing...');
+        const newTokens = await refreshAccessToken(session.refresh_token);
+
+        if (newTokens) {
+          logger.info('Token refreshed successfully');
+          const newSession = {
+            access_token: newTokens.accessToken,
+            refresh_token: newTokens.refreshToken,
+          };
+          setSession(newSession);
+          persistSession(newSession);
+        } else {
+          logger.warn('Token refresh failed, user may need to re-login');
+        }
+      }
+    };
+
+    // Check immediately
+    checkAndRefresh();
+
+    // Then check every 30 seconds
+    const interval = setInterval(checkAndRefresh, 30 * 1000);
+
+    return () => clearInterval(interval);
+  }, [session?.access_token, session?.refresh_token]);
 
   // Persist session to localStorage
   useEffect(() => {
