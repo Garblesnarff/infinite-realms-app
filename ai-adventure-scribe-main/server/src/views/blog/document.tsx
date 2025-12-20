@@ -202,6 +202,39 @@ export function BlogDocument({ site, assets, meta, children, preloadState, struc
         ))}
       </head>
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+        {/* Site Navigation */}
+        <nav className="sticky top-0 z-50 border-b border-slate-800/60 bg-slate-950/90 backdrop-blur-md">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 md:px-10">
+            <a
+              href="https://infiniterealms.app"
+              className="group flex items-center gap-3 transition-opacity hover:opacity-80"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 shadow-lg shadow-amber-900/30">
+                <svg className="h-5 w-5 text-slate-950" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <span className="font-heading text-lg font-semibold text-amber-50">Infinite Realms</span>
+            </a>
+            <div className="flex items-center gap-6">
+              <a
+                href="/"
+                className="text-sm font-medium text-slate-400 transition-colors hover:text-amber-300"
+              >
+                Blog
+              </a>
+              <a
+                href="https://infiniterealms.app"
+                className="inline-flex items-center gap-2 rounded-full border border-amber-600/40 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-200 transition-all hover:border-amber-500 hover:bg-amber-900/40 hover:text-amber-100"
+              >
+                <span>Play Now</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </nav>
         <div id="blog-root" className="min-h-screen">
           {children}
         </div>
