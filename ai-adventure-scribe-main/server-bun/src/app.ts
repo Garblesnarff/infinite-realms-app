@@ -37,11 +37,12 @@ export function createApp() {
         msg: 'request.start',
       });
     })
-    .onAfterHandle(({ request, response, store }) => {
+    .onAfterHandle(({ request, response, store, set }) => {
       const start = (store as any).__startTime || performance.now();
       const durationMs = performance.now() - start;
       const url = new URL(request.url);
-      const status = response instanceof Response ? response.status : 200;
+      // Fix: Read status from set.status first (set by handlers), then response, then default
+      const status = set.status || (response instanceof Response ? response.status : 200);
       const requestId = request.headers.get('x-request-id') || 'unknown';
 
       // Prometheus metrics

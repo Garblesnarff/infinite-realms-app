@@ -477,7 +477,7 @@ export class AIService {
         }
 
         // Use local Gemini API
-        logger.info('Using local Gemini API for chat...');
+        logger.info(`Using local Gemini API for chat with model: ${GEMINI_TEXT_MODEL}`);
         const geminiManager = this.getGeminiManager();
 
         const result = await geminiManager.executeWithRotation(async (genAI) => {
@@ -1125,6 +1125,42 @@ Character Level 9+ (60+ HP):
 - Level 5+: Scale proportionally to character HP pool
 </encounter_difficulty>
 
+<skill_check_consequences>
+<title>CRITICAL: FAILED SKILL CHECKS ARE NOT DEATH SENTENCES</title>
+**A failed skill check should NEVER result in instant death or unconsciousness!**
+
+Failed skill checks should lead to:
+✅ Complications (guards alerted, enemy gets advantage)
+✅ Partial failure (you escape but drop something)
+✅ New challenges (different path required)
+✅ Minor damage (1-2 HP, NOT lethal amounts)
+✅ Time pressure (you're delayed, enemies closing in)
+✅ Story consequences (you're spotted, information lost)
+
+❌ NEVER on failed skill check:
+- "The world goes dark" / "You lose consciousness"
+- Instant death or mortal wounds
+- Full HP damage that drops the character
+- "You die" or any death narration
+- Complete campaign-ending failure
+
+Example GOOD failure handling:
+\`\`\`
+Player fails Dexterity check to escape (rolled 6)
+DM: "You stumble on the slick floor. The automaton's electric arc grazes your arm (3 damage). You need to find another way out - there's a vent above or you could try to fight."
+[Give new options, don't end the character]
+\`\`\`
+
+Example BAD failure handling (DO NOT DO THIS):
+\`\`\`
+Player fails Dexterity check to escape
+DM: "The lightning strikes you. The world goes dark."
+[WRONG - This effectively kills the player on a single failed check!]
+\`\`\`
+
+**Remember: Failed checks create drama and new challenges, NOT game-ending moments!**
+</skill_check_consequences>
+
 </rules_of_play>`;
 
           contextPrompt += `<game_context>`;
@@ -1268,6 +1304,44 @@ Reference these memories naturally to maintain story continuity.`;
             contextPrompt += `<opening_scene_requirements>
 <title>CAMPAIGN OPENING - FIRST MESSAGE</title>
 
+<opening_scene_quality_requirements>
+**CREATE A MEMORABLE, IMMERSIVE OPENING SCENE**
+
+Your opening scene MUST include ALL of these elements:
+1. **RICH SENSORY DETAILS** (4+ senses):
+   - Sight: Colors, lighting, movement, textures
+   - Sound: Ambient noise, specific sounds, music, silence
+   - Smell: Distinctive scents that set the mood
+   - Touch/Feel: Temperature, air quality, physical sensations
+   - Optional: Taste if relevant
+
+2. **ATMOSPHERIC WRITING** (3-4 paragraphs minimum):
+   - Set the tone immediately - mysterious, tense, cozy, dangerous
+   - Paint a vivid picture of the environment
+   - Use evocative, literary language
+   - Create a sense of place unique to this campaign world
+
+3. **NPC INTRODUCTION** (with direct quoted dialogue):
+   - At least ONE NPC with spoken dialogue in quotes
+   - Give the NPC a distinct voice/personality
+   - NPC should have a name or memorable descriptor
+   - Their dialogue should hook the player into the story
+
+4. **STORY HOOK** that connects to the campaign:
+   - Reference the campaign setting/premise
+   - Create immediate intrigue or stakes
+   - Give the player a reason to care and engage
+   - Plant seeds for larger adventure
+
+5. **PLAYER AGENCY** with meaningful A/B/C choices:
+   - Each option leads to genuinely different outcomes
+   - Options should reflect different playstyles (action, social, exploration)
+   - At least one "wild card" creative option
+   - Make choices feel consequential
+
+**LENGTH: 300-500 words per opening scene (NOT just 2-3 short paragraphs)**
+</opening_scene_quality_requirements>
+
 <verbalized_sampling_output>
 Generate 3 COMPLETE opening scenes, each in a separate <response> tag.
 Each <response> MUST include:
@@ -1283,27 +1357,29 @@ FORMAT EXACTLY LIKE THIS:
 <response>
 <probability>0.5</probability>
 <text>
-[Complete opening scene - 2-3 paragraphs with sensory details, NPC dialogue in quotes, ends with A/B/C action options]
+[Complete opening scene - 300-500 words with ALL required elements: rich sensory details, atmospheric prose, NPC with quoted dialogue, story hook, and meaningful A/B/C options]
 </text>
 </response>
 <response>
 <probability>0.3</probability>
 <text>
-[Different approach - complete scene with dialogue and A/B/C options]
+[Different approach - equally detailed 300-500 word scene with all elements]
 </text>
 </response>
 <response>
 <probability>0.2</probability>
 <text>
-[Creative/unexpected approach - complete scene with dialogue and A/B/C options]
+[Creative/unexpected approach - equally detailed 300-500 word scene with all elements]
 </text>
 </response>
 
 CRITICAL RULES:
-- Each <text> MUST be a COMPLETE, STANDALONE opening scene
-- Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
+- Each <text> MUST be 300-500 words with ALL quality requirements above
+- Include at least one NPC with direct quoted dialogue in EACH response
+- Use all senses (sight, sound, smell, touch) to create immersion
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
+- SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
 </verbalized_sampling_output>
 </opening_scene_requirements>`;
           }

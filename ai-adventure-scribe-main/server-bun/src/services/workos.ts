@@ -36,8 +36,10 @@ export async function verifyWorkOSToken(accessToken: string) {
   try {
     // Verify JWT signature using WorkOS JWKS endpoint
     // WorkOS User Management tokens have issuer: https://api.workos.com/user_management/{clientId}
+    // Add 30-second clock tolerance to handle minor timing differences
     const { payload } = await jwtVerify(accessToken, JWKS, {
       issuer: `https://api.workos.com/user_management/${authConfig.clientId}`,
+      clockTolerance: 30, // 30 seconds tolerance
     });
 
     // Extract user information from verified token
@@ -51,9 +53,23 @@ export async function verifyWorkOSToken(accessToken: string) {
       email: payload.email as string,
     };
   } catch (error) {
-    // Log specific error for debugging
+    // Log specific error for debugging with token details
     if (error instanceof Error) {
-      console.error('WorkOS token verification failed:', error.message);
+      // Decode token payload to see expiry (without verifying signature)
+      try {
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          const expTime = payload.exp ? new Date(payload.exp * 1000).toISOString() : 'N/A';
+          const nowTime = new Date().toISOString();
+          const tokenAgeSec = payload.iat ? Math.floor((Date.now() / 1000) - payload.iat) : 'N/A';
+          console.error(`WorkOS token verification failed: ${error.message}`);
+          console.error(`  Token exp: ${expTime}, Now: ${nowTime}, Token age: ${tokenAgeSec}s`);
+          console.error(`  Token sub: ${payload.sub}, sid: ${payload.sid}`);
+        }
+      } catch {
+        console.error('WorkOS token verification failed:', error.message);
+      }
     } else {
       console.error('WorkOS token verification failed:', error);
     }

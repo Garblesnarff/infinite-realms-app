@@ -10,8 +10,7 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { requireAuth, type AuthTokenPayload } from '../../middleware/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
+import { authenticateRequest } from '../../lib/auth.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
 import { logger } from '../../lib/logger.js';
@@ -106,29 +105,24 @@ const extractFromMessage = (msg: any): string | null => {
 };
 
 export const imageRoutes = new Elysia({ prefix: '/v1/images' })
-  .use(requireAuth)
-  .use(planRateLimit('images'))
 
   /**
    * Get image quota status
    * GET /v1/images/quota
    */
-  .get('/quota', async (ctx) => {
-    const { set } = ctx;
-    const user = (ctx as any).user as AuthTokenPayload | null;
-    const userId = user?.userId;
-    const plan = user?.plan || 'free';
-
-    if (!userId) {
+  .get('/quota', async ({ request, set }) => {
+    // Direct auth check - bypasses Elysia plugin context issues
+    const { user, error } = await authenticateRequest(request);
+    if (error || !user) {
       set.status = 401;
-      return { error: 'Unauthorized' };
+      return { error: error || 'Unauthorized' };
     }
 
     try {
-      const quotaStatus = await AIUsageService.getQuotaStatus({ userId, plan, type: 'image' });
+      const quotaStatus = await AIUsageService.getQuotaStatus({ userId: user.userId, plan: user.plan, type: 'image' });
       return quotaStatus;
-    } catch (error) {
-      logger.error({ msg: 'IMAGE_QUOTA_ERROR', error });
+    } catch (err) {
+      logger.error({ msg: 'IMAGE_QUOTA_ERROR', error: err });
       set.status = 500;
       return { error: 'Failed to fetch quota status' };
     }
@@ -140,9 +134,14 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
    */
   .post(
     '/generate',
-    async (ctx) => {
-      const { body, set } = ctx;
-      const user = (ctx as any).user as AuthTokenPayload | null;
+    async ({ request, body, set }) => {
+      // Direct auth check - bypasses Elysia plugin context issues
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
+        set.status = 401;
+        return { error: authError || 'Unauthorized' };
+      }
+
       const { prompt, referenceImage, model, quality } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -150,13 +149,8 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: 'Missing prompt' };
       }
 
-      const userId = user?.userId;
-      const plan = user?.plan || 'free';
-
-      if (!userId) {
-        set.status = 401;
-        return { error: 'Unauthorized' };
-      }
+      const userId = user.userId;
+      const plan = user.plan;
 
       // Quota check
       const quota = await AIUsageService.checkQuotaAndConsume({ userId, plan, type: 'image', units: 1 });
@@ -292,16 +286,16 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
    */
   .patch(
     '/message/:id/images',
-    async (ctx) => {
-      const { params, body, set } = ctx;
-      const user = (ctx as any).user as AuthTokenPayload | null;
-      const { id } = params;
-      const userId = user?.userId;
-
-      if (!userId) {
+    async ({ request, params, body, set }) => {
+      // Direct auth check - bypasses Elysia plugin context issues
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
         set.status = 401;
-        return { error: 'Unauthorized' };
+        return { error: authError || 'Unauthorized' };
       }
+
+      const { id } = params;
+      const userId = user.userId;
 
       const image = {
         url: String(body?.url || ''),

@@ -8,8 +8,7 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { requireAuth, type AuthTokenPayload } from '../../middleware/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
+import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 
@@ -32,8 +31,6 @@ function parseSpellString(value: string | string[] | null): string[] {
 }
 
 export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
-  .use(requireAuth)
-  .use(planRateLimit('default'))
 
   /**
    * Get character spells with full spell data
@@ -41,16 +38,16 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get(
     '/:id/spells',
-    async (ctx) => {
-      const { params, set } = ctx;
-      const user = (ctx as any).user as AuthTokenPayload | null;
-      const characterId = params.id;
-      const userId = user?.userId;
-
-      if (!userId) {
+    async ({ request, params, set }) => {
+      // Direct auth check - bypasses Elysia plugin context issues
+      const { user, error } = await authenticateRequest(request);
+      if (error || !user) {
         set.status = 401;
-        return { error: 'Unauthorized' };
+        return { error: error || 'Unauthorized' };
       }
+
+      const characterId = params.id;
+      const userId = user.userId;
 
       logger.info({
         msg: 'CHARACTER_SPELLS',
