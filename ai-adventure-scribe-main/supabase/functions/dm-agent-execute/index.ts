@@ -11,8 +11,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
 };
 
-const DEFAULT_PRIMARY_MODEL = 'gemini-3-flash-preview';
-const DEFAULT_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash-lite';
+const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash-lite';
 
 /**
  * Verbalized Sampling: Parse structured response and sample based on probabilities
@@ -88,10 +88,7 @@ const dedupeModels = (models: string[]): string[] => {
 
 const buildModelCandidates = (preferred: string, variants: string[], fallback: string): string[] => {
   const autoVariants: string[] = [];
-  if (/^gemini-3-flash-preview$/i.test(preferred)) {
-    // Gemini 3 Flash variants
-    autoVariants.push('gemini-3-flash', 'gemini-3-flash-001');
-  } else if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
+  if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
     autoVariants.push('gemini-2.5-flash-lite-001', 'gemini-2.5-flash-lite-preview');
   }
   return dedupeModels([preferred, ...variants, ...autoVariants, fallback]);

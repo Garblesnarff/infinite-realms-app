@@ -132,8 +132,7 @@ export class GeminiApiManager {
   }
 
   private selectApiVersion(model: string): 'v1' | 'v1beta' {
-    // Gemini 3 and 2.5 models use v1 API
-    if (/^gemini-3-/i.test(model) || /^gemini-2\.5-/i.test(model)) return 'v1';
+    if (/^gemini-2\.5-/i.test(model)) return 'v1';
     return 'v1beta';
   }
 
