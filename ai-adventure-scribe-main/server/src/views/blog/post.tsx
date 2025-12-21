@@ -177,7 +177,7 @@ export function BlogPostPage({ site, assets, post, relatedPosts }: BlogPostPageP
                 {relatedPosts.slice(0, 4).map((other: any) => (
                   <article
                     key={other.id}
-                    className="group flex flex-col gap-4 overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 to-slate-900/60 p-5 transition-all duration-300 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-900/20"
+                    className="group relative flex flex-col gap-4 overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 to-slate-900/60 p-5 transition-all duration-300 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-900/20"
                   >
                     {other.coverImageUrl ? (
                       <div className="relative aspect-video overflow-hidden rounded-lg">

@@ -113,7 +113,7 @@ export function BlogIndexPage({ site, assets, posts }: BlogIndexPageProps) {
               posts.map((post) => (
                 <article
                   key={post.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-900/80 shadow-xl backdrop-blur-sm transition-all duration-300 hover:border-amber-500/40 hover:shadow-2xl hover:shadow-amber-900/20"
+                  className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-900/80 shadow-xl backdrop-blur-sm transition-all duration-300 hover:border-amber-500/40 hover:shadow-2xl hover:shadow-amber-900/20"
                   data-post-slug={post.slug}
                   data-post-tags={post.tags.join(',')}
                   data-post-categories={post.categories.join(',')}
