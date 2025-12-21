@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3"
 import { ChatMessage } from './types.ts';
 
-const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash-lite';
-const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash-lite';
+const DEFAULT_PRIMARY_MODEL = 'gemini-3-flash-preview';
+const DEFAULT_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
 
 const GEMINI_PRIMARY_MODEL = (Deno.env.get('GEMINI_TEXT_MODEL') ?? DEFAULT_PRIMARY_MODEL).trim() || DEFAULT_PRIMARY_MODEL;
 const GEMINI_FALLBACK_MODEL = (Deno.env.get('GEMINI_TEXT_FALLBACK') ?? DEFAULT_FALLBACK_MODEL).trim() || DEFAULT_FALLBACK_MODEL;
@@ -24,7 +24,10 @@ const dedupeModels = (models: string[]): string[] => {
 
 const buildModelCandidates = (preferred: string, variants: string[], fallback: string): string[] => {
   const autoVariants: string[] = [];
-  if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
+  if (/^gemini-3-flash-preview$/i.test(preferred)) {
+    // Gemini 3 Flash variants
+    autoVariants.push('gemini-3-flash', 'gemini-3-flash-001');
+  } else if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
     autoVariants.push('gemini-2.5-flash-lite-001', 'gemini-2.5-flash-lite-preview');
   }
   return dedupeModels([preferred, ...variants, ...autoVariants, fallback]);

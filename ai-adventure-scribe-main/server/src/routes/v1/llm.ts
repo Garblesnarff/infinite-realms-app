@@ -42,7 +42,10 @@ const dedupeModels = (values: string[]): string[] => {
 
 const buildModelCandidates = (preferred: string, variants: string[], fallback: string) => {
   const extras: string[] = [];
-  if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
+  if (/^gemini-3-flash-preview$/i.test(preferred)) {
+    // Gemini 3 Flash variants
+    extras.push('gemini-3-flash', 'gemini-3-flash-001');
+  } else if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
     extras.push('gemini-2.5-flash-lite-001', 'gemini-2.5-flash-lite-preview');
   }
   return dedupeModels([preferred, ...variants, ...extras, fallback]);
@@ -82,7 +85,8 @@ const getGeminiModelIds = async (apiKey: string): Promise<Set<string>> => {
 };
 
 const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
-  return /^gemini-2\.5-/i.test(modelId) ? 'v1' : 'v1beta';
+  // Gemini 3 and 2.5 models use v1 API
+  return (/^gemini-3-/i.test(modelId) || /^gemini-2\.5-/i.test(modelId)) ? 'v1' : 'v1beta';
 };
 
 export default function llmRouter() {
@@ -218,8 +222,8 @@ export default function llmRouter() {
 
         const preferredModel = (typeof model === 'string' && model.trim())
           ? model.trim()
-          : (process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash-lite');
-        const fallbackModel = (process.env.GEMINI_TEXT_FALLBACK || 'gemini-2.0-flash-lite').trim() || 'gemini-2.0-flash-lite';
+          : (process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview');
+        const fallbackModel = (process.env.GEMINI_TEXT_FALLBACK || 'gemini-2.5-flash-lite').trim() || 'gemini-2.5-flash-lite';
         const variantEnv = (process.env.GEMINI_MODEL_VARIANTS || '')
           .split(',')
           .map(v => v.trim())

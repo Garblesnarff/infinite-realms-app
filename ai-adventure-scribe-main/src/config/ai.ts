@@ -5,12 +5,15 @@ const variantRaw = (import.meta.env.VITE_GEMINI_MODEL_VARIANTS || '')
   .map((v) => v.trim())
   .filter(Boolean);
 
-const DEFAULT_PRIMARY = 'gemini-2.5-flash-lite';
-const DEFAULT_FALLBACK = 'gemini-2.0-flash-lite';
+const DEFAULT_PRIMARY = 'gemini-3-flash-preview';
+const DEFAULT_FALLBACK = 'gemini-2.5-flash-lite';
 
 const autoVariants: string[] = [];
 const preferred = primary || DEFAULT_PRIMARY;
-if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
+if (/^gemini-3-flash-preview$/i.test(preferred)) {
+  // Gemini 3 Flash variants
+  autoVariants.push('gemini-3-flash', 'gemini-3-flash-001');
+} else if (/^gemini-2\.5-flash-lite$/i.test(preferred)) {
   autoVariants.push('gemini-2.5-flash-lite-001', 'gemini-2.5-flash-lite-preview');
 }
 
