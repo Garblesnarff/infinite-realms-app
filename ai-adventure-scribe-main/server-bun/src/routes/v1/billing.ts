@@ -116,6 +116,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           line_items: [{ price: finalPriceId, quantity: 1 }],
           success_url: successUrl || `${process.env.APP_ORIGIN || 'https://infiniterealms.app'}/app/account?success=true`,
           cancel_url: cancelUrl || `${process.env.APP_ORIGIN || 'https://infiniterealms.app'}/app/account?canceled=true`,
+          allow_promotion_codes: true,
           metadata: {
             userId: user.userId,
           },
