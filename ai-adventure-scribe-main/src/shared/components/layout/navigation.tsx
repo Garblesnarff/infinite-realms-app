@@ -1,4 +1,4 @@
-import { Sword, Users, Home, LogOut, FileText } from 'lucide-react';
+import { Sword, Users, Home, LogOut, FileText, Crown, Settings } from 'lucide-react';
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 const Navigation: React.FC = () => {
   const location = useLocation();
-  const { user, signOut, isBlogAdmin } = useAuth();
+  const { user, signOut, isBlogAdmin, userPlan } = useAuth();
 
   /**
    * Helper function to determine if a path is active
@@ -78,9 +78,34 @@ const Navigation: React.FC = () => {
               )}
             </div>
 
+            {/* User Plan Badge and Upgrade Button */}
+            <div className="flex items-center space-x-2 border-l border-border pl-4">
+              {userPlan === 'free' ? (
+                <Link
+                  to="/app/account"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-gray-900 font-bold text-sm hover:from-amber-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg"
+                >
+                  <Crown className="h-4 w-4" />
+                  <span>Upgrade</span>
+                </Link>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 text-amber-400 text-sm font-medium">
+                  <Crown className="h-4 w-4" />
+                  <span>Legend</span>
+                </span>
+              )}
+            </div>
+
             {/* User Info and Sign Out */}
             <div className="flex items-center space-x-2 border-l border-border pl-4">
-              <span className="text-sm text-muted-foreground">{user?.email}</span>
+              <Link
+                to="/app/account"
+                className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-infinite-gold transition-colors"
+                title="Account Settings"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">{user?.email}</span>
+              </Link>
               <Button
                 onClick={handleSignOut}
                 variant="ghost"

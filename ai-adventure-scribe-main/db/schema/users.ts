@@ -26,6 +26,11 @@ export const users = pgTable(
     // Subscription plan
     plan: text('plan').default('free').notNull(),
 
+    // Stripe subscription fields
+    stripeCustomerId: text('stripe_customer_id'),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    subscriptionStatus: text('subscription_status'), // active, past_due, canceled, none
+
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
@@ -33,6 +38,7 @@ export const users = pgTable(
   (table) => ({
     emailIdx: index('idx_users_email').on(table.email),
     planIdx: index('idx_users_plan').on(table.plan),
+    stripeCustomerIdx: index('idx_users_stripe_customer').on(table.stripeCustomerId),
   })
 );
 

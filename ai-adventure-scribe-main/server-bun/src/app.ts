@@ -16,6 +16,7 @@ import { charactersRoutes } from './routes/v1/characters';
 import { llmRoutes } from './routes/v1/llm';
 import { imageRoutes } from './routes/v1/images';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
+import { billingRoutes } from './routes/v1/billing';
 
 export function createApp() {
   const app = new Elysia()
@@ -237,6 +238,9 @@ export function createApp() {
 
   // Blog admin auth routes (separate from WorkOS)
   app.use(blogAdminAuthRoutes);
+
+  // Billing routes (Stripe subscription management)
+  app.use(billingRoutes);
 
   // tRPC integration using native fetch adapter (compatible with tRPC v11)
   // Mount tRPC at /api/trpc/* endpoint with context creation
