@@ -252,7 +252,8 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
 
       let event: Stripe.Event;
       try {
-        event = stripeClient.webhooks.constructEvent(rawBody, signature, webhookSecret);
+        // Use async version for Bun compatibility
+        event = await stripeClient.webhooks.constructEventAsync(rawBody, signature, webhookSecret);
       } catch (err: any) {
         logger.error({ msg: 'WEBHOOK_SIGNATURE_FAILED', error: err.message });
         set.status = 400;
