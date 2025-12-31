@@ -131,6 +131,16 @@ function buildPrompt(req: SceneImageRequest): string {
 
 async function fetchImageAsBase64(url: string): Promise<string> {
   const res = await fetch(url);
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+  }
+
+  const contentType = res.headers.get('content-type');
+  if (!contentType?.startsWith('image/')) {
+    throw new Error(`Invalid content-type: ${contentType}, expected image/*`);
+  }
+
   const blob = await res.blob();
   const base64 = await blobToBase64(blob);
   // Strip prefix for API compatibility
