@@ -60,6 +60,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
       req.referenceImageUrl ||
       req.character?.avatar_url ||
       req.character?.image_url ||
+      (req.character ? '/default-character-avatar.png' : undefined) ||
       req.campaign?.background_image ||
       undefined;
     if (refUrl) referenceBase64 = await fetchImageAsBase64(refUrl);
