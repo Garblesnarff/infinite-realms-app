@@ -8,28 +8,49 @@ import type { CampaignFiles, ParsedCampaign, Difficulty } from './types.js';
 
 /**
  * Read all campaign files from a directory
+ * Handles both underscore and hyphen naming conventions, and various file name patterns
  */
 export function readCampaignFiles(campaignPath: string): CampaignFiles {
   const files: CampaignFiles = {};
 
-  const tryReadFile = (filename: string): string | undefined => {
-    const filePath = join(campaignPath, filename);
-    if (existsSync(filePath)) {
-      return readFileSync(filePath, 'utf-8');
+  // Get the campaign directory name for pattern matching
+  const dirName = campaignPath.split('/').pop() || '';
+
+  const tryReadFile = (...filenames: string[]): string | undefined => {
+    for (const filename of filenames) {
+      const filePath = join(campaignPath, filename);
+      if (existsSync(filePath)) {
+        return readFileSync(filePath, 'utf-8');
+      }
     }
     return undefined;
   };
 
-  files.creativeBrief = tryReadFile('creative_brief.md');
-  files.worldBuildingSpec = tryReadFile('world_building_spec.md');
-  files.overview = tryReadFile('overview.md');
-  files.campaignBible = tryReadFile('campaign_bible.md');
+  // Try multiple naming conventions
+  files.creativeBrief = tryReadFile('creative_brief.md', 'creative-brief.md');
+  files.worldBuildingSpec = tryReadFile('world_building_spec.md', 'world-building-spec.md');
+
+  // Overview might be named overview.md or {campaign-name}.md (without -campaign-bible suffix)
+  files.overview = tryReadFile(
+    'overview.md',
+    `${dirName}.md`,
+    // Strip common suffixes from dirName if present
+    dirName.replace(/-campaign$/, '') + '.md'
+  );
+
+  // Campaign bible might be campaign_bible.md or {campaign-name}-campaign-bible.md
+  files.campaignBible = tryReadFile(
+    'campaign_bible.md',
+    'campaign-bible.md',
+    `${dirName}-campaign-bible.md`
+  );
 
   return files;
 }
 
 /**
  * List all campaign directories in the repo
+ * Searches recursively for directories containing campaign files
  */
 export function listCampaignDirectories(repoPath: string): string[] {
   const campaignsPath = join(repoPath, 'campaign-ideas');
@@ -38,25 +59,55 @@ export function listCampaignDirectories(repoPath: string): string[] {
     throw new Error(`Campaign ideas directory not found: ${campaignsPath}`);
   }
 
-  return readdirSync(campaignsPath, { withFileTypes: true })
-    .filter(dirent => dirent.isDirectory())
-    .map(dirent => dirent.name)
-    .sort();
+  const campaigns: string[] = [];
+
+  // Recursively find campaign directories
+  const findCampaigns = (dir: string, relativePath: string = ''): void => {
+    const entries = readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const fullPath = join(dir, entry.name);
+        const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+        // Check if this directory contains campaign files
+        const hasOverview = existsSync(join(fullPath, 'overview.md')) ||
+          existsSync(join(fullPath, `${entry.name}.md`)) ||
+          existsSync(join(fullPath, `${entry.name}-campaign-bible.md`));
+        const hasCreativeBrief = existsSync(join(fullPath, 'creative_brief.md')) ||
+          existsSync(join(fullPath, 'creative-brief.md'));
+
+        if (hasOverview || hasCreativeBrief) {
+          campaigns.push(relPath);
+        } else {
+          // Recurse into subdirectories
+          findCampaigns(fullPath, relPath);
+        }
+      }
+    }
+  };
+
+  findCampaigns(campaignsPath);
+  return campaigns.sort();
 }
 
 /**
  * Convert directory name to slug
+ * Handles nested paths like "Completed/Horror/abyssal-descent" by using only the last part
  */
 export function dirToSlug(dirName: string): string {
-  return dirName.toLowerCase().replace(/_/g, '-');
+  const lastPart = dirName.split('/').pop() || dirName;
+  return lastPart.toLowerCase().replace(/_/g, '-');
 }
 
 /**
  * Convert directory name to title
+ * Handles nested paths and converts to title case
  */
 export function dirToTitle(dirName: string): string {
-  return dirName
-    .split('_')
+  const lastPart = dirName.split('/').pop() || dirName;
+  return lastPart
+    .split(/[-_]/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }
@@ -146,9 +197,12 @@ export function parseOverview(content: string, campaignId: string): ParsedCampai
     premise = premise.substring(0, 497) + '...';
   }
 
+  // Use just the last part of the path for id and slug
+  const campaignDirName = campaignId.split('/').pop() || campaignId;
+
   return {
-    id: campaignId,
-    slug: dirToSlug(campaignId),
+    id: campaignDirName,
+    slug: dirToSlug(campaignDirName),
     title,
     genre: genre.length > 0 ? genre : ['fantasy'],
     tone: tone.length > 0 ? tone : ['adventure'],

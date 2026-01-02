@@ -19,21 +19,24 @@ export function chunkCampaignFiles(
   const chunks: CampaignChunk[] = [];
   const rules: CampaignRule[] = [];
 
+  // Normalize campaign ID to just the last part of the path
+  const normalizedId = campaignId.split('/').pop() || campaignId;
+
   // Creative Brief - usually one chunk
   if (files.creativeBrief) {
-    chunks.push(...chunkCreativeBrief(campaignId, files.creativeBrief));
+    chunks.push(...chunkCreativeBrief(normalizedId, files.creativeBrief));
   }
 
   // World Building Spec
   if (files.worldBuildingSpec) {
-    const worldChunks = chunkWorldBuilding(campaignId, files.worldBuildingSpec);
+    const worldChunks = chunkWorldBuilding(normalizedId, files.worldBuildingSpec);
     chunks.push(...worldChunks.chunks);
     rules.push(...worldChunks.rules);
   }
 
   // Campaign Bible - the richest content
   if (files.campaignBible) {
-    chunks.push(...chunkCampaignBible(campaignId, files.campaignBible));
+    chunks.push(...chunkCampaignBible(normalizedId, files.campaignBible));
   }
 
   return { chunks, rules };

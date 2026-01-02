@@ -146,9 +146,11 @@ async function main(options: {
 
   // Initialize Gemini for embeddings
   if (!opts.skipEmbeddings && !opts.dryRun) {
-    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY ||
+                         process.env.VITE_GOOGLE_GEMINI_API_KEY ||
+                         process.env.VITE_GEMINI_API_KEYS?.split(',')[0];
     if (!googleApiKey) {
-      console.error('❌ Missing GOOGLE_AI_API_KEY environment variable');
+      console.error('❌ Missing GOOGLE_AI_API_KEY or VITE_GOOGLE_GEMINI_API_KEY environment variable');
       console.error('Use --skip-embeddings to skip embedding generation');
       process.exit(1);
     }
