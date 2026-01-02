@@ -60,6 +60,7 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
         campaignId,
         characterId,
         sessionId: session.id,
+        starterCampaignId: session.starter_campaign_id ?? undefined,
         campaignDetails,
         characterDetails,
       };
@@ -183,6 +184,7 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
         campaignId,
         characterId,
         sessionId: session.id,
+        starterCampaignId: session.starter_campaign_id ?? undefined,
         campaignDetails,
         characterDetails,
       };

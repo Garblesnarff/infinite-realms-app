@@ -13,6 +13,8 @@ export interface GameSession {
   start_time: string;
   end_time?: string | null;
   summary?: string | null;
+  starter_campaign_id?: string | null; // Links to starter_campaigns for pre-built adventures
+  campaign_version?: number | null; // Locked version at session start
 }
 
 export const useSimpleGameSession = (campaignId?: string, characterId?: string) => {

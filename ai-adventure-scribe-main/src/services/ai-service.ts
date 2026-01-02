@@ -8,6 +8,7 @@ import { voiceConsistencyService } from './voice-consistency-service';
 import type { SessionVoiceContext } from './voice-consistency-service';
 import { detectCombatFromText, type CombatDetectionResult } from '@/utils/combatDetection';
 import logger from '@/lib/logger';
+import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { sampleFromVerbalizedResponse } from './ai/shared/verbalized-sampling';
 import { SessionStateService } from './session-state-service';
@@ -63,6 +64,7 @@ export interface GameContext {
   campaignId: string;
   characterId: string;
   sessionId?: string;
+  starterCampaignId?: string; // Links to starter_campaigns for pre-built adventures with canonical lore
   campaignDetails?: Record<string, unknown>;
   characterDetails?: Record<string, unknown>;
 }
@@ -1169,6 +1171,48 @@ DM: "The lightning strikes you. The world goes dark."
 CAMPAIGN: "${params.context.campaignDetails.name}"
 DESCRIPTION: ${params.context.campaignDetails.description}
 </campaign_details>`;
+          }
+
+          // Inject starter campaign lore if this session is linked to a pre-built campaign
+          if (params.context.starterCampaignId) {
+            try {
+              const loreKeeper = getLoreKeeperService();
+              const [campaignOverview, campaignRules] = await Promise.all([
+                loreKeeper.getCampaignOverview(params.context.starterCampaignId),
+                loreKeeper.getRules(params.context.starterCampaignId),
+              ]);
+
+              if (campaignOverview) {
+                contextPrompt += `
+<starter_campaign_lore>
+<canonical_setting>
+TITLE: ${campaignOverview.title}
+PREMISE: ${campaignOverview.premise || 'A mysterious adventure awaits.'}
+OVERVIEW: ${campaignOverview.overview || ''}
+</canonical_setting>
+
+<creative_direction>
+${campaignOverview.creativeBrief || 'Maintain an immersive, atmospheric tone.'}
+</creative_direction>`;
+
+                // Add causality rules if present
+                if (campaignRules && campaignRules.length > 0) {
+                  contextPrompt += `
+<world_rules>
+These rules govern how the world responds to player actions:
+${campaignRules.map(rule => `- ${rule.condition} → ${rule.effect}${rule.reversible ? ' (reversible)' : ''}`).join('\n')}
+</world_rules>`;
+                }
+
+                contextPrompt += `
+</starter_campaign_lore>`;
+
+                logger.info(`[AIService] Injected lore for starter campaign: ${campaignOverview.title}`);
+              }
+            } catch (loreError) {
+              logger.warn('[AIService] Failed to fetch starter campaign lore:', loreError);
+              // Continue without lore - don't break the chat
+            }
           }
 
           if (params.context.characterDetails) {
