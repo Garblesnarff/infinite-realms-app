@@ -4,6 +4,26 @@ export interface AgentContext {
   memories: Memory[];
   gameState?: GameState;
   combatContext?: CombatContext;
+  starterCampaignContext?: StarterCampaignContext;
+}
+
+/**
+ * Context from starter campaigns (pre-written canonical lore)
+ */
+export interface StarterCampaignContext {
+  id: string;
+  title: string;
+  overview?: string;
+  creativeBrief?: string;
+  rules: StarterCampaignRule[];
+}
+
+export interface StarterCampaignRule {
+  ruleType: 'causality' | 'mechanic' | 'world_law';
+  condition: string;
+  effect: string;
+  reversible: boolean;
+  priority: number;
 }
 
 export interface CombatContext {

@@ -1,4 +1,4 @@
-import { AgentContext, GameState, VoiceContext } from './types.ts';
+import { AgentContext, GameState, VoiceContext, StarterCampaignContext } from './types.ts';
 
 function formatMemories(memories: any[]) {
   // Sort memories by importance and recency
@@ -244,6 +244,81 @@ When an enemy deals damage to the player, you MUST use a structured roll request
 The game system will automatically update the player's HP based on the damage_taken roll result.`;
 
   return contextText;
+}
+
+function formatStarterCampaignContext(context: StarterCampaignContext): string {
+  let loreText = `
+<starter_campaign_lore>
+<title>CANONICAL CAMPAIGN LORE: ${context.title}</title>
+<instruction>This is a pre-written campaign with established lore. You MUST respect this canonical content.</instruction>
+
+${context.overview ? `<campaign_overview>
+${context.overview}
+</campaign_overview>` : ''}
+
+${context.creativeBrief ? `<creative_brief>
+${context.creativeBrief}
+</creative_brief>` : ''}`;
+
+  // Add campaign rules if any exist
+  if (context.rules && context.rules.length > 0) {
+    loreText += `
+
+<campaign_rules>
+<instruction>These rules define the world's mechanics and causality. Apply them consistently.</instruction>
+`;
+
+    // Group rules by type
+    const causalityRules = context.rules.filter(r => r.ruleType === 'causality');
+    const mechanicRules = context.rules.filter(r => r.ruleType === 'mechanic');
+    const worldLaws = context.rules.filter(r => r.ruleType === 'world_law');
+
+    if (causalityRules.length > 0) {
+      loreText += `
+<causality_rules>
+${causalityRules.map(r => `  <rule priority="${r.priority}" reversible="${r.reversible}">
+    <condition>${r.condition}</condition>
+    <effect>${r.effect}</effect>
+  </rule>`).join('\n')}
+</causality_rules>`;
+    }
+
+    if (mechanicRules.length > 0) {
+      loreText += `
+<mechanic_rules>
+${mechanicRules.map(r => `  <rule priority="${r.priority}">
+    <condition>${r.condition}</condition>
+    <effect>${r.effect}</effect>
+  </rule>`).join('\n')}
+</mechanic_rules>`;
+    }
+
+    if (worldLaws.length > 0) {
+      loreText += `
+<world_laws>
+${worldLaws.map(r => `  <law priority="${r.priority}">
+    <condition>${r.condition}</condition>
+    <effect>${r.effect}</effect>
+  </law>`).join('\n')}
+</world_laws>`;
+    }
+
+    loreText += `
+</campaign_rules>`;
+  }
+
+  loreText += `
+
+<lore_adherence_rules>
+  <rule>NEVER contradict established lore, NPCs, locations, or history</rule>
+  <rule>Reference canonical characters, places, and events when relevant</rule>
+  <rule>Maintain the campaign's established tone and atmosphere</rule>
+  <rule>Apply campaign rules consistently - if a rule has a condition that matches, apply its effect</rule>
+  <rule>Causality rules marked as reversible CAN be undone; non-reversible rules are permanent</rule>
+</lore_adherence_rules>
+</starter_campaign_lore>`;
+
+  return loreText;
 }
 
 function buildCombatRulesReference(): string {
@@ -504,7 +579,7 @@ NEVER ask the player to roll for these - describe what they notice based on thei
 }
 
 export function buildPrompt(context: AgentContext, voiceContext?: VoiceContext, isFirstMessage: boolean = false): string {
-  const { campaignContext, characterContext, memories, gameState, combatContext } = context;
+  const { campaignContext, characterContext, memories, gameState, combatContext, starterCampaignContext } = context;
 
   // Format recent memories for context
   const recentMemories = formatMemories(memories);
@@ -670,6 +745,8 @@ The outcome narration happens in your NEXT response, AFTER you see the player's 
   <atmosphere>${campaignContext.setting_details?.atmosphere || campaignContext.genre}</atmosphere>
   ${campaignContext.description ? `<description>\n${campaignContext.description}\n</description>` : ''}
 </campaign_context>
+
+${starterCampaignContext ? formatStarterCampaignContext(starterCampaignContext) : ''}
 
 <character>
   <summary>You are guiding ${characterContext.name}, a level ${characterContext.level} ${characterContext.race} ${characterContext.class}.</summary>

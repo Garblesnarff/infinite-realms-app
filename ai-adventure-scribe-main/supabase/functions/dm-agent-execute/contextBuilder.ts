@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { AgentContext, CampaignContext, CharacterContext } from './types.ts';
+import { AgentContext, CampaignContext, CharacterContext, StarterCampaignContext, StarterCampaignRule } from './types.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -107,6 +107,62 @@ export async function buildCampaignContext(campaignId: string): Promise<Campaign
     };
   } catch (error) {
     console.error('Error building campaign context:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetches and builds starter campaign context (canonical lore)
+ * Called when a session is linked to a starter_campaign_id
+ */
+export async function buildStarterCampaignContext(starterCampaignId: string): Promise<StarterCampaignContext | null> {
+  try {
+    // Fetch the starter campaign with overview and creative brief
+    const { data: campaign, error: campaignError } = await supabase
+      .from('starter_campaigns')
+      .select('id, title, overview, creative_brief')
+      .eq('id', starterCampaignId)
+      .single();
+
+    if (campaignError) {
+      console.error('[StarterCampaign] Error fetching campaign:', campaignError);
+      return null;
+    }
+    if (!campaign) {
+      console.log('[StarterCampaign] No campaign found for id:', starterCampaignId);
+      return null;
+    }
+
+    // Fetch campaign rules (causality, mechanics, world laws)
+    const { data: rulesData, error: rulesError } = await supabase
+      .from('campaign_rules')
+      .select('rule_type, condition, effect, reversible, priority')
+      .eq('campaign_id', starterCampaignId)
+      .order('priority', { ascending: false });
+
+    if (rulesError) {
+      console.error('[StarterCampaign] Error fetching rules:', rulesError);
+    }
+
+    const rules: StarterCampaignRule[] = (rulesData || []).map((r: any) => ({
+      ruleType: r.rule_type,
+      condition: r.condition,
+      effect: r.effect,
+      reversible: r.reversible,
+      priority: r.priority
+    }));
+
+    console.log(`[StarterCampaign] Loaded "${campaign.title}" with ${rules.length} rules`);
+
+    return {
+      id: campaign.id,
+      title: campaign.title,
+      overview: campaign.overview,
+      creativeBrief: campaign.creative_brief,
+      rules
+    };
+  } catch (error) {
+    console.error('[StarterCampaign] Error building context:', error);
     return null;
   }
 }

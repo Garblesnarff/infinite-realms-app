@@ -5,6 +5,7 @@ import { EnvironmentGenerator } from "./generators/EnvironmentGenerator.ts";
 import { buildPrompt } from "./promptBuilder.ts";
 import { DMResponse, StructuredDMResponse, VoiceContext, NarrationSegment } from "./types.ts";
 import { calculatePassiveScores } from "./passiveSkillsEvaluator.ts";
+import { buildStarterCampaignContext } from "./contextBuilder.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://infiniterealms.app',
@@ -143,7 +144,7 @@ serve(async (req) => {
       );
     }
 
-    const { campaignDetails, characterDetails, memories = [] } = agentContext;
+    const { campaignDetails, characterDetails, memories = [], starterCampaignId } = agentContext;
 
     console.log('Processing DM Agent task:', {
       requestId,
@@ -152,8 +153,25 @@ serve(async (req) => {
       character: characterDetails?.name,
       memoryCount: memories?.length,
       isFirstMessage: isFirstMessage,
-      hasCombatContext: !!combatContext
+      hasCombatContext: !!combatContext,
+      starterCampaignId: starterCampaignId || 'none'
     });
+
+    // Fetch starter campaign lore if session is linked to one
+    let starterCampaignContext = null;
+    if (starterCampaignId) {
+      starterCampaignContext = await buildStarterCampaignContext(starterCampaignId);
+      if (starterCampaignContext) {
+        console.log('[DM Agent] Loaded starter campaign lore:', {
+          requestId,
+          campaignId: starterCampaignContext.id,
+          title: starterCampaignContext.title,
+          rulesCount: starterCampaignContext.rules.length,
+          hasOverview: !!starterCampaignContext.overview,
+          hasCreativeBrief: !!starterCampaignContext.creativeBrief
+        });
+      }
+    }
 
     // Sort memories by importance and recency
     const relevantMemories = memories
@@ -178,13 +196,14 @@ serve(async (req) => {
     const passiveScores = calculatePassiveScores(characterDetails);
     console.log('[DM Agent] Calculated passive scores:', passiveScores, { requestId });
 
-    // Inject passive scores into character context
+    // Inject passive scores and starter campaign context
     const enhancedAgentContext = {
       ...agentContext,
       characterContext: {
         ...characterDetails,
         passiveScores: passiveScores
-      }
+      },
+      starterCampaignContext: starterCampaignContext
     };
 
     // Build prompt with memory, voice context, combat context, and passive scores
