@@ -22,6 +22,7 @@ import { FooterSection } from '@/components/launch/FooterSection';
 import { FounderStorySection } from '@/components/launch/FounderStorySection';
 import { HeroSection } from '@/components/launch/HeroSection';
 import { RoadmapSection } from '@/components/launch/RoadmapSection';
+import { StarterCampaignsSection } from '@/components/launch/StarterCampaignsSection';
 import { VisionSection } from '@/components/launch/VisionSection';
 
 /**
@@ -109,6 +110,12 @@ const LaunchPage: React.FC = () => {
 
         {/* Gradient Transition */}
         <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent"></div>
+
+        {/* Starter Campaigns Section - Ready-to-Play Adventures */}
+        <StarterCampaignsSection />
+
+        {/* Gradient Transition */}
+        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent"></div>
 
         {/* Roadmap Section - Clear Beta Phases */}
         <RoadmapSection />
