@@ -39,6 +39,7 @@ const BlogAdmin = lazy(() => import('./pages/BlogAdmin'));
 const BlogEditor = lazy(() => import('./pages/BlogEditor'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
 
 // TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;
@@ -101,6 +102,16 @@ function App() {
                         element={
                           <Suspense fallback={<RouteLoading />}>
                             <CallbackPage />
+                          </Suspense>
+                        }
+                      />
+
+                      {/* Explore Gallery - browse all starter campaigns */}
+                      <Route
+                        path="/explore"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <ExploreGalleryPage />
                           </Suspense>
                         }
                       />
