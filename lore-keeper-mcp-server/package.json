@@ -1,0 +1,30 @@
+{
+  "name": "lore-keeper-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for campaign lore retrieval - used by Franz (AI DM)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "lore-keeper-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "openai": "^4.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "lore-keeper-ingest",
+  "version": "1.0.0",
+  "description": "Campaign ingestion pipeline for Lore Keeper",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "ingest": "tsx src/index.ts",
+    "ingest:single": "tsx src/index.ts --campaign",
+    "ingest:dry-run": "tsx src/index.ts --dry-run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "gray-matter": "^4.0.3",
+    "openai": "^4.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  }
+}

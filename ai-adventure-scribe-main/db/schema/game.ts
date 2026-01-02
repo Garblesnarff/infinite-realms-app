@@ -145,6 +145,10 @@ export const gameSessions = pgTable(
     summary: text('summary'),
     sessionNotes: text('session_notes'),
     turnCount: integer('turn_count').default(0),
+    // Starter campaign support
+    starterCampaignId: text('starter_campaign_id'), // References starter_campaigns if this is a starter playthrough
+    campaignVersion: integer('campaign_version'), // Locked version at session start
+    ruleset: text('ruleset').default('5e'), // Game system (5e, OSE, Pathfinder, etc.)
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },
@@ -152,6 +156,7 @@ export const gameSessions = pgTable(
     campaignIdIdx: index('idx_game_sessions_campaign_id').on(table.campaignId),
     characterIdIdx: index('idx_game_sessions_character_id').on(table.characterId),
     statusIdx: index('idx_game_sessions_status').on(table.status),
+    starterCampaignIdx: index('idx_game_sessions_starter_campaign').on(table.starterCampaignId),
   })
 );
 
