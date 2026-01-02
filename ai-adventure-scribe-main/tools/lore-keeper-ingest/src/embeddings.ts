@@ -49,6 +49,7 @@ export async function generateEmbeddings(
           },
           body: JSON.stringify({
             requests: truncatedBatch.map(text => ({
+              model: 'models/text-embedding-004',
               content: {
                 parts: [{ text }],
               },
