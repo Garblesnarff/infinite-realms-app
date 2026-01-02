@@ -138,8 +138,8 @@ CREATE TABLE IF NOT EXISTS campaign_chunks (
   content TEXT NOT NULL,
   summary TEXT, -- One-line summary for quick display
 
-  -- Vector embedding for semantic search (1536 dimensions for text-embedding-3-small)
-  embedding vector(1536),
+  -- Vector embedding for semantic search (768 dimensions for Gemini text-embedding-004)
+  embedding vector(768),
 
   -- Metadata
   metadata JSONB DEFAULT '{}', -- tier, zone, quest_type, etc.
@@ -169,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_campaign_chunks_embedding ON campaign_chunks
   USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
 COMMENT ON TABLE campaign_chunks IS 'Chunked lore for RAG retrieval - atomic, queryable pieces';
-COMMENT ON COLUMN campaign_chunks.embedding IS 'OpenAI text-embedding-3-small vector (1536 dimensions)';
+COMMENT ON COLUMN campaign_chunks.embedding IS 'Gemini text-embedding-004 vector (768 dimensions)';
 COMMENT ON COLUMN campaign_chunks.entity_name IS 'Primary entity this chunk describes (for direct lookups)';
 COMMENT ON COLUMN campaign_chunks.parent_entity IS 'Parent entity for hierarchical relationships (e.g., NPC belonging to faction)';
 
@@ -301,7 +301,7 @@ COMMENT ON COLUMN party_characters.stats IS 'Universal stats format - translated
 -- Semantic search for campaign lore
 CREATE OR REPLACE FUNCTION search_campaign_lore(
   p_campaign_id TEXT,
-  p_query_embedding vector(1536),
+  p_query_embedding vector(768),
   p_chunk_types chunk_type[] DEFAULT NULL,
   p_limit INTEGER DEFAULT 5,
   p_threshold FLOAT DEFAULT 0.7

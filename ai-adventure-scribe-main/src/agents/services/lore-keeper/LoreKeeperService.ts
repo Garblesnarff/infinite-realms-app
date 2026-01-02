@@ -75,10 +75,10 @@ export interface SearchResult extends CampaignChunk {
  * Lore Keeper Service for querying canonical campaign lore
  */
 export class LoreKeeperService {
-  private openaiApiKey?: string;
+  private googleApiKey?: string;
 
-  constructor(openaiApiKey?: string) {
-    this.openaiApiKey = openaiApiKey || import.meta.env.VITE_OPENAI_API_KEY;
+  constructor(googleApiKey?: string) {
+    this.googleApiKey = googleApiKey || import.meta.env.VITE_GOOGLE_AI_API_KEY;
   }
 
   /**
@@ -205,8 +205,8 @@ export class LoreKeeperService {
       limit?: number;
     }
   ): Promise<SearchResult[]> {
-    if (!this.openaiApiKey) {
-      logger.warn('[LoreKeeper] No OpenAI API key - semantic search unavailable');
+    if (!this.googleApiKey) {
+      logger.warn('[LoreKeeper] No Google AI API key - semantic search unavailable');
       return [];
     }
 
@@ -317,24 +317,30 @@ export class LoreKeeperService {
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: text.substring(0, 8000), // Truncate for safety
-      }),
-    });
+    // Gemini text-embedding-004 produces 768-dimensional vectors
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.googleApiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: {
+            parts: [{ text: text.substring(0, 8000) }], // Truncate for safety
+          },
+          taskType: 'RETRIEVAL_QUERY',
+        }),
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`Embedding generation failed: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Gemini embedding generation failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    return data.data[0].embedding;
+    return data.embedding.values;
   }
 
   private mapCampaignRow(row: any): StarterCampaign {

@@ -144,16 +144,16 @@ async function main(options: {
     return;
   }
 
-  // Initialize OpenAI for embeddings
+  // Initialize Gemini for embeddings
   if (!opts.skipEmbeddings && !opts.dryRun) {
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      console.error('❌ Missing OPENAI_API_KEY environment variable');
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!googleApiKey) {
+      console.error('❌ Missing GOOGLE_AI_API_KEY environment variable');
       console.error('Use --skip-embeddings to skip embedding generation');
       process.exit(1);
     }
-    initOpenAI(openaiKey);
-    console.log('✅ OpenAI client initialized\n');
+    initOpenAI(googleApiKey); // Uses legacy alias for Gemini
+    console.log('✅ Gemini embedding client initialized\n');
   }
 
   // Get campaigns to ingest

@@ -1,28 +1,30 @@
 /**
- * Embedding generation using OpenAI's text-embedding-3-small
+ * Embedding generation using Google's text-embedding-004
+ * Produces 768-dimensional vectors (vs OpenAI's 1536)
  */
 
-import OpenAI from 'openai';
-
-let openaiClient: OpenAI | null = null;
+let googleApiKey: string | null = null;
 
 /**
- * Initialize the OpenAI client
+ * Initialize the Google AI client
  */
-export function initOpenAI(apiKey: string): void {
-  openaiClient = new OpenAI({ apiKey });
+export function initGemini(apiKey: string): void {
+  googleApiKey = apiKey;
 }
+
+// Legacy alias for backwards compatibility
+export const initOpenAI = initGemini;
 
 /**
  * Generate embeddings for a batch of texts
- * Uses text-embedding-3-small (1536 dimensions)
+ * Uses Gemini text-embedding-004 (768 dimensions)
  */
 export async function generateEmbeddings(
   texts: string[],
   batchSize: number = 100
 ): Promise<number[][]> {
-  if (!openaiClient) {
-    throw new Error('OpenAI client not initialized. Call initOpenAI first.');
+  if (!googleApiKey) {
+    throw new Error('Google AI client not initialized. Call initGemini first.');
   }
 
   const embeddings: number[][] = [];
@@ -37,13 +39,34 @@ export async function generateEmbeddings(
     );
 
     try {
-      const response = await openaiClient.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: truncatedBatch,
-      });
+      // Gemini's batchEmbedContents endpoint
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${googleApiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requests: truncatedBatch.map(text => ({
+              content: {
+                parts: [{ text }],
+              },
+              taskType: 'RETRIEVAL_DOCUMENT',
+            })),
+          }),
+        }
+      );
 
-      for (const item of response.data) {
-        embeddings.push(item.embedding);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini batch embedding failed: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      for (const item of data.embeddings) {
+        embeddings.push(item.values);
       }
 
       // Add a small delay between batches to avoid rate limits
@@ -84,11 +107,12 @@ export function estimateTokens(text: string): number {
 
 /**
  * Calculate estimated cost for embedding generation
+ * Note: Gemini embeddings are currently free!
  */
 export function estimateCost(texts: string[]): { tokens: number; cost: number } {
   const totalTokens = texts.reduce((sum, text) => sum + estimateTokens(text), 0);
-  // text-embedding-3-small: $0.00002 per 1K tokens
-  const cost = (totalTokens / 1000) * 0.00002;
+  // Gemini text-embedding-004 is currently free (as of 2024)
+  const cost = 0;
 
   return { tokens: totalTokens, cost };
 }
