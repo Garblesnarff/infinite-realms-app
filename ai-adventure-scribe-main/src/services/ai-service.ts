@@ -1260,14 +1260,32 @@ DESCRIPTION: ${params.context.campaignDetails.description}
           }
 
           // Inject starter campaign lore if this session is linked to a pre-built campaign
-          if (params.context.starterCampaignId) {
+          // Also try to infer starter campaign from campaign name as fallback
+          let starterCampaignId = params.context.starterCampaignId;
+
+          // Fallback: if no starterCampaignId but campaign name matches a starter campaign
+          if (!starterCampaignId && params.context.campaignDetails?.name) {
+            const campaignName = String(params.context.campaignDetails.name).toLowerCase().trim();
+            // Map known campaign names to their slugs
+            const nameToSlug: Record<string, string> = {
+              'the eternal feast': 'the-eternal-feast',
+              'eternal feast': 'the-eternal-feast',
+              'abyssal descent': 'abyssal-descent',
+            };
+            starterCampaignId = nameToSlug[campaignName];
+            if (starterCampaignId) {
+              logger.info(`[AIService] Inferred starter campaign '${starterCampaignId}' from campaign name`);
+            }
+          }
+
+          if (starterCampaignId) {
             try {
               const loreKeeper = getLoreKeeperService();
               const [campaignOverview, campaignRules, campaignAssets, campaignEntities] = await Promise.all([
-                loreKeeper.getCampaignOverview(params.context.starterCampaignId),
-                loreKeeper.getRules(params.context.starterCampaignId),
-                fetchCampaignAssetsForPrompt(params.context.starterCampaignId),
-                loreKeeper.getEntities(params.context.starterCampaignId),
+                loreKeeper.getCampaignOverview(starterCampaignId),
+                loreKeeper.getRules(starterCampaignId),
+                fetchCampaignAssetsForPrompt(starterCampaignId),
+                loreKeeper.getEntities(starterCampaignId),
               ]);
 
               if (campaignOverview) {
