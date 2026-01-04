@@ -16,6 +16,15 @@ export interface StarterCampaignContext {
   overview?: string;
   creativeBrief?: string;
   rules: StarterCampaignRule[];
+  entities: StarterCampaignEntity[];
+}
+
+export interface StarterCampaignEntity {
+  name: string;
+  type: 'npc' | 'location' | 'faction' | 'item' | 'monster';
+  content: string;
+  summary?: string;
+  imageUrl?: string;
 }
 
 export interface StarterCampaignRule {

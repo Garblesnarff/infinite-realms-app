@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { AgentContext, CampaignContext, CharacterContext, StarterCampaignContext, StarterCampaignRule } from './types.ts';
+import { AgentContext, CampaignContext, CharacterContext, StarterCampaignContext, StarterCampaignRule, StarterCampaignEntity } from './types.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -152,14 +152,54 @@ export async function buildStarterCampaignContext(starterCampaignId: string): Pr
       priority: r.priority
     }));
 
-    console.log(`[StarterCampaign] Loaded "${campaign.title}" with ${rules.length} rules`);
+    // Fetch key entities (NPCs, locations, factions, items, monsters) from campaign_chunks
+    const { data: chunksData, error: chunksError } = await supabase
+      .from('campaign_chunks')
+      .select('entity_name, chunk_type, content, summary, metadata')
+      .eq('campaign_id', starterCampaignId)
+      .in('chunk_type', ['npc_tier1', 'npc_tier2', 'npc_tier3', 'location', 'faction', 'item', 'monster'])
+      .order('chunk_type');
+
+    if (chunksError) {
+      console.error('[StarterCampaign] Error fetching chunks:', chunksError);
+    }
+
+    // Map chunk_type to entity type
+    const typeMap: Record<string, 'npc' | 'location' | 'faction' | 'item' | 'monster'> = {
+      'npc_tier1': 'npc',
+      'npc_tier2': 'npc',
+      'npc_tier3': 'npc',
+      'location': 'location',
+      'faction': 'faction',
+      'item': 'item',
+      'monster': 'monster'
+    };
+
+    // Deduplicate by entity_name (some may have duplicates)
+    const seenNames = new Set<string>();
+    const entities: StarterCampaignEntity[] = (chunksData || [])
+      .filter((c: any) => {
+        if (!c.entity_name || seenNames.has(c.entity_name)) return false;
+        seenNames.add(c.entity_name);
+        return true;
+      })
+      .map((c: any) => ({
+        name: c.entity_name,
+        type: typeMap[c.chunk_type] || 'npc',
+        content: c.content,
+        summary: c.summary,
+        imageUrl: c.metadata?.image_url
+      }));
+
+    console.log(`[StarterCampaign] Loaded "${campaign.title}" with ${rules.length} rules and ${entities.length} entities`);
 
     return {
       id: campaign.id,
       title: campaign.title,
       overview: campaign.overview,
       creativeBrief: campaign.creative_brief,
-      rules
+      rules,
+      entities
     };
   } catch (error) {
     console.error('[StarterCampaign] Error building context:', error);

@@ -1,4 +1,4 @@
-import { AgentContext, GameState, VoiceContext, StarterCampaignContext } from './types.ts';
+import { AgentContext, GameState, VoiceContext, StarterCampaignContext, StarterCampaignEntity } from './types.ts';
 
 function formatMemories(memories: any[]) {
   // Sort memories by importance and recency
@@ -307,11 +307,76 @@ ${worldLaws.map(r => `  <law priority="${r.priority}">
 </campaign_rules>`;
   }
 
+  // Add canonical entities (NPCs, locations, factions, items, monsters)
+  if (context.entities && context.entities.length > 0) {
+    const npcs = context.entities.filter(e => e.type === 'npc');
+    const locations = context.entities.filter(e => e.type === 'location');
+    const factions = context.entities.filter(e => e.type === 'faction');
+    const items = context.entities.filter(e => e.type === 'item');
+    const monsters = context.entities.filter(e => e.type === 'monster');
+
+    loreText += `
+
+<canonical_entities>
+<instruction>These are the OFFICIAL NPCs, locations, and creatures for this campaign. USE THESE EXACT NAMES AND DESCRIPTIONS. Do NOT invent new NPCs or locations when these exist.</instruction>
+`;
+
+    if (npcs.length > 0) {
+      loreText += `
+<npcs count="${npcs.length}">
+${npcs.map(npc => `<npc name="${npc.name}"${npc.imageUrl ? ` has_portrait="true"` : ''}>
+${npc.content}
+</npc>`).join('\n')}
+</npcs>`;
+    }
+
+    if (locations.length > 0) {
+      loreText += `
+<locations count="${locations.length}">
+${locations.map(loc => `<location name="${loc.name}"${loc.imageUrl ? ` has_image="true"` : ''}>
+${loc.content}
+</location>`).join('\n')}
+</locations>`;
+    }
+
+    if (factions.length > 0) {
+      loreText += `
+<factions count="${factions.length}">
+${factions.map(f => `<faction name="${f.name}">
+${f.content}
+</faction>`).join('\n')}
+</factions>`;
+    }
+
+    if (items.length > 0) {
+      loreText += `
+<items count="${items.length}">
+${items.map(i => `<item name="${i.name}"${i.imageUrl ? ` has_image="true"` : ''}>
+${i.content}
+</item>`).join('\n')}
+</items>`;
+    }
+
+    if (monsters.length > 0) {
+      loreText += `
+<monsters count="${monsters.length}">
+${monsters.map(m => `<monster name="${m.name}"${m.imageUrl ? ` has_image="true"` : ''}>
+${m.content}
+</monster>`).join('\n')}
+</monsters>`;
+    }
+
+    loreText += `
+</canonical_entities>`;
+  }
+
   loreText += `
 
 <lore_adherence_rules>
   <rule>NEVER contradict established lore, NPCs, locations, or history</rule>
+  <rule>USE THE CANONICAL NPCs listed above - do NOT invent new characters when these exist</rule>
   <rule>Reference canonical characters, places, and events when relevant</rule>
+  <rule>When introducing an NPC from the list, use their EXACT name and personality</rule>
   <rule>Maintain the campaign's established tone and atmosphere</rule>
   <rule>Apply campaign rules consistently - if a rule has a condition that matches, apply its effect</rule>
   <rule>Causality rules marked as reversible CAN be undone; non-reversible rules are permanent</rule>
