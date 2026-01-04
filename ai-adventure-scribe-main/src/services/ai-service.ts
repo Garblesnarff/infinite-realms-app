@@ -22,6 +22,92 @@ import { parseXMLTagsFromResponse } from './ai/xml-parser';
 import { getClassEquipment } from './ai/class-equipment';
 import { buildDMContextPrompt, formatCombatContext } from './ai/dm-prompt-builder';
 
+/**
+ * Fetch campaign assets for AI prompt injection
+ * Returns a formatted string listing available visual assets
+ */
+async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<string> {
+  const assets: { type: string; key: string; name: string }[] = [];
+
+  try {
+    // Fetch character templates with portraits
+    const { data: characters } = await supabase
+      .from('starter_character_templates')
+      .select('template_key, name, portrait_url')
+      .eq('starter_campaign_id', starterCampaignId);
+
+    if (characters) {
+      for (const char of characters) {
+        if (char.portrait_url) {
+          assets.push({
+            type: 'character',
+            key: char.template_key || char.name.toLowerCase().replace(/\s+/g, '-'),
+            name: char.name,
+          });
+        }
+      }
+    }
+
+    // Fetch campaign chunks with images in metadata
+    const { data: chunks } = await supabase
+      .from('campaign_chunks')
+      .select('entity_name, chunk_type, metadata')
+      .eq('campaign_id', starterCampaignId)
+      .not('entity_name', 'is', null);
+
+    if (chunks) {
+      for (const chunk of chunks) {
+        const metadata = chunk.metadata as Record<string, unknown> | null;
+        const imageUrl = metadata?.image_url as string | undefined;
+
+        if (imageUrl && chunk.entity_name) {
+          let assetType = 'entity';
+          const chunkType = chunk.chunk_type as string;
+          if (chunkType.startsWith('npc')) assetType = 'npc';
+          else if (chunkType === 'location') assetType = 'location';
+          else if (chunkType === 'item') assetType = 'item';
+          else if (chunkType === 'encounter') assetType = 'monster';
+
+          assets.push({
+            type: assetType,
+            key: chunk.entity_name.toLowerCase().replace(/\s+/g, '-'),
+            name: chunk.entity_name,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    logger.warn('[AIService] Failed to fetch campaign assets for prompt:', error);
+    return '';
+  }
+
+  if (assets.length === 0) return '';
+
+  // Format for AI prompt
+  let prompt = `
+<available_visual_assets>
+When you describe or introduce the following entities in your narrative, include the tag shown next to their name.
+The system will display their image when the player reads the message.
+
+`;
+  const byType: Record<string, typeof assets> = {};
+  for (const asset of assets) {
+    if (!byType[asset.type]) byType[asset.type] = [];
+    byType[asset.type].push(asset);
+  }
+
+  for (const [type, typeAssets] of Object.entries(byType)) {
+    prompt += `## ${type.charAt(0).toUpperCase() + type.slice(1)}s\n`;
+    for (const asset of typeAssets) {
+      prompt += `- ${asset.name} [ASSET:${type}:${asset.key}]\n`;
+    }
+    prompt += '\n';
+  }
+
+  prompt += `</available_visual_assets>`;
+  return prompt;
+}
+
 // Type-only import for LegacyChatMessage (doesn't load the module)
 type LegacyChatMessage = {
   id: string;
@@ -1177,9 +1263,11 @@ DESCRIPTION: ${params.context.campaignDetails.description}
           if (params.context.starterCampaignId) {
             try {
               const loreKeeper = getLoreKeeperService();
-              const [campaignOverview, campaignRules] = await Promise.all([
+              const [campaignOverview, campaignRules, campaignAssets, campaignEntities] = await Promise.all([
                 loreKeeper.getCampaignOverview(params.context.starterCampaignId),
                 loreKeeper.getRules(params.context.starterCampaignId),
+                fetchCampaignAssetsForPrompt(params.context.starterCampaignId),
+                loreKeeper.getEntities(params.context.starterCampaignId),
               ]);
 
               if (campaignOverview) {
@@ -1204,8 +1292,77 @@ ${campaignRules.map(rule => `- ${rule.condition} → ${rule.effect}${rule.revers
 </world_rules>`;
                 }
 
+                // Add canonical entities (NPCs, locations, factions, items, monsters)
+                const { npcs, locations, factions, items, monsters } = campaignEntities;
+                const totalEntities = npcs.length + locations.length + factions.length + items.length + monsters.length;
+
+                if (totalEntities > 0) {
+                  contextPrompt += `
+
+<canonical_entities>
+<instruction>These are the OFFICIAL NPCs, locations, and creatures for this campaign. USE THESE EXACT NAMES. Do NOT invent new NPCs when these exist.</instruction>`;
+
+                  if (npcs.length > 0) {
+                    contextPrompt += `
+
+<npcs count="${npcs.length}">
+${npcs.map(npc => `<npc name="${npc.entityName}"${npc.metadata?.image_url ? ' has_portrait="true"' : ''}>
+${npc.content}
+</npc>`).join('\n')}
+</npcs>`;
+                  }
+
+                  if (locations.length > 0) {
+                    contextPrompt += `
+
+<locations count="${locations.length}">
+${locations.map(loc => `<location name="${loc.entityName}"${loc.metadata?.image_url ? ' has_image="true"' : ''}>
+${loc.content}
+</location>`).join('\n')}
+</locations>`;
+                  }
+
+                  if (factions.length > 0) {
+                    contextPrompt += `
+
+<factions count="${factions.length}">
+${factions.map(f => `<faction name="${f.entityName}">
+${f.content}
+</faction>`).join('\n')}
+</factions>`;
+                  }
+
+                  if (monsters.length > 0) {
+                    contextPrompt += `
+
+<monsters count="${monsters.length}">
+${monsters.map(m => `<monster name="${m.entityName}"${m.metadata?.image_url ? ' has_image="true"' : ''}>
+${m.content}
+</monster>`).join('\n')}
+</monsters>`;
+                  }
+
+                  contextPrompt += `
+</canonical_entities>`;
+
+                  logger.info(`[AIService] Injected ${totalEntities} canonical entities (${npcs.length} NPCs, ${locations.length} locations, ${factions.length} factions, ${monsters.length} monsters)`);
+                }
+
                 contextPrompt += `
+
+<lore_adherence>
+- USE the canonical NPCs listed above - do NOT invent new characters when these exist
+- When introducing an NPC from the list, use their EXACT name
+- Reference canonical locations and describe them as specified
+- Apply world rules consistently
+</lore_adherence>
 </starter_campaign_lore>`;
+
+                // Add available visual assets for the AI to reference
+                if (campaignAssets) {
+                  contextPrompt += campaignAssets;
+                  logger.info(`[AIService] Injected visual assets for starter campaign`);
+                }
 
                 logger.info(`[AIService] Injected lore for starter campaign: ${campaignOverview.title}`);
               }

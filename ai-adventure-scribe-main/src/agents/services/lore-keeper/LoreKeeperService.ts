@@ -195,6 +195,49 @@ export class LoreKeeperService {
   }
 
   /**
+   * Get all canonical entities (NPCs, locations, factions, items, monsters) for prompt injection
+   * Returns deduplicated list with full content for each entity
+   */
+  async getEntities(campaignId: string): Promise<{
+    npcs: CampaignChunk[];
+    locations: CampaignChunk[];
+    factions: CampaignChunk[];
+    items: CampaignChunk[];
+    monsters: CampaignChunk[];
+  }> {
+    const { data, error } = await supabase
+      .from('campaign_chunks')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .in('chunk_type', ['npc_tier1', 'npc_tier2', 'npc_tier3', 'location', 'faction', 'item', 'monster'])
+      .order('chunk_type')
+      .order('entity_name');
+
+    if (error) {
+      logger.error('[LoreKeeper] Failed to get entities:', error);
+      return { npcs: [], locations: [], factions: [], items: [], monsters: [] };
+    }
+
+    // Deduplicate by entity_name
+    const seenNames = new Set<string>();
+    const dedupedData = (data || []).filter(row => {
+      if (!row.entity_name || seenNames.has(row.entity_name)) return false;
+      seenNames.add(row.entity_name);
+      return true;
+    });
+
+    const chunks = dedupedData.map(this.mapChunkRow);
+
+    return {
+      npcs: chunks.filter(c => ['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(c.chunkType)),
+      locations: chunks.filter(c => c.chunkType === 'location'),
+      factions: chunks.filter(c => c.chunkType === 'faction'),
+      items: chunks.filter(c => c.chunkType === 'item'),
+      monsters: chunks.filter(c => c.chunkType === 'monster'),
+    };
+  }
+
+  /**
    * Semantic search across campaign lore
    */
   async searchLore(
