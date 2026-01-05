@@ -390,9 +390,12 @@ export async function searchLore(
 export async function getStarterParties(campaignId: string): Promise<CampaignParty[]> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list to reduce over-fetching.
   const { data, error } = await client
     .from('campaign_parties')
-    .select('*')
+    .select(
+      'id, campaign_id, party_name, party_concept, party_hook, playstyle, is_default'
+    )
     .eq('campaign_id', campaignId)
     .order('is_default', { ascending: false })
     .order('party_name');
