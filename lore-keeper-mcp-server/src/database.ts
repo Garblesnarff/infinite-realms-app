@@ -5,8 +5,9 @@
  * No in-memory caching - makes horizontal scaling trivial.
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { clients } from './clients.js';
 import type {
   StarterCampaign,
   CampaignChunk,
@@ -39,15 +40,10 @@ export function initialize(
   supabaseKey: string,
   openaiKey?: string
 ): void {
-  supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  supabase = clients.createSupabaseClient(supabaseUrl, supabaseKey);
 
   if (openaiKey) {
-    openai = new OpenAI({ apiKey: openaiKey });
+    openai = clients.createOpenAIClient({ apiKey: openaiKey });
   }
 }
 
@@ -270,6 +266,9 @@ async function getEntityByName(
   name: string,
   chunkTypes: ChunkType[]
 ): Promise<CampaignChunk | null> {
+  if (!name) {
+    return null;
+  }
   const client = getClient();
 
   // Use the RPC function for case-insensitive lookup
