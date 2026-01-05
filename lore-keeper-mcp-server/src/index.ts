@@ -27,13 +27,13 @@ config({ path: join(__dirname, '../../../ai-adventure-scribe-main/.env') });
 async function main(): Promise<void> {
   // Validate environment
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error('❌ Missing required environment variables:');
-    if (!supabaseUrl) console.error('  - SUPABASE_URL or VITE_SUPABASE_URL');
-    if (!supabaseKey) console.error('  - SUPABASE_SERVICE_ROLE_KEY');
+    console.error('❌ Missing required environment variables for Lore Keeper MCP Server:');
+    if (!supabaseUrl) console.error('  - SUPABASE_URL or VITE_SUPABASE_URL is required.');
+    if (!supabaseKey) console.error('  - SUPABASE_SERVICE_ROLE_KEY is required for secure database access.');
     process.exit(1);
   }
 
