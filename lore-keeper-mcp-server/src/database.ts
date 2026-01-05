@@ -21,7 +21,18 @@ let supabase: SupabaseClient | null = null;
 let openai: OpenAI | null = null;
 
 /**
- * Initialize database and embedding clients
+ * Initializes the Supabase and OpenAI clients. This must be called once
+ * at application startup before any other database functions are used.
+ *
+ * @param supabaseUrl - The URL of the Supabase project.
+ * @param supabaseKey - The service role key for Supabase.
+ * @param openaiKey - The API key for OpenAI, required for semantic search.
+ * @example
+ * ```typescript
+ * import { initialize } from './database';
+ *
+ * initialize(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, process.env.OPENAI_KEY);
+ * ```
  */
 export function initialize(
   supabaseUrl: string,
@@ -52,7 +63,19 @@ function getClient(): SupabaseClient {
 // =============================================================================
 
 /**
- * List available campaigns with optional filters
+ * Lists available starter campaigns, optionally filtering by genre, difficulty, or featured status.
+ * Only returns campaigns that are marked as published and complete.
+ *
+ * @param filters - An optional object to filter the campaigns.
+ * @param filters.genre - Filter campaigns by a specific genre (e.g., "fantasy").
+ * @param filters.difficulty - Filter campaigns by difficulty level (e.g., "medium").
+ * @param filters.featured - If true, only return featured campaigns.
+ * @returns A promise that resolves to an array of starter campaigns.
+ * @example
+ * ```typescript
+ * const fantasyCampaigns = await listCampaigns({ genre: 'fantasy' });
+ * console.log(fantasyCampaigns);
+ * ```
  */
 export async function listCampaigns(filters?: {
   genre?: string;
@@ -91,7 +114,17 @@ export async function listCampaigns(filters?: {
 }
 
 /**
- * Get full campaign overview including creative brief
+ * Retrieves the full overview of a specific campaign, including its creative brief and other metadata.
+ *
+ * @param campaignId - The unique identifier for the campaign.
+ * @returns A promise that resolves to the campaign object, or null if not found.
+ * @example
+ * ```typescript
+ * const campaign = await getCampaignOverview('a_midsummer_nights_chaos');
+ * if (campaign) {
+ *   console.log(campaign.title);
+ * }
+ * ```
  */
 export async function getCampaignOverview(campaignId: string): Promise<StarterCampaign | null> {
   const client = getClient();
@@ -117,7 +150,16 @@ export async function getCampaignOverview(campaignId: string): Promise<StarterCa
 // =============================================================================
 
 /**
- * Get NPC by name (case-insensitive)
+ * Retrieves a specific NPC from a campaign by their name (case-insensitive).
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @param name - The name of the NPC to retrieve.
+ * @returns A promise that resolves to the NPC chunk, or null if not found.
+ * @example
+ * ```typescript
+ * const npc = await getNPC('a_midsummer_nights_chaos', 'Puck');
+ * console.log(npc?.content);
+ * ```
  */
 export async function getNPC(
   campaignId: string,
@@ -127,7 +169,16 @@ export async function getNPC(
 }
 
 /**
- * Get location by name
+ * Retrieves a specific location from a campaign by its name (case-insensitive).
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @param name - The name of the location to retrieve.
+ * @returns A promise that resolves to the location chunk, or null if not found.
+ * @example
+ * ```typescript
+ * const location = await getLocation('a_midsummer_nights_chaos', 'The Feywild');
+ * console.log(location?.summary);
+ * ```
  */
 export async function getLocation(
   campaignId: string,
@@ -137,7 +188,16 @@ export async function getLocation(
 }
 
 /**
- * Get faction by name
+ * Retrieves a specific faction from a campaign by its name (case-insensitive).
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @param name - The name of the faction to retrieve.
+ * @returns A promise that resolves to the faction chunk, or null if not found.
+ * @example
+ * ```typescript
+ * const faction = await getFaction('a_midsummer_nights_chaos', 'The Seelie Court');
+ * console.log(faction?.metadata);
+ * ```
  */
 export async function getFaction(
   campaignId: string,
@@ -147,7 +207,15 @@ export async function getFaction(
 }
 
 /**
- * Get all mechanics for a campaign
+ * Retrieves all unique game mechanics for a specific campaign.
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @returns A promise that resolves to an array of mechanic chunks.
+ * @example
+ * ```typescript
+ * const mechanics = await getMechanics('a_midsummer_nights_chaos');
+ * mechanics.forEach(mechanic => console.log(mechanic.entityName));
+ * ```
  */
 export async function getMechanics(campaignId: string): Promise<CampaignChunk[]> {
   const client = getClient();
@@ -167,7 +235,16 @@ export async function getMechanics(campaignId: string): Promise<CampaignChunk[]>
 }
 
 /**
- * Get causality rules for a campaign
+ * Retrieves all causality rules (IF/THEN logic) for a specific campaign.
+ * These rules help the AI DM enforce world consequences.
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @returns A promise that resolves to an array of campaign rules.
+ * @example
+ * ```typescript
+ * const rules = await getRules('a_midsummer_nights_chaos');
+ * console.log(rules);
+ * ```
  */
 export async function getRules(campaignId: string): Promise<CampaignRule[]> {
   const client = getClient();
@@ -229,7 +306,25 @@ async function getEntityByName(
 // =============================================================================
 
 /**
- * Semantic search across campaign lore
+ * Performs a semantic search across the lore of a specific campaign using a natural language query.
+ * Requires the OpenAI key to be initialized.
+ *
+ * @param campaignId - The identifier for the campaign to search within.
+ * @param query - The natural language query to search for.
+ * @param options - Optional parameters to refine the search.
+ * @param options.chunkTypes - An array of chunk types to restrict the search to.
+ * @param options.limit - The maximum number of results to return (default: 5).
+ * @param options.threshold - The similarity threshold for results (default: 0.7).
+ * @returns A promise that resolves to an array of search results, including similarity scores.
+ * @example
+ * ```typescript
+ * const results = await searchLore(
+ *   'a_midsummer_nights_chaos',
+ *   'who is the queen of the fairies?',
+ *   { limit: 3 }
+ * );
+ * console.log(results);
+ * ```
  */
 export async function searchLore(
   campaignId: string,
@@ -279,7 +374,15 @@ export async function searchLore(
 // =============================================================================
 
 /**
- * Get starter parties for a campaign
+ * Retrieves a list of pre-built starter parties for a specific campaign.
+ *
+ * @param campaignId - The identifier for the campaign.
+ * @returns A promise that resolves to an array of campaign parties.
+ * @example
+ * ```typescript
+ * const parties = await getStarterParties('a_midsummer_nights_chaos');
+ * console.log(parties.map(p => p.partyName));
+ * ```
  */
 export async function getStarterParties(campaignId: string): Promise<CampaignParty[]> {
   const client = getClient();
@@ -299,7 +402,19 @@ export async function getStarterParties(campaignId: string): Promise<CampaignPar
 }
 
 /**
- * Get party details including all characters
+ * Retrieves the full details for a specific party, including the party concept and
+ * a list of all its characters with their backstories and stats.
+ *
+ * @param partyId - The unique identifier for the party.
+ * @returns A promise that resolves to an object containing party and character details, or null if not found.
+ * @example
+ * ```typescript
+ * const partyDetails = await getPartyDetails('some-party-uuid');
+ * if (partyDetails) {
+ *   console.log(partyDetails.party.partyName);
+ *   console.log(partyDetails.characters);
+ * }
+ * ```
  */
 export async function getPartyDetails(partyId: string): Promise<{
   party: CampaignParty;

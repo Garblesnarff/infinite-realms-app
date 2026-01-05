@@ -238,6 +238,26 @@ export const tools: ToolDefinition[] = [
 // TOOL HANDLERS
 // =============================================================================
 
+/**
+ * Handles an incoming tool call request by dispatching it to the appropriate database function.
+ * This function acts as a router, mapping tool names to their corresponding implementation.
+ *
+ * @param name - The name of the tool to execute (e.g., 'list_campaigns', 'get_npc').
+ * @param args - An object containing the arguments for the tool.
+ * @returns A promise that resolves with the result of the database function, or an error object if the tool is not found or fails.
+ * @example
+ * ```typescript
+ * import { handleToolCall } from './tools';
+ *
+ * async function runTool() {
+ *   const campaigns = await handleToolCall('list_campaigns', { genre: 'fantasy' });
+ *   console.log(campaigns);
+ *
+ *   const npc = await handleToolCall('get_npc', { campaign_id: 'a_midsummer_nights_chaos', name: 'Puck' });
+ *   console.log(npc);
+ * }
+ * ```
+ */
 export async function handleToolCall(
   name: string,
   args: Record<string, unknown>

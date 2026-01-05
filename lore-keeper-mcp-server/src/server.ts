@@ -14,9 +14,23 @@ import {
 
 import { tools, handleToolCall } from './tools.js';
 
+/**
+ * An MCP server responsible for providing campaign lore to AI agents like Franz.
+ * It exposes a set of tools for querying campaign data from Supabase.
+ *
+ * @example
+ * ```typescript
+ * const server = new LoreKeeperMcpServer();
+ * await server.start();
+ * ```
+ */
 export class LoreKeeperMcpServer {
   private server: Server;
 
+  /**
+   * Initializes a new instance of the LoreKeeperMcpServer, setting up the MCP server
+   * and its request handlers.
+   */
   constructor() {
     this.server = new Server(
       {
@@ -83,6 +97,10 @@ export class LoreKeeperMcpServer {
     });
   }
 
+  /**
+   * Starts the MCP server and begins listening for requests over the configured transport.
+   * For this server, it uses STDIO to communicate with the parent process.
+   */
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
