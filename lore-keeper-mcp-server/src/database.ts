@@ -421,32 +421,27 @@ export async function getPartyDetails(partyId: string): Promise<{
 } | null> {
   const client = getClient();
 
-  // Get party
-  const { data: partyData, error: partyError } = await client
+  // ⚡ Bolt: Combined party and character queries into a single nested query
+  // to eliminate the N+1 problem. This reduces database round trips from 2 to 1.
+  const { data, error } = await client
     .from('campaign_parties')
-    .select('*')
+    .select('*, party_characters(*)')
     .eq('id', partyId)
+    .order('character_name', { foreignTable: 'party_characters' })
     .single();
 
-  if (partyError) {
-    if (partyError.code === 'PGRST116') return null;
-    throw new Error(`Failed to get party: ${partyError.message}`);
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to get party details: ${error.message}`);
   }
 
-  // Get characters
-  const { data: charData, error: charError } = await client
-    .from('party_characters')
-    .select('*')
-    .eq('party_id', partyId)
-    .order('character_name');
-
-  if (charError) {
-    throw new Error(`Failed to get characters: ${charError.message}`);
-  }
+  // The nested query returns characters as a property on the party object.
+  // We need to extract them and map them separately.
+  const { party_characters: charactersData, ...partyData } = data;
 
   return {
     party: mapPartyRow(partyData),
-    characters: (charData || []).map(mapCharacterRow),
+    characters: (charactersData || []).map(mapCharacterRow),
   };
 }
 
