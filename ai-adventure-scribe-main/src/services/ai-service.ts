@@ -1271,6 +1271,8 @@ DESCRIPTION: ${params.context.campaignDetails.description}
               'the eternal feast': 'the-eternal-feast',
               'eternal feast': 'the-eternal-feast',
               'abyssal descent': 'abyssal-descent',
+              'academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
+              'the academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
             };
             starterCampaignId = nameToSlug[campaignName];
             if (starterCampaignId) {
