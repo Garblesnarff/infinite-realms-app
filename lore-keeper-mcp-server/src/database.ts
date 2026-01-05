@@ -125,9 +125,13 @@ export async function listCampaigns(filters?: {
 export async function getCampaignOverview(campaignId: string): Promise<StarterCampaign | null> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list to reduce over-fetching.
+  // This is a database performance best practice.
   const { data, error } = await client
     .from('starter_campaigns')
-    .select('*')
+    .select(
+      'id, slug, title, tagline, genre, sub_genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, is_featured, cover_image_url'
+    )
     .eq('id', campaignId)
     .eq('is_published', true)
     .eq('is_complete', true)
