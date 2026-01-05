@@ -203,8 +203,16 @@ async function main(options: {
   const failed = results.filter(r => r.errors.length > 0);
 
   console.log(`  Successful: ${successful.length}`);
-  console.log(`  Failed: ${failed.length}`);
-  console.log(`  Total chunks: ${results.reduce((sum, r) => sum + r.chunksCreated, 0)}`);
+  console.log(`  Failed:     ${failed.length}`);
+
+  if (failed.length > 0) {
+    console.log('\n  Errors:');
+    failed.forEach(f => {
+      console.log(`    - ${f.campaignId}: ${f.errors.join(', ')}`);
+    });
+  }
+
+  console.log(`\n  Total chunks: ${results.reduce((sum, r) => sum + r.chunksCreated, 0)}`);
   console.log(`  Total rules: ${results.reduce((sum, r) => sum + r.rulesCreated, 0)}`);
   console.log(`  Total embeddings: ${results.reduce((sum, r) => sum + r.embeddingsGenerated, 0)}`);
 
@@ -236,23 +244,57 @@ async function ingestCampaign(
 
   // Read campaign files
   const files = readCampaignFiles(campaignPath);
+  const dirName = campaignId.split('/').pop() || '';
 
+  // Validate required files per spec
+  const missingFiles: string[] = [];
+  if (!files.creativeBrief) {
+    missingFiles.push('creative-brief.md');
+  }
+  if (!files.worldBuildingSpec) {
+    missingFiles.push('world-building-spec.md');
+  }
+  if (!files.campaignBible) {
+    missingFiles.push(`${dirName}-campaign-bible.md`);
+  }
   if (!files.overview) {
+    missingFiles.push(`${dirName}.md`);
+  }
+
+  if (missingFiles.length > 0) {
     return {
       campaignId,
       title: campaignId,
       chunksCreated: 0,
       rulesCreated: 0,
       embeddingsGenerated: 0,
-      errors: ['Missing overview.md'],
+      errors: [`missing ${missingFiles.join(', ')}`],
     };
   }
 
   // Parse campaign metadata
-  const campaign = parseOverview(files.overview, campaignId);
-  campaign.tagline = extractTagline(files.creativeBrief, files.overview);
-  campaign.creativeBrief = files.creativeBrief;
-  campaign.overview = files.overview;
+  let campaign, chunks, rules;
+  try {
+    campaign = parseOverview(files.overview!, campaignId);
+    campaign.tagline = extractTagline(files.creativeBrief, files.overview);
+    campaign.creativeBrief = files.creativeBrief;
+    campaign.overview = files.overview;
+
+    const chunkResult = chunkCampaignFiles(campaignId, files);
+    chunks = chunkResult.chunks;
+    rules = chunkResult.rules;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown parsing error';
+    return {
+      campaignId,
+      title: campaignId,
+      chunksCreated: 0,
+      rulesCreated: 0,
+      embeddingsGenerated: 0,
+      errors: [`Malformed markdown: ${message}`],
+    };
+  }
+
 
   const isComplete = isCampaignComplete(files);
 
@@ -263,8 +305,10 @@ async function ingestCampaign(
     console.log(`  Difficulty: ${campaign.difficulty}`);
   }
 
-  // Chunk the content
-  const { chunks, rules } = chunkCampaignFiles(campaignId, files);
+  if (opts.verbose) {
+    console.log(`  Chunks: ${chunks.length}`);
+    console.log(`  Rules: ${rules.length}`);
+  }
 
   if (opts.verbose) {
     console.log(`  Chunks: ${chunks.length}`);
@@ -291,34 +335,64 @@ async function ingestCampaign(
     };
   }
 
-  // Upsert campaign
-  await upsertStarterCampaign({
-    ...campaign,
-    isComplete,
-    isPublished: false, // Always start unpublished
-  });
-
-  // Delete existing chunks and rules
-  await deleteCampaignChunks(campaignId);
-  await deleteCampaignRules(campaignId);
-
   // Generate embeddings
   let embeddings: (number[] | null)[] = [];
+  let embeddingsGenerated = 0;
   if (!opts.skipEmbeddings && chunks.length > 0) {
-    const texts = chunks.map(c => c.content);
-    embeddings = await generateEmbeddings(texts);
+    try {
+      const texts = chunks.map(c => c.content);
+      embeddings = await generateEmbeddings(texts);
+      embeddingsGenerated = embeddings.length;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown embedding error';
+      return {
+        campaignId,
+        title: campaign.title,
+        chunksCreated: 0,
+        rulesCreated: 0,
+        embeddingsGenerated: 0,
+        errors: [`Embedding generation error: ${message}`],
+      };
+    }
   }
 
-  // Insert chunks and rules
-  const chunksCreated = await insertCampaignChunks(chunks, embeddings);
-  const rulesCreated = await insertCampaignRules(rules);
+  // Database operations
+  let chunksCreated = 0;
+  let rulesCreated = 0;
+
+  try {
+    // Upsert campaign
+    await upsertStarterCampaign({
+      ...campaign,
+      isComplete,
+      isPublished: false, // Always start unpublished
+    });
+
+    // Delete existing chunks and rules
+    await deleteCampaignChunks(campaignId);
+    await deleteCampaignRules(campaignId);
+
+    // Insert chunks and rules
+    chunksCreated = await insertCampaignChunks(chunks, embeddings);
+    rulesCreated = await insertCampaignRules(rules);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    return {
+      campaignId,
+      title: campaign.title,
+      chunksCreated: 0,
+      rulesCreated: 0,
+      embeddingsGenerated: 0,
+      errors: [`Database error: ${message}`],
+    };
+  }
 
   return {
     campaignId,
     title: campaign.title,
     chunksCreated,
     rulesCreated,
-    embeddingsGenerated: embeddings.length,
+    embeddingsGenerated,
     errors: [],
   };
 }
