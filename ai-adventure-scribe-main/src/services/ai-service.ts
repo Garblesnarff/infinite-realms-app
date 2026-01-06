@@ -139,7 +139,13 @@ async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<
           assets.push({
             type: assetType,
             // Clean key: must match generateKey() in use-campaign-assets.ts
-            key: chunk.entity_name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim(),
+            key: chunk.entity_name
+              .toLowerCase()
+              .replace(/[""''«»`]/g, '')      // Remove all quote variants (Unicode + ASCII)
+              .replace(/[^a-z0-9\s-]/g, '')   // Remove remaining special chars
+              .replace(/\s+/g, '-')           // Spaces to hyphens
+              .replace(/-+/g, '-')            // Collapse multiple hyphens
+              .trim(),
             name: chunk.entity_name,
           });
         }
