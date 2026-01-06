@@ -22,12 +22,80 @@ import { parseXMLTagsFromResponse } from './ai/xml-parser';
 import { getClassEquipment } from './ai/class-equipment';
 import { buildDMContextPrompt, formatCombatContext } from './ai/dm-prompt-builder';
 
+// Asset type definition for post-processing
+interface AssetInfo {
+  type: string;
+  key: string;
+  name: string;
+}
+
+// Module-level cache for assets to avoid re-fetching
+let cachedAssets: { campaignId: string; assets: AssetInfo[] } | null = null;
+
+/**
+ * Post-process AI response to automatically insert asset tags
+ * Scans for entity names and inserts [ASSET:type:key] before them
+ *
+ * IMPORTANT: Only matches FULL asset names to avoid false positives.
+ * e.g., "The Unwashed Dish" matches, but "dish" alone does NOT.
+ */
+function insertAssetTags(text: string, assets: AssetInfo[]): string {
+  if (!assets || assets.length === 0) return text;
+
+  let result = text;
+
+  // Sort assets by name length (longest first) to avoid partial matches
+  const sortedAssets = [...assets].sort((a, b) => b.name.length - a.name.length);
+
+  for (const asset of sortedAssets) {
+    // Skip if tag already exists for this asset
+    const existingTag = `[ASSET:${asset.type}:${asset.key}]`;
+    if (result.includes(existingTag)) continue;
+
+    // Match FULL name only (case-insensitive, word boundary)
+    const pattern = new RegExp(`\\b${escapeRegex(asset.name)}\\b`, 'i');
+    const match = result.match(pattern);
+
+    if (match && match.index !== undefined) {
+      // Check if there's already an asset tag right before this match
+      const beforeMatch = result.slice(Math.max(0, match.index - 50), match.index);
+      if (beforeMatch.includes('[ASSET:')) continue;
+
+      // Insert the asset tag before the matched name
+      const tag = `[ASSET:${asset.type}:${asset.key}] `;
+      result = result.slice(0, match.index) + tag + result.slice(match.index);
+    }
+  }
+
+  return result;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Apply asset tag post-processing to response text
+ * Uses cached assets from fetchCampaignAssetsForPrompt
+ */
+function applyAssetPostProcessing<T extends { text: string }>(response: T): T {
+  if (!cachedAssets || !cachedAssets.assets.length) return response;
+  const processedText = insertAssetTags(response.text, cachedAssets.assets);
+  if (processedText !== response.text) {
+    logger.info(`[Asset Post-Processing] Inserted asset tags for ${cachedAssets.assets.length} available assets`);
+  }
+  return {
+    ...response,
+    text: processedText
+  };
+}
+
 /**
  * Fetch campaign assets for AI prompt injection
  * Returns a formatted string listing available visual assets
  */
 async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<string> {
-  const assets: { type: string; key: string; name: string }[] = [];
+  const assets: AssetInfo[] = [];
 
   try {
     // Fetch character templates with portraits
@@ -66,11 +134,12 @@ async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<
           if (chunkType.startsWith('npc')) assetType = 'npc';
           else if (chunkType === 'location') assetType = 'location';
           else if (chunkType === 'item') assetType = 'item';
-          else if (chunkType === 'encounter') assetType = 'monster';
+          else if (chunkType === 'monster' || chunkType === 'encounter') assetType = 'monster';
 
           assets.push({
             type: assetType,
-            key: chunk.entity_name.toLowerCase().replace(/\s+/g, '-'),
+            // Clean key: must match generateKey() in use-campaign-assets.ts
+            key: chunk.entity_name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim(),
             name: chunk.entity_name,
           });
         }
@@ -81,13 +150,31 @@ async function fetchCampaignAssetsForPrompt(starterCampaignId: string): Promise<
     return '';
   }
 
-  if (assets.length === 0) return '';
+  if (assets.length === 0) {
+    cachedAssets = null;
+    return '';
+  }
 
-  // Format for AI prompt
+  // Cache assets for post-processing use (insertAssetTags)
+  cachedAssets = { campaignId: starterCampaignId, assets };
+
+  // Format for AI prompt with strong instructions
   let prompt = `
 <available_visual_assets>
-When you describe or introduce the following entities in your narrative, include the tag shown next to their name.
-The system will display their image when the player reads the message.
+<MANDATORY_REQUIREMENT>
+You MUST include [ASSET:type:key] tags when introducing ANY entity from this list.
+These tags display artwork to the player - WITHOUT the tag, the player sees NO image.
+
+FORMAT: Place the tag IMMEDIATELY BEFORE the entity's name on first mention.
+CORRECT: "A figure approaches - [ASSET:npc:remy-the-manager] Remy greets you warmly."
+WRONG: "Remy greets you warmly." (NO TAG = NO IMAGE SHOWN)
+
+If you introduce Remy, you MUST write [ASSET:npc:remy-the-manager] before their name.
+If you describe a location, you MUST include its [ASSET:location:*] tag.
+If a monster appears, you MUST include its [ASSET:monster:*] tag.
+
+THIS IS NOT OPTIONAL. Every entity below has artwork. Include the tag or the player misses the visual.
+</MANDATORY_REQUIREMENT>
 
 `;
   const byType: Record<string, typeof assets> = {};
@@ -1326,9 +1413,14 @@ ${campaignRules.map(rule => `- ${rule.condition} → ${rule.effect}${rule.revers
                     contextPrompt += `
 
 <npcs count="${npcs.length}">
-${npcs.map(npc => `<npc name="${npc.entityName}"${npc.metadata?.image_url ? ' has_portrait="true"' : ''}>
-${npc.content}
-</npc>`).join('\n')}
+${npcs.map(npc => {
+  const hasImage = !!npc.metadata?.image_url;
+  const assetKey = npc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:npc:${assetKey}]` : '';
+  return `<npc name="${npc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${npc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when introducing this character**` : ''}
+</npc>`;
+}).join('\n')}
 </npcs>`;
                   }
 
@@ -1336,9 +1428,14 @@ ${npc.content}
                     contextPrompt += `
 
 <locations count="${locations.length}">
-${locations.map(loc => `<location name="${loc.entityName}"${loc.metadata?.image_url ? ' has_image="true"' : ''}>
-${loc.content}
-</location>`).join('\n')}
+${locations.map(loc => {
+  const hasImage = !!loc.metadata?.image_url;
+  const assetKey = loc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:location:${assetKey}]` : '';
+  return `<location name="${loc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${loc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when the party enters or views this location**` : ''}
+</location>`;
+}).join('\n')}
 </locations>`;
                   }
 
@@ -1356,9 +1453,14 @@ ${f.content}
                     contextPrompt += `
 
 <monsters count="${monsters.length}">
-${monsters.map(m => `<monster name="${m.entityName}"${m.metadata?.image_url ? ' has_image="true"' : ''}>
-${m.content}
-</monster>`).join('\n')}
+${monsters.map(m => {
+  const hasImage = !!m.metadata?.image_url;
+  const assetKey = m.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:monster:${assetKey}]` : '';
+  return `<monster name="${m.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${m.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when this creature appears or attacks**` : ''}
+</monster>`;
+}).join('\n')}
 </monsters>`;
                   }
 
@@ -1375,6 +1477,8 @@ ${m.content}
 - When introducing an NPC from the list, use their EXACT name
 - Reference canonical locations and describe them as specified
 - Apply world rules consistently
+- **CRITICAL: Include the asset_tag shown for any entity with a portrait/image when you first mention them**
+- Asset tags like [ASSET:npc:headmaster] display the entity's artwork to the player
 </lore_adherence>
 </starter_campaign_lore>`;
 
@@ -1547,6 +1651,7 @@ Your opening scene MUST include ALL of these elements:
    - Give the NPC a distinct voice/personality
    - NPC should have a name or memorable descriptor
    - Their dialogue should hook the player into the story
+   - **MUST include [ASSET:npc:*] tag before the NPC's name (see visual assets list above)**
 
 4. **STORY HOOK** that connects to the campaign:
    - Reference the campaign setting/premise
@@ -1601,6 +1706,9 @@ CRITICAL RULES:
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
 - SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
+- **MANDATORY: Include [ASSET:type:key] tags when introducing NPCs, locations, or monsters with images!**
+  Example: "A gruff voice booms - [ASSET:npc:head-chef-balthazar] Balthazar wipes his hands on his apron..."
+  Check the <available_visual_assets> section above for exact tags to use.
 </verbalized_sampling_output>
 </opening_scene_requirements>`;
           }
@@ -1816,7 +1924,7 @@ Your narrative response here...
               params.onStream(chunkText);
             }
 
-            return { text: fullResponse };
+            return applyAssetPostProcessing({ text: fullResponse });
           } else {
             const response = await chat.sendMessage(params.message);
             const result = await response.response;
@@ -1831,7 +1939,7 @@ Your narrative response here...
               const sampledText = sampleFromVerbalizedResponse(rawResponse);
               logger.info('[Opening Message] Sampled text length:', sampledText.length);
               logger.debug('[Opening Message] Sampled text (first 500 chars):', sampledText.slice(0, 500));
-              return { text: sampledText };
+              return applyAssetPostProcessing({ text: sampledText });
             }
 
             // Try to parse structured response if voice context is available
@@ -1882,6 +1990,21 @@ Your narrative response here...
                   );
                 }
 
+                // Apply asset post-processing to structured response
+                if (cachedAssets?.assets.length) {
+                  if (structuredResponse.text) {
+                    structuredResponse.text = insertAssetTags(structuredResponse.text, cachedAssets.assets);
+                  }
+                  if (structuredResponse.narration_segments) {
+                    structuredResponse.narration_segments = structuredResponse.narration_segments.map(
+                      (segment: NarrationSegment) => ({
+                        ...segment,
+                        text: segment.text ? insertAssetTags(segment.text, cachedAssets!.assets) : segment.text
+                      })
+                    );
+                  }
+                }
+
                 return structuredResponse;
               } catch (parseError) {
                 logger.warn(
@@ -1899,7 +2022,7 @@ Your narrative response here...
                       .replace(/\\n/g, '\n')
                       .replace(/\\\\/g, '\\');
                     logger.debug('🔧 Extracted text from malformed JSON');
-                    return { text: extractedText };
+                    return applyAssetPostProcessing({ text: extractedText });
                   }
                 } catch (extractError) {
                   logger.warn('Could not extract text from malformed JSON:', extractError);
@@ -1934,11 +2057,11 @@ Your narrative response here...
                       .replace(/\\\\/g, '\\');
                   }
                 }
-                return { text: cleanText || rawResponse };
+                return applyAssetPostProcessing({ text: cleanText || rawResponse });
               }
             }
 
-            return { text: rawResponse };
+            return applyAssetPostProcessing({ text: rawResponse });
           }
         });
 
