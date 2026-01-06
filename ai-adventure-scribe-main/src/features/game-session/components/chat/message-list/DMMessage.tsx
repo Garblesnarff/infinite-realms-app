@@ -1,14 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 
 import { formatNarrative } from './formatNarrative';
-import { MessageImageSection } from './MessageImageSection';
+import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
 
 import type { ChatMessage } from '@/types/game';
 
 import { Button } from '@/components/ui/button';
+import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
 import { cn } from '@/lib/utils';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
+import { parseAssetTags } from '../../../utils/parse-asset-tags';
 
 interface DMMessageProps {
   message: ChatMessage;
@@ -22,7 +25,6 @@ interface DMMessageProps {
   isGeneratingImage: boolean;
   imageError?: string;
   onGenerateImage: () => void;
-  hasAnyImage: boolean;
 }
 
 /**
@@ -42,11 +44,57 @@ export const DMMessage: React.FC<DMMessageProps> = ({
   isGeneratingImage,
   imageError,
   onGenerateImage,
-  hasAnyImage,
 }) => {
+  // Get campaign assets for displaying entity images
+  const { getAsset } = useCampaignAssetsContext();
+  const { setSceneBackground } = useSceneBackground();
+  const hasSetBackgroundRef = useRef(false);
+
   // Remove roll requests and visual prompt markers from display
   let cleanContent = removeRollRequestsFromMessage(displayContent);
   cleanContent = cleanContent.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
+
+  // Parse and remove asset tags, extracting referenced assets
+  const { cleanContent: contentWithoutTags, assets: assetTags } = useMemo(
+    () => parseAssetTags(cleanContent),
+    [cleanContent]
+  );
+  cleanContent = contentWithoutTags;
+
+  // Set scene background based on referenced assets (priority: location > scene > monster > npc)
+  useEffect(() => {
+    // Only set background once per message and only for the last message in a group
+    if (hasSetBackgroundRef.current || !isLastInGroup || assetTags.length === 0) {
+      return;
+    }
+
+    // Priority order for background images
+    const priorityOrder: AssetType[] = ['location', 'scene', 'monster', 'npc', 'item', 'character'];
+
+    // Find the highest priority asset with an image
+    let bestAsset = null;
+    let bestPriority = Infinity;
+
+    for (const tag of assetTags) {
+      const asset = getAsset(tag.type, tag.key);
+      if (asset?.imageUrl) {
+        const priority = priorityOrder.indexOf(tag.type as AssetType);
+        if (priority !== -1 && priority < bestPriority) {
+          bestAsset = asset;
+          bestPriority = priority;
+        }
+      }
+    }
+
+    if (bestAsset) {
+      setSceneBackground(
+        bestAsset.imageUrl,
+        bestAsset.name,
+        bestAsset.type as AssetType
+      );
+      hasSetBackgroundRef.current = true;
+    }
+  }, [assetTags, getAsset, setSceneBackground, isLastInGroup]);
 
   // Don't render if content is empty after removing roll requests
   if (!cleanContent || cleanContent.length === 0) {
@@ -72,7 +120,7 @@ export const DMMessage: React.FC<DMMessageProps> = ({
     : '';
 
   return (
-    <div className={cn('w-full', hasAnyImage ? 'relative pb-48 md:pb-60' : '')}>
+    <div className="w-full">
       <article
         aria-label="Dungeon Master message"
         className={cn(
@@ -95,18 +143,18 @@ export const DMMessage: React.FC<DMMessageProps> = ({
           </div>
         )}
 
-        {/* Image generation section - only on last message */}
-        {isLastInGroup && (
-          <div className="mt-4">
-            <MessageImageSection
-              messageId={messageId}
-              isGenerating={isGeneratingImage}
-              imageUrl={imageUrl}
-              error={imageError}
-              onGenerate={onGenerateImage}
-            />
-          </div>
-        )}
+        {/* Display campaign assets and generated images */}
+        <MessageAssetDisplay
+          assetTags={assetTags}
+          getAsset={getAsset}
+          className="mt-4"
+          generatedImage={isLastInGroup ? {
+            url: imageUrl,
+            isGenerating: isGeneratingImage,
+            error: imageError,
+            onGenerate: onGenerateImage,
+          } : undefined}
+        />
 
         {isFirstInGroup && hasContextMetadata && (
           <div className="mt-5 border-t border-white/10 pt-4 text-sm text-white/70 space-y-2">

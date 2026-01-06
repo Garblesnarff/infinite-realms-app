@@ -89,7 +89,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
     isDM && Array.isArray(message.images) && message.images.length > 0;
   const firstMessageImgUrl = hasMessageImages ? message.images[0]?.url : undefined;
   const ephemeralImgUrl = isDM && !hasMessageImages ? imageByMessage[messageId]?.url : undefined;
-  const hasAnyImage = Boolean(firstMessageImgUrl || ephemeralImgUrl);
 
   return (
     <div
@@ -157,7 +156,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
           isGeneratingImage={generatingFor.has(messageId)}
           imageError={genErrorByMessage[messageId]}
           onGenerateImage={() => onGenerateScene(message as any)}
-          hasAnyImage={hasAnyImage}
         />
       ) : (
         <PlayerMessage
