@@ -6,6 +6,12 @@ import logger from '@/lib/logger';
 
 type Quality = 'low' | 'medium' | 'high';
 
+export interface AssetReference {
+  url: string;
+  type: 'npc' | 'location' | 'item' | 'monster' | 'scene' | 'character';
+  name: string;
+}
+
 export interface SceneImageRequest {
   sceneText: string;
   campaign?: {
@@ -34,6 +40,7 @@ export interface SceneImageRequest {
   model?: string;
   storage?: UploadOptions;
   referenceImageUrl?: string | null; // Optional explicit reference image URL
+  assetUrls?: AssetReference[]; // Campaign assets from message (NPCs, locations, etc.)
 }
 
 export interface SceneImageResult {
@@ -54,26 +61,67 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
 
   const prompt = buildPrompt(req);
 
-  let referenceBase64: string | undefined;
-  try {
-    const refUrl =
-      req.referenceImageUrl ||
-      req.character?.avatar_url ||
-      req.character?.image_url ||
-      (req.character ? '/default-character-avatar.png' : undefined) ||
-      req.campaign?.background_image ||
-      undefined;
-    if (refUrl) referenceBase64 = await fetchImageAsBase64(refUrl);
-  } catch (e) {
-    logger.warn('[SceneImage] Failed to fetch reference image, continuing without it');
+  // Collect all reference images (character avatar + campaign assets)
+  const referenceBase64s: string[] = [];
+
+  // 1. Character avatar (highest priority - always first)
+  const charUrl =
+    req.referenceImageUrl ||
+    req.character?.avatar_url ||
+    req.character?.image_url;
+  if (charUrl) {
+    try {
+      referenceBase64s.push(await fetchImageAsBase64(charUrl));
+    } catch (e) {
+      logger.warn('[SceneImage] Failed to fetch character reference image');
+    }
+  }
+
+  // 2. Campaign assets from message (prioritize locations, then NPCs)
+  if (req.assetUrls?.length) {
+    const assetPriority: Record<string, number> = {
+      location: 0,
+      scene: 1,
+      npc: 2,
+      character: 3,
+      monster: 4,
+      item: 5,
+    };
+    const sortedAssets = [...req.assetUrls].sort(
+      (a, b) => (assetPriority[a.type] ?? 6) - (assetPriority[b.type] ?? 6)
+    );
+
+    // Limit to 3 additional assets (4 total with character)
+    for (const asset of sortedAssets.slice(0, 3)) {
+      try {
+        referenceBase64s.push(await fetchImageAsBase64(asset.url));
+        logger.info('[SceneImage] Added asset reference', { type: asset.type, name: asset.name });
+      } catch (e) {
+        logger.warn('[SceneImage] Failed to fetch asset reference', { type: asset.type, name: asset.name });
+      }
+    }
+  }
+
+  // 3. Fallback to campaign background if no other references
+  if (referenceBase64s.length === 0 && req.campaign?.background_image) {
+    try {
+      referenceBase64s.push(await fetchImageAsBase64(req.campaign.background_image));
+    } catch (e) {
+      logger.warn('[SceneImage] Failed to fetch campaign background');
+    }
   }
 
   const t0 = performance.now();
-  logger.info('[SceneImage] Generating image', { model, quality, promptLen: prompt.length });
+  logger.info('[SceneImage] Generating image', {
+    model,
+    quality,
+    promptLen: prompt.length,
+    referenceCount: referenceBase64s.length,
+  });
   const base64 = await openRouterService.generateImage({
     prompt,
     model,
-    referenceImage: referenceBase64,
+    referenceImages: referenceBase64s.length > 0 ? referenceBase64s : undefined,
     quality,
   });
 

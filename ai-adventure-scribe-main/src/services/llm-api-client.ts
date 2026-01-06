@@ -22,7 +22,7 @@ export interface GenerateTextParams {
 export interface GenerateImageParams {
   prompt: string;
   model?: string;
-  referenceImage?: string; // base64 without data URL prefix
+  referenceImages?: string[]; // base64 images without data URL prefix
   quality?: 'low' | 'medium' | 'high';
 }
 
@@ -153,7 +153,7 @@ class LlmApiClient {
       body: JSON.stringify({
         prompt: params.prompt,
         model: params.model,
-        referenceImage: params.referenceImage,
+        referenceImages: params.referenceImages,
         quality: params.quality,
       }),
     });

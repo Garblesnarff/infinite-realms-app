@@ -8,6 +8,7 @@ import { useScrollBehavior } from './message-list/useScrollBehavior';
 
 import type { ChatMessage } from '@/types/game';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';
@@ -51,6 +52,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   const { state: combatState } = useCombat();
   const { state: characterState } = useCharacter();
   const { state: campaignState } = useCampaign();
+  const { getAssetImageUrl } = useCampaignAssetsContext();
   const { id: routeCampaignId } = useParams<{ id: string }>();
 
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
@@ -73,6 +75,7 @@ export const MessageList: React.FC<MessageListProps> = ({
       character: characterState.character,
       campaign: campaignState.campaign,
       messages,
+      getAssetImageUrl,
     });
 
   useScrollBehavior(messagesRef, messages, hasMore, loadMore, isFetchingMore);

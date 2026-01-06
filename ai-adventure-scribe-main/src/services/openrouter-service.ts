@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface ImageGenerationRequest {
   prompt: string;
   model?: string;
-  referenceImage?: string;
+  referenceImages?: string[];
   quality?: 'low' | 'medium' | 'high';
 }
 interface TextGenerationRequest {
@@ -93,7 +93,7 @@ export class OpenRouterService {
     const base64 = await llmApiClient.generateImage({
       prompt: request.prompt,
       model: modelId,
-      referenceImage: request.referenceImage,
+      referenceImages: request.referenceImages,
       quality: request.quality,
     });
     const cfg = this.models.find((m) => m.id === modelId);

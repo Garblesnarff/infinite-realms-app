@@ -4,7 +4,7 @@ import type { ChatMessage } from '@/types/game';
 
 import logger from '@/lib/logger';
 import { llmApiClient } from '@/services/llm-api-client';
-import { generateSceneImage } from '@/services/scene-image-generator';
+import { generateSceneImage, type AssetReference } from '@/services/scene-image-generator';
 import { handleAsyncError } from '@/utils/error-handler';
 import { generateImageLabel } from '@/utils/image-label-generator';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
@@ -16,6 +16,7 @@ interface UseImageGenerationProps {
   character: any;
   campaign: any;
   messages: ChatMessage[];
+  getAssetImageUrl?: (type: string, key: string) => string | null;
 }
 
 /**
@@ -28,6 +29,7 @@ export const useImageGeneration = ({
   character,
   campaign,
   messages,
+  getAssetImageUrl,
 }: UseImageGenerationProps) => {
   const [generatingFor, setGeneratingFor] = useState<Set<string>>(new Set());
   const [imageByMessage, setImageByMessage] = useState<
@@ -77,6 +79,37 @@ export const useImageGeneration = ({
 
         const t0 = performance.now();
 
+        // Extract asset URLs from message for reference images
+        const assetUrls: AssetReference[] = [];
+        if (getAssetImageUrl) {
+          // Parse [ASSET:type:key] tags from message text
+          const tagPattern = /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
+          let match;
+          const seen = new Set<string>();
+          const fullText = message.text || baseText;
+          while ((match = tagPattern.exec(fullText)) !== null) {
+            const [, type, key] = match;
+            const lookupKey = `${type}:${key}`;
+            if (!seen.has(lookupKey)) {
+              seen.add(lookupKey);
+              const url = getAssetImageUrl(type, key);
+              if (url) {
+                assetUrls.push({
+                  url,
+                  type: type as AssetReference['type'],
+                  name: key,
+                });
+              }
+            }
+          }
+          if (assetUrls.length > 0) {
+            logger.info('[useImageGeneration] Found asset references for scene', {
+              count: assetUrls.length,
+              types: assetUrls.map((a) => a.type),
+            });
+          }
+        }
+
         // Generate semantic label using campaign name and scene keywords
         // Falls back to 'scene' if no campaign name or scene text available
         const label = generateImageLabel(campaign?.name, sceneText, {
@@ -108,6 +141,7 @@ export const useImageGeneration = ({
                 theme: character.theme || undefined,
               }
             : null,
+          assetUrls: assetUrls.length > 0 ? assetUrls : undefined,
           quality: (import.meta as any)?.env?.VITE_DM_IMAGE_QUALITY || 'low',
           model:
             (import.meta as any)?.env?.VITE_DM_IMAGE_MODEL ||
@@ -173,7 +207,7 @@ export const useImageGeneration = ({
         });
       }
     },
-    [character, campaign, routeCampaignId, sessionId],
+    [character, campaign, routeCampaignId, sessionId, getAssetImageUrl],
   );
 
   // Auto-generate on DM-suggested imageRequests

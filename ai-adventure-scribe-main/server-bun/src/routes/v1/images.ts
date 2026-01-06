@@ -142,7 +142,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: authError || 'Unauthorized' };
       }
 
-      const { prompt, referenceImage, model, quality } = body || {};
+      const { prompt, referenceImages, model, quality } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
@@ -185,12 +185,15 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           ? (process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview')
           : model;
 
-        // Build message content based on whether we have a reference image
+        // Build message content based on whether we have reference images
         let content: any = prompt;
-        if (referenceImage) {
+        if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
           content = [
             { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:image/png;base64,${referenceImage}` } },
+            ...referenceImages.map((img: string) => ({
+              type: 'image_url',
+              image_url: { url: `data:image/png;base64,${img}` }
+            }))
           ];
         }
 
@@ -274,7 +277,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       body: t.Object({
         prompt: t.String(),
         model: t.Optional(t.String()),
-        referenceImage: t.Optional(t.String()),
+        referenceImages: t.Optional(t.Array(t.String())),
         quality: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
       }),
     }
