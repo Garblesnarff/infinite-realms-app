@@ -291,6 +291,10 @@ export interface CombatParticipant {
   characterClass?: string;
   level?: number;
 
+  // Visual assets (from campaign chunks)
+  portraitUrl?: string;
+  assetKey?: string;
+
   // Combat stats
   maxHitPoints: number;
   currentHitPoints: number;

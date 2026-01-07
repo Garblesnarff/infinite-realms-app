@@ -12,7 +12,7 @@ import { AIService } from '@/services/ai-service';
 
 interface InitialGreetingProps {
   sessionId: string | null;
-  sessionData: { turn_count?: number } | null;
+  sessionData: { turn_count?: number; starter_campaign_id?: string | null } | null;
   characterId: string | null;
   campaignId: string | null;
   messages: ChatMessage[];
@@ -152,6 +152,7 @@ export const useInitialGreeting = ({
           campaignId: campaignId as string,
           characterId: characterId as string,
           sessionId: sessionId!,
+          starterCampaignId: sessionData?.starter_campaign_id ?? undefined,
           // These are stored as loose records in AIService, so cast to Record<string, unknown>
           campaignDetails: campaignData as unknown as Record<string, unknown>,
           characterDetails: characterData as unknown as Record<string, unknown>,

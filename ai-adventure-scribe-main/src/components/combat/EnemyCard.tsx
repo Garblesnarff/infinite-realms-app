@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { useCombat } from '@/contexts/CombatContext';
+import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 
 interface EnemyCardProps {
   enemyId: string;
@@ -27,11 +28,16 @@ interface EnemyCardProps {
 
 const EnemyCard: React.FC<EnemyCardProps> = ({ enemyId, className = '', onAttack }) => {
   const { state } = useCombat();
+  const { getAssetImageUrl } = useCampaignAssetsContext();
   const enemy = state.activeEncounter?.participants.find((p) => p.id === enemyId);
 
   if (!enemy || enemy.participantType !== 'monster') {
     return null;
   }
+
+  // Look up portrait from campaign assets
+  const assetKey = enemy.name.toLowerCase().replace(/\s+/g, '-');
+  const portraitUrl = enemy.portraitUrl || getAssetImageUrl('monster', assetKey);
 
   const getChallengeRatingColor = (cr: string) => {
     const numCR = parseFloat(cr);
@@ -77,20 +83,38 @@ const EnemyCard: React.FC<EnemyCardProps> = ({ enemyId, className = '', onAttack
   return (
     <Card className={`w-full max-w-sm ${className}`}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-red-700 flex items-center gap-2">
-            <Skull className="w-5 h-5" />
-            {enemy.name}
-          </CardTitle>
-
-          {enemy.monsterData?.challengeRating && (
-            <Badge
-              className={getChallengeRatingColor(enemy.monsterData.challengeRating)}
-              variant="secondary"
-            >
-              CR {enemy.monsterData.challengeRating}
-            </Badge>
+        <div className="flex items-center gap-3">
+          {/* Portrait thumbnail */}
+          {portraitUrl ? (
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-500/50 shadow-lg flex-shrink-0">
+              <img
+                src={portraitUrl}
+                alt={enemy.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-red-900/30 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">
+              <Skull className="w-6 h-6 text-red-500" />
+            </div>
           )}
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold text-red-700 flex items-center gap-2">
+                {enemy.name}
+              </CardTitle>
+
+              {enemy.monsterData?.challengeRating && (
+                <Badge
+                  className={getChallengeRatingColor(enemy.monsterData.challengeRating)}
+                  variant="secondary"
+                >
+                  CR {enemy.monsterData.challengeRating}
+                </Badge>
+              )}
+            </div>
+          </div>
         </div>
 
         {enemy.monsterData?.type && (

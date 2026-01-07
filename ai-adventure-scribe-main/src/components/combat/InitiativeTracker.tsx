@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useCombat } from '@/contexts/CombatContext';
+import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -53,6 +54,7 @@ interface ParticipantRowProps {
   isCurrentTurn: boolean;
   roundNumber: number;
   onSelectParticipant?: (participantId: string) => void;
+  getAssetImageUrl?: (type: string, key: string) => string | null;
 }
 
 const ParticipantRow: React.FC<ParticipantRowProps> = ({
@@ -60,6 +62,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   isCurrentTurn,
   roundNumber,
   onSelectParticipant,
+  getAssetImageUrl,
 }) => {
   const hpPercent =
     participant.maxHitPoints > 0
@@ -68,6 +71,11 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   const isDead = participant.currentHitPoints === 0 && participant.deathSaves.failures >= 3;
   const isUnconscious = participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
   const needsDeathSave = participant.currentHitPoints === 0 && !isDead;
+
+  // Look up portrait from campaign assets
+  const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
+  const assetType = participant.participantType === 'monster' || participant.participantType === 'enemy' ? 'monster' : 'npc';
+  const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
   const getParticipantTypeIcon = () => {
     switch (participant.participantType) {
@@ -105,8 +113,16 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
           <div className="text-xs text-gray-500">init</div>
         </div>
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          {getParticipantTypeIcon()}
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
+          {portraitUrl ? (
+            <img
+              src={portraitUrl}
+              alt={participant.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            getParticipantTypeIcon()
+          )}
         </div>
       </div>
 
@@ -231,6 +247,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
   onAddParticipant,
 }) => {
   const { state, nextTurn, rollInitiative } = useCombat();
+  const { getAssetImageUrl } = useCampaignAssetsContext();
   const { activeEncounter, isInCombat } = state;
 
   if (!isInCombat || !activeEncounter) {
@@ -313,6 +330,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
                   participant={participant}
                   isCurrentTurn={participant.id === activeEncounter.currentTurnParticipantId}
                   roundNumber={activeEncounter.currentRound}
+                  getAssetImageUrl={getAssetImageUrl}
                 />
               ))}
             </div>

@@ -7,8 +7,10 @@ import type { Campaign as CampaignType } from '@/types/campaign';
 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { CampaignAssetsProvider } from '@/contexts/CampaignAssetsContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { SceneBackgroundProvider } from '@/contexts/SceneBackgroundContext';
 import { VoiceProvider } from '@/contexts/VoiceContext';
 import { useGameSession } from '@/hooks/use-game-session';
 import { CombatProvider, useCombat } from '@/contexts/CombatContext';
@@ -36,9 +38,10 @@ const GameContent: React.FC = () => {
   const characterIdFromParams = searchParams.get('character');
   const forceNew = searchParams.get('new') === 'true';
   const specificSessionId = searchParams.get('session') || undefined;
+  const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
 
   const { state: characterState, dispatch: characterDispatch } = useCharacter();
-  const { dispatch: campaignDispatch } = useCampaign();
+  const { state: campaignState, dispatch: campaignDispatch } = useCampaign();
 
   // Initialize game session
   const { sessionData, sessionId, sessionState, updateGameSessionState } = useGameSession(
@@ -46,6 +49,7 @@ const GameContent: React.FC = () => {
     characterIdFromParams || undefined,
     forceNew,
     specificSessionId,
+    starterCampaignIdFromParams,
   );
 
   const [isLoading, setIsLoading] = useState(true);
@@ -193,14 +197,28 @@ const GameContent: React.FC = () => {
     );
   }
 
+  // Use starterCampaignId from URL params, session data, or infer from campaign name
+  // This mirrors the inference logic in ai-service.ts
+  const campaignNameToSlug: Record<string, string> = {
+    'The Eternal Feast': 'the-eternal-feast',
+    'The Academy of Arcane Gastronomy': 'the-academy-of-arcane-gastronomy',
+    'Abyssal Descent': 'abyssal-descent',
+  };
+  const inferredStarterCampaignId = campaignState?.campaign?.name
+    ? campaignNameToSlug[campaignState.campaign.name]
+    : undefined;
+  const effectiveStarterCampaignId = starterCampaignIdFromParams || sessionData?.starter_campaign_id || inferredStarterCampaignId || null;
+
   return (
     <ErrorBoundary level="feature">
-      <CombatProvider sessionId={sessionId}>
-        <GameProvider>
-          <MessageProvider sessionId={sessionId}>
-            <MemoryProvider sessionId={sessionId}>
-              <VoiceProvider>
-                <GameContentInner
+      <CampaignAssetsProvider key={effectiveStarterCampaignId || 'no-starter-campaign'} starterCampaignId={effectiveStarterCampaignId}>
+        <SceneBackgroundProvider>
+          <CombatProvider sessionId={sessionId}>
+            <GameProvider>
+              <MessageProvider sessionId={sessionId}>
+                <MemoryProvider sessionId={sessionId}>
+                  <VoiceProvider>
+                    <GameContentInner
                   sessionId={sessionId}
                   campaignIdForHandler={campaignIdFromParams ?? null}
                   characterIdForHandler={characterIdFromParams ?? null}
@@ -215,11 +233,13 @@ const GameContent: React.FC = () => {
                   showSceneBlurb={showSceneBlurb}
                   setShowSceneBlurb={setShowSceneBlurb}
                 />
-              </VoiceProvider>
-            </MemoryProvider>
-          </MessageProvider>
-        </GameProvider>
-      </CombatProvider>
+                  </VoiceProvider>
+                </MemoryProvider>
+              </MessageProvider>
+            </GameProvider>
+          </CombatProvider>
+        </SceneBackgroundProvider>
+      </CampaignAssetsProvider>
     </ErrorBoundary>
   );
 };

@@ -177,15 +177,27 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
 
   if (!npcSection) return chunks;
 
-  // Tier 1 NPCs - major characters with detailed info
-  const tier1Pattern = /\*\*\d+\.\s*(.+?)\*\*.*?(?=\*\*\d+\.|###|##|$)/gs;
-  const boldNamePattern = /^\d+\.\s*\*\*(.+?)\*\*/gm;
+  // Try multiple patterns for NPC extraction to handle different formats
+  // Format 1: 1. **Name** (standard)
+  // Format 2: **1. Name** (Abyssal Descent style - bold wraps the number)
+  const patterns = [
+    /(?=^\d+\.\s*\*\*)/m,           // Split on: 1. **Name
+    /(?=^\*\*\d+\.\s*)/m,           // Split on: **1. Name
+  ];
 
-  // Try different patterns for NPC extraction
-  const npcBlocks = npcSection.split(/(?=^\d+\.\s*\*\*)/m).filter(b => b.trim());
+  let npcBlocks: string[] = [];
+  for (const pattern of patterns) {
+    npcBlocks = npcSection.split(pattern).filter(b => b.trim());
+    if (npcBlocks.length > 1) break;
+  }
 
   npcBlocks.forEach((block, index) => {
-    const nameMatch = block.match(/^\d+\.\s*\*\*(.+?)\*\*/);
+    // Try multiple name extraction patterns
+    let nameMatch = block.match(/^\d+\.\s*\*\*(.+?)\*\*/);
+    if (!nameMatch) {
+      // Abyssal format: **1. Name** (type) - description
+      nameMatch = block.match(/^\*\*\d+\.\s*(.+?)\*\*/);
+    }
     if (!nameMatch) return;
 
     const name = nameMatch[1].trim();
@@ -335,7 +347,7 @@ function extractLocations(campaignId: string, content: string): CampaignChunk[] 
   const locationSection = extractSection(content, 'Location') || extractSection(content, 'World Map');
   if (!locationSection) return chunks;
 
-  // Look for Zone headers
+  // Look for Zone headers (Abyssal Descent style)
   const zonePattern = /###\s*Zone\s*\d+:?\s*(.+?)\n([\s\S]*?)(?=###\s*Zone|##|$)/gi;
   const zoneMatches = locationSection.matchAll(zonePattern);
 
@@ -370,6 +382,33 @@ function extractLocations(campaignId: string, content: string): CampaignChunk[] 
         metadata: { zone: zoneName.trim() },
         sourceFile: 'campaign_bible.md',
         sourceSection: `Locations > ${zoneName.trim()}`,
+      });
+    }
+  }
+
+  // Bullet point locations (Eternal Feast style): *   **Location Name:** Description
+  const bulletLocationPattern = /\*\s+\*\*(.+?)\*\*:?\s*(.+?)(?=\n\*\s+\*\*|\n##|\n\[TAG|$)/g;
+  const bulletMatches = locationSection.matchAll(bulletLocationPattern);
+
+  for (const match of bulletMatches) {
+    const [, locName, locDetails] = match;
+    if (!chunks.some(c => c.entityName === locName.trim())) {
+      // Extract sensory details
+      const smell = locDetails.match(/\*\*Smell:\*\*\s*(.+?)(?:\.|$)/i)?.[1];
+      const sound = locDetails.match(/\*\*Sound:\*\*\s*(.+?)(?:\.|$)/i)?.[1];
+
+      chunks.push({
+        campaignId,
+        chunkType: 'location',
+        entityName: locName.trim(),
+        content: cleanContent(`**${locName.trim()}**\n\n${locDetails}`),
+        summary: `Location: ${locName.trim()}`,
+        metadata: {
+          ...(smell && { smell: smell.trim() }),
+          ...(sound && { sound: sound.trim() }),
+        },
+        sourceFile: 'campaign_bible.md',
+        sourceSection: 'Locations',
       });
     }
   }
@@ -505,22 +544,55 @@ function extractEncounters(campaignId: string, content: string): CampaignChunk[]
   const encounterSection = extractSection(content, 'Bestiary') || extractSection(content, 'Encounter');
   if (!encounterSection) return chunks;
 
-  // Custom stat blocks
+  // Numbered monster stat blocks
+  // Format 1 (Abyssal): **1. The Chiropteran Hulk (CR 5)**
+  // Format 2 (Eternal Feast): ### 1. Gluten Golem (CR 5)
+  const monsterPatterns = [
+    /\*\*(\d+)\.\s*(.+?)\s*\(CR\s*[\d/]+\)\*\*\s*([\s\S]*?)(?=\*\*\d+\.|##|$)/gi,
+    /###\s*(\d+)\.\s*(.+?)\s*\(CR\s*[\d/]+\)\s*\n([\s\S]*?)(?=###\s*\d+\.|##|$|\[TAG)/gi,
+  ];
+
+  for (const monsterPattern of monsterPatterns) {
+    const monsterMatches = encounterSection.matchAll(monsterPattern);
+
+    for (const match of monsterMatches) {
+      const [, number, name, details] = match;
+      if (!chunks.some(c => c.entityName === name.trim())) {
+        chunks.push({
+          campaignId,
+          chunkType: 'monster',
+          entityName: name.trim(),
+          content: cleanContent(`**${name.trim()}**\n\n${details}`),
+          summary: `Monster: ${name.trim()}`,
+          metadata: {
+            isStatBlock: true,
+            cr: extractCR(details)
+          },
+          sourceFile: 'campaign_bible.md',
+          sourceSection: 'Bestiary',
+        });
+      }
+    }
+  }
+
+  // Custom stat blocks (old format)
   const statBlockPattern = /###\s*Custom Stat Block:?\s*\*\*(.+?)\*\*\s*([\s\S]*?)(?=###|##|$)/gi;
   const matches = encounterSection.matchAll(statBlockPattern);
 
   for (const match of matches) {
     const [, name, details] = match;
-    chunks.push({
-      campaignId,
-      chunkType: 'encounter',
-      entityName: name.trim(),
-      content: cleanContent(`**${name.trim()}**\n\n${details}`),
-      summary: `Creature: ${name.trim()}`,
-      metadata: { isStatBlock: true },
-      sourceFile: 'campaign_bible.md',
-      sourceSection: 'Bestiary',
-    });
+    if (!chunks.some(c => c.entityName === name.trim())) {
+      chunks.push({
+        campaignId,
+        chunkType: 'monster',
+        entityName: name.trim(),
+        content: cleanContent(`**${name.trim()}**\n\n${details}`),
+        summary: `Creature: ${name.trim()}`,
+        metadata: { isStatBlock: true },
+        sourceFile: 'campaign_bible.md',
+        sourceSection: 'Bestiary',
+      });
+    }
   }
 
   // Encounter tables
@@ -541,6 +613,14 @@ function extractEncounters(campaignId: string, content: string): CampaignChunk[]
   }
 
   return chunks;
+}
+
+/**
+ * Extract CR from monster details
+ */
+function extractCR(details: string): string | undefined {
+  const match = details.match(/CR\s*([\d/]+)/i);
+  return match ? match[1] : undefined;
 }
 
 /**
@@ -612,10 +692,15 @@ function extractCausalityRules(campaignId: string, content: string): CampaignRul
  * Extract a section from markdown by header name
  */
 function extractSection(content: string, headerName: string): string | undefined {
-  // Try both ## and ### headers
+  // Try multiple header formats to handle different bible styles
   const patterns = [
+    // Standard: ## NPCs or ### NPCs
     new RegExp(`##\\s*\\d*\\.?\\s*${headerName}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i'),
     new RegExp(`###\\s*${headerName}[^\\n]*\\n([\\s\\S]*?)(?=\\n###|\\n##|$)`, 'i'),
+    // Numbered sections: ## Section 3: NPC ROSTER
+    new RegExp(`##\\s*Section\\s*\\d+:?\\s*[^\\n]*${headerName}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i'),
+    // Bold labels: **Causality Chains**: or **NPCs**:
+    new RegExp(`\\*\\*${headerName}[^*]*\\*\\*:?\\s*\\n([\\s\\S]*?)(?=\\n\\*\\*|\\n##|$)`, 'i'),
   ];
 
   for (const pattern of patterns) {

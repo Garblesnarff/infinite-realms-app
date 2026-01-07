@@ -14,6 +14,7 @@ export type ChunkType =
   | 'quest_side'
   | 'mechanic'
   | 'item'
+  | 'monster'
   | 'encounter'
   | 'session_outline';
 

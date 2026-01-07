@@ -16,8 +16,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
+import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 
 /**
  * Get difficulty badge styling
@@ -73,7 +76,9 @@ const CampaignDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const { campaign, isLoading, error } = useStarterCampaign(slug);
+  const [isStarting, setIsStarting] = React.useState(false);
 
   // Default banner placeholder
   const bannerImage =
@@ -81,16 +86,88 @@ const CampaignDetailPage: React.FC = () => {
     campaign?.coverImageUrl ||
     'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1600&h=600&fit=crop';
 
-  const handleStartAdventure = () => {
+  /**
+   * Start adventure flow:
+   * 1. Check for existing campaign linked to this starter
+   * 2. If none, create a shadow campaign for the user
+   * 3. Navigate to character creation for that campaign
+   */
+  const handleStartAdventure = async () => {
     if (!user) {
-      // TODO: Redirect to auth with return URL
-      navigate('/auth/callback');
+      // Redirect to auth with return URL
+      navigate(`/auth/callback?returnTo=${encodeURIComponent(`/explore/${slug}`)}`);
       return;
     }
 
-    // TODO: Navigate to character selection for this campaign
-    // For now, just go to the app
-    navigate('/app');
+    if (!campaign) return;
+
+    setIsStarting(true);
+
+    try {
+      // Check if user already has a campaign linked to this starter
+      const { data: existingCampaign, error: checkError } = await supabase
+        .from('campaigns')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('name', campaign.title)
+        .maybeSingle();
+
+      if (checkError) {
+        logger.error('Error checking for existing campaign:', checkError);
+        throw checkError;
+      }
+
+      let campaignId: string;
+
+      if (existingCampaign) {
+        // Use existing campaign
+        campaignId = existingCampaign.id;
+        logger.info(`Using existing campaign ${campaignId} for starter ${campaign.id}`);
+      } else {
+        // Create a new campaign linked to this starter
+        const { data: newCampaign, error: createError } = await supabase
+          .from('campaigns')
+          .insert({
+            user_id: user.id,
+            name: campaign.title,
+            description: campaign.premise,
+            genre: campaign.genre[0] || 'fantasy',
+            tone: campaign.tone[0] || 'epic',
+            difficulty_level: campaign.difficulty,
+            campaign_length: 'full',
+            status: 'active',
+            background_image: campaign.coverImageUrl,
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          logger.error('Error creating campaign:', createError);
+          throw createError;
+        }
+
+        campaignId = newCampaign.id;
+        logger.info(`Created new campaign ${campaignId} for starter ${campaign.id}`);
+      }
+
+      toast({
+        title: 'Adventure Awaits!',
+        description: 'Choose your character to begin your journey.',
+      });
+
+      // Navigate to character selection page
+      // Users can pick a pre-built character or create a custom one
+      navigate(`/explore/${slug}/choose-character?campaignId=${campaignId}`);
+    } catch (err) {
+      logger.error('Error starting adventure:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to start adventure. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   // Loading state
@@ -150,7 +227,7 @@ const CampaignDetailPage: React.FC = () => {
           {/* Back Button */}
           <div className="absolute top-6 left-6 z-20">
             <Link
-              to="/"
+              to="/explore"
               className="flex items-center gap-2 text-white/80 hover:text-white transition-colors bg-black/30 backdrop-blur-sm rounded-full px-4 py-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,7 +238,7 @@ const CampaignDetailPage: React.FC = () => {
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              Back
+              Back to Campaigns
             </Link>
           </div>
 
@@ -190,8 +267,18 @@ const CampaignDetailPage: React.FC = () => {
               </h1>
 
               {campaign.tagline && (
-                <p className="text-xl text-gray-300 italic">{campaign.tagline}</p>
+                <p className="text-xl text-gray-300 italic mb-6">{campaign.tagline}</p>
               )}
+
+              {/* Hero CTA - visible without scrolling */}
+              <Button
+                onClick={handleStartAdventure}
+                disabled={isStarting}
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 text-white px-8 py-6 text-lg font-semibold rounded-xl shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50"
+              >
+                {isStarting ? 'Preparing Your Adventure...' : 'Start Your Adventure'}
+              </Button>
             </div>
           </div>
         </div>
@@ -262,13 +349,15 @@ const CampaignDetailPage: React.FC = () => {
             <p className="text-lg text-gray-300 leading-relaxed">{campaign.premise}</p>
           </div>
 
-          {/* Overview (if available) */}
+          {/* Overview - show only a polished intro, not the full campaign bible */}
           {campaign.overview && (
             <div className="mb-12">
-              <h2 className="text-2xl font-bold text-white mb-4">Campaign Overview</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">What Awaits You</h2>
               <div className="prose prose-invert prose-lg max-w-none">
                 <p className="text-gray-300 leading-relaxed whitespace-pre-line">
-                  {campaign.overview}
+                  {/* Extract first section (before ## or first 800 chars) for a polished preview */}
+                  {campaign.overview.split(/\n##/)[0].slice(0, 800).trim()}
+                  {campaign.overview.length > 800 && '...'}
                 </p>
               </div>
             </div>
@@ -284,9 +373,10 @@ const CampaignDetailPage: React.FC = () => {
             <div className="flex flex-wrap gap-4">
               <Button
                 onClick={handleStartAdventure}
-                className="bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 text-white px-8 py-6 text-lg font-semibold rounded-xl"
+                disabled={isStarting}
+                className="bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 text-white px-8 py-6 text-lg font-semibold rounded-xl disabled:opacity-50"
               >
-                Start Your Adventure
+                {isStarting ? 'Preparing Your Adventure...' : 'Start Your Adventure'}
               </Button>
               <Link to="/#starter-campaigns">
                 <Button

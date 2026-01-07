@@ -5,6 +5,7 @@ import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { FloatingActionPanel } from '../FloatingActionPanel';
+import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
 
 /**
  * GameLayout Component
@@ -69,6 +70,7 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
 }) => {
   const [topOffset, setTopOffset] = useState(0);
   const [isFloatingPanelVisible, setIsFloatingPanelVisible] = useState(false);
+  const { currentBackgroundUrl, isTransitioning } = useSceneBackground();
 
   // Measure sticky nav + breadcrumbs height to constrain viewport
   useLayoutEffect(() => {
@@ -83,8 +85,24 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
   }, []);
 
   return (
-    <div className="bg-background" style={{ ['--top-offset' as any]: `${topOffset}px` }}>
-      <div className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden">
+    <div className="bg-background relative" style={{ ['--top-offset' as any]: `${topOffset}px` }}>
+      {/* Scene background layer */}
+      {currentBackgroundUrl && (
+        <div
+          className="fixed inset-0 z-0 pointer-events-none transition-opacity duration-1000"
+          style={{
+            backgroundImage: `url(${currentBackgroundUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: isTransitioning ? 0 : 0.15,
+          }}
+        >
+          {/* Dark overlay for better readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/60" />
+        </div>
+      )}
+
+      <div className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative z-10">
         <div
           key={sessionId}
           className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${

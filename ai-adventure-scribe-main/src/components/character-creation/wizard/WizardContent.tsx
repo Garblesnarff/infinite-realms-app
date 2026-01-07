@@ -481,7 +481,12 @@ const WizardContent: React.FC = () => {
                 'Character created successfully! Background image generation may continue in the background.',
             });
             const targetCampaignId = savedCharacter.campaign_id || state.character?.campaign_id;
-            if (targetCampaignId) {
+            const starterCampaignId = searchParams.get('starterCampaign');
+
+            // If this is a starter campaign, navigate directly to the game
+            if (starterCampaignId && targetCampaignId && savedCharacter.id) {
+              navigate(`/app/game/${targetCampaignId}?character=${savedCharacter.id}&starterCampaign=${starterCampaignId}`);
+            } else if (targetCampaignId) {
               navigate(`/app/campaigns/${targetCampaignId}/characters`);
             } else {
               navigate('/app/characters');

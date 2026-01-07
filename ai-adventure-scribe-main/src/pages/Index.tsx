@@ -60,9 +60,9 @@ const Index = () => {
               variant="outline"
               size="lg"
               className="px-8 py-4 text-lg border-infinite-gold text-infinite-gold hover:bg-infinite-gold/10"
-              onClick={() => navigate('/app')}
+              onClick={() => navigate('/explore')}
             >
-              Explore Gallery
+              Explore Pre-Built Campaigns
             </Button>
           </div>
         </div>

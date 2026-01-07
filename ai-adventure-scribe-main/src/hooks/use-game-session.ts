@@ -92,6 +92,7 @@ export const useGameSession = (
   characterId?: string,
   forceNew?: boolean,
   specificSessionId?: string,
+  starterCampaignId?: string,
 ) => {
   const [sessionData, setSessionData] = useState<ExtendedGameSession | null>(null);
   const [sessionState, setSessionState] = useState<
@@ -217,6 +218,7 @@ export const useGameSession = (
             turn_count: 0,
             current_scene_description: 'The adventure begins...',
             session_notes: '',
+            starter_campaign_id: starterCampaignId || null,
           },
         ])
         .select()
@@ -642,6 +644,7 @@ export const useGameSession = (
                 current_scene_description:
                   lastCompletedSession.current_scene_description || 'Continuing your adventure...',
                 session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
+                starter_campaign_id: starterCampaignId || null,
               },
             ])
             .select()
