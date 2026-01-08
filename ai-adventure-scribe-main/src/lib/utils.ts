@@ -77,3 +77,27 @@ export function throttle<T extends (...args: any[]) => any>(
 
   return throttled;
 }
+
+/**
+ * Strips asset tags from a string.
+ * Asset tags are in the format [ASSET:type:identifier].
+ *
+ * @param text The input string.
+ * @returns The string with asset tags removed.
+ *
+ * @example
+ * const Franz = {
+ *   say: (text: string) => {
+ *     const cleanedText = stripAssetTags(text);
+ *     console.log(cleanedText);
+ *   }
+ * }
+ * Franz.say("[ASSET:npc:balthazar] Balthazar lets out a booming laugh.");
+ * // "Balthazar lets out a booming laugh."
+ */
+export function stripAssetTags(text: string | null | undefined): string {
+  if (!text) {
+    return '';
+  }
+  return text.replace(/\[ASSET:[^\]]+\]/g, '').trim();
+}

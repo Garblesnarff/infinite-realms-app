@@ -18,6 +18,7 @@ export default defineConfig({
     css: true, // If you have CSS imports in components
     include: [
       'src/lib/logger.test.ts',
+      'src/lib/utils.test.ts',
       'src/utils/diceRolls.test.ts',
       'src/utils/abilityScoreUtils.test.ts',
       'src/utils/equality.test.ts',
@@ -75,7 +76,9 @@ export default defineConfig({
       'src/agents/langgraph/nodes/__tests__/rules-validator.test.ts',
       'src/agents/langgraph/nodes/__tests__/response-generator.test.ts',
       'src/agents/langgraph/__tests__/integration.test.ts',
-      'src/agents/langgraph/__tests__/performance.test.ts'
+      'src/agents/langgraph/__tests__/performance.test.ts',
+      'tests/services/passive-skills-service.test.ts',
+      'tests/utils/character-converter.test.ts'
     ],
     exclude: [
       'node_modules/**',

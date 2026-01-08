@@ -12,6 +12,7 @@ import { getClassEquipment } from './class-equipment';
 import { getCharacterPassiveScores } from '../passive-skills-service';
 import type { Character } from '@/types/character';
 import logger from '@/lib/logger';
+import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
 
 /**
  * Character details from game context
@@ -656,22 +657,7 @@ ${classEquipment.weapons.join(', ')} | ${classEquipment.armor}
 
   // Passive skills
   try {
-    const characterForPassive: Character = {
-      id: char.id,
-      name: char.name,
-      level: char.level,
-      abilityScores: char.character_stats?.[0]
-        ? {
-            strength: { score: char.character_stats[0].strength || 10, modifier: Math.floor((char.character_stats[0].strength || 10 - 10) / 2), savingThrow: false },
-            dexterity: { score: char.character_stats[0].dexterity || 10, modifier: Math.floor((char.character_stats[0].dexterity || 10 - 10) / 2), savingThrow: false },
-            constitution: { score: char.character_stats[0].constitution || 10, modifier: Math.floor((char.character_stats[0].constitution || 10 - 10) / 2), savingThrow: false },
-            intelligence: { score: char.character_stats[0].intelligence || 10, modifier: Math.floor((char.character_stats[0].intelligence || 10 - 10) / 2), savingThrow: false },
-            wisdom: { score: char.character_stats[0].wisdom || 10, modifier: Math.floor((char.character_stats[0].wisdom || 10 - 10) / 2), savingThrow: false },
-            charisma: { score: char.character_stats[0].charisma || 10, modifier: Math.floor((char.character_stats[0].charisma || 10 - 10) / 2), savingThrow: false },
-          }
-        : undefined,
-      skillProficiencies: char.skill_proficiencies?.split(',').map((s) => s.trim()) || [],
-    };
+    const characterForPassive = convertCharacterDetailsToCharacter(char);
     const passiveScores = getCharacterPassiveScores(characterForPassive);
     section += `
 
@@ -687,7 +673,7 @@ Passive Investigation: ${passiveScores.investigation} (spots clues, patterns, lo
 - Reserve active checks (d20 rolls) for deliberate investigation or difficult perception tasks
 </passive_skills>`;
   } catch (passiveSkillError) {
-    logger.warn('Failed to calculate passive skills (non-fatal):', passiveSkillError);
+    logger.warn(`Failed to calculate passive skills for character ${char.name} (ID: ${char.id}) (non-fatal):`, passiveSkillError);
   }
 
   section += `

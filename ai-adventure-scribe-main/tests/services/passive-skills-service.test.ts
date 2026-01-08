@@ -194,8 +194,8 @@ describe('PassiveSkillsService', () => {
         const result = checkPassiveInsight(character, 14);
 
         expect(result.success).toBe(true);
-        expect(result.passiveScore).toBe(15); // 10 + 4 + 3
-        expect(result.margin).toBe(1);
+        expect(result.passiveScore).toBe(17); // 10 + 4 (Wis mod) + 3 (prof)
+        expect(result.margin).toBe(3);
       });
     });
 
