@@ -9,6 +9,7 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: 'production',
+      PORT: 8888,
       VITE_MANIFEST_PATH: '/var/www/infiniterealms/ai-adventure-scribe-main/dist/.vite/manifest.json',
     },
     out_file: '/var/log/infiniterealms/bun-out.log',
