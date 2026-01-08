@@ -13,46 +13,50 @@ serve(async (req) => {
 
   try {
     const { text } = await req.json();
-    
+
     if (!text) {
       throw new Error('Text is required');
     }
 
-    // Clean and truncate text
-    const cleanedText = text.substring(0, 1000).replace(/\n/g, ' ').trim();
-    console.log('Processing text for embedding:', cleanedText);
+    // Clean and truncate text (Gemini text-embedding-004 supports up to 2048 tokens)
+    const cleanedText = text.substring(0, 2000).replace(/\n/g, ' ').trim();
+    console.log('Processing text for embedding:', cleanedText.substring(0, 100) + '...');
 
-    // Get OpenAI API key from environment
-    const openAiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAiKey) {
-      throw new Error('OpenAI API key not configured');
+    // Get Google Gemini API key from environment
+    const googleApiKey = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+    if (!googleApiKey) {
+      throw new Error('Google Gemini API key not configured');
     }
 
-    // Call OpenAI embeddings API
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: cleanedText,
-        model: 'text-embedding-ada-002',
-      }),
-    });
+    // Call Gemini embeddings API (text-embedding-004)
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${googleApiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: {
+            parts: [{ text: cleanedText }],
+          },
+          taskType: 'RETRIEVAL_DOCUMENT',
+        }),
+      }
+    );
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('OpenAI API error:', error);
+      console.error('Gemini API error:', error);
       throw new Error('Failed to generate embedding');
     }
 
     const data = await response.json();
-    console.log('OpenAI API response:', JSON.stringify(data));
+    console.log('Gemini API response received, embedding dimensions:', data.embedding?.values?.length);
 
-    // Extract embedding array from response
-    const embedding = data.data[0].embedding;
-    
+    // Extract embedding array from Gemini response
+    const embedding = data.embedding?.values;
+
     // Validate embedding format
     if (!Array.isArray(embedding) || embedding.length === 0) {
       throw new Error('Invalid embedding format received');
@@ -60,30 +64,29 @@ serve(async (req) => {
 
     // Format embedding for Supabase vector storage
     const vectorString = `[${embedding.join(',')}]`;
-    console.log('Final vector string format:', vectorString);
 
     return new Response(
       JSON.stringify({ embedding: vectorString }),
-      { 
-        headers: { 
-          ...corsHeaders, 
+      {
+        headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json'
-        } 
+        }
       }
     );
   } catch (error) {
     console.error('Error generating embedding:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message,
-        stack: error.stack 
+        stack: error.stack
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
+      {
+        headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json'
         },
-        status: 500 
+        status: 500
       }
     );
   }

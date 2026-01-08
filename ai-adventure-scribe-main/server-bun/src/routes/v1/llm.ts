@@ -203,7 +203,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             return { error: 'Server not configured for OpenRouter' };
           }
 
-          const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-2.5-pro-exp-03-25:free';
+          const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free';
           const messages: ChatMessage[] = [];
 
           if (Array.isArray(history)) {

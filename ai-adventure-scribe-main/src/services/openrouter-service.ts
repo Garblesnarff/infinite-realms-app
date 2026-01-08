@@ -45,7 +45,7 @@ export class OpenRouterService {
 
   private textModels: ModelConfig[] = [
     {
-      id: import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.5-pro-exp-03-25:free',
+      id: import.meta.env.VITE_OPENROUTER_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free',
       isFree: true,
       dailyLimit: 1000,
     },
