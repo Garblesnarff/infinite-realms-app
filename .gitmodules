@@ -1,0 +1,3 @@
+[submodule "infinite-realms"]
+	path = infinite-realms
+	url = https://github.com/Garblesnarff/infinite-realms-clean.git
