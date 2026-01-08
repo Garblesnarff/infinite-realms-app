@@ -125,9 +125,13 @@ export async function listCampaigns(filters?: {
 export async function getCampaignOverview(campaignId: string): Promise<StarterCampaign | null> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list to reduce over-fetching.
+  // This is a database performance best practice.
   const { data, error } = await client
     .from('starter_campaigns')
-    .select('*')
+    .select(
+      'id, slug, title, tagline, genre, sub_genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, is_featured, cover_image_url'
+    )
     .eq('id', campaignId)
     .eq('is_published', true)
     .eq('is_complete', true)
@@ -386,9 +390,12 @@ export async function searchLore(
 export async function getStarterParties(campaignId: string): Promise<CampaignParty[]> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list to reduce over-fetching.
   const { data, error } = await client
     .from('campaign_parties')
-    .select('*')
+    .select(
+      'id, campaign_id, party_name, party_concept, party_hook, playstyle, is_default'
+    )
     .eq('campaign_id', campaignId)
     .order('is_default', { ascending: false })
     .order('party_name');
@@ -421,32 +428,27 @@ export async function getPartyDetails(partyId: string): Promise<{
 } | null> {
   const client = getClient();
 
-  // Get party
-  const { data: partyData, error: partyError } = await client
+  // ⚡ Bolt: Combined party and character queries into a single nested query
+  // to eliminate the N+1 problem. This reduces database round trips from 2 to 1.
+  const { data, error } = await client
     .from('campaign_parties')
-    .select('*')
+    .select('*, party_characters(*)')
     .eq('id', partyId)
+    .order('character_name', { foreignTable: 'party_characters' })
     .single();
 
-  if (partyError) {
-    if (partyError.code === 'PGRST116') return null;
-    throw new Error(`Failed to get party: ${partyError.message}`);
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to get party details: ${error.message}`);
   }
 
-  // Get characters
-  const { data: charData, error: charError } = await client
-    .from('party_characters')
-    .select('*')
-    .eq('party_id', partyId)
-    .order('character_name');
-
-  if (charError) {
-    throw new Error(`Failed to get characters: ${charError.message}`);
-  }
+  // The nested query returns characters as a property on the party object.
+  // We need to extract them and map them separately.
+  const { party_characters: charactersData, ...partyData } = data;
 
   return {
     party: mapPartyRow(partyData),
-    characters: (charData || []).map(mapCharacterRow),
+    characters: (charactersData || []).map(mapCharacterRow),
   };
 }
 
