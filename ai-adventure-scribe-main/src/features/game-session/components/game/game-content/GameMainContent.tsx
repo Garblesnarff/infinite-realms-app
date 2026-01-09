@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/card';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { usePendingRolls } from '@/hooks/use-pending-rolls';
+import { stripAssetTags } from '@/lib/utils';
 
 /**
  * GameMainContent Component
@@ -134,7 +135,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
                   {showSceneBlurb && (
                     <div className="flex-1 hidden xl:block">
                       <p className="text-narrative text-muted-foreground leading-relaxed text-xs line-clamp-2">
-                        {sessionData.current_scene_description ??
+                        {stripAssetTags(sessionData.current_scene_description) ||
                           'Your infinite story unfolds across realms of endless possibility...'}
                       </p>
                     </div>
