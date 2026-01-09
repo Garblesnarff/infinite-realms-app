@@ -325,7 +325,7 @@ INSERT INTO public.starter_character_templates (
   3
 );
 
--- 4. The Reveler (Satyr Bard) - The Eternal Feast
+-- 4. The Reveler (Elf Barbarian) - The Eternal Feast
 INSERT INTO public.starter_character_templates (
   starter_campaign_id,
   template_key,
@@ -349,8 +349,8 @@ INSERT INTO public.starter_character_templates (
   'the-reveler',
   'The Reveler',
   'Fey hedonist learning the depth of mortal feelings',
-  'Satyr',
-  'Bard',
+  'Elf',
+  'Barbarian',
   'Entertainer',
   1,
   '{"strength": 10, "dexterity": 14, "constitution": 14, "intelligence": 10, "wisdom": 10, "charisma": 18}',
@@ -360,7 +360,7 @@ INSERT INTO public.starter_character_templates (
   '["rapier", "pan pipes", "lute", "entertainer''s pack", "fine clothes", "wine flask", "Feywild party favors"]',
   'In the Feywild, we revel for centuries. Wine, song, dance—endless, eternal. I thought I knew pleasure. Then I visited the mortal realm and met a dying human who showed me more passion in one evening than I''d felt in five hundred years. When they passed, I understood: Limits create meaning. I''ve been chasing that intensity ever since. The Last Course—a place where beings from every realm come to share food, stories, and fleeting connections—is exactly where I need to be. Every meal here is a celebration of mortality''s beautiful urgency.',
   'The Eternal Feast is the most intensely alive place I''ve ever encountered! Beings with spans of centuries sitting beside those with mere decades, all sharing food and moment together. The joy! The drama! The exquisite tension of temporary connections! I must experience every course, every guest, every impossible combination of existence!',
-  'Attractive satyr with elegant spiral horns and playful grin, goat legs prancing gracefully, ornate pan pipes at hip, wine-stained server''s vest barely containing enthusiasm, surrounded by magical motes of joy and scattered musical notes, vibrant interdimensional restaurant background, whimsical fey style with warm celebratory lighting',
+  'Wild-looking elf with untamed silver hair and fierce amber eyes full of joy, tribal tattoos across bare muscular arms, goat-horn drinking cup at belt, wearing festive but battle-ready leather vest, surrounded by magical motes of joy and scattered musical notes, vibrant interdimensional restaurant background, whimsical fey style with warm celebratory lighting',
   4
 );
 
