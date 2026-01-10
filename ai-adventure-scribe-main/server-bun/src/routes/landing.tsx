@@ -1,17 +1,17 @@
 import { Elysia } from 'elysia';
-import { getSiteConfig } from '../../../server/src/config/site.js';
-import { resolveAssetsForEntries } from '../../../server/src/lib/manifest.js';
+import { getSiteConfig } from '../config/site.js';
+import { resolveAssetsForEntries } from '../lib/manifest.js';
 import { streamReactResponse } from '../utils/react-stream.js';
-import { LandingDocument } from '../../../server/src/views/landing/document.js';
+import { LandingDocument } from '../views/landing/document.js';
 import {
   createFAQSchema,
   createWebPageSchema,
   createSoftwareAppSchema,
   combineSchemas,
   type FAQItem,
-} from '../../../server/src/views/landing/schema.js';
-import { AIGameMasterPage } from '../../../server/src/views/landing/pages/ai-game-master.js';
-import { SoloTabletopRPGPage } from '../../../server/src/views/landing/pages/solo-tabletop-rpg.js';
+} from '../views/landing/schema.js';
+import { AIGameMasterPage } from '../views/landing/pages/ai-game-master.js';
+import { SoloTabletopRPGPage } from '../views/landing/pages/solo-tabletop-rpg.js';
 
 /**
  * Create cache control headers for SSR pages

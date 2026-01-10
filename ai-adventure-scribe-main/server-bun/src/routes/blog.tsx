@@ -1,9 +1,9 @@
 import { Elysia } from 'elysia';
-import { BlogService } from '../../../server/src/services/blog-service.js';
-import { getSiteConfig } from '../../../server/src/config/site.js';
-import { resolveAssetsForEntries } from '../../../server/src/lib/manifest.js';
-import { BlogIndexPage } from '../../../server/src/views/blog/index.js';
-import { BlogPostPage } from '../../../server/src/views/blog/post.js';
+import { BlogService } from '../services/blog-service.js';
+import { getSiteConfig } from '../config/site.js';
+import { resolveAssetsForEntries } from '../lib/manifest.js';
+import { BlogIndexPage } from '../views/blog/index.js';
+import { BlogPostPage } from '../views/blog/post.js';
 import { streamReactResponse } from '../utils/react-stream.js';
 
 /**

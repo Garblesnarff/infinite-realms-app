@@ -1,20 +1,19 @@
 /**
- * tRPC Context for Elysia/Bun
+ * tRPC Context
  *
  * Creates the context for each tRPC request, including:
  * - Authenticated user information from WorkOS tokens
  * - Drizzle database client for type-safe queries
- * - Request object from Elysia/Fetch API
+ * - Express request and response objects
  *
  * The context is available in all tRPC procedures and middleware.
- *
- * Ported from /server/src/trpc/context.ts for Elysia/Bun compatibility.
  */
 
-import { db } from '../lib/drizzle.js';
+import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
+import { db } from '../../../db/client.js';
 import { getBearerToken } from '../lib/jwt.js';
 import { verifyWorkOSToken } from '../services/workos.js';
-import { Pool } from 'pg';
+import { createPgClient } from '../../../src/infrastructure/database/index.js';
 
 /**
  * Authenticated user payload extracted from WorkOS token
@@ -26,26 +25,15 @@ export interface AuthUser {
 }
 
 /**
- * Create PostgreSQL client for plan resolution
- */
-function createPgClient(): Pool {
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined,
-    max: Number(process.env.PGPOOL_MAX || 10),
-  });
-}
-
-/**
  * Resolves user's subscription plan from database or headers
  */
 async function resolveUserPlan(
   userId: string,
-  headers: Record<string, string | undefined>
+  headers: Record<string, string | string[] | undefined>
 ): Promise<string> {
   // 1) Check for explicit header override (useful for tests)
   const planHeader = headers['x-plan'];
-  const hdr = planHeader?.toLowerCase();
+  const hdr = (typeof planHeader === 'string' ? planHeader : planHeader?.[0])?.toLowerCase();
   if (hdr) return hdr;
 
   // 2) Try to resolve from Postgres users table
@@ -81,24 +69,12 @@ async function resolveUserPlan(
 }
 
 /**
- * Context creation options for Elysia/Fetch adapter
- * Uses standard Fetch API Request/Response
- */
-export interface CreateContextOptions {
-  req: Request;
-  resHeaders: Headers;
-}
-
-/**
  * Creates context for tRPC requests
  * Extracts and validates WorkOS auth token if present
- *
- * Compatible with @elysiajs/trpc plugin
  */
-export async function createContext({ req, resHeaders }: CreateContextOptions) {
+export async function createContext({ req, res }: CreateExpressContextOptions) {
   // Extract bearer token from Authorization header
-  const authHeader = req.headers.get('authorization');
-  const token = getBearerToken(authHeader);
+  const token = getBearerToken(req.headers.authorization);
 
   let user: AuthUser | null = null;
 
@@ -107,13 +83,7 @@ export async function createContext({ req, resHeaders }: CreateContextOptions) {
     try {
       const workosUser = await verifyWorkOSToken(token);
       if (workosUser) {
-        // Convert Headers to plain object for resolveUserPlan
-        const headersObj: Record<string, string | undefined> = {};
-        req.headers.forEach((value, key) => {
-          headersObj[key] = value;
-        });
-
-        const plan = await resolveUserPlan(workosUser.userId, headersObj);
+        const plan = await resolveUserPlan(workosUser.userId, req.headers);
         user = {
           userId: workosUser.userId,
           email: workosUser.email,
@@ -127,7 +97,7 @@ export async function createContext({ req, resHeaders }: CreateContextOptions) {
 
   return {
     req,
-    resHeaders,
+    res,
     db, // Drizzle ORM client
     user, // Authenticated user or null
   };

@@ -17,6 +17,22 @@ import { llmRoutes } from './routes/v1/llm';
 import { imageRoutes } from './routes/v1/images';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 import { billingRoutes } from './routes/v1/billing';
+import { combatRoutes } from './routes/v1/combat';
+import { inventoryRoutes } from './routes/v1/inventory';
+import { spellSlotsCharacterRoutes, spellSlotsUtilityRoutes } from './routes/v1/spell-slots';
+import { progressionRoutes } from './routes/v1/progression';
+import { restRoutes } from './routes/v1/rest';
+import { classFeaturesRoutes } from './routes/v1/class-features';
+import { observabilityRoutes } from './routes/v1/observability';
+import { encountersRoutes } from './routes/v1/encounters';
+import { campaignsRoutes } from './routes/v1/campaigns';
+import { sessionsRoutes } from './routes/v1/sessions';
+import { personalityRoutes } from './routes/v1/personality';
+import { adminRoutes } from './routes/v1/admin';
+import { spellsRoutes } from './routes/v1/spells';
+import { waitlistRoutes } from './routes/v1/waitlist';
+import { internalRoutes } from './routes/v1/internal';
+import { blogApiRoutes } from './routes/v1/blog';
 
 export function createApp() {
   const app = new Elysia()
@@ -241,6 +257,55 @@ export function createApp() {
 
   // Billing routes (Stripe subscription management)
   app.use(billingRoutes);
+
+  // Combat routes (D&D 5E combat system)
+  app.use(combatRoutes);
+
+  // Inventory routes (D&D 5E inventory management)
+  app.use(inventoryRoutes);
+
+  // Spell slots routes (D&D 5E spell slot tracking)
+  app.use(spellSlotsCharacterRoutes);
+  app.use(spellSlotsUtilityRoutes);
+
+  // Progression routes (D&D 5E XP and leveling)
+  app.use(progressionRoutes);
+
+  // Rest routes (D&D 5E short/long rest mechanics)
+  app.use(restRoutes);
+
+  // Class features routes (D&D 5E class features and subclasses)
+  app.use(classFeaturesRoutes);
+
+  // Observability routes (frontend error/metric logging)
+  app.use(observabilityRoutes);
+
+  // Encounters routes (encounter telemetry)
+  app.use(encountersRoutes);
+
+  // Campaigns routes (campaign CRUD)
+  app.use(campaignsRoutes);
+
+  // Sessions routes (game session management)
+  app.use(sessionsRoutes);
+
+  // Personality routes (D&D personality elements)
+  app.use(personalityRoutes);
+
+  // Admin routes (system maintenance)
+  app.use(adminRoutes);
+
+  // Spells routes (D&D spell data)
+  app.use(spellsRoutes);
+
+  // Waitlist routes (landing page signups)
+  app.use(waitlistRoutes);
+
+  // Internal routes (CI/CD automation)
+  app.use(internalRoutes);
+
+  // Blog API routes (CRUD for blog posts, categories, tags)
+  app.use(blogApiRoutes);
 
   // tRPC integration using native fetch adapter (compatible with tRPC v11)
   // Mount tRPC at /api/trpc/* endpoint with context creation

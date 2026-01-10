@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
-import { BlogService } from '../../../server/src/services/blog-service.js';
-import { getSiteConfig } from '../../../server/src/config/site.js';
+import { BlogService } from '../services/blog-service.js';
+import { getSiteConfig } from '../config/site.js';
 
 type BlogPosts = Awaited<ReturnType<typeof BlogService.fetchPublishedBlogPosts>>;
 
