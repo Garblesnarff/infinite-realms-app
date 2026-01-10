@@ -99,14 +99,13 @@ const { data } = await supabase
 - **Location**: `/var/www/infiniterealms/ai-adventure-scribe-main/`
 - **Docker**: All Supabase services containerized, up 5-12 days
 
-### 🚀 Bun + Elysia Server (NEW - December 2025)
-Production API server migrated from Node.js/Express to **Bun/Elysia** following Anthropic's acquisition of Bun.
+### 🚀 Bun + Elysia Server
+Production API server runs on **Bun/Elysia** (migrated from Node.js/Express in December 2025).
 
 **Key Details:**
 - **Server Location**: `server-bun/src/` (Elysia framework)
-- **Old Server**: `server/src/` (Express - deprecated, kept for reference)
 - **Runtime**: Bun 1.3.4 (2-3x faster than Node.js)
-- **Port**: 8888 (same as before)
+- **Port**: 8888
 - **PM2 Process**: `infiniterealms-bun`
 
 **Commands:**
@@ -164,18 +163,10 @@ ai-adventure-scribe-main/
 │   ├── app.ts                 # Elysia app setup
 │   ├── ws.ts                  # WebSocket (Foundry VTT)
 │   ├── routes/                # SSR routes (blog, landing)
-│   ├── trpc/                  # tRPC context
+│   ├── trpc/                  # tRPC routers
+│   ├── services/              # Backend services (combat, blog, etc.)
+│   ├── views/                 # Blog/landing SSR templates
 │   └── middleware/            # Auth, rate-limit, metrics
-├── server/src/                # Express/Node (DEPRECATED - reference only)
-│   ├── routes/blog.tsx        # Blog SSR routes
-│   ├── views/blog/            # Blog React SSR pages
-│   │   ├── index.tsx          # Blog listing page
-│   │   ├── post.tsx           # Individual blog post
-│   │   └── document.tsx       # Blog HTML wrapper
-│   └── services/
-│       ├── blog-service.ts    # Blog CRUD operations
-│       ├── blog-scheduler.ts  # Scheduled post publishing
-│       └── blog-content-generator.ts  # AI content generation
 ├── src/
 │   ├── components/           # React components (kebab-case files)
 │   │   └── blog-admin/       # Blog admin UI components
@@ -189,7 +180,7 @@ ai-adventure-scribe-main/
 
 **Important**:
 - `supabase/functions/` is **Deno**, not Bun. Cannot use `@/` imports there.
-- `server-bun/` is **Bun/Elysia** - the production API server
+- `server-bun/` is **Bun/Elysia** - the only API server (Express was deleted Jan 2026)
 - Blog uses **server-side rendering (SSR)** via Bun/Elysia, not the React SPA
 
 ---
@@ -414,9 +405,9 @@ curl -X POST http://localhost:8888/internal/generate-commit-post \
 
 **Blog System** (Bun/Elysia):
 - SSR routes: `server-bun/src/routes/blog.tsx`
-- SSR views: `server/src/views/blog/` (index, post, document - shared)
-- Blog service: `server/src/services/blog-service.ts` (shared with Bun)
-- AI generator: `server/src/services/blog-content-generator.ts`
+- SSR views: `server-bun/src/views/blog/` (index, post, document)
+- Blog service: `server-bun/src/services/blog-service.ts`
+- AI generator: `server-bun/src/services/blog-content-generator.ts`
 - Admin UI: `src/components/blog-admin/`
 - Database: Supabase tables (blog_posts, blog_authors, blog_categories, blog_tags)
 - nginx config: `/etc/nginx/sites-available/infiniterealms` (blog subdomain block)
@@ -557,7 +548,7 @@ See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
 
 ---
 
-**Last Updated**: 2025-12-14
+**Last Updated**: 2026-01-10
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based Supabase, **Bun 1.3.4 + Elysia**
 **Blog**: https://blog.infiniterealms.app (SSR via Bun/Elysia, Cloudflare-proxied, Let's Encrypt SSL)
