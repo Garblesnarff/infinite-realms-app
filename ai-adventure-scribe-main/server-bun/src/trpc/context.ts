@@ -9,7 +9,7 @@
  * The context is available in all tRPC procedures and middleware.
  */
 
-import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
+import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { db } from '../../../db/client.js';
 import { getBearerToken } from '../lib/jwt.js';
 import { verifyWorkOSToken } from '../services/workos.js';
@@ -29,11 +29,11 @@ export interface AuthUser {
  */
 async function resolveUserPlan(
   userId: string,
-  headers: Record<string, string | string[] | undefined>
+  headers: Headers
 ): Promise<string> {
   // 1) Check for explicit header override (useful for tests)
-  const planHeader = headers['x-plan'];
-  const hdr = (typeof planHeader === 'string' ? planHeader : planHeader?.[0])?.toLowerCase();
+  const planHeader = headers.get('x-plan');
+  const hdr = planHeader?.toLowerCase();
   if (hdr) return hdr;
 
   // 2) Try to resolve from Postgres users table
@@ -72,9 +72,11 @@ async function resolveUserPlan(
  * Creates context for tRPC requests
  * Extracts and validates WorkOS auth token if present
  */
-export async function createContext({ req, res }: CreateExpressContextOptions) {
+export async function createContext({ req, resHeaders }: FetchCreateContextFnOptions) {
   // Extract bearer token from Authorization header
-  const token = getBearerToken(req.headers.authorization);
+  // NOTE: req is a fetch Request object, so we use req.headers.get()
+  const authHeader = req.headers.get('authorization');
+  const token = getBearerToken(authHeader);
 
   let user: AuthUser | null = null;
 
@@ -97,7 +99,7 @@ export async function createContext({ req, res }: CreateExpressContextOptions) {
 
   return {
     req,
-    res,
+    resHeaders,
     db, // Drizzle ORM client
     user, // Authenticated user or null
   };
