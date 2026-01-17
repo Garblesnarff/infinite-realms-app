@@ -182,7 +182,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         // If caller passed an OpenAI image model, pick a valid OpenRouter image-capable default instead
         const isOpenAIModel = typeof model === 'string' && /^gpt-image/i.test(model);
         const imageModel = (!model || isOpenAIModel)
-          ? (process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview')
+          ? (process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image')
           : model;
 
         // Build message content based on whether we have reference images

@@ -282,7 +282,7 @@ export class CharacterImageGenerator {
         // Use paid model directly
         const base64Image = await openRouterService.generateImage({
           prompt,
-          model: 'google/gemini-2.5-flash-image-preview',
+          model: 'google/gemini-2.5-flash-image',
           referenceImage: referenceImageBase64,
         });
         return base64Image;

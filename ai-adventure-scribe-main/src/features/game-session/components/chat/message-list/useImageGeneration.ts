@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 
 import type { ChatMessage } from '@/types/game';
 
+import { ASSET_TAG_PATTERN } from '@/features/game-session/utils/parse-asset-tags';
 import logger from '@/lib/logger';
 import { llmApiClient } from '@/services/llm-api-client';
 import { generateSceneImage, type AssetReference } from '@/services/scene-image-generator';
@@ -82,8 +83,8 @@ export const useImageGeneration = ({
         // Extract asset URLs from message for reference images
         const assetUrls: AssetReference[] = [];
         if (getAssetImageUrl) {
-          // Parse [ASSET:type:key] tags from message text
-          const tagPattern = /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
+          // Parse [ASSET:type:key] tags from message text using shared pattern
+          const tagPattern = new RegExp(ASSET_TAG_PATTERN.source, 'gi');
           let match;
           const seen = new Set<string>();
           const fullText = message.text || baseText;
@@ -145,7 +146,7 @@ export const useImageGeneration = ({
           quality: (import.meta as any)?.env?.VITE_DM_IMAGE_QUALITY || 'low',
           model:
             (import.meta as any)?.env?.VITE_DM_IMAGE_MODEL ||
-            'google/gemini-2.5-flash-image-preview',
+            'google/gemini-2.5-flash-image',
           storage: routeCampaignId
             ? { entityType: 'campaign', entityId: routeCampaignId, label }
             : { label },

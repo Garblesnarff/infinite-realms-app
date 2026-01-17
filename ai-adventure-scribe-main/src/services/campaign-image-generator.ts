@@ -54,7 +54,7 @@ export class CampaignImageGenerator {
       retryAttempts = this.maxRetries,
       fallbackToDefault = true,
       quality = 'medium',
-      model = 'google/gemini-2.5-flash-image-preview',
+      model = 'google/gemini-2.5-flash-image',
     } = options;
 
     try {

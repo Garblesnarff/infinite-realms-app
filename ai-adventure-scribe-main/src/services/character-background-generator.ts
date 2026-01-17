@@ -160,7 +160,7 @@ export class CharacterBackgroundGenerator {
     referenceImage?: string,
   ): Promise<string> {
     let lastError: Error | null = null;
-    const chosenModel = 'google/gemini-2.5-flash-image-preview';
+    const chosenModel = 'google/gemini-2.5-flash-image';
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {

@@ -40,7 +40,7 @@ export interface UploadOptions {
 export class OpenRouterService {
   private imageModels: ModelConfig[] = [
     // DEPRECATED: Removed gpt-image-1-mini (requires OpenAI verification)
-    { id: 'google/gemini-2.5-flash-image-preview', isFree: false },
+    { id: 'google/gemini-2.5-flash-image', isFree: false },
   ];
 
   private textModels: ModelConfig[] = [
