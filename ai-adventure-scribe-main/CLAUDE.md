@@ -278,7 +278,40 @@ bd close bead-id --reason "Fixed: description"
 - Publishes posts where `status='scheduled'` AND `scheduled_for <= now()`
 - Started automatically in `server-bun/src/index.ts`
 
-### 5. AI Education Pattern
+### 5. Static Files & Cloudflare Caching
+**Problem**: Adding new images/assets that return 404.
+
+**Root cause**:
+- Nginx serves from `dist/` (built output), not `public/` (source)
+- Files manually added to `public/` after build won't be in `dist/`
+- Cloudflare caches 404 responses for ~4 hours
+
+**Fix when adding new static files**:
+```bash
+# 1. Add files to public/ (source of truth)
+cp new-image.png public/images/path/
+
+# 2. ALSO copy to dist/ (what nginx actually serves)
+mkdir -p dist/images/path/
+cp public/images/path/new-image.png dist/images/path/
+
+# 3. Use cache-busting query param in database/code URLs
+# BAD:  /images/path/new-image.png  (Cloudflare cached 404)
+# GOOD: /images/path/new-image.png?v=1  (bypasses cached 404)
+```
+
+**Why this happens**: Vite copies `public/` → `dist/` during `npm run build`, but if you add files to `public/` without rebuilding, they only exist in `public/`.
+
+**Quick verification**:
+```bash
+# Test if file is served (bypassing Cloudflare)
+curl -I -k -H "Host: infiniterealms.app" https://127.0.0.1/images/path/file.png
+
+# If 200 locally but 404 via domain = Cloudflare cache issue
+# Add ?v=1 to URL to bypass
+```
+
+### 6. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
 
 1. Add section to `promptBuilder.ts` with XML tags: `<rule_name>`
@@ -548,7 +581,7 @@ See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
 
 ---
 
-**Last Updated**: 2026-01-10
+**Last Updated**: 2026-01-17
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based Supabase, **Bun 1.3.4 + Elysia**
 **Blog**: https://blog.infiniterealms.app (SSR via Bun/Elysia, Cloudflare-proxied, Let's Encrypt SSL)

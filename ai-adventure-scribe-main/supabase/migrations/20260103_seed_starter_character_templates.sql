@@ -226,6 +226,7 @@ INSERT INTO public.starter_character_templates (
   adapted_backstory,
   campaign_hook,
   portrait_prompt,
+  portrait_url,
   display_order
 ) VALUES (
   'the-eternal-feast',
@@ -244,6 +245,7 @@ INSERT INTO public.starter_character_templates (
   'Every person is a story waiting to be told. I''ve spent my life collecting them—the farmer''s quiet tragedy, the king''s secret shame, the soldier''s last words. I carry over three hundred tales, each one a life that matters. When I heard whispers of The Last Course—a restaurant that exists between worlds, serving guests from dimensions beyond imagining—I knew I had found the greatest collection of untold stories in existence. Archons, fey lords, beings of pure concept... each one a narrative never before recorded.',
   'The Eternal Feast represents the intersection of infinite stories—every guest carries tales from realms I''ve never visited, cultures I''ve never encountered. This is where legends are born. I need to be there when history happens across every dimension at once.',
   'Charming half-elf with expressive amber eyes and warm inviting smile, well-worn lute with cosmic motifs, traveling clothes with colorful interdimensional accents, journal bursting with notes tucked in belt, captivating presence, ethereal restaurant interior with impossible architecture background, warm magical lighting, storybook fantasy style',
+  '/images/characters/eternal-feast/the-storyteller.png?v=1',
   1
 );
 
@@ -265,6 +267,7 @@ INSERT INTO public.starter_character_templates (
   adapted_backstory,
   campaign_hook,
   portrait_prompt,
+  portrait_url,
   display_order
 ) VALUES (
   'the-eternal-feast',
@@ -283,6 +286,7 @@ INSERT INTO public.starter_character_templates (
   'I heard Helm''s call when I was just a kitchen hand at the Temple of the Watchful Eye. Took my vows and served for fifteen years—healing the sick, comforting the dying, ensuring all who entered our doors felt welcome. When the vision came showing me The Last Course—a sanctuary where beings from across all planes could find nourishment and peace—I knew my calling extended beyond any single temple. Hospitality is holy. Food shared is love manifest. This restaurant is a temple to something universal.',
   'The Eternal Feast serves all who enter in peace—regardless of their origin, nature, or form. That sacred hospitality is exactly what Helm stands for: protection and welcome for those who need it. If beings from across the multiverse can find sanctuary here, I will ensure it remains so.',
   'Human cleric in practical holy vestments with hospitality motifs, religious symbol worn as an elegant pendant, kind but perceptive eyes, healing hands ready to serve, server''s apron over chainmail, warm smile welcoming guests, interdimensional restaurant interior with floating candles, reverent yet warm fantasy style',
+  '/images/characters/eternal-feast/the-faithful.png?v=1',
   2
 );
 
@@ -304,6 +308,7 @@ INSERT INTO public.starter_character_templates (
   adapted_backstory,
   campaign_hook,
   portrait_prompt,
+  portrait_url,
   display_order
 ) VALUES (
   'the-eternal-feast',
@@ -322,10 +327,11 @@ INSERT INTO public.starter_character_templates (
   'Back in Willowdale, they said I was born under a lucky star. Fell off a roof, landed on a hay cart. Cheated a crime boss, he choked on dinner that night. Got caught stealing from a visiting noble, they thought it was so funny they offered me a job instead. I don''t question it anymore. When the door to The Last Course appeared in an alley I was fleeing through, I walked right in. Universe just seems to like me. A restaurant that serves interdimensional beings? Sounds like exactly the kind of chaos I thrive in!',
   'Look, an infinite restaurant with guests from impossible dimensions sounds dangerous, but I''ve got a good feeling about this. I always land on my feet—usually in exactly the right place. When have I ever been wrong? Don''t answer that. The point is, someone needs to charm the difficult customers and smooth over diplomatic incidents, and that someone might as well be me.',
   'Cheerful halfling with messy curly brown hair, mischievous grin that could sell sand in a desert, pockets bulging with lucky charms and odds and ends, server''s vest over colorful clothing, balancing impossibly full tray of exotic drinks, surrounded by amused interdimensional guests, warm whimsical fantasy style, golden hour lighting',
+  '/images/characters/eternal-feast/the-lucky-one.png?v=1',
   3
 );
 
--- 4. The Reveler (Elf Barbarian) - The Eternal Feast
+-- 4. The Reveler (Satyr Barbarian) - The Eternal Feast
 INSERT INTO public.starter_character_templates (
   starter_campaign_id,
   template_key,
@@ -343,28 +349,30 @@ INSERT INTO public.starter_character_templates (
   adapted_backstory,
   campaign_hook,
   portrait_prompt,
+  portrait_url,
   display_order
 ) VALUES (
   'the-eternal-feast',
   'the-reveler',
   'The Reveler',
   'Fey hedonist learning the depth of mortal feelings',
-  'Elf',
+  'Satyr',
   'Barbarian',
   'Entertainer',
   1,
-  '{"strength": 10, "dexterity": 14, "constitution": 14, "intelligence": 10, "wisdom": 10, "charisma": 18}',
+  '{"strength": 14, "dexterity": 14, "constitution": 14, "intelligence": 10, "wisdom": 10, "charisma": 16}',
   '{"traits": ["I have a joke for every occasion", "I change my mood as quickly as I change my tune"], "ideals": ["Beauty. When I perform, I make the world better than it was"], "bonds": ["I want to be famous—whatever it takes"], "flaws": ["I have trouble keeping my true feelings hidden"]}',
-  '["acrobatics", "performance", "persuasion", "deception"]',
-  '["Common", "Sylvan", "Elvish", "Giant"]',
-  '["rapier", "pan pipes", "lute", "entertainer''s pack", "fine clothes", "wine flask", "Feywild party favors"]',
-  'In the Feywild, we revel for centuries. Wine, song, dance—endless, eternal. I thought I knew pleasure. Then I visited the mortal realm and met a dying human who showed me more passion in one evening than I''d felt in five hundred years. When they passed, I understood: Limits create meaning. I''ve been chasing that intensity ever since. The Last Course—a place where beings from every realm come to share food, stories, and fleeting connections—is exactly where I need to be. Every meal here is a celebration of mortality''s beautiful urgency.',
+  '["acrobatics", "performance", "persuasion", "athletics"]',
+  '["Common", "Sylvan"]',
+  '["greataxe", "pan pipes", "handaxes", "entertainer''s pack", "fine clothes", "wine flask", "Feywild party favors"]',
+  'In the Feywild, we satyrs revel for centuries. Wine, song, dance—endless, eternal. I thought I knew pleasure. Then I visited the mortal realm and met a dying human who showed me more passion in one evening than I''d felt in five hundred years. When they passed, I understood: Limits create meaning. I''ve been chasing that intensity ever since. My hooves have carried me across a dozen realms, and my horns have crowned a thousand celebrations. The Last Course—a place where beings from every realm come to share food, stories, and fleeting connections—is exactly where I need to be. Every meal here is a celebration of mortality''s beautiful urgency.',
   'The Eternal Feast is the most intensely alive place I''ve ever encountered! Beings with spans of centuries sitting beside those with mere decades, all sharing food and moment together. The joy! The drama! The exquisite tension of temporary connections! I must experience every course, every guest, every impossible combination of existence!',
-  'Wild-looking elf with untamed silver hair and fierce amber eyes full of joy, tribal tattoos across bare muscular arms, goat-horn drinking cup at belt, wearing festive but battle-ready leather vest, surrounded by magical motes of joy and scattered musical notes, vibrant interdimensional restaurant background, whimsical fey style with warm celebratory lighting',
+  'Wild satyr with curling ram horns and fierce amber eyes full of joy, goat legs with brown fur ending in cloven hooves, bare muscular torso with tribal tattoos, untamed auburn hair with leaves tangled in it, goat-horn drinking cup raised in toast, wearing festive leather vest, surrounded by magical motes of joy and scattered musical notes, vibrant interdimensional restaurant background, whimsical fey style with warm celebratory lighting',
+  '/images/characters/eternal-feast/the-reveler.png?v=1',
   4
 );
 
--- 5. The Seeker (Catfolk Explorer) - The Eternal Feast
+-- 5. The Seeker (Catfolk Ranger) - The Eternal Feast
 INSERT INTO public.starter_character_templates (
   starter_campaign_id,
   template_key,
@@ -382,23 +390,25 @@ INSERT INTO public.starter_character_templates (
   adapted_backstory,
   campaign_hook,
   portrait_prompt,
+  portrait_url,
   display_order
 ) VALUES (
   'the-eternal-feast',
   'the-seeker',
   'The Seeker',
-  'Insatiably curious explorer of mysteries',
+  'Insatiably curious tracker of mysteries',
   'Catfolk',
-  'Rogue',
+  'Ranger',
   'Anthropologist',
   1,
-  '{"strength": 10, "dexterity": 18, "constitution": 10, "intelligence": 14, "wisdom": 12, "charisma": 12}',
+  '{"strength": 10, "dexterity": 16, "constitution": 12, "intelligence": 14, "wisdom": 16, "charisma": 10}',
   '{"traits": ["I''m driven by wanderlust that led me away from home", "I have a lesson for every situation"], "ideals": ["Discovery. I want to know everything about the world"], "bonds": ["I seek to preserve a memory of a culture that no longer exists"], "flaws": ["I am dogmatic in my beliefs"]}',
-  '["acrobatics", "investigation", "perception", "stealth"]',
+  '["nature", "survival", "perception", "investigation"]',
   '["Common", "Feline", "Primordial", "Celestial"]',
-  '["shortsword", "shortbow", "leather armor", "thieves'' tools", "journal", "explorer''s pack", "artifacts from various cultures"]',
-  'My people have a saying: "Curiosity is the path to all knowledge." They leave out the part about how many paths lead to death. I left my clan to find the legendary Library of Infinite Shelves—a story, a myth, a truth no one could confirm. Every answer led to three more questions. When I discovered that The Last Course exists in the spaces between dimensions, serving guests from realms beyond imagination, I knew I had found something even greater than a library: a crossroads of all knowledge, walking through the door three times a night.',
-  'The Eternal Feast hosts beings from dimensions I''ve only theorized might exist! Every guest is a walking encyclopedia of unknowable truths. Their customs, their foods, their stories—each detail is a thread leading to revelations about the nature of reality itself. I must observe everything, document every interaction, taste every impossible cuisine!',
-  'Sleek catfolk with spotted golden fur and impossibly bright curious green eyes, explorer''s gear with countless pouches bulging with collected curiosities, leather journal and quill always ready, ears perked forward with intense interest, sniffing at an exotic glowing dish being served, interdimensional restaurant kitchen background, adventure fantasy style with wonder-filled lighting',
+  '["longbow", "quiver with 20 arrows", "shortsword", "leather armor", "journal", "ranger''s pack", "hunting traps", "artifacts from various cultures"]',
+  'My people have a saying: "Curiosity is the path to all knowledge." They leave out the part about how many paths lead to death. I left my clan to track the legendary Library of Infinite Shelves—a story, a myth, a truth no one could confirm. My keen senses and natural instincts led me across countless wildernesses, following trails others couldn''t see. Every answer led to three more questions. When I discovered that The Last Course exists in the spaces between dimensions, serving guests from realms beyond imagination, I knew I had found something even greater than a library: a crossroads of all knowledge, where I could track the patterns of existence itself.',
+  'The Eternal Feast hosts beings from dimensions I''ve only theorized might exist! Every guest leaves traces—scents, auras, patterns of movement—that tell stories words cannot. My ranger''s instincts help me read these trails of existence. Their customs, their foods, their stories—each detail is a thread leading to revelations about the nature of reality itself. I must observe everything, document every interaction, taste every impossible cuisine!',
+  'Sleek catfolk with spotted golden fur and impossibly bright curious green eyes, longbow slung across back with nature-themed quiver, ranger''s gear with countless pouches bulging with collected curiosities, leather journal and quill always ready, ears perked forward with intense interest, nose twitching as they catch an exotic scent, interdimensional restaurant background with otherworldly flora, adventure fantasy style with wonder-filled lighting',
+  '/images/characters/eternal-feast/the-seeker.png?v=1',
   5
 );
