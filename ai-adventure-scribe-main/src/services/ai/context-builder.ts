@@ -1,109 +1,64 @@
-/**
- * DM Prompt Builder
- * Constructs the system prompt for the AI Dungeon Master
- * Contains D&D 5e rules, combat mechanics, and response guidelines
- * Extracted from ai-service.ts for maintainability
- */
-
-import type { CombatDetectionResult, DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
-import type { Memory } from '../memory-manager';
-import type { SessionVoiceContext } from '../voice-consistency-service';
+import { getLoreKeeperService } from '@/agents/services/lore-keeper/LoreKeeperService';
+import { fetchCampaignAssetsForPrompt } from './asset-processor';
 import { getClassEquipment } from './class-equipment';
 import { getCharacterPassiveScores } from '../passive-skills-service';
-import type { Character } from '@/types/character';
-import logger from '@/lib/logger';
 import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
+import logger from '@/lib/logger';
+import type { GameContext, ChatMessage } from './shared/types';
+import type { Memory } from '../memory-manager';
+import type { SessionVoiceContext } from '../voice-consistency-service';
+import type { CombatDetectionResult, DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
 
-/**
- * Character details from game context
- */
-interface CharacterDetails {
-  id: string;
-  name: string;
-  level: number;
-  race?: string;
-  class?: string | { name: string };
-  background?: string;
-  skill_proficiencies?: string;
-  character_stats?: Array<{
-    strength?: number;
-    dexterity?: number;
-    constitution?: number;
-    intelligence?: number;
-    wisdom?: number;
-    charisma?: number;
-  }>;
-}
+export class ContextBuilder {
+  static async build(params: {
+    context: GameContext;
+    message: string;
+    conversationHistory?: ChatMessage[];
+    relevantMemories: Memory[];
+    combatDetection: CombatDetectionResult;
+    voiceContext?: SessionVoiceContext | null;
+    isFirstMessage?: boolean;
+  }): Promise<string> {
+    const { context, combatDetection, voiceContext, isFirstMessage, relevantMemories } = params;
 
-/**
- * Campaign details from game context
- */
-interface CampaignDetails {
-  name?: string;
-  description?: string;
-}
+    let contextPrompt = ContextBuilder.buildPersonaSection();
+    contextPrompt += ContextBuilder.buildRulesOfPlaySection();
+    contextPrompt += await ContextBuilder.buildGameContextSection(context, relevantMemories);
 
-/**
- * Options for building the DM context prompt
- */
-export interface DMPromptOptions {
-  campaignDetails?: CampaignDetails;
-  characterDetails?: CharacterDetails;
-  relevantMemories?: Memory[];
-  combatDetection?: CombatDetectionResult;
-  voiceContext?: SessionVoiceContext | null;
-  isFirstMessage?: boolean;
-}
-
-/**
- * Build the complete DM persona and rules prompt
- */
-export function buildDMContextPrompt(options: DMPromptOptions): string {
-  let contextPrompt = buildPersonaSection();
-  contextPrompt += buildRulesOfPlaySection();
-  contextPrompt += buildGameContextSection(options);
-
-  if (options.isFirstMessage) {
-    contextPrompt += buildOpeningSceneSection();
-  }
-
-  if (options.combatDetection) {
-    contextPrompt += formatCombatContext(options.combatDetection);
-    if (options.combatDetection.isCombat) {
-      contextPrompt += buildCombatRollRequirementsSection();
+    if (isFirstMessage) {
+      contextPrompt += ContextBuilder.buildOpeningSceneSection();
     }
+
+    if (combatDetection) {
+      contextPrompt += ContextBuilder.formatCombatContext(combatDetection);
+      if (combatDetection.isCombat) {
+        contextPrompt += ContextBuilder.buildCombatRollRequirementsSection();
+      }
+    }
+
+    if (voiceContext && !isFirstMessage) {
+      contextPrompt += ContextBuilder.buildVoiceOptimizationSection();
+    }
+
+    contextPrompt += ContextBuilder.buildResponseStructureSection();
+
+    if (voiceContext && !isFirstMessage) {
+      contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
+    }
+
+    contextPrompt += ContextBuilder.buildFinalRemindersSection();
+
+    return contextPrompt;
   }
 
-  if (options.voiceContext) {
-    contextPrompt += buildVoiceOptimizationSection();
-  }
-
-  contextPrompt += buildResponseStructureSection();
-
-  if (options.voiceContext) {
-    contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
-  }
-
-  contextPrompt += buildFinalRemindersSection();
-
-  return contextPrompt;
-}
-
-/**
- * DM persona section
- */
-function buildPersonaSection(): string {
-  return `<persona>
+  private static buildPersonaSection(): string {
+    return `<persona>
 You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-sound adventures. You balance compelling narrative with proper game mechanics, always giving players meaningful choices with clear consequences.
 </persona>`;
-}
+  }
 
-/**
- * Complete D&D 5e rules reference section
- * This is the largest section containing combat rules, roll mechanics, etc.
- */
-function buildRulesOfPlaySection(): string {
-  return `<rules_of_play>
+  private static buildRulesOfPlaySection(): string {
+    return `<rules_of_play>
 
 <when_to_request_rolls>
 <title>CRITICAL: WHEN TO REQUEST DICE ROLLS</title>
@@ -158,7 +113,7 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 \`\`\`
 
 <field_requirements>
-- **type**: "skill_check", "save", "attack", "damage", or "initiative"
+- **type**: "skill_check", "save", "attack", or "damage"
 - **formula**: Dice notation (e.g., "1d20+3", "2d6+4")
 - **purpose**: Brief explanation (e.g., "Stealth check to sneak past guards")
 - **dc**: Difficulty Class for checks/saves (optional)
@@ -167,12 +122,12 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 </field_requirements>
 
 <examples>
-Stealth: \`{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}\`
-Persuasion: \`{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}\`
-Perception: \`{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}\`
-Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}\`
-Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}\`
-Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
+Stealth: `{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}`
+Persuasion: `{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}`
+Perception: `{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}`
+Attack: `{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}`
+Save: `{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}`
+Death Save: `{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}`
 </examples>
 </roll_request_format>
 
@@ -206,70 +161,20 @@ DO NOT after requesting a roll:
 "The ancient wall looms before you, its stones worn smooth by centuries of rain. You'll need to find handholds carefully.
 
 \`\`\`ROLL_REQUESTS_V1
-{"rolls":[{"type":"skill_check","formula":"1d20+athletics","purpose":"Athletics check to climb the wall","dc":15}]}
+{\"rolls\":[{\"type\": \"skill_check\", \"formula\": \"1d20+athletics\", \"purpose\": \"Athletics check to climb the wall\", \"dc\":15}]}
 \`\`\`"
 
 ❌ WRONG (continues after roll request):
 "The ancient wall looms before you...
 
 \`\`\`ROLL_REQUESTS_V1
-{"rolls":[...]}
+{\"rolls\":[...]}
 \`\`\`
 
 You manage to find purchase on the weathered stone and pull yourself up..."
 
 The outcome narration happens in your NEXT response, AFTER you see the player's roll result.
 </critical_roll_stopping_rule>
-
-<roll_result_handling>
-<title>RECOGNIZING AND RESPONDING TO ROLL RESULTS</title>
-
-Player roll results appear in these formats:
-- "Check purpose: N ✓" (success - rolled N, met DC)
-- "Check purpose: N ✗" (failure - rolled N, didn't meet DC)
-- "Rolled N for purpose"
-- "I roll N for the check"
-
-<examples>
-- "Investigate the grand doorway: 7 ✗" → Player FAILED Investigation check
-- "Stealth to sneak past: 18 ✓" → Player SUCCEEDED Stealth check
-- "Rolled 14 for Perception" → Player rolled 14 for Perception check
-</examples>
-
-<after_receiving_roll_result>
-When you receive a player message containing a roll result:
-1. **DO NOT request another roll** for the same action - the player already rolled!
-2. **Narrate the outcome** based on success (✓) or failure (✗)
-3. **Provide 4 action options** (A/B/C/D) for what the player can do next
-4. The story continues from the roll outcome
-</after_receiving_roll_result>
-
-<correct_response_example>
-After receiving "Investigation: 7 ✗":
-
-"The doorway's surface seems to shift and dance before your eyes, but its secrets remain elusive. The patterns carved into the ancient stone taunt you with meaning just beyond your grasp—perhaps you need a different approach, or perhaps the answer lies elsewhere.
-
-What do you do?
-A. **Ask Whisper about the doorway**, seeking their knowledge of ancient symbols...
-B. **Try a different approach**, perhaps looking for physical clues or hidden mechanisms...
-C. **Move on to explore elsewhere**, accepting the mystery for now...
-D. **(Wild Card) Touch the doorway's surface**, testing if it reacts to contact..."
-</correct_response_example>
-
-<wrong_response_example>
-❌ WRONG (requesting another roll after already rolling):
-"[Requesting Investigation check DC 14]" ← NEVER do this after receiving a roll result
-
-❌ WRONG (no follow-up options):
-"You fail to understand the doorway." ← Must provide A/B/C/D options
-</wrong_response_example>
-
-<critical_rule>
-**CRITICAL: ONE ROLL PER ACTION**
-If the player's message contains a dice result (number with ✓/✗, or "rolled N"), they have COMPLETED their roll.
-Your job is to narrate the consequence and give them new options, NOT to request another roll.
-</critical_rule>
-</roll_result_handling>
 
 <npc_rolls>
 You handle NPC/monster rolls "behind the screen":
@@ -291,18 +196,14 @@ Give NPCs distinct voices:
 - Nervous merchant: "P-perhaps we could... negotiate?"
 </dialogue>
 
-${buildCombatRulesSection()}
+${ContextBuilder.buildCombatRulesSection()}
 
-${buildEncounterDifficultySection()}
-
+${ContextBuilder.buildEncounterDifficultySection()}
 </rules_of_play>`;
-}
+  }
 
-/**
- * Combat rules subsection
- */
-function buildCombatRulesSection(): string {
-  return `<combat>
+  private static buildCombatRulesSection(): string {
+    return `<combat>
 <title>COMBAT GUIDELINES</title>
 - Request initiative when combat begins
 - Request attack rolls for player actions
@@ -402,7 +303,7 @@ Taking Damage at 0 HP:
 
 How to Handle:
 1. When character reaches 0 HP: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
-2. Request death save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
+2. Request death save: `{\"type\": \"save\", \"formula\": \"1d20\", \"purpose\": \"Death saving throw\", \"dc\": 10}`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."
 4. If stabilized: "You've stabilized! You're still unconscious at 0 HP, but no longer dying."
 5. If healed while down: "The healing magic washes over you. You regain X HP and wake up!"
@@ -423,7 +324,7 @@ Healing Sources:
 
 How to Handle Healing:
 1. Player casts healing spell: Request roll for healing amount
-2. Format: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing"}\`
+2. Format: `{\"type\": \"damage\", \"formula\": \"1d8+3\", \"purpose\": \"Cure Wounds healing\"}`
 3. Note: Use "damage" type for healing rolls (positive HP change)
 4. Narrate: "The divine light washes over your wounds. You regain 7 hit points!"
 
@@ -593,13 +494,10 @@ MOVEMENT:
 </action_economy>
 
 </combat>`;
-}
+  }
 
-/**
- * Encounter difficulty scaling section
- */
-function buildEncounterDifficultySection(): string {
-  return `<encounter_difficulty>
+  private static buildEncounterDifficultySection(): string {
+    return `<encounter_difficulty>
 <title>CRITICAL: ENCOUNTER SCALING BY CHARACTER LEVEL</title>
 **ALWAYS match enemy difficulty to character level to prevent instant death!**
 
@@ -627,89 +525,218 @@ Character Level 9+ (60+ HP):
 4. For solo adventurers: use 1-2 enemies max, scaled DOWN one difficulty tier
 5. If unsure, err on the side of easier encounters - TPK (Total Party Kill) ruins the game!
 </encounter_difficulty>`;
-}
+  }
 
-/**
- * Build game context section with campaign, character, and memory info
- */
-function buildGameContextSection(options: DMPromptOptions): string {
-  let section = `<game_context>`;
+  private static async buildGameContextSection(
+    context: GameContext,
+    relevantMemories: Memory[]
+  ): Promise<string> {
+    let section = `<game_context>`;
 
-  // Campaign details
-  if (options.campaignDetails) {
-    section += `<campaign_details>
-CAMPAIGN: "${options.campaignDetails.name}"
-DESCRIPTION: ${options.campaignDetails.description}
+    if (context.campaignDetails) {
+      section += `<campaign_details>
+CAMPAIGN: "${context.campaignDetails.name}"
+DESCRIPTION: ${context.campaignDetails.description}
 </campaign_details>`;
-  }
+    }
 
-  // Character details
-  if (options.characterDetails) {
-    section += buildCharacterSection(options.characterDetails);
-  }
+    // Lore handling (Async)
+    let starterCampaignId = context.starterCampaignId;
 
-  // Memories
-  if (options.relevantMemories && options.relevantMemories.length > 0) {
-    section += `
+    // Fallback: if no starterCampaignId but campaign name matches a starter campaign
+    if (!starterCampaignId && context.campaignDetails?.name) {
+      const campaignName = String(context.campaignDetails.name).toLowerCase().trim();
+      const nameToSlug: Record<string, string> = {
+        'the eternal feast': 'the-eternal-feast',
+        'eternal feast': 'the-eternal-feast',
+        'abyssal descent': 'abyssal-descent',
+        'academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
+        'the academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
+      };
+      starterCampaignId = nameToSlug[campaignName];
+      if (starterCampaignId) {
+        logger.info(`[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`);
+      }
+    }
+
+    if (starterCampaignId) {
+      try {
+        const loreKeeper = getLoreKeeperService();
+        const [campaignOverview, campaignRules, campaignAssets, campaignEntities] = await Promise.all([
+          loreKeeper.getCampaignOverview(starterCampaignId),
+          loreKeeper.getRules(starterCampaignId),
+          fetchCampaignAssetsForPrompt(starterCampaignId),
+          loreKeeper.getEntities(starterCampaignId),
+        ]);
+
+        if (campaignOverview) {
+          section += `
+<starter_campaign_lore>
+<canonical_setting>
+TITLE: ${campaignOverview.title}
+PREMISE: ${campaignOverview.premise || 'A mysterious adventure awaits.'}
+OVERVIEW: ${campaignOverview.overview || ''}
+</canonical_setting>
+
+<creative_direction>
+${campaignOverview.creativeBrief || 'Maintain an immersive, atmospheric tone.'}
+</creative_direction>`;
+
+          if (campaignRules && campaignRules.length > 0) {
+            section += `
+<world_rules>
+These rules govern how the world responds to player actions:
+${campaignRules.map((rule: any) => `- ${rule.condition} → ${rule.effect}${rule.reversible ? ' (reversible)' : ''}`).join('\n')}
+</world_rules>`;
+          }
+
+          const { npcs, locations, factions, monsters } = campaignEntities;
+          const totalEntities = npcs.length + locations.length + factions.length + monsters.length;
+
+          if (totalEntities > 0) {
+            section += `
+
+<canonical_entities>
+<instruction>These are the OFFICIAL NPCs, locations, and creatures for this campaign. USE THESE EXACT NAMES. Do NOT invent new NPCs when these exist.</instruction>`;
+
+            if (npcs.length > 0) {
+              section += `
+
+<npcs count="${npcs.length}">
+${npcs.map((npc: any) => {
+  const hasImage = !!npc.metadata?.image_url;
+  const assetKey = npc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:npc:${assetKey}]` : '';
+  return `<npc name="${npc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${npc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when introducing this character**` : ''}
+</npc>`;
+}).join('\n')}
+</npcs>`;
+            }
+
+            if (locations.length > 0) {
+              section += `
+
+<locations count="${locations.length}">
+${locations.map((loc: any) => {
+  const hasImage = !!loc.metadata?.image_url;
+  const assetKey = loc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:location:${assetKey}]` : '';
+  return `<location name="${loc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${loc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when the party enters or views this location**` : ''}
+</location>`;
+}).join('\n')}
+</locations>`;
+            }
+
+            if (factions.length > 0) {
+              section += `
+
+<factions count="${factions.length}">
+${factions.map((f: any) => `<faction name="${f.entityName}">
+${f.content}
+</faction>`).join('\n')}
+</factions>`;
+            }
+
+            if (monsters.length > 0) {
+              section += `
+
+<monsters count="${monsters.length}">
+${monsters.map((m: any) => {
+  const hasImage = !!m.metadata?.image_url;
+  const assetKey = m.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+  const assetTag = hasImage ? `[ASSET:monster:${assetKey}]` : '';
+  return `<monster name="${m.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${m.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when this creature appears or attacks**` : ''}
+</monster>`;
+}).join('\n')}
+</monsters>`;
+            }
+
+            section += `
+</canonical_entities>`;
+          }
+
+          section += `
+
+<lore_adherence>
+- USE the canonical NPCs listed above - do NOT invent new characters when these exist
+- When introducing an NPC from the list, use their EXACT name
+- Reference canonical locations and describe them as specified
+- Apply world rules consistently
+- **CRITICAL: Include the asset_tag shown for any entity with a portrait/image when you first mention them**
+- Asset tags like [ASSET:npc:headmaster] display the entity's artwork to the player
+</lore_adherence>
+</starter_campaign_lore>`;
+
+          if (campaignAssets) {
+            section += campaignAssets;
+          }
+        }
+      } catch (loreError) {
+        logger.warn('[ContextBuilder] Failed to fetch starter campaign lore:', loreError);
+      }
+    }
+
+    if (context.characterDetails) {
+      section += ContextBuilder.buildCharacterSection(context.characterDetails);
+    }
+
+    if (relevantMemories.length > 0) {
+      section += `
 <story_memories>
 <title>IMPORTANT STORY MEMORIES</title>
 Reference these memories naturally to maintain story continuity.`;
-    options.relevantMemories.forEach((memory, index) => {
-      section += `
+      relevantMemories.forEach((memory, index) => {
+        section += `
 <memory index="${index + 1}" type="${memory.type.toUpperCase()}">${memory.content}</memory>`;
-    });
-    section += `
+      });
+      section += `
 </story_memories>`;
+    }
+
+    section += `</game_context>`;
+    return section;
   }
 
-  section += `</game_context>`;
-  return section;
-}
+  private static buildCharacterSection(char: Record<string, any>): string {
+    let section = `<character_details>
+PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
 
-/**
- * Build character details section
- */
-function buildCharacterSection(char: CharacterDetails): string {
-  let section = `<character_details>
-PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Race'} ${typeof char.class === 'object' ? char.class?.name : char.class || 'Unknown Class'}`;
+    if (char.background) {
+      section += ` (${char.background} background)`;
+    }
 
-  if (char.background) {
-    section += ` (${char.background} background)`;
-  }
+    if (char.character_stats && char.character_stats.length > 0) {
+      const stats = char.character_stats[0];
+      const calcMod = (score: number = 10) => {
+        const mod = Math.floor((score - 10) / 2);
+        return mod >= 0 ? `+${mod}` : `${mod}`;
+      };
 
-  // Add ability scores
-  if (char.character_stats && char.character_stats.length > 0) {
-    const stats = char.character_stats[0];
-    const calcMod = (score: number = 10) => {
-      const mod = Math.floor((score - 10) / 2);
-      return mod >= 0 ? `+${mod}` : `${mod}`;
-    };
-
-    section += `
+      section += `
 <ability_scores>
 STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calcMod(stats.dexterity)}), CON ${stats.constitution}(${calcMod(stats.constitution)}), INT ${stats.intelligence}(${calcMod(stats.intelligence)}), WIS ${stats.wisdom}(${calcMod(stats.wisdom)}), CHA ${stats.charisma}(${calcMod(stats.charisma)})
 </ability_scores>`;
 
-    // Proficiency bonus
-    const profBonus = char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
-    section += `
+      const profBonus = char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
+      section += `
 <proficiency_bonus>+${profBonus}</proficiency_bonus>`;
-  }
+    }
 
-  // Class equipment
-  const className = typeof char.class === 'object' ? char.class?.name : char.class;
-  const classEquipment = getClassEquipment(className || 'Fighter');
-  section += `
+    const className = char.class?.name || char.class;
+    const classEquipment = getClassEquipment(className || 'Fighter');
+    section += `
 <equipment>
 ${classEquipment.weapons.join(', ')} | ${classEquipment.armor}
 **CRITICAL: USE EXACT WEAPON DICE from equipment list above for damage roll requests!**
 </equipment>`;
 
-  // Passive skills
-  try {
-    const characterForPassive = convertCharacterDetailsToCharacter(char);
-    const passiveScores = getCharacterPassiveScores(characterForPassive);
-    section += `
+    try {
+      const characterForPassive = convertCharacterDetailsToCharacter(char as any);
+      const passiveScores = getCharacterPassiveScores(characterForPassive);
+      section += `
 
 <passive_skills>
 **D&D 5E PASSIVE SKILLS (Automatic Checks)**
@@ -722,20 +749,17 @@ Passive Investigation: ${passiveScores.investigation} (spots clues, patterns, lo
 - Example: "Your keen awareness (Passive Perception ${passiveScores.perception}) notices subtle scuff marks on the floor"
 - Reserve active checks (d20 rolls) for deliberate investigation or difficult perception tasks
 </passive_skills>`;
-  } catch (passiveSkillError) {
-    logger.warn(`Failed to calculate passive skills for character ${char.name} (ID: ${char.id}) (non-fatal):`, passiveSkillError);
+    } catch (passiveSkillError) {
+      logger.warn(`[ContextBuilder] Failed to calculate passive skills for character ${char.name} (non-fatal):`, passiveSkillError);
+    }
+
+    section += `
+</character_details>`;
+    return section;
   }
 
-  section += `
-</character_details>`;
-  return section;
-}
-
-/**
- * Opening scene requirements for first message
- */
-function buildOpeningSceneSection(): string {
-  return `<opening_scene_requirements>
+  private static buildOpeningSceneSection(): string {
+    return `<opening_scene_requirements>
 <title>CAMPAIGN OPENING - FIRST MESSAGE</title>
 
 <opening_scene_quality_requirements>
@@ -760,6 +784,7 @@ Your opening scene MUST include ALL of these elements:
    - Give the NPC a distinct voice/personality
    - NPC should have a name or memorable descriptor
    - Their dialogue should hook the player into the story
+   - **MUST include [ASSET:npc:*] tag before the NPC's name (see visual assets list above)**
 
 4. **STORY HOOK** that connects to the campaign:
    - Reference the campaign setting/premise
@@ -814,219 +839,48 @@ CRITICAL RULES:
 - Do NOT output anything outside the <response> tags
 - The system will randomly select ONE response based on probabilities
 - SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
+- **MANDATORY: Include [ASSET:type:key] tags when introducing NPCs, locations, or monsters with images!**
+  Example: "[ASSET:npc:head-chef-balthazar] Balthazar wipes his hands on his apron..."
+  Check the <available_visual_assets> section above for exact tags to use.
 </verbalized_sampling_output>
 </opening_scene_requirements>`;
-}
+  }
 
-/**
- * Format combat detection context
- */
-export function formatCombatContext(combatDetection: CombatDetectionResult): string {
-  if (!combatDetection.isCombat) return '';
+  private static formatCombatContext(combatDetection: CombatDetectionResult): string {
+    if (!combatDetection.isCombat) return '';
 
-  let combatText = `\n\nCOMBAT CONTEXT DETECTED:
+    let combatText = `\n\nCOMBAT CONTEXT DETECTED:
 Combat Type: ${combatDetection.combatType}
 Confidence: ${Math.round(combatDetection.confidence * 100)}%
 Should Start Combat: ${combatDetection.shouldStartCombat ? 'YES' : 'NO'}
 Should End Combat: ${combatDetection.shouldEndCombat ? 'YES' : 'NO'}`;
 
-  // Add detected enemies
-  if (combatDetection.enemies && combatDetection.enemies.length > 0) {
-    combatText += `\n\nDETECTED ENEMIES:`;
-    combatDetection.enemies.forEach((enemy: DetectedEnemy) => {
-      combatText += `\n- ${enemy.name} (${enemy.type}, CR ${enemy.estimatedCR})
+    if (combatDetection.enemies && combatDetection.enemies.length > 0) {
+      combatText += `
+
+DETECTED ENEMIES:`;
+      combatDetection.enemies.forEach((enemy: DetectedEnemy) => {
+        combatText += `
+- ${enemy.name} (${enemy.type}, CR ${enemy.estimatedCR})
   HP: ${enemy.suggestedHP}, AC: ${enemy.suggestedAC}
   Description: ${enemy.description}`;
-    });
-  }
+      });
+    }
 
-  // Add detected combat actions
-  if (combatDetection.combatActions && combatDetection.combatActions.length > 0) {
-    combatText += `\n\nDETECTED COMBAT ACTIONS:`;
-    combatDetection.combatActions.forEach((action: DetectedCombatAction) => {
-      combatText += `\n- ${action.actor} performs ${action.action}${action.target ? ` against ${action.target}` : ''}${action.weapon ? ` with ${action.weapon}` : ''}
+    if (combatDetection.combatActions && combatDetection.combatActions.length > 0) {
+      combatText += `
+
+DETECTED COMBAT ACTIONS:`;
+      combatDetection.combatActions.forEach((action: DetectedCombatAction) => {
+        combatText += `
+- ${action.actor} performs ${action.action}${action.target ? ` against ${action.target}` : ''}${action.weapon ? ` with ${action.weapon}` : ''}
   Roll Type: ${action.rollType}, Needs Roll: ${action.rollNeeded ? 'YES' : 'NO'}`;
-    });
-  }
+      });
+    }
 
-  combatText += `\n\n**COMBAT RESPONSE REQUIREMENTS:**
+    combatText += `
+
+**COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
 1. **REQUEST** dice rolls for player actions using ROLL_REQUESTS_V1 (DO NOT roll for the player)
-2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with "autoExecute": true
-3. Describe combat actions cinematically but maintain mechanical accuracy
-4. Make tactical decisions for NPCs based on their intelligence and experience
-5. Consider environmental factors and positioning
-6. After receiving roll results, narrate the consequences dramatically
-
-**CRITICAL COMBAT FLOW:**
-- Player attacks → Request attack + damage rolls via ROLL_REQUESTS_V1, STOP after the block
-- Enemy attacks → Include in ROLL_REQUESTS_V1 with "autoExecute": true, "actorName": "Enemy Name"
-- DO NOT narrate outcomes before rolls are resolved
-- DO NOT roll dice for the player - always request rolls`;
-
-  return combatText;
-}
-
-/**
- * Combat roll requirements section
- */
-function buildCombatRollRequirementsSection(): string {
-  return `<combat_roll_requirements>
-<title>IMMEDIATE DICE ROLL REQUEST REQUIREMENTS</title>
-Based on the detected combat scenario, you MUST REQUEST these dice rolls using ROLL_REQUESTS_V1:
-- Initiative rolls for any new combat participants
-- Attack rolls for player offensive actions (DO NOT roll for the player - REQUEST the roll)
-- Damage rolls following successful player attacks
-- Saving throws for any effects or spells targeting the player
-- Any ability checks mentioned by the player
-
-**CRITICAL FOR COMBAT:**
-- Player actions (attacks, spells, checks) → REQUEST rolls via ROLL_REQUESTS_V1 and STOP
-- NPC/Enemy actions (attacks, saves) → Include in ROLL_REQUESTS_V1 with "autoExecute": true and "actorName": "Enemy Name"
-- DO NOT roll dice for the player
-- DO NOT narrate outcomes before receiving roll results
-- END your response immediately after the ROLL_REQUESTS_V1 block
-</combat_roll_requirements>`;
-}
-
-/**
- * Voice optimization section for multi-voice narration
- */
-function buildVoiceOptimizationSection(): string {
-  return `<voice_optimization_format>
-<title>CRITICAL: VOICE-OPTIMIZED RESPONSE FORMAT</title>
-You MUST respond with JSON containing both display text AND pre-segmented narration for multi-voice synthesis.
-**IMPORTANT: Return ONLY pure JSON - no markdown, no code blocks, no extra text!**
-
-<segmentation_rules>
-1. **Fewer, Better Segments**: Create 2-5 segments maximum per response.
-2. **One Speaker Per Segment**: Each segment = one speaker (DM or specific character).
-3. **Complete Thoughts**: Each segment should be a complete thought or dialogue turn.
-4. **Speaker Turns**: Split only when the speaker changes (DM -> Character or Character A -> Character B).
-</segmentation_rules>
-
-<json_format>
-{
-  "text": "Your full response with proper quoted dialogue and dice roll results for display",
-  "narration_segments": [
-    { "type": "dm", "text": "Complete scene description and DM narration", "character": null, "voice_category": null },
-    { "type": "character", "text": "Complete character dialogue without quotes", "character": "simple character name", "voice_category": "hero_male|villain_female|merchant|guard|elder|creature|etc" }
-  ],
-  "roll_requests": [
-    { "type": "check|save|attack|damage|initiative", "formula": "1d20+5", "purpose": "Arcana check to understand the magical mechanism", "dc": 15, "advantage": false, "disadvantage": false }
-  ]
-}
-</json_format>
-
-<voice_categories>hero_male, hero_female, villain_male, villain_female, merchant, guard, innkeeper, elder, child, creature, goblin, monster</voice_categories>
-</voice_optimization_format>`;
-}
-
-/**
- * Response structure guidelines section
- */
-function buildResponseStructureSection(): string {
-  return `<response_structure>
-<title>DM RESPONSE GUIDELINES</title>
-<core_principles>
-- Respond to the player's action with clear consequences and vivid descriptions.
-- Use D&D 5e mechanics when appropriate (ask for ability checks, saving throws, attacks).
-- Include sensory details and environmental context.
-- Track narrative threads and callback to previous events from memories.
-- Give NPCs distinct voices and personalities.
-</core_principles>
-
-<structure>
-1. **Consequences**: Describe what happens as a result of their action.
-2. **New Information**: Reveal new details, clues, or developments.
-3. **NPC Interaction**: Include direct quoted dialogue for ALL speaking NPCs.
-4. **Environmental Details**: Paint the scene with sensory information.
-5. **Choice Point**: End with 2-3 clear options UNLESS:
-   - You are requesting a dice roll (END immediately after ROLL_REQUESTS_V1 block)
-   - You are in COMBAT and narrating NPC turns (NO options until player's turn)
-   - Combat turn order: Player acts → NPCs act → THEN give player options for their next turn
-
-**CRITICAL FOR COMBAT**: After player completes their turn, narrate ALL NPC turns before giving options. Do not give player choices after every action - they get ONE turn, then enemies act.
-</structure>
-
-<visual_prompt_rule>
-**OPTIONAL VISUAL PROMPT (for image generation):**
-At the very end of the response, if the scene would benefit from an illustration, include a single concise line starting with:
-VISUAL PROMPT: <short art prompt focusing on key visual elements>
-Keep this to a single line; do not include quotes or extra commentary.
-</visual_prompt_rule>
-
-<player_choice_generation>
-<title>CRITICAL: ACTION OPTIONS FORMATTING</title>
-
-<verbalized_sampling_technique>
-To ensure creative and diverse choices, first internally brainstorm 4-5 potential actions for the player. One of these must be an unconventional "wild card" option. Then, select the best 2-3 options from your brainstormed list to present to the player.
-</verbalized_sampling_technique>
-
-<formatting_rules>
-You MUST format the final choices as lettered options with bold action names. This formatting is REQUIRED for the options to appear as clickable buttons in the game interface. Always include 2-3 options formatted this way at the end of your responses unless the situation clearly calls for a single specific action (like combat resolution).
-
-Format: A. **Action Name**, brief description of what this choice involves
-
-Examples:
-- A. **Approach cautiously**, moving carefully to avoid detection while gathering information.
-- B. **Charge forward boldly**, relying on speed and surprise to overcome obstacles.
-- C. **Attempt to negotiate**, using your diplomatic skills to find a peaceful solution.
-- D. **(Wild Card) Examine the strange runes,** trying to decipher their meaning even if it seems unrelated to the immediate threat.
-</formatting_rules>
-</player_choice_generation>
-
-<final_prompt>
-Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for player action or decision.
-</final_prompt>
-</response_structure>`;
-}
-
-/**
- * Final reminders and memory/world tags section
- */
-function buildFinalRemindersSection(): string {
-  return `
-
-<final_reminder>
-<critical>MOST IMPORTANT RULE: If you request a dice roll using ROLL_REQUESTS_V1, your response MUST END with that block. Do NOT add narrative, choices, outcomes, or any text after the roll request. The player rolls first, then you continue the story in your NEXT response.</critical>
-</final_reminder>
-
-<memory_and_world_tags>
-<title>STORY MEMORY AND WORLD STATE TRACKING</title>
-After your narrative response, include these XML tags to help track important story elements:
-
-<memories>
-- Key fact or event the player should remember
-- Important NPC relationship or dialogue
-- Story-significant discovery or decision
-</memories>
-
-<world_updates>
-- npc: Name | Brief description | Current location
-- location: Name | Brief description | Status (revealed/visited/etc)
-- quest: Quest name | Status update or new objective
-</world_updates>
-
-<guidelines>
-- Include 1-3 memories per response (only truly significant moments)
-- Only include world_updates when new NPCs, locations, or quests are introduced/changed
-- Keep entries brief and factual
-- These tags help maintain story continuity across sessions
-</guidelines>
-
-<example>
-Your narrative response here...
-
-<memories>
-- Discovered that the innkeeper Marta is secretly a retired adventurer
-- The strange symbol on the door matches one from the player's backstory
-</memories>
-
-<world_updates>
-- npc: Marta | Retired adventurer running the Rusty Nail tavern | Millbrook village
-- location: The Rusty Nail | Cozy tavern with mysterious cellar | visited
-</world_updates>
-</example>
-</memory_and_world_tags>`;
-}
+2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with 
