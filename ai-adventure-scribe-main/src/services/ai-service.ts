@@ -22,6 +22,8 @@ import { parseXMLTagsFromResponse } from './ai/xml-parser';
 import { getClassEquipment } from './ai/class-equipment';
 import { ContextBuilder } from './ai/context-builder';
 import { GeminiClient } from './ai/gemini-client';
+import { ChatPersistence } from './ai/chat-persistence';
+import { deduplicateParagraphs } from './ai/response-deduplicator';
 import {
   fetchCampaignAssetsForPrompt,
   applyAssetPostProcessing,
@@ -51,63 +53,6 @@ const DEDUPE_MS = 2000;
 function keyFor(sessionId: string | undefined, message: string, historyLen: number) {
   return `${sessionId || 'nosession'}|${message.slice(0, 256)}|${historyLen}`;
 }
-
-/**
- * Remove duplicate/accumulated paragraphs from AI output
- * Pattern: AI outputs Para1, Para2, Para3, then "Para1 Para2 Para3" collapsed
- */
-function deduplicateParagraphs(text: string): string {
-  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
-
-  // Split on double newlines (paragraph breaks)
-  let paragraphs = text
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  if (paragraphs.length <= 1) return text;
-
-  const result: string[] = [];
-
-  for (let i = 0; i < paragraphs.length; i++) {
-    const currentNorm = normalize(paragraphs[i]);
-    let isDuplicate = false;
-
-    // Check if this paragraph contains 2+ previous paragraphs in sequence
-    if (i >= 2) {
-      for (let startIdx = 0; startIdx <= i - 2 && !isDuplicate; startIdx++) {
-        let consecutiveFound = 0;
-        let searchPos = 0;
-
-        for (let j = startIdx; j < i; j++) {
-          const prevStart = normalize(paragraphs[j]).slice(0, 50);
-          const foundAt = currentNorm.indexOf(prevStart, searchPos);
-
-          if (foundAt !== -1 && foundAt >= searchPos) {
-            consecutiveFound++;
-            searchPos = foundAt + prevStart.length;
-          } else {
-            break;
-          }
-        }
-
-        if (consecutiveFound >= 2) {
-          isDuplicate = true;
-          logger.debug(`[Dedup] Removed accumulated paragraph at index ${i} (contained ${consecutiveFound} previous paragraphs)`);
-        }
-      }
-    }
-
-    if (!isDuplicate) {
-      result.push(paragraphs[i]);
-    }
-  }
-
-  return result.join('\n\n');
-}
-
-// sampleFromVerbalizedResponse is now imported from ./ai/shared/verbalized-sampling
-// It provides robust multi-strategy parsing with safe fallback to prevent duplicates
 
 export class AIService {
   /**
@@ -170,8 +115,6 @@ export class AIService {
     // Delegate to modular campaign generator (includes verbalized sampling)
     return generateCampaignName(params);
   }
-
-  // NOTE: formatCombatContext is now imported from ./ai/dm-prompt-builder
 
   /**
    * Simplified chat with AI DM for MVP with fallback and streaming support
@@ -517,7 +460,7 @@ export class AIService {
                   .replace(/,\s*}/g, '}') // Remove trailing commas before }
                   .replace(/,\s*]/g, ']') // Remove trailing commas before ]
                   .replace(/}\s*{/g, '},{') // Fix missing commas between objects
-                  .replace(/"\s*:\s*"([^\"]*?)"\s*([,}])/g, '":"$1"$2'); // Fix spacing issues
+                  .replace(/"\s*:\s*"([^"]*?)"\s*([,}])/g, '":"$1"$2'); // Fix spacing issues
 
                 // Parse the cleaned JSON
                 const structuredResponse = JSON.parse(cleanedResponse);
@@ -552,4 +495,299 @@ export class AIService {
                 // Try to extract text from malformed JSON
                 try {
                   // Look for text field in the response even if JSON is malformed
-                  const textMatch = rawResponse.match(/
+                  const textMatch = rawResponse.match(/"text"\s*:\s*"([\s\S]*?)"(?=\s*[,}])/);
+                  if (textMatch) {
+                    const extractedText = textMatch[1]
+                      .replace(/\\"/g, '"')
+                      .replace(/\\n/g, '\n')
+                      .replace(/\\\\/g, '\\');
+                    logger.debug('🔧 Extracted text from malformed JSON');
+                    result = applyAssetPostProcessing({ text: extractedText });
+                  } else {
+                    // Final fallback - return raw response with minimal cleaning
+                    let cleanText = rawResponse;
+                    if (cleanText.trim().startsWith('{') && cleanText.includes('"text"')) {
+                      // Try to find where the actual text content starts and ends
+                      const startMatch = cleanText.match(/"text"\s*:\s*"/);
+                      if (startMatch) {
+                        const startIndex = startMatch.index! + startMatch[0].length;
+                        let textContent = cleanText.substring(startIndex);
+                        const endMatch = textContent.match(/"\s*[,}]/);
+                        if (endMatch) {
+                          textContent = textContent.substring(0, endMatch.index);
+                        } else {
+                          const lastQuoteIndex = textContent.lastIndexOf('"');
+                          if (lastQuoteIndex > 0) {
+                            textContent = textContent.substring(0, lastQuoteIndex);
+                          }
+                        }
+                        cleanText = textContent
+                          .replace(/\\"/g, '"')
+                          .replace(/\\n/g, '\n')
+                          .replace(/\\\\/g, '\\');
+                      }
+                    }
+                    result = applyAssetPostProcessing({ text: cleanText || rawResponse });
+                  }
+                } catch (extractError) {
+                  logger.warn('Could not extract text from malformed JSON:', extractError);
+                  result = applyAssetPostProcessing({ text: rawResponse });
+                }
+             }
+        } else {
+             result = applyAssetPostProcessing({ text: rawResponse });
+        }
+
+        logger.info('Successfully generated DM response using local Gemini API');
+
+        // Process voice assignments if we have structured data
+        if (result.narration_segments && params.context.sessionId && voiceContext) {
+          try {
+            // Normalize segment types for compatibility
+            type VoiceSegment = {
+              type: string;
+              text: string;
+              character?: string;
+              voice_category?: string;
+            };
+            const normalizedSegments: VoiceSegment[] = result.narration_segments.map(
+              (segment: NarrationSegment) => ({
+                ...segment,
+                type:
+                  segment.type === 'dm'
+                    ? 'narration'
+                    : segment.type === 'character'
+                      ? 'dialogue'
+                      : (segment.type as string),
+              }),
+            );
+
+            await voiceConsistencyService.processVoiceAssignments(
+              params.context.sessionId,
+              normalizedSegments,
+            );
+            logger.info('🎪 Processed voice assignments for character consistency');
+          } catch (voiceError) {
+            logger.warn('Voice assignment processing failed (non-fatal):', voiceError);
+          }
+        }
+
+        // ========================================================================
+        // PHASE 2: XML-TAGGED MEMORY AND WORLD EXTRACTION
+        // ========================================================================
+        if (params.context.sessionId) {
+          // Parse XML tags from the response
+          const xmlParsed = parseXMLTagsFromResponse(result.text);
+
+          // If XML tags were found, use them directly (no additional API calls!)
+          if (xmlParsed.hadTags) {
+            logger.info(`📋 Found XML tags in DM response: ${xmlParsed.memories.length} memories, ${xmlParsed.worldUpdates.npcs.length} NPCs, ${xmlParsed.worldUpdates.locations.length} locations, ${xmlParsed.worldUpdates.quests.length} quests`);
+
+            // Store memories from XML tags (no API call needed)
+            if (xmlParsed.memories.length > 0) {
+              try {
+                const memoriesToSave = xmlParsed.memories.map((content) => ({
+                  session_id: params.context.sessionId!,
+                  campaign_id: params.context.campaignId,
+                  content,
+                  type: 'event',
+                  memory_type: 'story_event',
+                  importance: 4,
+                  metadata: { source: 'xml_extraction', characterId: params.context.characterId },
+                }));
+                await MemoryManager.saveMemories(memoriesToSave);
+                logger.info(`🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`);
+              } catch (memoryError) {
+                logger.warn('Failed to save XML-extracted memories (non-fatal):', memoryError);
+              }
+            }
+
+            // Process world updates from XML tags
+            const hasWorldUpdates = xmlParsed.worldUpdates.npcs.length > 0 ||
+              xmlParsed.worldUpdates.locations.length > 0 ||
+              xmlParsed.worldUpdates.quests.length > 0;
+
+            if (hasWorldUpdates) {
+              try {
+                for (const npc of xmlParsed.worldUpdates.npcs) {
+                  await WorldBuilderService.saveNPCFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    npc,
+                  );
+                }
+                for (const loc of xmlParsed.worldUpdates.locations) {
+                  await WorldBuilderService.saveLocationFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    loc,
+                  );
+                }
+                for (const quest of xmlParsed.worldUpdates.quests) {
+                  await WorldBuilderService.saveQuestFromXML(
+                    params.context.campaignId,
+                    params.context.sessionId!,
+                    quest,
+                  );
+                }
+                logger.info(`🌍 World expanded from XML: +${xmlParsed.worldUpdates.locations.length} locations, +${xmlParsed.worldUpdates.npcs.length} NPCs, +${xmlParsed.worldUpdates.quests.length} quests`);
+              } catch (worldError) {
+                logger.warn('Failed to save XML-extracted world updates (non-fatal):', worldError);
+              }
+            }
+
+            // Update result.text to be the clean narrative without XML tags
+            result.text = xmlParsed.narrative;
+          } else {
+            // No XML tags found - fall back to traditional extraction
+            logger.info('⚠️ No XML tags found in DM response, using fallback extraction');
+
+            const shouldExtractMemory =
+              params.userPlan === 'pro' ||
+              params.userPlan === 'enterprise' ||
+              !params.userPlan ||
+              (params.turnCount !== undefined && params.turnCount % 3 === 0);
+
+            if (shouldExtractMemory) {
+              try {
+                const memoryContext: MemoryContext = {
+                  sessionId: params.context.sessionId,
+                  campaignId: params.context.campaignId,
+                  characterId: params.context.characterId,
+                  currentMessage: params.message,
+                  recentMessages:
+                    params.conversationHistory?.slice(-5).map((msg) => msg.content) || [],
+                };
+
+                const extractionResult = await MemoryManager.extractMemories(
+                  memoryContext,
+                  params.message,
+                  result.text,
+                );
+
+                if (extractionResult.memories.length > 0) {
+                  await MemoryManager.saveMemories(extractionResult.memories);
+                  logger.info(`🧠 Extracted and saved ${extractionResult.memories.length} memories (fallback API call)`);
+                }
+              } catch (memoryError) {
+                logger.warn('Memory extraction failed (non-fatal):', memoryError);
+              }
+            } else {
+              logger.info(
+                `⏭️ Skipping memory extraction for free tier (turn ${params.turnCount}, next extraction on turn ${params.turnCount ? Math.ceil((params.turnCount + 1) / 3) * 3 : 'unknown'})`,
+              );
+            }
+
+            try {
+              const worldExpansion = await WorldBuilderService.respondToPlayerAction(
+                params.context.campaignId,
+                params.context.sessionId!,
+                params.context.characterId,
+                params.message,
+                result.text,
+              );
+
+              if (
+                worldExpansion &&
+                worldExpansion.locations.length +
+                  worldExpansion.npcs.length +
+                  worldExpansion.quests.length >
+                  0
+              ) {
+                logger.info(
+                  `🌍 World expanded (fallback): +${worldExpansion.locations.length} locations, +${worldExpansion.npcs.length} NPCs, +${worldExpansion.quests.length} quests`,
+                );
+              }
+            } catch (worldError) {
+              logger.warn('World building failed (non-fatal):', worldError);
+            }
+          }
+        }
+
+        // Add combat detection data to the result
+        const enhancedResult = {
+          ...result,
+          combatDetection: {
+            isCombat: combatDetection.isCombat,
+            confidence: combatDetection.confidence,
+            combatType: combatDetection.combatType,
+            shouldStartCombat: combatDetection.shouldStartCombat,
+            shouldEndCombat: combatDetection.shouldEndCombat,
+            enemies: combatDetection.enemies || [],
+            combatActions: combatDetection.combatActions || [],
+          },
+        };
+
+        return enhancedResult;
+      } catch (geminiError) {
+        logger.error('Local Gemini API failed:', geminiError);
+        throw new Error('Failed to get DM response - AI service unavailable');
+      }
+    })(); // End of the async promise wrapper
+
+    // Store promise in in-flight map and return it
+    inFlight.set(key, { ts: now, promise: p });
+    return p;
+  }
+
+  /**
+   * Save a chat message to the database
+   */
+  static async saveChatMessage(params: {
+    sessionId: string;
+    role: 'user' | 'assistant';
+    content: string;
+    speakerId?: string;
+    id?: string;
+  }): Promise<void> {
+    return ChatPersistence.saveChatMessage(params);
+  }
+
+  /**
+   * Get conversation history for a session
+   */
+  static async getConversationHistory(sessionId: string): Promise<ChatMessage[]> {
+    return ChatPersistence.getConversationHistory(sessionId);
+  }
+
+  /**
+   * Generate an opening message for a new campaign session
+   * Uses chatWithDM with empty message/history to trigger first message flow
+   */
+  static async generateOpeningMessage(params: { context: GameContext }): Promise<string> {
+    const response = await AIService.chatWithDM({
+      message: '',
+      context: params.context,
+      conversationHistory: [],
+    });
+
+    if (typeof response === 'string') {
+      return response;
+    }
+    return (response as any)?.text || (response as any)?.content || 'Welcome to your adventure!';
+  }
+
+  /**
+   * Get Gemini API manager statistics (for debugging)
+   */
+  static getApiStats(): {
+    currentKey: ReturnType<GeminiApiManager['getCurrentKeyInfo']>;
+    allKeyStats: ReturnType<GeminiApiManager['getStats']>;
+    rateLimits: ReturnType<GeminiApiManager['getRateLimitStats']>;
+  } {
+    try {
+      const manager = this.getGeminiManager();
+      return {
+        currentKey: manager.getCurrentKeyInfo(),
+        allKeyStats: manager.getStats(),
+        rateLimits: manager.getRateLimitStats(),
+      };
+    } catch (error) {
+      return { error: 'Gemini API manager not available' } as unknown as {
+        currentKey: ReturnType<GeminiApiManager['getCurrentKeyInfo']>;
+        allKeyStats: ReturnType<GeminiApiManager['getStats']>;
+        rateLimits: ReturnType<GeminiApiManager['getRateLimitStats']>;
+      };
+    }
+  }
+}
