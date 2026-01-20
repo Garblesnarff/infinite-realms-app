@@ -499,7 +499,7 @@ export class WorldBuilderService {
    */
   static async saveNPCFromXML(
     campaignId: string,
-    sessionId: string,
+    _sessionId: string,  // Kept for API compatibility but not used (column doesn't exist)
     npc: { name: string; description: string; location: string },
   ): Promise<void> {
     try {
@@ -516,15 +516,14 @@ export class WorldBuilderService {
         return;
       }
 
+      // Only use columns that exist in the npcs table schema:
+      // id, campaign_id, name, race, occupation, personality, description, backstory,
+      // relationship, location, image_url, voice_id, stats, created_at, updated_at
       const { error } = await supabase.from('npcs').insert({
         campaign_id: campaignId,
-        session_id: sessionId,
         name: npc.name,
         description: npc.description,
-        current_location: npc.location,
-        role: 'supporting', // Default role for XML-extracted NPCs
-        disposition: 'neutral', // Default disposition
-        generated_by: 'xml_extraction',
+        location: npc.location,  // Use 'location' not 'current_location'
       });
 
       if (error) {
@@ -542,8 +541,8 @@ export class WorldBuilderService {
    */
   static async saveLocationFromXML(
     campaignId: string,
-    sessionId: string,
-    location: { name: string; description: string; status: string },
+    _sessionId: string,  // Kept for API compatibility but not used (column doesn't exist)
+    location: { name: string; description: string; status?: string },  // status is optional, not saved
   ): Promise<void> {
     try {
       // Check if location already exists (by name in this campaign)
@@ -559,12 +558,13 @@ export class WorldBuilderService {
         return;
       }
 
+      // Only use columns that exist in the locations table schema:
+      // id, campaign_id, name, location_type, description, population, climate, terrain,
+      // notable_features[], connected_locations[], image_url, map_url, metadata, created_at, updated_at, generated_by
       const { error } = await supabase.from('locations').insert({
         campaign_id: campaignId,
-        session_id: sessionId,
         name: location.name,
         description: location.description,
-        status: location.status || 'revealed',
         location_type: 'point_of_interest', // Default type for XML-extracted locations
         generated_by: 'xml_extraction',
       });

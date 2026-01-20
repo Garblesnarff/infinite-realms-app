@@ -46,15 +46,42 @@ export const usePendingRolls = () => {
     // Parse roll requests from the last DM message
     const rollRequests = parseRollRequests(lastDMMessage.text);
 
-    // If there are roll requests and no player dice roll responses after, they're pending
+    // Check if the last player message overall was a dice roll
+    // This handles the case where:
+    //   1. DM requests roll
+    //   2. Player rolls
+    //   3. AI incorrectly requests ANOTHER roll (bug we're mitigating)
+    // In step 3, playerResponsesAfter is empty (no messages after buggy AI response),
+    // but lastPlayerMessage IS a dice roll, so we suppress the notification.
+    //
+    // Tradeoff: If AI correctly requests a NEW roll immediately after player rolls,
+    // we'd briefly suppress that too. But the dice UI remains available, and once
+    // the player takes any other action, normal behavior resumes.
+    const playerMessages = messages.filter((m) => m.sender === 'player');
+    const lastPlayerMessage = playerMessages.length > 0 ? playerMessages[playerMessages.length - 1] : null;
+
+    // Detect dice roll patterns in player message
+    const isDiceRollMessage = (msg: typeof lastPlayerMessage): boolean => {
+      if (!msg) return false;
+      if (msg.context?.intent === 'dice_roll') return true;
+      const text = msg.text || '';
+      return (
+        /:\s*\d+\s*[✓✗]/u.test(text) ||  // "Perception: 15 ✓" or "Investigation: 7 ✗"
+        /rolled?\s+\d+/i.test(text) ||     // "rolled 15" or "I roll 15"
+        /\d+\s*[✓✗]/u.test(text)           // "15 ✓" anywhere
+      );
+    };
+
+    const wasJustDiceRoll = isDiceRollMessage(lastPlayerMessage);
+
+    // Pending if: roll requests exist AND player hasn't responded with a dice roll
+    // Two checks needed:
+    //   1. wasJustDiceRoll - catches buggy "AI requests roll right after player rolled"
+    //   2. playerResponsesAfter - catches normal "player rolled after DM requested"
     const hasPendingRolls =
       rollRequests.length > 0 &&
-      !playerResponsesAfter.some(
-        (msg) =>
-          msg.context?.intent === 'dice_roll' ||
-          msg.text.toLowerCase().includes('rolled') ||
-          msg.text.toLowerCase().includes('i roll'),
-      );
+      !wasJustDiceRoll &&
+      !playerResponsesAfter.some((msg) => isDiceRollMessage(msg));
 
     return {
       hasPendingRolls,
