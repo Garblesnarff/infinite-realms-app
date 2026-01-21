@@ -1,5 +1,5 @@
 import { Plus, Users } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import CampaignList from '@/components/campaign-list/campaign-list';
@@ -16,23 +16,12 @@ const Index = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [sortBy, setSortBy] = React.useState<'name' | 'created_at'>('created_at');
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-100">
       {/* Hero Header */}
       <div
-        className={`relative bg-no-repeat py-16 sm:py-20 md:py-24 px-4 bg-gradient-to-br from-slate-900 via-purple-900/40 to-indigo-900 ${!isMobile ? 'bg-fixed' : 'bg-scroll'}`}
+        className="relative bg-no-repeat py-16 sm:py-20 md:py-24 px-4 bg-gradient-to-br from-slate-900 via-purple-900/40 to-indigo-900"
         style={{
           backgroundImage: "url('/hero_header.png')",
           backgroundSize: 'cover',
