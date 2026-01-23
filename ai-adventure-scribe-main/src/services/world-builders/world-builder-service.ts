@@ -622,7 +622,6 @@ export class WorldBuilderService {
         description: quest.update,
         status: 'active',
         type: 'side', // Default type for XML-extracted quests
-        generated_by: 'xml_extraction',
       });
 
       if (error) {
