@@ -1,5 +1,6 @@
 import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
 import { GEMINI_TEXT_MODEL } from '@/config/ai';
+import { llmApiClient } from '@/services/llm-api-client';
 
 import type {
   Memory as UIMemory,
@@ -99,16 +100,18 @@ export class MemoryService {
     });
   }
 
+  /**
+   * Extract memories from conversation using dedicated extraction endpoint.
+   * Uses free model (DeepSeek V3.1 Nex-N1) with paid fallback (ByteDance Seed 1.6 Flash).
+   * This is ~99% cheaper than using the main LLM model for extraction.
+   */
   static async extractMemories(
     context: MemoryContext,
     userMessage: string,
     aiResponse: string,
   ): Promise<MemoryExtractionResult> {
     try {
-      const geminiManager = MemoryService.getGeminiManager();
-      return await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-        const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
+      const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
 
 CONTEXT:
 - Session: ${context.sessionId}
@@ -134,16 +137,20 @@ Extract 1-4 key memories in this JSON format:
     }
   ]
 }`;
-        const response = await model.generateContent(extractionPrompt);
-        const text = await response.response.text();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) return { memories: [] };
-        try {
-          return JSON.parse(jsonMatch[0]) as MemoryExtractionResult;
-        } catch {
-          return { memories: [] };
-        }
-      });
+
+      // Use dedicated extraction endpoint (free model with paid fallback)
+      const text = await llmApiClient.extractMemories(extractionPrompt, 1000);
+
+      if (!text) return { memories: [] };
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return { memories: [] };
+
+      try {
+        return JSON.parse(jsonMatch[0]) as MemoryExtractionResult;
+      } catch {
+        return { memories: [] };
+      }
     } catch {
       return { memories: [] };
     }

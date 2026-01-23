@@ -395,4 +395,105 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         requestType: t.Optional(t.Union([t.Literal('user'), t.Literal('system')])),
       }),
     }
+  )
+
+  /**
+   * Extract memories via LLM (uses free model with paid fallback)
+   * POST /v1/llm/extract
+   *
+   * Uses OPENROUTER_EXTRACTION_MODEL (free) as primary,
+   * falls back to OPENROUTER_EXTRACTION_FALLBACK_MODEL on error.
+   */
+  .post(
+    '/extract',
+    async ({ request, body, set }) => {
+      // Direct auth check
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
+        set.status = 401;
+        return { error: authError || 'Unauthorized' };
+      }
+
+      const { prompt, maxTokens = 1000 } = body || {};
+
+      if (!prompt || typeof prompt !== 'string') {
+        set.status = 400;
+        return { error: 'Missing prompt' };
+      }
+
+      // Use system quota for extraction (doesn't count against user's chat quota)
+      const quota = await AIUsageService.checkQuotaAndConsume({
+        userId: user.userId,
+        plan: user.plan,
+        type: 'llm_system',
+        units: 1,
+      });
+      if (!quota.allowed) {
+        set.status = 402;
+        return { error: 'AI quota exceeded', resetAt: quota.resetAt };
+      }
+
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) {
+        set.status = 500;
+        return { error: 'Server not configured for OpenRouter' };
+      }
+
+      // Models to try: free primary, cheap fallback
+      const models = [
+        process.env.OPENROUTER_EXTRACTION_MODEL || 'nex-agi/deepseek-v3.1-nex-n1:free',
+        process.env.OPENROUTER_EXTRACTION_FALLBACK_MODEL || 'bytedance/seed-1.6-flash',
+      ];
+
+      const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+
+      for (const model of models) {
+        try {
+          const reqBody = {
+            model,
+            messages,
+            max_tokens: maxTokens,
+            temperature: 0.3, // Lower temp for structured extraction
+          };
+
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': process.env.APP_ORIGIN || 'http://localhost:5173',
+              'X-Title': 'AI Adventure Scribe - Memory Extraction',
+            },
+            body: JSON.stringify(reqBody),
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            logger.warn({ msg: 'LLM_EXTRACT_MODEL_FAILED', model, status: response.status, errText });
+            continue; // Try next model
+          }
+
+          type ORChatResp = { choices?: { message?: { content?: string } }[] };
+          const data = (await response.json()) as ORChatResp;
+          const text: string = data.choices?.[0]?.message?.content ?? '';
+
+          logger.info({ msg: 'LLM_EXTRACT_SUCCESS', model, promptLength: prompt.length, responseLength: text.length });
+          return { text, model };
+        } catch (err) {
+          logger.warn({ msg: 'LLM_EXTRACT_ERROR', model, error: err });
+          continue; // Try next model
+        }
+      }
+
+      // All models failed
+      logger.error({ msg: 'LLM_EXTRACT_ALL_FAILED', models });
+      set.status = 503;
+      return { error: 'All extraction models failed' };
+    },
+    {
+      body: t.Object({
+        prompt: t.String(),
+        maxTokens: t.Optional(t.Number()),
+      }),
+    }
   );

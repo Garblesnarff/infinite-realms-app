@@ -223,6 +223,27 @@ class LlmApiClient {
       return null;
     }
   }
+
+  /**
+   * Extract memories from conversation using dedicated extraction endpoint.
+   * Uses free model (DeepSeek V3.1 Nex-N1) with paid fallback (ByteDance Seed 1.6 Flash).
+   * @param prompt - The extraction prompt containing conversation context
+   * @param maxTokens - Max tokens for response (default 1000)
+   * @returns The extracted text (JSON string with memories)
+   */
+  async extractMemories(prompt: string, maxTokens: number = 1000): Promise<string> {
+    try {
+      const res = await this.fetchWithAuth('/v1/llm/extract', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, maxTokens }),
+      });
+      const data = await res.json();
+      return data?.text ?? '';
+    } catch (err) {
+      console.warn('[LLMApiClient] Memory extraction failed:', err);
+      return '';
+    }
+  }
 }
 
 export const llmApiClient = new LlmApiClient();
