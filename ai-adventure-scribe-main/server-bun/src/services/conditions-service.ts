@@ -42,6 +42,28 @@ const INCOMPATIBLE_CONDITIONS: Record<string, string[]> = {
   'Prone': ['Flying'], // Can't be prone while flying (if we add flying status)
 };
 
+/**
+ * Row structure for encounter conditions query
+ */
+interface EncounterConditionRow {
+  id: string;
+  participant_id: string;
+  condition_id: string;
+  duration_type: string;
+  duration_value: number | null;
+  save_dc: number | null;
+  save_ability: string | null;
+  applied_at_round: number;
+  expires_at_round: number | null;
+  source_description: string | null;
+  is_active: boolean;
+  created_at: string;
+  condition_name: string;
+  condition_description: string;
+  mechanical_effects: string;
+  icon_name: string | null;
+}
+
 export class ConditionsService {
   /**
    * Apply a condition to a combat participant
@@ -268,10 +290,99 @@ export class ConditionsService {
    */
   static async getMechanicalEffects(participantId: string): Promise<AggregatedMechanicalEffects> {
     const conditions = await this.getActiveConditions(participantId);
+    return this.calculateAggregatedEffects(conditions);
+  }
 
-    const aggregated = {
-      appliedConditions: [] as string[],
-    } as AggregatedMechanicalEffects;
+  /**
+   * Get all active conditions for all participants in an encounter
+   */
+  static async getEncounterConditions(encounterId: string): Promise<
+    Record<
+      string,
+      {
+        conditions: ParticipantConditionWithDetails[];
+        aggregatedEffects: AggregatedMechanicalEffects;
+      }
+    >
+  > {
+    const result = await db.execute<Record<string, unknown>>(
+      sql`
+        SELECT
+          cpc.*,
+          cl.name as condition_name,
+          cl.description as condition_description,
+          cl.mechanical_effects,
+          cl.icon_name,
+          cp.id as participant_id
+        FROM combat_participant_conditions cpc
+        JOIN conditions_library cl ON cl.id = cpc.condition_id
+        JOIN combat_participants cp ON cp.id = cpc.participant_id
+        WHERE cp.encounter_id = ${encounterId}
+          AND cpc.is_active = true
+        ORDER BY cpc.applied_at_round DESC
+      `
+    );
+
+    const participantsMap: Record<string, ParticipantConditionWithDetails[]> = {};
+
+    const rows = (result || []) as unknown as EncounterConditionRow[];
+
+    rows.forEach((row) => {
+      const pid = row.participant_id;
+      if (!participantsMap[pid]) participantsMap[pid] = [];
+
+      const mechanicalEffects = this.parseMechanicalEffects(row.mechanical_effects);
+      participantsMap[pid].push({
+        id: row.id,
+        participantId: row.participant_id,
+        conditionId: row.condition_id,
+        durationType: row.duration_type as ConditionDurationType,
+        durationValue: row.duration_value,
+        saveDc: row.save_dc,
+        saveAbility: row.save_ability as SaveAbility | null,
+        appliedAtRound: row.applied_at_round,
+        expiresAtRound: row.expires_at_round,
+        sourceDescription: row.source_description,
+        isActive: row.is_active,
+        createdAt: new Date(row.created_at),
+        condition: {
+          id: row.condition_id,
+          name: row.condition_name,
+          description: row.condition_description,
+          mechanicalEffects,
+          iconName: row.icon_name,
+          createdAt: new Date(row.created_at),
+        },
+      });
+    });
+
+    const finalResult: Record<
+      string,
+      {
+        conditions: ParticipantConditionWithDetails[];
+        aggregatedEffects: AggregatedMechanicalEffects;
+      }
+    > = {};
+
+    for (const [pid, conditions] of Object.entries(participantsMap)) {
+      finalResult[pid] = {
+        conditions,
+        aggregatedEffects: this.calculateAggregatedEffects(conditions),
+      };
+    }
+
+    return finalResult;
+  }
+
+  /**
+   * Calculate aggregated mechanical effects from a list of conditions
+   */
+  static calculateAggregatedEffects(
+    conditions: ParticipantConditionWithDetails[]
+  ): AggregatedMechanicalEffects {
+    const aggregated: AggregatedMechanicalEffects = {
+      appliedConditions: [],
+    };
 
     // Merge all mechanical effects
     for (const condition of conditions) {
@@ -282,11 +393,13 @@ export class ConditionsService {
       for (const [key, value] of Object.entries(effects)) {
         if (key === 'appliedConditions') continue;
 
-        if (!aggregated[key]) {
-          aggregated[key] = value;
+        const currentValue = aggregated[key];
+        if (currentValue === undefined) {
+          // TypeScript index signature handling
+          (aggregated as any)[key] = value;
         } else {
           // Apply precedence rules
-          aggregated[key] = this.mergeEffectValues(aggregated[key], value, key);
+          (aggregated as any)[key] = this.mergeEffectValues(currentValue, value, key);
         }
       }
     }

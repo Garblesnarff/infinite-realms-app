@@ -151,4 +151,19 @@ You MUST include [ASSET:type:key] tags when introducing ANY entity from this lis
 These tags display artwork to the player - WITHOUT the tag, the player sees NO image.
 
 FORMAT: Place the tag IMMEDIATELY BEFORE the entity's name on first mention.
-CORRECT: 
+CORRECT: "As you enter, [ASSET:npc:elara] Elara greets you."
+INCORRECT: "As you enter, Elara greets you [ASSET:npc:elara]."
+</MANDATORY_REQUIREMENT>
+
+${assets.map(a => `- ${a.name} [ASSET:${a.type}:${a.key}]`).join('\n')}
+</available_visual_assets>`;
+
+  return prompt;
+}
+
+/**
+ * Get currently cached assets
+ */
+export function getCachedAssets(): AssetInfo[] {
+  return cachedAssets?.assets || [];
+}

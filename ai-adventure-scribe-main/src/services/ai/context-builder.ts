@@ -122,12 +122,12 @@ Request a roll when the outcome is UNCERTAIN. Ask yourself:
 </field_requirements>
 
 <examples>
-Stealth: `{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}`
-Persuasion: `{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}`
-Perception: `{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}`
-Attack: `{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}`
-Save: `{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}`
-Death Save: `{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}`
+Stealth: \`{"type": "skill_check", "formula": "1d20+dex", "purpose": "Stealth check to avoid detection", "dc": 14}\`
+Persuasion: \`{"type": "skill_check", "formula": "1d20+cha", "purpose": "Persuasion to convince the merchant", "dc": 15}\`
+Perception: \`{"type": "skill_check", "formula": "1d20+wis", "purpose": "Perception to notice hidden details", "dc": 12}\`
+Attack: \`{"type": "attack", "formula": "1d20+5", "purpose": "Attack roll with longsword", "ac": 15}\`
+Save: \`{"type": "save", "formula": "1d20+2", "purpose": "Dexterity save to dodge fireball", "dc": 15}\`
+Death Save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
 </examples>
 </roll_request_format>
 
@@ -303,7 +303,7 @@ Taking Damage at 0 HP:
 
 How to Handle:
 1. When character reaches 0 HP: "You collapse, unconscious. The world fades to black. Make a death saving throw!"
-2. Request death save: `{\"type\": \"save\", \"formula\": \"1d20\", \"purpose\": \"Death saving throw\", \"dc\": 10}`
+2. Request death save: \`{"type": "save", "formula": "1d20", "purpose": "Death saving throw", "dc": 10}\`
 3. Track results in narrative: "You rolled 14 - that's one success. Two more and you stabilize."
 4. If stabilized: "You've stabilized! You're still unconscious at 0 HP, but no longer dying."
 5. If healed while down: "The healing magic washes over you. You regain X HP and wake up!"
@@ -324,7 +324,7 @@ Healing Sources:
 
 How to Handle Healing:
 1. Player casts healing spell: Request roll for healing amount
-2. Format: `{\"type\": \"damage\", \"formula\": \"1d8+3\", \"purpose\": \"Cure Wounds healing\"}`
+2. Format: \`{"type": "damage", "formula": "1d8+3", "purpose": "Cure Wounds healing"}\`
 3. Note: Use "damage" type for healing rolls (positive HP change)
 4. Narrate: "The divine light washes over your wounds. You regain 7 hit points!"
 
@@ -883,4 +883,42 @@ DETECTED COMBAT ACTIONS:`;
 **COMBAT RESPONSE REQUIREMENTS:**
 When combat is detected, you MUST:
 1. **REQUEST** dice rolls for player actions using ROLL_REQUESTS_V1 (DO NOT roll for the player)
-2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with 
+2. **AUTO-EXECUTE** NPC/enemy actions by marking rolls with "autoExecute": true
+3. **DESCRIBE** actions cinematically while maintaining mechanical accuracy
+4. **ENFORCE** turn order (player turn, then all NPCs, then player again)
+`;
+
+    return combatText;
+  }
+
+  private static buildCombatRollRequirementsSection(): string {
+    return `
+<combat_roll_requirements>
+For ALL combat actions, you must include proper ROLL_REQUESTS_V1 blocks.
+Attack: \\\`{"type": "attack", "formula": "1d20+mod", "purpose": "Attack with weapon", "ac": 15}\\\`
+Damage: \\\`{"type": "damage", "formula": "1d8+mod", "purpose": "Weapon damage"}\\\`
+Save: \\\`{"type": "save", "formula": "1d20+mod", "purpose": "Save vs effect", "dc": 14}\\\`
+</combat_roll_requirements>`;
+  }
+
+  private static buildVoiceOptimizationSection(): string {
+    return `
+<voice_optimization>
+Your response will be synthesized into voice. Structure your narration into logical segments.
+</voice_optimization>`;
+  }
+
+  private static buildResponseStructureSection(): string {
+    return `
+<response_structure>
+Maintain a consistent and immersive structure in your responses.
+</response_structure>`;
+  }
+
+  private static buildFinalRemindersSection(): string {
+    return `
+<final_reminders>
+Remember to stay in character and follow all D&D 5e rules.
+</final_reminders>`;
+  }
+}

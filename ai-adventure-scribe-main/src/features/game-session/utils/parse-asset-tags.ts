@@ -27,7 +27,8 @@ export interface ParsedAssets {
 }
 
 /** Regex pattern to match [ASSET:type:key] tags */
-const ASSET_TAG_PATTERN = /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
+export const ASSET_TAG_PATTERN =
+  /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
 
 /**
  * Parse asset tags from message content

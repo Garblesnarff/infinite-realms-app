@@ -15,3 +15,7 @@
 ## 2025-05-22 - [Drizzle Type Conflicts]
 **Learning:** Conflicting versions of `drizzle-orm` in nested `node_modules` (root vs server-bun) caused type errors regarding private properties like `shouldInlineParams`.
 **Action:** When working in monorepos or nested projects, ensure dependency versions are synchronized to avoid opaque type errors.
+
+## 2025-01-29 - [Combat Conditions N+1 & Truncated Files]
+**Learning:** Found an N+1 query pattern in `server-bun/src/routes/v1/combat/status.ts` where participant conditions were fetched in a loop. Also discovered truncated files in `src/services/ai/` that broke the build.
+**Action:** Always check for batching opportunities in loops hitting the DB. Use `db.execute(sql`...`)` for efficient multi-table joins when Drizzle relations aren't mapped. Ensure template literals with backticks are escaped to prevent Vite build failures.

@@ -165,16 +165,21 @@ export const statusRoutes = new Elysia()
       }
 
       const combatState = await CombatInitiativeService.getCombatState(params.encounterId);
+      const encounterConditions = await ConditionsService.getEncounterConditions(
+        params.encounterId
+      );
       const participantConditions: Record<string, any> = {};
 
       for (const participant of combatState.participants) {
-        const conditions = await ConditionsService.getActiveConditions(participant.id);
-        const effects = await ConditionsService.getMechanicalEffects(participant.id);
+        const data = encounterConditions[participant.id] || {
+          conditions: [],
+          aggregatedEffects: { appliedConditions: [] },
+        };
 
         participantConditions[participant.id] = {
           participantName: participant.name,
-          conditions,
-          aggregatedEffects: effects,
+          conditions: data.conditions,
+          aggregatedEffects: data.aggregatedEffects,
         };
       }
 
