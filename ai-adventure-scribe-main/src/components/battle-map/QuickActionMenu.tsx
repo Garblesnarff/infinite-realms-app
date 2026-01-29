@@ -16,7 +16,6 @@
  * @module components/battle-map/QuickActionMenu
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Target,
   Move,
@@ -27,8 +26,11 @@ import {
   Shield,
   Eye,
 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+import { Z_INDEX } from '@/constants/z-index';
+import { useHotkeys, BATTLE_MAP_HOTKEYS } from '@/hooks/use-hotkeys';
 import { cn } from '@/lib/utils';
-import { useHotkeys, createHotkeyFromPreset, BATTLE_MAP_HOTKEYS } from '@/hooks/use-hotkeys';
 
 // ===========================
 // Types
@@ -243,7 +245,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm"
+        className={`fixed inset-0 z-[${Z_INDEX.MODAL_BACKDROP}] bg-black/20 backdrop-blur-sm`}
         style={{
           animation: 'fadeIn 0.2s ease-out',
         }}
@@ -253,7 +255,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
       <div
         ref={menuRef}
         className={cn(
-          'fixed z-50',
+          `fixed z-[${Z_INDEX.MODAL}]`,
           className
         )}
         style={{
@@ -378,7 +380,6 @@ export function useQuickActionMenu(
   options: UseQuickActionMenuOptions
 ): UseQuickActionMenuReturn {
   const {
-    actions,
     enableRightClick = true,
     enableHotkey = true,
     hotkeyConfig,

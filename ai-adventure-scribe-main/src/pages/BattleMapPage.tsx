@@ -15,28 +15,19 @@
  * - Responsive design (mobile/desktop)
  */
 
+import { ArrowLeft, Settings as SettingsIcon, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings as SettingsIcon, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 
 import { BattleCanvas } from '@/components/battle-map/BattleCanvas';
-import { Toolbar } from '@/components/battle-map/Toolbar';
-import { LayersPanel } from '@/components/battle-map/LayersPanel';
-import { ToolOptionsPanel } from '@/components/battle-map/ToolOptionsPanel';
-import { PerformanceMonitor } from '@/components/battle-map/PerformanceMonitor';
 import { HotkeyGuide } from '@/components/battle-map/HotkeyGuide';
+import { LayersPanel } from '@/components/battle-map/LayersPanel';
+import { PerformanceMonitor } from '@/components/battle-map/PerformanceMonitor';
 import { QuickActionMenu } from '@/components/battle-map/QuickActionMenu';
-
+import { Toolbar } from '@/components/battle-map/Toolbar';
+import { ToolOptionsPanel } from '@/components/battle-map/ToolOptionsPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,12 +36,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-import { trpc } from '@/infrastructure/api/trpc-client';
-import { useBattleMapStore } from '@/stores/useBattleMapStore';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Z_INDEX } from '@/constants/z-index';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
-import { cn } from '@/lib/utils';
+import { trpc } from '@/infrastructure/api/trpc-client';
 import logger from '@/lib/logger';
+import { cn } from '@/lib/utils';
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 /**
  * Battle Map Page Component
@@ -271,7 +269,7 @@ export const BattleMapPage: React.FC = () => {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b z-40 flex items-center justify-between px-4">
+      <div className={`absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b z-[${Z_INDEX.FLOATING_PANEL}] flex items-center justify-between px-4`}>
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-sm text-muted-foreground">
           <button
@@ -304,7 +302,7 @@ export const BattleMapPage: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Mobile: Layers Panel Toggle */}
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={toggleLayersPanel}>
+            <Button variant="ghost" size="icon" onClick={toggleLayersPanel} aria-label="Toggle Layers">
               <Menu className="h-4 w-4" />
             </Button>
           )}
@@ -312,7 +310,7 @@ export const BattleMapPage: React.FC = () => {
           {/* Settings Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Open Settings">
                 <SettingsIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -354,7 +352,7 @@ export const BattleMapPage: React.FC = () => {
           />
 
           {/* Toolbar - Positioned on left side */}
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30">
+          <div className={`absolute left-4 top-1/2 -translate-y-1/2 z-[${Z_INDEX.STICKY}]`}>
             <Toolbar
               sceneId={sceneId}
               isGM={true} // TODO: Get from user/campaign context
@@ -368,14 +366,14 @@ export const BattleMapPage: React.FC = () => {
 
           {/* Tool Options Panel - Positioned below toolbar when active */}
           {(selectedTool === 'wall' || selectedTool === 'fog-brush' || selectedTool === 'draw') && (
-            <div className="absolute left-4 bottom-4 z-30">
+            <div className={`absolute left-4 bottom-4 z-[${Z_INDEX.STICKY}]`}>
               <ToolOptionsPanel sceneId={sceneId} />
             </div>
           )}
 
           {/* Performance Monitor - Top left corner */}
           {showPerformanceMonitor && (
-            <div className="absolute top-4 left-20 z-30">
+            <div className={`absolute top-4 left-20 z-[${Z_INDEX.STICKY}]`}>
               <PerformanceMonitor />
             </div>
           )}
@@ -386,8 +384,10 @@ export const BattleMapPage: React.FC = () => {
               variant="ghost"
               size="icon"
               onClick={toggleLayersPanel}
+              aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
               className={cn(
-                'absolute top-4 z-30 transition-all',
+                'absolute top-4 transition-all',
+                `z-[${Z_INDEX.STICKY}]`,
                 showLayersPanel ? 'right-80' : 'right-4'
               )}
             >

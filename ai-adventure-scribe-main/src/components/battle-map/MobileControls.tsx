@@ -17,7 +17,6 @@
  * @module components/battle-map/MobileControls
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   MousePointer2,
   Hand,
@@ -34,8 +33,10 @@ import {
   Maximize2,
   HelpCircle,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
@@ -45,6 +46,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 import { useBattleMapStore, type ToolType } from '@/stores/useBattleMapStore';
 
@@ -124,7 +126,7 @@ interface GestureHintsProps {
 
 const GestureHints: React.FC<GestureHintsProps> = ({ onDismiss }) => {
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className={`fixed inset-0 z-[${Z_INDEX.MODAL_BACKDROP}] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4`}>
       <div className="bg-background border rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Touch Gestures</h3>
@@ -228,7 +230,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick }) => {
 // ===========================
 
 export const MobileControls: React.FC<MobileControlsProps> = ({
-  sceneId,
+  sceneId: _sceneId,
   isGM = false,
   className,
   showGestureHints: showGestureHintsProp = false,
@@ -333,7 +335,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       {/* Mobile Toolbar */}
       <div
         className={cn(
-          'fixed bottom-0 left-0 right-0 z-40 bg-background border-t shadow-lg transition-transform',
+          'fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg transition-transform',
+          `z-[${Z_INDEX.FLOATING_PANEL}]`,
           isCollapsed && 'translate-y-full',
           className
         )}
@@ -481,7 +484,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
 
       {/* Collapsed Toolbar Indicator */}
       {isCollapsed && (
-        <div className="fixed bottom-4 right-4 z-40">
+        <div className={`fixed bottom-4 right-4 z-[${Z_INDEX.FLOATING_PANEL}]`}>
           <Button
             variant="default"
             size="icon"
