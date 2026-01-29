@@ -15,7 +15,7 @@ import {
   blogPostCategories,
   blogPostTags,
 } from '../../../../db/schema/index.js';
-import { eq, and, or, ilike, desc, lte, SQL, sql } from 'drizzle-orm';
+import { eq, and, or, ilike, desc, lte, inArray, SQL, sql } from 'drizzle-orm';
 import {
   blogListQuerySchema,
   blogPostInputSchema,
@@ -30,25 +30,56 @@ import {
 } from './blog-helpers.js';
 
 /**
- * Fetch categories and tags for a post
+ * Fetch categories and tags for multiple posts in batch to avoid N+1 queries
  */
-async function fetchPostRelations(ctx: any, postId: string) {
-  const catSelect = { id: blogCategories.id, slug: blogCategories.slug, name: blogCategories.name };
-  const tagSelect = { id: blogTags.id, slug: blogTags.slug, name: blogTags.name };
+async function fetchPostsRelations(ctx: any, postIds: string[]) {
+  if (postIds.length === 0) return {};
 
-  const categories = await ctx.db
-    .select(catSelect)
-    .from(blogPostCategories)
-    .innerJoin(blogCategories, eq(blogPostCategories.categoryId, blogCategories.id))
-    .where(eq(blogPostCategories.postId, postId));
+  const catSelect = {
+    postId: blogPostCategories.postId,
+    id: blogCategories.id,
+    slug: blogCategories.slug,
+    name: blogCategories.name,
+  };
+  const tagSelect = {
+    postId: blogPostTags.postId,
+    id: blogTags.id,
+    slug: blogTags.slug,
+    name: blogTags.name,
+  };
 
-  const tags = await ctx.db
-    .select(tagSelect)
-    .from(blogPostTags)
-    .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
-    .where(eq(blogPostTags.postId, postId));
+  const [allCategories, allTags] = await Promise.all([
+    ctx.db
+      .select(catSelect)
+      .from(blogPostCategories)
+      .innerJoin(blogCategories, eq(blogPostCategories.categoryId, blogCategories.id))
+      .where(inArray(blogPostCategories.postId, postIds)),
+    ctx.db
+      .select(tagSelect)
+      .from(blogPostTags)
+      .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+      .where(inArray(blogPostTags.postId, postIds)),
+  ]);
 
-  return { categories, tags };
+  // Group by postId
+  const relationsMap: Record<string, { categories: any[]; tags: any[] }> = {};
+  postIds.forEach((id) => {
+    relationsMap[id] = { categories: [], tags: [] };
+  });
+
+  allCategories.forEach((cat) => {
+    if (relationsMap[cat.postId]) {
+      relationsMap[cat.postId].categories.push({ id: cat.id, slug: cat.slug, name: cat.name });
+    }
+  });
+
+  allTags.forEach((tag) => {
+    if (relationsMap[tag.postId]) {
+      relationsMap[tag.postId].tags.push({ id: tag.id, slug: tag.slug, name: tag.name });
+    }
+  });
+
+  return relationsMap;
 }
 
 export const blogPostsRouter = router({
@@ -87,9 +118,14 @@ export const blogPostsRouter = router({
       .from(blogPosts)
       .where(and(...conditions));
 
-    const postsWithRelations = await Promise.all(
-      posts.map(async (post) => ({ ...post, ...(await fetchPostRelations(ctx, post.id)) }))
-    );
+    // Fetch all relations in batch to avoid N+1 problem
+    const postIds = posts.map((post) => post.id);
+    const relationsMap = await fetchPostsRelations(ctx, postIds);
+
+    const postsWithRelations = posts.map((post) => ({
+      ...post,
+      ...relationsMap[post.id],
+    }));
 
     const filtered = postsWithRelations.filter((post: any) => {
       const categoryOk = !category || post.categories.some((c: any) => c.slug === category);
@@ -115,7 +151,8 @@ export const blogPostsRouter = router({
 
     if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
 
-    return { ...post, ...(await fetchPostRelations(ctx, post.id)) };
+    const relations = await fetchPostsRelations(ctx, [post.id]);
+    return { ...post, ...relations[post.id] };
   }),
 
   /**
