@@ -8,21 +8,21 @@
  * @module server/services/token-service
  */
 
+import { TRPCError } from '@trpc/server';
+import { eq, and, desc, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   tokens,
   tokenConfigurations,
   characterTokens,
   scenes,
-  campaigns,
   characters,
   type Token,
   type NewToken,
   type TokenConfiguration,
   type NewTokenConfiguration,
 } from '../../../db/schema/index.js';
-import { eq, and, desc } from 'drizzle-orm';
-import { TRPCError } from '@trpc/server';
 
 /**
  * Token creation data interface
@@ -98,15 +98,15 @@ export class TokenService {
    */
   private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<boolean> {
     const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
     });
 
     if (!character) {
+      // We throw NOT_FOUND to avoid leaking the existence of characters the user doesn't own
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
-    }
-
-    if (character.userId !== userId && character.ownerId !== userId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied to this character' });
     }
 
     return true;
@@ -413,7 +413,10 @@ export class TokenService {
   /**
    * Get default token configuration for a character
    */
-  static async getDefaultTokenConfig(characterId: string): Promise<TokenConfiguration | null> {
+  static async getDefaultTokenConfig(characterId: string, userId: string): Promise<TokenConfiguration | null> {
+    // Verify character ownership to ensure the user has access to this configuration
+    await this.verifyCharacterOwnership(characterId, userId);
+
     const config = await db.query.tokenConfigurations.findFirst({
       where: eq(tokenConfigurations.characterId, characterId),
     });
@@ -433,7 +436,7 @@ export class TokenService {
     await this.verifyCharacterOwnership(characterId, userId);
 
     // Check if config exists
-    const existing = await this.getDefaultTokenConfig(characterId);
+    const existing = await this.getDefaultTokenConfig(characterId, userId);
 
     if (existing) {
       // Update existing config
@@ -492,7 +495,7 @@ export class TokenService {
     }
 
     // Get default config
-    const config = await this.getDefaultTokenConfig(token.actorId);
+    const config = await this.getDefaultTokenConfig(token.actorId, userId);
     if (!config) {
       throw new TRPCError({
         code: 'NOT_FOUND',

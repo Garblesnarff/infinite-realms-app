@@ -8,9 +8,11 @@
  */
 
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc.js';
+
 import { TokenService } from '../../services/token-service.js';
 import { broadcastToScene } from '../../ws.js';
+import { router, protectedProcedure } from '../trpc.js';
+
 import type { Token } from '../../../../db/schema/index.js';
 
 /**
@@ -322,8 +324,8 @@ export const tokensRouter = router({
    */
   getDefaultConfig: protectedProcedure
     .input(z.object({ characterId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const config = await TokenService.getDefaultTokenConfig(input.characterId);
+    .query(async ({ input, ctx }) => {
+      const config = await TokenService.getDefaultTokenConfig(input.characterId, ctx.user.userId);
       return config;
     }),
 
