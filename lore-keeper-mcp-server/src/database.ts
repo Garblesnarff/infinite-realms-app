@@ -149,6 +149,12 @@ export async function getCampaignOverview(campaignId: string): Promise<StarterCa
 // LORE RETRIEVAL - DIRECT LOOKUP
 // =============================================================================
 
+// Explicit column lists to avoid over-fetching, especially large vector embeddings.
+const CHUNK_COLUMNS = 'id, campaign_id, chunk_type, entity_name, parent_entity, content, summary, metadata, source_file, source_section, sequence_order';
+const RULE_COLUMNS = 'id, campaign_id, rule_type, condition, effect, reversible, priority, metadata';
+const PARTY_COLUMNS = 'id, campaign_id, party_name, party_concept, party_hook, playstyle, is_default';
+const CHARACTER_COLUMNS = 'id, party_id, character_name, race, class, level, backstory, personality, campaign_hook, party_relationship, stats, portrait_url';
+
 /**
  * Retrieves a specific NPC from a campaign by their name (case-insensitive).
  *
@@ -220,9 +226,10 @@ export async function getFaction(
 export async function getMechanics(campaignId: string): Promise<CampaignChunk[]> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list to avoid fetching large vector embeddings.
   const { data, error } = await client
     .from('campaign_chunks')
-    .select('*')
+    .select(CHUNK_COLUMNS)
     .eq('campaign_id', campaignId)
     .eq('chunk_type', 'mechanic')
     .order('entity_name');
@@ -249,9 +256,10 @@ export async function getMechanics(campaignId: string): Promise<CampaignChunk[]>
 export async function getRules(campaignId: string): Promise<CampaignRule[]> {
   const client = getClient();
 
+  // ⚡ Bolt: Replaced select('*') with an explicit column list.
   const { data, error } = await client
     .from('campaign_rules')
-    .select('*')
+    .select(RULE_COLUMNS)
     .eq('campaign_id', campaignId)
     .order('priority', { ascending: false });
 
@@ -284,9 +292,10 @@ async function getEntityByName(
 
   if (error) {
     // Fallback to direct query if RPC fails
+    // ⚡ Bolt: Replaced select('*') with an explicit column list.
     const { data: fallbackData, error: fallbackError } = await client
       .from('campaign_chunks')
-      .select('*')
+      .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
       .ilike('entity_name', name)
       .in('chunk_type', chunkTypes)
@@ -429,10 +438,11 @@ export async function getPartyDetails(partyId: string): Promise<{
   const client = getClient();
 
   // ⚡ Bolt: Combined party and character queries into a single nested query
-  // to eliminate the N+1 problem. This reduces database round trips from 2 to 1.
+  // to eliminate the N+1 problem, AND used explicit column lists for both tables
+  // to reduce over-fetching.
   const { data, error } = await client
     .from('campaign_parties')
-    .select('*, party_characters(*)')
+    .select(`${PARTY_COLUMNS}, party_characters(${CHARACTER_COLUMNS})`)
     .eq('id', partyId)
     .order('character_name', { foreignTable: 'party_characters' })
     .single();

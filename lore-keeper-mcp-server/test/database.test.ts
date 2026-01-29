@@ -209,13 +209,13 @@ describe('Database Operations', () => {
 
     describe('getPartyDetails()', () => {
         it('should return party details and characters', async () => {
-            const partyData = { id: 'p1', party_name: 'The Crew' };
-            const charData = [{ id: 'c1', character_name: 'Bob' }];
-            const mock = setupQueryBuilderMock(fromStub, charData);
-            // The first call to the builder gets the party...
-            mock.single.resolves({ data: partyData, error: null });
-            // The second call (without single) gets the characters.
-            fromStub.onSecondCall().returns(mock);
+            const partyWithChars = {
+              id: 'p1',
+              party_name: 'The Crew',
+              party_characters: [{ id: 'c1', character_name: 'Bob' }]
+            };
+            const mock = setupQueryBuilderMock(fromStub, partyWithChars);
+            mock.single.resolves({ data: partyWithChars, error: null });
 
             const details = await db.getPartyDetails('p1');
 
@@ -231,10 +231,13 @@ describe('Database Operations', () => {
         });
 
         it('should return a party with no characters', async () => {
-            const partyData = { id: 'p1', party_name: 'Solo Act' };
-            const mock = setupQueryBuilderMock(fromStub, []); // char data is empty
-            mock.single.resolves({ data: partyData, error: null });// party data is not
-            fromStub.onSecondCall().returns(mock);
+            const partyWithNoChars = {
+              id: 'p1',
+              party_name: 'Solo Act',
+              party_characters: []
+            };
+            const mock = setupQueryBuilderMock(fromStub, partyWithNoChars);
+            mock.single.resolves({ data: partyWithNoChars, error: null });
 
             const details = await db.getPartyDetails('p1');
 
