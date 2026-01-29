@@ -1,4 +1,19 @@
+import { vi, describe, it, expect } from 'vitest';
 import { checkSafetyCommands, processSafetyCommand } from '../safetyCommands';
+
+// Mock Supabase client to avoid "supabaseUrl is required" error during module load
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve({ data: null, error: null }))
+        }))
+      })),
+      insert: vi.fn(() => Promise.resolve({ error: null }))
+    }))
+  }
+}));
 
 describe('Safety Commands', () => {
   const sessionId = 'test-session-1';

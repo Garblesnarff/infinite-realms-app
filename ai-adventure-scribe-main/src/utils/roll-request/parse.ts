@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Roll Request Parser (parse stage)
  * Parses DM messages to detect and extract dice roll requests
@@ -26,7 +27,7 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
       const parsed = JSON.parse(jsonContent);
 
       if (parsed.rolls && Array.isArray(parsed.rolls)) {
-        parsed.rolls.forEach((roll: any) => {
+        parsed.rolls.forEach((roll: Record<string, unknown>) => {
           if (roll.type && roll.formula && roll.purpose) {
             requests.push({
               type: roll.type as RollRequest['type'],
@@ -209,7 +210,7 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
 
   // "Roll for <skill> (DC 14)" without explicit dice
   const rollForSkillPattern =
-    /(?:please\s+)?roll\s+for\s+(perception|stealth|investigation|insight|persuasion|deception|intimidation|athletics|acrobatics|arcana|history|medicine|nature|religion|survival|performance|sleight\s+of\s+hand|animal\s+handling)(?:\s*\(?:(?:dc|DC)\s*(\d+)\)?)?/gi;
+    /(?:please\s+)?roll\s+for\s+(perception|stealth|investigation|insight|persuasion|deception|intimidation|athletics|acrobatics|arcana|history|medicine|nature|religion|survival|performance|sleight\s+of\s+hand|animal\s+handling)(?:\s*\((?:dc|DC)\s*(\d+)\))?/gi;
   while ((match = rollForSkillPattern.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
     const dc = match[2] ? parseInt(match[2]) : undefined;

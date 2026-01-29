@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 const SAFETY_ENABLED =
-  String(import.meta.env.VITE_ENABLE_SAFETY_GUARDS ?? '').toLowerCase() === 'true';
+  String(import.meta.env.VITE_ENABLE_SAFETY_GUARDS ?? '').toLowerCase() === 'true' ||
+  import.meta.env.MODE === 'test';
 
 // Debounce utility function
 const debounce = <T extends (...args: any[]) => void>(

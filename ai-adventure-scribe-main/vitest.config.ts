@@ -34,6 +34,7 @@ export default defineConfig({
       'src/utils/memoryClassification.test.ts',
       'src/utils/__tests__/memory-importance-normalization.test.ts',
       'src/utils/__tests__/safetyCommands.test.ts',
+      'src/utils/__tests__/attackUtils.test.ts',
       'src/services/__tests__/ai-service-deduplication.test.ts',
       'src/services/__tests__/encounter-generator.test.ts',
       'src/services/encounters/__tests__/srd-loader.test.ts',
@@ -106,6 +107,7 @@ export default defineConfig({
       include: [
         'src/lib/logger.ts',
         'src/utils/diceRolls.ts',
+        'src/utils/attackUtils.ts',
         'src/utils/abilityScoreUtils.ts',
         'src/utils/sentence-segmenter.ts',
         'src/utils/spell-validation.ts',

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Attack Resolution Utilities for D&D 5e Combat System
  *
@@ -145,9 +146,11 @@ export function resolveAttack(
   const criticalHit = roll.naturalRoll === 20;
   const criticalFail = roll.naturalRoll === 1;
 
-  // Critical hits always hit (unless critical fail)
-  if (criticalHit && !criticalFail) {
+  // Critical hits always hit, natural 1s always miss
+  if (criticalHit) {
     hit = true;
+  } else if (criticalFail) {
+    hit = false;
   }
 
   return {
@@ -232,7 +235,12 @@ export function calculateAttackDamage(
 
   // Add Barbarian Rage damage bonus
   if (attacker.isRaging && attacker.characterClass === 'barbarian') {
-    const rageBonus = Math.floor((attacker.level || 1) / 4) || 2;
+    // D&D 5e Rage bonus: +2 (lvl 1-8), +3 (lvl 9-15), +4 (lvl 16+)
+    let rageBonus = 2;
+    const level = attacker.level || 1;
+    if (level >= 16) rageBonus = 4;
+    else if (level >= 9) rageBonus = 3;
+
     baseDamage += rageBonus;
   }
 
@@ -276,8 +284,8 @@ export function performAttack(
   // Resolve the attack
   const resolution = resolveAttack(weapon, attacker, target, options);
 
-  // If attack misses and it's not a critical hit/fail, return result with no damage
-  if (!resolution.hit && !resolution.criticalHit && !resolution.criticalFail) {
+  // If attack misses, return result with no damage
+  if (!resolution.hit) {
     return {
       resolution,
       damage: null,
@@ -299,7 +307,7 @@ export function performAttack(
   // Apply temporary HP first
   const tempHpToReduce = Math.min(target.temporaryHitPoints, damageToDeal);
   const remainingDamage = damageToDeal - tempHpToReduce;
-  const newTempHp = target.temporaryHitPoints - tempHpToReduce;
+  const _newTempHp = target.temporaryHitPoints - tempHpToReduce;
   const newHp =
     remainingDamage > 0
       ? Math.max(0, target.currentHitPoints - remainingDamage)
@@ -396,27 +404,6 @@ function getAbilityModifier(participant: CombatParticipant, ability: string): nu
     wisdom: 12,
     charisma: 12,
   };
-
-  // For spells, override with known ability scores based on class
-  if (ability === 'spellcasting') {
-    switch (participant.characterClass?.toLowerCase()) {
-      case 'wizard':
-      case 'artificer':
-      case 'arcane_trickster':
-        return Math.floor(participant.level || 3); // Intellect bonus approximation
-      case 'sorcerer':
-      case 'bard':
-      case 'warlock':
-      case 'paladin':
-        return Math.floor(participant.level || 3); // Charisma bonus approximation
-      case 'cleric':
-      case 'druid':
-      case 'ranger':
-        return Math.floor(participant.level || 3); // Wisdom bonus approximation
-      default:
-        return 3; // Default +3 bonus
-    }
-  }
 
   // Get modifier from default scores (floor of (score-10)/2)
   const score = defaultAbilityScores[ability.toLowerCase()] || 12;
