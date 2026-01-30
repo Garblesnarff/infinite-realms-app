@@ -19,3 +19,7 @@
 ## 2025-01-29 - [Combat Conditions N+1 & Truncated Files]
 **Learning:** Found an N+1 query pattern in `server-bun/src/routes/v1/combat/status.ts` where participant conditions were fetched in a loop. Also discovered truncated files in `src/services/ai/` that broke the build.
 **Action:** Always check for batching opportunities in loops hitting the DB. Use `db.execute(sql`...`)` for efficient multi-table joins when Drizzle relations aren't mapped. Ensure template literals with backticks are escaped to prevent Vite build failures.
+
+## 2025-01-30 - tRPC Context Connection Churn
+**Learning:** `resolveUserPlan` in `server-bun/src/trpc/context.ts` was creating a new PostgreSQL pool for every authenticated request, adding 10-50ms latency.
+**Action:** Use the existing Drizzle `db` instance for context resolution. Use relational query callbacks to bypass cross-package drizzle-orm type conflicts.
