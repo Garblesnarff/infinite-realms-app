@@ -218,6 +218,7 @@ export default tseslint.config(
 
       // Top violators requiring refactoring (1000+ lines)
       "src/contexts/CombatContext.tsx", // 1199 lines
+      "src/contexts/combat/combat-reducer.ts",
       "src/services/ai-service.ts", // 1142 lines
       "src/components/combat/CombatInterface.tsx", // 966 lines
 
