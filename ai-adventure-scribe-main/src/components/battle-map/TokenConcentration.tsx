@@ -7,10 +7,12 @@
  * @module components/battle-map/TokenConcentration
  */
 
-import React from 'react';
 import { Html } from '@react-three/drei';
 import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
+import React from 'react';
+
+import { Z_INDEX } from '@/constants/z-index';
 
 /**
  * Props for TokenConcentration component
@@ -157,9 +159,10 @@ export function TokenConcentration({
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 5 }}
-              className="absolute pointer-events-none z-50"
+              className="absolute pointer-events-none"
               style={{
                 bottom: `${auraSize / 2 + 20}px`,
+                zIndex: Z_INDEX.TOOLTIP,
               }}
             >
               <div
@@ -281,7 +284,8 @@ export function TokenConcentrationCompact({
         <motion.div
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none z-50 whitespace-nowrap"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none whitespace-nowrap"
+          style={{ zIndex: Z_INDEX.TOOLTIP }}
         >
           <div
             className="px-2 py-1 rounded text-xs text-white"

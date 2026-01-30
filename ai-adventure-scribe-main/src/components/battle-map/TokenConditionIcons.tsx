@@ -7,10 +7,13 @@
  * @module components/battle-map/TokenConditionIcons
  */
 
-import React, { useMemo } from 'react';
 import { Html } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo } from 'react';
+
 import type { Condition, ConditionName } from '@/types/combat';
+
+import { Z_INDEX } from '@/constants/z-index';
 import {
   CONDITION_ICONS,
   getSortedConditions,
@@ -140,10 +143,11 @@ function ConditionIcon({ condition, position, size, showTooltip, index }: Condit
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 5 }}
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none z-50"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none"
           style={{
             minWidth: '200px',
             maxWidth: '300px',
+            zIndex: Z_INDEX.TOOLTIP,
           }}
         >
           <div
