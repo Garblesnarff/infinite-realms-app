@@ -12,11 +12,13 @@
  */
 
 import { Elysia } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
-
+import { CharacterService } from '../../services/character-service.js';
 // Import service from Bun server
 import { InventoryService } from '../../services/inventory-service.js';
+
 import type {
   CreateInventoryItemInput,
   UpdateInventoryItemInput,
@@ -26,6 +28,24 @@ import type {
 } from '../../types/inventory.js';
 
 export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
+  /**
+   * Centralized authentication and character ownership verification
+   */
+  .onBeforeHandle(async ({ params, request, set }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+
+    if (params.id) {
+      const character = await CharacterService.getById(params.id, user.userId);
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
+      }
+    }
+  })
 
   // ==========================================
   // Inventory Management (4 endpoints)
@@ -35,13 +55,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/inventory
    * Get character inventory with optional filters
    */
-  .get('/:id/inventory', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id/inventory', async ({ params, query, set }) => {
     try {
       const options: GetInventoryOptions = {};
 
@@ -68,15 +82,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory
    * Add item to character inventory
    */
-  .post('/:id/inventory', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/inventory', async ({ params, body, set }) => {
     try {
-      const itemData = body as any;
+      const itemData = body as CreateInventoryItemInput;
 
       if (!itemData.name || !itemData.itemType) {
         set.status = 400;
@@ -114,15 +122,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * PATCH /v1/characters/:id/inventory/:itemId
    * Update inventory item
    */
-  .patch('/:id/inventory/:itemId', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .patch('/:id/inventory/:itemId', async ({ params, body, set }) => {
     try {
-      const updates = body as any;
+      const updates = body as UpdateInventoryItemInput;
       const input: UpdateInventoryItemInput = {};
 
       if (updates.name !== undefined) input.name = updates.name;
@@ -133,7 +135,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       if (updates.isEquipped !== undefined) input.isEquipped = updates.isEquipped;
       if (updates.isAttuned !== undefined) input.isAttuned = updates.isAttuned;
 
-      const item = await InventoryService.updateItem(params.itemId, input);
+      const item = await InventoryService.updateItem(params.itemId, params.id, input);
 
       if (!item) {
         set.status = 404;
@@ -155,15 +157,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * DELETE /v1/characters/:id/inventory/:itemId
    * Remove item from inventory
    */
-  .delete('/:id/inventory/:itemId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .delete('/:id/inventory/:itemId', async ({ params, set }) => {
     try {
-      const deleted = await InventoryService.removeItem(params.itemId);
+      const deleted = await InventoryService.removeItem(params.itemId, params.id);
 
       if (!deleted) {
         set.status = 404;
@@ -189,15 +185,13 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/use
    * Use consumable or ammunition
    */
-  .post('/:id/inventory/:itemId/use', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/inventory/:itemId/use', async ({ params, body, set }) => {
     try {
-      const { quantity, sessionId, context } = body as any;
+      const { quantity, sessionId, context } = body as {
+        quantity?: number;
+        sessionId?: string;
+        context?: string;
+      };
 
       const input: UseConsumableInput = {
         characterId: params.id,
@@ -231,13 +225,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/encumbrance
    * Get encumbrance status
    */
-  .get('/:id/encumbrance', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id/encumbrance', async ({ params, set }) => {
     try {
       const encumbrance = await InventoryService.checkEncumbrance(params.id);
       return encumbrance;
@@ -259,13 +247,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/attune/:itemId
    * Attune to a magic item
    */
-  .post('/:id/attune/:itemId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/attune/:itemId', async ({ params, set }) => {
     try {
       const result = await InventoryService.attuneItem(params.id, params.itemId);
 
@@ -298,15 +280,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * DELETE /v1/characters/:id/attune/:itemId
    * Break attunement with a magic item
    */
-  .delete('/:id/attune/:itemId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .delete('/:id/attune/:itemId', async ({ params, set }) => {
     try {
-      const item = await InventoryService.unattuneItem(params.itemId);
+      const item = await InventoryService.unattuneItem(params.itemId, params.id);
 
       if (!item) {
         set.status = 404;
@@ -328,13 +304,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/attuned
    * Get all attuned items
    */
-  .get('/:id/attuned', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id/attuned', async ({ params, set }) => {
     try {
       const items = await InventoryService.getAttunedItems(params.id);
       return { items };
@@ -356,13 +326,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/equip
    * Equip weapon or armor
    */
-  .post('/:id/inventory/:itemId/equip', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/inventory/:itemId/equip', async ({ params, set }) => {
     try {
       const result = await InventoryService.equipItem(params.id, params.itemId);
 
@@ -386,15 +350,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/unequip
    * Unequip item
    */
-  .post('/:id/inventory/:itemId/unequip', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/inventory/:itemId/unequip', async ({ params, set }) => {
     try {
-      const item = await InventoryService.unequipItem(params.itemId);
+      const item = await InventoryService.unequipItem(params.itemId, params.id);
 
       if (!item) {
         set.status = 404;
@@ -420,13 +378,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/usage-history
    * Get consumable usage history
    */
-  .get('/:id/usage-history', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id/usage-history', async ({ params, query, set }) => {
     try {
       const history = await InventoryService.getUsageHistory({
         characterId: params.id,

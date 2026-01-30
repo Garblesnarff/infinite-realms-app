@@ -11,17 +11,24 @@
  * @module server/services/inventory-service
  */
 
+import { eq, and, desc } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   inventoryItems,
   consumableUsageLog,
-  characters,
   characterStats,
   type InventoryItem,
   type NewInventoryItem,
   type ConsumableUsageLog,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { NotFoundError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
+import {
+  MAX_ATTUNED_ITEMS,
+  ENCUMBRANCE_THRESHOLDS,
+  SPEED_PENALTIES,
+} from '../types/inventory.js';
+
 import type {
   CreateInventoryItemInput,
   UpdateInventoryItemInput,
@@ -33,16 +40,9 @@ import type {
   EquipResult,
   GetInventoryOptions,
   GetUsageHistoryInput,
-  ItemType,
   EncumbranceLevel,
-  ItemProperties,
 } from '../types/inventory.js';
-import {
-  MAX_ATTUNED_ITEMS,
-  ENCUMBRANCE_THRESHOLDS,
-  SPEED_PENALTIES,
-} from '../types/inventory.js';
-import { NotFoundError, BusinessLogicError, ForbiddenError, InternalServerError } from '../lib/errors.js';
+
 
 export class InventoryService {
   // ==========================================
@@ -59,21 +59,15 @@ export class InventoryService {
     characterId: string,
     options: GetInventoryOptions = {}
   ): Promise<InventorySummary> {
-    const conditions = [eq(inventoryItems.characterId, characterId)];
-
-    if (options.itemType) {
-      conditions.push(eq(inventoryItems.itemType, options.itemType));
-    }
-    if (options.equipped !== undefined) {
-      conditions.push(eq(inventoryItems.isEquipped, options.equipped));
-    }
-    if (options.attuned !== undefined) {
-      conditions.push(eq(inventoryItems.isAttuned, options.attuned));
-    }
-
     const items = await db.query.inventoryItems.findMany({
-      where: and(...conditions),
-      orderBy: [desc(inventoryItems.createdAt)],
+      where: (items, { and, eq }) => {
+        const conditions = [eq(items.characterId, characterId)];
+        if (options.itemType) conditions.push(eq(items.itemType, options.itemType));
+        if (options.equipped !== undefined) conditions.push(eq(items.isEquipped, options.equipped));
+        if (options.attuned !== undefined) conditions.push(eq(items.isAttuned, options.attuned));
+        return and(...conditions);
+      },
+      orderBy: (items, { desc }) => [desc(items.createdAt)],
     });
 
     const totalWeight = items.reduce((sum, item) => {
@@ -119,11 +113,13 @@ export class InventoryService {
   /**
    * Update an existing inventory item
    * @param itemId - Item ID to update
+   * @param characterId - Character ID (for ownership verification)
    * @param updates - Fields to update
    * @returns Updated item or null if not found
    */
   static async updateItem(
     itemId: string,
+    characterId: string,
     updates: UpdateInventoryItemInput
   ): Promise<InventoryItem | null> {
     const updateData: Partial<NewInventoryItem> = {};
@@ -141,7 +137,7 @@ export class InventoryService {
     const [updated] = await db
       .update(inventoryItems)
       .set(updateData)
-      .where(eq(inventoryItems.id, itemId))
+      .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.characterId, characterId)))
       .returning();
 
     return updated || null;
@@ -150,12 +146,13 @@ export class InventoryService {
   /**
    * Remove item from inventory
    * @param itemId - Item ID to delete
+   * @param characterId - Character ID (for ownership verification)
    * @returns True if deleted, false if not found
    */
-  static async removeItem(itemId: string): Promise<boolean> {
+  static async removeItem(itemId: string, characterId: string): Promise<boolean> {
     const result = await db
       .delete(inventoryItems)
-      .where(eq(inventoryItems.id, itemId))
+      .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.characterId, characterId)))
       .returning({ id: inventoryItems.id });
 
     return result.length > 0;
@@ -164,11 +161,13 @@ export class InventoryService {
   /**
    * Get a single inventory item by ID
    * @param itemId - Item ID
+   * @param characterId - Character ID (for ownership verification)
    * @returns Item or null if not found
    */
-  static async getItemById(itemId: string): Promise<InventoryItem | null> {
+  static async getItemById(itemId: string, characterId: string): Promise<InventoryItem | null> {
     const item = await db.query.inventoryItems.findFirst({
-      where: eq(inventoryItems.id, itemId),
+      where: (items, { and, eq }) =>
+        and(eq(items.id, itemId), eq(items.characterId, characterId)),
     });
 
     return item || null;
@@ -185,14 +184,10 @@ export class InventoryService {
    * @returns Usage result with remaining quantity
    */
   static async useConsumable(input: UseConsumableInput): Promise<UseConsumableResult> {
-    const item = await this.getItemById(input.itemId);
+    const item = await this.getItemById(input.itemId, input.characterId);
 
     if (!item) {
       throw new NotFoundError('Inventory item', input.itemId);
-    }
-
-    if (item.characterId !== input.characterId) {
-      throw new ForbiddenError('Item does not belong to this character');
     }
 
     const quantityToUse = input.quantity ?? 1;
@@ -225,10 +220,10 @@ export class InventoryService {
 
     // Update or delete item based on remaining quantity
     if (newQuantity <= 0) {
-      await this.removeItem(input.itemId);
+      await this.removeItem(input.itemId, input.characterId);
       itemDeleted = true;
     } else {
-      await this.updateItem(input.itemId, { quantity: newQuantity });
+      await this.updateItem(input.itemId, input.characterId, { quantity: newQuantity });
     }
 
     return {
@@ -253,11 +248,12 @@ export class InventoryService {
   ): Promise<UseConsumableResult> {
     // Find ammunition by name
     const items = await db.query.inventoryItems.findMany({
-      where: and(
-        eq(inventoryItems.characterId, characterId),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ),
+      where: (items, { and, eq }) =>
+        and(
+          eq(items.characterId, characterId),
+          eq(items.itemType, 'ammunition'),
+          eq(items.name, ammoType)
+        ),
     });
 
     if (items.length === 0) {
@@ -291,11 +287,12 @@ export class InventoryService {
   ): Promise<InventoryItem> {
     // Find or create ammunition
     const items = await db.query.inventoryItems.findMany({
-      where: and(
-        eq(inventoryItems.characterId, characterId),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ),
+      where: (items, { and, eq }) =>
+        and(
+          eq(items.characterId, characterId),
+          eq(items.itemType, 'ammunition'),
+          eq(items.name, ammoType)
+        ),
     });
 
     if (items.length > 0) {
@@ -304,7 +301,7 @@ export class InventoryService {
       if (!item) {
         throw new InternalServerError('Failed to find ammunition item');
       }
-      const updated = await this.updateItem(item.id, {
+      const updated = await this.updateItem(item.id, characterId, {
         quantity: item.quantity + count,
       });
       if (!updated) throw new InternalServerError('Failed to update ammunition');
@@ -332,21 +329,17 @@ export class InventoryService {
    * @returns Equip result
    */
   static async equipItem(characterId: string, itemId: string): Promise<EquipResult> {
-    const item = await this.getItemById(itemId);
+    const item = await this.getItemById(itemId, characterId);
 
     if (!item) {
       return { success: false, error: 'Item not found' };
-    }
-
-    if (item.characterId !== characterId) {
-      return { success: false, error: 'Item does not belong to this character' };
     }
 
     if (item.itemType !== 'weapon' && item.itemType !== 'armor') {
       return { success: false, error: 'Only weapons and armor can be equipped' };
     }
 
-    const updated = await this.updateItem(itemId, { isEquipped: true });
+    const updated = await this.updateItem(itemId, characterId, { isEquipped: true });
 
     if (!updated) {
       return { success: false, error: 'Failed to equip item' };
@@ -361,10 +354,11 @@ export class InventoryService {
   /**
    * Unequip item
    * @param itemId - Item ID to unequip
+   * @param characterId - Character ID (for ownership verification)
    * @returns Updated item
    */
-  static async unequipItem(itemId: string): Promise<InventoryItem | null> {
-    return this.updateItem(itemId, { isEquipped: false });
+  static async unequipItem(itemId: string, characterId: string): Promise<InventoryItem | null> {
+    return this.updateItem(itemId, characterId, { isEquipped: false });
   }
 
   // ==========================================
@@ -389,7 +383,7 @@ export class InventoryService {
    */
   static async getCarryingCapacity(characterId: string): Promise<number> {
     const stats = await db.query.characterStats.findFirst({
-      where: eq(characterStats.characterId, characterId),
+      where: (stats, { eq }) => eq(stats.characterId, characterId),
     });
 
     if (!stats) {
@@ -412,7 +406,7 @@ export class InventoryService {
    */
   static async checkEncumbrance(characterId: string): Promise<EncumbranceStatus> {
     const stats = await db.query.characterStats.findFirst({
-      where: eq(characterStats.characterId, characterId),
+      where: (stats, { eq }) => eq(stats.characterId, characterId),
     });
 
     if (!stats) {
@@ -459,10 +453,7 @@ export class InventoryService {
    */
   static async getAttunedItems(characterId: string): Promise<InventoryItem[]> {
     const items = await db.query.inventoryItems.findMany({
-      where: and(
-        eq(inventoryItems.characterId, characterId),
-        eq(inventoryItems.isAttuned, true)
-      ),
+      where: (items, { and, eq }) => and(eq(items.characterId, characterId), eq(items.isAttuned, true)),
     });
 
     return items;
@@ -476,7 +467,7 @@ export class InventoryService {
    * @returns Attunement result
    */
   static async attuneItem(characterId: string, itemId: string): Promise<AttunementResult> {
-    const item = await this.getItemById(itemId);
+    const item = await this.getItemById(itemId, characterId);
 
     if (!item) {
       return {
@@ -484,15 +475,6 @@ export class InventoryService {
         currentAttunedCount: 0,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Item not found',
-      };
-    }
-
-    if (item.characterId !== characterId) {
-      return {
-        success: false,
-        currentAttunedCount: 0,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: 'Item does not belong to this character',
       };
     }
 
@@ -527,7 +509,7 @@ export class InventoryService {
     }
 
     // Attune to the item
-    const updated = await this.updateItem(itemId, { isAttuned: true });
+    const updated = await this.updateItem(itemId, characterId, { isAttuned: true });
 
     if (!updated) {
       return {
@@ -549,10 +531,11 @@ export class InventoryService {
   /**
    * Break attunement with a magic item
    * @param itemId - Item ID to unattune
+   * @param characterId - Character ID (for ownership verification)
    * @returns Updated item or null
    */
-  static async unattuneItem(itemId: string): Promise<InventoryItem | null> {
-    return this.updateItem(itemId, { isAttuned: false });
+  static async unattuneItem(itemId: string, characterId: string): Promise<InventoryItem | null> {
+    return this.updateItem(itemId, characterId, { isAttuned: false });
   }
 
   // ==========================================
@@ -565,21 +548,17 @@ export class InventoryService {
    * @returns Array of usage log entries
    */
   static async getUsageHistory(input: GetUsageHistoryInput): Promise<ConsumableUsageLog[]> {
-    const conditions = [eq(consumableUsageLog.characterId, input.characterId)];
-
-    if (input.itemId) {
-      conditions.push(eq(consumableUsageLog.itemId, input.itemId));
-    }
-    if (input.sessionId) {
-      conditions.push(eq(consumableUsageLog.sessionId, input.sessionId));
-    }
-
     const query = db.query.consumableUsageLog.findMany({
-      where: and(...conditions),
-      orderBy: [desc(consumableUsageLog.timestamp)],
+      where: (logs, { and, eq }) => {
+        const conditions = [eq(logs.characterId, input.characterId)];
+        if (input.itemId) conditions.push(eq(logs.itemId, input.itemId));
+        if (input.sessionId) conditions.push(eq(logs.sessionId, input.sessionId));
+        return and(...conditions);
+      },
+      orderBy: (logs, { desc }) => [desc(logs.timestamp)],
       limit: input.limit ?? 100,
     });
 
-    return query;
+    return query as any;
   }
 }
