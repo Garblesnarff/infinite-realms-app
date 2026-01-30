@@ -36,6 +36,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // ============================
 // External integrations
 // ============================
+import {
+  type ExtendedGameSession,
+  type SessionStateUpdater,
+  type SessionState,
+  CLEANUP_INTERVAL,
+  isValidSession,
+  sanitizeSessionPatch,
+  isSessionExpired,
+  generateSessionSummary,
+} from './game-session/session-utils';
+import { useSessionInitialization } from './game-session/use-session-initialization';
+
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -43,19 +55,13 @@ import logger from '@/lib/logger';
 // ============================
 // Session utilities (extracted)
 // ============================
-import {
-  type ExtendedGameSession,
-  type SessionStateUpdater,
-  SESSION_EXPIRY_TIME,
-  CLEANUP_INTERVAL,
-  isValidSession,
-  sanitizeSessionPatch,
-  isSessionExpired,
-  generateSessionSummary,
-} from './game-session/session-utils';
+
+// ============================
+// Session hooks (extracted)
+// ============================
 
 // Re-export types for consumers of this hook
-export type { ExtendedGameSession, SessionStateUpdater };
+export type { ExtendedGameSession, SessionStateUpdater, SessionState };
 
 /**
  * React hook for managing game sessions, including creation, expiration, cleanup, and summary generation.
@@ -95,12 +101,19 @@ export const useGameSession = (
   starterCampaignId?: string,
 ) => {
   const [sessionData, setSessionData] = useState<ExtendedGameSession | null>(null);
-  const [sessionState, setSessionState] = useState<
-    'active' | 'expired' | 'ending' | 'loading' | 'error' | 'idle'
-  >('idle');
+  const [sessionState, setSessionState] = useState<SessionState>('idle');
   const { toast } = useToast();
 
   const currentSessionId = sessionData?.id || null;
+  const mountedRef = useRef(true);
+
+  // Set mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   /**
    * Safe setter for session data with validation.
@@ -151,20 +164,6 @@ export const useGameSession = (
 
     return true;
   }, [sessionData, sessionState]);
-
-  // Race condition prevention: track initialization and mount status
-  // initializingRef acts as a lock to prevent duplicate session creation during:
-  // - React StrictMode double mounting (development)
-  // - Fast component mount/unmount cycles
-  // - Concurrent useEffect executions
-  const initializingRef = useRef(false);
-  const mountedRef = useRef(true);
-  const sessionInitializedRef = useRef(false); // Track if session was successfully initialized
-
-  // AbortController for cancelling in-flight async operations
-  // While Supabase doesn't directly support AbortSignal, we use this pattern
-  // to track and prevent state updates from stale async operations
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Store toast in ref to avoid dependency changes and prevent stale closures
   const toastRef = useRef(toast);
@@ -467,252 +466,20 @@ export const useGameSession = (
     }
   }, []);
 
-  /**
-   * Initialize and maintain session
-   *
-   * This effect handles:
-   * - Session initialization when campaignId and characterId are available
-   * - Resuming active sessions
-   * - Cleaning up expired sessions
-   * - Creating continuation sessions
-   * - Race condition prevention via lock mechanism
-   */
-  useEffect(() => {
-    // Guard: Only initialize if we have the required IDs
-    if (!campaignId || !characterId) {
-      if (mountedRef.current) {
-        setSessionState('idle');
-        logger.info('[Session Init] Waiting for campaignId and characterId');
-      }
-      return;
-    }
-
-    // Guard: Prevent concurrent initialization (CRITICAL for race condition prevention)
-    // This lock prevents duplicate sessions from being created when:
-    // - React StrictMode double-mounts components in development
-    // - Components mount/unmount rapidly during navigation
-    // - Multiple useEffect cycles execute before first completes
-    if (initializingRef.current) {
-      logger.info('🔒 [Session Init] Already in progress, skipping to prevent duplicate creation');
-      return;
-    }
-
-    // Guard: Skip if session already initialized successfully
-    if (sessionInitializedRef.current) {
-      logger.info('✓ [Session Init] Already initialized, skipping');
-      return;
-    }
-
-    // Acquire lock: Mark initialization as in progress IMMEDIATELY after guards
-    initializingRef.current = true;
-    logger.info(
-      '🔓 [Session Init] Acquired lock - campaignId:',
-      campaignId,
-      'characterId:',
-      characterId,
-    );
-
-    // Create new AbortController for this initialization cycle
-    // This allows us to cancel the operation if the component unmounts
-    // or if the dependencies change before completion
-    abortControllerRef.current = new AbortController();
-    const abortSignal = abortControllerRef.current.signal;
-
-    const initSession = async () => {
-      try {
-        // Check if aborted before starting
-        if (abortSignal.aborted) {
-          logger.info('[Session Init] Aborted before starting');
-          return;
-        }
-
-        // Set loading state at start
-        if (mountedRef.current) {
-          setSessionState('loading');
-        }
-
-        // If forceNew=true, skip checking for existing sessions and create a new one
-        if (forceNew) {
-          logger.info('[Session Init] forceNew=true, creating new session');
-          const newSessionId = await createGameSession(campaignId, characterId);
-          if (newSessionId && mountedRef.current) {
-            sessionInitializedRef.current = true; // Mark as successfully initialized
-          }
-          return;
-        }
-
-        // If specificSessionId is provided, load THAT specific session
-        if (specificSessionId) {
-          logger.info('[Session Init] Loading specific session:', specificSessionId);
-          const { data: specificSession, error: specificError } = await supabase
-            .from('game_sessions')
-            .select('*')
-            .eq('id', specificSessionId)
-            .single();
-
-          if (specificError) {
-            logger.error('[Session Init] Error loading specific session:', specificError);
-            // Fall through to normal session search
-          } else if (specificSession && mountedRef.current) {
-            const extended = specificSession as ExtendedGameSession;
-            setSessionData(extended);
-            sessionInitializedRef.current = true;
-            setSessionState('active');
-            logger.info('[Session Init] Loaded specific session:', specificSessionId);
-            return;
-          }
-        }
-
-        // First, try to find the most recent session for this campaign & character
-        // Look for both active and completed sessions to get the latest one
-        const { data: existingSessions, error: existingSessionError } = await supabase
-          .from('game_sessions')
-          .select('*')
-          .eq('campaign_id', campaignId)
-          .eq('character_id', characterId)
-          .order('created_at', { ascending: false })
-          .limit(5); // Get last 5 sessions to find the best one to resume
-
-        // Check if operation was aborted or component unmounted after async operation
-        if (abortSignal.aborted || !mountedRef.current) {
-          logger.info('[Session Init] Aborted after fetching sessions');
-          return;
-        }
-
-        if (existingSessionError) {
-          logger.error('[Session Init] Error fetching existing sessions:', existingSessionError);
-          // If we can't fetch sessions, create a new one
-          const newSessionId = await createGameSession(campaignId, characterId);
-          if (newSessionId && mountedRef.current) {
-            sessionInitializedRef.current = true; // Mark as successfully initialized
-          }
-          return;
-        }
-
-        // Look for an active session first
-        let sessionToResume = existingSessions?.find((s) => s.status === 'active') as
-          | ExtendedGameSession
-          | undefined;
-
-        // If we have an active session, check if it's expired
-        if (sessionToResume) {
-          if (isSessionExpired(sessionToResume)) {
-            logger.info(
-              '[Session Init] Found active session but expired, cleaning up:',
-              sessionToResume.id,
-            );
-            await cleanupSession(sessionToResume.id);
-            // Check abort status after async cleanup operation
-            if (abortSignal.aborted || !mountedRef.current) {
-              logger.info('[Session Init] Aborted after session cleanup');
-              return;
-            }
-            sessionToResume = undefined;
-          } else {
-            logger.info('[Session Init] Resuming active session:', sessionToResume.id);
-            if (mountedRef.current && !abortSignal.aborted) {
-              setSessionData(sessionToResume);
-              setSessionState('active');
-              sessionInitializedRef.current = true; // Mark as successfully initialized
-            }
-            return;
-          }
-        }
-
-        // If no active session, look for the most recent completed session
-        // and create a new session based on its state
-        const lastCompletedSession = existingSessions?.find((s) => s.status === 'completed');
-
-        if (lastCompletedSession) {
-          logger.info(
-            '[Session Init] Creating continuation from previous:',
-            lastCompletedSession.id,
-          );
-          // Create a new session but maintain continuity from the last one
-          const sessionNumber =
-            Math.max(...(existingSessions?.map((s) => s.session_number || 1) || [1])) + 1;
-
-          const { data, error } = await supabase
-            .from('game_sessions')
-            .insert([
-              {
-                session_number: sessionNumber,
-                status: 'active',
-                campaign_id: campaignId,
-                character_id: characterId,
-                turn_count: 0,
-                current_scene_description:
-                  lastCompletedSession.current_scene_description || 'Continuing your adventure...',
-                session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
-                starter_campaign_id: starterCampaignId || null,
-              },
-            ])
-            .select()
-            .single();
-
-          if (!mountedRef.current) return;
-
-          if (error) {
-            logger.error('[Session Init] Error creating continuation session:', error);
-            setSessionState('error');
-            toastRef.current({
-              title: 'Error',
-              description: 'Failed to create game session',
-              variant: 'destructive',
-            });
-            return;
-          }
-
-          setSessionData(data as ExtendedGameSession);
-          setSessionState('active');
-          sessionInitializedRef.current = true; // Mark as successfully initialized
-          logger.info('✅ [Session Init] Continuation session created:', data.id);
-          return;
-        }
-
-        // No existing sessions found, create the first one
-        logger.info('[Session Init] No existing sessions, creating first session');
-        const newSessionId = await createGameSession(campaignId, characterId);
-        if (newSessionId && mountedRef.current) {
-          sessionInitializedRef.current = true; // Mark as successfully initialized
-        }
-      } catch (error) {
-        logger.error('[Session Init] Error in session initialization:', error);
-        if (mountedRef.current) {
-          setSessionState('error');
-          toastRef.current({
-            title: 'Error',
-            description: 'Failed to initialize game session',
-            variant: 'destructive',
-          });
-        }
-        // On error, release lock to allow retry
-        initializingRef.current = false;
-        sessionInitializedRef.current = false;
-      } finally {
-        // Note: We intentionally do NOT clear initializingRef.current here on success
-        // The lock persists until component unmount to prevent React StrictMode
-        // double-mounting from creating duplicate sessions
-        // Only cleared on error (above) or unmount (below)
-      }
-    };
-
-    initSession();
-
-    // Cleanup on unmount - CRITICAL for proper lock release
-    return () => {
-      logger.info('🔓 [Session Init] Releasing lock on unmount');
-      mountedRef.current = false;
-      initializingRef.current = false; // Release lock on unmount
-      sessionInitializedRef.current = false; // Reset initialization flag
-
-      // Abort any in-flight async operations from this effect
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-    };
-  }, [campaignId, characterId, createGameSession, cleanupSession]); // Stable dependencies now
+  // Extracted initialization logic
+  useSessionInitialization({
+    campaignId,
+    characterId,
+    forceNew,
+    specificSessionId,
+    starterCampaignId,
+    setSessionData,
+    setSessionState,
+    createGameSession,
+    cleanupSession,
+    toast,
+    mountedRef,
+  });
 
   // Periodic cleanup check with stable references
   // This effect runs every CLEANUP_INTERVAL (15 minutes) to check for expired sessions
