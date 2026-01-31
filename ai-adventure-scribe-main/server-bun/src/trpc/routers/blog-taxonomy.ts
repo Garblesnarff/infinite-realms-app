@@ -5,16 +5,17 @@
  * Separated from main blog router for maintainability.
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
+import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
 import {
   blogCategories,
-  blogTags,
   blogPostCategories,
   blogPostTags,
+  blogTags,
 } from '../../../../db/schema/index.js';
-import { eq, sql } from 'drizzle-orm';
+import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 
 export const blogTaxonomyRouter = router({
@@ -33,22 +34,21 @@ export const blogTaxonomyRouter = router({
         return categories;
       }
 
-      // Add post counts
-      const categoriesWithCount = await Promise.all(
-        categories.map(async (category) => {
-          const [result] = await ctx.db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(blogPostCategories)
-            .where(eq(blogPostCategories.categoryId, category.id));
-
-          return {
-            ...category,
-            postCount: result?.count ?? 0,
-          };
+      // Add post counts - batched to avoid N+1 queries
+      const counts = await ctx.db
+        .select({
+          categoryId: blogPostCategories.categoryId,
+          count: sql<number>`count(*)::int`,
         })
-      );
+        .from(blogPostCategories)
+        .groupBy(blogPostCategories.categoryId);
 
-      return categoriesWithCount;
+      const countMap = new Map(counts.map((c) => [c.categoryId, c.count]));
+
+      return categories.map((category) => ({
+        ...category,
+        postCount: countMap.get(category.id) ?? 0,
+      }));
     }),
 
   /**
@@ -63,22 +63,21 @@ export const blogTaxonomyRouter = router({
         return tags;
       }
 
-      // Add post counts
-      const tagsWithCount = await Promise.all(
-        tags.map(async (tag) => {
-          const [result] = await ctx.db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(blogPostTags)
-            .where(eq(blogPostTags.tagId, tag.id));
-
-          return {
-            ...tag,
-            postCount: result?.count ?? 0,
-          };
+      // Add post counts - batched to avoid N+1 queries
+      const counts = await ctx.db
+        .select({
+          tagId: blogPostTags.tagId,
+          count: sql<number>`count(*)::int`,
         })
-      );
+        .from(blogPostTags)
+        .groupBy(blogPostTags.tagId);
 
-      return tagsWithCount;
+      const countMap = new Map(counts.map((c) => [c.tagId, c.count]));
+
+      return tags.map((tag) => ({
+        ...tag,
+        postCount: countMap.get(tag.id) ?? 0,
+      }));
     }),
 
   /**
