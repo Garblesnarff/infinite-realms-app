@@ -5,25 +5,24 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   combatEncounters,
   combatParticipants,
   type CombatEncounter,
-  type NewCombatEncounter,
   type CombatParticipant,
-  type NewCombatParticipant,
 } from '../../../db/schema/index.js';
+import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
+
 import type {
   CombatState,
   CreateParticipantInput,
   InitiativeRoll,
   TurnOrderEntry,
   AdvanceTurnResult,
-  ReorderInitiativeInput,
 } from '../types/combat.js';
-import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
 
 /**
  * Roll a d20 for initiative
@@ -139,9 +138,9 @@ export class CombatInitiativeService {
   ): Promise<InitiativeRoll> {
     // Get participant
     const participant = await db.query.combatParticipants.findFirst({
-      where: and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, encounterId)
+      where: (cp, { eq, and }) => and(
+        eq(cp.id, participantId),
+        eq(cp.encounterId, encounterId)
       ),
     });
 
@@ -187,9 +186,9 @@ export class CombatInitiativeService {
   static async calculateTurnOrder(encounterId: string): Promise<void> {
     // Get all active participants
     const participants = await db.query.combatParticipants.findMany({
-      where: and(
-        eq(combatParticipants.encounterId, encounterId),
-        eq(combatParticipants.isActive, true)
+      where: (cp, { eq, and }) => and(
+        eq(cp.encounterId, encounterId),
+        eq(cp.isActive, true)
       ),
     });
 
@@ -225,33 +224,33 @@ export class CombatInitiativeService {
    * @returns Result with previous and current participants
    */
   static async advanceTurn(encounterId: string): Promise<AdvanceTurnResult> {
-    const encounter = await db.query.combatEncounters.findFirst({
-      where: eq(combatEncounters.id, encounterId),
+    // Single relational query to fetch encounter and active participants
+    const encounterWithParticipants = await db.query.combatEncounters.findFirst({
+      where: (ce, { eq }) => eq(ce.id, encounterId),
+      with: {
+        participants: {
+          where: (cp, { eq }) => eq(cp.isActive, true),
+          orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
+        },
+      },
     });
 
-    if (!encounter) {
+    if (!encounterWithParticipants) {
       throw new NotFoundError('Combat encounter', encounterId);
     }
+
+    const { participants, ...encounter } = encounterWithParticipants;
 
     if (encounter.status !== 'active') {
       throw new BusinessLogicError('Encounter is not active', { status: encounter.status });
     }
 
-    // Get current participant
-    const previousParticipant = await this.getCurrentTurn(encounterId);
-
-    // Get all active participants ordered by turn order
-    const participants = await db.query.combatParticipants.findMany({
-      where: and(
-        eq(combatParticipants.encounterId, encounterId),
-        eq(combatParticipants.isActive, true)
-      ),
-      orderBy: asc(combatParticipants.turnOrder),
-    });
-
     if (participants.length === 0) {
       throw new BusinessLogicError('No active participants in combat');
     }
+
+    // Get current participant (before advancing) from memory
+    const previousParticipant = participants[encounter.currentTurnOrder] || null;
 
     // Calculate next turn
     const currentTurnOrder = encounter.currentTurnOrder;
@@ -269,7 +268,7 @@ export class CombatInitiativeService {
       })
       .where(eq(combatEncounters.id, encounterId));
 
-    // Get new current participant
+    // Get new current participant from memory
     const currentParticipant = participants[nextTurnOrder];
 
     if (!currentParticipant) {
@@ -290,27 +289,21 @@ export class CombatInitiativeService {
    * @returns Current participant or null
    */
   static async getCurrentTurn(encounterId: string): Promise<CombatParticipant | null> {
-    const encounter = await db.query.combatEncounters.findFirst({
-      where: eq(combatEncounters.id, encounterId),
+    const encounterWithParticipants = await db.query.combatEncounters.findFirst({
+      where: (ce, { eq }) => eq(ce.id, encounterId),
+      with: {
+        participants: {
+          where: (cp, { eq }) => eq(cp.isActive, true),
+          orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
+        },
+      },
     });
 
-    if (!encounter) {
-      throw new NotFoundError('Combat encounter', encounterId);
-    }
-
-    const participants = await db.query.combatParticipants.findMany({
-      where: and(
-        eq(combatParticipants.encounterId, encounterId),
-        eq(combatParticipants.isActive, true)
-      ),
-      orderBy: asc(combatParticipants.turnOrder),
-    });
-
-    if (participants.length === 0) {
+    if (!encounterWithParticipants || encounterWithParticipants.participants.length === 0) {
       return null;
     }
 
-    return participants[encounter.currentTurnOrder] || null;
+    return encounterWithParticipants.participants[encounterWithParticipants.currentTurnOrder] || null;
   }
 
   /**
@@ -366,32 +359,36 @@ export class CombatInitiativeService {
    * @returns Complete combat state with participants and turn order
    */
   static async getCombatState(encounterId: string): Promise<CombatState> {
-    const encounter = await db.query.combatEncounters.findFirst({
-      where: eq(combatEncounters.id, encounterId),
+    // Single relational query to fetch encounter and all participants
+    const encounterWithParticipants = await db.query.combatEncounters.findFirst({
+      where: (ce, { eq }) => eq(ce.id, encounterId),
+      with: {
+        participants: {
+          orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
+        },
+      },
     });
 
-    if (!encounter) {
+    if (!encounterWithParticipants) {
       throw new NotFoundError('Combat encounter', encounterId);
     }
 
-    const participants = await db.query.combatParticipants.findMany({
-      where: eq(combatParticipants.encounterId, encounterId),
-      orderBy: asc(combatParticipants.turnOrder),
-    });
+    // Extract participants from the joined result
+    const { participants, ...encounter } = encounterWithParticipants;
 
-    const currentParticipant = await this.getCurrentTurn(encounterId);
+    // Filter active participants and determine current turn in-memory
+    const activeParticipants = participants.filter(p => p.isActive);
+    const currentParticipant = activeParticipants[encounter.currentTurnOrder] || null;
 
-    // Build turn order entries
-    const turnOrder: TurnOrderEntry[] = participants
-      .filter(p => p.isActive)
-      .map((participant, index) => ({
-        participant,
-        isCurrent: currentParticipant?.id === participant.id,
-        hasGone: index < encounter.currentTurnOrder,
-      }));
+    // Build turn order entries in-memory
+    const turnOrder: TurnOrderEntry[] = activeParticipants.map((participant, index) => ({
+      participant,
+      isCurrent: currentParticipant?.id === participant.id,
+      hasGone: index < encounter.currentTurnOrder,
+    }));
 
     return {
-      encounter,
+      encounter: encounter as CombatEncounter,
       participants,
       turnOrder,
       currentParticipant,
@@ -403,7 +400,7 @@ export class CombatInitiativeService {
    */
   static async getEncounterById(encounterId: string): Promise<CombatEncounter | undefined> {
     return await db.query.combatEncounters.findFirst({
-      where: eq(combatEncounters.id, encounterId),
+      where: (ce, { eq }) => eq(ce.id, encounterId),
     });
   }
 
@@ -412,9 +409,9 @@ export class CombatInitiativeService {
    */
   static async getActiveEncounter(sessionId: string): Promise<CombatEncounter | undefined> {
     return await db.query.combatEncounters.findFirst({
-      where: and(
-        eq(combatEncounters.sessionId, sessionId),
-        eq(combatEncounters.status, 'active')
+      where: (ce, { eq, and }) => and(
+        eq(ce.sessionId, sessionId),
+        eq(ce.status, 'active')
       ),
     });
   }
