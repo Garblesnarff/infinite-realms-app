@@ -16,7 +16,6 @@
  * @module components/battle-map/Toolbar
  */
 
-import React, { useCallback } from 'react';
 import {
   MousePointer2,
   Hand,
@@ -28,17 +27,20 @@ import {
   Grid3x3,
   HelpCircle,
 } from 'lucide-react';
+import React, { useCallback } from 'react';
+
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Separator } from '@/components/ui/separator';
+import { Z_INDEX } from '@/constants/z-index';
+import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
 import { cn } from '@/lib/utils';
 import { useBattleMapStore, type ToolType } from '@/stores/useBattleMapStore';
-import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
 
 // ===========================
 // Types
@@ -266,12 +268,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         'flex gap-2 p-2 bg-background border rounded-lg shadow-md',
         orientation === 'vertical' ? 'flex-col' : 'flex-row',
         // Position-based styling
-        position === 'left' && 'fixed left-4 top-1/2 -translate-y-1/2 z-50',
-        position === 'right' && 'fixed right-4 top-1/2 -translate-y-1/2 z-50',
-        position === 'top' && 'fixed top-4 left-1/2 -translate-x-1/2 z-50',
-        position === 'bottom' && 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50',
+        position === 'left' && 'fixed left-4 top-1/2 -translate-y-1/2',
+        position === 'right' && 'fixed right-4 top-1/2 -translate-y-1/2',
+        position === 'top' && 'fixed top-4 left-1/2 -translate-x-1/2',
+        position === 'bottom' && 'fixed bottom-4 left-1/2 -translate-x-1/2',
         className
       )}
+      style={position ? { zIndex: Z_INDEX.FLOATING_PANEL } : undefined}
       role="toolbar"
       aria-label="Battle map tools"
     >

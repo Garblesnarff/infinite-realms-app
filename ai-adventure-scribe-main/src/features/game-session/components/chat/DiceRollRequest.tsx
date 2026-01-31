@@ -340,6 +340,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
                 variant={hasAdvantage ? 'default' : 'outline'}
                 size="sm"
                 onClick={toggleAdvantage}
+                aria-pressed={hasAdvantage}
                 className={cn(
                   'text-xs',
                   hasAdvantage
@@ -354,6 +355,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
                 variant={hasDisadvantage ? 'default' : 'outline'}
                 size="sm"
                 onClick={toggleDisadvantage}
+                aria-pressed={hasDisadvantage}
                 className={cn(
                   'text-xs',
                   hasDisadvantage
@@ -425,8 +427,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
         ) : (
           <div className="space-y-3">
             <div>
-              <label className="text-sm text-slate-600 mb-1 block">Enter your roll result:</label>
+              <label htmlFor="manual-result" className="text-sm text-slate-600 mb-1 block">
+                Enter your roll result:
+              </label>
               <Input
+                id="manual-result"
                 type="number"
                 value={manualResult}
                 onChange={(e) => setManualResult(e.target.value)}

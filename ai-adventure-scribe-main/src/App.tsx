@@ -6,13 +6,15 @@ import { Toaster } from 'sonner';
 import { AuthProvider } from './contexts/AuthContext';
 import { CampaignProvider } from './contexts/CampaignContext';
 import { CharacterProvider } from './contexts/CharacterContext';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useTelemetry } from './hooks/use-telemetry';
 import { TRPCProvider } from './lib/trpc/Provider';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
 import Breadcrumbs from './shared/components/layout/breadcrumbs';
 import Navigation from './shared/components/layout/navigation';
 import { RouteLoading } from './shared/components/RouteLoading';
+
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import { Z_INDEX } from '@/constants/z-index';
 
 // Lazy load route page components for code splitting
 const Index = lazy(() => import('./pages/Index'));
@@ -74,7 +76,8 @@ function App() {
                     {/* Skip to content for keyboard users */}
                     <a
                       href="#main-content"
-                      className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-primary focus:text-primary-foreground focus:px-3 focus:py-2 focus:rounded"
+                      className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:bg-primary focus:text-primary-foreground focus:px-3 focus:py-2 focus:rounded"
+                      style={{ zIndex: Z_INDEX.LOADING_OVERLAY }}
                     >
                       Skip to content
                     </a>
