@@ -20,6 +20,10 @@
 **Learning:** Found an N+1 query pattern in `server-bun/src/routes/v1/combat/status.ts` where participant conditions were fetched in a loop. Also discovered truncated files in `src/services/ai/` that broke the build.
 **Action:** Always check for batching opportunities in loops hitting the DB. Use `db.execute(sql`...`)` for efficient multi-table joins when Drizzle relations aren't mapped. Ensure template literals with backticks are escaped to prevent Vite build failures.
 
+## 2025-01-30 - tRPC Context Connection Churn
+**Learning:** `resolveUserPlan` in `server-bun/src/trpc/context.ts` was creating a new PostgreSQL pool for every authenticated request, adding 10-50ms latency.
+**Action:** Use the existing Drizzle `db` instance for context resolution. Use relational query callbacks to bypass cross-package drizzle-orm type conflicts.
+
 ## 2025-01-31 - [Redundant Combat State Queries]
 **Learning:** The `CombatInitiativeService` was performing redundant database queries by calling `getCurrentTurn` inside `getCombatState` and `advanceTurn`. Each call re-fetched the encounter and all participants even when they were already available in memory.
 **Action:** Avoid calling helper methods that repeat database fetches when the data is already available. Use Drizzle's relational queries (`db.query`) with `with` to fetch related data in a single round-trip, and perform dependent logic (like finding the current participant) in-memory.

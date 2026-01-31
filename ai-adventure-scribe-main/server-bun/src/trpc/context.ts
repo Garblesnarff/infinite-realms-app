@@ -9,11 +9,12 @@
  * The context is available in all tRPC procedures and middleware.
  */
 
-import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { db } from '../../../db/client.js';
+import { logger } from '../lib/logger.js';
 import { getBearerToken } from '../lib/jwt.js';
 import { verifyWorkOSToken } from '../services/workos.js';
-import { createPgClient } from '../../../src/infrastructure/database/index.js';
+
+import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 
 /**
  * Authenticated user payload extracted from WorkOS token
@@ -33,35 +34,21 @@ async function resolveUserPlan(
 ): Promise<string> {
   // 1) Check for explicit header override (useful for tests)
   const planHeader = headers.get('x-plan');
-  const hdr = planHeader?.toLowerCase();
-  if (hdr) return hdr;
+  if (planHeader) return planHeader.toLowerCase();
 
-  // 2) Try to resolve from Postgres users table
+  // 2) Try to resolve from Postgres users table using shared Drizzle client
   try {
-    if (process.env.DATABASE_URL) {
-      const pgClient = createPgClient();
-      const client = await pgClient.connect();
-      try {
-        const { rows } = await client.query(
-          'SELECT plan FROM users WHERE id = $1 LIMIT 1',
-          [userId]
-        );
-        if (rows?.[0]?.plan) return String(rows[0].plan).toLowerCase();
-      } finally {
-        try {
-          client.release();
-        } catch {
-          // Ignore release errors
-        }
-        try {
-          await pgClient.end();
-        } catch {
-          // Ignore cleanup errors
-        }
-      }
-    }
-  } catch {
-    // Fall through to default
+    // Using relational query with callback to avoid cross-package type conflicts
+    // between local and root drizzle-orm versions
+    const user = await (db.query as any).users.findFirst({
+      where: (fields: any, { eq }: any) => eq(fields.id, userId),
+      columns: { plan: true },
+    });
+
+    if (user?.plan) return user.plan.toLowerCase();
+  } catch (error) {
+    // Fall through to default, but log the error for diagnostic purposes
+    logger.error({ msg: 'Failed to resolve user plan', error });
   }
 
   // 3) Default plan
