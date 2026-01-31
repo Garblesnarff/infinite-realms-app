@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Combat Damage Integrator
  * Bridges dice roll results to HP tracking and database persistence
@@ -5,8 +6,10 @@
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 import type { DamageType } from '@/types/combat';
+
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+
 
 export interface DamageApplication {
   participantId: string;
@@ -99,22 +102,23 @@ export function calculateModifiedDamage(
     return 0;
   }
 
+  let modifiedDamage = baseDamage;
+
   // Resistance = half damage (rounded down)
   if (resistances.includes(damageType)) {
-    const reduced = Math.floor(baseDamage / 2);
-    logger.info(`[DamageIntegrator] Damage type ${damageType} is resisted - ${baseDamage} → ${reduced}`);
-    return reduced;
+    const reduced = Math.floor(modifiedDamage / 2);
+    logger.info(`[DamageIntegrator] Damage type ${damageType} is resisted - ${modifiedDamage} → ${reduced}`);
+    modifiedDamage = reduced;
   }
 
   // Vulnerability = double damage
   if (vulnerabilities.includes(damageType)) {
-    const doubled = baseDamage * 2;
-    logger.info(`[DamageIntegrator] Damage type ${damageType} is vulnerable - ${baseDamage} → ${doubled}`);
-    return doubled;
+    const doubled = modifiedDamage * 2;
+    logger.info(`[DamageIntegrator] Damage type ${damageType} is vulnerable - ${modifiedDamage} → ${doubled}`);
+    modifiedDamage = doubled;
   }
 
-  // Normal damage
-  return baseDamage;
+  return modifiedDamage;
 }
 
 /**
@@ -267,7 +271,7 @@ export async function applyDamageFromRoll(
 export async function applyHealingFromRoll(
   healing: HealingApplication
 ): Promise<HPUpdateResult> {
-  const { participantId, healingAmount, sourceDescription } = healing;
+  const { participantId, healingAmount } = healing;
 
   try {
     logger.info(`[DamageIntegrator] Applying ${healingAmount} healing to ${participantId}`);
@@ -302,7 +306,13 @@ export async function applyHealingFromRoll(
     }
 
     // Update database
-    const updateData: any = {
+    const updateData: {
+      current_hp: number;
+      is_conscious: boolean;
+      updated_at: string;
+      death_saves_successes?: number;
+      death_saves_failures?: number;
+    } = {
       current_hp: newHP,
       is_conscious: isConscious,
       updated_at: new Date().toISOString(),
