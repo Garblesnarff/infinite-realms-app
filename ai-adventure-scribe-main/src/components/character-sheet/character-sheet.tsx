@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 
 import CharacterSheetTabs from './character-sheet-tabs';
 
+import { CharacterSheetSkeleton } from '@/components/skeletons';
 import { Card } from '@/components/ui/card';
 import { useCharacterData } from '@/hooks/use-character-data';
 
@@ -17,15 +18,7 @@ const CharacterSheet: React.FC = () => {
 
   // Show loading state while fetching data
   if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Card className="p-6 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-          <div className="flex justify-center items-center min-h-[200px]">
-            Loading character data...
-          </div>
-        </Card>
-      </div>
-    );
+    return <CharacterSheetSkeleton />;
   }
 
   // Early return if no character data is available

@@ -6,5 +6,6 @@
 
 export { CharacterListSkeleton } from './CharacterListSkeleton';
 export { CharacterSelectionSkeleton } from './CharacterSelectionSkeleton';
+export { CharacterSheetSkeleton } from './CharacterSheetSkeleton';
 export { CampaignListSkeleton } from './CampaignListSkeleton';
 export { TimelineSkeleton } from './TimelineSkeleton';
