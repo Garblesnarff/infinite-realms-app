@@ -4,7 +4,7 @@
  * Now integrated with CombatAuditSystem for rule compliance tracking
  */
 
-import { combatAuditSystem } from './CombatAuditSystem';
+import { combatAuditSystem } from '../combat-audit';
 
 import logger from '@/lib/logger';
 
@@ -222,13 +222,6 @@ export class CombatSequenceValidator {
     logger.info(`👤 ${currentActor.actorName}'s turn (Round ${turnOrder.round})`);
 
     return currentActor;
-  }
-
-  /**
-   * Get current turn order for a combat
-   */
-  getTurnOrder(combatId: string): TurnOrder | null {
-    return this.turnOrders.get(combatId) || null;
   }
 
   /**
