@@ -19,9 +19,9 @@ interface PlayerMessageProps {
  * PlayerMessage Component
  * Renders player-specific message bubbles with card styling
  */
-export const PlayerMessage: React.FC<PlayerMessageProps> = ({
+export const PlayerMessage: React.FC<PlayerMessageProps> = React.memo(({
   message,
-  messageId,
+  messageId: _messageId,
   isFirstInGroup,
   isLastInGroup,
   displayText,
@@ -63,4 +63,4 @@ export const PlayerMessage: React.FC<PlayerMessageProps> = ({
       </div>
     </div>
   );
-};
+});
