@@ -7,6 +7,8 @@
  */
 
 import { Elysia, t } from 'elysia';
+
+import { logger } from './lib/logger';
 import { verifyWorkOSToken } from './services/workos';
 
 type RoomId = string;
@@ -182,25 +184,21 @@ function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         }
       }
 
-      console.log(JSON.stringify({
-        level: 'info',
-        msg: 'ws.chat',
+      logger.info({
         requestId,
         sessionId: roomId,
         userId: user.userId
-      }));
+      }, 'ws.chat');
       return;
     }
 
     // Handle Foundry VTT messages
     if (!isValidFoundryMessage(msg)) {
-      console.error(JSON.stringify({
-        level: 'error',
-        msg: 'ws.invalid_message',
+      logger.error({
         requestId,
         userId: user.userId,
         messageType: msg?.type
-      }));
+      }, 'ws.invalid_message');
       return;
     }
 
@@ -237,14 +235,12 @@ function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         // Notify other users in the scene about the new user
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.scene_join',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           usersCount: usersInScene.length
-        }));
+        }, 'ws.scene_join');
         break;
 
       case 'scene:leave':
@@ -254,143 +250,121 @@ function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         // Notify other users in the scene
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.scene_leave',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId
-        }));
+        }, 'ws.scene_leave');
         break;
 
       case 'token:update':
         // Broadcast token position/state changes to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.token_update',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           tokenId: msg.data?.tokenId
-        }));
+        }, 'ws.token_update');
         break;
 
       case 'token:create':
         // Broadcast new token creation to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.token_create',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           tokenId: msg.data?.tokenId
-        }));
+        }, 'ws.token_create');
         break;
 
       case 'token:delete':
         // Broadcast token deletion to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.token_delete',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           tokenId: msg.data?.tokenId
-        }));
+        }, 'ws.token_delete');
         break;
 
       case 'fog:reveal':
         // Broadcast fog of war reveal to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.fog_reveal',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId
-        }));
+        }, 'ws.fog_reveal');
         break;
 
       case 'fog:conceal':
         // Broadcast fog of war conceal to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.fog_conceal',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId
-        }));
+        }, 'ws.fog_conceal');
         break;
 
       case 'wall:update':
         // Broadcast wall/door state changes to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.wall_update',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           wallId: msg.data?.wallId
-        }));
+        }, 'ws.wall_update');
         break;
 
       case 'drawing:create':
         // Broadcast new drawing creation to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.drawing_create',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           drawingId: msg.data?.drawingId
-        }));
+        }, 'ws.drawing_create');
         break;
 
       case 'drawing:delete':
         // Broadcast drawing deletion to scene room
         broadcastToRoom(sceneRoomId, ws, payload);
 
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.drawing_delete',
+        logger.info({
           requestId,
           sceneId: msg.sceneId,
           userId: user.userId,
           drawingId: msg.data?.drawingId
-        }));
+        }, 'ws.drawing_delete');
         break;
 
       default:
-        console.error(JSON.stringify({
-          level: 'error',
-          msg: 'ws.unknown_message_type',
+        logger.error({
           requestId,
           userId: user.userId,
           messageType: msg.type
-        }));
+        }, 'ws.unknown_message_type');
         break;
     }
   } catch (e: any) {
-    console.error(JSON.stringify({
-      level: 'error',
-      msg: 'ws.message_error',
+    logger.error({
       requestId,
       userId: user.userId,
       error: { message: e?.message, stack: e?.stack }
-    }));
+    }, 'ws.message_error');
   }
 }
 
@@ -428,22 +402,18 @@ function handleClose(ws: WSConnection) {
     // Remove from the scene room
     leaveRoom(sceneRoomId, ws);
 
-    console.log(JSON.stringify({
-      level: 'info',
-      msg: 'ws.scene_cleanup',
+    logger.info({
       requestId,
       sceneId,
       userId: user.userId
-    }));
+    }, 'ws.scene_cleanup');
   }
 
-  console.log(JSON.stringify({
-    level: 'info',
-    msg: 'ws.close',
+  logger.info({
     requestId,
     sessionId: roomId,
     userId: user.userId
-  }));
+  }, 'ws.close');
 }
 
 /**
@@ -490,24 +460,20 @@ export const wsPlugin = new Elysia()
         joinRoom(sessionId, ws as unknown as WSConnection);
 
         // Log connection
-        console.log(JSON.stringify({
-          level: 'info',
-          msg: 'ws.connection',
+        logger.info({
           requestId,
           sessionId,
           userId: user.userId
-        }));
+        }, 'ws.connection');
 
         // Send welcome message
         ws.send(JSON.stringify({ type: 'welcome', sessionId, requestId }));
       } catch (e: any) {
         const requestId = crypto.randomUUID();
-        console.error(JSON.stringify({
-          level: 'error',
-          msg: 'ws.connection_error',
+        logger.error({
           requestId,
           error: { message: e?.message, stack: e?.stack }
-        }));
+        }, 'ws.connection_error');
         ws.close(4000, 'Unauthorized');
       }
     },
