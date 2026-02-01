@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { combatAuditSystem } from '../services/combat/CombatAuditSystem';
+import { combatAuditSystem } from '../services/combat-audit';
 import { combatSequenceValidator } from '../services/combat/CombatSequenceValidator';
 import { rollStateManager } from '../services/combat/rollStateManager';
 import { DiceEngine } from '../services/dice/DiceEngine';
