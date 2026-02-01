@@ -13,10 +13,11 @@
  * @module server/trpc/routers/drawings
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
+import { z } from 'zod';
+
 import { DrawingService, type CreateDrawingData } from '../../services/drawing-service.js';
+import { protectedProcedure, router } from '../trpc.js';
 
 /**
  * Validation schema for point coordinates
@@ -63,23 +64,23 @@ const updateDrawingSchema = z.object({
  */
 export const drawingsRouter = router({
   /**
-   * List all drawings for a scene (PUBLIC)
-   * Anyone can view drawings on a scene
+   * List all drawings for a scene (PROTECTED)
+   * Only scene owner or authorized users can view drawings
    */
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const drawings = await DrawingService.listDrawings(input.sceneId);
+    .query(async ({ input, ctx }) => {
+      const drawings = await DrawingService.listDrawings(input.sceneId, ctx.user.userId);
       return { data: drawings };
     }),
 
   /**
-   * Get a single drawing by ID (PUBLIC)
+   * Get a single drawing by ID (PROTECTED)
    */
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ drawingId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const drawing = await DrawingService.getDrawingById(input.drawingId);
+    .query(async ({ input, ctx }) => {
+      const drawing = await DrawingService.getDrawingById(input.drawingId, ctx.user.userId);
 
       if (!drawing) {
         throw new TRPCError({
@@ -151,6 +152,7 @@ export const drawingsRouter = router({
         const updated = await DrawingService.updateDrawing(
           input.drawingId,
           ctx.user.userId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           input.updates as any
         );
 

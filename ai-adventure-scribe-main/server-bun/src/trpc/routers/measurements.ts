@@ -14,10 +14,11 @@
  * @module server/trpc/routers/measurements
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
+import { z } from 'zod';
+
 import { MeasurementService, type CreateTemplateData } from '../../services/measurement-service.js';
+import { protectedProcedure, router } from '../trpc.js';
 
 /**
  * Validation schema for creating a measurement template
@@ -40,23 +41,23 @@ const createTemplateSchema = z.object({
  */
 export const measurementsRouter = router({
   /**
-   * List all templates for a scene (PUBLIC)
-   * Anyone can view templates on a scene
+   * List all templates for a scene (PROTECTED)
+   * Only scene owner or authorized users can view templates
    */
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const templates = await MeasurementService.listTemplates(input.sceneId);
+    .query(async ({ input, ctx }) => {
+      const templates = await MeasurementService.listTemplates(input.sceneId, ctx.user.userId);
       return { data: templates };
     }),
 
   /**
-   * Get a single template by ID (PUBLIC)
+   * Get a single template by ID (PROTECTED)
    */
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ templateId: z.string().uuid() }))
-    .query(async ({ input }) => {
-      const template = await MeasurementService.getTemplateById(input.templateId);
+    .query(async ({ input, ctx }) => {
+      const template = await MeasurementService.getTemplateById(input.templateId, ctx.user.userId);
 
       if (!template) {
         throw new TRPCError({
@@ -141,14 +142,14 @@ export const measurementsRouter = router({
     }),
 
   /**
-   * Get tokens affected by a template (PUBLIC)
+   * Get tokens affected by a template (PROTECTED)
    * Calculates which tokens are within the template's area of effect
    */
-  getAffectedTokens: publicProcedure
+  getAffectedTokens: protectedProcedure
     .input(z.object({ templateId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const result = await MeasurementService.calculateAffectedTokens(input.templateId);
+        const result = await MeasurementService.calculateAffectedTokens(input.templateId, ctx.user.userId);
         return result;
       } catch (error) {
         if (error instanceof Error && error.message.includes('not found')) {
@@ -186,6 +187,7 @@ export const measurementsRouter = router({
 
       const deletedCount = await MeasurementService.cleanupTemporaryTemplates(
         input.sceneId,
+        ctx.user.userId,
         input.maxAgeMinutes ?? 60
       );
 

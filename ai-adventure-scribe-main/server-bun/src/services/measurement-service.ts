@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Measurement Service
  *
@@ -15,17 +16,17 @@
  * @module server/services/measurement-service
  */
 
+import { eq, and, lt } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   measurementTemplates,
-  tokens,
   scenes,
+  tokens,
   type MeasurementTemplate,
-  type NewMeasurementTemplate,
   type Token,
 } from '../../../db/schema/index.js';
-import { eq, and, lt } from 'drizzle-orm';
-import { InternalServerError } from '../lib/errors.js';
+import { InternalServerError, ForbiddenError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new measurement template
@@ -129,7 +130,7 @@ export class MeasurementService {
     const isSceneOwner = existing.sceneOwnerId === userId;
 
     if (!isCreator && !isSceneOwner) {
-      throw new InternalServerError('Not authorized to delete this template');
+      throw new ForbiddenError('Not authorized to delete this template');
     }
 
     // Delete the template
@@ -145,16 +146,30 @@ export class MeasurementService {
    * Calculate which tokens are affected by a template
    * Uses geometry calculations based on template type
    */
-  static async calculateAffectedTokens(templateId: string): Promise<AffectedTokensResult> {
-    // Get the template
-    const [template] = await db
-      .select()
+  static async calculateAffectedTokens(templateId: string, userId: string): Promise<AffectedTokensResult> {
+    // Get the template with scene info to check authorization
+    const [existing] = await db
+      .select({
+        template: measurementTemplates,
+        sceneOwnerId: scenes.userId,
+      })
       .from(measurementTemplates)
+      .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
       .where(eq(measurementTemplates.id, templateId))
       .limit(1);
 
-    if (!template) {
-      throw new InternalServerError('Template not found');
+    if (!existing) {
+      throw new NotFoundError('Template', templateId);
+    }
+
+    const template = existing.template;
+
+    // Check authorization: creator or scene owner
+    const isCreator = template.createdBy === userId;
+    const isSceneOwner = existing.sceneOwnerId === userId;
+
+    if (!isCreator && !isSceneOwner) {
+      throw new ForbiddenError('Not authorized to access this template');
     }
 
     // Get all tokens in the same scene
@@ -368,8 +383,24 @@ export class MeasurementService {
    */
   static async cleanupTemporaryTemplates(
     sceneId: string,
+    userId: string,
     maxAgeMinutes: number = 60
   ): Promise<number> {
+    // Verify scene ownership
+    const [scene] = await db
+      .select({ userId: scenes.userId })
+      .from(scenes)
+      .where(eq(scenes.id, sceneId))
+      .limit(1);
+
+    if (!scene) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
+    if (scene.userId !== userId) {
+      throw new ForbiddenError('Only the scene owner (GM) can cleanup templates');
+    }
+
     const cutoffDate = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
 
     const result = await db
@@ -389,20 +420,51 @@ export class MeasurementService {
   /**
    * Get a single template by ID
    */
-  static async getTemplateById(templateId: string): Promise<MeasurementTemplate | null> {
-    const [template] = await db
-      .select()
+  static async getTemplateById(templateId: string, userId: string): Promise<MeasurementTemplate | null> {
+    const [existing] = await db
+      .select({
+        template: measurementTemplates,
+        sceneOwnerId: scenes.userId,
+      })
       .from(measurementTemplates)
+      .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
       .where(eq(measurementTemplates.id, templateId))
       .limit(1);
 
-    return template || null;
+    if (!existing) {
+      return null;
+    }
+
+    // Check authorization: creator or scene owner
+    const isCreator = existing.template.createdBy === userId;
+    const isSceneOwner = existing.sceneOwnerId === userId;
+
+    if (!isCreator && !isSceneOwner) {
+      throw new ForbiddenError('Not authorized to view this template');
+    }
+
+    return existing.template as MeasurementTemplate;
   }
 
   /**
    * List all templates for a scene
    */
-  static async listTemplates(sceneId: string): Promise<MeasurementTemplate[]> {
+  static async listTemplates(sceneId: string, userId: string): Promise<MeasurementTemplate[]> {
+    // Verify scene access
+    const [scene] = await db
+      .select({ userId: scenes.userId })
+      .from(scenes)
+      .where(eq(scenes.id, sceneId))
+      .limit(1);
+
+    if (!scene) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
+    if (scene.userId !== userId) {
+      throw new ForbiddenError('Not authorized to view templates for this scene');
+    }
+
     const templates = await db
       .select()
       .from(measurementTemplates)

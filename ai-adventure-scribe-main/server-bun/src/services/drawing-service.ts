@@ -8,10 +8,11 @@
  * @module server/services/drawing-service
  */
 
+import { eq, and } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import { sceneDrawings, scenes, type SceneDrawing, type NewSceneDrawing } from '../../../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
-import { InternalServerError } from '../lib/errors.js';
+import { InternalServerError, ForbiddenError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new drawing
@@ -34,7 +35,22 @@ export class DrawingService {
   /**
    * List all drawings for a specific scene
    */
-  static async listDrawings(sceneId: string): Promise<SceneDrawing[]> {
+  static async listDrawings(sceneId: string, userId: string): Promise<SceneDrawing[]> {
+    // Verify scene access (only owner for now)
+    const [scene] = await db
+      .select({ userId: scenes.userId })
+      .from(scenes)
+      .where(eq(scenes.id, sceneId))
+      .limit(1);
+
+    if (!scene) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
+    if (scene.userId !== userId) {
+      throw new ForbiddenError('Not authorized to view drawings for this scene');
+    }
+
     const drawings = await db
       .select()
       .from(sceneDrawings)
@@ -69,6 +85,7 @@ export class DrawingService {
         sceneId: data.sceneId,
         createdBy: userId,
         drawingType: data.drawingType,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pointsData: data.pointsData as any,
         strokeColor: data.strokeColor,
         strokeWidth: data.strokeWidth,
@@ -119,7 +136,7 @@ export class DrawingService {
     const isSceneOwner = existing.sceneOwnerId === userId;
 
     if (!isCreator && !isSceneOwner) {
-      throw new InternalServerError('Not authorized to update this drawing');
+      throw new ForbiddenError('Not authorized to update this drawing');
     }
 
     // Update the drawing
@@ -162,7 +179,7 @@ export class DrawingService {
     const isSceneOwner = existing.sceneOwnerId === userId;
 
     if (!isCreator && !isSceneOwner) {
-      throw new InternalServerError('Not authorized to delete this drawing');
+      throw new ForbiddenError('Not authorized to delete this drawing');
     }
 
     // Delete the drawing
@@ -199,7 +216,7 @@ export class DrawingService {
     }
 
     if (scene.userId !== userId) {
-      throw new InternalServerError('Only scene owner can bulk delete drawings');
+      throw new ForbiddenError('Only scene owner can bulk delete drawings');
     }
 
     // Delete all specified drawings for this scene
@@ -226,13 +243,29 @@ export class DrawingService {
   /**
    * Get a single drawing by ID
    */
-  static async getDrawingById(drawingId: string): Promise<SceneDrawing | null> {
+  static async getDrawingById(drawingId: string, userId: string): Promise<SceneDrawing | null> {
     const [drawing] = await db
-      .select()
+      .select({
+        drawing: sceneDrawings,
+        sceneOwnerId: scenes.userId,
+      })
       .from(sceneDrawings)
+      .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
       .where(eq(sceneDrawings.id, drawingId))
       .limit(1);
 
-    return drawing || null;
+    if (!drawing) {
+      return null;
+    }
+
+    // Check authorization: creator or scene owner
+    const isCreator = drawing.drawing.createdBy === userId;
+    const isSceneOwner = drawing.sceneOwnerId === userId;
+
+    if (!isCreator && !isSceneOwner) {
+      throw new ForbiddenError('Not authorized to view this drawing');
+    }
+
+    return drawing.drawing as SceneDrawing;
   }
 }
