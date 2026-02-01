@@ -39,7 +39,7 @@ interface MessageRendererProps {
  * Renders individual messages with proper delegation to DMMessage or PlayerMessage
  * Handles special message types (dice rolls, combat)
  */
-export const MessageRenderer: React.FC<MessageRendererProps> = ({
+export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(({
   message,
   messageId,
   isFirstInGroup,
@@ -54,7 +54,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
   genErrorByMessage,
   onGenerateScene,
   onOptionSelect,
-  characterName,
+  characterName: _characterName,
 }) => {
   // Compose display text with dynamic options overlay (DM last-in-group only)
   const shouldOverlay = isDM && isLastInGroup && dynamicOptions?.key === messageId;
@@ -180,4 +180,42 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
       )}
     </div>
   );
-};
+}, (prev, next) => {
+  // Return true if props are equal (prevents re-render)
+  // Standard props check - skip collections which are checked specifically below
+  const basicPropsMatch =
+    prev.message === next.message &&
+    prev.messageId === next.messageId &&
+    prev.isFirstInGroup === next.isFirstInGroup &&
+    prev.isLastInGroup === next.isLastInGroup &&
+    prev.isPlayer === next.isPlayer &&
+    prev.isDM === next.isDM &&
+    prev.characterName === next.characterName &&
+    prev.onGenerateScene === next.onGenerateScene &&
+    prev.onOptionSelect === next.onOptionSelect;
+
+  if (!basicPropsMatch) return false;
+
+  // Optimized check for collection-based props to avoid re-renders when OTHER messages change
+  // We only care if the state relevant to THIS specific message has changed
+  const expandedMatch =
+    prev.expandedMessages.has(prev.messageId) === next.expandedMessages.has(next.messageId);
+  const generatingMatch =
+    prev.generatingFor.has(prev.messageId) === next.generatingFor.has(next.messageId);
+  const imageMatch = prev.imageByMessage[prev.messageId] === next.imageByMessage[next.messageId];
+  const errorMatch =
+    prev.genErrorByMessage[prev.messageId] === next.genErrorByMessage[next.messageId];
+
+  // dynamicOptions only affects the last DM message in a group if it matches this messageId
+  const prevWasOverlay =
+    prev.isDM && prev.isLastInGroup && prev.dynamicOptions?.key === prev.messageId;
+  const nextIsOverlay =
+    next.isDM && next.isLastInGroup && next.dynamicOptions?.key === next.messageId;
+
+  let dynamicOptionsMatch = true;
+  if (prevWasOverlay || nextIsOverlay) {
+    dynamicOptionsMatch = prev.dynamicOptions === next.dynamicOptions;
+  }
+
+  return expandedMatch && generatingMatch && imageMatch && errorMatch && dynamicOptionsMatch;
+});

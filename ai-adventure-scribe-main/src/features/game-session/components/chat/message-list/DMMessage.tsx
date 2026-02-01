@@ -32,7 +32,7 @@ interface DMMessageProps {
  * Renders DM-specific message bubbles with purple gradient styling
  * Integrates voice controls, image generation, and action options
  */
-export const DMMessage: React.FC<DMMessageProps> = ({
+export const DMMessage: React.FC<DMMessageProps> = React.memo(({
   message,
   messageId,
   isFirstInGroup,
@@ -194,4 +194,4 @@ export const DMMessage: React.FC<DMMessageProps> = ({
       </div>
     </div>
   );
-};
+});
