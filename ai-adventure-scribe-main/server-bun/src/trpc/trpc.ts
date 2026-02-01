@@ -10,6 +10,9 @@
  */
 
 import { initTRPC, TRPCError } from '@trpc/server';
+
+import { logger } from '../lib/logger.js';
+
 import type { Context } from './context.js';
 
 /**
@@ -51,9 +54,13 @@ const loggingMiddleware = middleware(async ({ path, type, next, ctx }) => {
   const userId = ctx.user?.userId ?? 'anonymous';
 
   // Log request details
-  console.log(
-    `[tRPC] ${type} ${path} - ${userId} - ${durationMs}ms - ${result.ok ? 'OK' : 'ERROR'}`
-  );
+  logger.info({
+    type,
+    path,
+    userId,
+    durationMs,
+    status: result.ok ? 'OK' : 'ERROR'
+  }, 'tRPC Request');
 
   return result;
 });

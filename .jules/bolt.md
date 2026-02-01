@@ -27,3 +27,7 @@
 ## 2025-01-31 - [Redundant Combat State Queries]
 **Learning:** The `CombatInitiativeService` was performing redundant database queries by calling `getCurrentTurn` inside `getCombatState` and `advanceTurn`. Each call re-fetched the encounter and all participants even when they were already available in memory.
 **Action:** Avoid calling helper methods that repeat database fetches when the data is already available. Use Drizzle's relational queries (`db.query`) with `with` to fetch related data in a single round-trip, and perform dependent logic (like finding the current participant) in-memory.
+
+## 2025-05-23 - [Blocking Event Loop with Synchronous Logging]
+**Learning:** High-frequency WebSocket handlers and tRPC middleware using `console.log(JSON.stringify(...))` block the Bun event loop synchronously, causing measurable latency under load.
+**Action:** Replace all `console.log` in request/message processing paths with a pino-based `logger` utility. Use structured logging (passing objects) to ensure asynchronous, non-blocking log output.
