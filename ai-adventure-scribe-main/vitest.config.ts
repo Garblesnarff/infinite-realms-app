@@ -35,6 +35,7 @@ export default defineConfig({
       'src/utils/__tests__/memory-importance-normalization.test.ts',
       'src/utils/__tests__/safetyCommands.test.ts',
       'src/utils/__tests__/attackUtils.test.ts',
+      'src/utils/__tests__/character-calculations.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/__tests__/ai-service-deduplication.test.ts',
@@ -109,6 +110,7 @@ export default defineConfig({
       include: [
         'src/lib/logger.ts',
         'src/utils/diceRolls.ts',
+        'src/utils/character-calculations.ts',
         'src/utils/attackUtils.ts',
         'src/utils/abilityScoreUtils.ts',
         'src/services/combat/damage-integrator.ts',

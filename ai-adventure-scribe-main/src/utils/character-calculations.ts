@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
 /**
@@ -48,16 +49,19 @@ export const calculateProficiencyBonus = (level: number): number => {
  * Calculate hit points based on class, level, and constitution
  */
 export const calculateHitPoints = (character: Character): number => {
-  const level = character.level || 1;
+  const level = Math.max(1, character.level || 1);
   const conMod = character.abilityScores?.constitution?.modifier || 0;
   const hitDie = character.class?.hitDie || 8;
 
   // First level gets max hit die + con mod
-  // Subsequent levels get average of hit die (rounded up) + con mod
-  const firstLevelHP = hitDie + conMod;
-  const subsequentLevelsHP = (level - 1) * (Math.floor(hitDie / 2) + 1 + conMod);
+  // D&D 5e rule: minimum 1 HP per level
+  const firstLevelHP = Math.max(1, hitDie + conMod);
 
-  return Math.max(1, firstLevelHP + subsequentLevelsHP);
+  // Subsequent levels get average of hit die (rounded up) + con mod
+  const perSubsequentLevelHP = Math.max(1, Math.floor(hitDie / 2) + 1 + conMod);
+  const subsequentLevelsHP = (level - 1) * perSubsequentLevelHP;
+
+  return firstLevelHP + subsequentLevelsHP;
 };
 
 /**
@@ -65,34 +69,39 @@ export const calculateHitPoints = (character: Character): number => {
  */
 export const calculateArmorClass = (character: Character): number => {
   const dexMod = character.abilityScores?.dexterity?.modifier || 0;
+  const hasShield = !!character.equippedShield;
+  const shieldBonus = hasShield ? 2 : 0;
+  const isUnarmored = !character.equippedArmor;
 
   // Check if character has unarmored defense feature
   const hasUnarmoredDefense =
+    isUnarmored &&
     character.class &&
     (character.class.name.toLowerCase() === 'barbarian' ||
       character.class.name.toLowerCase() === 'monk');
 
   // If character has unarmored defense, calculate accordingly
   if (hasUnarmoredDefense && character.class && character.abilityScores) {
-    // Import the function dynamically to avoid circular dependencies
-    // For now, we'll implement the logic directly
-
     const baseAC = 10;
 
     switch (character.class.name.toLowerCase()) {
       case 'barbarian': {
         const conMod = character.abilityScores.constitution?.modifier || 0;
-        return baseAC + dexMod + conMod;
+        return baseAC + dexMod + conMod + shieldBonus;
       }
       case 'monk': {
-        const wisMod = character.abilityScores.wisdom?.modifier || 0;
-        return baseAC + dexMod + wisMod;
+        // Monk unarmored defense does NOT work with a shield
+        if (!hasShield) {
+          const wisMod = character.abilityScores.wisdom?.modifier || 0;
+          return baseAC + dexMod + wisMod;
+        }
+        break;
       }
     }
   }
 
-  // Base AC (no armor) = 10 + Dex mod
-  return 10 + dexMod;
+  // Base AC (no armor) = 10 + Dex mod + shield bonus
+  return 10 + dexMod + shieldBonus;
 };
 
 /**
