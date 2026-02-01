@@ -28,22 +28,16 @@ import {
 import React, { useState } from 'react';
 
 import AttackRollVisualization, { type AttackResult } from './AttackRollVisualization';
+import { ConditionApplicationPanel } from './ConditionApplicationPanel';
 
 import type { Equipment } from '@/data/equipmentOptions';
-import type { ActionType, ConditionName, Condition } from '@/types/combat';
+import type { ActionType, ConditionName, Condition, CombatParticipant } from '@/types/combat';
 
 import SpellSlotPanel from '@/components/spellcasting/SpellSlotPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombat } from '@/contexts/CombatContext';
@@ -52,298 +46,30 @@ import logger from '@/lib/logger';
 import { performAttack, canUseSneakAttack } from '@/utils/attackUtils';
 
 // ===========================
-// Condition Management Components
-// ===========================
-
-// Condition Icons & Colors
-const CONDITION_ICONS: Record<
-  ConditionName,
-  { icon: React.ComponentType<any>; color: string; bgColor: string }
-> = {
-  blinded: { icon: UserX, color: 'text-white', bgColor: 'bg-gray-500' },
-  charmed: { icon: Heart, color: 'text-white', bgColor: 'bg-pink-500' },
-  deafened: { icon: UserX, color: 'text-white', bgColor: 'bg-slate-500' },
-  frightened: { icon: Skull, color: 'text-white', bgColor: 'bg-yellow-600' },
-  grappled: { icon: UserX, color: 'text-white', bgColor: 'bg-orange-500' },
-  incapacitated: { icon: UserX, color: 'text-white', bgColor: 'bg-red-500' },
-  invisible: { icon: UserX, color: 'text-blue-600', bgColor: 'bg-blue-200' },
-  paralyzed: { icon: UserX, color: 'text-white', bgColor: 'bg-purple-600' },
-  petrified: { icon: UserX, color: 'text-white', bgColor: 'bg-stone-500' },
-  poisoned: { icon: UserX, color: 'text-white', bgColor: 'bg-green-600' },
-  prone: { icon: UserX, color: 'text-amber-900', bgColor: 'bg-amber-400' },
-  restrained: { icon: UserX, color: 'text-white', bgColor: 'bg-red-600' },
-  stunned: { icon: UserX, color: 'text-white', bgColor: 'bg-yellow-600' },
-  unconscious: { icon: UserX, color: 'text-white', bgColor: 'bg-black' },
-  exhaustion: { icon: Clock, color: 'text-white', bgColor: 'bg-gray-600' },
-  surprised: { icon: Skull, color: 'text-white', bgColor: 'bg-yellow-400' },
-};
-
-// Common D&D conditions with descriptions
-const CONDITION_TEMPLATES: Record<
-  ConditionName,
-  { name: string; description: string; defaultDuration: number }
-> = {
-  blinded: {
-    name: 'Blinded',
-    description: "Can't see, attacks against target have advantage, auto-miss on own attacks",
-    defaultDuration: 3,
-  },
-  charmed: {
-    name: 'Charmed',
-    description: 'Cannot attack charmer, regards charmer as friendly',
-    defaultDuration: 10,
-  },
-  deafened: {
-    name: 'Deafened',
-    description: 'Cannot hear sounds, fails audio-dependent saves',
-    defaultDuration: 5,
-  },
-  frightened: {
-    name: 'Frightened',
-    description: 'Cannot approach source of fear, disadvantage on attacks and checks',
-    defaultDuration: 5,
-  },
-  grappled: {
-    name: 'Grappled',
-    description: 'Speed becomes 0, can break free with Athletics or Acrobatics',
-    defaultDuration: 0, // Indeterminate until broken
-  },
-  incapacitated: {
-    name: 'Incapacitated',
-    description: 'Cannot take actions or speak, no reactions',
-    defaultDuration: 3,
-  },
-  invisible: {
-    name: 'Invisible',
-    description:
-      'Cannot be detected by sight, attacks have advantage, disadvantage to being targeted',
-    defaultDuration: 10,
-  },
-  paralyzed: {
-    name: 'Paralyzed',
-    description: 'Cannot move, speak, or take actions, auto-fails STR and DEX saves',
-    defaultDuration: 3,
-  },
-  petrified: {
-    name: 'Petrified',
-    description: 'Turned to stone, unconscious and cannot take actions',
-    defaultDuration: 10,
-  },
-  poisoned: {
-    name: 'Poisoned',
-    description: 'Disadvantage on attack rolls and ability checks',
-    defaultDuration: 10,
-  },
-  prone: {
-    name: 'Prone',
-    description:
-      'Lying down, melee attacks vs prone have advantage, ranged attacks have disadvantage',
-    defaultDuration: 0, // Indeterminate until standing
-  },
-  restrained: {
-    name: 'Restrained',
-    description: 'Speed 0, disadvantage on DEX saves, advantage on attacks against target',
-    defaultDuration: 5,
-  },
-  stunned: {
-    name: 'Stunned',
-    description: 'Cannot take actions, auto-fails STR and DEX saves',
-    defaultDuration: 1,
-  },
-  unconscious: {
-    name: 'Unconscious',
-    description: 'Completely unaware, defense has disadvantage, criticals automatically hit',
-    defaultDuration: 10,
-  },
-  exhaustion: {
-    name: 'Exhaustion',
-    description: 'Various penalties based on level (1-6), can lead to death at level 6',
-    defaultDuration: -1, // Persistent
-  },
-  surprised: {
-    name: 'Surprised',
-    description: 'Cannot take an action this turn',
-    defaultDuration: 0, // Until end of turn
-  },
-};
-
-// ===========================
-// Condition Application Component
-// ===========================
-
-interface ConditionApplicationPanelProps {
-  onApplyCondition: (condition: Condition, targetId: string) => void;
-  onRemoveCondition: (conditionName: ConditionName, targetId: string) => void;
-  participants: any[];
-  currentParticipantId: string | undefined;
-}
-
-const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps> = ({
-  onApplyCondition,
-  onRemoveCondition,
-  participants,
-  currentParticipantId,
-}) => {
-  const [selectedCondition, setSelectedCondition] = useState<ConditionName | null>(null);
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [conditionDuration, setConditionDuration] = useState<number>(3);
-
-  const applicableConditions = Object.entries(CONDITION_TEMPLATES).filter(
-    ([conditionName]) => conditionName !== 'surprised' && conditionName !== 'exhaustion',
-  );
-
-  const handleApplyCondition = () => {
-    if (!selectedCondition || !selectedTarget) return;
-
-    const template = CONDITION_TEMPLATES[selectedCondition];
-    const condition: Condition = {
-      name: selectedCondition,
-      description: template.description,
-      duration: conditionDuration === 0 ? template.defaultDuration : conditionDuration,
-      saveEndsType: 'end',
-      saveDC: 12, // Default DC - can be customized
-      saveAbility: conditionDuration === 0 ? undefined : 'con', // Constitution save by default
-      concentrationRequired: false,
-    };
-
-    onApplyCondition(condition, selectedTarget);
-    setSelectedCondition(null);
-    setSelectedTarget(null);
-    setConditionDuration(3);
-  };
-
-  return (
-    <div className="space-y-4">
-      <h4 className="font-semibold">Apply Condition</h4>
-
-      <div className="space-y-3">
-        <div>
-          <label className="text-sm font-medium">Condition:</label>
-          <Select
-            value={selectedCondition || ''}
-            onValueChange={(value) => setSelectedCondition(value as ConditionName)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a condition" />
-            </SelectTrigger>
-            <SelectContent>
-              {applicableConditions.map(([conditionName, template]) => (
-                <SelectItem key={conditionName} value={conditionName}>
-                  <div className="flex items-center space-x-2">
-                    {React.createElement(
-                      CONDITION_ICONS[conditionName as ConditionName]?.icon || UserX,
-                      {
-                        className: 'w-4 h-4',
-                      },
-                    )}
-                    <span>{template.name}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {selectedCondition && (
-          <div>
-            <label className="text-sm font-medium">Description:</label>
-            <p className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
-              {CONDITION_TEMPLATES[selectedCondition].description}
-            </p>
-          </div>
-        )}
-
-        <div>
-          <label className="text-sm font-medium">Target:</label>
-          <Select value={selectedTarget || ''} onValueChange={setSelectedTarget}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select target" />
-            </SelectTrigger>
-            <SelectContent>
-              {participants.map((participant) => (
-                <SelectItem key={participant.id} value={participant.id}>
-                  {participant.name}
-                  {participant.conditions.length > 0 && (
-                    <Badge variant="outline" className="ml-2 text-xs">
-                      {participant.conditions.length} conditions
-                    </Badge>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Duration (rounds, 0 for save-based):</label>
-          <Input
-            type="number"
-            min="0"
-            value={conditionDuration}
-            onChange={(e) => setConditionDuration(Number(e.target.value))}
-            className="mt-1"
-            placeholder="Duration in rounds"
-          />
-        </div>
-
-        <Button
-          onClick={handleApplyCondition}
-          disabled={!selectedCondition || !selectedTarget}
-          className="w-full"
-          variant="default"
-        >
-          Apply {selectedCondition ? CONDITION_TEMPLATES[selectedCondition].name : 'Condition'}
-        </Button>
-      </div>
-
-      {/* Current Conditions */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Managing Conditions:</label>
-        <div className="space-y-1">
-          {participants.map((participant) =>
-            participant.conditions.map((condition: Condition, index: number) => (
-              <div
-                key={`${participant.id}-${condition.name}-${index}`}
-                className="flex items-center justify-between p-2 bg-gray-50 rounded"
-              >
-                <div className="flex items-center space-x-2">
-                  {React.createElement(CONDITION_ICONS[condition.name]?.icon || UserX, {
-                    className: 'w-4 h-4',
-                  })}
-                  <span className="text-sm">
-                    {condition.name} on {participant.name}
-                  </span>
-                  {condition.duration > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {condition.duration} rounds
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemoveCondition(condition.name, participant.id)}
-                  className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
-                >
-                  ×
-                </Button>
-              </div>
-            )),
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ===========================
 // Action Definitions
 // ===========================
+
+// Special management panel (not a combat action)
+interface ManagementAction {
+  type: string;
+  name: string;
+  icon: React.ComponentType<any>;
+  description: string;
+}
+
+const MANAGEMENT_ACTIONS: ManagementAction[] = [
+  {
+    type: 'manage_conditions',
+    name: 'Manage Conditions',
+    icon: UserX,
+    description: 'Apply, remove, or manage D&D conditions',
+  },
+];
 
 interface ActionDefinition {
   type: ActionType;
   name: string;
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ className?: string }>;
   description: string;
   actionRequired: boolean; // Uses action slot
   bonusAction: boolean; // Uses bonus action slot
@@ -434,23 +160,6 @@ const COMBAT_ACTIONS: ActionDefinition[] = [
   },
 ];
 
-// Special management panel (not a combat action)
-interface ManagementAction {
-  type: string;
-  name: string;
-  icon: React.ComponentType<any>;
-  description: string;
-}
-
-const MANAGEMENT_ACTIONS: ManagementAction[] = [
-  {
-    type: 'manage_conditions',
-    name: 'Manage Conditions',
-    icon: UserX,
-    description: 'Apply, remove, or manage D&D conditions',
-  },
-];
-
 // ===========================
 // Component Props
 // ===========================
@@ -485,24 +194,27 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const [attackResult, setAttackResult] = useState<AttackResult | null>(null);
 
   // Handle management panel selection
-  const handleManagementSelect = (managementType: string) => {
+  const handleManagementSelect = (managementType: string): void => {
     setSelectedManagement(managementType);
   };
 
-  const handleApplyCondition = async (condition: Condition, targetId: string) => {
+  const handleApplyCondition = async (condition: Condition, targetId: string): Promise<void> => {
     await applyCondition(targetId, condition);
   };
 
-  const handleRemoveCondition = async (conditionName: ConditionName, targetId: string) => {
+  const handleRemoveCondition = async (
+    conditionName: ConditionName,
+    targetId: string,
+  ): Promise<void> => {
     await removeCondition(targetId, conditionName);
   };
 
   // Get current participant to check action availability
   const currentParticipant = activeEncounter?.participants.find(
-    (p) => p.id === activeEncounter.currentTurnParticipantId,
+    (p: CombatParticipant) => p.id === activeEncounter.currentTurnParticipantId,
   );
 
-  const handleQuickAction = async (action: ActionDefinition) => {
+  const handleQuickAction = async (action: ActionDefinition): Promise<void> => {
     if (!action.quickAction) return;
 
     setIsSubmitting(true);
@@ -513,7 +225,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
     }
   };
 
-  const handleDetailedAction = async () => {
+  const handleDetailedAction = async (): Promise<void> => {
     if (!selectedAction) return;
 
     setIsSubmitting(true);
@@ -545,7 +257,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
     }
   };
 
-  const handleCancelAction = () => {
+  const handleCancelAction = (): void => {
     setSelectedAction(null);
     setActionDetails('');
   };
@@ -639,7 +351,6 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                 onApplyCondition={handleApplyCondition}
                 onRemoveCondition={handleRemoveCondition}
                 participants={activeEncounter?.participants || []}
-                currentParticipantId={activeEncounter?.currentTurnParticipantId}
               />
             )}
             <div className="flex justify-end">
