@@ -8,8 +8,7 @@
  */
 
 import { DMState } from '../state';
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
-import { getGeminiManager } from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 import logger from '@/lib/logger';
 
 /**
@@ -89,15 +88,13 @@ export async function detectIntent(state: DMState): Promise<Partial<DMState>> {
 
     logger.info(`Detecting intent for: "${playerInput}"`);
 
-    // Use Gemini to detect intent
-    const geminiManager = getGeminiManager();
+    // Use llmApiClient to detect intent
     const prompt = INTENT_DETECTION_PROMPT.replace('{message}', playerInput);
 
-    const responseText = await geminiManager.executeWithRotation(async (genAI) => {
-      const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+    const responseText = await llmApiClient.generateText({
+      prompt,
+      temperature: 0.3,
+      maxTokens: 512,
     });
 
     // Parse the intent

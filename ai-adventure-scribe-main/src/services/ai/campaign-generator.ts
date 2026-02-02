@@ -1,18 +1,17 @@
 /**
  * Campaign Generation Service
  *
- * Handles AI-powered campaign name and description generation using Gemini API.
+ * Handles AI-powered campaign name and description generation using llmApiClient.
  * Extracted from ai-service.ts to maintain single responsibility.
  *
  * @module campaign-generator
  */
 
 import { buildCampaignDescriptionPrompt, buildCampaignNamePrompt } from './shared/prompts';
-import { getGeminiManager } from './shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 
 import type { CampaignParams } from './shared/types';
 
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 
 /**
@@ -36,24 +35,20 @@ import logger from '@/lib/logger';
  * ```
  */
 export async function generateCampaignDescription(params: CampaignParams): Promise<string> {
-  logger.info('Using local Gemini API for campaign description...');
+  logger.info('Using llmApiClient for campaign description...');
 
   try {
-    const geminiManager = getGeminiManager();
-
-    const result = await geminiManager.executeWithRotation(async (genAI) => {
-      const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-      const prompt = buildCampaignDescriptionPrompt(params);
-
-      const response = await model.generateContent(prompt);
-      const result = await response.response;
-      return result.text();
+    const prompt = buildCampaignDescriptionPrompt(params);
+    const result = await llmApiClient.generateText({
+      prompt,
+      temperature: 0.9,
+      maxTokens: 2048,
     });
 
-    logger.info('Successfully generated campaign description using local Gemini API');
+    logger.info('Successfully generated campaign description');
     return result;
-  } catch (geminiError) {
-    logger.error('Local Gemini API failed:', geminiError);
+  } catch (error) {
+    logger.error('Campaign description generation failed:', error);
     throw new Error('Failed to generate campaign description - AI service unavailable');
   }
 }
@@ -79,27 +74,23 @@ export async function generateCampaignDescription(params: CampaignParams): Promi
  * ```
  */
 export async function generateCampaignName(params: CampaignParams): Promise<string> {
-  logger.info('Using local Gemini API for campaign name...');
+  logger.info('Using llmApiClient for campaign name...');
 
   try {
-    const geminiManager = getGeminiManager();
-
-    const result = await geminiManager.executeWithRotation(async (genAI) => {
-      const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-      const prompt = buildCampaignNamePrompt(params);
-
-      const response = await model.generateContent(prompt);
-      const result = await response.response;
-      return result.text();
+    const prompt = buildCampaignNamePrompt(params);
+    const result = await llmApiClient.generateText({
+      prompt,
+      temperature: 0.9,
+      maxTokens: 256,
     });
 
     // Clean up the result - remove quotes, extra whitespace, etc.
     const cleanedName = result.trim().replace(/^["']|["']$/g, '').trim();
 
-    logger.info('Successfully generated campaign name using local Gemini API:', cleanedName);
+    logger.info('Successfully generated campaign name:', cleanedName);
     return cleanedName;
-  } catch (geminiError) {
-    logger.error('Local Gemini API failed:', geminiError);
+  } catch (error) {
+    logger.error('Campaign name generation failed:', error);
     throw new Error('Failed to generate campaign name - AI service unavailable');
   }
 }

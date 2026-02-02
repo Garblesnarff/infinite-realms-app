@@ -1,6 +1,4 @@
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
-
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
+import { llmApiClient } from '@/services/llm-api-client';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -57,56 +55,47 @@ export interface GeneratedLocation {
 }
 
 export class LocationGenerator {
-  private static getGeminiManager(): GeminiApiManager {
-    return getGeminiApiManager();
-  }
-
   /**
    * Generate a detailed location using AI
    */
   static async generateLocation(request: LocationRequest): Promise<GeneratedLocation> {
     try {
-      const geminiManager = this.getGeminiManager();
+      const prompt = this.buildLocationPrompt(request);
 
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        const prompt = this.buildLocationPrompt(request);
-
-        const response = await model.generateContent(prompt);
-        const text = await response.response.text();
-
-        try {
-          // Extract JSON from the response
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) {
-            throw new Error('No JSON found in location generation response');
-          }
-
-          const locationData = JSON.parse(jsonMatch[0]);
-
-          // Add metadata
-          const location: GeneratedLocation = {
-            ...locationData,
-            id: undefined, // Will be set when saved
-            metadata: {
-              createdAt: new Date(),
-              campaignId: request.context.campaignId,
-              sessionId: request.context.sessionId,
-              narrativeWeight: this.calculateNarrativeWeight(locationData, request),
-              storyArc: request.context.currentStory,
-            },
-          };
-
-          return location;
-        } catch (parseError) {
-          logger.error('Failed to parse location JSON:', parseError);
-          throw new Error('Failed to generate location: Invalid response format');
-        }
+      const text = await llmApiClient.generateText({
+        prompt,
+        temperature: 0.9,
+        maxTokens: 4096,
       });
 
-      logger.info(`🏰 Generated location: ${result.name}`);
-      return result;
+      try {
+        // Extract JSON from the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('No JSON found in location generation response');
+        }
+
+        const locationData = JSON.parse(jsonMatch[0]);
+
+        // Add metadata
+        const location: GeneratedLocation = {
+          ...locationData,
+          id: undefined, // Will be set when saved
+          metadata: {
+            createdAt: new Date(),
+            campaignId: request.context.campaignId,
+            sessionId: request.context.sessionId,
+            narrativeWeight: this.calculateNarrativeWeight(locationData, request),
+            storyArc: request.context.currentStory,
+          },
+        };
+
+        logger.info(`🏰 Generated location: ${location.name}`);
+        return location;
+      } catch (parseError) {
+        logger.error('Failed to parse location JSON:', parseError);
+        throw new Error('Failed to generate location: Invalid response format');
+      }
     } catch (error) {
       logger.error('Location generation failed:', error);
       throw new Error(

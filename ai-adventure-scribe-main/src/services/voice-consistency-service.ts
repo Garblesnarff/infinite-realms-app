@@ -15,7 +15,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { VoiceMapper, VoiceConfig } from './voice-mapper';
 import logger from '@/lib/logger';
-import { geminiService } from './gemini-service';
+import { llmApiClient } from '@/services/llm-api-client';
 
 export interface CharacterVoiceMapping {
   id: string;
@@ -498,9 +498,8 @@ Please analyze and provide a JSON response with the following structure:
 
 Be specific and base your analysis on the actual dialogue provided. The consistency_score should be between 0 and 1.`;
 
-      const response = await geminiService.generateText({
+      const response = await llmApiClient.generateText({
         prompt,
-        model: 'gemini-1.5-flash',
         temperature: 0.3,
         maxTokens: 1000,
       });

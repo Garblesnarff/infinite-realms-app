@@ -41,8 +41,15 @@ export interface ImageQuotaStatus {
 
 class LlmApiClient {
   private useOfflineFallback = false;
+  private offlineFallbackSetAt = 0;
+  private static readonly OFFLINE_RESET_MS = 30_000; // 30 seconds
 
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+    // Auto-reset offline fallback after 30 seconds
+    if (this.useOfflineFallback && Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS) {
+      this.useOfflineFallback = false;
+    }
+
     if (this.useOfflineFallback) {
       throw new Error('API unavailable');
     }
@@ -71,6 +78,7 @@ class LlmApiClient {
     } catch (err: any) {
       if (err instanceof TypeError && String(err.message || '').includes('fetch')) {
         this.useOfflineFallback = true;
+        this.offlineFallbackSetAt = Date.now();
       }
       throw err;
     }
@@ -119,12 +127,9 @@ class LlmApiClient {
       // Rate limit - try multiple free fallback models
       if (isRateLimitErr) {
         const fallbackModels = [
-          'moonshotai/kimi-k2:free',              // Strong creative, intermittent availability
-          'deepseek/deepseek-r1-0528:free',       // Good reasoning/narrative
-          'qwen/qwen3-235b-a22b:free',            // High quality multi-turn
-          'mistralai/mixtral-8x7b-instruct:free', // Balanced fallback
-          'mistralai/mistral-7b-instruct:free',   // Efficient small model
-          'google/gemma-3-4b-instruct:free',      // Lightweight last resort
+          'arcee-ai/trinity-large-preview:free',   // First fallback (free)
+          'stepfun/step-3.5-flash:free',           // Second fallback (free)
+          'nvidia/nemotron-3-nano-30b-a3b:free',   // Third fallback (free)
         ];
         console.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
 

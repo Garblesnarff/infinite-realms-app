@@ -8,8 +8,7 @@
  */
 
 import { DMState, NarrativeResponse } from '../state';
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
-import { getGeminiManager } from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 import {
   buildDMPersonaPrompt,
   buildGameContextPrompt,
@@ -164,14 +163,11 @@ export async function generateResponse(state: DMState): Promise<Partial<DMState>
       .replace('{diceRoll}', diceRollStatus)
       .replace('{memories}', memoryContext);
 
-    // Use Gemini to generate response
-    const geminiManager = getGeminiManager();
-
-    const responseText = await geminiManager.executeWithRotation(async (genAI) => {
-      const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
+    // Use llmApiClient to generate response
+    const responseText = await llmApiClient.generateText({
+      prompt,
+      temperature: 0.9,
+      maxTokens: 2048,
     });
 
     // Parse the narrative

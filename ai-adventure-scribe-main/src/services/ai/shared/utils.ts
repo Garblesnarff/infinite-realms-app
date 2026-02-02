@@ -5,7 +5,6 @@
 
 import type { ClassEquipment } from './types';
 
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
 import logger from '@/lib/logger';
 
 // In-flight request deduplication with 2s TTL
@@ -43,13 +42,6 @@ export function getOrCreateDeduped<T>(key: string, factory: () => Promise<T>): P
   inFlight.set(key, { ts: now, promise });
 
   return promise;
-}
-
-/**
- * Get the shared Gemini API manager instance
- */
-export function getGeminiManager(): GeminiApiManager {
-  return getGeminiApiManager();
 }
 
 /**

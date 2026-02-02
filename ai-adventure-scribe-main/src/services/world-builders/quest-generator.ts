@@ -1,8 +1,7 @@
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
+import { llmApiClient } from '@/services/llm-api-client';
 import { MemoryManager } from '../memory-manager';
 import type { Memory } from '@/types/memory';
 
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -128,60 +127,51 @@ export interface QuestStage {
 }
 
 export class QuestGenerator {
-  private static getGeminiManager(): GeminiApiManager {
-    return getGeminiApiManager();
-  }
-
   /**
    * Generate a detailed quest using AI
    */
   static async generateQuest(request: QuestRequest): Promise<GeneratedQuest> {
     try {
-      const geminiManager = this.getGeminiManager();
+      const prompt = await this.buildQuestPrompt(request);
 
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        const prompt = await this.buildQuestPrompt(request);
-
-        const response = await model.generateContent(prompt);
-        const text = await response.response.text();
-
-        try {
-          // Extract JSON from the response
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) {
-            throw new Error('No JSON found in quest generation response');
-          }
-
-          const questData = JSON.parse(jsonMatch[0]);
-
-          // Add metadata
-          const quest: GeneratedQuest = {
-            ...questData,
-            id: undefined, // Will be set when saved
-            metadata: {
-              createdAt: new Date(),
-              campaignId: request.context.campaignId,
-              sessionId: request.context.sessionId,
-              characterId: request.context.characterId,
-              giver: request.giver,
-              urgency: request.urgency,
-              scope: request.scope,
-              narrativeWeight: this.calculateNarrativeWeight(questData, request),
-              storyArc: request.context.currentStory,
-            },
-          };
-
-          return quest;
-        } catch (parseError) {
-          logger.error('Failed to parse quest JSON:', parseError);
-          throw new Error('Failed to generate quest: Invalid response format');
-        }
+      const text = await llmApiClient.generateText({
+        prompt,
+        temperature: 0.9,
+        maxTokens: 4096,
       });
 
-      logger.info(`⚔️ Generated quest: ${result.title} (${result.type})`);
-      return result;
+      try {
+        // Extract JSON from the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('No JSON found in quest generation response');
+        }
+
+        const questData = JSON.parse(jsonMatch[0]);
+
+        // Add metadata
+        const quest: GeneratedQuest = {
+          ...questData,
+          id: undefined, // Will be set when saved
+          metadata: {
+            createdAt: new Date(),
+            campaignId: request.context.campaignId,
+            sessionId: request.context.sessionId,
+            characterId: request.context.characterId,
+            giver: request.giver,
+            urgency: request.urgency,
+            scope: request.scope,
+            narrativeWeight: this.calculateNarrativeWeight(questData, request),
+            storyArc: request.context.currentStory,
+          },
+        };
+
+        logger.info(`⚔️ Generated quest: ${quest.title} (${quest.type})`);
+        return quest;
+      } catch (parseError) {
+        logger.error('Failed to parse quest JSON:', parseError);
+        throw new Error('Failed to generate quest: Invalid response format');
+      }
     } catch (error) {
       logger.error('Quest generation failed:', error);
       throw new Error(
@@ -529,12 +519,7 @@ export class QuestGenerator {
     contextMessage: string,
   ): Promise<{ title: string; hook: string; questType: string }> {
     try {
-      const geminiManager = this.getGeminiManager();
-
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        const prompt = `<task>
+      const prompt = `<task>
   <description>Generate a quest hook based on the current game context</description>
 </task>
 
@@ -557,23 +542,23 @@ export class QuestGenerator {
   <guideline>Make it immediately actionable and intriguing</guideline>
 </guidelines>`;
 
-        const response = await model.generateContent(prompt);
-        const text = await response.response.text();
-
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
-        }
-
-        // Fallback if JSON parsing fails
-        return {
-          title: 'Mysterious Opportunity',
-          hook: 'Something interesting has caught your attention...',
-          questType: 'side',
-        };
+      const text = await llmApiClient.generateText({
+        prompt,
+        temperature: 0.8,
+        maxTokens: 512,
       });
 
-      return result;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+
+      // Fallback if JSON parsing fails
+      return {
+        title: 'Mysterious Opportunity',
+        hook: 'Something interesting has caught your attention...',
+        questType: 'side',
+      };
     } catch (error) {
       logger.error('Failed to generate quest hook:', error);
       return {

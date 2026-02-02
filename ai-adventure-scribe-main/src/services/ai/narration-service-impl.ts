@@ -1,7 +1,7 @@
 /**
  * Narration Service Implementation
  *
- * Contains the core Gemini response generation logic.
+ * Contains the core LLM response generation logic.
  * Split from narration-service.ts to maintain under 200 lines per file.
  *
  * @module narration-service-impl
@@ -16,21 +16,21 @@ import {
   buildCombatContextPrompt,
   buildOpeningScenePrompt,
 } from './shared/prompts';
-import { getGeminiManager, addEquipmentContext } from './shared/utils';
+import { addEquipmentContext } from './shared/utils';
 import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
 
+import { llmApiClient } from '@/services/llm-api-client';
 import type { Memory, MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, GameContext, AIResponse, NarrationSegment } from './shared/types';
 
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 
 // sampleFromVerbalizedResponse is now imported from ./shared/verbalized-sampling
 // It provides robust multi-strategy parsing with safe fallback to prevent duplicates
 
 /**
- * Generate response using Gemini API
+ * Generate response using LLM API
  */
 export async function generateGeminiResponse(
   params: {
@@ -43,36 +43,32 @@ export async function generateGeminiResponse(
   voiceContext: SessionVoiceContext | null,
   combatDetection: any,
 ): Promise<AIResponse> {
-  logger.info('Using local Gemini API for chat...');
-  const geminiManager = getGeminiManager();
+  logger.info('Using llmApiClient for chat...');
 
-  const result = await geminiManager.executeWithRotation(async (genAI) => {
-    const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
+  // Build enhanced context for DM interactions
+  let contextPrompt = buildDMPersonaPrompt();
+  contextPrompt += buildGameContextPrompt(params.context, relevantMemories);
 
-    // Build enhanced context for DM interactions
-    let contextPrompt = buildDMPersonaPrompt();
-    contextPrompt += buildGameContextPrompt(params.context, relevantMemories);
+  // Add equipment context if character details available
+  if (params.context.characterDetails) {
+    contextPrompt += addEquipmentContext(params.context.characterDetails);
+  }
 
-    // Add equipment context if character details available
-    if (params.context.characterDetails) {
-      contextPrompt += addEquipmentContext(params.context.characterDetails);
-    }
+  // Detect if this is a campaign opening (first message)
+  const isFirstMessage =
+    (!params.conversationHistory || params.conversationHistory.length === 0) &&
+    (!params.message || params.message.trim() === '');
 
-    // Detect if this is a campaign opening (first message)
-    const isFirstMessage =
-      (!params.conversationHistory || params.conversationHistory.length === 0) &&
-      (!params.message || params.message.trim() === '');
+  if (isFirstMessage) {
+    contextPrompt += buildOpeningScenePrompt();
+  }
 
-    if (isFirstMessage) {
-      contextPrompt += buildOpeningScenePrompt();
-    }
+  // Add combat context if detected
+  contextPrompt += buildCombatContextPrompt(combatDetection);
 
-    // Add combat context if detected
-    contextPrompt += buildCombatContextPrompt(combatDetection);
-
-    // Add specific dice roll requirements for combat
-    if (combatDetection.isCombat) {
-      contextPrompt += `<combat_roll_requirements>
+  // Add specific dice roll requirements for combat
+  if (combatDetection.isCombat) {
+    contextPrompt += `<combat_roll_requirements>
 <title>IMMEDIATE DICE ROLL REQUIREMENTS</title>
 Based on the detected combat scenario, you MUST include these dice rolls in your response:
 - Initiative rolls for any new combat participants.
@@ -83,13 +79,13 @@ Based on the detected combat scenario, you MUST include these dice rolls in your
 
 **CRITICAL**: Include actual dice roll results in your "dice_rolls" array AND display them in the narrative text.
 </combat_roll_requirements>`;
-    }
+  }
 
-    // Add voice context for multi-voice narration
-    // IMPORTANT: Skip voice context for opening scenes (first message) to avoid conflicting
-    // with verbalized sampling XML format. Voice segments can be processed separately if needed.
-    if (voiceContext && !isFirstMessage) {
-      contextPrompt += `<voice_optimization_format>
+  // Add voice context for multi-voice narration
+  // IMPORTANT: Skip voice context for opening scenes (first message) to avoid conflicting
+  // with verbalized sampling XML format. Voice segments can be processed separately if needed.
+  if (voiceContext && !isFirstMessage) {
+    contextPrompt += `<voice_optimization_format>
 <title>CRITICAL: VOICE-OPTIMIZED RESPONSE FORMAT</title>
 You MUST respond with JSON containing both display text AND pre-segmented narration for multi-voice synthesis.
 **IMPORTANT: Return ONLY pure JSON - no markdown, no code blocks, no extra text!**
@@ -123,79 +119,50 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 
 <voice_categories>hero_male, hero_female, villain_male, villain_female, merchant, guard, innkeeper, elder, child, creature, goblin, monster</voice_categories>
 </voice_optimization_format>`;
-    }
+  }
 
-    contextPrompt += buildResponseStructurePrompt();
+  contextPrompt += buildResponseStructurePrompt();
 
-    if (voiceContext && !isFirstMessage) {
-      contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
-    }
+  if (voiceContext && !isFirstMessage) {
+    contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
+  }
 
-    // Build conversation history
-    const messages = [
-      { role: 'user', parts: [{ text: contextPrompt }] },
-      { role: 'model', parts: [{ text: "Understood! I'm ready to be your Dungeon Master." }] },
-    ];
+  // Build conversation history context
+  const historyContext = (params.conversationHistory || [])
+    .slice(-10) // Keep last 10 messages for context
+    .map(msg => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
+    .join('\n\n');
 
-    // Add conversation history
-    if (params.conversationHistory) {
-      params.conversationHistory.forEach((msg) => {
-        messages.push({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }],
-        });
-      });
-    }
+  // For opening scenes (first message), use a prompt to trigger scene generation
+  const messageToSend = isFirstMessage
+    ? 'Begin the adventure. Generate the opening scene for this campaign.'
+    : params.message;
 
-    const chat = model.startChat({
-      history: messages,
-      generationConfig: {
-        temperature: 0.9,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      },
-    });
+  // Build full prompt
+  const fullPrompt = `${contextPrompt}\n\n${historyContext ? `<conversation_history>\n${historyContext}\n</conversation_history>\n\n` : ''}Player: ${messageToSend}`;
 
-    // Use streaming if callback provided (note: streaming won't work with JSON parsing)
-    // For opening scenes (first message), use a prompt to trigger scene generation
-    const messageToSend = isFirstMessage
-      ? 'Begin the adventure. Generate the opening scene for this campaign.'
-      : params.message;
-
-    if (params.onStream && !voiceContext) {
-      const response = await chat.sendMessageStream(messageToSend);
-      let fullResponse = '';
-
-      for await (const chunk of response.stream) {
-        const chunkText = chunk.text();
-        fullResponse += chunkText;
-        params.onStream(chunkText);
-      }
-
-      return { text: fullResponse };
-    } else {
-      const response = await chat.sendMessage(messageToSend);
-      const result = await response.response;
-      const rawResponse = result.text();
-
-      // Apply verbalized sampling for opening scenes (first message)
-      // ALWAYS use verbalized sampling for opening scenes regardless of voice context
-      // Voice context prompt is already skipped for first messages to avoid conflicting formats
-      if (isFirstMessage) {
-        return { text: sampleFromVerbalizedResponse(rawResponse) };
-      }
-
-      // Try to parse structured response if voice context is available
-      if (voiceContext) {
-        return parseStructuredResponse(rawResponse);
-      }
-
-      return { text: rawResponse };
-    }
+  // Generate response
+  const rawResponse = await llmApiClient.generateText({
+    prompt: fullPrompt,
+    temperature: 0.9,
+    maxTokens: 2048,
   });
 
-  logger.info('Successfully generated DM response using local Gemini API');
+  let result: AIResponse;
+
+  // Apply verbalized sampling for opening scenes (first message)
+  // ALWAYS use verbalized sampling for opening scenes regardless of voice context
+  // Voice context prompt is already skipped for first messages to avoid conflicting formats
+  if (isFirstMessage) {
+    result = { text: sampleFromVerbalizedResponse(rawResponse) };
+  } else if (voiceContext) {
+    // Try to parse structured response if voice context is available
+    result = parseStructuredResponse(rawResponse);
+  } else {
+    result = { text: rawResponse };
+  }
+
+  logger.info('Successfully generated DM response using llmApiClient');
 
   // Process voice assignments if we have structured data
   if (result.narrationSegments && params.context.sessionId && voiceContext) {

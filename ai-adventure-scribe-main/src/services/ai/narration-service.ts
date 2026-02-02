@@ -21,18 +21,17 @@ import {
   buildOpeningScenePrompt,
 } from './shared/prompts';
 import {
-  getGeminiManager,
   useCrewAI,
   keyFor,
   getOrCreateDeduped,
   addEquipmentContext,
 } from './shared/utils';
 
+import { llmApiClient } from '@/services/llm-api-client';
 import type { Memory, MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, GameContext, AIResponse, NarrationSegment } from './shared/types';
 
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import logger from '@/lib/logger';
 import { detectCombatFromText } from '@/utils/combatDetection';
 
@@ -187,21 +186,19 @@ async function attemptCrewAI(
 }
 
 /**
- * Generate fallback narration via Gemini
+ * Generate fallback narration via LLM
  */
 async function generateFallbackNarration(message: string): Promise<string> {
-  logger.info('CrewAI returned placeholder text; generating narration via local Gemini.');
+  logger.info('CrewAI returned placeholder text; generating narration via LLM.');
   try {
-    const geminiManager = getGeminiManager();
-    return await geminiManager.executeWithRotation(async (genAI) => {
-      const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-      const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${message}"`;
-      const response = await model.generateContent(prompt);
-      const res = await response.response;
-      return res.text();
+    const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${message}"`;
+    return await llmApiClient.generateText({
+      prompt,
+      temperature: 0.9,
+      maxTokens: 2048,
     });
   } catch (e) {
-    logger.warn('Gemini fallback for placeholder failed:', e);
+    logger.warn('LLM fallback for placeholder failed:', e);
     return '';
   }
 }

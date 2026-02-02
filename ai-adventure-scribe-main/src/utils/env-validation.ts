@@ -10,7 +10,6 @@ import { logger } from '@/lib/logger';
  * Required Variables:
  * - VITE_SUPABASE_URL: Supabase project URL
  * - VITE_SUPABASE_ANON_KEY: Supabase anonymous key
- * - VITE_GEMINI_API_KEYS: Gemini API key(s) for AI functionality
  *
  * @example
  * // Call early in application lifecycle (e.g., main.tsx)
@@ -36,12 +35,6 @@ const ENV_VARIABLES: EnvVariable[] = [
     description: 'Supabase anonymous key',
     required: true,
     validator: (value) => value.length > 20, // Basic length check
-  },
-  {
-    key: 'VITE_GEMINI_API_KEYS',
-    description: 'Gemini API key(s) for AI functionality',
-    required: true,
-    validator: (value) => value.length > 10, // Basic length check
   },
   {
     key: 'VITE_GA_MEASUREMENT_ID',

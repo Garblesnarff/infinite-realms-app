@@ -7,8 +7,7 @@
  * @author AI Dungeon Master Team
  */
 
-import { geminiService } from './gemini-service';
-import { openRouterService } from './openrouter-service';
+import { llmApiClient } from '@/services/llm-api-client';
 
 import logger from '@/lib/logger';
 
@@ -89,21 +88,20 @@ export class CharacterDescriptionGenerator {
 
     try {
       const prompt = this.createDescriptionPrompt(characterData, options);
-      logger.info('Generating character description with Gemini...');
+      logger.info('Generating character description...');
 
-      const response = await geminiService.generateText({
+      const response = await llmApiClient.generateText({
         prompt,
-        model: 'gemini-2.5-flash-lite',
         maxTokens: 1000,
         temperature: 0.8,
       });
 
-      logger.debug('Raw Gemini response:', response);
+      logger.debug('Raw LLM response:', response);
       logger.debug('Response type:', typeof response);
       logger.debug('Response length:', response.length);
 
       if (!response || response.trim() === '') {
-        logger.warn('Empty or null response from Gemini API');
+        logger.warn('Empty or null response from AI service');
         throw new Error('Received empty response from AI service');
       }
 
@@ -112,42 +110,17 @@ export class CharacterDescriptionGenerator {
       logger.info('Successfully generated character description');
       return enhancedDescription;
     } catch (error) {
-      logger.error('Failed to generate character description with Gemini:', error);
+      logger.error('Failed to generate character description:', error);
 
-      // Try OpenRouter as fallback
-      try {
-        logger.info('Attempting to generate character description with OpenRouter fallback...');
-        const prompt = this.createDescriptionPrompt(characterData, options);
-
-        const response = await openRouterService.generateText({
-          prompt,
-          model: 'google/gemini-2.5-pro-exp-03-25:free',
-          maxTokens: 1000,
-          temperature: 0.8,
-        });
-
-        logger.debug('Raw OpenRouter response:', response);
-
-        if (!response || response.trim() === '') {
-          throw new Error('Received empty response from OpenRouter');
-        }
-
-        const enhancedDescription = this.parseDescriptionResponse(response, characterData);
-        logger.info('Successfully generated character description with OpenRouter fallback');
-        return enhancedDescription;
-      } catch (fallbackError) {
-        logger.error('OpenRouter fallback also failed:', fallbackError);
-
-        // Return static fallback description
-        return {
-          description:
-            characterData.description ||
-            `${characterData.name || 'The character'} is a ${characterData.race || 'heroic'} ${characterData.class || 'adventurer'}.`,
-          appearance: `A typical ${characterData.race || 'adventurer'} with ${characterData.class || 'heroic'} characteristics.`,
-          personality_traits: 'Determined and adventurous, with a strong sense of justice.',
-          backstory_elements: `${characterData.name || 'This character'} comes from a ${characterData.background || 'common'} background and has chosen the path of a ${characterData.class || 'heroic adventurer'}.`,
-        };
-      }
+      // Return static fallback description
+      return {
+        description:
+          characterData.description ||
+          `${characterData.name || 'The character'} is a ${characterData.race || 'heroic'} ${characterData.class || 'adventurer'}.`,
+        appearance: `A typical ${characterData.race || 'adventurer'} with ${characterData.class || 'heroic'} characteristics.`,
+        personality_traits: 'Determined and adventurous, with a strong sense of justice.',
+        backstory_elements: `${characterData.name || 'This character'} comes from a ${characterData.background || 'common'} background and has chosen the path of a ${characterData.class || 'heroic adventurer'}.`,
+      };
     }
   }
 
@@ -629,34 +602,16 @@ export class CharacterDescriptionGenerator {
   <requirement>If special traits are provided, incorporate them prominently</requirement>
 </requirements>`;
 
-      const response = await geminiService.generateText({
+      const response = await llmApiClient.generateText({
         prompt,
-        model: 'gemini-2.5-flash-lite',
         maxTokens: 100,
         temperature: 0.7,
       });
 
       return response.trim();
     } catch (error) {
-      logger.error('Failed to generate quick description with Gemini:', error);
-
-      // Try OpenRouter as fallback
-      try {
-        logger.info('Attempting to generate quick description with OpenRouter fallback...');
-
-        const response = await openRouterService.generateText({
-          prompt,
-          model: 'google/gemini-2.5-pro-exp-03-25:free',
-          maxTokens: 100,
-          temperature: 0.7,
-        });
-
-        logger.info('Successfully generated quick description with OpenRouter fallback');
-        return response.trim();
-      } catch (fallbackError) {
-        logger.error('OpenRouter fallback also failed for quick description:', fallbackError);
-        return `${characterData.name || 'This character'} is a ${characterData.race || 'heroic'} ${characterData.class || 'adventurer'} ready for adventure.`;
-      }
+      logger.error('Failed to generate quick description:', error);
+      return `${characterData.name || 'This character'} is a ${characterData.race || 'heroic'} ${characterData.class || 'adventurer'} ready for adventure.`;
     }
   }
 }

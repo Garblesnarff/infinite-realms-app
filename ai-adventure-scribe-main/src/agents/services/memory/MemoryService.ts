@@ -1,5 +1,3 @@
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
 import { llmApiClient } from '@/services/llm-api-client';
 
 import type {
@@ -35,10 +33,6 @@ const importanceService = new MemoryImportanceService(repository);
 
 export class MemoryService {
   // ===== Static utilities (shared) =====
-  private static getGeminiManager(): GeminiApiManager {
-    return getGeminiApiManager();
-  }
-
   static async generateEmbedding(content: string): Promise<string | null> {
     return importanceService.embedQuery(content);
   }

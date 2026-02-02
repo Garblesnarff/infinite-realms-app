@@ -8,8 +8,7 @@
  */
 
 import { DMState, RuleCheckResult } from '../state';
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
-import { getGeminiManager } from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 import logger from '@/lib/logger';
 
 /**
@@ -151,9 +150,8 @@ export async function validateRules(state: DMState): Promise<Partial<DMState>> {
     // Determine if a dice roll is needed
     const rollRequirement = determineDiceRollRequirement(playerIntent, playerInput);
 
-    // Use Gemini for complex validation
+    // Use llmApiClient for complex validation
     try {
-      const geminiManager = getGeminiManager();
       const characterContext = worldContext.characterIds?.[0]
         ? `Character ID: ${worldContext.characterIds[0]}`
         : 'No character context';
@@ -162,11 +160,10 @@ export async function validateRules(state: DMState): Promise<Partial<DMState>> {
         .replace('{action}', playerInput)
         .replace('{context}', characterContext);
 
-      const responseText = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        return response.text();
+      const responseText = await llmApiClient.generateText({
+        prompt,
+        temperature: 0.3,
+        maxTokens: 1024,
       });
 
       const validation = parseValidation(responseText);

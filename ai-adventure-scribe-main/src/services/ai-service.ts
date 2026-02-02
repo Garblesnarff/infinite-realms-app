@@ -1,6 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
+import { llmApiClient } from '@/services/llm-api-client';
 import { MemoryManager, MemoryContext } from './memory-manager';
 import type { Memory } from './memory-manager';
 import { WorldBuilderService } from './world-builders/world-builder-service';
@@ -21,7 +20,6 @@ import { buildPaymentRequiredFallback } from './ai/roll-fallback';
 import { parseXMLTagsFromResponse } from './ai/xml-parser';
 import { getClassEquipment } from './ai/class-equipment';
 import { ContextBuilder } from './ai/context-builder';
-import { GeminiClient } from './ai/gemini-client';
 import { ChatPersistence } from './ai/chat-persistence';
 import { deduplicateParagraphs } from './ai/response-deduplicator';
 import {
@@ -55,13 +53,6 @@ function keyFor(sessionId: string | undefined, message: string, historyLen: numb
 }
 
 export class AIService {
-  /**
-   * Get the shared Gemini API manager instance
-   */
-  private static getGeminiManager(): GeminiApiManager {
-    return getGeminiApiManager();
-  }
-
   /** Feature flag to enable CrewAI orchestrator integration. */
   private static useCrewAI(): boolean {
     try {
@@ -302,20 +293,18 @@ export class AIService {
                 finalText = `Please roll ${purpose}${target}${advantage}.`;
               } else {
                 logger.info(
-                  'CrewAI returned placeholder text; generating narration via local Gemini.',
+                  'CrewAI returned placeholder text; generating narration via LLM.',
                 );
                 try {
-                  const geminiManager = this.getGeminiManager();
-                  const genAIResult = await geminiManager.executeWithRotation(async (genAI) => {
-                    const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-                    const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${params.message}"`;
-                    const response = await model.generateContent(prompt);
-                    const res = await response.response;
-                    return res.text();
+                  const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${params.message}"`;
+                  const genAIResult = await llmApiClient.generateText({
+                    prompt,
+                    temperature: 0.9,
+                    maxTokens: 2048,
                   });
                   finalText = genAIResult || finalText;
                 } catch (e) {
-                  logger.warn('Gemini fallback for placeholder failed, using placeholder text:', e);
+                  logger.warn('LLM fallback for placeholder failed, using placeholder text:', e);
                 }
               }
             }
@@ -422,12 +411,19 @@ export class AIService {
             isFirstMessage
         });
 
-        // Execute chat via GeminiClient
-        const rawResponse = await GeminiClient.chat({
-            systemPrompt: contextPrompt,
-            message: params.message,
-            conversationHistory: params.conversationHistory || [],
-            onStream: (!voiceContext && !isFirstMessage) ? params.onStream : undefined,
+        // Execute chat via llmApiClient
+        // Build combined prompt from context, history, and message
+        const historyContext = (params.conversationHistory || [])
+          .slice(-10) // Keep last 10 messages for context
+          .map(msg => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
+          .join('\n\n');
+
+        const fullPrompt = `${contextPrompt}\n\n${historyContext ? `<conversation_history>\n${historyContext}\n</conversation_history>\n\n` : ''}${params.message ? `Player: ${params.message}` : 'Begin the adventure. Generate the opening scene for this campaign.'}`;
+
+        const rawResponse = await llmApiClient.generateText({
+          prompt: fullPrompt,
+          temperature: 0.9,
+          maxTokens: 2048,
         });
 
         // Initialize result with raw text
@@ -768,26 +764,13 @@ export class AIService {
   }
 
   /**
-   * Get Gemini API manager statistics (for debugging)
+   * Get API statistics (for debugging)
+   * @deprecated API stats are no longer tracked after Gemini removal
    */
-  static getApiStats(): {
-    currentKey: ReturnType<GeminiApiManager['getCurrentKeyInfo']>;
-    allKeyStats: ReturnType<GeminiApiManager['getStats']>;
-    rateLimits: ReturnType<GeminiApiManager['getRateLimitStats']>;
-  } {
-    try {
-      const manager = this.getGeminiManager();
-      return {
-        currentKey: manager.getCurrentKeyInfo(),
-        allKeyStats: manager.getStats(),
-        rateLimits: manager.getRateLimitStats(),
-      };
-    } catch (error) {
-      return { error: 'Gemini API manager not available' } as unknown as {
-        currentKey: ReturnType<GeminiApiManager['getCurrentKeyInfo']>;
-        allKeyStats: ReturnType<GeminiApiManager['getStats']>;
-        rateLimits: ReturnType<GeminiApiManager['getRateLimitStats']>;
-      };
-    }
+  static getApiStats(): { provider: string; status: string } {
+    return {
+      provider: 'openrouter',
+      status: 'Using server-proxied OpenRouter API',
+    };
   }
 }

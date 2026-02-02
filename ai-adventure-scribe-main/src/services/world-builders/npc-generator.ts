@@ -1,6 +1,4 @@
-import { getGeminiApiManager, type GeminiApiManager } from '@/infrastructure/ai';
-
-import { GEMINI_TEXT_MODEL } from '@/config/ai';
+import { llmApiClient } from '@/services/llm-api-client';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -112,58 +110,49 @@ export interface GeneratedNPC {
 }
 
 export class NPCGenerator {
-  private static getGeminiManager(): GeminiApiManager {
-    return getGeminiApiManager();
-  }
-
   /**
    * Generate a detailed NPC using AI
    */
   static async generateNPC(request: NPCRequest): Promise<GeneratedNPC> {
     try {
-      const geminiManager = this.getGeminiManager();
+      const prompt = this.buildNPCPrompt(request);
 
-      const result = await geminiManager.executeWithRotation(async (genAI) => {
-        const model = genAI.getGenerativeModel({ model: GEMINI_TEXT_MODEL });
-
-        const prompt = this.buildNPCPrompt(request);
-
-        const response = await model.generateContent(prompt);
-        const text = await response.response.text();
-
-        try {
-          // Extract JSON from the response
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) {
-            throw new Error('No JSON found in NPC generation response');
-          }
-
-          const npcData = JSON.parse(jsonMatch[0]);
-
-          // Add metadata
-          const npc: GeneratedNPC = {
-            ...npcData,
-            id: undefined, // Will be set when saved
-            metadata: {
-              createdAt: new Date(),
-              campaignId: request.context.campaignId,
-              sessionId: request.context.sessionId,
-              importance: request.importance,
-              narrativeWeight: this.calculateNarrativeWeight(npcData, request),
-              storyArc: request.context.currentStory,
-              locationId: request.location,
-            },
-          };
-
-          return npc;
-        } catch (parseError) {
-          logger.error('Failed to parse NPC JSON:', parseError);
-          throw new Error('Failed to generate NPC: Invalid response format');
-        }
+      const text = await llmApiClient.generateText({
+        prompt,
+        temperature: 0.9,
+        maxTokens: 4096,
       });
 
-      logger.info(`👤 Generated NPC: ${result.name} (${result.role})`);
-      return result;
+      try {
+        // Extract JSON from the response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('No JSON found in NPC generation response');
+        }
+
+        const npcData = JSON.parse(jsonMatch[0]);
+
+        // Add metadata
+        const npc: GeneratedNPC = {
+          ...npcData,
+          id: undefined, // Will be set when saved
+          metadata: {
+            createdAt: new Date(),
+            campaignId: request.context.campaignId,
+            sessionId: request.context.sessionId,
+            importance: request.importance,
+            narrativeWeight: this.calculateNarrativeWeight(npcData, request),
+            storyArc: request.context.currentStory,
+            locationId: request.location,
+          },
+        };
+
+        logger.info(`👤 Generated NPC: ${npc.name} (${npc.role})`);
+        return npc;
+      } catch (parseError) {
+        logger.error('Failed to parse NPC JSON:', parseError);
+        throw new Error('Failed to generate NPC: Invalid response format');
+      }
     } catch (error) {
       logger.error('NPC generation failed:', error);
       throw new Error(
