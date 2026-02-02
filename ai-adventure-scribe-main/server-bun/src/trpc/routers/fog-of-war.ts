@@ -5,11 +5,13 @@
  * Each user has their own revealed areas per scene for exploration tracking.
  */
 
-import { z } from 'zod';
+/* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '../trpc.js';
+import { z } from 'zod';
+
 import { FogOfWarService } from '../../services/fog-of-war-service.js';
 import { broadcastToScene } from '../../ws.js';
+import { protectedProcedure, router } from '../trpc.js';
 
 /**
  * Schema for a point (x, y coordinates)
@@ -42,6 +44,7 @@ export const fogOfWarRouter = router({
       try {
         const revealedAreas = await FogOfWarService.getRevealedAreas(
           input.sceneId,
+          ctx.user.userId,
           ctx.user.userId
         );
         return { revealedAreas };
@@ -68,6 +71,7 @@ export const fogOfWarRouter = router({
         const revealedArea = await FogOfWarService.revealArea(
           input.sceneId,
           targetUserId,
+          ctx.user.userId,
           input.polygon,
           (message) => broadcastToScene(input.sceneId, message)
         );
@@ -101,6 +105,7 @@ export const fogOfWarRouter = router({
         const revealedAreas = await FogOfWarService.revealAreas(
           input.sceneId,
           targetUserId,
+          ctx.user.userId,
           input.polygons,
           (message) => broadcastToScene(input.sceneId, message)
         );
@@ -134,6 +139,7 @@ export const fogOfWarRouter = router({
         const success = await FogOfWarService.concealArea(
           input.sceneId,
           targetUserId,
+          ctx.user.userId,
           input.areaId,
           (message) => broadcastToScene(input.sceneId, message)
         );
@@ -172,6 +178,7 @@ export const fogOfWarRouter = router({
         const concealedAreas = await FogOfWarService.concealAreas(
           input.sceneId,
           targetUserId,
+          ctx.user.userId,
           input.areaIds,
           (message) => broadcastToScene(input.sceneId, message)
         );
@@ -191,7 +198,11 @@ export const fogOfWarRouter = router({
     .input(z.object({ sceneId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        await FogOfWarService.resetFogOfWar(input.sceneId, ctx.user.userId);
+        await FogOfWarService.resetFogOfWar(
+          input.sceneId,
+          ctx.user.userId,
+          ctx.user.userId
+        );
         return { success: true };
       } catch (error: any) {
         throw new TRPCError({
@@ -210,6 +221,7 @@ export const fogOfWarRouter = router({
       try {
         const mergedAreas = await FogOfWarService.mergeRevealedAreas(
           input.sceneId,
+          ctx.user.userId,
           ctx.user.userId
         );
         return { revealedAreas: mergedAreas };
@@ -230,6 +242,7 @@ export const fogOfWarRouter = router({
       try {
         const record = await FogOfWarService.getFogOfWarRecord(
           input.sceneId,
+          ctx.user.userId,
           ctx.user.userId
         );
         return { record };

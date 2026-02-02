@@ -12,3 +12,8 @@
 **Vulnerability:** Several methods in `CharacterService` only verified `userId`, ignoring the `ownerId` field. Additionally, permission-related methods threw `FORBIDDEN` instead of `NOT_FOUND` when authorization failed, leaking the existence of characters to unauthorized users.
 **Learning:** In systems with complex ownership (like PC assignment vs. creation), all authorization checks must account for all identity fields. Using generic `NOT_FOUND` errors for unauthorized access is critical for preventing IDOR scanning.
 **Prevention:** Always check both `userId` and `ownerId` for characters. Ensure all service methods that verify access throw `NOT_FOUND` (404) rather than `FORBIDDEN` (403) to mask the existence of private resources.
+
+## 2025-05-25 - [IDOR in Fog of War Revelation]
+**Vulnerability:** Fog of War tRPC procedures (`reveal`, `conceal`, etc.) allowed a `targetUserId` parameter without verifying if the requester was authorized to modify that user's fog. This allowed any authenticated user to manipulate any other user's revealed map areas.
+**Learning:** Even for user-specific data like Fog of War, authorization must be strictly enforced. A user should only be able to modify their own data or data for users they are "managing" (e.g., a DM managing players in their scene).
+**Prevention:** Always validate that the requester (`ctx.user.userId`) is either the owner of the target data (`targetUserId === requesterId`) or the owner of the parent resource (scene owner). Consistently throw `NotFoundError` for unauthorized access to prevent existence leakage.

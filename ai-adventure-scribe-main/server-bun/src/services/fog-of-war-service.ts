@@ -7,11 +7,16 @@
  * @module server/services/fog-of-war-service
  */
 
-import { db } from '../../../db/client.js';
-import { fogOfWar, type FogOfWar, type NewFogOfWar } from '../../../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
-import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
+/* eslint-disable max-lines */
 import { randomUUID } from 'crypto';
+
+import { and, eq } from 'drizzle-orm';
+
+import { db } from '../../../db/client.js';
+import { fogOfWar, scenes } from '../../../db/schema/index.js';
+import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
+
+import type { FogOfWar } from '../../../db/schema/index.js';
 
 /**
  * Type for a revealed area polygon
@@ -40,14 +45,48 @@ export type BroadcastCallback = (message: any) => void;
 
 export class FogOfWarService {
   /**
+   * Internal helper to verify scene access and target user permissions
+   */
+  private static async verifyAccess(
+    sceneId: string,
+    targetUserId: string,
+    requesterId: string
+  ): Promise<void> {
+    // 1. Get scene to check ownership
+    const [scene] = await db
+      .select({ userId: scenes.userId })
+      .from(scenes)
+      .where(eq(scenes.id, sceneId))
+      .limit(1);
+
+    if (!scene) {
+      throw new NotFoundError('Scene', sceneId);
+    }
+
+    // 2. Authorization logic:
+    // - Requester is the target user
+    // - Requester is the scene owner
+    const isTarget = requesterId === targetUserId;
+    const isOwner = requesterId === scene.userId;
+
+    if (!isTarget && !isOwner) {
+      // Throw NOT_FOUND to avoid leaking association existence
+      throw new NotFoundError('Scene', sceneId);
+    }
+  }
+
+  /**
    * Get all revealed areas for a user in a specific scene
    */
-  static async getRevealedAreas(sceneId: string, userId: string): Promise<RevealedArea[]> {
+  static async getRevealedAreas(
+    sceneId: string,
+    userId: string,
+    requesterId: string
+  ): Promise<RevealedArea[]> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const fogRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
+      where: and(eq(fogOfWar.sceneId, sceneId), eq(fogOfWar.userId, userId)),
     });
 
     if (!fogRecord) {
@@ -65,9 +104,12 @@ export class FogOfWarService {
   static async revealArea(
     sceneId: string,
     userId: string,
+    requesterId: string,
     input: RevealAreaInput,
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     // Validate points
     if (!input.points || input.points.length < 3) {
       throw new ValidationError('A polygon must have at least 3 points');
@@ -148,9 +190,12 @@ export class FogOfWarService {
   static async revealAreas(
     sceneId: string,
     userId: string,
+    requesterId: string,
     inputs: RevealAreaInput[],
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea[]> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     if (inputs.length === 0) {
       return [];
     }
@@ -238,9 +283,12 @@ export class FogOfWarService {
   static async concealArea(
     sceneId: string,
     userId: string,
+    requesterId: string,
     areaId: string,
     broadcast?: BroadcastCallback
   ): Promise<boolean> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
@@ -292,9 +340,12 @@ export class FogOfWarService {
   static async concealAreas(
     sceneId: string,
     userId: string,
+    requesterId: string,
     areaIds: string[],
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea[]> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     if (areaIds.length === 0) {
       return [];
     }
@@ -347,7 +398,13 @@ export class FogOfWarService {
   /**
    * Clear all revealed areas for a user in a scene (reset fog of war)
    */
-  static async resetFogOfWar(sceneId: string, userId: string): Promise<void> {
+  static async resetFogOfWar(
+    sceneId: string,
+    userId: string,
+    requesterId: string
+  ): Promise<void> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
@@ -374,7 +431,13 @@ export class FogOfWarService {
    * This is a simplified version - a full implementation would use polygon union algorithms
    * For now, this just removes duplicate area IDs
    */
-  static async mergeRevealedAreas(sceneId: string, userId: string): Promise<RevealedArea[]> {
+  static async mergeRevealedAreas(
+    sceneId: string,
+    userId: string,
+    requesterId: string
+  ): Promise<RevealedArea[]> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
@@ -415,12 +478,15 @@ export class FogOfWarService {
   /**
    * Get the entire fog of war record for a user in a scene
    */
-  static async getFogOfWarRecord(sceneId: string, userId: string): Promise<FogOfWar | null> {
+  static async getFogOfWarRecord(
+    sceneId: string,
+    userId: string,
+    requesterId: string
+  ): Promise<FogOfWar | null> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const record = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
+      where: and(eq(fogOfWar.sceneId, sceneId), eq(fogOfWar.userId, userId)),
     });
 
     return record || null;
@@ -429,7 +495,13 @@ export class FogOfWarService {
   /**
    * Delete fog of war record for a user in a scene
    */
-  static async deleteFogOfWar(sceneId: string, userId: string): Promise<boolean> {
+  static async deleteFogOfWar(
+    sceneId: string,
+    userId: string,
+    requesterId: string
+  ): Promise<boolean> {
+    await this.verifyAccess(sceneId, userId, requesterId);
+
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
