@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
 /**
@@ -54,10 +55,12 @@ export const calculateHitPoints = (character: Character): number => {
 
   // First level gets max hit die + con mod
   // Subsequent levels get average of hit die (rounded up) + con mod
-  const firstLevelHP = hitDie + conMod;
-  const subsequentLevelsHP = (level - 1) * (Math.floor(hitDie / 2) + 1 + conMod);
+  // D&D 5e rule: You always gain at least 1 HP when you level up
+  const firstLevelHP = Math.max(1, hitDie + conMod);
+  const hpPerLevel = Math.max(1, Math.floor(hitDie / 2) + 1 + conMod);
+  const subsequentLevelsHP = (level - 1) * hpPerLevel;
 
-  return Math.max(1, firstLevelHP + subsequentLevelsHP);
+  return firstLevelHP + subsequentLevelsHP;
 };
 
 /**
