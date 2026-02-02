@@ -6,8 +6,8 @@ import {
   buildCharacterDescriptionPrompt,
   buildCharacterImagePrompt,
   toCharacterPromptData,
-  type CharacterPromptData,
 } from '@/services/prompts/characterPrompts';
+import type { CharacterPromptData } from '@/services/prompts/character-prompt-types';
 
 describe('characterPrompts', () => {
   it('injects mandatory physical traits into description prompts', () => {

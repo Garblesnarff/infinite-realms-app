@@ -244,6 +244,8 @@ export default tseslint.config(
       "src/utils/vision-polygon.ts",
       "src/utils/vision-worker-manager.ts",
       "src/workers/vision-worker.ts",
+      "src/services/prompts/characterPrompts.ts",
+      "src/services/prompts/character-prompt-helpers.ts",
       "src/components/battle-map/VisionPolygon.tsx",
       "src/examples/vision-system-usage.tsx",
     ],
