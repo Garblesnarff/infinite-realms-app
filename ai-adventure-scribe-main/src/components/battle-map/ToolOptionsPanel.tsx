@@ -18,7 +18,6 @@
  * @module components/battle-map/ToolOptionsPanel
  */
 
-import React, { useState, useEffect } from 'react';
 import {
   Paintbrush,
   Circle,
@@ -32,9 +31,15 @@ import {
   Lock,
   Unlock,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+
 import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -43,14 +48,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
-import { useBattleMapStore, type ToolType } from '@/stores/useBattleMapStore';
+import { Slider } from '@/components/ui/slider';
+import { Z_INDEX } from '@/constants/z-index';
 import { useDrawingTool } from '@/hooks/use-drawing-tool';
+import { cn } from '@/lib/utils';
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 // ===========================
 // Types
@@ -98,11 +100,15 @@ interface ColorPickerProps {
 }
 
 const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange, className }) => {
+  const id = React.useId();
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <Label className="text-sm flex-shrink-0">{label}</Label>
+      <Label htmlFor={id} className="text-sm flex-shrink-0">
+        {label}
+      </Label>
       <div className="flex items-center gap-2 flex-1">
         <input
+          id={id}
           type="color"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -196,6 +202,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           max={20}
           step={1}
           className="w-full"
+          aria-label="Stroke Width"
         />
         <span className="text-xs text-muted-foreground">{drawingTool.state.strokeWidth}px</span>
       </div>
@@ -211,6 +218,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           variant={drawingTool.state.fillEnabled ? 'default' : 'outline'}
           size="sm"
           onClick={() => drawingTool.setFillEnabled(!drawingTool.state.fillEnabled)}
+          aria-pressed={drawingTool.state.fillEnabled}
         >
           {drawingTool.state.fillEnabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           <span className="ml-2">Fill</span>
@@ -234,6 +242,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
               max={100}
               step={5}
               className="w-full"
+              aria-label="Fill Opacity"
             />
             <span className="text-xs text-muted-foreground">
               {Math.round(drawingTool.state.fillOpacity * 100)}%
@@ -249,7 +258,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       <div className="space-y-2">
         <Label className="text-sm">Template Type</Label>
         <Select value={templateType} onValueChange={(value: any) => setTemplateType(value)}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" aria-label="Template type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -302,6 +311,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           max={100}
           step={5}
           className="w-full"
+          aria-label="Template Opacity"
         />
         <span className="text-xs text-muted-foreground">
           {Math.round(drawingTool.state.fillOpacity * 100)}%
@@ -315,7 +325,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       <div className="space-y-2">
         <Label className="text-sm">Wall Type</Label>
         <Select value={wallType} onValueChange={(value: any) => setWallType(value)}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" aria-label="Wall type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -332,6 +342,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           variant={wallSnapToGrid ? 'default' : 'outline'}
           size="sm"
           onClick={toggleWallSnapToGrid}
+          aria-pressed={wallSnapToGrid}
         >
           {wallSnapToGrid ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
           <span className="ml-2">Snap to Grid</span>
@@ -347,6 +358,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           max={10}
           step={1}
           className="w-full"
+          aria-label="Stroke Width"
         />
         <span className="text-xs text-muted-foreground">{drawingTool.state.strokeWidth}px</span>
       </div>
@@ -358,7 +370,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       <div className="space-y-2">
         <Label className="text-sm">Brush Mode</Label>
         <Select value={fogBrushMode} onValueChange={(value: any) => setFogBrushMode(value)}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" aria-label="Brush mode">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -387,6 +399,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           max={200}
           step={10}
           className="w-full"
+          aria-label="Brush Size"
         />
         <span className="text-xs text-muted-foreground">{fogBrushSize}px</span>
       </div>
@@ -444,12 +457,13 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       onOpenChange={setIsCollapsed}
       className={cn(
         'bg-background border rounded-lg shadow-md',
-        position === 'top' && 'fixed top-4 left-1/2 -translate-x-1/2 z-40 w-80',
-        position === 'left' && 'fixed left-20 top-4 z-40 w-80',
-        position === 'right' && 'fixed right-4 top-4 z-40 w-80',
-        position === 'floating' && 'absolute z-40 w-80',
+        position === 'top' && 'fixed top-4 left-1/2 -translate-x-1/2 w-80',
+        position === 'left' && 'fixed left-20 top-4 w-80',
+        position === 'right' && 'fixed right-4 top-4 w-80',
+        position === 'floating' && 'absolute w-80',
         className
       )}
+      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
     >
       <CollapsibleTrigger asChild>
         <Button
