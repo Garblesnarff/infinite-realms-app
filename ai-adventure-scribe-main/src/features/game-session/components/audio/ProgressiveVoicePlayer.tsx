@@ -14,7 +14,7 @@ import {
 import React from 'react';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
-import type { AISegment } from '@/services/voice-director';
+import type { AISegment } from '@/services/voice-routing';
 
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
@@ -29,9 +29,9 @@ import {
   CollapsibleTrigger,
 } from '@/shared/components/ui/collapsible';
 import { Label } from '@/shared/components/ui/label';
+import { Progress } from '@/shared/components/ui/progress';
 import { Slider } from '@/shared/components/ui/slider';
 import { Switch } from '@/shared/components/ui/switch';
-import { Progress } from '@/shared/components/ui/progress';
 import {
   Tooltip,
   TooltipContent,

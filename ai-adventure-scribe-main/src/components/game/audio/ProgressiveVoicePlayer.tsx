@@ -14,7 +14,7 @@ import {
 import React from 'react';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
-import type { AISegment } from '@/services/voice-director';
+import type { AISegment } from '@/services/voice-routing';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
