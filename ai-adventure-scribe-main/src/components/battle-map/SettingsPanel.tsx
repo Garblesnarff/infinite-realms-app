@@ -363,9 +363,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
           {/* Visual Effects Section */}
           <SettingsSection title="Visual Effects" icon={Zap}>
-            <SettingItem label="Animation Speed">
+            <SettingItem label="Animation Speed" id="animation-speed">
               <div className="w-32 space-y-2">
                 <Slider
+                  id="animation-speed"
                   value={[settings.animationSpeed]}
                   onValueChange={([value]) => updateSetting('animationSpeed', value)}
                   min={0.5}
@@ -381,9 +382,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Shadows"
+              id="enable-shadows"
               description="Enable token and object shadows"
             >
               <Switch
+                id="enable-shadows"
                 checked={settings.enableShadows}
                 onCheckedChange={(checked) => updateSetting('enableShadows', checked)}
               />
@@ -391,9 +394,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Bloom Effect"
+              id="enable-bloom"
               description="Add glow to lights and effects"
             >
               <Switch
+                id="enable-bloom"
                 checked={settings.enableBloom}
                 onCheckedChange={(checked) => updateSetting('enableBloom', checked)}
               />
@@ -401,17 +406,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Anti-Aliasing"
+              id="enable-anti-aliasing"
               description="Smooth edges (impacts performance)"
             >
               <Switch
+                id="enable-anti-aliasing"
                 checked={settings.enableAntiAliasing}
                 onCheckedChange={(checked) => updateSetting('enableAntiAliasing', checked)}
               />
             </SettingItem>
 
-            <SettingItem label="Max Particles">
+            <SettingItem label="Max Particles" id="max-particles">
               <div className="w-32 space-y-2">
                 <Slider
+                  id="max-particles"
                   value={[settings.maxParticles]}
                   onValueChange={([value]) => updateSetting('maxParticles', value)}
                   min={0}
@@ -468,13 +476,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Token Labels"
+              id="token-labels"
               description="When to show token names"
             >
               <Select
                 value={settings.tokenLabels}
                 onValueChange={(value: any) => updateSetting('tokenLabels', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="token-labels" className="w-32" aria-label="Token Labels">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -487,13 +496,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Measurement Unit"
+              id="measurement-unit"
               description="Distance measurement unit"
             >
               <Select
                 value={settings.measurementUnit}
                 onValueChange={(value: any) => updateSetting('measurementUnit', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="measurement-unit" className="w-32" aria-label="Measurement Unit">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
