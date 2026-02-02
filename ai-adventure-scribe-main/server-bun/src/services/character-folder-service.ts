@@ -8,15 +8,15 @@
  * @module server/services/character-folder-service
  */
 
+import { TRPCError } from '@trpc/server';
+import { and, asc, eq, isNull, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   characterFolders,
   characters,
   type CharacterFolder,
-  type NewCharacterFolder,
 } from '../../../db/schema/index.js';
-import { eq, and, asc, isNull } from 'drizzle-orm';
-import { TRPCError } from '@trpc/server';
 import { InternalServerError } from '../lib/errors.js';
 
 export interface CreateFolderData {
@@ -85,7 +85,7 @@ export class CharacterFolderService {
 
     // Get character counts for each folder
     const allCharacters = await db.query.characters.findMany({
-      where: eq(characters.userId, userId),
+      where: or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       columns: { id: true, folderId: true },
     });
 
@@ -253,7 +253,10 @@ export class CharacterFolderService {
     await db
       .update(characters)
       .set({ folderId: folder.parentFolderId })
-      .where(eq(characters.folderId, folderId));
+      .where(and(
+        eq(characters.folderId, folderId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ));
 
     // Move all subfolders to the parent folder (or root if no parent)
     await db
@@ -285,7 +288,7 @@ export class CharacterFolderService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ),
     });
 
@@ -322,7 +325,7 @@ export class CharacterFolderService {
       })
       .where(and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ))
       .returning({ id: characters.id });
 

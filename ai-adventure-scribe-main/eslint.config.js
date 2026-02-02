@@ -248,6 +248,9 @@ export default tseslint.config(
       "src/services/prompts/character-prompt-helpers.ts",
       "src/components/battle-map/VisionPolygon.tsx",
       "src/examples/vision-system-usage.tsx",
+      "server-bun/src/services/inventory-service.ts",
+      "server-bun/src/routes/v1/inventory.ts",
+      "server-bun/src/services/character-folder-service.ts",
     ],
     rules: {
       "max-lines": "warn"
