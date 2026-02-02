@@ -15,8 +15,15 @@ export {
   // Main functions
   calculateVisionPolygon,
   hasLineOfSight,
-  canSeeToken,
   mergeVisionPolygons,
+
+  // Types
+  type VisionPolygon,
+} from './vision-polygon';
+
+export {
+  // Main functions
+  canSeeToken,
 
   // Light calculations
   getEffectiveLightLevel,
@@ -37,7 +44,6 @@ export {
   lineSegmentsIntersect,
 
   // Types
-  type VisionPolygon,
   type LightLevel,
 } from './vision-calculations';
 

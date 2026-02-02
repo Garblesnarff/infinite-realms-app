@@ -7,9 +7,9 @@
  * @module utils/vision-worker-manager
  */
 
-import type { Token } from '@/types/token';
 import type { VisionBlocker } from '@/types/scene';
-import type { VisionPolygon } from '@/utils/vision-calculations';
+import type { Token } from '@/types/token';
+import type { VisionPolygon } from '@/utils/vision-polygon';
 import type {
   VisionWorkerMessage,
   VisionWorkerResponse,
@@ -294,7 +294,7 @@ export class VisionWorkerManager {
         if (request) {
           // Convert plain object back to Map
           const polygonsMap = new Map<string, VisionPolygon>();
-          const polygonsObj = response.payload.polygons as any;
+          const polygonsObj = response.payload.polygons as Record<string, VisionPolygon>;
 
           for (const [key, value] of Object.entries(polygonsObj)) {
             polygonsMap.set(key, value as VisionPolygon);
