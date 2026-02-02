@@ -12,194 +12,26 @@
  *
  * @author AI Dungeon Master Team
  */
+import {
+  type VoiceSegment,
+  type VoicePool,
+  type VoiceConfig,
+  type AISegment,
+  VOICE_POOLS,
+  ELEVENLABS_MODEL,
+  assignVoice,
+  detectVoiceCategoryFromNPCType,
+  getCharacterVoiceMappings as getMappings,
+  clearCharacterVoiceMappings as clearMappings,
+} from './voice-routing';
+
 import logger from '@/lib/logger';
 
-// Core types for voice management
-export interface VoiceSegment {
-  id: string;
-  type: 'dm' | 'character';
-  text: string;
-  character?: string;
-  voiceId: string;
-  voiceName: string;
-  voiceSettings: {
-    stability: number;
-    similarity_boost: number;
-    style?: number;
-    use_speaker_boost?: boolean;
-  };
-  audioUrl?: string;
-  audioBlob?: Blob;
-  isGenerating?: boolean;
-  isPlaying?: boolean;
-  error?: string;
-}
-
-export interface VoicePool {
-  dm: VoiceConfig[];
-  heroes: VoiceConfig[];
-  npcs: VoiceConfig[];
-  villains: VoiceConfig[];
-  creatures: VoiceConfig[];
-}
-
-export interface VoiceConfig {
-  id: string;
-  name: string;
-  description: string;
-  settings: {
-    stability: number;
-    similarity_boost: number;
-    style?: number;
-    use_speaker_boost?: boolean;
-  };
-}
-
-export interface AISegment {
-  type: 'dm' | 'character';
-  text: string;
-  character?: string;
-  voice_category?: string;
-}
+export type { VoiceSegment, VoicePool, VoiceConfig, AISegment };
 
 export class VoiceDirector {
   // Logger
   // Centralized logging utility for level-based filtering
-
-  private static readonly ELEVENLABS_MODEL = 'eleven_turbo_v2_5'; // Revert to working model
-
-  // Persistent storage key for character-voice mappings
-  private static readonly CHARACTER_VOICE_CACHE_KEY = 'voice-director-character-mappings';
-
-  // Simplified voice pools - fewer options, clearer choices
-  private static readonly VOICE_POOLS: VoicePool = {
-    dm: [
-      {
-        id: 'T0GKiSwCb51L7pv1sshd', // Same voice ID as old AudioPlayer
-        name: 'DM Voice',
-        description: 'Main DM narrator voice (old compatible)',
-        settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          // Remove style and use_speaker_boost to match old settings
-        },
-      },
-    ],
-
-    heroes: [
-      {
-        id: 'GBv7mTt0atIp3Br8iCZE', // Thomas
-        name: 'Thomas',
-        description: 'Noble male hero voice',
-        settings: {
-          stability: 0.6,
-          similarity_boost: 0.8,
-          style: 0.2,
-          use_speaker_boost: true,
-        },
-      },
-      {
-        id: 'BlgEcC0TfWpBak7FmvHW', // Fena
-        name: 'Fena',
-        description: 'Young female hero voice',
-        settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.3,
-          use_speaker_boost: true,
-        },
-      },
-    ],
-
-    npcs: [
-      {
-        id: 'pMsXgVXv3BLzUgSXRplE', // Serena
-        name: 'Serena',
-        description: 'Warm innkeeper voice',
-        settings: {
-          stability: 0.6,
-          similarity_boost: 0.8,
-          style: 0.2,
-          use_speaker_boost: true,
-        },
-      },
-      {
-        id: 'g2W4HAjKvdW93AmsjsOx', // Nathan
-        name: 'Nathan',
-        description: 'Friendly merchant voice',
-        settings: {
-          stability: 0.4,
-          similarity_boost: 0.8,
-          style: 0.4,
-          use_speaker_boost: true,
-        },
-      },
-      {
-        id: 'yoZ06aMxZJJ28mfd3POQ', // Sam
-        name: 'Sam',
-        description: 'Wise elder voice',
-        settings: {
-          stability: 0.8,
-          similarity_boost: 0.8,
-          style: 0.1,
-          use_speaker_boost: true,
-        },
-      },
-    ],
-
-    villains: [
-      {
-        id: '2gPFXx8pN3Avh27Dw5Ma', // Oxley
-        name: 'Oxley',
-        description: 'Ominous male villain voice',
-        settings: {
-          stability: 0.7,
-          similarity_boost: 0.9,
-          style: 0.4,
-          use_speaker_boost: true,
-        },
-      },
-      {
-        id: 'flHkNRp1BlvT73UL6gyz', // Jessica Anne Bogart
-        name: 'Jessica Anne Bogart',
-        description: 'Wickedly eloquent female villain voice',
-        settings: {
-          stability: 0.8,
-          similarity_boost: 0.85,
-          style: 0.5,
-          use_speaker_boost: true,
-        },
-      },
-    ],
-
-    creatures: [
-      {
-        id: 'cPoqAvGWCPfCfyPMwe4z', // Kallixis
-        name: 'Kallixis',
-        description: 'Deep ancient malevolence voice',
-        settings: {
-          stability: 0.9,
-          similarity_boost: 0.7,
-          style: 0.1,
-          use_speaker_boost: false,
-        },
-      },
-      {
-        id: 'dfZGXKiIzjizWtJ0NgPy', // Michael Mouse
-        name: 'Michael Mouse',
-        description: 'High-pitched comic character for goblins',
-        settings: {
-          stability: 0.3,
-          similarity_boost: 0.6,
-          style: 0.6,
-          use_speaker_boost: true,
-        },
-      },
-    ],
-  };
-
-  // Character voice assignments (persistent)
-  private static characterVoiceMap: Map<string, VoiceConfig> | null = null;
 
   // Audio cache for generated segments
   private static audioCache: Map<string, { audioBlob: Blob; timestamp: number }> = new Map();
@@ -251,21 +83,12 @@ export class VoiceDirector {
     }
   }
 
-  /**
-   * Ensure the characterVoiceMap is initialized
-   */
-  private static ensureMapInitialized(): Map<string, VoiceConfig> {
-    if (!VoiceDirector.characterVoiceMap) {
-      VoiceDirector.characterVoiceMap = new Map<string, VoiceConfig>();
-    }
-    return VoiceDirector.characterVoiceMap;
-  }
 
   /**
    * Convert AI segments to voice-ready segments
    * This is the main entry point - replaces the complex parsing chain
    */
-  static processAISegments(aiSegments: AISegment[], sessionId?: string): VoiceSegment[] {
+  static processAISegments(aiSegments: AISegment[], _sessionId?: string): VoiceSegment[] {
     logger.info('🎭 VoiceDirector: Processing', aiSegments.length, 'AI segments');
 
     const voiceSegments: VoiceSegment[] = [];
@@ -332,7 +155,7 @@ export class VoiceDirector {
 
     if (parsedSegments.length === 0) {
       // No dialogue found, return as single DM segment
-      const dmVoice = VoiceDirector.VOICE_POOLS.dm[0];
+      const dmVoice = VOICE_POOLS.dm[0];
       return [
         {
           id: `fallback_${Date.now()}`,
@@ -350,7 +173,7 @@ export class VoiceDirector {
 
     // Convert parsed segments to voice segments
     return parsedSegments.map((segment, index) => {
-      const voiceConfig = VoiceDirector.assignVoice(segment);
+      const voiceConfig = assignVoice(segment);
       return {
         id: `parsed_${Date.now()}_${index}`,
         type: segment.type,
@@ -400,7 +223,7 @@ export class VoiceDirector {
 
       // Use whichever character name we found
       const characterName = (preCharacter || postCharacter || '').trim();
-      const voiceCategory = VoiceDirector.detectVoiceCategoryFromNPCType(characterName);
+      const voiceCategory = detectVoiceCategoryFromNPCType(characterName);
 
       if (dialogue.trim()) {
         segments.push({
@@ -431,62 +254,6 @@ export class VoiceDirector {
 
     logger.info(`🎭 Parsed ${segments.length} segments (${segments.filter(s => s.type === 'character').length} dialogue)`);
     return segments;
-  }
-
-  /**
-   * Detect voice category from NPC type keywords
-   * Maps common D&D NPC types to voice categories
-   */
-  private static detectVoiceCategoryFromNPCType(character: string): string | undefined {
-    const lowerChar = character.toLowerCase();
-
-    // Guard/Military types -> gruff voice
-    if (/guard|soldier|captain|knight|warrior|mercenary|watchman/.test(lowerChar)) {
-      return 'guard';
-    }
-
-    // Merchant/Trader types -> friendly voice
-    if (/merchant|trader|shopkeep|vendor|salesman|peddler/.test(lowerChar)) {
-      return 'merchant';
-    }
-
-    // Innkeeper/Hospitality types -> warm voice
-    if (/innkeeper|barkeep|bartender|tavern|host|barmaid/.test(lowerChar)) {
-      return 'innkeeper';
-    }
-
-    // Wizard/Mage types -> mysterious/elderly voice
-    if (/wizard|mage|sorcerer|warlock|witch|sage|scholar|oracle|mystic|archmage/.test(lowerChar)) {
-      return 'elder';
-    }
-
-    // Noble/Royalty types -> refined voice
-    if (/noble|lord|lady|duke|duchess|baron|count|prince|princess|king|queen|aristocrat/.test(lowerChar)) {
-      return 'hero'; // Using hero pool for refined voices
-    }
-
-    // Elder/Wise types -> wise elder voice
-    if (/elder|old|ancient|wise|priest|cleric|monk|hermit/.test(lowerChar)) {
-      return 'elder';
-    }
-
-    // Child types -> (use NPC pool for now, could add child voices later)
-    if (/child|boy|girl|kid|young|urchin/.test(lowerChar)) {
-      return 'merchant'; // Friendly voice for children
-    }
-
-    // Creature/Monster types -> creature voice
-    if (/goblin|orc|troll|ogre|beast|creature|monster|dragon|demon|spirit|ghost/.test(lowerChar)) {
-      return 'creature';
-    }
-
-    // Villain types -> villain voice
-    if (/villain|evil|dark|necromancer|cultist|bandit|thief|assassin|rogue/.test(lowerChar)) {
-      return 'villain';
-    }
-
-    // Default: no specific category, will use NPC pool
-    return undefined;
   }
 
   /**
@@ -528,7 +295,7 @@ export class VoiceDirector {
           },
           body: JSON.stringify({
             text: segment.text,
-            model_id: VoiceDirector.ELEVENLABS_MODEL,
+            model_id: ELEVENLABS_MODEL,
             voice_settings: segment.voiceSettings,
           }),
         },
@@ -569,146 +336,6 @@ export class VoiceDirector {
     }
   }
 
-  /**
-   * Assign voice to a segment based on character and type
-   */
-  private static assignVoice(segment: AISegment): VoiceConfig {
-    // DM/Narrator always gets the DM voice
-    if (segment.type === 'dm') {
-      return VoiceDirector.VOICE_POOLS.dm[0];
-    }
-
-    // Character voices
-    if (segment.character) {
-      const character = VoiceDirector.normalizeCharacterName(segment.character);
-
-      // Check if we've assigned a voice to this character before
-      const voiceMap = VoiceDirector.ensureMapInitialized();
-      if (voiceMap.has(character)) {
-        return voiceMap.get(character)!;
-      }
-
-      // Assign new voice based on voice category hint or character fingerprint
-      let voicePool: VoiceConfig[];
-
-      if (segment.voice_category) {
-        voicePool = VoiceDirector.getVoicePoolByCategory(segment.voice_category);
-      } else {
-        voicePool = VoiceDirector.getVoicePoolByCharacter(character);
-      }
-
-      // Use character name hash to pick consistent voice from pool
-      const voiceIndex = VoiceDirector.hashCharacterName(character) % voicePool.length;
-      const selectedVoice = voicePool[voiceIndex];
-
-      // Remember this assignment
-      voiceMap.set(character, selectedVoice);
-
-      logger.info(
-        `🎯 New voice assignment: "${character}" -> ${selectedVoice.name} (${segment.voice_category || 'auto'})`,
-      );
-      return selectedVoice;
-    }
-
-    // Fallback to DM voice
-    return VoiceDirector.VOICE_POOLS.dm[0];
-  }
-
-  /**
-   * Get voice pool based on AI's voice category hint
-   */
-  private static getVoicePoolByCategory(category: string): VoiceConfig[] {
-    const categoryMap: Record<string, keyof VoicePool> = {
-      narrator: 'dm',
-      hero_male: 'heroes',
-      hero_female: 'heroes',
-      hero: 'heroes',
-      villain_male: 'villains',
-      villain_female: 'villains',
-      villain: 'villains',
-      monster: 'creatures',
-      creature: 'creatures',
-      goblin: 'creatures',
-      merchant: 'npcs',
-      guard: 'npcs',
-      innkeeper: 'npcs',
-      elder: 'npcs',
-      child: 'npcs',
-    };
-
-    const poolKey = categoryMap[category.toLowerCase()] || 'npcs';
-    return VoiceDirector.VOICE_POOLS[poolKey];
-  }
-
-  /**
-   * Get voice pool based on character name patterns
-   */
-  private static getVoicePoolByCharacter(character: string): VoiceConfig[] {
-    const lowerChar = character.toLowerCase();
-
-    // Villain keywords
-    if (
-      lowerChar.includes('villain') ||
-      lowerChar.includes('evil') ||
-      lowerChar.includes('dark') ||
-      lowerChar.includes('necromancer') ||
-      lowerChar.includes('cultist') ||
-      lowerChar.includes('bandit')
-    ) {
-      return VoiceDirector.VOICE_POOLS.villains;
-    }
-
-    // Creature keywords
-    if (
-      lowerChar.includes('dragon') ||
-      lowerChar.includes('monster') ||
-      lowerChar.includes('goblin') ||
-      lowerChar.includes('orc') ||
-      lowerChar.includes('troll') ||
-      lowerChar.includes('beast')
-    ) {
-      return VoiceDirector.VOICE_POOLS.creatures;
-    }
-
-    // Hero keywords
-    if (
-      lowerChar.includes('hero') ||
-      lowerChar.includes('champion') ||
-      lowerChar.includes('knight') ||
-      lowerChar.includes('paladin')
-    ) {
-      return VoiceDirector.VOICE_POOLS.heroes;
-    }
-
-    // Default to NPCs for most characters
-    return VoiceDirector.VOICE_POOLS.npcs;
-  }
-
-  /**
-   * Create a consistent hash from character name for voice assignment
-   */
-  private static hashCharacterName(character: string): number {
-    let hash = 0;
-    for (let i = 0; i < character.length; i++) {
-      const char = character.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash);
-  }
-
-  /**
-   * Normalize character names for consistent voice assignment
-   */
-  private static normalizeCharacterName(character: string): string {
-    return character
-      .toLowerCase()
-      .trim()
-      .replace(/^(the|a|an)\s+/i, '') // Remove articles
-      .replace(/[^\w\s'-]/g, '') // Remove special characters except apostrophes and hyphens
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
-  }
 
   /**
    * Clean segment text for audio generation
@@ -768,12 +395,7 @@ export class VoiceDirector {
    * Get current character-to-voice mappings
    */
   static getCharacterVoiceMappings(): Record<string, string> {
-    const mappings: Record<string, string> = {};
-    const voiceMap = VoiceDirector.ensureMapInitialized();
-    voiceMap.forEach((voice, character) => {
-      mappings[character] = voice.name;
-    });
-    return mappings;
+    return getMappings();
   }
 
   /**
@@ -781,8 +403,7 @@ export class VoiceDirector {
    */
   static clearCharacterVoiceMappings(): void {
     logger.info('🗑️ VoiceDirector: Clearing all character voice mappings');
-    const voiceMap = VoiceDirector.ensureMapInitialized();
-    voiceMap.clear();
+    clearMappings();
   }
 
   /**

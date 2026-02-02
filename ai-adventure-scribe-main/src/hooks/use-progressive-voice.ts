@@ -19,7 +19,7 @@ import { useLocalStorage } from './use-local-storage';
 import { useToast } from './use-toast';
 import { logger } from '../lib/logger';
 
-import type { VoiceSegment, AISegment } from '@/services/voice-director';
+import type { VoiceSegment, AISegment } from '@/services/voice-routing';
 
 import { supabase } from '@/integrations/supabase/client';
 import { VoiceDirector } from '@/services/voice-director';
