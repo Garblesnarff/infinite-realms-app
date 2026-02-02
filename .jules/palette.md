@@ -19,3 +19,7 @@
 ## 2025-05-23 - Z-Index Reliability
 **Learning:** Tailwind JIT might not always generate classes for arbitrary values like `z-[${Z_INDEX.CONSTANT}]` if they are dynamic. Using inline `style={{ zIndex: Z_INDEX.CONSTANT }}` is the most reliable way to apply our centralized z-index constants.
 **Action:** Prefer inline styles for applying `Z_INDEX` constants over Tailwind arbitrary value syntax.
+
+## 2025-05-25 - Comprehensive Accessibility Standardization
+**Learning:** Standardizing accessibility across a complex component (like `ToolOptionsPanel`) involves a multi-pronged approach: adding `aria-label` to non-textual controls (`Slider`, `SelectTrigger`), `aria-pressed` for toggle states, and using `React.useId()` for robust label-to-input linking.
+**Action:** When touching complex UI panels, perform a full a11y audit and apply these patterns consistently.
