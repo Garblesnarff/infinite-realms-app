@@ -51,7 +51,7 @@ type LastRollMeta = {
  * - Manages dice roll queue from GameContext
  * - Renders message groups with avatars
  */
-export const MessageListContainer: React.FC<MessageListContainerProps> = ({
+export const MessageListContainer: React.FC<MessageListContainerProps> = React.memo(({
   messages,
   messagesRef,
   expandedMessages,
@@ -149,6 +149,31 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
 
     return { current: currentPosition, total: totalRolls };
   }, [currentRoll, state.diceRollQueue.pendingRolls]);
+
+  /**
+   * ⚡ Bolt: Memoize the roll request object to ensure stable props for DiceRollRequest.
+   * This prevents unnecessary re-renders of the DiceRollRequest component when other
+   * props in MessageListContainer change (like expandedMessages).
+   */
+  const rollRequest = useMemo(() => {
+    if (!currentRoll) return null;
+    return {
+      type: currentRoll.requestType as any,
+      formula: `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
+      purpose: currentRoll.description,
+      advantage: currentRoll.rollConfig.advantage,
+      disadvantage: currentRoll.rollConfig.disadvantage,
+    };
+  }, [currentRoll]);
+
+  /**
+   * ⚡ Bolt: Memoize the onCancel callback to ensure stable props for DiceRollRequest.
+   */
+  const handleCancelRoll = React.useCallback(() => {
+    if (currentRoll) {
+      cancelDiceRoll(currentRoll.id);
+    }
+  }, [currentRoll, cancelDiceRoll]);
 
   // Group consecutive messages from the same sender
   const groupedMessages = useMemo(() => {
@@ -515,22 +540,16 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
       ))}
 
       {/* Global Dice Roll Request - Shows current roll from GameContext queue */}
-      {currentRoll && (
+      {currentRoll && rollRequest && (
         <div
           className={`fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[${Z_INDEX.POPOVER}]`}
         >
           <DiceRollRequest
             key={currentRoll.id}
-            request={{
-              type: currentRoll.requestType as any,
-              formula: `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
-              purpose: currentRoll.description,
-              advantage: currentRoll.rollConfig.advantage,
-              disadvantage: currentRoll.rollConfig.disadvantage,
-            }}
+            request={rollRequest}
             onRoll={handleDiceRoll}
             onManualResult={handleManualResult}
-            onCancel={() => cancelDiceRoll(currentRoll.id)}
+            onCancel={handleCancelRoll}
             batchProgress={batchProgress}
             className="shadow-2xl animate-in slide-in-from-bottom-4 duration-300"
           />
@@ -558,4 +577,4 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = ({
       )}
     </>
   );
-};
+});

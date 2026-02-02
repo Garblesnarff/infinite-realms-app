@@ -26,7 +26,7 @@
  */
 
 // SDK Imports
-import React, { createContext, useContext } from 'react'; // Added ReactNode
+import React, { createContext, useContext, useMemo } from 'react'; // Added ReactNode
 
 import type { ChatMessage } from '@/types/game';
 import type { ReactNode } from 'react';
@@ -60,15 +60,22 @@ export const MessageProvider: React.FC<{
   const { data: messages = [], isLoading, isFetching, hasMore, loadMore } = useMessages(sessionId);
   const { messageMutation, queueStatus } = useMessageQueue(sessionId);
 
-  const value: MessageContextType = {
-    messages,
-    isLoading,
-    isFetchingMore: isFetching && !isLoading,
-    hasMore,
-    loadMore,
-    sendMessage: messageMutation.mutateAsync,
-    queueStatus,
-  };
+  /**
+   * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders
+   * of all consumers when MessageProvider's parent re-renders.
+   */
+  const value: MessageContextType = useMemo(
+    () => ({
+      messages,
+      isLoading,
+      isFetchingMore: isFetching && !isLoading,
+      hasMore,
+      loadMore,
+      sendMessage: messageMutation.mutateAsync,
+      queueStatus,
+    }),
+    [messages, isLoading, isFetching, hasMore, loadMore, messageMutation.mutateAsync, queueStatus],
+  );
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;
 };
