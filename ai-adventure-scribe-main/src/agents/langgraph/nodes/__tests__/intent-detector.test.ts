@@ -9,11 +9,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { detectIntent } from '../intent-detector';
 import type { DMState } from '../../state';
-import * as geminiUtils from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 
-// Mock the Gemini manager
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(),
+// Mock the LLM API client
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(),
+  },
 }));
 
 // Mock logger to avoid console output during tests
@@ -26,14 +28,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('Intent Detector Node', () => {
-  let mockGeminiManager: any;
+  const mockGenerateText = vi.mocked(llmApiClient.generateText);
 
   beforeEach(() => {
-    // Create a fresh mock for each test
-    mockGeminiManager = {
-      executeWithRotation: vi.fn(),
-    };
-    vi.mocked(geminiUtils.getGeminiManager).mockReturnValue(mockGeminiManager);
+    // Reset mock for each test
+    mockGenerateText.mockReset();
   });
 
   afterEach(() => {
@@ -64,7 +63,7 @@ describe('Intent Detector Node', () => {
       const mockState = createMockState('I attack the goblin with my sword');
 
       // Mock AI response
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'attack',
           confidence: 0.95,
@@ -86,7 +85,7 @@ describe('Intent Detector Node', () => {
     it('should detect social intent from AI response', async () => {
       const mockState = createMockState('I try to persuade the guard to let us pass');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'social',
           confidence: 0.92,
@@ -107,7 +106,7 @@ describe('Intent Detector Node', () => {
     it('should detect exploration intent from AI response', async () => {
       const mockState = createMockState('I search the room for hidden doors');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'exploration',
           confidence: 0.88,
@@ -127,7 +126,7 @@ describe('Intent Detector Node', () => {
     it('should detect spellcast intent from AI response', async () => {
       const mockState = createMockState('I cast Healing Word on the wounded fighter');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'spellcast',
           confidence: 0.97,
@@ -147,7 +146,7 @@ describe('Intent Detector Node', () => {
     it('should handle JSON embedded in text response', async () => {
       const mockState = createMockState('I move forward cautiously');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         'Based on the player input, here is my analysis: {"type": "movement", "confidence": 0.85, "details": {"target": null, "action": "move forward", "skill": null}}',
       );
 
@@ -160,7 +159,7 @@ describe('Intent Detector Node', () => {
   describe('Fallback Intent Detection', () => {
     beforeEach(() => {
       // Mock AI to return invalid response
-      mockGeminiManager.executeWithRotation.mockResolvedValue('Invalid response');
+      mockGenerateText.mockResolvedValue('Invalid response');
     });
 
     it('should use fallback for attack keywords', async () => {
@@ -227,7 +226,7 @@ describe('Intent Detector Node', () => {
     it('should handle AI service errors gracefully', async () => {
       const mockState = createMockState('I attack the dragon');
 
-      mockGeminiManager.executeWithRotation.mockRejectedValue(new Error('AI service unavailable'));
+      mockGenerateText.mockRejectedValue(new Error('AI service unavailable'));
 
       const result = await detectIntent(mockState);
 
@@ -238,7 +237,7 @@ describe('Intent Detector Node', () => {
     it('should handle malformed JSON from AI', async () => {
       const mockState = createMockState('I search for traps');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         '{"type": "exploration", invalid json}',
       );
 
@@ -250,7 +249,7 @@ describe('Intent Detector Node', () => {
     it('should handle JSON without required fields', async () => {
       const mockState = createMockState('I talk to the innkeeper');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           // Missing 'type' and 'confidence'
           details: { target: 'innkeeper' },
@@ -268,7 +267,7 @@ describe('Intent Detector Node', () => {
       const mockState = createMockState('I ready my weapon');
       mockState.metadata!.stepCount = 5;
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({ type: 'other', confidence: 0.5, details: {} }),
       );
 
@@ -285,7 +284,7 @@ describe('Intent Detector Node', () => {
         tokensUsed: 100,
       };
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({ type: 'exploration', confidence: 0.9, details: {} }),
       );
 
@@ -300,7 +299,7 @@ describe('Intent Detector Node', () => {
     it('should handle multi-action input', async () => {
       const mockState = createMockState('I draw my sword and attack the nearest enemy');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'attack',
           confidence: 0.93,
@@ -318,7 +317,7 @@ describe('Intent Detector Node', () => {
         'If the door is locked, I try to pick it. Otherwise I open it.',
       );
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'skill_check',
           confidence: 0.78,
@@ -336,7 +335,7 @@ describe('Intent Detector Node', () => {
         'With a flourish of my cape, I address the crowd: "Good people of Waterdeep, lend me your ears!"',
       );
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           type: 'social',
           confidence: 0.96,
@@ -364,7 +363,7 @@ describe('Intent Detector Node', () => {
       const longInput = 'I ' + 'really '.repeat(100) + 'want to attack';
       const mockState = createMockState(longInput);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({ type: 'attack', confidence: 0.9, details: {} }),
       );
 
@@ -376,7 +375,7 @@ describe('Intent Detector Node', () => {
     it('should handle special characters in input', async () => {
       const mockState = createMockState('I say "Hey! @#$% you!" to the guard');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({ type: 'social', confidence: 0.85, details: {} }),
       );
 

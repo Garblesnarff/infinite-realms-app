@@ -26,20 +26,16 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/config/ai', () => ({
-  GEMINI_TEXT_MODEL: 'gemini-1.5-flash',
-}));
-
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(() => ({
-    executeWithRotation: vi.fn(async () => {
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(async () => {
       return JSON.stringify({
         type: 'attack',
         confidence: 0.9,
         details: { target: 'goblin', action: 'attack' },
       });
     }),
-  })),
+  },
 }));
 
 vi.mock('@/services/ai/shared/prompts', () => ({
@@ -303,10 +299,10 @@ describe('DMService Integration Tests', () => {
     });
 
     it('should handle graph execution errors', async () => {
-      const mockGemini = await import('@/services/ai/shared/utils');
-      vi.mocked(mockGemini.getGeminiManager).mockReturnValueOnce({
-        executeWithRotation: vi.fn().mockRejectedValue(new Error('AI Error')),
-      } as any);
+      const mockLlmClient = await import('@/services/llm-api-client');
+      vi.mocked(mockLlmClient.llmApiClient.generateText).mockRejectedValueOnce(
+        new Error('AI Error'),
+      );
 
       const config = {
         sessionId: 'session-error-2',

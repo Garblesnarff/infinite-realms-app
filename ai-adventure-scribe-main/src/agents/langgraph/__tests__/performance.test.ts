@@ -11,11 +11,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { invokeDMGraph } from '../dm-graph';
 import { AgentMessagingService } from '@/agents/messaging/agent-messaging-service';
 import type { WorldInfo } from '../state';
-import * as geminiUtils from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 
 // Mock dependencies
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(),
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(),
+  },
 }));
 
 vi.mock('@/services/ai/shared/prompts', () => ({
@@ -46,17 +48,14 @@ vi.mock('../checkpointer', () => ({
 }));
 
 describe('Performance Comparison: LangGraph vs Custom Messaging', () => {
-  let mockGeminiManager: any;
+  const mockGenerateText = vi.mocked(llmApiClient.generateText);
 
   beforeEach(() => {
-    mockGeminiManager = {
-      executeWithRotation: vi.fn(),
-    };
-    vi.mocked(geminiUtils.getGeminiManager).mockReturnValue(mockGeminiManager);
+    mockGenerateText.mockReset();
 
     // Setup mock responses for consistent testing
     let callCount = 0;
-    mockGeminiManager.executeWithRotation.mockImplementation(async () => {
+    mockGenerateText.mockImplementation(async () => {
       callCount++;
       // Simulate AI delay
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -306,11 +305,11 @@ describe('Performance Comparison: LangGraph vs Custom Messaging', () => {
 
   describe('AI Call Efficiency', () => {
     it('should count AI calls per graph execution', async () => {
-      const callsBefore = mockGeminiManager.executeWithRotation.mock.calls.length;
+      const callsBefore = mockGenerateText.mock.calls.length;
 
       await invokeDMGraph('I attack', createWorldContext(), 'ai-count-thread-1');
 
-      const callsAfter = mockGeminiManager.executeWithRotation.mock.calls.length;
+      const callsAfter = mockGenerateText.mock.calls.length;
       const aiCalls = callsAfter - callsBefore;
 
       console.log(`\nAI Calls per execution: ${aiCalls}`);
@@ -321,13 +320,13 @@ describe('Performance Comparison: LangGraph vs Custom Messaging', () => {
 
     it('should measure AI call efficiency with fallbacks', async () => {
       // Make AI fail to test fallback paths
-      mockGeminiManager.executeWithRotation.mockRejectedValueOnce(new Error('AI unavailable'));
+      mockGenerateText.mockRejectedValueOnce(new Error('AI unavailable'));
 
-      const callsBefore = mockGeminiManager.executeWithRotation.mock.calls.length;
+      const callsBefore = mockGenerateText.mock.calls.length;
 
       await invokeDMGraph('I attack', createWorldContext(), 'ai-fallback-thread-1');
 
-      const callsAfter = mockGeminiManager.executeWithRotation.mock.calls.length;
+      const callsAfter = mockGenerateText.mock.calls.length;
       const attemptedCalls = callsAfter - callsBefore;
 
       console.log(`AI calls with fallback: ${attemptedCalls}`);

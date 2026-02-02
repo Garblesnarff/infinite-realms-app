@@ -9,11 +9,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateResponse } from '../response-generator';
 import type { DMState, RuleCheckResult, DiceRollRequest } from '../../state';
-import * as geminiUtils from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 
 // Mock dependencies
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(),
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(),
+  },
 }));
 
 vi.mock('@/services/ai/shared/prompts', () => ({
@@ -31,13 +33,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('Response Generator Node', () => {
-  let mockGeminiManager: any;
+  const mockGenerateText = vi.mocked(llmApiClient.generateText);
 
   beforeEach(() => {
-    mockGeminiManager = {
-      executeWithRotation: vi.fn(),
-    };
-    vi.mocked(geminiUtils.getGeminiManager).mockReturnValue(mockGeminiManager);
+    mockGenerateText.mockReset();
   });
 
   afterEach(() => {
@@ -95,7 +94,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I attack the goblin', 'attack', validation, diceRoll);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You swing your blade at the goblin. The creature snarls and raises its rusty shield to defend itself. Roll your attack!',
@@ -125,7 +124,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I try to persuade the guard', 'social', validation);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You approach the guard with a friendly smile and begin to make your case. The guard eyes you suspiciously but seems willing to listen.',
@@ -157,7 +156,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I search the room', 'exploration', validation);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You carefully examine the room, running your hands along the stone walls. Dust particles dance in the dim light filtering through the cracked windows.',
@@ -188,7 +187,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I cast Healing Word', 'spellcast', validation);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You speak the words of power, and a warm golden light emanates from your outstretched hand, flowing toward your wounded companion. You feel the divine energy channel through you.',
@@ -210,7 +209,7 @@ describe('Response Generator Node', () => {
     it('should incorporate recent memories into narrative', async () => {
       const mockState = createMockState('I look around', 'exploration');
 
-      mockGeminiManager.executeWithRotation.mockImplementation(async (callback: any) => {
+      mockGenerateText.mockImplementation(async (callback: any) => {
         return JSON.stringify({
           description:
             'You recall entering the dark tavern and spot the hooded figure still watching.',
@@ -225,14 +224,14 @@ describe('Response Generator Node', () => {
 
       expect(result.response).toBeTruthy();
       // Verify that the generator was called with memories
-      expect(mockGeminiManager.executeWithRotation).toHaveBeenCalled();
+      expect(mockGenerateText).toHaveBeenCalled();
     });
 
     it('should handle empty memories gracefully', async () => {
       const mockState = createMockState('I investigate', 'exploration');
       mockState.worldContext.recentMemories = [];
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'You begin your investigation.',
           atmosphere: 'neutral',
@@ -259,7 +258,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I cast Fireball', 'spellcast', validation);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You begin to channel the arcane energy, but realize you have no spell slots remaining. The magic fizzles before it can take form.',
@@ -290,7 +289,7 @@ describe('Response Generator Node', () => {
 
       const mockState = createMockState('I attack', 'attack', validation, diceRoll);
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'You ready your weapon for the strike. Roll to hit!',
           atmosphere: 'tense',
@@ -304,7 +303,7 @@ describe('Response Generator Node', () => {
 
       expect(result.response).toBeTruthy();
       // Verify the prompt included dice roll info
-      expect(mockGeminiManager.executeWithRotation).toHaveBeenCalled();
+      expect(mockGenerateText).toHaveBeenCalled();
     });
   });
 
@@ -312,7 +311,7 @@ describe('Response Generator Node', () => {
     it('should handle non-JSON AI response', async () => {
       const mockState = createMockState('I look around', 'exploration');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         'You see a dimly lit room with cobwebs in the corners.',
       );
 
@@ -326,7 +325,7 @@ describe('Response Generator Node', () => {
     it('should extract JSON from mixed response', async () => {
       const mockState = createMockState('I talk to NPC', 'social');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         'Here is the response: {"description": "The NPC greets you warmly.", "atmosphere": "friendly", "npcs": [], "availableActions": [], "consequences": []}',
       );
 
@@ -339,7 +338,7 @@ describe('Response Generator Node', () => {
     it('should handle malformed JSON gracefully', async () => {
       const mockState = createMockState('I do something', 'other');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue('{invalid json content');
+      mockGenerateText.mockResolvedValue('{invalid json content');
 
       const result = await generateResponse(mockState);
 
@@ -372,7 +371,7 @@ describe('Response Generator Node', () => {
     it('should handle AI service errors', async () => {
       const mockState = createMockState('I attack', 'attack');
 
-      mockGeminiManager.executeWithRotation.mockRejectedValue(new Error('AI service down'));
+      mockGenerateText.mockRejectedValue(new Error('AI service down'));
 
       const result = await generateResponse(mockState);
 
@@ -383,7 +382,7 @@ describe('Response Generator Node', () => {
     it('should handle null AI response gracefully', async () => {
       const mockState = createMockState('I search', 'exploration');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue('');
+      mockGenerateText.mockResolvedValue('');
 
       const result = await generateResponse(mockState);
 
@@ -393,7 +392,7 @@ describe('Response Generator Node', () => {
 
   describe('Metadata Handling', () => {
     beforeEach(() => {
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'Test response',
           atmosphere: 'neutral',
@@ -432,7 +431,7 @@ describe('Response Generator Node', () => {
     it('should handle multi-NPC interactions', async () => {
       const mockState = createMockState('I address the council', 'social');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You stand before the council of elders, each watching you with varying degrees of interest.',
@@ -456,7 +455,7 @@ describe('Response Generator Node', () => {
     it('should generate atmospheric descriptions', async () => {
       const mockState = createMockState('I enter the ancient tomb', 'exploration');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'The air grows cold as you step into the tomb. Ancient hieroglyphs line the walls, and the smell of decay fills your nostrils. Your torch barely pierces the oppressive darkness ahead.',
@@ -477,7 +476,7 @@ describe('Response Generator Node', () => {
     it('should provide meaningful consequences', async () => {
       const mockState = createMockState('I break down the door', 'attack');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description:
             'You charge at the door with all your might. The wood splinters and the door crashes inward with a deafening crash.',
@@ -505,7 +504,7 @@ describe('Response Generator Node', () => {
         'I carefully and methodically ' + 'search every nook and cranny '.repeat(20);
       const mockState = createMockState(longInput, 'exploration');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'Your thorough search reveals hidden details.',
           atmosphere: 'neutral',
@@ -523,7 +522,7 @@ describe('Response Generator Node', () => {
     it('should handle special characters in input', async () => {
       const mockState = createMockState('I shout "Hey! @#$%!"', 'social');
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'Your outburst echoes through the hall.',
           atmosphere: 'chaotic',
@@ -542,7 +541,7 @@ describe('Response Generator Node', () => {
       const mockState = createMockState('I look around', 'exploration');
       mockState.worldContext.characterIds = [];
 
-      mockGeminiManager.executeWithRotation.mockResolvedValue(
+      mockGenerateText.mockResolvedValue(
         JSON.stringify({
           description: 'You survey your surroundings.',
           atmosphere: 'neutral',

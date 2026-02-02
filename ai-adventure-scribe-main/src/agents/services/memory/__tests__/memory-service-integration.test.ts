@@ -59,36 +59,26 @@ vi.mock('@/utils/memory/importance', () => ({
   }),
 }));
 
-// Mock Gemini API Manager
-vi.mock('@/services/gemini-api-manager-singleton', () => ({
-  getGeminiApiManager: vi.fn(() => ({
-    executeWithRotation: vi.fn(async (fn) => {
-      const mockGenAI = {
-        getGenerativeModel: vi.fn(() => ({
-          generateContent: vi.fn(async () => ({
-            response: {
-              text: vi.fn(async () =>
-                JSON.stringify({
-                  memories: [
-                    {
-                      session_id: 'session-123',
-                      type: 'quest',
-                      category: 'main_quest',
-                      content: 'Find the Dragon Scroll',
-                      importance: 5,
-                      emotional_tone: 'intense',
-                      metadata: {},
-                    },
-                  ],
-                }),
-              ),
-            },
-          })),
-        })),
-      };
-      return fn(mockGenAI);
-    }),
-  })),
+// Mock LLM API Client
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn().mockResolvedValue('Mock response'),
+    extractMemories: vi.fn().mockResolvedValue(
+      JSON.stringify({
+        memories: [
+          {
+            session_id: 'session-123',
+            type: 'quest',
+            category: 'main_quest',
+            content: 'Find the Dragon Scroll',
+            importance: 5,
+            emotional_tone: 'intense',
+            metadata: {},
+          },
+        ],
+      }),
+    ),
+  },
 }));
 
 // Import after mocking

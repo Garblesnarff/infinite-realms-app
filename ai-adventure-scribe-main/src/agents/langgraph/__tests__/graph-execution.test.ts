@@ -31,14 +31,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/config/ai', () => ({
-  GEMINI_TEXT_MODEL: 'gemini-1.5-flash',
-}));
-
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(() => ({
-    executeWithRotation: vi.fn(async (fn: any) => {
-      // Mock Gemini responses
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(async () => {
+      // Mock LLM responses
       return JSON.stringify({
         type: 'attack',
         confidence: 0.9,
@@ -49,7 +45,7 @@ vi.mock('@/services/ai/shared/utils', () => ({
         },
       });
     }),
-  })),
+  },
 }));
 
 vi.mock('@/services/ai/shared/prompts', () => ({
@@ -234,10 +230,10 @@ describe('LangGraph Graph Execution', () => {
 
     it('should end with error on intent detection failure', async () => {
       // Mock intent detector to fail
-      const mockGemini = await import('@/services/ai/shared/utils');
-      vi.mocked(mockGemini.getGeminiManager).mockReturnValueOnce({
-        executeWithRotation: vi.fn().mockRejectedValue(new Error('API Error')),
-      } as any);
+      const mockLlmClient = await import('@/services/llm-api-client');
+      vi.mocked(mockLlmClient.llmApiClient.generateText).mockRejectedValueOnce(
+        new Error('API Error'),
+      );
 
       const result = await invokeDMGraph('', worldContext, 'test-thread-12');
 
@@ -257,11 +253,11 @@ describe('LangGraph Graph Execution', () => {
     });
 
     it('should handle node execution errors', async () => {
-      // Mock Gemini to throw error
-      const mockGemini = await import('@/services/ai/shared/utils');
-      vi.mocked(mockGemini.getGeminiManager).mockReturnValueOnce({
-        executeWithRotation: vi.fn().mockRejectedValue(new Error('Network error')),
-      } as any);
+      // Mock LLM to throw error
+      const mockLlmClient = await import('@/services/llm-api-client');
+      vi.mocked(mockLlmClient.llmApiClient.generateText).mockRejectedValueOnce(
+        new Error('Network error'),
+      );
 
       const result = await invokeDMGraph('test input', worldContext, 'test-thread-14');
 
@@ -354,10 +350,10 @@ describe('LangGraph Graph Execution', () => {
 
     it('should handle streaming errors gracefully', async () => {
       // Mock to throw error during streaming
-      const mockGemini = await import('@/services/ai/shared/utils');
-      vi.mocked(mockGemini.getGeminiManager).mockReturnValueOnce({
-        executeWithRotation: vi.fn().mockRejectedValue(new Error('Stream error')),
-      } as any);
+      const mockLlmClient = await import('@/services/llm-api-client');
+      vi.mocked(mockLlmClient.llmApiClient.generateText).mockRejectedValueOnce(
+        new Error('Stream error'),
+      );
 
       const chunks: any[] = [];
       const stream = streamDMGraph('test', worldContext, 'test-thread-22');

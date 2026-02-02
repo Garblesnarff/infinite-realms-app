@@ -12,14 +12,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock the gemini api manager
-vi.mock('../gemini-api-manager-singleton', () => ({
-  getGeminiApiManager: () => ({
-    executeWithRotation: vi.fn().mockResolvedValue({
-      text: 'Mock response',
-      narrationSegments: [],
-    }),
-  }),
+// Mock the LLM API client
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn().mockResolvedValue('Mock response'),
+  },
 }));
 
 // Mock other dependencies

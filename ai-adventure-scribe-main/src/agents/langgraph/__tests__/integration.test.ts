@@ -10,11 +10,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { invokeDMGraph, streamDMGraph } from '../dm-graph';
 import type { WorldInfo } from '../state';
-import * as geminiUtils from '@/services/ai/shared/utils';
+import { llmApiClient } from '@/services/llm-api-client';
 
 // Mock dependencies
-vi.mock('@/services/ai/shared/utils', () => ({
-  getGeminiManager: vi.fn(),
+vi.mock('@/services/llm-api-client', () => ({
+  llmApiClient: {
+    generateText: vi.fn(),
+  },
 }));
 
 vi.mock('@/services/ai/shared/prompts', () => ({
@@ -41,13 +43,10 @@ vi.mock('../checkpointer', () => ({
 }));
 
 describe('LangGraph DM Agent Integration', () => {
-  let mockGeminiManager: any;
+  const mockGenerateText = vi.mocked(llmApiClient.generateText);
 
   beforeEach(() => {
-    mockGeminiManager = {
-      executeWithRotation: vi.fn(),
-    };
-    vi.mocked(geminiUtils.getGeminiManager).mockReturnValue(mockGeminiManager);
+    mockGenerateText.mockReset();
   });
 
   afterEach(() => {
@@ -75,7 +74,7 @@ describe('LangGraph DM Agent Integration', () => {
     narrativeResponse: any,
   ) => {
     let callCount = 0;
-    mockGeminiManager.executeWithRotation.mockImplementation(async () => {
+    mockGenerateText.mockImplementation(async () => {
       callCount++;
       if (callCount === 1) return JSON.stringify(intentResponse);
       if (callCount === 2) return JSON.stringify(validationResponse);
@@ -370,7 +369,7 @@ describe('LangGraph DM Agent Integration', () => {
     });
 
     it('should handle graph execution errors', async () => {
-      mockGeminiManager.executeWithRotation.mockRejectedValue(new Error('AI service unavailable'));
+      mockGenerateText.mockRejectedValue(new Error('AI service unavailable'));
 
       const result = await invokeDMGraph('I do something', createWorldContext(), 'test-thread-11');
 
@@ -419,7 +418,7 @@ describe('LangGraph DM Agent Integration', () => {
 
       expect(result.response).toBeTruthy();
       // Memories should be included in the prompt (verified through mock call)
-      expect(mockGeminiManager.executeWithRotation).toHaveBeenCalled();
+      expect(mockGenerateText).toHaveBeenCalled();
     });
   });
 

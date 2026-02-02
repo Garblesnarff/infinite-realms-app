@@ -12,7 +12,7 @@ src/services/ai/
 ├── index.ts                          # Public API & backward compatibility (121 lines)
 ├── campaign-generator.ts             # Campaign description generation (66 lines)
 ├── narration-service.ts              # DM chat & coordination (199 lines)
-├── narration-service-impl.ts         # Gemini response generation (198 lines)
+├── narration-service-impl.ts         # LLM response generation (198 lines)
 ├── opening-message-generator.ts      # Opening scene generation (146 lines)
 ├── conversation-service.ts           # Message persistence (90 lines)
 ├── api-manager.ts                    # API statistics & diagnostics (48 lines)
@@ -55,15 +55,15 @@ generateCampaignDescription(params: CampaignParams): Promise<string>
 chatWithDM(params: ChatParams): Promise<AIResponse>
 ```
 
-### 4. `narration-service-impl.ts` - Gemini Response Generation
-- Core Gemini API interaction logic
+### 4. `narration-service-impl.ts` - LLM Response Generation
+- Core LLM API interaction logic (via server-proxied llmApiClient)
 - Builds comprehensive prompts with context, rules, memories
 - Handles structured JSON parsing for voice segments
 - Processes voice assignments and post-response tasks
 
 **Key Function:**
 ```typescript
-generateGeminiResponse(...): Promise<AIResponse>
+generateLLMResponse(...): Promise<AIResponse>
 ```
 
 ### 5. `opening-message-generator.ts` - Opening Scenes
@@ -88,8 +88,8 @@ getConversationHistory(sessionId: string): Promise<ChatMessage[]>
 ```
 
 ### 7. `api-manager.ts` - API Diagnostics
-- Provides Gemini API manager statistics
-- Returns current key info, usage stats, rate limit data
+- Provides LLM API statistics (deprecated - API calls now go through server)
+- Returns placeholder stats for backward compatibility
 - Useful for debugging and monitoring
 
 **Key Function:**
@@ -117,7 +117,6 @@ Centralized prompt building functions:
 
 ### 10. `shared/utils.ts` - Shared Utilities
 Common functionality:
-- `getGeminiManager()` - Access Gemini API manager singleton
 - `useCrewAI()` - Check CrewAI feature flag
 - `keyFor()` - Generate deduplication cache keys
 - `getOrCreateDeduped()` - Request deduplication with TTL
@@ -225,7 +224,7 @@ import type { ChatMessage, GameContext, AIResponse } from '@/services/ai';
 | `index.ts` | 121 | Public API & compatibility |
 | `campaign-generator.ts` | 66 | Campaign descriptions |
 | `narration-service.ts` | 199 | DM chat coordination |
-| `narration-service-impl.ts` | 198 | Gemini response generation |
+| `narration-service-impl.ts` | 198 | LLM response generation |
 | `opening-message-generator.ts` | 146 | Opening scenes |
 | `conversation-service.ts` | 90 | Message persistence |
 | `api-manager.ts` | 48 | API diagnostics |
@@ -239,9 +238,8 @@ import type { ChatMessage, GameContext, AIResponse } from '@/services/ai';
 ## Dependencies
 
 ### External Dependencies
-- `@google/generative-ai` - Gemini API client
+- `@/services/llm-api-client` - Server-proxied LLM API client (routes through OpenRouter)
 - `@/integrations/supabase/client` - Database access
-- `@/config/ai` - AI model configuration
 - `@/lib/logger` - Logging utilities
 - `@/utils/combatDetection` - Combat detection system
 
@@ -251,7 +249,6 @@ import type { ChatMessage, GameContext, AIResponse } from '@/services/ai';
 - `voice-consistency-service` - Multi-voice TTS
 - `session-state-service` - Session state management
 - `crewai/agent-orchestrator` - CrewAI integration (optional)
-- `gemini-api-manager` - API key rotation and rate limiting
 
 ## Testing
 
