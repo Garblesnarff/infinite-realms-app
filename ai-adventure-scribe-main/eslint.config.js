@@ -239,6 +239,7 @@ export default tseslint.config(
       "src/components/character-creation/steps/RaceSelection.tsx", // 766 lines
       "src/components/ui/sidebar.tsx", // 761 lines
       "src/utils/spell-validation.ts", // 737 lines
+      "src/services/ai/context-builder-prompts.ts", // 885 lines
     ],
     rules: {
       "max-lines": "warn"
