@@ -8,15 +8,20 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Token } from '@/types/token';
+
 import type { VisionBlocker } from '@/types/scene';
-import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-calculations';
+import type { Token } from '@/types/token';
+import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon';
+
 import {
-  calculateVisionPolygon,
-  mergeVisionPolygons,
   getVisionColor,
   getVisionOpacity,
 } from '@/utils/vision-calculations';
+import {
+  calculateVisionPolygon,
+  mergeVisionPolygons,
+} from '@/utils/vision-polygon';
+
 
 // ===========================
 // Types
@@ -177,14 +182,9 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
     return getVisionOpacity(polygon.visionMode);
   }, [opacity, polygon]);
 
-  // Don't render if no polygon or GM view
-  if (!polygon || polygon.points.length === 0 || isGMView) {
-    return null;
-  }
-
   // Create SVG path from polygon points
   const pathData = useMemo(() => {
-    if (!polygon.points.length) return '';
+    if (!polygon || !polygon.points.length) return '';
 
     const points = polygon.points;
     let path = `M ${points[0].x} ${points[0].y}`;
@@ -196,6 +196,11 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
     path += ' Z'; // Close path
     return path;
   }, [polygon]);
+
+  // Don't render if no polygon or GM view
+  if (!polygon || polygon.points.length === 0 || isGMView) {
+    return null;
+  }
 
   return (
     <g className="vision-polygon">

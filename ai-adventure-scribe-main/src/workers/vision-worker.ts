@@ -10,7 +10,7 @@
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
-import type { VisionPolygon } from '@/utils/vision-calculations';
+import type { VisionPolygon } from '@/utils/vision-polygon';
 
 // ===========================
 // Message Types
@@ -209,8 +209,8 @@ self.onmessage = (event: MessageEvent<VisionWorkerMessage>) => {
         break;
 
       default:
-        // @ts-ignore
-        throw new Error(`Unknown message type: ${message.type}`);
+        // @ts-ignore: Handle potential unknown message types at runtime
+        throw new Error(`Unknown message type: ${(message as { type: string }).type}`);
     }
   } catch (error) {
     self.postMessage({
@@ -291,7 +291,7 @@ function handleCalculateMultiVision(
       polygons: polygonsObj,
     },
     requestId: message.requestId,
-  } as any); // Cast needed due to Map serialization
+  } as unknown as VisionWorkerResponse); // Cast needed due to Map serialization
 }
 
 /**

@@ -240,6 +240,12 @@ export default tseslint.config(
       "src/components/ui/sidebar.tsx", // 761 lines
       "src/utils/spell-validation.ts", // 737 lines
       "src/services/ai/context-builder-prompts.ts", // 885 lines
+      "src/utils/vision-calculations.ts",
+      "src/utils/vision-polygon.ts",
+      "src/utils/vision-worker-manager.ts",
+      "src/workers/vision-worker.ts",
+      "src/components/battle-map/VisionPolygon.tsx",
+      "src/examples/vision-system-usage.tsx",
     ],
     rules: {
       "max-lines": "warn"
