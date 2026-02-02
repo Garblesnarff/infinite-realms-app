@@ -269,7 +269,10 @@ export const BattleMapPage: React.FC = () => {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       {/* Top Navigation Bar */}
-      <div className={`absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b z-[${Z_INDEX.FLOATING_PANEL}] flex items-center justify-between px-4`}>
+      <div
+        className="absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between px-4"
+        style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+      >
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-sm text-muted-foreground">
           <button
@@ -352,7 +355,10 @@ export const BattleMapPage: React.FC = () => {
           />
 
           {/* Toolbar - Positioned on left side */}
-          <div className={`absolute left-4 top-1/2 -translate-y-1/2 z-[${Z_INDEX.STICKY}]`}>
+          <div
+            className="absolute left-4 top-1/2 -translate-y-1/2"
+            style={{ zIndex: Z_INDEX.STICKY }}
+          >
             <Toolbar
               sceneId={sceneId}
               isGM={true} // TODO: Get from user/campaign context
@@ -366,14 +372,20 @@ export const BattleMapPage: React.FC = () => {
 
           {/* Tool Options Panel - Positioned below toolbar when active */}
           {(selectedTool === 'wall' || selectedTool === 'fog-brush' || selectedTool === 'draw') && (
-            <div className={`absolute left-4 bottom-4 z-[${Z_INDEX.STICKY}]`}>
+            <div
+              className="absolute left-4 bottom-4"
+              style={{ zIndex: Z_INDEX.STICKY }}
+            >
               <ToolOptionsPanel sceneId={sceneId} />
             </div>
           )}
 
           {/* Performance Monitor - Top left corner */}
           {showPerformanceMonitor && (
-            <div className={`absolute top-4 left-20 z-[${Z_INDEX.STICKY}]`}>
+            <div
+              className="absolute top-4 left-20"
+              style={{ zIndex: Z_INDEX.STICKY }}
+            >
               <PerformanceMonitor />
             </div>
           )}
@@ -387,9 +399,9 @@ export const BattleMapPage: React.FC = () => {
               aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
               className={cn(
                 'absolute top-4 transition-all',
-                `z-[${Z_INDEX.STICKY}]`,
                 showLayersPanel ? 'right-80' : 'right-4'
               )}
+              style={{ zIndex: Z_INDEX.STICKY }}
             >
               {showLayersPanel ? (
                 <ChevronRight className="h-4 w-4" />
