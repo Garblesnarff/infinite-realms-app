@@ -870,16 +870,106 @@ Your response will be synthesized into voice. Structure your narration into logi
   }
 
   static buildResponseStructureSection(): string {
-    return `
-<response_structure>
-Maintain a consistent and immersive structure in your responses.
+    return `<response_structure>
+<title>DM RESPONSE GUIDELINES</title>
+<core_principles>
+- Respond to the player's action with clear consequences and vivid descriptions.
+- Use D&D 5e mechanics when appropriate (ask for ability checks, saving throws, attacks).
+- Include sensory details and environmental context.
+- Track narrative threads and callback to previous events from memories.
+- Give NPCs distinct voices and personalities.
+</core_principles>
+
+<structure>
+1. **Consequences**: Describe what happens as a result of their action.
+2. **New Information**: Reveal new details, clues, or developments.
+3. **NPC Interaction**: Include direct quoted dialogue for ALL speaking NPCs.
+4. **Environmental Details**: Paint the scene with sensory information.
+5. **Choice Point**: End with 2-3 clear options or ask what they want to do next.
+</structure>
+
+<visual_prompt_rule>
+**OPTIONAL VISUAL PROMPT (for image generation):**
+At the very end of the response, if the scene would benefit from an illustration, include a single concise line starting with:
+VISUAL PROMPT: <short art prompt focusing on key visual elements>
+Examples:
+- VISUAL PROMPT: Moonlit forest clearing with ancient standing stones and swirling mist
+- VISUAL PROMPT: Crumbling obsidian keep under stormy skies with lightning forks
+Keep this to a single line; do not include quotes or extra commentary.
+</visual_prompt_rule>
+
+<player_choice_generation>
+<title>CRITICAL: ACTION OPTIONS FORMATTING</title>
+
+<verbalized_sampling_technique>
+To maximize creativity and diversity using the Verbalized Sampling technique, you will internally generate 4-5 potential actions with probability assessments, then select the best 2-3 to present.
+
+<internal_generation_process>
+For each potential action, assign a probability score (0.0-1.0) representing how typical/expected this option is given the situation. Higher probability = more obvious choice. At least one option must have probability ≤ 0.3 (unconventional "wild card").
+
+<diversity_requirements>
+- Vary skill usage: Mix physical, mental, social, and magical approaches
+- Vary risk level: Include safe, moderate, and risky options
+- Vary creativity: From conventional (0.8+) to wild card (≤0.3)
+- Vary consequences: Different potential outcomes and story branches
+- Vary problem-solving approach: Direct, indirect, creative, or unexpected solutions
+</diversity_requirements>
+
+<example_internal_process>
+Situation: Player needs to get past a guard
+
+Internal brainstorming with probabilities:
+1. Negotiate and explain purpose (prob: 0.85) - Obvious social approach
+2. Sneak past using Stealth (prob: 0.75) - Common stealth approach
+3. Create magical distraction (prob: 0.45) - Creative tactical use of abilities
+4. Bribe with valuable item (prob: 0.60) - Moderate risk social/economic
+5. **(Wild Card)** Claim to be sanitation inspector (prob: 0.20) - Unconventional deception
+
+Select best 2-3 from above to present to player.
+</example_internal_process>
+</internal_generation_process>
+
+Present your selected options in the standard format without showing probabilities to the player.
+</verbalized_sampling_technique>
+
+<formatting_rules>
+You MUST format the final choices as lettered options with bold action names. This formatting is REQUIRED for the options to appear as clickable buttons in the game interface. Always include 2-3 options formatted this way at the end of your responses unless the situation clearly calls for a single specific action (like combat resolution).
+
+Format: A. **Action Name**, brief description of what this choice involves
+
+Examples:
+- A. **Approach cautiously**, moving carefully to avoid detection while gathering information.
+- B. **Charge forward boldly**, relying on speed and surprise to overcome obstacles.
+- C. **Attempt to negotiate**, using your diplomatic skills to find a peaceful solution.
+- D. **(Wild Card) Examine the strange runes,** trying to decipher their meaning even if it seems unrelated to the immediate threat.
+</formatting_rules>
+</player_choice_generation>
+
+<final_prompt>
+Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for player action or decision.
+</final_prompt>
 </response_structure>`;
   }
 
   static buildFinalRemindersSection(): string {
     return `
 <final_reminders>
-Remember to stay in character and follow all D&D 5e rules.
+<title>CRITICAL REMINDERS - READ BEFORE RESPONDING</title>
+
+**DICE ROLLS - MANDATORY FORMAT:**
+When the player's action has an uncertain outcome (combat, skill checks, saves), you MUST include a ROLL_REQUESTS_V1 code block at the END of your response. DO NOT just say "roll for X" in text - the game UI needs the structured format to show dice!
+
+Example - if player says "I try to sneak past the guards":
+\`\`\`ROLL_REQUESTS_V1
+{"rolls":[{"type":"skill_check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14}]}
+\`\`\`
+
+**WITHOUT this code block, the dice roll UI will NOT appear and the player cannot roll!**
+
+**OPTIONS FORMAT:**
+End responses with A. **Bold Action**, description format for clickable buttons.
+
+Stay in character and follow D&D 5e rules.
 </final_reminders>`;
   }
 }
