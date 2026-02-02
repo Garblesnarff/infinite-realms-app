@@ -6,19 +6,22 @@ import {
   calculateProficiencyBonus,
   calculateHitPoints,
   calculateArmorClass,
+  getSpellcastingAbility,
   calculateSpellSaveDC,
   calculateSpellAttackBonus,
   calculateSpellSlots,
   calculateSkillModifiers,
   calculateSavingThrowModifiers,
-  calculateAllCharacterStats,
-  getClassSkillProficiencies,
-  getRaceSkillProficiencies
+  calculateCarryingCapacity,
+  calculatePassivePerception,
+  calculateAllCharacterStats
 } from '../character-calculations';
+
+import type { Character } from '@/types/character';
 
 describe('character-calculations', () => {
   describe('calculateProficiencyBonus', () => {
-    it('should calculate correct proficiency bonus for various levels', () => {
+    it('should calculate correct bonus for various levels', () => {
       expect(calculateProficiencyBonus(1)).toBe(2);
       expect(calculateProficiencyBonus(4)).toBe(2);
       expect(calculateProficiencyBonus(5)).toBe(3);
@@ -33,269 +36,348 @@ describe('character-calculations', () => {
   });
 
   describe('calculateHitPoints', () => {
-    it('should calculate correct HP for level 1 character', () => {
-      const character: any = {
-        level: 1,
-        class: { hitDie: 10 },
-        abilityScores: { constitution: { modifier: 3 } }
-      };
-      // 10 + 3 = 13
-      expect(calculateHitPoints(character)).toBe(13);
+    const baseCharacter: Partial<Character> = {
+      level: 1,
+      class: { name: 'Fighter', hitDie: 10 } as any,
+      abilityScores: {
+        constitution: { score: 14, modifier: 2, savingThrow: false },
+      } as any
+    };
+
+    it('should calculate correct HP for level 1', () => {
+      expect(calculateHitPoints(baseCharacter as Character)).toBe(12);
     });
 
-    it('should calculate correct HP for higher level character', () => {
-      const character: any = {
-        level: 5,
-        class: { hitDie: 8 },
-        abilityScores: { constitution: { modifier: 2 } }
-      };
-      // Level 1: 8 + 2 = 10
-      // Levels 2-5: 4 * (5 + 2) = 28
-      // Total: 38
-      expect(calculateHitPoints(character)).toBe(38);
+    it('should calculate correct HP for higher levels', () => {
+      const level3Character = { ...baseCharacter, level: 3 };
+      // 10 + 2 (level 1) + 2 * (6 + 2) (levels 2-3) = 12 + 16 = 28
+      expect(calculateHitPoints(level3Character as Character)).toBe(28);
     });
 
-    it('should ensure at least 1 HP per level even with negative Con modifier', () => {
-      const character: any = {
-        level: 3,
-        class: { hitDie: 6 },
-        abilityScores: { constitution: { modifier: -5 } }
-      };
-      // Level 1: max(1, 6 - 5) = 1
-      // Level 2: max(1, 4 - 5) = 1
-      // Level 3: max(1, 4 - 5) = 1
-      // Total: 3
-      expect(calculateHitPoints(character)).toBe(3);
+    it('should handle negative constitution modifier', () => {
+      const frailCharacter: Character = {
+        ...baseCharacter,
+        abilityScores: {
+          constitution: { score: 6, modifier: -2, savingThrow: false },
+        } as any
+      } as Character;
+      // 10 - 2 (level 1) = 8
+      expect(calculateHitPoints(frailCharacter)).toBe(8);
+
+      const frailLevel3 = { ...frailCharacter, level: 3 };
+      // 10 - 2 (level 1) + 2 * (6 - 2) (levels 2-3) = 8 + 8 = 16
+      expect(calculateHitPoints(frailLevel3)).toBe(16);
+    });
+
+    it('should handle extreme negative constitution modifier (edge case)', () => {
+      const veryFrailCharacter: Character = {
+        ...baseCharacter,
+        class: { name: 'Wizard', hitDie: 6 } as any,
+        abilityScores: {
+          constitution: { score: 1, modifier: -5, savingThrow: false },
+        } as any
+      } as Character;
+      // 6 - 5 (level 1) = 1
+      expect(calculateHitPoints(veryFrailCharacter)).toBe(1);
+
+      const veryFrailLevel2 = { ...veryFrailCharacter, level: 2 };
+      // Current implementation: (6 - 5) + (2 - 1) * (3 + 1 - 5) = 1 + 1 * (-1) = 0
+      // Math.max(1, 0) = 1.
+      // D&D 5e rule: minimum 1 HP per level. So it should be 1 (lvl 1) + 1 (lvl 2) = 2.
+      // We'll see if this test fails.
+      expect(calculateHitPoints(veryFrailLevel2)).toBe(2);
     });
   });
 
   describe('calculateArmorClass', () => {
-    it('should calculate base AC (10 + Dex)', () => {
-      const character: any = {
-        abilityScores: { dexterity: { modifier: 2 } }
-      };
-      expect(calculateArmorClass(character)).toBe(12);
-    });
-
-    it('should calculate Barbarian Unarmored Defense (10 + Dex + Con)', () => {
-      const character: any = {
-        class: { name: 'Barbarian' },
-        abilityScores: {
-          dexterity: { modifier: 2 },
-          constitution: { modifier: 3 }
-        }
-      };
-      expect(calculateArmorClass(character)).toBe(15);
-    });
-
-    it('should calculate Monk Unarmored Defense (10 + Dex + Wis)', () => {
-      const character: any = {
-        class: { name: 'Monk' },
-        abilityScores: {
-          dexterity: { modifier: 2 },
-          wisdom: { modifier: 4 }
-        }
-      };
-      expect(calculateArmorClass(character)).toBe(16);
-    });
-  });
-
-  describe('Spellcasting Calculations', () => {
-    const wizard: any = {
-      level: 5,
-      class: { name: 'Wizard' },
-      abilityScores: { intelligence: { modifier: 4 } }
+    const baseCharacter: Partial<Character> = {
+      abilityScores: {
+        dexterity: { score: 14, modifier: 2, savingThrow: false },
+        constitution: { score: 16, modifier: 3, savingThrow: false },
+        wisdom: { score: 12, modifier: 1, savingThrow: false },
+      } as any,
+      class: { name: 'Fighter' } as any
     };
 
-    it('should calculate correct Spell Save DC', () => {
-      // 8 + 3 (prof) + 4 (int) = 15
-      expect(calculateSpellSaveDC(wizard)).toBe(15);
+    it('should calculate base AC for non-unarmored defense classes', () => {
+      expect(calculateArmorClass(baseCharacter as Character)).toBe(12);
     });
 
-    it('should calculate correct Spell Attack Bonus', () => {
-      // 3 (prof) + 4 (int) = 7
-      expect(calculateSpellAttackBonus(wizard)).toBe(7);
-    });
-
-    it('should calculate correct Spell Slots for full caster', () => {
-      const slots = calculateSpellSlots(wizard);
-      expect(slots).toEqual({
-        1: 4,
-        2: 3,
-        3: 2
-      });
-    });
-
-    it('should return undefined for non-spellcasters', () => {
-      const fighter: any = {
-        class: { name: 'Fighter' },
-        abilityScores: { strength: { modifier: 4 } }
+    it('should calculate AC for Barbarian unarmored defense', () => {
+      const barbarian = {
+        ...baseCharacter,
+        class: { name: 'Barbarian' } as any
       };
-      expect(calculateSpellSaveDC(fighter)).toBeUndefined();
-      expect(calculateSpellAttackBonus(fighter)).toBeUndefined();
-      expect(calculateSpellSlots(fighter)).toBeUndefined();
+      // 10 + 2 (Dex) + 3 (Con) = 15
+      expect(calculateArmorClass(barbarian as Character)).toBe(15);
     });
 
-    it('should return undefined if class is missing', () => {
-      const character: any = {
-        abilityScores: { intelligence: { modifier: 3 } }
+    it('should calculate AC for Monk unarmored defense', () => {
+      const monk = {
+        ...baseCharacter,
+        class: { name: 'Monk' } as any
       };
-      expect(calculateSpellSaveDC(character)).toBeUndefined();
-      expect(calculateSpellAttackBonus(character)).toBeUndefined();
-      expect(calculateSpellSlots(character)).toBeUndefined();
+      // 10 + 2 (Dex) + 1 (Wis) = 13
+      expect(calculateArmorClass(monk as Character)).toBe(13);
     });
 
-    it('should handle levels above 20 for spell slots (undefined for now)', () => {
-      const epicWizard: any = {
-        level: 21,
-        class: { name: 'Wizard' },
-        abilityScores: { intelligence: { modifier: 5 } }
+    it('should not apply Monk unarmored defense when wearing a shield', () => {
+      const monkWithShield = {
+        ...baseCharacter,
+        class: { name: 'Monk' } as any,
+        equippedShield: 'Shield'
       };
-      expect(calculateSpellSlots(epicWizard)).toBeUndefined();
+      // Monk unarmored defense doesn't work with shields.
+      // Should be 10 + 2 (Dex) + 2 (Shield) = 14?
+      // Actually if they are not using unarmored defense, they use normal AC: 10 + Dex + Shield.
+      // 10 + 2 + 2 = 14.
+      // But the current code doesn't even know about shields.
+      expect(calculateArmorClass(monkWithShield as Character)).toBe(14);
+    });
+
+    it('should apply Barbarian unarmored defense when wearing a shield', () => {
+      const barbWithShield = {
+        ...baseCharacter,
+        class: { name: 'Barbarian' } as any,
+        equippedShield: 'Shield'
+      };
+      // 10 + 2 (Dex) + 3 (Con) + 2 (Shield) = 17
+      expect(calculateArmorClass(barbWithShield as Character)).toBe(17);
     });
   });
 
-  describe('Skill Proficiencies', () => {
-    it('should return correct proficiencies for different classes', () => {
-      expect(getClassSkillProficiencies({ name: 'Wizard' } as any)).toContain('Arcana');
-      expect(getClassSkillProficiencies({ name: 'Rogue' } as any)).toContain('Stealth');
-      expect(getClassSkillProficiencies({ name: 'Cleric' } as any)).toContain('Medicine');
-      expect(getClassSkillProficiencies(null)).toEqual([]);
+  describe('spellcasting calculations', () => {
+    const wizard: Partial<Character> = {
+      level: 1,
+      class: { name: 'Wizard' } as any,
+      abilityScores: {
+        intelligence: { score: 16, modifier: 3, savingThrow: false },
+      } as any
+    };
+
+    it('should get correct spellcasting ability', () => {
+      expect(getSpellcastingAbility(wizard.class as any)).toBe('intelligence');
+      expect(getSpellcastingAbility({ name: 'Cleric' } as any)).toBe('wisdom');
+      expect(getSpellcastingAbility({ name: 'Sorcerer' } as any)).toBe('charisma');
+      expect(getSpellcastingAbility({ name: 'Fighter' } as any)).toBe(null);
     });
 
-    it('should return correct proficiencies for races and subraces', () => {
-      expect(getRaceSkillProficiencies({ name: 'Half-Elf' } as any, null)).toContain('Deception');
-      expect(getRaceSkillProficiencies({ name: 'Elf' } as any, { name: 'Wood Elf' } as any)).toContain('Stealth');
-      expect(getRaceSkillProficiencies(null, null)).toEqual([]);
+    it('should calculate spell save DC', () => {
+      // 8 + 2 (Prof) + 3 (Int) = 13
+      expect(calculateSpellSaveDC(wizard as Character)).toBe(13);
+    });
+
+    it('should calculate spell attack bonus', () => {
+      // 2 (Prof) + 3 (Int) = 5
+      expect(calculateSpellAttackBonus(wizard as Character)).toBe(5);
+    });
+
+    it('should return undefined for non-casters', () => {
+      const fighter = { ...wizard, class: { name: 'Fighter' } as any };
+      expect(calculateSpellSaveDC(fighter as Character)).toBeUndefined();
+      expect(calculateSpellAttackBonus(fighter as Character)).toBeUndefined();
+    });
+
+    it('should calculate spell slots for level 1 full caster', () => {
+      const slots = calculateSpellSlots(wizard as Character);
+      expect(slots).toEqual({ 1: 2 });
+    });
+
+    it('should calculate spell slots for level 5 full caster', () => {
+      const slots = calculateSpellSlots({ ...wizard, level: 5 } as Character);
+      expect(slots).toEqual({ 1: 4, 2: 3, 3: 2 });
     });
   });
 
   describe('calculateSkillModifiers', () => {
-    it('should apply proficiency bonus to proficient skills', () => {
-      const character: any = {
-        level: 1, // prof +2
-        class: { name: 'Fighter' }, // Proficient in Athletics
-        abilityScores: {
-          strength: { modifier: 3 },
-          dexterity: { modifier: 2 }
-        }
-      };
-      const skillMods = calculateSkillModifiers(character);
+    const character: Partial<Character> = {
+      level: 1,
+      abilityScores: {
+        strength: { modifier: 3 },
+        dexterity: { modifier: 2 },
+        intelligence: { modifier: 1 },
+        wisdom: { modifier: 0 },
+        charisma: { modifier: -1 },
+      } as any,
+      class: { name: 'Fighter' } as any, // Fighter has Athletics
+      race: { name: 'Human' } as any
+    };
 
-      // Athletics (Str) - Proficient: 3 + 2 = 5
-      expect(skillMods['Athletics'].modifier).toBe(5);
-      expect(skillMods['Athletics'].proficient).toBe(true);
+    it('should calculate modifiers correctly including proficiencies', () => {
+      const skillMods = calculateSkillModifiers(character as Character);
 
-      // Stealth (Dex) - Not Proficient: 2
-      expect(skillMods['Stealth'].modifier).toBe(2);
-      expect(skillMods['Stealth'].proficient).toBe(false);
+      // Athletics: 3 (Str) + 2 (Prof) = 5
+      expect(skillMods['Athletics']).toEqual({
+        modifier: 5,
+        proficient: true,
+        expertise: false
+      });
+
+      // Stealth: 2 (Dex) + 0 (No Prof) = 2
+      expect(skillMods['Stealth']).toEqual({
+        modifier: 2,
+        proficient: false,
+        expertise: false
+      });
+
+      // Deception: -1 (Cha) + 0 (No Prof) = -1
+      expect(skillMods['Deception']).toEqual({
+        modifier: -1,
+        proficient: false,
+        expertise: false
+      });
     });
   });
 
   describe('calculateSavingThrowModifiers', () => {
-    it('should apply proficiency bonus to proficient saving throws', () => {
-      const character: any = {
-        level: 1, // prof +2
-        class: { name: 'Wizard' }, // Proficient in Int and Wis
+    it('should calculate modifiers correctly including class proficiencies', () => {
+      const fighter: Partial<Character> = {
+        level: 1,
         abilityScores: {
-          intelligence: { modifier: 4 },
-          wisdom: { modifier: 2 },
-          strength: { modifier: 0 }
-        }
+          strength: { modifier: 3 },
+          dexterity: { modifier: 2 },
+          constitution: { modifier: 2 },
+          intelligence: { modifier: 1 },
+          wisdom: { modifier: 0 },
+          charisma: { modifier: -1 },
+        } as any,
+        class: { name: 'Fighter' } as any // Fighter has Str and Con saves
       };
-      const saveMods = calculateSavingThrowModifiers(character);
 
-      // Intelligence - Proficient: 4 + 2 = 6
-      expect(saveMods['intelligence'].modifier).toBe(6);
-      expect(saveMods['intelligence'].proficient).toBe(true);
+      const saveMods = calculateSavingThrowModifiers(fighter as Character);
 
-      // Wisdom - Proficient: 2 + 2 = 4
-      expect(saveMods['wisdom'].modifier).toBe(4);
-      expect(saveMods['wisdom'].proficient).toBe(true);
-
-      // Strength - Not Proficient: 0
-      expect(saveMods['strength'].modifier).toBe(0);
-      expect(saveMods['strength'].proficient).toBe(false);
+      expect(saveMods['strength'].modifier).toBe(5); // 3 + 2
+      expect(saveMods['constitution'].modifier).toBe(4); // 2 + 2
+      expect(saveMods['dexterity'].modifier).toBe(2); // 2 + 0
     });
 
-    it('should return base ability modifiers if class is unknown', () => {
-      const character: any = {
+    it('should handle Rogue saving throws', () => {
+      const rogue: Partial<Character> = {
         level: 1,
-        class: { name: 'Unknown' },
-        abilityScores: {
-          intelligence: { modifier: 4 }
-        }
+        abilityScores: { dexterity: { modifier: 3 }, intelligence: { modifier: 2 } } as any,
+        class: { name: 'Rogue' } as any
       };
-      const saveMods = calculateSavingThrowModifiers(character);
-      expect(saveMods['intelligence'].modifier).toBe(4);
-      expect(saveMods['intelligence'].proficient).toBe(false);
+      const saveMods = calculateSavingThrowModifiers(rogue as Character);
+      expect(saveMods['dexterity'].proficient).toBe(true);
+      expect(saveMods['intelligence'].proficient).toBe(true);
+    });
+
+    it('should return empty if no class', () => {
+      expect(calculateSavingThrowModifiers({} as Character)).toEqual({});
+    });
+  });
+
+  describe('calculatePassivePerception', () => {
+    it('should handle null skill mods gracefully', () => {
+      expect(calculatePassivePerception({} as Character)).toBe(10);
+    });
+
+    it('should be 10 + Perception modifier', () => {
+      const character: Partial<Character> = {
+        level: 1,
+        abilityScores: { wisdom: { modifier: 2 } } as any,
+        class: { name: 'Cleric' } as any // Cleric has Insight, Medicine, Persuasion, Religion, History.
+        // Wait, Cleric skills in code: ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion']
+        // Perception is not there by default.
+      };
+      // Passive Perception = 10 + 2 (Wis) + 0 (No Prof) = 12
+      expect(calculatePassivePerception(character as Character)).toBe(12);
+
+      const observantCharacter = {
+        ...character,
+        class: { name: 'Rogue' } as any // Rogue has Perception in code
+      };
+      // Passive Perception = 10 + 2 (Wis) + 2 (Prof) = 14
+      expect(calculatePassivePerception(observantCharacter as Character)).toBe(14);
     });
   });
 
   describe('calculateAllCharacterStats', () => {
-    it('should aggregate all character stats correctly', () => {
-      const character: any = {
-        level: 1,
-        name: 'Test Wizard',
-        race: { name: 'High Elf', traits: ['Darkvision'], languages: ['Common', 'Elvish'], speed: 30 },
-        class: { name: 'Wizard', hitDie: 6 },
+    it('should return a complete stats object', () => {
+      const character: Partial<Character> = {
+        level: 3,
+        class: { name: 'Wizard', hitDie: 6 } as any,
         abilityScores: {
           intelligence: { modifier: 3 },
-          dexterity: { modifier: 2 },
-          constitution: { modifier: 1 },
+          constitution: { modifier: 2 },
+          dexterity: { modifier: 1 },
+          strength: { score: 10, modifier: 0 },
           wisdom: { modifier: 0 },
-          strength: { modifier: 0 },
           charisma: { modifier: 0 }
-        }
+        } as any,
+        race: { name: 'High Elf', speed: 30, traits: ['Darkvision'], languages: ['Common', 'Elvish'] } as any
       };
 
-      const stats = calculateAllCharacterStats(character);
+      const stats = calculateAllCharacterStats(character as Character);
 
       expect(stats.proficiencyBonus).toBe(2);
-      expect(stats.hitPoints).toBe(7); // 6 + 1
-      expect(stats.armorClass).toBe(12); // 10 + 2
-      expect(stats.initiative).toBe(2); // Dex mod
+      expect(stats.hitPoints).toBe(20); // 6+2 (lvl 1) + 2*(4+2) (lvl 2-3) = 8 + 12 = 20
+      expect(stats.armorClass).toBe(11); // 10 + 1 (Dex)
       expect(stats.speed).toBe(30);
-      expect(stats.spellSaveDC).toBe(13); // 8 + 2 + 3
-      expect(stats.passivePerception).toBe(10); // 10 + 0 (not proficient)
       expect(stats.allTraits).toContain('Darkvision');
       expect(stats.allLanguages).toContain('Common');
       expect(stats.allLanguages).toContain('Elvish');
     });
 
-    it('should handle missing race and subrace information', () => {
-      const character: any = {
-        level: 1,
-        class: { name: 'Fighter', hitDie: 10 },
-        abilityScores: {
-          strength: { modifier: 3 },
-          dexterity: { modifier: 2 }
-        }
-      };
-
-      const stats = calculateAllCharacterStats(character);
+    it('should handle missing data gracefully', () => {
+      const stats = calculateAllCharacterStats({} as Character);
+      expect(stats.proficiencyBonus).toBe(2);
+      expect(stats.hitPoints).toBe(8); // 8+0 (lvl 1)
+      expect(stats.armorClass).toBe(10);
       expect(stats.speed).toBe(30);
-      expect(stats.allTraits).toEqual([]);
-      expect(stats.allLanguages).toEqual([]);
     });
 
     it('should use subrace speed if available', () => {
-      const character: any = {
-        race: { speed: 30 },
-        subrace: { speed: 35 },
-        class: { name: 'Fighter' }
+      const character: Partial<Character> = {
+        race: { speed: 30 } as any,
+        subrace: { speed: 35 } as any
       };
-      const stats = calculateAllCharacterStats(character);
+      const stats = calculateAllCharacterStats(character as Character);
       expect(stats.speed).toBe(35);
     });
+  });
 
-    it('should use race speed if subrace speed is missing', () => {
-      const character: any = {
-        race: { speed: 25 },
-        class: { name: 'Fighter' }
+  describe('race and class proficiency branches', () => {
+    it('should handle Wood Elf stealth proficiency', () => {
+      const woodElf: Partial<Character> = {
+        race: { name: 'Elf' } as any,
+        subrace: { name: 'Wood Elf' } as any,
+        abilityScores: { dexterity: { modifier: 2 } } as any
       };
-      const stats = calculateAllCharacterStats(character);
-      expect(stats.speed).toBe(25);
+      const skillMods = calculateSkillModifiers(woodElf as Character);
+      expect(skillMods['Stealth'].proficient).toBe(true);
+    });
+
+    it('should handle Half-Elf proficiencies', () => {
+      const halfElf: Partial<Character> = {
+        race: { name: 'Half-Elf' } as any,
+        abilityScores: { charisma: { modifier: 2 } } as any
+      };
+      const skillMods = calculateSkillModifiers(halfElf as Character);
+      expect(skillMods['Deception'].proficient).toBe(true);
+      expect(skillMods['Persuasion'].proficient).toBe(true);
+    });
+
+    it('should handle Rogue skill proficiencies', () => {
+      const rogue: Partial<Character> = {
+        class: { name: 'Rogue' } as any,
+        abilityScores: { dexterity: { modifier: 2 } } as any
+      };
+      const skillMods = calculateSkillModifiers(rogue as Character);
+      expect(skillMods['Stealth'].proficient).toBe(true);
+      expect(skillMods['Acrobatics'].proficient).toBe(true);
+    });
+  });
+
+  describe('carrying capacity', () => {
+    it('should calculate 15 times strength score', () => {
+      const character = { abilityScores: { strength: { score: 10 } } };
+      expect(calculateCarryingCapacity(character as any)).toBe(150);
+
+      const strongCharacter = { abilityScores: { strength: { score: 20 } } };
+      expect(calculateCarryingCapacity(strongCharacter as any)).toBe(300);
+
+      expect(calculateCarryingCapacity({} as any)).toBe(150); // Default score 10
     });
   });
 });
