@@ -11,7 +11,7 @@
  * @module server/services/inventory-service
  */
 
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -419,8 +419,20 @@ export class InventoryService {
    * @returns Total weight in pounds
    */
   static async calculateTotalWeight(characterId: string, userId: string): Promise<number> {
-    const { totalWeight } = await this.getInventory(characterId, userId);
-    return totalWeight;
+    // ⚡ Bolt: Optimized to use SQL aggregation (SUM) instead of fetching all items into memory.
+    // This reduces data transfer and memory usage, especially for characters with large inventories.
+    const [result] = await db
+      .select({
+        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`
+      })
+      .from(inventoryItems)
+      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
+      .where(and(
+        eq(inventoryItems.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ));
+
+    return parseFloat(result?.totalWeight || '0');
   }
 
   /**
@@ -466,51 +478,54 @@ export class InventoryService {
    * @returns Encumbrance status
    */
   static async checkEncumbrance(characterId: string, userId: string): Promise<EncumbranceStatus> {
-    const statsResult = await db
-      .select({ stats: characterStats })
-      .from(characterStats)
-      .innerJoin(characters, eq(characterStats.characterId, characters.id))
+    // ⚡ Bolt: Optimized to use a single query with multiple joins and aggregation.
+    // This replaces a 3-query pattern (stats, then weight, then stats again) with O(1) database round-trip.
+    const [result] = await db
+      .select({
+        strength: characterStats.strength,
+        totalWeight: sql<string>`COALESCE(SUM(${inventoryItems.weight} * ${inventoryItems.quantity}), 0)`
+      })
+      .from(characters)
+      .innerJoin(characterStats, eq(characters.id, characterStats.characterId))
+      .leftJoin(inventoryItems, eq(characters.id, inventoryItems.characterId))
       .where(and(
-        eq(characterStats.characterId, characterId),
+        eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ))
-      .limit(1);
+      .groupBy(characterStats.strength, characters.id);
 
-    if (!statsResult || statsResult.length === 0) {
-      throw new NotFoundError('Character stats', characterId);
+    if (!result) {
+      // If result is empty, it means either the character or their stats don't exist
+      throw new NotFoundError('Character or stats', characterId);
     }
 
-    const stats = statsResult[0]?.stats;
-    if (!stats) {
-      throw new NotFoundError('Character stats', characterId);
-    }
-
-    const currentWeight = await this.calculateTotalWeight(characterId, userId);
-    const carryingCapacity = await this.getCarryingCapacity(characterId, userId);
+    const strength = result.strength;
+    const currentWeight = parseFloat(result.totalWeight);
+    const carryingCapacity = strength * 15;
 
     // Determine encumbrance level using variant rule
     let encumbranceLevel: EncumbranceLevel = 'normal';
     let speedPenalty = SPEED_PENALTIES.NORMAL as number;
 
     // Heavily Encumbered: weight > STR × 10
-    if (currentWeight > stats.strength * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED) {
+    if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED) {
       encumbranceLevel = 'heavily_encumbered';
       speedPenalty = SPEED_PENALTIES.HEAVILY_ENCUMBERED as number;
     }
     // Encumbered: weight > STR × 5
-    else if (currentWeight > stats.strength * ENCUMBRANCE_THRESHOLDS.ENCUMBERED) {
+    else if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.ENCUMBERED) {
       encumbranceLevel = 'encumbered';
       speedPenalty = SPEED_PENALTIES.ENCUMBERED as number;
     }
 
     return {
-      currentWeight,
+      currentWeight: Math.round(currentWeight * 100) / 100,
       carryingCapacity,
       encumbranceLevel,
       isEncumbered: encumbranceLevel === 'encumbered' || encumbranceLevel === 'heavily_encumbered',
       isHeavilyEncumbered: encumbranceLevel === 'heavily_encumbered',
       speedPenalty,
-      strengthScore: stats.strength,
+      strengthScore: strength,
     };
   }
 
