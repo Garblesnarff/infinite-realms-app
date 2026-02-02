@@ -7,10 +7,16 @@
  * @module server/services/vision-blocker-service
  */
 
+import { eq, and, asc } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
-import { visionBlockingShapes, scenes, type VisionBlockingShape, type NewVisionBlockingShape } from '../../../db/schema/index.js';
-import { eq, and } from 'drizzle-orm';
-import { InternalServerError, NotFoundError, ValidationError, ForbiddenError } from '../lib/errors.js';
+import {
+  visionBlockingShapes,
+  scenes,
+  type VisionBlockingShape,
+  type NewVisionBlockingShape,
+} from '../../../db/schema/index.js';
+import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 /**
  * Input type for creating a vision blocker
@@ -37,39 +43,50 @@ export class VisionBlockerService {
    */
   private static async verifySceneOwnership(sceneId: string, userId: string): Promise<void> {
     const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
+      where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
     });
 
     if (!scene) {
       throw new NotFoundError('Scene', sceneId);
-    }
-
-    if (scene.userId !== userId) {
-      throw new ForbiddenError('Only the scene owner (GM) can modify vision blockers');
     }
   }
 
   /**
    * List all vision blockers for a scene
    */
-  static async listVisionBlockers(sceneId: string): Promise<VisionBlockingShape[]> {
-    const blockers = await db.query.visionBlockingShapes.findMany({
-      where: eq(visionBlockingShapes.sceneId, sceneId),
-      orderBy: (vbs, { asc }) => [asc(vbs.createdAt)],
-    });
+  static async listVisionBlockers(sceneId: string, userId: string): Promise<VisionBlockingShape[]> {
+    const blockers = await db
+      .select({ blockers: visionBlockingShapes })
+      .from(visionBlockingShapes)
+      .innerJoin(scenes, eq(visionBlockingShapes.sceneId, scenes.id))
+      .where(
+        and(
+          eq(visionBlockingShapes.sceneId, sceneId),
+          eq(scenes.userId, userId)
+        )
+      )
+      .orderBy(asc(visionBlockingShapes.createdAt));
 
-    return blockers;
+    return blockers.map(b => b.blockers);
   }
 
   /**
    * Get a single vision blocker by ID
    */
-  static async getVisionBlocker(blockerId: string): Promise<VisionBlockingShape | null> {
-    const blocker = await db.query.visionBlockingShapes.findFirst({
-      where: eq(visionBlockingShapes.id, blockerId),
-    });
+  static async getVisionBlocker(blockerId: string, userId: string): Promise<VisionBlockingShape | null> {
+    const [result] = await db
+      .select({ blocker: visionBlockingShapes })
+      .from(visionBlockingShapes)
+      .innerJoin(scenes, eq(visionBlockingShapes.sceneId, scenes.id))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          eq(scenes.userId, userId)
+        )
+      )
+      .limit(1);
 
-    return blocker || null;
+    return result?.blocker || null;
   }
 
   /**
@@ -136,7 +153,7 @@ export class VisionBlockerService {
     updates: UpdateVisionBlockerData
   ): Promise<VisionBlockingShape> {
     // Get the existing blocker
-    const existingBlocker = await this.getVisionBlocker(blockerId);
+    const existingBlocker = await this.getVisionBlocker(blockerId, userId);
     if (!existingBlocker) {
       throw new NotFoundError('Vision blocker', blockerId);
     }
@@ -189,7 +206,7 @@ export class VisionBlockerService {
    */
   static async deleteVisionBlocker(blockerId: string, userId: string): Promise<boolean> {
     // Get the existing blocker
-    const existingBlocker = await this.getVisionBlocker(blockerId);
+    const existingBlocker = await this.getVisionBlocker(blockerId, userId);
     if (!existingBlocker) {
       return false;
     }
@@ -211,7 +228,7 @@ export class VisionBlockerService {
    */
   static async toggleDoor(blockerId: string, userId: string): Promise<VisionBlockingShape> {
     // Get the existing blocker
-    const existingBlocker = await this.getVisionBlocker(blockerId);
+    const existingBlocker = await this.getVisionBlocker(blockerId, userId);
     if (!existingBlocker) {
       throw new NotFoundError('Vision blocker', blockerId);
     }
@@ -317,16 +334,21 @@ export class VisionBlockerService {
   /**
    * Get all doors in a scene (useful for quick door state checks)
    */
-  static async listDoors(sceneId: string): Promise<VisionBlockingShape[]> {
-    const doors = await db.query.visionBlockingShapes.findMany({
-      where: and(
-        eq(visionBlockingShapes.sceneId, sceneId),
-        eq(visionBlockingShapes.shapeType, 'door')
-      ),
-      orderBy: (vbs, { asc }) => [asc(vbs.createdAt)],
-    });
+  static async listDoors(sceneId: string, userId: string): Promise<VisionBlockingShape[]> {
+    const doors = await db
+      .select({ blockers: visionBlockingShapes })
+      .from(visionBlockingShapes)
+      .innerJoin(scenes, eq(visionBlockingShapes.sceneId, scenes.id))
+      .where(
+        and(
+          eq(visionBlockingShapes.sceneId, sceneId),
+          eq(visionBlockingShapes.shapeType, 'door'),
+          eq(scenes.userId, userId)
+        )
+      )
+      .orderBy(asc(visionBlockingShapes.createdAt));
 
-    return doors;
+    return doors.map(d => d.blockers);
   }
 
   /**
