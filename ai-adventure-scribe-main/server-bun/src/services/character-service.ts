@@ -34,7 +34,7 @@ export class CharacterService {
    */
   static async listForUser(userId: string): Promise<Character[]> {
     const chars = await db.query.characters.findMany({
-      where: eq(characters.userId, userId),
+      where: or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       orderBy: [desc(characters.createdAt)],
       columns: {
         id: true,
@@ -60,7 +60,7 @@ export class CharacterService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ),
       with: {
         stats: true,
@@ -77,7 +77,7 @@ export class CharacterService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ),
       with: {
         campaign: {
@@ -103,6 +103,7 @@ export class CharacterService {
       .insert(characters)
       .values({
         userId,
+        ownerId: userId,
         name: data.name || 'Unnamed Character',
         description: data.description || null,
         race: data.race || null,
@@ -138,7 +139,7 @@ export class CharacterService {
       })
       .where(and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ))
       .returning();
 
@@ -153,7 +154,7 @@ export class CharacterService {
       .delete(characters)
       .where(and(
         eq(characters.id, characterId),
-        eq(characters.userId, userId)
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ))
       .returning({ id: characters.id });
 
@@ -271,8 +272,8 @@ export class CharacterService {
     const { isOwner } = await this.checkPermission(characterId, userId);
     if (!isOwner) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only the character owner can share this character',
+        code: 'NOT_FOUND',
+        message: 'Character not found',
       });
     }
 
@@ -324,8 +325,8 @@ export class CharacterService {
     const { isOwner } = await this.checkPermission(characterId, userId);
     if (!isOwner) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only the character owner can modify permissions',
+        code: 'NOT_FOUND',
+        message: 'Character not found',
       });
     }
 
@@ -366,8 +367,8 @@ export class CharacterService {
     const { isOwner } = await this.checkPermission(characterId, userId);
     if (!isOwner) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only the character owner can revoke permissions',
+        code: 'NOT_FOUND',
+        message: 'Character not found',
       });
     }
 
@@ -434,8 +435,8 @@ export class CharacterService {
     const { isOwner } = await this.checkPermission(characterId, userId);
     if (!isOwner) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Only the character owner can view permissions',
+        code: 'NOT_FOUND',
+        message: 'Character not found',
       });
     }
 
@@ -452,8 +453,8 @@ export class CharacterService {
     const { hasAccess } = await this.checkPermission(characterId, userId);
     if (!hasAccess) {
       throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to access this character',
+        code: 'NOT_FOUND',
+        message: 'Character not found',
       });
     }
 
@@ -546,6 +547,7 @@ export class CharacterService {
       .insert(characters)
       .values({
         userId,
+        ownerId: userId,
         name: charData.name,
         description: charData.description || null,
         race: charData.race || null,
