@@ -52,7 +52,7 @@ interface DiceRollRequestProps {
  * Interactive Dice Roll Request Component
  * Shows when DM requests a roll, allows player to roll or input manually
  */
-export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
+export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(({
   request,
   onRoll,
   onManualResult,
@@ -464,4 +464,4 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
       </div>
     </Card>
   );
-};
+});

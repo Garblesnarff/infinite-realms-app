@@ -18,7 +18,6 @@
  * @module components/battle-map/SettingsPanel
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Monitor,
@@ -31,9 +30,12 @@ import {
   Activity,
   Gauge,
 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -41,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
@@ -51,8 +52,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -156,14 +157,15 @@ interface SettingItemProps {
   description?: string;
   badge?: string;
   children: React.ReactNode;
+  id?: string;
 }
 
-const SettingItem: React.FC<SettingItemProps> = ({ label, description, badge, children }) => {
+const SettingItem: React.FC<SettingItemProps> = ({ label, description, badge, children, id }) => {
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex-1 space-y-0.5">
         <div className="flex items-center gap-2">
-          <Label className="text-sm cursor-pointer">{label}</Label>
+          <Label htmlFor={id} className="text-sm cursor-pointer">{label}</Label>
           {badge && (
             <Badge variant="secondary" className="text-xs">
               {badge}
@@ -292,7 +294,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     <Sheet open={controlledOpen} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Open settings">
             <Settings className="h-5 w-5" />
           </Button>
         )}
@@ -313,13 +315,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <SettingsSection title="Performance" icon={Gauge}>
             <SettingItem
               label="Canvas Quality"
+              id="canvas-quality"
               description="Overall rendering quality"
             >
               <Select
                 value={settings.canvasQuality}
                 onValueChange={(value: any) => applyQualityPreset(value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="canvas-quality" className="w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -332,10 +335,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Performance Mode"
+              id="performance-mode"
               description="Reduce visual effects for better performance"
               badge="Recommended for older devices"
             >
               <Switch
+                id="performance-mode"
                 checked={settings.performanceMode}
                 onCheckedChange={(checked) => updateSetting('performanceMode', checked)}
               />
@@ -343,9 +348,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Show FPS Counter"
+              id="show-fps"
               description="Display frames per second"
             >
               <Switch
+                id="show-fps"
                 checked={settings.showFPS}
                 onCheckedChange={(checked) => updateSetting('showFPS', checked)}
               />
@@ -356,9 +363,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
           {/* Visual Effects Section */}
           <SettingsSection title="Visual Effects" icon={Zap}>
-            <SettingItem label="Animation Speed">
+            <SettingItem label="Animation Speed" id="animation-speed">
               <div className="w-32 space-y-2">
                 <Slider
+                  id="animation-speed"
                   value={[settings.animationSpeed]}
                   onValueChange={([value]) => updateSetting('animationSpeed', value)}
                   min={0.5}
@@ -374,9 +382,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Shadows"
+              id="enable-shadows"
               description="Enable token and object shadows"
             >
               <Switch
+                id="enable-shadows"
                 checked={settings.enableShadows}
                 onCheckedChange={(checked) => updateSetting('enableShadows', checked)}
               />
@@ -384,9 +394,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Bloom Effect"
+              id="enable-bloom"
               description="Add glow to lights and effects"
             >
               <Switch
+                id="enable-bloom"
                 checked={settings.enableBloom}
                 onCheckedChange={(checked) => updateSetting('enableBloom', checked)}
               />
@@ -394,17 +406,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Anti-Aliasing"
+              id="enable-anti-aliasing"
               description="Smooth edges (impacts performance)"
             >
               <Switch
+                id="enable-anti-aliasing"
                 checked={settings.enableAntiAliasing}
                 onCheckedChange={(checked) => updateSetting('enableAntiAliasing', checked)}
               />
             </SettingItem>
 
-            <SettingItem label="Max Particles">
+            <SettingItem label="Max Particles" id="max-particles">
               <div className="w-32 space-y-2">
                 <Slider
+                  id="max-particles"
                   value={[settings.maxParticles]}
                   onValueChange={([value]) => updateSetting('maxParticles', value)}
                   min={0}
@@ -425,9 +440,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <SettingsSection title="Behavior" icon={Target}>
             <SettingItem
               label="Auto-Center on Turn"
+              id="auto-center"
               description="Center camera on active token"
             >
               <Switch
+                id="auto-center"
                 checked={settings.autoCenterOnTurn}
                 onCheckedChange={(checked) => updateSetting('autoCenterOnTurn', checked)}
               />
@@ -435,9 +452,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Grid Snap"
+              id="grid-snap"
               description="Snap tokens to grid"
             >
               <Switch
+                id="grid-snap"
                 checked={settings.gridSnap}
                 onCheckedChange={(checked) => updateSetting('gridSnap', checked)}
               />
@@ -445,9 +464,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Confirm Before Delete"
+              id="confirm-delete"
               description="Ask before deleting items"
             >
               <Switch
+                id="confirm-delete"
                 checked={settings.confirmBeforeDelete}
                 onCheckedChange={(checked) => updateSetting('confirmBeforeDelete', checked)}
               />
@@ -455,13 +476,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Token Labels"
+              id="token-labels"
               description="When to show token names"
             >
               <Select
                 value={settings.tokenLabels}
                 onValueChange={(value: any) => updateSetting('tokenLabels', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="token-labels" className="w-32" aria-label="Token Labels">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -474,13 +496,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Measurement Unit"
+              id="measurement-unit"
               description="Distance measurement unit"
             >
               <Select
                 value={settings.measurementUnit}
                 onValueChange={(value: any) => updateSetting('measurementUnit', value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="measurement-unit" className="w-32" aria-label="Measurement Unit">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

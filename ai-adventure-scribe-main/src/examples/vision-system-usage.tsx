@@ -8,13 +8,15 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import type { Token } from '@/types/token';
+
 import type { VisionBlocker } from '@/types/scene';
+import type { Token } from '@/types/token';
+
 import { VisionPolygon, FogOfWarMask, VisionBoundary } from '@/components/battle-map/VisionPolygon';
-import { calculateVisionPolygon } from '@/utils/vision-calculations';
-import { buildQuadTree } from '@/utils/spatial-partitioning';
-import VisionWorkerManager from '@/utils/vision-worker-manager';
 import { calculateSceneLighting } from '@/utils/lighting-integration';
+import { buildQuadTree } from '@/utils/spatial-partitioning';
+import { calculateVisionPolygon } from '@/utils/vision-polygon';
+import VisionWorkerManager from '@/utils/vision-worker-manager';
 
 // ===========================
 // Example 1: Basic Vision Polygon

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 
@@ -125,18 +125,36 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
     }
   }, [isPlaying, isProcessing, isPaused, currentPlayingId]);
 
-  const contextValue: VoiceContextType = {
-    currentPlayingId,
-    isPlaying: isPlaying && !!currentPlayingId,
-    isPaused: isPaused && !!currentPlayingId,
-    playMessage,
-    pauseMessage,
-    stopMessage,
-    volume,
-    isMuted,
-    setVolume,
-    toggleMute,
-  };
+  /**
+   * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders
+   * of all consumers when VoiceProvider's parent re-renders.
+   */
+  const contextValue: VoiceContextType = useMemo(
+    () => ({
+      currentPlayingId,
+      isPlaying: isPlaying && !!currentPlayingId,
+      isPaused: isPaused && !!currentPlayingId,
+      playMessage,
+      pauseMessage,
+      stopMessage,
+      volume,
+      isMuted,
+      setVolume,
+      toggleMute,
+    }),
+    [
+      currentPlayingId,
+      isPlaying,
+      isPaused,
+      playMessage,
+      pauseMessage,
+      stopMessage,
+      volume,
+      isMuted,
+      setVolume,
+      toggleMute,
+    ],
+  );
 
   return (
     <VoiceContext.Provider value={contextValue}>

@@ -245,8 +245,9 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-[${Z_INDEX.MODAL_BACKDROP}] bg-black/20 backdrop-blur-sm`}
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm"
         style={{
+          zIndex: Z_INDEX.MODAL_BACKDROP,
           animation: 'fadeIn 0.2s ease-out',
         }}
       />
@@ -255,7 +256,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
       <div
         ref={menuRef}
         className={cn(
-          `fixed z-[${Z_INDEX.MODAL}]`,
+          'fixed',
           className
         )}
         style={{
@@ -264,6 +265,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
           width: radius * 2.5,
           height: radius * 2.5,
           transform: 'translate(-50%, -50%)',
+          zIndex: Z_INDEX.MODAL,
         }}
       >
         {/* Center Button */}
