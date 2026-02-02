@@ -25,7 +25,7 @@
  */
 
 // SDK Imports
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useMemo } from 'react';
 
 import type { Character } from '@/types/character';
 import type { ReactNode } from 'react';
@@ -470,10 +470,14 @@ export function CharacterProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(characterReducer, initialState);
   const { toast } = useToast();
 
-  const value = {
-    state,
-    dispatch,
-  };
+  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo(
+    () => ({
+      state,
+      dispatch,
+    }),
+    [state, dispatch],
+  );
 
   return <CharacterContext.Provider value={value}>{children}</CharacterContext.Provider>;
 }

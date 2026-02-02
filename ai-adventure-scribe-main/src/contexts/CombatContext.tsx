@@ -6,7 +6,7 @@
  * as they would be managed at a physical D&D table.
  */
 
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
 
 import { useCharacter } from './CharacterContext';
 import {
@@ -729,40 +729,73 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   // Context Value
   // ===========================
 
-  const contextValue: CombatContextValue = {
-    state,
-    startCombat,
-    endCombat,
-    nextTurn,
-    rollInitiative,
-    takeAction,
-    dealDamage,
-    healDamage,
-    applyCondition,
-    removeCondition,
-    rollDeathSave,
-    addParticipant,
-    removeParticipant,
-    updateParticipant,
-    // Reaction management
-    addReactionOpportunity,
-    removeReactionOpportunity,
-    clearReactionOpportunities,
-    setPendingReaction,
-    // Participant reaction opportunities
-    addParticipantReactionOpportunity,
-    removeParticipantReactionOpportunity,
-    clearParticipantReactionOpportunities,
+  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
+  // Using useMemo ensures that components consuming this context only re-render
+  // when the actual state or dependent actions change.
+  const contextValue: CombatContextValue = useMemo(
+    () => ({
+      state,
+      startCombat,
+      endCombat,
+      nextTurn,
+      rollInitiative,
+      takeAction,
+      dealDamage,
+      healDamage,
+      applyCondition,
+      removeCondition,
+      rollDeathSave,
+      addParticipant,
+      removeParticipant,
+      updateParticipant,
+      // Reaction management
+      addReactionOpportunity,
+      removeReactionOpportunity,
+      clearReactionOpportunities,
+      setPendingReaction,
+      // Participant reaction opportunities
+      addParticipantReactionOpportunity,
+      removeParticipantReactionOpportunity,
+      clearParticipantReactionOpportunities,
 
-    // Movement actions
-    moveParticipant,
+      // Movement actions
+      moveParticipant,
 
-    // Weapon management
-    equipMainHandWeapon,
-    equipOffHandWeapon,
-    unequipMainHandWeapon,
-    unequipOffHandWeapon,
-  };
+      // Weapon management
+      equipMainHandWeapon,
+      equipOffHandWeapon,
+      unequipMainHandWeapon,
+      unequipOffHandWeapon,
+    }),
+    [
+      state,
+      startCombat,
+      endCombat,
+      nextTurn,
+      rollInitiative,
+      takeAction,
+      dealDamage,
+      healDamage,
+      applyCondition,
+      removeCondition,
+      rollDeathSave,
+      addParticipant,
+      removeParticipant,
+      updateParticipant,
+      addReactionOpportunity,
+      removeReactionOpportunity,
+      clearReactionOpportunities,
+      setPendingReaction,
+      addParticipantReactionOpportunity,
+      removeParticipantReactionOpportunity,
+      clearParticipantReactionOpportunities,
+      moveParticipant,
+      equipMainHandWeapon,
+      equipOffHandWeapon,
+      unequipMainHandWeapon,
+      unequipOffHandWeapon,
+    ],
+  );
 
   return <CombatContext.Provider value={contextValue}>{children}</CombatContext.Provider>;
 };
