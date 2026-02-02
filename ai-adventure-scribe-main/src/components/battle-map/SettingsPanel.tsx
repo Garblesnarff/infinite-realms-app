@@ -18,7 +18,6 @@
  * @module components/battle-map/SettingsPanel
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Monitor,
@@ -31,9 +30,12 @@ import {
   Activity,
   Gauge,
 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -41,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
@@ -51,8 +52,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -156,14 +157,15 @@ interface SettingItemProps {
   description?: string;
   badge?: string;
   children: React.ReactNode;
+  id?: string;
 }
 
-const SettingItem: React.FC<SettingItemProps> = ({ label, description, badge, children }) => {
+const SettingItem: React.FC<SettingItemProps> = ({ label, description, badge, children, id }) => {
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex-1 space-y-0.5">
         <div className="flex items-center gap-2">
-          <Label className="text-sm cursor-pointer">{label}</Label>
+          <Label htmlFor={id} className="text-sm cursor-pointer">{label}</Label>
           {badge && (
             <Badge variant="secondary" className="text-xs">
               {badge}
@@ -292,7 +294,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     <Sheet open={controlledOpen} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Open settings">
             <Settings className="h-5 w-5" />
           </Button>
         )}
@@ -313,13 +315,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <SettingsSection title="Performance" icon={Gauge}>
             <SettingItem
               label="Canvas Quality"
+              id="canvas-quality"
               description="Overall rendering quality"
             >
               <Select
                 value={settings.canvasQuality}
                 onValueChange={(value: any) => applyQualityPreset(value)}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger id="canvas-quality" className="w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -332,10 +335,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Performance Mode"
+              id="performance-mode"
               description="Reduce visual effects for better performance"
               badge="Recommended for older devices"
             >
               <Switch
+                id="performance-mode"
                 checked={settings.performanceMode}
                 onCheckedChange={(checked) => updateSetting('performanceMode', checked)}
               />
@@ -343,9 +348,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Show FPS Counter"
+              id="show-fps"
               description="Display frames per second"
             >
               <Switch
+                id="show-fps"
                 checked={settings.showFPS}
                 onCheckedChange={(checked) => updateSetting('showFPS', checked)}
               />
@@ -425,9 +432,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <SettingsSection title="Behavior" icon={Target}>
             <SettingItem
               label="Auto-Center on Turn"
+              id="auto-center"
               description="Center camera on active token"
             >
               <Switch
+                id="auto-center"
                 checked={settings.autoCenterOnTurn}
                 onCheckedChange={(checked) => updateSetting('autoCenterOnTurn', checked)}
               />
@@ -435,9 +444,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Grid Snap"
+              id="grid-snap"
               description="Snap tokens to grid"
             >
               <Switch
+                id="grid-snap"
                 checked={settings.gridSnap}
                 onCheckedChange={(checked) => updateSetting('gridSnap', checked)}
               />
@@ -445,9 +456,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <SettingItem
               label="Confirm Before Delete"
+              id="confirm-delete"
               description="Ask before deleting items"
             >
               <Switch
+                id="confirm-delete"
                 checked={settings.confirmBeforeDelete}
                 onCheckedChange={(checked) => updateSetting('confirmBeforeDelete', checked)}
               />
