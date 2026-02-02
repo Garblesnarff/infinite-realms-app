@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Character Service
  *
@@ -8,21 +9,20 @@
  * @module server/services/character-service
  */
 
+import { TRPCError } from '@trpc/server';
+import { eq, and, desc } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   characters,
   characterStats,
-  campaigns,
   characterPermissions,
   type Character,
   type NewCharacter,
   type CharacterPermission,
-  type NewCharacterPermission,
   type PermissionLevel
 } from '../../../db/schema/index.js';
-import { eq, and, desc, or } from 'drizzle-orm';
 import { InternalServerError } from '../lib/errors.js';
-import { TRPCError } from '@trpc/server';
 
 export class CharacterService {
   /**
@@ -203,48 +203,56 @@ export class CharacterService {
     userId: string,
     requiredLevel?: 'viewer' | 'editor' | 'owner'
   ): Promise<{ hasAccess: boolean; permission?: CharacterPermission; isOwner: boolean }> {
-    // Check if user is the owner
-    const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
-      columns: { userId: true, ownerId: true },
-    });
+    // Optimization: Use a single query with leftJoin to check both ownership and permissions in one round-trip
+    const result = await (db as any)
+      .select({
+        character: {
+          userId: characters.userId,
+          ownerId: characters.ownerId,
+        },
+        permission: characterPermissions,
+      })
+      .from(characters)
+      .leftJoin(
+        characterPermissions,
+        and(
+          eq(characterPermissions.characterId, characters.id),
+          eq(characterPermissions.userId, userId)
+        )
+      )
+      .where(eq(characters.id, characterId))
+      .limit(1);
 
-    if (!character) {
+    if (result.length === 0) {
       return { hasAccess: false, isOwner: false };
     }
 
+    const { character, permission } = result[0];
     const isOwner = character.userId === userId || character.ownerId === userId;
 
     if (isOwner) {
       return { hasAccess: true, isOwner: true };
     }
 
-    // Check for explicit permission
-    const permission = await db.query.characterPermissions.findFirst({
-      where: and(
-        eq(characterPermissions.characterId, characterId),
-        eq(characterPermissions.userId, userId)
-      ),
-    });
-
-    if (!permission) {
+    // If not owner, check if explicit permission was found by the join
+    if (!permission || !permission.id) {
       return { hasAccess: false, isOwner: false };
     }
 
     // If a specific permission level is required, check it
     if (requiredLevel) {
-      const permissionLevels = { viewer: 1, editor: 2, owner: 3 };
+      const permissionLevels: Record<string, number> = { viewer: 1, editor: 2, owner: 3 };
       const hasRequiredLevel =
         permissionLevels[permission.permissionLevel] >= permissionLevels[requiredLevel];
 
       return {
         hasAccess: hasRequiredLevel,
-        permission,
+        permission: permission as CharacterPermission,
         isOwner: false,
       };
     }
 
-    return { hasAccess: true, permission, isOwner: false };
+    return { hasAccess: true, permission: permission as CharacterPermission, isOwner: false };
   }
 
   /**
