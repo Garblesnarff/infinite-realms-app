@@ -15,11 +15,6 @@
  * @module components/battle-map/DrawingTool
  */
 
-import React, { useCallback, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Separator } from '@/components/ui/separator';
 import {
   Pen,
   Square,
@@ -33,14 +28,23 @@ import {
   Palette,
   PaintBucket,
 } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+
 import { FreehandDrawing } from './FreehandDrawing';
 import { ShapeDrawing, type ShapeData } from './ShapeDrawing';
 import { TextAnnotation, type TextAnnotationData } from './TextAnnotation';
-import { useDrawingTool } from '@/hooks/use-drawing-tool';
-import { DrawingType, FillType } from '@/types/drawing';
+
 import type { Point2D } from '@/types/scene';
+
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
+import { Z_INDEX } from '@/constants/z-index';
+import { useDrawingTool } from '@/hooks/use-drawing-tool';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { DrawingType, FillType } from '@/types/drawing';
 
 // ===========================
 // Types
@@ -234,6 +238,7 @@ export function DrawingTool({
                 size="icon"
                 onClick={() => handleToolSelect(tool.type)}
                 title={`${tool.label} (${tool.shortcut})`}
+                aria-label={tool.label}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -335,6 +340,7 @@ export function DrawingTool({
             onClick={undo}
             disabled={!canUndo}
             title="Undo (Ctrl+Z)"
+            aria-label="Undo"
           >
             <Undo className="h-4 w-4" />
           </Button>
@@ -344,6 +350,7 @@ export function DrawingTool({
             onClick={redo}
             disabled={!canRedo}
             title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"
           >
             <Redo className="h-4 w-4" />
           </Button>
@@ -358,6 +365,7 @@ export function DrawingTool({
             logger.warn('Clear all not yet implemented');
           }}
           title="Clear All"
+          aria-label="Clear All"
           className="text-destructive hover:text-destructive"
         >
           <Trash2 className="h-4 w-4" />
@@ -499,12 +507,13 @@ export function DrawingTool({
       {showToolbar && (
         <div
           className={cn(
-            'absolute z-10',
+            'absolute',
             toolbarPosition === 'top' && 'top-4 left-1/2 -translate-x-1/2',
             toolbarPosition === 'bottom' && 'bottom-4 left-1/2 -translate-x-1/2',
             toolbarPosition === 'left' && 'left-4 top-1/2 -translate-y-1/2',
             toolbarPosition === 'right' && 'right-4 top-1/2 -translate-y-1/2'
           )}
+          style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
         >
           {renderToolbar()}
         </div>

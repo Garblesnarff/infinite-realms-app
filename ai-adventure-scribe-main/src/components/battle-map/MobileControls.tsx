@@ -126,11 +126,14 @@ interface GestureHintsProps {
 
 const GestureHints: React.FC<GestureHintsProps> = ({ onDismiss }) => {
   return (
-    <div className={`fixed inset-0 z-[${Z_INDEX.MODAL_BACKDROP}] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4`}>
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+    >
       <div className="bg-background border rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Touch Gestures</h3>
-          <Button variant="ghost" size="icon" onClick={onDismiss}>
+          <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Close hints">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -336,10 +339,10 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       <div
         className={cn(
           'fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg transition-transform',
-          `z-[${Z_INDEX.FLOATING_PANEL}]`,
           isCollapsed && 'translate-y-full',
           className
         )}
+        style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
       >
         {/* Collapse/Expand Button */}
         <div className="absolute -top-10 right-4">
@@ -348,6 +351,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
             size="icon"
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="rounded-full shadow-lg"
+            aria-label={isCollapsed ? "Expand controls" : "Collapse controls"}
           >
             {isCollapsed ? <Maximize2 className="h-5 w-5" /> : <X className="h-5 w-5" />}
           </Button>
@@ -484,7 +488,10 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
 
       {/* Collapsed Toolbar Indicator */}
       {isCollapsed && (
-        <div className={`fixed bottom-4 right-4 z-[${Z_INDEX.FLOATING_PANEL}]`}>
+        <div
+          className="fixed bottom-4 right-4"
+          style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+        >
           <Button
             variant="default"
             size="icon"

@@ -8,11 +8,16 @@
  * @module server/services/drawing-service
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc, or, inArray } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
-import { sceneDrawings, scenes, type SceneDrawing, type NewSceneDrawing } from '../../../db/schema/index.js';
-import { InternalServerError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import {
+  sceneDrawings,
+  scenes,
+  type SceneDrawing,
+  type NewSceneDrawing,
+} from '../../../db/schema/index.js';
+import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new drawing
@@ -36,27 +41,19 @@ export class DrawingService {
    * List all drawings for a specific scene
    */
   static async listDrawings(sceneId: string, userId: string): Promise<SceneDrawing[]> {
-    // Verify scene access (only owner for now)
-    const [scene] = await db
-      .select({ userId: scenes.userId })
-      .from(scenes)
-      .where(eq(scenes.id, sceneId))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    if (scene.userId !== userId) {
-      throw new ForbiddenError('Not authorized to view drawings for this scene');
-    }
-
     const drawings = await db
-      .select()
+      .select({ drawings: sceneDrawings })
       .from(sceneDrawings)
-      .where(eq(sceneDrawings.sceneId, sceneId));
+      .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
+      .where(
+        and(
+          eq(sceneDrawings.sceneId, sceneId),
+          eq(scenes.userId, userId)
+        )
+      )
+      .orderBy(asc(sceneDrawings.createdAt));
 
-    return drawings;
+    return drawings.map(d => d.drawings);
   }
 
   /**
@@ -67,15 +64,15 @@ export class DrawingService {
     userId: string,
     data: CreateDrawingData
   ): Promise<SceneDrawing> {
-    // Verify the scene exists and get the owner
+    // Verify scene ownership
     const [scene] = await db
-      .select({ userId: scenes.userId })
+      .select({ id: scenes.id })
       .from(scenes)
-      .where(eq(scenes.id, sceneId))
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
       .limit(1);
 
     if (!scene) {
-      throw new InternalServerError('Scene not found');
+      throw new NotFoundError('Scene', sceneId);
     }
 
     // Create the drawing
@@ -124,19 +121,16 @@ export class DrawingService {
       })
       .from(sceneDrawings)
       .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(eq(sceneDrawings.id, drawingId))
+      .where(
+        and(
+          eq(sceneDrawings.id, drawingId),
+          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
+        )
+      )
       .limit(1);
 
     if (!existing) {
       return null;
-    }
-
-    // Check authorization: creator or scene owner
-    const isCreator = existing.createdBy === userId;
-    const isSceneOwner = existing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to update this drawing');
     }
 
     // Update the drawing
@@ -157,32 +151,26 @@ export class DrawingService {
    * Only the creator or scene owner can delete
    */
   static async deleteDrawing(drawingId: string, userId: string): Promise<boolean> {
-    // Get the drawing with scene info to check authorization
+    // We fetch the drawing first to check ownership, then delete
+    // This ensures we only delete if the user has permission
     const [existing] = await db
       .select({
-        drawingId: sceneDrawings.id,
-        createdBy: sceneDrawings.createdBy,
-        sceneId: sceneDrawings.sceneId,
-        sceneOwnerId: scenes.userId,
+        id: sceneDrawings.id,
       })
       .from(sceneDrawings)
       .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(eq(sceneDrawings.id, drawingId))
+      .where(
+        and(
+          eq(sceneDrawings.id, drawingId),
+          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
+        )
+      )
       .limit(1);
 
     if (!existing) {
       return false;
     }
 
-    // Check authorization: creator or scene owner (GM)
-    const isCreator = existing.createdBy === userId;
-    const isSceneOwner = existing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to delete this drawing');
-    }
-
-    // Delete the drawing
     const result = await db
       .delete(sceneDrawings)
       .where(eq(sceneDrawings.id, drawingId))
@@ -206,66 +194,47 @@ export class DrawingService {
 
     // Verify user is the scene owner
     const [scene] = await db
-      .select({ userId: scenes.userId })
+      .select({ id: scenes.id })
       .from(scenes)
-      .where(eq(scenes.id, sceneId))
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
       .limit(1);
 
     if (!scene) {
-      throw new InternalServerError('Scene not found');
-    }
-
-    if (scene.userId !== userId) {
-      throw new ForbiddenError('Only scene owner can bulk delete drawings');
+      throw new NotFoundError('Scene', sceneId);
     }
 
     // Delete all specified drawings for this scene
-    let deletedCount = 0;
-    for (const drawingId of drawingIds) {
-      const result = await db
-        .delete(sceneDrawings)
-        .where(
-          and(
-            eq(sceneDrawings.id, drawingId),
-            eq(sceneDrawings.sceneId, sceneId)
-          )
+    const result = await db
+      .delete(sceneDrawings)
+      .where(
+        and(
+          eq(sceneDrawings.sceneId, sceneId),
+          inArray(sceneDrawings.id, drawingIds)
         )
-        .returning({ id: sceneDrawings.id });
+      )
+      .returning({ id: sceneDrawings.id });
 
-      if (result.length > 0) {
-        deletedCount++;
-      }
-    }
-
-    return deletedCount;
+    return result.length;
   }
 
   /**
    * Get a single drawing by ID
    */
   static async getDrawingById(drawingId: string, userId: string): Promise<SceneDrawing | null> {
-    const [drawing] = await db
+    const [result] = await db
       .select({
         drawing: sceneDrawings,
-        sceneOwnerId: scenes.userId,
       })
       .from(sceneDrawings)
       .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(eq(sceneDrawings.id, drawingId))
+      .where(
+        and(
+          eq(sceneDrawings.id, drawingId),
+          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
+        )
+      )
       .limit(1);
 
-    if (!drawing) {
-      return null;
-    }
-
-    // Check authorization: creator or scene owner
-    const isCreator = drawing.drawing.createdBy === userId;
-    const isSceneOwner = drawing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to view this drawing');
-    }
-
-    return drawing.drawing as SceneDrawing;
+    return result?.drawing || null;
   }
 }

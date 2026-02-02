@@ -14,7 +14,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
  *
  * Usage: Render below campaign title in GameContent header
  */
-export const StatsBar: React.FC = () => {
+export const StatsBar: React.FC = React.memo(() => {
   const { state: characterState } = useCharacter();
   const character = characterState.character;
 
@@ -92,4 +92,4 @@ export const StatsBar: React.FC = () => {
       />
     </div>
   );
-};
+});

@@ -6,10 +6,11 @@
  * All mutations require GM ownership of the scene.
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '../trpc.js';
+import { z } from 'zod';
+
 import { VisionBlockerService } from '../../services/vision-blocker-service.js';
+import { router, protectedProcedure } from '../trpc.js';
 
 /**
  * Schema for a point (x, y coordinates)
@@ -55,9 +56,12 @@ export const visionBlockersRouter = router({
    */
   list: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const blockers = await VisionBlockerService.listVisionBlockers(input.sceneId);
+        const blockers = await VisionBlockerService.listVisionBlockers(
+          input.sceneId,
+          ctx.user.userId
+        );
         return { blockers };
       } catch (error: any) {
         throw new TRPCError({
@@ -72,9 +76,12 @@ export const visionBlockersRouter = router({
    */
   get: protectedProcedure
     .input(z.object({ blockerId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const blocker = await VisionBlockerService.getVisionBlocker(input.blockerId);
+        const blocker = await VisionBlockerService.getVisionBlocker(
+          input.blockerId,
+          ctx.user.userId
+        );
 
         if (!blocker) {
           throw new TRPCError({
@@ -301,9 +308,9 @@ export const visionBlockersRouter = router({
    */
   listDoors: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
-        const doors = await VisionBlockerService.listDoors(input.sceneId);
+        const doors = await VisionBlockerService.listDoors(input.sceneId, ctx.user.userId);
         return { doors };
       } catch (error: any) {
         throw new TRPCError({
