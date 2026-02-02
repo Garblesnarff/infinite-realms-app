@@ -11,6 +11,7 @@
  * Ported from /server/src/routes/v1/inventory.ts
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../lib/auth.js';
@@ -31,8 +32,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
   /**
    * Centralized authentication and character ownership verification
    */
-  .onBeforeHandle(async ({ params, request, set }) => {
+  .derive(async ({ request }) => {
     const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, params, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
@@ -55,7 +59,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/inventory
    * Get character inventory with optional filters
    */
-  .get('/:id/inventory', async ({ params, query, set }) => {
+  .get('/:id/inventory', async ({ params, query, set, user }) => {
     try {
       const options: GetInventoryOptions = {};
 
@@ -66,7 +70,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         options.equipped = query.equipped === 'true';
       }
 
-      const inventory = await InventoryService.getInventory(params.id, options);
+      const inventory = await InventoryService.getInventory(params.id, (user as any).userId, options);
       return inventory;
     } catch (error) {
       logger.error({ msg: 'INVENTORY_GET error', error });
@@ -82,7 +86,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory
    * Add item to character inventory
    */
-  .post('/:id/inventory', async ({ params, body, set }) => {
+  .post('/:id/inventory', async ({ params, body, set, user }) => {
     try {
       const itemData = body as CreateInventoryItemInput;
 
@@ -104,7 +108,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         requiresAttunement: itemData.requiresAttunement,
       };
 
-      const item = await InventoryService.addItem(input);
+      const item = await InventoryService.addItem(input, (user as any).userId);
 
       set.status = 201;
       return { item };
@@ -122,7 +126,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * PATCH /v1/characters/:id/inventory/:itemId
    * Update inventory item
    */
-  .patch('/:id/inventory/:itemId', async ({ params, body, set }) => {
+  .patch('/:id/inventory/:itemId', async ({ params, body, set, user }) => {
     try {
       const updates = body as UpdateInventoryItemInput;
       const input: UpdateInventoryItemInput = {};
@@ -135,7 +139,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       if (updates.isEquipped !== undefined) input.isEquipped = updates.isEquipped;
       if (updates.isAttuned !== undefined) input.isAttuned = updates.isAttuned;
 
-      const item = await InventoryService.updateItem(params.itemId, params.id, input);
+      const item = await InventoryService.updateItem(params.itemId, params.id, (user as any).userId, input);
 
       if (!item) {
         set.status = 404;
@@ -157,9 +161,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * DELETE /v1/characters/:id/inventory/:itemId
    * Remove item from inventory
    */
-  .delete('/:id/inventory/:itemId', async ({ params, set }) => {
+  .delete('/:id/inventory/:itemId', async ({ params, set, user }) => {
     try {
-      const deleted = await InventoryService.removeItem(params.itemId, params.id);
+      const deleted = await InventoryService.removeItem(params.itemId, params.id, (user as any).userId);
 
       if (!deleted) {
         set.status = 404;
@@ -185,7 +189,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/use
    * Use consumable or ammunition
    */
-  .post('/:id/inventory/:itemId/use', async ({ params, body, set }) => {
+  .post('/:id/inventory/:itemId/use', async ({ params, body, set, user }) => {
     try {
       const { quantity, sessionId, context } = body as {
         quantity?: number;
@@ -201,7 +205,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         context,
       };
 
-      const result = await InventoryService.useConsumable(input);
+      const result = await InventoryService.useConsumable(input, (user as any).userId);
 
       return {
         remainingQuantity: result.remainingQuantity,
@@ -225,9 +229,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/encumbrance
    * Get encumbrance status
    */
-  .get('/:id/encumbrance', async ({ params, set }) => {
+  .get('/:id/encumbrance', async ({ params, set, user }) => {
     try {
-      const encumbrance = await InventoryService.checkEncumbrance(params.id);
+      const encumbrance = await InventoryService.checkEncumbrance(params.id, (user as any).userId);
       return encumbrance;
     } catch (error) {
       logger.error({ msg: 'ENCUMBRANCE_CHECK error', error });
@@ -247,9 +251,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/attune/:itemId
    * Attune to a magic item
    */
-  .post('/:id/attune/:itemId', async ({ params, set }) => {
+  .post('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const result = await InventoryService.attuneItem(params.id, params.itemId);
+      const result = await InventoryService.attuneItem(params.id, params.itemId, (user as any).userId);
 
       if (!result.success) {
         set.status = 400;
@@ -280,9 +284,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * DELETE /v1/characters/:id/attune/:itemId
    * Break attunement with a magic item
    */
-  .delete('/:id/attune/:itemId', async ({ params, set }) => {
+  .delete('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const item = await InventoryService.unattuneItem(params.itemId, params.id);
+      const item = await InventoryService.unattuneItem(params.itemId, params.id, (user as any).userId);
 
       if (!item) {
         set.status = 404;
@@ -304,9 +308,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/attuned
    * Get all attuned items
    */
-  .get('/:id/attuned', async ({ params, set }) => {
+  .get('/:id/attuned', async ({ params, set, user }) => {
     try {
-      const items = await InventoryService.getAttunedItems(params.id);
+      const items = await InventoryService.getAttunedItems(params.id, (user as any).userId);
       return { items };
     } catch (error) {
       logger.error({ msg: 'ATTUNED_ITEMS error', error });
@@ -326,9 +330,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/equip
    * Equip weapon or armor
    */
-  .post('/:id/inventory/:itemId/equip', async ({ params, set }) => {
+  .post('/:id/inventory/:itemId/equip', async ({ params, set, user }) => {
     try {
-      const result = await InventoryService.equipItem(params.id, params.itemId);
+      const result = await InventoryService.equipItem(params.id, params.itemId, (user as any).userId);
 
       if (!result.success) {
         set.status = 400;
@@ -350,9 +354,9 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/unequip
    * Unequip item
    */
-  .post('/:id/inventory/:itemId/unequip', async ({ params, set }) => {
+  .post('/:id/inventory/:itemId/unequip', async ({ params, set, user }) => {
     try {
-      const item = await InventoryService.unequipItem(params.itemId, params.id);
+      const item = await InventoryService.unequipItem(params.itemId, params.id, (user as any).userId);
 
       if (!item) {
         set.status = 404;
@@ -378,14 +382,14 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/usage-history
    * Get consumable usage history
    */
-  .get('/:id/usage-history', async ({ params, query, set }) => {
+  .get('/:id/usage-history', async ({ params, query, set, user }) => {
     try {
       const history = await InventoryService.getUsageHistory({
         characterId: params.id,
         itemId: query.itemId as string | undefined,
         sessionId: query.sessionId as string | undefined,
         limit: query.limit ? parseInt(query.limit as string) : undefined,
-      });
+      }, (user as any).userId);
 
       return { history };
     } catch (error) {
