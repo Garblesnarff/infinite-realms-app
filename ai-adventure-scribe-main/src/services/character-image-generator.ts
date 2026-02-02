@@ -12,11 +12,11 @@ import { geminiImageService } from './gemini-image-service';
 import { openRouterService, type UploadOptions } from './openrouter-service';
 
 import logger from '@/lib/logger';
-import {
-  buildCharacterImagePrompt,
-  type CharacterPromptData,
-  type ImagePromptOptions,
-} from '@/services/prompts/characterPrompts';
+import { buildCharacterImagePrompt } from '@/services/prompts/characterPrompts';
+import type {
+  CharacterPromptData,
+  ImagePromptOptions,
+} from '@/services/prompts/character-prompt-types';
 
 enum ImageGenerationProvider {
   GEMINI_DIRECT = 'gemini-direct',
