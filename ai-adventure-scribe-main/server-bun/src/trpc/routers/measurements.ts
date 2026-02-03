@@ -17,6 +17,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AppError } from '../../lib/errors.js';
 import { MeasurementService, type CreateTemplateData } from '../../services/measurement-service.js';
 import { protectedProcedure, router } from '../trpc.js';
 
@@ -47,8 +48,15 @@ export const measurementsRouter = router({
   list: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      const templates = await MeasurementService.listTemplates(input.sceneId, ctx.user.userId);
-      return { data: templates };
+      try {
+        const templates = await MeasurementService.listTemplates(input.sceneId, ctx.user.userId);
+        return { data: templates };
+      } catch (error: unknown) {
+        if (error instanceof AppError && error.statusCode === 404) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+        }
+        throw error;
+      }
     }),
 
   /**
@@ -96,13 +104,20 @@ export const measurementsRouter = router({
         isTemporary: input.isTemporary ?? true,
       };
 
-      const template = await MeasurementService.createTemplate(
-        input.sceneId,
-        ctx.user.userId,
-        templateData
-      );
+      try {
+        const template = await MeasurementService.createTemplate(
+          input.sceneId,
+          ctx.user.userId,
+          templateData
+        );
 
-      return template;
+        return template;
+      } catch (error: unknown) {
+        if (error instanceof AppError && error.statusCode === 404) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+        }
+        throw error;
+      }
     }),
 
   /**
@@ -119,26 +134,16 @@ export const measurementsRouter = router({
         });
       }
 
-      try {
-        const deleted = await MeasurementService.deleteTemplate(input.templateId, ctx.user.userId);
+      const deleted = await MeasurementService.deleteTemplate(input.templateId, ctx.user.userId);
 
-        if (!deleted) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Template not found',
-          });
-        }
-
-        return { success: true };
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Not authorized')) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'You do not have permission to delete this template',
-          });
-        }
-        throw error;
+      if (!deleted) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Template not found',
+        });
       }
+
+      return { success: true };
     }),
 
   /**
@@ -151,12 +156,9 @@ export const measurementsRouter = router({
       try {
         const result = await MeasurementService.calculateAffectedTokens(input.templateId, ctx.user.userId);
         return result;
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('not found')) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Template not found',
-          });
+      } catch (error: unknown) {
+        if (error instanceof AppError && error.statusCode === 404) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
         }
         throw error;
       }
@@ -181,20 +183,23 @@ export const measurementsRouter = router({
         });
       }
 
-      // Note: Scene ownership check is not implemented here for simplicity
-      // In production, you might want to verify the user is the scene owner
-      // before allowing cleanup
+      try {
+        const deletedCount = await MeasurementService.cleanupTemporaryTemplates(
+          input.sceneId,
+          ctx.user.userId,
+          input.maxAgeMinutes ?? 60
+        );
 
-      const deletedCount = await MeasurementService.cleanupTemporaryTemplates(
-        input.sceneId,
-        ctx.user.userId,
-        input.maxAgeMinutes ?? 60
-      );
-
-      return {
-        success: true,
-        deletedCount,
-      };
+        return {
+          success: true,
+          deletedCount,
+        };
+      } catch (error: unknown) {
+        if (error instanceof AppError && error.statusCode === 404) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+        }
+        throw error;
+      }
     }),
 });
 

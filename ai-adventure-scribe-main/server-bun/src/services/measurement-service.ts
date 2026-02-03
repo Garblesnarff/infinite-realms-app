@@ -16,7 +16,7 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, lt, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -26,7 +26,7 @@ import {
   type MeasurementTemplate,
   type Token,
 } from '../../../db/schema/index.js';
-import { InternalServerError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new measurement template
@@ -67,15 +67,15 @@ export class MeasurementService {
     userId: string,
     data: CreateTemplateData
   ): Promise<MeasurementTemplate> {
-    // Verify the scene exists
+    // Verify the scene exists and user has access (is the owner/GM)
     const [scene] = await db
       .select({ id: scenes.id })
       .from(scenes)
-      .where(eq(scenes.id, sceneId))
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
       .limit(1);
 
     if (!scene) {
-      throw new InternalServerError('Scene not found');
+      throw new NotFoundError('Scene', sceneId);
     }
 
     // Create the template
@@ -108,29 +108,26 @@ export class MeasurementService {
    * Only the creator or scene owner can delete
    */
   static async deleteTemplate(templateId: string, userId: string): Promise<boolean> {
-    // Get the template with scene info to check authorization
+    // We check ownership in the initial query to prevent existence leakage
     const [existing] = await db
       .select({
-        templateId: measurementTemplates.id,
-        createdBy: measurementTemplates.createdBy,
-        sceneId: measurementTemplates.sceneId,
-        sceneOwnerId: scenes.userId,
+        id: measurementTemplates.id,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
-      .where(eq(measurementTemplates.id, templateId))
+      .where(
+        and(
+          eq(measurementTemplates.id, templateId),
+          or(
+            eq(measurementTemplates.createdBy, userId),
+            eq(scenes.userId, userId)
+          )
+        )
+      )
       .limit(1);
 
     if (!existing) {
       return false;
-    }
-
-    // Check authorization: creator or scene owner
-    const isCreator = existing.createdBy === userId;
-    const isSceneOwner = existing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to delete this template');
     }
 
     // Delete the template
@@ -151,11 +148,18 @@ export class MeasurementService {
     const [existing] = await db
       .select({
         template: measurementTemplates,
-        sceneOwnerId: scenes.userId,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
-      .where(eq(measurementTemplates.id, templateId))
+      .where(
+        and(
+          eq(measurementTemplates.id, templateId),
+          or(
+            eq(measurementTemplates.createdBy, userId),
+            eq(scenes.userId, userId)
+          )
+        )
+      )
       .limit(1);
 
     if (!existing) {
@@ -163,14 +167,6 @@ export class MeasurementService {
     }
 
     const template = existing.template;
-
-    // Check authorization: creator or scene owner
-    const isCreator = template.createdBy === userId;
-    const isSceneOwner = existing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to access this template');
-    }
 
     // Get all tokens in the same scene
     const sceneTokens = await db
@@ -390,15 +386,11 @@ export class MeasurementService {
     const [scene] = await db
       .select({ userId: scenes.userId })
       .from(scenes)
-      .where(eq(scenes.id, sceneId))
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
       .limit(1);
 
     if (!scene) {
       throw new NotFoundError('Scene', sceneId);
-    }
-
-    if (scene.userId !== userId) {
-      throw new ForbiddenError('Only the scene owner (GM) can cleanup templates');
     }
 
     const cutoffDate = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
@@ -421,55 +413,42 @@ export class MeasurementService {
    * Get a single template by ID
    */
   static async getTemplateById(templateId: string, userId: string): Promise<MeasurementTemplate | null> {
-    const [existing] = await db
+    const [result] = await db
       .select({
         template: measurementTemplates,
-        sceneOwnerId: scenes.userId,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
-      .where(eq(measurementTemplates.id, templateId))
+      .where(
+        and(
+          eq(measurementTemplates.id, templateId),
+          or(
+            eq(measurementTemplates.createdBy, userId),
+            eq(scenes.userId, userId)
+          )
+        )
+      )
       .limit(1);
 
-    if (!existing) {
-      return null;
-    }
-
-    // Check authorization: creator or scene owner
-    const isCreator = existing.template.createdBy === userId;
-    const isSceneOwner = existing.sceneOwnerId === userId;
-
-    if (!isCreator && !isSceneOwner) {
-      throw new ForbiddenError('Not authorized to view this template');
-    }
-
-    return existing.template as MeasurementTemplate;
+    return result?.template || null;
   }
 
   /**
    * List all templates for a scene
    */
   static async listTemplates(sceneId: string, userId: string): Promise<MeasurementTemplate[]> {
-    // Verify scene access
-    const [scene] = await db
-      .select({ userId: scenes.userId })
-      .from(scenes)
-      .where(eq(scenes.id, sceneId))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    if (scene.userId !== userId) {
-      throw new ForbiddenError('Not authorized to view templates for this scene');
-    }
-
-    const templates = await db
-      .select()
+    // Incorporate ownership check into the query itself to prevent existence leakage
+    const result = await db
+      .select({ template: measurementTemplates })
       .from(measurementTemplates)
-      .where(eq(measurementTemplates.sceneId, sceneId));
+      .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
+      .where(
+        and(
+          eq(measurementTemplates.sceneId, sceneId),
+          eq(scenes.userId, userId)
+        )
+      );
 
-    return templates;
+    return result.map(r => r.template);
   }
 }
