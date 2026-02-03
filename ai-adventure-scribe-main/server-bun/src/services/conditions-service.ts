@@ -448,8 +448,6 @@ export class ConditionsService {
       const row = rowData as any;
       // Check if condition has expired
       if (row.expires_at_round && row.expires_at_round <= currentRound) {
-        await this.removeCondition(row.id);
-
         const mechanicalEffects = this.parseMechanicalEffects(row.mechanical_effects);
         expiredConditions.push({
           id: row.id,
@@ -483,6 +481,23 @@ export class ConditionsService {
           saveDc: row.save_dc,
         });
       }
+    }
+
+    // ⚡ Bolt: Batch update all expired conditions in a single query instead of N updates.
+    // This fixes an N+1 update pattern and significantly improves performance during turn advancement.
+    // It also resolves a bug where encounterId was missing in the individual removeCondition calls.
+    if (expiredConditions.length > 0) {
+      const expiredIds = expiredConditions.map((c) => c.id);
+      await db.execute(
+        sql`
+          UPDATE combat_participant_conditions
+          SET is_active = false
+          WHERE id IN (${sql.join(
+            expiredIds.map((id) => sql`${id}`),
+            sql`, `
+          )})
+        `
+      );
     }
 
     return { expiredConditions, savingThrowsNeeded };
