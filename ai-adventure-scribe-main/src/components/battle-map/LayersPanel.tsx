@@ -13,11 +13,15 @@
  * - Uses Shadcn UI components (Sheet, Slider, Switch)
  */
 
-import React from 'react';
 import { Eye, EyeOff, Lock, Unlock, Layers } from 'lucide-react';
+import React, { useId } from 'react';
 import { toast } from 'sonner';
 
+import { LAYER_CONFIGS, type LayerConfig } from './LayerManager';
+
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
@@ -27,10 +31,8 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Slider } from '@/components/ui/slider';
-import { Separator } from '@/components/ui/separator';
-import { useBattleMapStore } from '@/stores/useBattleMapStore';
-import { LAYER_CONFIGS, type LayerConfig } from './LayerManager';
 import { trpc } from '@/lib/trpc';
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 // ===========================
 // Types
@@ -63,6 +65,7 @@ interface LayerControlItemProps {
 }
 
 const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, layerId }) => {
+  const opacityId = useId();
   const getLayerState = useBattleMapStore((state) => state.getLayerState);
   const toggleLayerVisibility = useBattleMapStore((state) => state.toggleLayerVisibility);
   const toggleLayerLock = useBattleMapStore((state) => state.toggleLayerLock);
@@ -149,6 +152,8 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
             size="icon"
             className="h-8 w-8"
             onClick={handleVisibilityToggle}
+            aria-label={layerState.visible ? 'Hide layer' : 'Show layer'}
+            aria-pressed={layerState.visible}
             title={layerState.visible ? 'Hide layer' : 'Show layer'}
           >
             {layerState.visible ? (
@@ -164,6 +169,8 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
             size="icon"
             className="h-8 w-8"
             onClick={handleLockToggle}
+            aria-label={layerState.locked ? 'Unlock layer' : 'Lock layer'}
+            aria-pressed={layerState.locked}
             title={layerState.locked ? 'Unlock layer' : 'Lock layer'}
           >
             {layerState.locked ? (
@@ -179,10 +186,11 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
       {layerState.visible && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Opacity</span>
+            <Label htmlFor={opacityId} className="cursor-pointer">Opacity</Label>
             <span>{Math.round(layerState.opacity * 100)}%</span>
           </div>
           <Slider
+            id={opacityId}
             value={[layerState.opacity]}
             min={0}
             max={1}
@@ -227,7 +235,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
     if (!sceneData?.layers) return {};
 
     const map: Record<string, string> = {};
-    sceneData.layers.forEach((layer: any) => {
+    sceneData.layers.forEach((layer: { id: string; layerType?: string | null }) => {
       if (layer.layerType) {
         map[layer.layerType] = layer.id;
       }
@@ -243,6 +251,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
           size="icon"
           className="h-10 w-10"
           title="Open layers panel"
+          aria-label="Open layers panel"
         >
           <Layers className="h-5 w-5" />
         </Button>

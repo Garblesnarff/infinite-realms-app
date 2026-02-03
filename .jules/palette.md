@@ -23,3 +23,7 @@
 ## 2025-05-25 - Comprehensive Accessibility Standardization
 **Learning:** Standardizing accessibility across a complex component (like `ToolOptionsPanel`) involves a multi-pronged approach: adding `aria-label` to non-textual controls (`Slider`, `SelectTrigger`), `aria-pressed` for toggle states, and using `React.useId()` for robust label-to-input linking.
 **Action:** When touching complex UI panels, perform a full a11y audit and apply these patterns consistently.
+
+## 2025-05-26 - Focused Micro-UX Pattern
+**Learning:** UX improvements are most effective when they are highly focused and "surgical". Combining accessibility fixes with large-scale design system migrations (like z-index) in a single PR can obscure the core value and increase regression risk.
+**Action:** Keep UX improvements strictly focused on a single component or small set of related elements. Favor surgical accessibility enhancements (ARIA labels, linked labels) as they provide immediate value with minimal risk.
