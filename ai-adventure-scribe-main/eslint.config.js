@@ -272,6 +272,7 @@ export default tseslint.config(
       'server-bun/src/services/character-service.ts',
       'src/utils/restMechanics.ts',
       'src/utils/__tests__/restMechanics.test.ts',
+      'src/utils/conditionEffects.ts',
       'src/components/battle-map/LayersPanel.tsx',
     ],
     rules: {

@@ -12,9 +12,6 @@ import { d20 } from './diceRolls';
 
 import type { CombatParticipant, Condition, ConditionName, DiceRoll } from '@/types/combat';
 
-import { Equipment } from '@/data/equipmentOptions';
-import { DamageType } from '@/types/combat';
-
 // ===========================
 // Condition Effect Definitions
 // ===========================
@@ -44,43 +41,33 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
   blinded: {
     description:
       "Can't see enemies or allies. All attacks have disadvantage. Attacks against this creature have advantage.",
-    getModifiers: (participant, rollType, target) => {
-      const isAttacker = participant.participantType === 'player' || !target;
-      if (isAttacker) {
+    getModifiers: (_participant, rollType) => {
+      if (rollType === 'attack' || rollType === 'melee_attack' || rollType === 'ranged_attack') {
         // Attacker is blinded
-        return rollType === 'attack'
-          ? {
-              advantage: false,
-              disadvantage: true,
-              bonus: 0,
-              autoFail: false,
-              description: 'Blind - Disadvantage on attacks',
-            }
-          : {
-              advantage: false,
-              disadvantage: false,
-              bonus: 0,
-              autoFail: false,
-              description: '',
-            };
-      } else {
+        return {
+          advantage: false,
+          disadvantage: true,
+          bonus: 0,
+          autoFail: false,
+          description: 'Blind - Disadvantage on attacks',
+        };
+      } else if (rollType === 'defense') {
         // Target is blinded (attacks against them get advantage)
-        return rollType === 'defense'
-          ? {
-              advantage: true,
-              disadvantage: false,
-              bonus: 0,
-              autoFail: false,
-              description: 'Blind - Advantage on attacks vs blinded target',
-            }
-          : {
-              advantage: false,
-              disadvantage: false,
-              bonus: 0,
-              autoFail: false,
-              description: '',
-            };
+        return {
+          advantage: true,
+          disadvantage: false,
+          bonus: 0,
+          autoFail: false,
+          description: 'Blind - Advantage on attacks vs blinded target',
+        };
       }
+      return {
+        advantage: false,
+        disadvantage: false,
+        bonus: 0,
+        autoFail: false,
+        description: '',
+      };
     },
     effect: [
       "Can't see enemies or allies",
@@ -92,7 +79,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
   charmed: {
     description:
       'Regards the charmer as a friendly acquaintance. Cannot target the charmer with attacks or damage.',
-    getModifiers: (participant, rollType, target) => {
+    getModifiers: (_participant, rollType, target) => {
       // Charmed creatures cannot attack their charmer
       // Note: This is a simplified implementation - in full D&D it would track who charmed them
       if (rollType === 'attack' && target?.participantType === 'player') {
@@ -117,7 +104,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   deafened: {
     description: 'Cannot hear sounds. Automatically fails saving throws based on hearing.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       // Auto-fail saves that rely on hearing (some DM discretion needed)
       return rollType === 'hearing_dependent'
         ? {
@@ -141,7 +128,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
   frightened: {
     description:
       'Afraid of a creature. Cannot willingly move closer to it. Attacks have disadvantage.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       return rollType === 'attack'
         ? {
             advantage: false,
@@ -163,7 +150,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   grappled: {
     description: 'Restrained by a grappler. Speed becomes 0. Cannot move.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, _rollType) => {
       // Grappling affects movement primarily (handled in other systems)
       return {
         advantage: false,
@@ -185,7 +172,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   incapacitated: {
     description: 'Cannot take actions, speak, or communicate. Unable to respond.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, _rollType) => {
       return {
         advantage: false,
         disadvantage: false,
@@ -200,7 +187,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
   invisible: {
     description:
       'Cannot be seen. Attacks have advantage. Attacks against this creature have disadvantage.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       if (rollType === 'attack') {
         // Invisible creature attacking - advantage
         return {
@@ -233,7 +220,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   paralyzed: {
     description: 'Cannot move, speak, or take actions. Auto-fails DEX and STR saves.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       const dexAndStrSaves = rollType === 'dexterity_save' || rollType === 'strength_save';
       return {
         advantage: false,
@@ -254,7 +241,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   petrified: {
     description: 'Turned to stone. Cannot move, speak, or take actions. Unconscious.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, _rollType) => {
       return {
         advantage: false,
         disadvantage: false,
@@ -273,7 +260,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   poisoned: {
     description: 'Poisoned. Disadvantage on attack rolls and ability checks.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       return rollType === 'attack' || rollType === 'ability_check'
         ? {
             advantage: false,
@@ -295,7 +282,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   prone: {
     description: 'Lying down. Melee attacks have advantage. All attacks have disadvantage.',
-    getModifiers: (participant, rollType, target) => {
+    getModifiers: (_participant, rollType, target) => {
       if (rollType === 'melee_attack' && target) {
         // Attacking prone target
         return {
@@ -332,7 +319,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   restrained: {
     description: 'Restrained. Speed 0. Attacks have advantage. Auto-fail DEX saves.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       if (rollType === 'defense') {
         return {
           advantage: false,
@@ -370,7 +357,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   stunned: {
     description: 'Dazed and disoriented. Cannot take actions. Auto-fails DEX and STR saves.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       const dexAndStrSaves = rollType === 'dexterity_save' || rollType === 'strength_save';
       return {
         advantage: false,
@@ -392,7 +379,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   unconscious: {
     description: 'Unconscious and unable to act. Defenseless.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, rollType) => {
       if (rollType === 'defense') {
         return {
           advantage: false,
@@ -468,7 +455,7 @@ const CONDITION_EFFECTS: Record<ConditionName, ConditionDefinition> = {
 
   surprised: {
     description: 'Caught unawares. Cannot take an action this turn.',
-    getModifiers: (participant, rollType) => {
+    getModifiers: (_participant, _rollType) => {
       // The main effect of surprise is already handled by turn logic
       // But we can add any remaining modifiers here
       return {
@@ -600,7 +587,7 @@ export function removeConditionEffects(
  * @returns {success: boolean, roll: DiceRoll}
  */
 export function handleConditionSave(
-  participant: CombatParticipant,
+  _participant: CombatParticipant,
   condition: Condition,
   saveModifier: number = 0,
 ): { success: boolean; roll: DiceRoll } {
