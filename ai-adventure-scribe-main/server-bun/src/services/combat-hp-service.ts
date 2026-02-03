@@ -132,11 +132,12 @@ export class CombatHPService {
       isCriticalHit = false,
     } = options;
 
-    // Get participant and status
+    // Get participant, status, and encounter in a single query
     const participant = await db.query.combatParticipants.findFirst({
       where: eq(combatParticipants.id, participantId),
       with: {
         status: true,
+        encounter: true,
       },
     });
 
@@ -240,9 +241,8 @@ export class CombatHPService {
 
     // Log damage
     if (damageAmount > 0) {
-      const encounter = await db.query.combatEncounters.findFirst({
-        where: eq(combatEncounters.id, participant.encounterId),
-      });
+      // ⚡ Bolt: Use joined encounter data instead of fetching it again
+      const encounter = (participant as any).encounter;
 
       await db.insert(combatDamageLog).values({
         encounterId: participant.encounterId,
