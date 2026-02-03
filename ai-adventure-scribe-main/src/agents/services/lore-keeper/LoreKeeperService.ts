@@ -11,6 +11,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 
+// Explicit column lists to avoid over-fetching large vector embeddings
+const CHUNK_COLUMNS = 'id, campaign_id, chunk_type, entity_name, parent_entity, content, summary, metadata, sequence_order';
+const RULE_COLUMNS = 'id, campaign_id, rule_type, condition, effect, reversible, priority';
+const CAMPAIGN_COLUMNS = 'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, cover_image_url';
+
 // Types
 export type ChunkType =
   | 'creative_brief'
@@ -120,7 +125,7 @@ export class LoreKeeperService {
   async getCampaignOverview(campaignId: string): Promise<StarterCampaign | null> {
     const { data, error } = await supabase
       .from('starter_campaigns')
-      .select('*')
+      .select(CAMPAIGN_COLUMNS)
       .eq('id', campaignId)
       .eq('is_published', true)
       .eq('is_complete', true)
@@ -163,7 +168,7 @@ export class LoreKeeperService {
   async getMechanics(campaignId: string): Promise<CampaignChunk[]> {
     const { data, error } = await supabase
       .from('campaign_chunks')
-      .select('*')
+      .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
       .eq('chunk_type', 'mechanic')
       .order('entity_name');
@@ -182,7 +187,7 @@ export class LoreKeeperService {
   async getRules(campaignId: string): Promise<CampaignRule[]> {
     const { data, error } = await supabase
       .from('campaign_rules')
-      .select('*')
+      .select(RULE_COLUMNS)
       .eq('campaign_id', campaignId)
       .order('priority', { ascending: false });
 
@@ -207,7 +212,7 @@ export class LoreKeeperService {
   }> {
     const { data, error } = await supabase
       .from('campaign_chunks')
-      .select('*')
+      .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
       .in('chunk_type', ['npc_tier1', 'npc_tier2', 'npc_tier3', 'location', 'faction', 'item', 'monster'])
       .order('chunk_type')
@@ -295,7 +300,7 @@ export class LoreKeeperService {
   async getSessionOutlines(campaignId: string): Promise<CampaignChunk[]> {
     const { data, error } = await supabase
       .from('campaign_chunks')
-      .select('*')
+      .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
       .eq('chunk_type', 'session_outline')
       .order('sequence_order');
@@ -342,7 +347,7 @@ export class LoreKeeperService {
   ): Promise<CampaignChunk | null> {
     const { data, error } = await supabase
       .from('campaign_chunks')
-      .select('*')
+      .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
       .ilike('entity_name', name)
       .in('chunk_type', chunkTypes)
