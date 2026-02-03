@@ -16,7 +16,6 @@
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
 
-import { CharacterClass } from '@/types/character';
 import { restoreClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 import { rollDie } from '@/utils/diceRolls';
 import { restoreSpellSlots } from '@/utils/spell-management';
@@ -77,9 +76,10 @@ export function rollHitDice(
 
   let totalRecovered = 0;
   let remainingDice = character.hitDice.remaining;
+  const diceToRoll = Math.min(numDice, remainingDice);
 
   // Roll hit dice
-  for (let i = 0; i < Math.min(numDice, remainingDice); i++) {
+  for (let i = 0; i < diceToRoll; i++) {
     const roll = rollDie(dieType);
     const recovered = Math.max(1, roll + conModifier); // Minimum 1 HP recovered
     totalRecovered += recovered;
@@ -421,9 +421,10 @@ export function processShortRestCombat(
     const hitDiceType = 8; // Default d8
     let totalRecovered = 0;
     let remainingDice = participant.hitDice.current;
+    const diceToRoll = Math.min(hitDiceToRoll, remainingDice);
 
     // Roll hit dice
-    for (let i = 0; i < Math.min(hitDiceToRoll, remainingDice); i++) {
+    for (let i = 0; i < diceToRoll; i++) {
       const roll = rollDie(hitDiceType);
       const recovered = Math.max(1, roll); // Simplified - no CON modifier
       totalRecovered += recovered;
