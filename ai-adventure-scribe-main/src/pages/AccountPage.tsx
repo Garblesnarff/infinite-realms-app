@@ -28,7 +28,7 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || '';
 /**
  * Account page for subscription management
  */
-const AccountPage: React.FC = () => {
+const AccountPage: React.FC = () => {\n  // A/B Pricing Test\n  const [abVariant, setAbVariant] = useState<'A' | 'B'>('A');\n\n  useEffect(() => {\n    // Get cookie\n    const name = 'ir_ab_variant';\n    const value = `; ${document.cookie}`;\n    const parts = value.split(`; ${name}=`);\n    if (parts.length === 2) {\n      const variant = parts.pop()?.split(';').shift();\n      if (variant === 'A' || variant === 'B') {\n        setAbVariant(variant as 'A' | 'B');\n        return;\n      }\n    }\n\n    // Assign random variant\n    const newVariant = Math.random() < 0.5 ? 'A' : 'B';\n    setAbVariant(newVariant);\n\n    // Set cookie for 1 year\n    const expires = new Date();\n    expires.setFullYear(expires.getFullYear() + 1);\n    document.cookie = `${name}=${newVariant}; expires=${expires.toUTCString()}; path=/; Secure; SameSite=Strict`;\n\n    console.log('AB Test: Assigned variant', newVariant);\n  }, []);\n\n  const PRICES = {\n    A: {\n      label: '$15/month',\n      priceId: 'price_1ABC123proA', // TODO: Replace with actual Stripe Price ID for Variant A ($15/mo)\n    },\n    B: {\n      label: '$9/month intro (then $15)',\n      priceId: 'price_1DEF456proB', // TODO: Replace with actual Stripe Price ID for Variant B ($9 first mo)\n    },\n  } as const;\n\n  const currentPrice = PRICES[abVariant];
   const { user, userPlan, refreshUserPlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -113,7 +113,7 @@ const AccountPage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({\n      priceId: currentPrice.priceId,\n      ab_variant: abVariant,\n    }),
       });
 
       if (!response.ok) {
@@ -259,7 +259,7 @@ const AccountPage: React.FC = () => {
                     className="px-8 py-6 text-lg font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-gray-900 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
                   >
                     <Crown className="h-5 w-5 mr-2" />
-                    {loading ? 'Loading...' : 'Upgrade to Legend - $15/month'}
+                    {loading ? 'Loading...' : `Upgrade to Legend - ${currentPrice.label}`}
                   </Button>
                   <p className="text-sm text-muted-foreground mt-2">
                     Cancel anytime. No commitments.
