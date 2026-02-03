@@ -1,10 +1,13 @@
 import { Elysia } from 'elysia';
+
 import { authenticateRequest } from '../../../lib/auth.js';
 import { logger } from '../../../lib/logger.js';
-import { ConditionsService } from '../../../services/conditions-service.js';
-import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
-import { verifyEncounterOwnership } from './helpers.js';
 import { supabaseService } from '../../../lib/supabase.js';
+import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
+import { ConditionsService } from '../../../services/conditions-service.js';
+
+import { verifyEncounterOwnership } from './helpers.js';
+
 import type {
   ApplyConditionRequest,
   AttemptSaveRequest,
@@ -38,6 +41,7 @@ export const statusRoutes = new Elysia()
 
       const result = await ConditionsService.applyCondition(
         conditionRequest.participantId,
+        params.encounterId,
         conditionRequest.conditionName,
         conditionRequest.durationType,
         conditionRequest.durationValue,
@@ -84,7 +88,7 @@ export const statusRoutes = new Elysia()
         return { error: 'conditionId is required' };
       }
 
-      const removed = await ConditionsService.removeCondition(params.conditionId);
+      const removed = await ConditionsService.removeCondition(params.conditionId, params.encounterId);
 
       if (!removed) {
         set.status = 404;
@@ -130,7 +134,7 @@ export const statusRoutes = new Elysia()
         return { error: 'saveRoll must be between 1 and 20' };
       }
 
-      const result = await ConditionsService.attemptSave(params.conditionId, saveRoll);
+      const result = await ConditionsService.attemptSave(params.conditionId, params.encounterId, saveRoll);
 
       return {
         success: true,

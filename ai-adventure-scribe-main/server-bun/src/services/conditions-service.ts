@@ -8,21 +8,22 @@
  * @module server/services/conditions-service
  */
 
-import { db } from '../../../db/client.js';
 import { sql } from 'drizzle-orm';
+
+import { db } from '../../../db/client.js';
+import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
+
 import type {
   Condition,
-  ConditionLibraryEntry,
-  ParticipantCondition,
-  ParticipantConditionWithDetails,
-  NewParticipantCondition,
-  MechanicalEffects,
-  AggregatedMechanicalEffects,
   ConditionConflict,
   ConditionDurationType,
+  ConditionLibraryEntry,
+  MechanicalEffects,
+  AggregatedMechanicalEffects,
+  ParticipantCondition,
+  ParticipantConditionWithDetails,
   SaveAbility,
 } from '../types/combat.js';
-import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
 /**
  * Conditions that include or supersede other conditions
@@ -70,6 +71,7 @@ export class ConditionsService {
    */
   static async applyCondition(
     participantId: string,
+    encounterId: string,
     conditionName: string,
     durationType: ConditionDurationType,
     durationValue?: number,
@@ -91,13 +93,13 @@ export class ConditionsService {
 
     const conditionEntry = conditionLibrary[0] as unknown as ConditionLibraryEntry;
 
-    // Get participant to get current round
+    // Get participant to get current round and verify encounterId
     const participantResult = await db.execute<Record<string, unknown>>(
-      sql`SELECT encounter_id FROM combat_participants WHERE id = ${participantId} LIMIT 1`
+      sql`SELECT encounter_id FROM combat_participants WHERE id = ${participantId} AND encounter_id = ${encounterId} LIMIT 1`
     );
 
     if (!participantResult || participantResult.length === 0) {
-      throw new NotFoundError('Participant', participantId);
+      throw new NotFoundError('Participant in encounter', participantId);
     }
 
     // Get current round from encounter if not provided
@@ -129,7 +131,7 @@ export class ConditionsService {
       warnings.push(conflict.message);
       // Auto-remove superseded conditions
       if (conflict.conflictType === 'superseded') {
-        this.removeCondition(conflict.existingCondition.id).catch(err => {
+        this.removeCondition(conflict.existingCondition.id, encounterId).catch(err => {
           console.error('Failed to remove superseded condition:', err);
         });
       }
@@ -182,12 +184,13 @@ export class ConditionsService {
   /**
    * Remove a condition from a participant
    */
-  static async removeCondition(conditionId: string): Promise<boolean> {
+  static async removeCondition(conditionId: string, encounterId: string): Promise<boolean> {
     const result = await db.execute<Record<string, unknown>>(
       sql`
         UPDATE combat_participant_conditions
         SET is_active = false
         WHERE id = ${conditionId}
+          AND participant_id IN (SELECT id FROM combat_participants WHERE encounter_id = ${encounterId})
         RETURNING id
       `
     );
@@ -200,19 +203,22 @@ export class ConditionsService {
    */
   static async attemptSave(
     conditionId: string,
+    encounterId: string,
     saveRoll: number
   ): Promise<{ saved: boolean; conditionRemoved: boolean; message: string }> {
-    // Get the condition
+    // Get the condition and verify encounterId
     const result = await db.execute<Record<string, unknown>>(
       sql`
-        SELECT * FROM combat_participant_conditions
-        WHERE id = ${conditionId} AND is_active = true
+        SELECT cpc.* FROM combat_participant_conditions cpc
+        JOIN combat_participants cp ON cp.id = cpc.participant_id
+        WHERE cpc.id = ${conditionId} AND cpc.is_active = true
+          AND cp.encounter_id = ${encounterId}
         LIMIT 1
       `
     );
 
     if (!result || result.length === 0) {
-      throw new NotFoundError('Active condition', conditionId);
+      throw new NotFoundError('Active condition in encounter', conditionId);
     }
 
     const condition = result[0] as unknown as ParticipantCondition;
@@ -227,7 +233,7 @@ export class ConditionsService {
 
     if (saved) {
       // Remove the condition
-      await this.removeCondition(conditionId);
+      await this.removeCondition(conditionId, encounterId);
       conditionRemoved = true;
       message = `Saving throw successful (${saveRoll})! Condition removed.`;
     } else {

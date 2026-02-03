@@ -1,7 +1,9 @@
 import { Elysia } from 'elysia';
+
 import { authenticateRequest } from '../../../lib/auth.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatHPService } from '../../../services/combat-hp-service.js';
+
 import { verifyEncounterOwnership } from './helpers.js';
 
 export const damageRoutes = new Elysia()
@@ -43,7 +45,7 @@ export const damageRoutes = new Elysia()
         return { error: 'damageAmount must be non-negative' };
       }
 
-      const result = await CombatHPService.applyDamage(participantId, {
+      const result = await CombatHPService.applyDamage(participantId, params.encounterId, {
         damageAmount,
         damageType,
         sourceParticipantId,
@@ -93,6 +95,7 @@ export const damageRoutes = new Elysia()
 
       const result = await CombatHPService.healDamage(
         participantId,
+        params.encounterId,
         healingAmount,
         sourceDescription
       );
@@ -136,7 +139,7 @@ export const damageRoutes = new Elysia()
         return { error: 'tempHp must be non-negative' };
       }
 
-      const result = await CombatHPService.setTempHP(participantId, tempHp);
+      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp);
       return result;
     } catch (e) {
       logger.error({ msg: 'Set temp HP error', error: e });
@@ -176,7 +179,7 @@ export const damageRoutes = new Elysia()
         return { error: 'roll must be between 1 and 20' };
       }
 
-      const result = await CombatHPService.rollDeathSave(participantId, roll);
+      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll);
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });

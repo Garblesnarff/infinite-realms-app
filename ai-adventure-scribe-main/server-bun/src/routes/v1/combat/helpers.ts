@@ -51,7 +51,7 @@ export async function verifyEncounterOwnership(
   const { encounter, session, campaignOwnerId, characterOwnerId } = result;
 
   if (campaignOwnerId !== userId && characterOwnerId !== userId) {
-    return { success: false, error: { status: 403, message: 'Access denied' } };
+    return { success: false, error: { status: 404, message: 'Encounter not found' } };
   }
 
   return { success: true, encounter, session };
@@ -89,7 +89,7 @@ export async function verifySessionOwnership(
   const { session, campaignOwnerId, characterOwnerId } = result;
 
   if (campaignOwnerId !== userId && characterOwnerId !== userId) {
-    return { success: false, error: { status: 403, message: 'Access denied' } };
+    return { success: false, error: { status: 404, message: 'Session not found' } };
   }
 
   return { success: true, session };

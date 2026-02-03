@@ -8,16 +8,16 @@
  * @module server/services/combat-hp-service
  */
 
+import { and, desc, eq } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   combatParticipants,
   combatParticipantStatus,
   combatDamageLog,
-  combatEncounters,
   type CombatParticipantStatus,
   type CombatDamageLog,
 } from '../../../db/schema/index.js';
-import { eq, and, desc } from 'drizzle-orm';
 import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
 /**
@@ -120,6 +120,7 @@ export class CombatHPService {
    */
   static async applyDamage(
     participantId: string,
+    encounterId: string,
     options: ApplyDamageOptions
   ): Promise<DamageResult> {
     const {
@@ -134,7 +135,10 @@ export class CombatHPService {
 
     // Get participant, status, and encounter in a single query
     const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
       with: {
         status: true,
         encounter: true,
@@ -280,6 +284,7 @@ export class CombatHPService {
    */
   static async healDamage(
     participantId: string,
+    encounterId: string,
     healingAmount: number,
     sourceDescription?: string
   ): Promise<HealingResult> {
@@ -288,7 +293,10 @@ export class CombatHPService {
     }
 
     const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
       with: {
         status: true,
       },
@@ -344,6 +352,7 @@ export class CombatHPService {
    */
   static async setTempHP(
     participantId: string,
+    encounterId: string,
     tempHpAmount: number
   ): Promise<{ participantId: string; oldTempHp: number; newTempHp: number }> {
     if (tempHpAmount < 0) {
@@ -351,7 +360,10 @@ export class CombatHPService {
     }
 
     const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
       with: {
         status: true,
       },
@@ -394,6 +406,7 @@ export class CombatHPService {
    */
   static async rollDeathSave(
     participantId: string,
+    encounterId: string,
     roll: number
   ): Promise<DeathSaveResult> {
     if (roll < 1 || roll > 20) {
@@ -401,7 +414,10 @@ export class CombatHPService {
     }
 
     const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
       with: {
         status: true,
       },
@@ -589,6 +605,7 @@ export class CombatHPService {
    */
   static async stabilizeWithMedicine(
     participantId: string,
+    encounterId: string,
     roll: number,
     modifier: number
   ): Promise<StabilizationResult> {
@@ -597,7 +614,10 @@ export class CombatHPService {
     const success = total >= DC;
 
     const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
       with: {
         status: true,
       },

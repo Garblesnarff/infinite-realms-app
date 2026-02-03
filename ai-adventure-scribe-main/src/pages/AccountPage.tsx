@@ -28,7 +28,47 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || '';
 /**
  * Account page for subscription management
  */
-const AccountPage: React.FC = () => {\n  // A/B Pricing Test\n  const [abVariant, setAbVariant] = useState<'A' | 'B'>('A');\n\n  useEffect(() => {\n    // Get cookie\n    const name = 'ir_ab_variant';\n    const value = `; ${document.cookie}`;\n    const parts = value.split(`; ${name}=`);\n    if (parts.length === 2) {\n      const variant = parts.pop()?.split(';').shift();\n      if (variant === 'A' || variant === 'B') {\n        setAbVariant(variant as 'A' | 'B');\n        return;\n      }\n    }\n\n    // Assign random variant\n    const newVariant = Math.random() < 0.5 ? 'A' : 'B';\n    setAbVariant(newVariant);\n\n    // Set cookie for 1 year\n    const expires = new Date();\n    expires.setFullYear(expires.getFullYear() + 1);\n    document.cookie = `${name}=${newVariant}; expires=${expires.toUTCString()}; path=/; Secure; SameSite=Strict`;\n\n    console.log('AB Test: Assigned variant', newVariant);\n  }, []);\n\n  const PRICES = {\n    A: {\n      label: '$15/month',\n      priceId: 'price_1ABC123proA', // TODO: Replace with actual Stripe Price ID for Variant A ($15/mo)\n    },\n    B: {\n      label: '$9/month intro (then $15)',\n      priceId: 'price_1DEF456proB', // TODO: Replace with actual Stripe Price ID for Variant B ($9 first mo)\n    },\n  } as const;\n\n  const currentPrice = PRICES[abVariant];
+const AccountPage: React.FC = () => {
+  // A/B Pricing Test
+  const [abVariant, setAbVariant] = useState<'A' | 'B'>('A');
+
+  useEffect(() => {
+    // Get cookie
+    const name = 'ir_ab_variant';
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      const variant = parts.pop()?.split(';').shift();
+      if (variant === 'A' || variant === 'B') {
+        setAbVariant(variant as 'A' | 'B');
+        return;
+      }
+    }
+
+    // Assign random variant
+    const newVariant = Math.random() < 0.5 ? 'A' : 'B';
+    setAbVariant(newVariant);
+
+    // Set cookie for 1 year
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 1);
+    document.cookie = `${name}=${newVariant}; expires=${expires.toUTCString()}; path=/; Secure; SameSite=Strict`;
+
+    console.log('AB Test: Assigned variant', newVariant);
+  }, []);
+
+  const PRICES = {
+    A: {
+      label: '$15/month',
+      priceId: 'price_1ABC123proA', // TODO: Replace with actual Stripe Price ID for Variant A ($15/mo)
+    },
+    B: {
+      label: '$9/month intro (then $15)',
+      priceId: 'price_1DEF456proB', // TODO: Replace with actual Stripe Price ID for Variant B ($9 first mo)
+    },
+  } as const;
+
+  const currentPrice = PRICES[abVariant];
   const { user, userPlan, refreshUserPlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -113,7 +153,10 @@ const AccountPage: React.FC = () => {\n  // A/B Pricing Test\n  const [abVariant
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({\n      priceId: currentPrice.priceId,\n      ab_variant: abVariant,\n    }),
+        body: JSON.stringify({
+          priceId: currentPrice.priceId,
+          ab_variant: abVariant,
+        }),
       });
 
       if (!response.ok) {

@@ -11,15 +11,19 @@
  * @module server/services/combat-attack-service
  */
 
+import { desc, eq, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   weaponAttacks,
   creatureStats,
-  type WeaponAttack,
-  type CreatureStats,
 } from '../../../db/schema/index.js';
-import { eq, or, desc } from 'drizzle-orm';
 import { CombatHPService } from './combat-hp-service.js';
+
+import type {
+  WeaponAttack,
+  CreatureStats,
+} from '../../../db/schema/index.js';
 import type {
   AttackRollInput,
   AttackResult,
@@ -291,7 +295,7 @@ export class CombatAttackService {
 
     // Apply damage to target HP
     try {
-      const hpResult = await CombatHPService.applyDamage(targetId, {
+      const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
         damageAmount: damageCalc.finalDamage,
         damageType: weapon.damageType as DamageType,
         sourceParticipantId: attackerId,
@@ -399,7 +403,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
-            const hpResult = await CombatHPService.applyDamage(targetId, {
+            const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
               damageAmount: damageCalc.finalDamage,
               damageType,
               sourceParticipantId: casterId,
@@ -458,7 +462,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
-            const hpResult = await CombatHPService.applyDamage(targetId, {
+            const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
               damageAmount: finalDamage,
               damageType,
               sourceParticipantId: casterId,

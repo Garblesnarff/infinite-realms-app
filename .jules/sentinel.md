@@ -27,3 +27,8 @@
 **Vulnerability:** The `MeasurementService.createTemplate` method lacked any ownership verification, allowing any authenticated user to create measurement templates on any scene. Additionally, multiple methods (get, list, delete, cleanup) used `ForbiddenError` (403) for unauthorized access, leaking the existence of resources to unauthorized users.
 **Learning:** Services ported from legacy systems or implemented "for simplicity" often omit critical ownership checks. High-frequency assets like measurement templates are prime targets for IDOR scanning if existence is leaked via 403 errors.
 **Prevention:** Incorporate ownership checks directly into database `WHERE` clauses using `JOIN` with parent resources (e.g., `scenes`). Always throw `NotFoundError` (404) or return `null` instead of `ForbiddenError` (403) for unauthorized access to mask the existence of resources. Map these application-level 404s to `TRPCError({ code: 'NOT_FOUND' })` in the router.
+
+## 2025-05-27 - [IDOR and Existence Leakage in Combat Services]
+**Vulnerability:** Combat service methods (HP and Conditions) lacked verification that participants or conditions belonged to the encounter being accessed. Additionally, ownership verification returned 403 instead of 404, leaking resource existence.
+**Learning:** Even with encounter-level authorization, sub-resources must be explicitly scoped to the verified parent in database queries to prevent cross-resource manipulation.
+**Prevention:** Incorporate parent ID (e.g., `encounterId`) into all service methods and query `WHERE` clauses for sub-resources. Consistently use 404 for unauthorized access to valid IDs.
