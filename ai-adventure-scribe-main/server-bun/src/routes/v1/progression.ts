@@ -13,57 +13,45 @@
  */
 
 import { Elysia } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
-import { supabaseService } from '../../lib/supabase.js';
-
-// Import service from Bun server
+import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
+
 import type { XPSource, LevelUpInput } from '../../types/progression.js';
 
-/**
- * Helper to verify character ownership
- */
-async function verifyCharacterOwnership(
-  characterId: string,
-  userId: string
-): Promise<{ success: true } | { success: false; status: number; error: string }> {
-  const { data: character, error: charErr } = await supabaseService
-    .from('characters')
-    .select('user_id')
-    .eq('id', characterId)
-    .single();
-
-  if (charErr || !character) {
-    return { success: false, status: 404, error: 'Character not found' };
-  }
-
-  if (character.user_id !== userId) {
-    return { success: false, status: 403, error: 'Access denied' };
-  }
-
-  return { success: true };
-}
-
 export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
-
   /**
-   * POST /v1/progression/characters/:id/experience/award
-   * Award experience points to a character
+   * Centralized authentication and character ownership verification
    */
-  .post('/characters/:id/experience/award', async ({ request, params, body, set }) => {
+  .derive(async ({ request }) => {
     const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, params, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
     }
 
-    try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
+    if (params.id) {
+      // Sentinel: Verify ownership directly in the database query
+      // and throw 404 for unauthorized access to prevent existence leakage.
+      const character = await CharacterService.getById(params.id, user.userId);
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
       }
+    }
+  })
+
+  /**
+   * POST /v1/progression/characters/:id/experience/award
+   * Award experience points to a character
+   */
+  .post('/characters/:id/experience/award', async ({ params, body, set, user }) => {
+    try {
 
       const { xp, source, description, sessionId } = body as {
         xp: number;
@@ -89,6 +77,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
         params.id,
         xp,
         source,
+        (user as { userId: string }).userId,
         description,
         sessionId
       );
@@ -108,21 +97,9 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * GET /v1/progression/characters/:id/progression
    * Get character's current progression status
    */
-  .get('/characters/:id/progression', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/characters/:id/progression', async ({ params, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
-      const progression = await ProgressionService.getProgression(params.id);
+      const progression = await ProgressionService.getProgression(params.id, (user as { userId: string }).userId);
       return progression;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_GET error', error });
@@ -138,22 +115,12 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * POST /v1/progression/characters/:id/level-up
    * Perform a level-up
    */
-  .post('/characters/:id/level-up', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/characters/:id/level-up', async ({ params, body, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
+      const userId = (user as { userId: string }).userId;
 
       // Check if character can level up
-      const canLevel = await ProgressionService.canLevelUp(params.id);
+      const canLevel = await ProgressionService.canLevelUp(params.id, userId);
       if (!canLevel) {
         set.status = 400;
         return { error: 'Character does not have enough XP to level up' };
@@ -163,7 +130,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       const result = await ProgressionService.levelUp({
         characterId: params.id,
         ...input,
-      });
+      }, userId);
 
       return result;
     } catch (error) {
@@ -180,20 +147,8 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * GET /v1/progression/characters/:id/level-up-options
    * Get available options for leveling up
    */
-  .get('/characters/:id/level-up-options', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/characters/:id/level-up-options', async ({ params, query, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { newLevel } = query as { newLevel?: string };
 
       if (!newLevel) {
@@ -207,7 +162,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
         return { error: 'newLevel must be between 1 and 20' };
       }
 
-      const options = await ProgressionService.getLevelUpOptions(params.id, level);
+      const options = await ProgressionService.getLevelUpOptions(params.id, level, (user as { userId: string }).userId);
       return options;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_LEVELUP_OPTIONS error', error });
@@ -223,24 +178,13 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * GET /v1/progression/characters/:id/experience-history
    * Get XP history for a character
    */
-  .get('/characters/:id/experience-history', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/characters/:id/experience-history', async ({ params, query, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { sessionId, limit } = query as { sessionId?: string; limit?: string };
 
       const events = await ProgressionService.getXPHistory(
         params.id,
+        (user as { userId: string }).userId,
         sessionId,
         limit ? parseInt(limit) : undefined
       );
@@ -260,20 +204,8 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * POST /v1/progression/characters/:id/milestone-level
    * Set character level directly (milestone leveling)
    */
-  .post('/characters/:id/milestone-level', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/characters/:id/milestone-level', async ({ params, body, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { level, reason } = body as { level: number; reason?: string };
 
       if (level === undefined || level < 1 || level > 20) {
@@ -281,7 +213,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
         return { error: 'Level must be between 1 and 20' };
       }
 
-      const result = await ProgressionService.setLevel(params.id, level, reason);
+      const result = await ProgressionService.setLevel(params.id, level, (user as { userId: string }).userId, reason);
       return result;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_MILESTONE error', error });
@@ -297,8 +229,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * GET /v1/progression/xp-table
    * Get the D&D 5E XP threshold table
    */
-  .get('/xp-table', async ({ request, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
+  .get('/xp-table', async ({ set, user, authError }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };

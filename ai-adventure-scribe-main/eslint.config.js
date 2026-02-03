@@ -254,6 +254,8 @@ export default tseslint.config(
       "server-bun/src/services/inventory-service.ts",
       "server-bun/src/routes/v1/inventory.ts",
       "server-bun/src/services/character-folder-service.ts",
+      "server-bun/src/services/progression-service.ts",
+      "server-bun/src/services/character-service.ts",
     ],
     rules: {
       "max-lines": "warn"

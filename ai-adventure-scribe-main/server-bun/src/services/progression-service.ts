@@ -7,16 +7,18 @@
  * @module server/services/progression-service
  */
 
+import { eq, and, desc, or, exists } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   experienceEvents,
   levelProgression,
   characters,
   characterStats,
-  type ExperienceEvent,
-  type LevelProgression,
 } from '../../../db/schema/index.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
+
+import type { ExperienceEvent, LevelProgression } from '../../../db/schema/index.js';
 import type {
   XPSource,
   AwardXPResult,
@@ -24,16 +26,9 @@ import type {
   LevelUpOptions,
   LevelUpInput,
   LevelUpResult,
-  AbilityScoreImprovement,
   HitPointIncrease,
   ClassFeature,
-  XP_TABLE,
-  PROFICIENCY_BONUS_TABLE,
-  ASI_LEVELS,
-  MAX_ABILITY_SCORE,
-  MAX_LEVEL,
 } from '../types/progression.js';
-import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
 /**
  * D&D 5E XP thresholds by level (PHB pg. 15)
@@ -175,7 +170,19 @@ export class ProgressionService {
   /**
    * Initialize progression for a new character
    */
-  static async initializeProgression(characterId: string): Promise<LevelProgression> {
+  static async initializeProgression(characterId: string, userId: string): Promise<LevelProgression> {
+    // Verify character ownership first
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
     // Check if progression already exists
     const existing = await db.query.levelProgression.findFirst({
       where: eq(levelProgression.characterId, characterId),
@@ -207,14 +214,22 @@ export class ProgressionService {
   /**
    * Get current progression for a character
    */
-  static async getProgression(characterId: string): Promise<ProgressionStatus> {
-    let progression = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
-    });
+  static async getProgression(characterId: string, userId: string): Promise<ProgressionStatus> {
+    const results = await db
+      .select({ progression: levelProgression })
+      .from(levelProgression)
+      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    let progression = results[0]?.progression;
 
     // Initialize if doesn't exist
     if (!progression) {
-      progression = await this.initializeProgression(characterId);
+      progression = await this.initializeProgression(characterId, userId);
     }
 
     const percentToNext = progression.currentLevel >= 20
@@ -234,10 +249,18 @@ export class ProgressionService {
   /**
    * Check if character can level up
    */
-  static async canLevelUp(characterId: string): Promise<boolean> {
-    const progression = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
-    });
+  static async canLevelUp(characterId: string, userId: string): Promise<boolean> {
+    const results = await db
+      .select({ progression: levelProgression })
+      .from(levelProgression)
+      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    const progression = results[0]?.progression;
 
     if (!progression) return false;
     if (progression.currentLevel >= 20) return false;
@@ -253,6 +276,7 @@ export class ProgressionService {
     characterId: string,
     xp: number,
     source: XPSource,
+    userId: string,
     description?: string,
     sessionId?: string
   ): Promise<AwardXPResult> {
@@ -261,12 +285,20 @@ export class ProgressionService {
     }
 
     // Get or create progression
-    let progression = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
-    });
+    const results = await db
+      .select({ progression: levelProgression })
+      .from(levelProgression)
+      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    let progression = results[0]?.progression;
 
     if (!progression) {
-      progression = await this.initializeProgression(characterId);
+      progression = await this.initializeProgression(characterId, userId);
     }
 
     const oldLevel = progression.currentLevel;
@@ -285,7 +317,17 @@ export class ProgressionService {
         lastLevelUp: levelsGained > 0 ? new Date() : progression.lastLevelUp,
         updatedAt: new Date(),
       })
-      .where(eq(levelProgression.characterId, characterId))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ))
       .returning();
 
     if (!updatedProgression) {
@@ -300,7 +342,10 @@ export class ProgressionService {
           level: newLevel,
           updatedAt: new Date(),
         })
-        .where(eq(characters.id, characterId));
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ));
     }
 
     // Log XP event
@@ -327,22 +372,23 @@ export class ProgressionService {
    */
   static async getXPHistory(
     characterId: string,
+    userId: string,
     sessionId?: string,
     limit: number = 50
   ): Promise<ExperienceEvent[]> {
-    const conditions = [eq(experienceEvents.characterId, characterId)];
+    const history = await db
+      .select({ event: experienceEvents })
+      .from(experienceEvents)
+      .innerJoin(characters, eq(experienceEvents.characterId, characters.id))
+      .where(and(
+        eq(experienceEvents.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        sessionId ? eq(experienceEvents.sessionId, sessionId) : undefined
+      ))
+      .orderBy(desc(experienceEvents.timestamp))
+      .limit(limit);
 
-    if (sessionId) {
-      conditions.push(eq(experienceEvents.sessionId, sessionId));
-    }
-
-    const history = await db.query.experienceEvents.findMany({
-      where: conditions.length > 1 ? and(...conditions) : conditions[0],
-      orderBy: [desc(experienceEvents.timestamp)],
-      limit,
-    });
-
-    return history;
+    return history.map(h => h.event);
   }
 
   /**
@@ -350,11 +396,15 @@ export class ProgressionService {
    */
   static async getLevelUpOptions(
     characterId: string,
-    newLevel: number
+    newLevel: number,
+    userId: string
   ): Promise<LevelUpOptions> {
     // Get character
     const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
       with: {
         stats: true,
       },
@@ -406,12 +456,15 @@ export class ProgressionService {
   /**
    * Perform a level-up for a character
    */
-  static async levelUp(input: LevelUpInput): Promise<LevelUpResult> {
-    const { characterId, hpRoll, abilityScoreImprovements, featSelected, classFeatures, spellsLearned } = input;
+  static async levelUp(input: LevelUpInput, userId: string): Promise<LevelUpResult> {
+    const { characterId, hpRoll, abilityScoreImprovements, featSelected, spellsLearned } = input;
 
     // Get character
     const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
       with: {
         stats: true,
       },
@@ -425,9 +478,17 @@ export class ProgressionService {
       throw new BusinessLogicError('Character has no stats', { characterId });
     }
 
-    const progression = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
-    });
+    const results = await db
+      .select({ progression: levelProgression })
+      .from(levelProgression)
+      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    const progression = results[0]?.progression;
 
     if (!progression) {
       throw new NotFoundError('Progression for character', characterId);
@@ -457,7 +518,7 @@ export class ProgressionService {
     };
 
     // Apply ability score improvements
-    let updatedStats = { ...character.stats };
+    const updatedStats = { ...character.stats };
     if (abilityScoreImprovements && abilityScoreImprovements.length > 0) {
       const totalIncrease = abilityScoreImprovements.reduce((sum, asi) => sum + asi.increase, 0);
       if (totalIncrease > 2) {
@@ -497,7 +558,10 @@ export class ProgressionService {
         experiencePoints: newTotalXp,
         updatedAt: new Date(),
       })
-      .where(eq(characters.id, characterId));
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ));
 
     // Update progression
     await db
@@ -510,7 +574,17 @@ export class ProgressionService {
         lastLevelUp: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(levelProgression.characterId, characterId));
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ));
 
     // Get class features for this level (placeholder)
     const newClassFeatures: ClassFeature[] = [];
@@ -542,6 +616,7 @@ export class ProgressionService {
   static async setLevel(
     characterId: string,
     level: number,
+    userId: string,
     reason?: string
   ): Promise<{ oldLevel: number; newLevel: number }> {
     if (level < 1 || level > 20) {
@@ -549,12 +624,20 @@ export class ProgressionService {
     }
 
     // Get current progression
-    let progression = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
-    });
+    const results = await db
+      .select({ progression: levelProgression })
+      .from(levelProgression)
+      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    let progression = results[0]?.progression;
 
     if (!progression) {
-      progression = await this.initializeProgression(characterId);
+      progression = await this.initializeProgression(characterId, userId);
     }
 
     const oldLevel = progression.currentLevel;
@@ -571,7 +654,17 @@ export class ProgressionService {
         lastLevelUp: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(levelProgression.characterId, characterId));
+      .where(and(
+        eq(levelProgression.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ));
 
     // Update character
     await db
@@ -581,7 +674,10 @@ export class ProgressionService {
         experiencePoints: newTotalXp,
         updatedAt: new Date(),
       })
-      .where(eq(characters.id, characterId));
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ));
 
     // Log milestone event
     await db.insert(experienceEvents).values({

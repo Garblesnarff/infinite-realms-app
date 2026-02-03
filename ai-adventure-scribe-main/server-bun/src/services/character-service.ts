@@ -11,7 +11,7 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -73,7 +73,7 @@ export class CharacterService {
   /**
    * Get character with campaign details
    */
-  static async getWithCampaign(characterId: string, userId: string) {
+  static async getWithCampaign(characterId: string, userId: string): Promise<any> {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
