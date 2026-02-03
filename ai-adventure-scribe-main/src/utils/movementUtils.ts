@@ -54,10 +54,9 @@ export function doesMovementProvokeOpportunityAttacks(
 
   // Check for features that prevent opportunity attacks
   const hasMobileFeature = participant.classFeatures?.some((f) => f.name === 'mobile') || false;
-  const isFlying = participant.speed.fly > 0;
   const isUsingDisengage = participant.bonusActionTaken; // Simplified - would need proper tracking
 
-  return isLeavingReach && !hasMobileFeature && !isFlying && !isUsingDisengage;
+  return isLeavingReach && !hasMobileFeature && !isUsingDisengage;
 }
 
 /**
