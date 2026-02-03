@@ -9,9 +9,20 @@
  * - Create, duplicate, delete, and set active actions
  */
 
-import React, { useState } from 'react';
 import { Grid, List, Plus, Copy, Trash2, Eye, MoreVertical } from 'lucide-react';
+import React, { useState } from 'react';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -27,17 +38,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
 import { cn } from '@/lib/utils';
@@ -154,11 +154,14 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
     <div className="space-y-6">
       {/* Header with view toggle and create button */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" role="group" aria-label="View mode">
           <Button
             variant={viewMode === 'grid' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('grid')}
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
+            title="Grid view"
           >
             <Grid className="h-4 w-4" />
           </Button>
@@ -166,6 +169,9 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             variant={viewMode === 'list' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('list')}
+            aria-label="List view"
+            aria-pressed={viewMode === 'list'}
+            title="List view"
           >
             <List className="h-4 w-4" />
           </Button>
@@ -241,7 +247,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open scene menu">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -354,7 +360,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                 {/* Actions */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" aria-label="Open scene menu">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

@@ -9,8 +9,8 @@
  * - Step 5: Settings (fog of war, lighting, etc.)
  */
 
-import React, { useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import React, { useState } from 'react';
 
 import { MapUploader } from './MapUploader';
 import { SceneSettings } from './SceneSettings';
@@ -19,13 +19,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
-import { GridType } from '@/types/scene';
 import { cn } from '@/lib/utils';
+import { GridType } from '@/types/scene';
 
 interface SceneCreationWizardProps {
   campaignId: string;
@@ -219,7 +219,7 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </CardDescription>
             </div>
             {onCancel && (
-              <Button variant="ghost" size="icon" onClick={onCancel}>
+              <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close scene creation wizard">
                 <X className="h-4 w-4" />
               </Button>
             )}

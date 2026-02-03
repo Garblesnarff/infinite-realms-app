@@ -14,11 +14,15 @@
 
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
+
+
+import type { RevealedArea } from '@/types/fog-of-war';
 import type { Point2D } from '@/types/scene';
 import type { FogPolygon } from '@/utils/fog-calculations';
-import { polygonToThreeShape, simplifyPolygon } from '@/utils/fog-calculations';
-import type { RevealedArea } from '@/types/fog-of-war';
+
+import { Z_INDEX } from '@/constants/z-index';
 import { useFogWebSocket } from '@/hooks/useFogWebSocket';
+import { polygonToThreeShape, simplifyPolygon } from '@/utils/fog-calculations';
 
 // ===========================
 // Types
@@ -486,7 +490,10 @@ export interface FogResetConfirmationProps {
 
 export function FogResetConfirmation({ onConfirm, onCancel }: FogResetConfirmationProps) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50">
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+      style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+    >
       <div className="bg-card p-6 rounded-lg border border-border shadow-lg max-w-md">
         <h3 className="text-lg font-semibold mb-2">Reset Fog of War?</h3>
         <p className="text-sm text-muted-foreground mb-4">
