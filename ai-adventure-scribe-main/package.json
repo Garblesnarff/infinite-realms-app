@@ -4,6 +4,7 @@
   "version": "0.10.0",
   "type": "module",
   "scripts": {
+    "prepare": "husky",
     "release": "standard-version",
     "release:patch": "standard-version --release-as patch",
     "release:minor": "standard-version --release-as minor",
@@ -173,6 +174,7 @@
     "husky": "^9.1.7",
     "jsdom": "^26.1.0",
     "knip": "^5.69.1",
+    "lint-staged": "^16.2.7",
     "lovable-tagger": "^1.0.19",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
@@ -195,5 +197,18 @@
     "p-retry": "^6.2.1",
     "semver": "^7.6.0",
     "ansi-styles": "^4.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{js,jsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
   }
 }

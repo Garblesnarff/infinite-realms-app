@@ -1,0 +1,5 @@
+#!/bin/bash
+# Beads integration - import issues after merge
+if command -v bd &> /dev/null && [ -f ".beads/issues.jsonl" ]; then
+    bd import .beads/issues.jsonl 2>/dev/null || echo "Warning: Failed to import beads issues"
+fi

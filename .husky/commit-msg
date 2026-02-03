@@ -1,1 +1,5 @@
-cd ai-adventure-scribe-main && npx --no -- commitlint --edit ${1}
+#!/bin/bash
+# Run commitlint from the subdirectory but reference the correct commit message file
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$GIT_ROOT/ai-adventure-scribe-main" || exit 1
+bunx commitlint --edit "$GIT_ROOT/.git/COMMIT_EDITMSG"
