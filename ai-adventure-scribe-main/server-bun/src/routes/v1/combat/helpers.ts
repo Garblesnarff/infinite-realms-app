@@ -1,14 +1,14 @@
 import { eq } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../../../db/client.js';
 import {
   combatEncounters,
   gameSessions,
   campaigns,
   characters,
-} from '../../../db/schema/index.js';
+} from '../../../../../db/schema/index.js';
 
-import type { CombatEncounter, GameSession } from '../../../db/schema/index.js';
+import type { CombatEncounter, GameSession } from '../../../../../db/schema/index.js';
 
 export interface VerificationResult {
   success: boolean;
@@ -22,7 +22,7 @@ export interface VerificationResult {
  */
 export async function verifyEncounterOwnership(
   encounterId: string | undefined,
-  userId: string
+  userId: string,
 ): Promise<VerificationResult> {
   if (!encounterId) {
     return { success: false, error: { status: 400, message: 'encounterId is required' } };
@@ -62,7 +62,7 @@ export async function verifyEncounterOwnership(
  */
 export async function verifySessionOwnership(
   sessionId: string | undefined,
-  userId: string
+  userId: string,
 ): Promise<VerificationResult> {
   if (!sessionId) {
     return { success: false, error: { status: 400, message: 'sessionId is required' } };
