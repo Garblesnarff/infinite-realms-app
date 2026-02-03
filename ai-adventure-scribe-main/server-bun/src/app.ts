@@ -33,6 +33,7 @@ import { spellsRoutes } from './routes/v1/spells';
 import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
 import { blogApiRoutes } from './routes/v1/blog';
+import { llmsRoutes } from './routes/llms.js';
 
 export function createApp() {
   const app = new Elysia()
@@ -138,6 +139,10 @@ export function createApp() {
 
       // Permissions policy (restrict browser features)
       set.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()';
+
+      // LLM documentation discovery headers (llms.txt standard)
+      set.headers['Link'] = '</llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"';
+      set.headers['X-Llms-Txt'] = '/llms.txt';
     })
     // CORS configuration (matching Express setup)
     // Allow localhost on any port for development, and production origins from env
@@ -322,6 +327,9 @@ export function createApp() {
   app.use(blogRoutes);
   app.use(landingRoutes);
   app.use(seoRoutes);
+
+  // LLM documentation routes (llms.txt standard)
+  app.use(llmsRoutes);
 
   // WebSocket support for real-time Foundry VTT collaboration
   app.use(wsPlugin);

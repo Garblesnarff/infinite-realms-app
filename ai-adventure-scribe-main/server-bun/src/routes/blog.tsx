@@ -7,6 +7,35 @@ import { BlogPostPage } from '../views/blog/post.js';
 import { streamReactResponse } from '../utils/react-stream.js';
 
 /**
+ * Check if request accepts Markdown content
+ */
+function wantsMarkdown(request: Request): boolean {
+  const accept = request.headers.get('accept') || '';
+  return accept.includes('text/markdown');
+}
+
+/**
+ * Generate Markdown response for a blog post
+ * Prepends llms.txt discovery instruction per Mintlify pattern
+ */
+function generateMarkdownResponse(
+  post: { title: string; markdown: string; publishedAt: string; slug: string },
+  siteUrl: string
+): string {
+  const discovery = `> ## Documentation Index
+> Fetch the complete documentation index at: ${siteUrl}/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+`;
+  return `${discovery}# ${post.title}
+
+*Published: ${new Date(post.publishedAt).toLocaleDateString()}*
+
+${post.markdown}
+`;
+}
+
+/**
  * Create cache control headers for SSR pages
  */
 function createCacheHeaders({
@@ -59,15 +88,11 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
     }
   })
   // Individual blog post by slug
-  .get('/:slug', async ({ params, set }) => {
+  .get('/:slug', async ({ params, set, request }) => {
     const { slug } = params;
 
     try {
-      const [post, allPosts, assets] = await Promise.all([
-        BlogService.fetchBlogPostBySlug(slug),
-        BlogService.fetchPublishedBlogPosts(),
-        resolveAssetsForEntries(['index.html', 'src/blog-client.ts']),
-      ]);
+      const post = await BlogService.fetchBlogPostBySlug(slug);
 
       if (!post) {
         set.status = 404;
@@ -78,6 +103,26 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
       }
 
       const site = getSiteConfig();
+
+      // Content negotiation: serve Markdown for AI agents
+      if (wantsMarkdown(request)) {
+        const markdownContent = generateMarkdownResponse(post, site.url);
+
+        set.headers['Content-Type'] = 'text/markdown; charset=utf-8';
+        set.headers['Cache-Control'] = 'public, max-age=600, stale-while-revalidate=3600';
+        set.headers['X-Robots-Tag'] = 'noindex, nofollow';
+        set.headers['Link'] = '</llms.txt>; rel="llms-txt"';
+        set.headers['X-Llms-Txt'] = '/llms.txt';
+
+        return markdownContent;
+      }
+
+      // Standard HTML response for browsers
+      const [allPosts, assets] = await Promise.all([
+        BlogService.fetchPublishedBlogPosts(),
+        resolveAssetsForEntries(['index.html', 'src/blog-client.ts']),
+      ]);
+
       const relatedPosts = allPosts.filter((candidate) => candidate.slug !== slug).slice(0, 8);
 
       const cacheHeaders = createCacheHeaders({ maxAge: 600, staleWhileRevalidate: 3600 });

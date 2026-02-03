@@ -145,6 +145,10 @@ export const seoRoutes = new Elysia()
       'Allow: /',
       `Sitemap: ${site.url}/sitemap.xml`,
       `Host: ${site.url}`,
+      '',
+      '# LLM Documentation Index',
+      '# See https://llmstxt.org for specification',
+      `Llms-txt: ${site.url}/llms.txt`,
     ].join('\n');
 
     set.headers['Content-Type'] = 'text/plain';
