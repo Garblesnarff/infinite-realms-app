@@ -1,10 +1,19 @@
-import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
-import { supabaseService } from '../../../lib/supabase.js';
+import { eq } from 'drizzle-orm';
+
+import { db } from '../../../db/client.js';
+import {
+  combatEncounters,
+  gameSessions,
+  campaigns,
+  characters,
+} from '../../../db/schema/index.js';
+
+import type { CombatEncounter, GameSession } from '../../../db/schema/index.js';
 
 export interface VerificationResult {
   success: boolean;
-  encounter?: any;
-  session?: any;
+  encounter?: CombatEncounter;
+  session?: GameSession;
   error?: { status: number; message: string };
 }
 
@@ -19,25 +28,29 @@ export async function verifyEncounterOwnership(
     return { success: false, error: { status: 400, message: 'encounterId is required' } };
   }
 
-  const encounter = await CombatInitiativeService.getEncounterById(encounterId);
-  if (!encounter) {
+  // ⚡ Bolt: Optimized to use a single joined Drizzle query instead of multiple round-trips
+  // to CombatInitiativeService and Supabase JS client. Reduces latency for every combat request.
+  const [result] = await db
+    .select({
+      encounter: combatEncounters,
+      session: gameSessions,
+      campaignOwnerId: campaigns.userId,
+      characterOwnerId: characters.userId,
+    })
+    .from(combatEncounters)
+    .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+    .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+    .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+    .where(eq(combatEncounters.id, encounterId))
+    .limit(1);
+
+  if (!result) {
     return { success: false, error: { status: 404, message: 'Encounter not found' } };
   }
 
-  const { data: session, error: sessionErr } = await supabaseService
-    .from('game_sessions')
-    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-    .eq('id', encounter.sessionId)
-    .single();
+  const { encounter, session, campaignOwnerId, characterOwnerId } = result;
 
-  if (sessionErr || !session) {
-    return { success: false, error: { status: 404, message: 'Session not found' } };
-  }
-
-  const campaignOwner = (session as any).campaigns?.user_id;
-  const characterOwner = (session as any).characters?.user_id;
-
-  if (campaignOwner !== userId && characterOwner !== userId) {
+  if (campaignOwnerId !== userId && characterOwnerId !== userId) {
     return { success: false, error: { status: 403, message: 'Access denied' } };
   }
 
@@ -55,20 +68,27 @@ export async function verifySessionOwnership(
     return { success: false, error: { status: 400, message: 'sessionId is required' } };
   }
 
-  const { data: session, error: sessionErr } = await supabaseService
-    .from('game_sessions')
-    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-    .eq('id', sessionId)
-    .single();
+  // ⚡ Bolt: Optimized to use a joined Drizzle query instead of Supabase JS client.
+  // This provides a consistent and faster way to verify ownership within the same DB transaction/pool.
+  const [result] = await db
+    .select({
+      session: gameSessions,
+      campaignOwnerId: campaigns.userId,
+      characterOwnerId: characters.userId,
+    })
+    .from(gameSessions)
+    .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+    .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+    .where(eq(gameSessions.id, sessionId))
+    .limit(1);
 
-  if (sessionErr || !session) {
+  if (!result) {
     return { success: false, error: { status: 404, message: 'Session not found' } };
   }
 
-  const campaignOwner = (session as any).campaigns?.user_id;
-  const characterOwner = (session as any).characters?.user_id;
+  const { session, campaignOwnerId, characterOwnerId } = result;
 
-  if (campaignOwner !== userId && characterOwner !== userId) {
+  if (campaignOwnerId !== userId && characterOwnerId !== userId) {
     return { success: false, error: { status: 403, message: 'Access denied' } };
   }
 
