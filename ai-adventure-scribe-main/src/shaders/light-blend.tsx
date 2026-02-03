@@ -7,6 +7,7 @@
  * @module shaders/light-blend
  */
 
+import React from 'react';
 import * as THREE from 'three';
 
 /**
@@ -78,7 +79,7 @@ export function createLightBlendMaterial(maxLights: number = 32): THREE.ShaderMa
   };
 
   return new THREE.ShaderMaterial({
-    uniforms,
+    uniforms: uniforms as unknown as THREE.ShaderMaterialParameters['uniforms'],
     vertexShader: lightBlendVertexShader,
     fragmentShader: lightBlendFragmentShader(maxLights),
     transparent: true,
@@ -248,7 +249,7 @@ function lightBlendFragmentShader(maxLights: number): string {
  */
 export function updateLightSources(
   material: THREE.ShaderMaterial,
-  lights: ShaderLightSource[]
+  lights: ShaderLightSource[],
 ): void {
   const uniforms = material.uniforms as unknown as LightBlendUniforms;
   const maxLights = uniforms.lightPositions.value.length;
@@ -284,7 +285,7 @@ export function updateLightSources(
 export function setGlobalLighting(
   material: THREE.ShaderMaterial,
   globalLight: boolean,
-  ambientLight: number = 0.0
+  ambientLight: number = 0.0,
 ): void {
   const uniforms = material.uniforms as unknown as LightBlendUniforms;
   uniforms.globalLight.value = globalLight;
@@ -298,11 +299,7 @@ export function setGlobalLighting(
  * @param width - Viewport width
  * @param height - Viewport height
  */
-export function setResolution(
-  material: THREE.ShaderMaterial,
-  width: number,
-  height: number
-): void {
+export function setResolution(material: THREE.ShaderMaterial, width: number, height: number): void {
   const uniforms = material.uniforms as unknown as LightBlendUniforms;
   uniforms.resolution.value.set(width, height);
 }
@@ -315,8 +312,20 @@ export function setResolution(
  * @returns Shader light source data
  */
 export function tokenToShaderLight(
-  token: { x: number; y: number; light: any },
-  gridSize: number
+  token: {
+    x: number;
+    y: number;
+    light: {
+      emitsLight: boolean;
+      bright: number;
+      dim: number;
+      color: string;
+      colorIntensity?: number;
+      angle?: number;
+      rotation?: number;
+    };
+  },
+  gridSize: number,
 ): ShaderLightSource | null {
   if (!token.light.emitsLight) {
     return null;
@@ -373,10 +382,7 @@ export function LightBlendPlane({
   const materialRef = React.useRef<THREE.ShaderMaterial>(null);
 
   // Create material
-  const material = React.useMemo(
-    () => createLightBlendMaterial(maxLights),
-    [maxLights]
-  );
+  const material = React.useMemo(() => createLightBlendMaterial(maxLights), [maxLights]);
 
   // Update lights when they change
   React.useEffect(() => {
@@ -406,6 +412,3 @@ export function LightBlendPlane({
     </mesh>
   );
 }
-
-// For non-React usage
-import React from 'react';

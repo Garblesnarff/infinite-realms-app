@@ -1,4 +1,3 @@
-Connecting to localhost 54321
 export type Json =
   | string
   | number
