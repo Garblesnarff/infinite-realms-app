@@ -1,4 +1,5 @@
 import { ContextBuilderPrompts } from './context-builder-prompts';
+import { RulesPrompts } from './prompts/rules-prompts';
 
 import type { Memory } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
@@ -18,7 +19,7 @@ export class ContextBuilder {
     const { context, combatDetection, voiceContext, isFirstMessage, relevantMemories } = params;
 
     let contextPrompt = ContextBuilderPrompts.buildPersonaSection();
-    contextPrompt += ContextBuilderPrompts.buildRulesOfPlaySection();
+    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
     contextPrompt += await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
 
     if (isFirstMessage) {
@@ -26,9 +27,9 @@ export class ContextBuilder {
     }
 
     if (combatDetection) {
-      contextPrompt += ContextBuilderPrompts.formatCombatContext(combatDetection);
+      contextPrompt += RulesPrompts.formatCombatContext(combatDetection);
       if (combatDetection.isCombat) {
-        contextPrompt += ContextBuilderPrompts.buildCombatRollRequirementsSection();
+        contextPrompt += RulesPrompts.buildCombatRollRequirementsSection();
       }
     }
 
