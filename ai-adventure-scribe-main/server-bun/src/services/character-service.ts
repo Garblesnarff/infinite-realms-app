@@ -11,7 +11,7 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -224,7 +224,14 @@ export class CharacterService {
           eq(characterPermissions.userId, userId)
         )
       )
-      .where(eq(characters.id, characterId))
+      .where(and(
+        eq(characters.id, characterId),
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          isNotNull(characterPermissions.id)
+        )
+      ))
       .limit(1);
 
     if (!result) {
@@ -459,7 +466,21 @@ export class CharacterService {
     }
 
     const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
+      where: and(
+        eq(characters.id, characterId),
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId)
+              ))
+          )
+        )
+      ),
       with: {
         stats: true,
       },

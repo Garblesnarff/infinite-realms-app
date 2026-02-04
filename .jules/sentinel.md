@@ -32,3 +32,8 @@
 **Vulnerability:** Combat service methods (HP and Conditions) lacked verification that participants or conditions belonged to the encounter being accessed. Additionally, ownership verification returned 403 instead of 404, leaking resource existence.
 **Learning:** Even with encounter-level authorization, sub-resources must be explicitly scoped to the verified parent in database queries to prevent cross-resource manipulation.
 **Prevention:** Incorporate parent ID (e.g., `encounterId`) into all service methods and query `WHERE` clauses for sub-resources. Consistently use 404 for unauthorized access to valid IDs.
+
+## 2025-05-28 - [Critical Missing User Filtering in Character Folders and Character Service]
+**Vulnerability:** The `CharacterFolderService.getFolderSubtree` method was fetching all folders from the database without a `userId` filter. Additionally, `CharacterService.checkPermission` and `exportCharacter` fetched character data by ID before verifying ownership/permissions in the database query, potentially leading to existence leakage.
+**Learning:** High-level service methods and recursive logic are often overlooked during security audits. Even when high-level gates exist, the underlying database queries should incorporate ownership filters for defense in depth. Character-related entities require complex checks involving both `userId`, `ownerId`, and the `character_permissions` table.
+**Prevention:** Incorporate ownership and permissions directly into database `WHERE` clauses using `exists` subqueries for shared resources. Always filter by `userId` even for internal helper methods. Ensure that shared-resource retrieval masks existence by returning `null` for unauthorized IDs at the database level.

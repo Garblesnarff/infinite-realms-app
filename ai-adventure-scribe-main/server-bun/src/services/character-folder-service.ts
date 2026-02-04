@@ -52,8 +52,9 @@ export class CharacterFolderService {
   /**
    * Get all folder IDs in a subtree (including the folder itself)
    */
-  private static async getFolderSubtree(folderId: string): Promise<string[]> {
+  private static async getFolderSubtree(folderId: string, userId: string): Promise<string[]> {
     const allFolders = await db.query.characterFolders.findMany({
+      where: eq(characterFolders.userId, userId),
       columns: { id: true, parentFolderId: true },
     });
 
@@ -187,7 +188,7 @@ export class CharacterFolderService {
 
     // Prevent moving folder to be its own child
     if (updates.parentFolderId) {
-      const subtree = await this.getFolderSubtree(folderId);
+      const subtree = await this.getFolderSubtree(folderId, userId);
       if (subtree.includes(updates.parentFolderId)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -262,7 +263,10 @@ export class CharacterFolderService {
     await db
       .update(characterFolders)
       .set({ parentFolderId: folder.parentFolderId })
-      .where(eq(characterFolders.parentFolderId, folderId));
+      .where(and(
+        eq(characterFolders.parentFolderId, folderId),
+        eq(characterFolders.userId, userId)
+      ));
 
     // Delete the folder
     const result = await db
