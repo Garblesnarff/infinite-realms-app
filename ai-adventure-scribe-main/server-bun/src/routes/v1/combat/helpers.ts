@@ -35,7 +35,8 @@ export async function verifyEncounterOwnership(
       encounter: combatEncounters,
       session: gameSessions,
       campaignOwnerId: campaigns.userId,
-      characterOwnerId: characters.userId,
+      characterUserId: characters.userId,
+      characterOwnerId: characters.ownerId,
     })
     .from(combatEncounters)
     .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
@@ -48,9 +49,15 @@ export async function verifyEncounterOwnership(
     return { success: false, error: { status: 404, message: 'Encounter not found' } };
   }
 
-  const { encounter, session, campaignOwnerId, characterOwnerId } = result;
+  const { encounter, session, campaignOwnerId, characterUserId, characterOwnerId } = result;
 
-  if (campaignOwnerId !== userId && characterOwnerId !== userId) {
+  // 🛡️ Sentinel: Verify ownership through campaign OR character (both userId and ownerId)
+  // Incorporating all ownership fields prevents unauthorized access to encounters.
+  if (
+    campaignOwnerId !== userId &&
+    characterUserId !== userId &&
+    characterOwnerId !== userId
+  ) {
     return { success: false, error: { status: 404, message: 'Encounter not found' } };
   }
 
@@ -74,7 +81,8 @@ export async function verifySessionOwnership(
     .select({
       session: gameSessions,
       campaignOwnerId: campaigns.userId,
-      characterOwnerId: characters.userId,
+      characterUserId: characters.userId,
+      characterOwnerId: characters.ownerId,
     })
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
@@ -86,9 +94,14 @@ export async function verifySessionOwnership(
     return { success: false, error: { status: 404, message: 'Session not found' } };
   }
 
-  const { session, campaignOwnerId, characterOwnerId } = result;
+  const { session, campaignOwnerId, characterUserId, characterOwnerId } = result;
 
-  if (campaignOwnerId !== userId && characterOwnerId !== userId) {
+  // 🛡️ Sentinel: Verify ownership through campaign OR character (both userId and ownerId)
+  if (
+    campaignOwnerId !== userId &&
+    characterUserId !== userId &&
+    characterOwnerId !== userId
+  ) {
     return { success: false, error: { status: 404, message: 'Session not found' } };
   }
 

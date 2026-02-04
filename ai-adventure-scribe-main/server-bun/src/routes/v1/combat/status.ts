@@ -2,7 +2,6 @@ import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../../lib/auth.js';
 import { logger } from '../../../lib/logger.js';
-import { supabaseService } from '../../../lib/supabase.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
 
@@ -233,48 +232,31 @@ export const statusRoutes = new Elysia()
     }
 
     try {
-      const { data: participant } = await supabaseService
-        .from('combat_participants')
-        .select('*, combat_encounters!combat_participants_encounter_id_fkey(*)')
-        .eq('id', params.participantId)
-        .single();
-
-      if (!participant) {
-        set.status = 404;
-        return { error: 'Participant not found' };
-      }
-
-      const encounter = (participant as any).combat_encounters;
-
-      const { data: session, error: sessionErr } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
-        .eq('id', encounter.session_id)
-        .single();
-
-      if (sessionErr || !session) {
-        set.status = 404;
-        return { error: 'Session not found' };
-      }
-
-      const campaignOwner = (session as any).campaigns?.user_id;
-      const characterOwner = (session as any).characters?.user_id;
-
-      if (campaignOwner !== user.userId && characterOwner !== user.userId) {
-        set.status = 403;
-        return { error: 'Access denied' };
-      }
-
-      const conditions = await ConditionsService.getActiveConditions(params.participantId);
-      const effects = await ConditionsService.getMechanicalEffects(params.participantId);
+      // 🛡️ Sentinel: Use updated service methods that incorporate ownership checks
+      // and prevent existence leakage by throwing NotFoundError instead of Access Denied.
+      const conditions = await ConditionsService.getActiveConditions(
+        params.participantId,
+        user.userId
+      );
+      const effects = await ConditionsService.getMechanicalEffects(
+        params.participantId,
+        user.userId
+      );
 
       return {
         participantId: params.participantId,
         conditions,
         aggregatedEffects: effects,
       };
-    } catch (e) {
+    } catch (e: any) {
       logger.error({ msg: 'Get participant conditions error', error: e });
+
+      // 🛡️ Sentinel: Properly map NotFoundError to 404 to avoid existence leakage
+      if (e.name === 'NotFoundError' || e.statusCode === 404) {
+        set.status = 404;
+        return { error: e.message || 'Participant not found' };
+      }
+
       const message = e instanceof Error ? e.message : 'Failed to get participant conditions';
       set.status = 500;
       return { error: message };

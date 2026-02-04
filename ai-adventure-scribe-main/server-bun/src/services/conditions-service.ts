@@ -245,8 +245,15 @@ export class ConditionsService {
 
   /**
    * Get all active conditions for a participant
+   * @param participantId - The participant ID
+   * @param userId - Optional User ID for ownership verification
    */
-  static async getActiveConditions(participantId: string): Promise<ParticipantConditionWithDetails[]> {
+  static async getActiveConditions(
+    participantId: string,
+    userId?: string
+  ): Promise<ParticipantConditionWithDetails[]> {
+    // 🛡️ Sentinel: Incorporate ownership check directly into the query when userId is provided
+    // This prevents IDOR and existence leakage.
     const result = await db.execute<Record<string, unknown>>(
       sql`
         SELECT
@@ -257,8 +264,24 @@ export class ConditionsService {
           cl.icon_name
         FROM combat_participant_conditions cpc
         JOIN conditions_library cl ON cl.id = cpc.condition_id
+        ${
+          userId
+            ? sql`
+        JOIN combat_participants cp ON cp.id = cpc.participant_id
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        `
+            : sql``
+        }
         WHERE cpc.participant_id = ${participantId}
           AND cpc.is_active = true
+          ${
+            userId
+              ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+              : sql``
+          }
         ORDER BY cpc.applied_at_round DESC
       `
     );
@@ -293,9 +316,34 @@ export class ConditionsService {
 
   /**
    * Get aggregated mechanical effects for a participant from all active conditions
+   * @param participantId - The participant ID
+   * @param userId - Optional User ID for ownership verification
    */
-  static async getMechanicalEffects(participantId: string): Promise<AggregatedMechanicalEffects> {
-    const conditions = await this.getActiveConditions(participantId);
+  static async getMechanicalEffects(
+    participantId: string,
+    userId?: string
+  ): Promise<AggregatedMechanicalEffects> {
+    // 🛡️ Sentinel: If userId is provided, verify participant access first
+    if (userId) {
+      const participantResult = await db.execute<Record<string, unknown>>(
+        sql`
+          SELECT cp.id FROM combat_participants cp
+          JOIN combat_encounters ce ON ce.id = cp.encounter_id
+          JOIN game_sessions gs ON gs.id = ce.session_id
+          LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+          LEFT JOIN characters char ON char.id = gs.character_id
+          WHERE cp.id = ${participantId}
+            AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
+          LIMIT 1
+        `
+      );
+
+      if (!participantResult || participantResult.length === 0) {
+        throw new NotFoundError('Participant', participantId);
+      }
+    }
+
+    const conditions = await this.getActiveConditions(participantId, userId);
     return this.calculateAggregatedEffects(conditions);
   }
 
