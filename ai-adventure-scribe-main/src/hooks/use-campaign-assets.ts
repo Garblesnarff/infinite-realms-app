@@ -10,7 +10,9 @@
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 
 export interface CampaignAsset {
   type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene';
@@ -61,31 +63,45 @@ export function useCampaignAssets(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    console.log('[CampaignAssets] Effect triggered with starterCampaignId:', starterCampaignId);
+    logger.debug('[CampaignAssets] Effect triggered with starterCampaignId:', starterCampaignId);
 
     if (!starterCampaignId) {
-      console.log('[CampaignAssets] No campaignId provided, skipping asset load');
+      logger.debug('[CampaignAssets] No campaignId provided, skipping asset load');
       setAssets([]);
       return;
     }
 
-    async function loadAssets() {
+    async function loadAssets(): Promise<void> {
       setIsLoading(true);
       setError(null);
 
       try {
         const loadedAssets: CampaignAsset[] = [];
 
-        // 1. Load character templates with portraits
-        const { data: characters, error: charError } = await supabase
-          .from('starter_character_templates')
-          .select('template_key, name, tagline, portrait_url')
-          .eq('starter_campaign_id', starterCampaignId);
+        // ⚡ Bolt: Parallelize asset loading to reduce total latency.
+        // Instead of 3 sequential await calls, Promise.all executes them concurrently.
+        const [charResult, chunkResult, campaignResult] = await Promise.all([
+          supabase
+            .from('starter_character_templates')
+            .select('template_key, name, tagline, portrait_url')
+            .eq('starter_campaign_id', starterCampaignId),
+          supabase
+            .from('campaign_chunks')
+            .select('entity_name, chunk_type, metadata')
+            .eq('campaign_id', starterCampaignId)
+            .not('entity_name', 'is', null),
+          supabase
+            .from('starter_campaigns')
+            .select('title, cover_image_url, banner_image_url')
+            .eq('id', starterCampaignId)
+            .single(),
+        ]);
 
-        if (charError) {
-          console.warn('[CampaignAssets] Failed to load characters:', charError);
-        } else if (characters) {
-          for (const char of characters) {
+        // 1. Process character templates with portraits
+        if (charResult.error) {
+          logger.warn('[CampaignAssets] Failed to load characters:', charResult.error);
+        } else if (charResult.data) {
+          for (const char of charResult.data) {
             if (char.portrait_url) {
               loadedAssets.push({
                 type: 'character',
@@ -98,17 +114,11 @@ export function useCampaignAssets(
           }
         }
 
-        // 2. Load campaign chunks with images in metadata
-        const { data: chunks, error: chunkError } = await supabase
-          .from('campaign_chunks')
-          .select('entity_name, chunk_type, metadata')
-          .eq('campaign_id', starterCampaignId)
-          .not('entity_name', 'is', null);
-
-        if (chunkError) {
-          console.warn('[CampaignAssets] Failed to load chunks:', chunkError);
-        } else if (chunks) {
-          for (const chunk of chunks) {
+        // 2. Process campaign chunks with images in metadata
+        if (chunkResult.error) {
+          logger.warn('[CampaignAssets] Failed to load chunks:', chunkResult.error);
+        } else if (chunkResult.data) {
+          for (const chunk of chunkResult.data) {
             const metadata = chunk.metadata as Record<string, unknown> | null;
             const imageUrl = metadata?.image_url as string | undefined;
 
@@ -140,16 +150,11 @@ export function useCampaignAssets(
           }
         }
 
-        // 3. Load campaign cover/banner as scene assets
-        const { data: campaign, error: campaignError } = await supabase
-          .from('starter_campaigns')
-          .select('title, cover_image_url, banner_image_url')
-          .eq('id', starterCampaignId)
-          .single();
-
-        if (campaignError) {
-          console.warn('[CampaignAssets] Failed to load campaign:', campaignError);
-        } else if (campaign) {
+        // 3. Process campaign cover/banner as scene assets
+        if (campaignResult.error) {
+          logger.warn('[CampaignAssets] Failed to load campaign:', campaignResult.error);
+        } else if (campaignResult.data) {
+          const campaign = campaignResult.data;
           if (campaign.cover_image_url) {
             loadedAssets.push({
               type: 'scene',
@@ -168,10 +173,15 @@ export function useCampaignAssets(
           }
         }
 
-        console.log('[CampaignAssets] Loaded', loadedAssets.length, 'assets for campaign:', starterCampaignId);
+        logger.debug(
+          '[CampaignAssets] Loaded',
+          loadedAssets.length,
+          'assets for campaign:',
+          starterCampaignId,
+        );
         setAssets(loadedAssets);
       } catch (err) {
-        console.error('[CampaignAssets] Error loading assets:', err);
+        logger.error('[CampaignAssets] Error loading assets:', err);
         setError(err instanceof Error ? err : new Error('Failed to load campaign assets'));
       } finally {
         setIsLoading(false);
@@ -195,7 +205,7 @@ export function useCampaignAssets(
     (type: string, key: string): CampaignAsset | null => {
       return assetMap.get(`${type}:${key}`) || null;
     },
-    [assetMap]
+    [assetMap],
   );
 
   // Get just the image URL
@@ -204,7 +214,7 @@ export function useCampaignAssets(
       const asset = getAsset(type, key);
       return asset?.imageUrl || null;
     },
-    [getAsset]
+    [getAsset],
   );
 
   // Generate asset list for AI prompt
