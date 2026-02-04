@@ -23,3 +23,7 @@
 ## 2025-05-24 - [Condition Effects Logic Fixes]
 **Learning:** Found that `getConditionModifiers` in `src/utils/conditionEffects.ts` had incorrect logic for several conditions (like `blinded`) because it relied on `participantType === 'player'` instead of the `rollType`. This meant players never received the correct defensive penalties for being blinded.
 **Action:** Always use `rollType` (e.g., 'attack', 'defense', 'save') to determine which side of a condition's effect to apply. When testing situational advantage/disadvantage, call `getConditionModifiers` on the participant *possessing* the condition with the appropriate `rollType` (e.g., 'defense' if they are being targeted).
+
+## 2025-05-28 - [Exhaustion System Coverage]
+**Learning:** The exhaustion system in `src/utils/exhaustionUtils.ts` handles cumulative penalties across 6 levels. Testing it confirmed correct D&D 5e behavior, specifically the rounding down (floor) of hit point maximums when halved at level 4.
+**Action:** Always include both the test file and the module under test in the `vitest.config.ts` explicit `include` and `coverage.include` arrays to ensure visibility in reports. Use the AAA pattern and clear mock participants to test cumulative state changes.
