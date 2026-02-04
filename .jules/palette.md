@@ -31,3 +31,7 @@
 ## 2025-05-26 - Focused Micro-UX Pattern
 **Learning:** UX improvements are most effective when they are highly focused and "surgical". Combining accessibility fixes with large-scale design system migrations (like z-index) in a single PR can obscure the core value and increase regression risk.
 **Action:** Keep UX improvements strictly focused on a single component or small set of related elements. Favor surgical accessibility enhancements (ARIA labels, linked labels) as they provide immediate value with minimal risk.
+
+## 2025-05-14 - Character Sheet Loading and Layout
+**Learning:** Hardcoded grid columns (e.g., `grid-cols-7`) in tabbed layouts are brittle and break when new tabs are added (e.g., "Gallery" as the 8th tab). Using responsive grids (`grid-cols-4 md:grid-cols-8`) improves mobile UX and prevents layout shifts.
+**Action:** Always check the item count against grid column classes in tabbed navigations. Prefer responsive grid columns over fixed ones. Use `Skeleton` components instead of plain text for a more "delightful" loading experience.

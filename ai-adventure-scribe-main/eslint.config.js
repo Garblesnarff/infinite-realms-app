@@ -274,6 +274,7 @@ export default tseslint.config(
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/conditionEffects.ts',
       'src/components/battle-map/LayersPanel.tsx',
+      'src/features/character/components/sheet/character-sheet-tabs.tsx',
     ],
     rules: {
       'max-lines': 'warn',

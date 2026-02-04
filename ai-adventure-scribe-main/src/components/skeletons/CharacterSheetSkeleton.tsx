@@ -26,8 +26,8 @@ export const CharacterSheetSkeleton: React.FC = () => {
             </div>
           </div>
           {/* Tabs Skeleton */}
-          <div className="grid w-full grid-cols-7 h-auto p-2 bg-muted/50 rounded-lg border-2 mb-4">
-            {[...Array(7)].map((_, i) => (
+          <div className="grid w-full grid-cols-4 md:grid-cols-8 h-auto p-2 bg-muted/50 rounded-lg border-2 mb-4 gap-2">
+            {[...Array(8)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full rounded-lg" />
             ))}
           </div>

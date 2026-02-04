@@ -9,7 +9,6 @@ import {
   Shield,
   Sword,
   TrendingUp,
-  Users,
   Image as ImageIcon,
 } from 'lucide-react';
 import React, { useState } from 'react';
@@ -203,7 +202,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
 
       {/* Tab Navigation and Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-7 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -240,7 +239,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             {character.classLevels && character.classLevels.length > 1 ? (
               <MulticlassManager
                 character={character}
-                onUpdate={(updatedCharacter) => {
+                onUpdate={(_updatedCharacter) => {
                   // Update character and trigger refresh
                   onCharacterUpdate();
                 }}
@@ -248,7 +247,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             ) : (
               <ExperienceManager
                 character={character}
-                onUpdate={(updatedCharacter) => {
+                onUpdate={(_updatedCharacter) => {
                   // Update character and trigger refresh
                   onCharacterUpdate();
                 }}
