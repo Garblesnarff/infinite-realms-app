@@ -91,6 +91,8 @@ interface CharacterRow {
   known_spells?: string | null;
   prepared_spells?: string | null;
   ritual_spells?: string | null;
+  character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
+  character_equipment?: CharacterEquipmentRow[] | null;
 }
 /**
  * Transforms database stats into Character ability scores format
@@ -312,13 +314,22 @@ export const useCharacterData = (characterId: string | undefined) => {
         return;
       }
 
-      // Fetch basic character info WITH ownership check
+      // ⚡ Bolt: Fetch character data with stats and equipment in a single query.
+      // This reduces database round-trips from 2 to 1 and improves loading performance.
+      // Explicit column selection avoids over-fetching data.
       const { data: characterData, error: characterError } = await supabase
         .from('characters')
         .select(
           `
-          *,
-          character_stats(*)
+          id, user_id, name, description, race, class, level, background,
+          experience_points, alignment, avatar_url, image_url, background_image,
+          appearance, personality_traits, backstory_elements, vision_types,
+          obscurement, is_hidden, stealth_check_bonus, cantrips, known_spells,
+          prepared_spells, ritual_spells,
+          character_stats(
+            strength, dexterity, constitution, intelligence, wisdom, charisma
+          ),
+          character_equipment(*)
         `,
         )
         .eq('id', characterId!)
@@ -344,13 +355,8 @@ export const useCharacterData = (characterId: string | undefined) => {
         ? characterRecord.character_stats[0]
         : characterRecord.character_stats;
 
-      // Fetch character equipment
-      const { data: equipmentData, error: equipmentError } = await supabase
-        .from('character_equipment')
-        .select('*')
-        .eq('character_id', characterId!);
-
-      if (equipmentError) throw equipmentError;
+      // ⚡ Bolt: equipmentData is now pre-fetched via the joined query
+      const equipmentData = characterRecord.character_equipment;
 
       // Transform and set character data
       const transformedCharacter = transformCharacterData(
