@@ -271,6 +271,7 @@ export default tseslint.config(
       'server-bun/src/services/character-folder-service.ts',
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
+      'server-bun/src/services/rest-service.ts',
       'src/utils/restMechanics.ts',
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/conditionEffects.ts',
