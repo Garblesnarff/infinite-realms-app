@@ -5,10 +5,10 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, isNull, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
-import { gameSessions, dialogueHistory, type GameSession, type NewGameSession, type DialogueHistory, type NewDialogueHistory } from '../../../db/schema/index.js';
-import { InternalServerError } from '../lib/errors.js';
+import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index.js';
+import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Message with pagination metadata
@@ -25,6 +25,33 @@ export interface MessagePage {
  */
 export class SessionService {
   /**
+   * Helper to build ownership condition for a session
+   */
+  private static getOwnershipCondition(userId: string) {
+    return or(
+      exists(
+        db.select()
+          .from(campaigns)
+          .where(and(
+            eq(campaigns.id, gameSessions.campaignId),
+            eq(campaigns.userId, userId)
+          ))
+      ),
+      exists(
+        db.select()
+          .from(characters)
+          .where(and(
+            eq(characters.id, gameSessions.characterId),
+            or(
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId)
+            )
+          ))
+      )
+    );
+  }
+
+  /**
    * Create a new game session
    */
   static async createSession(data: {
@@ -32,7 +59,25 @@ export class SessionService {
     characterId?: string | null;
     sessionNumber?: number;
     status?: string;
-  }): Promise<GameSession> {
+  }, userId: string): Promise<GameSession> {
+    // SECURITY: Verify ownership of campaign or character before creating session
+    if (data.campaignId) {
+      const campaign = await db.query.campaigns.findFirst({
+        where: and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))
+      });
+      if (!campaign) throw new NotFoundError('Campaign', data.campaignId);
+    }
+
+    if (data.characterId) {
+      const character = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, data.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      });
+      if (!character) throw new NotFoundError('Character', data.characterId);
+    }
+
     const [session] = await db
       .insert(gameSessions)
       .values({
@@ -51,10 +96,16 @@ export class SessionService {
   /**
    * Get session by ID
    */
-  static async getSessionById(sessionId: string): Promise<GameSession | undefined> {
-    return await db.query.gameSessions.findFirst({
-      where: eq(gameSessions.id, sessionId),
+  static async getSessionById(sessionId: string, userId: string): Promise<GameSession> {
+    const session = await db.query.gameSessions.findFirst({
+      where: and(
+        eq(gameSessions.id, sessionId),
+        this.getOwnershipCondition(userId)
+      ),
     });
+
+    if (!session) throw new NotFoundError('Session', sessionId);
+    return session;
   }
 
   /**
@@ -62,25 +113,20 @@ export class SessionService {
    */
   static async getSessionWithMessages(
     sessionId: string,
+    userId: string,
     options?: {
       limit?: number;
       offset?: number;
     }
   ): Promise<{
-    session: GameSession | undefined;
+    session: GameSession;
     messages: DialogueHistory[];
     total: number;
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
 
-    const session = await db.query.gameSessions.findFirst({
-      where: eq(gameSessions.id, sessionId),
-    });
-
-    if (!session) {
-      return { session: undefined, messages: [], total: 0 };
-    }
+    const session = await this.getSessionById(sessionId, userId);
 
     // Get messages with pagination
     const messages = await db.query.dialogueHistory.findMany({
@@ -109,7 +155,7 @@ export class SessionService {
   static async getActiveSession(params: {
     campaignId?: string;
     characterId?: string;
-  }): Promise<GameSession | undefined> {
+  }, userId: string): Promise<GameSession | null> {
     const conditions = [isNull(gameSessions.endTime)];
 
     if (params.campaignId) {
@@ -120,9 +166,14 @@ export class SessionService {
       conditions.push(eq(gameSessions.characterId, params.characterId));
     }
 
-    return await db.query.gameSessions.findFirst({
+    // Add ownership check
+    conditions.push(this.getOwnershipCondition(userId));
+
+    const session = await db.query.gameSessions.findFirst({
       where: and(...conditions),
     });
+
+    return session || null;
   }
 
   /**
@@ -130,8 +181,12 @@ export class SessionService {
    */
   static async completeSession(
     sessionId: string,
+    userId: string,
     summary?: string
   ): Promise<GameSession> {
+    // Verify ownership first
+    await this.getSessionById(sessionId, userId);
+
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -140,7 +195,10 @@ export class SessionService {
         summary: summary || null,
         updatedAt: new Date(),
       })
-      .where(eq(gameSessions.id, sessionId))
+      .where(and(
+        eq(gameSessions.id, sessionId),
+        this.getOwnershipCondition(userId)
+      ))
       .returning();
 
     if (!updated) throw new InternalServerError('Failed to complete session');
@@ -152,15 +210,22 @@ export class SessionService {
    */
   static async updateSessionNotes(
     sessionId: string,
+    userId: string,
     notes: string
   ): Promise<GameSession> {
+    // Verify ownership first
+    await this.getSessionById(sessionId, userId);
+
     const [updated] = await db
       .update(gameSessions)
       .set({
         sessionNotes: notes,
         updatedAt: new Date(),
       })
-      .where(eq(gameSessions.id, sessionId))
+      .where(and(
+        eq(gameSessions.id, sessionId),
+        this.getOwnershipCondition(userId)
+      ))
       .returning();
 
     if (!updated) throw new InternalServerError('Failed to update session notes');
@@ -177,7 +242,10 @@ export class SessionService {
     message: string;
     context?: Record<string, unknown>;
     images?: unknown[];
-  }): Promise<DialogueHistory> {
+  }, userId: string): Promise<DialogueHistory> {
+    // Verify ownership first
+    await this.getSessionById(data.sessionId, userId);
+
     const [msg] = await db
       .insert(dialogueHistory)
       .values({
@@ -199,9 +267,13 @@ export class SessionService {
    */
   static async getRecentMessages(
     sessionId: string,
+    userId: string,
     limit: number = 50,
     offset: number = 0
   ): Promise<MessagePage> {
+    // Verify ownership first
+    await this.getSessionById(sessionId, userId);
+
     // Get messages ordered by timestamp (newest first for pagination)
     const messages = await db.query.dialogueHistory.findMany({
       where: eq(dialogueHistory.sessionId, sessionId),
@@ -230,8 +302,15 @@ export class SessionService {
    * Get session history for campaign
    */
   static async getCampaignSessions(
-    campaignId: string
+    campaignId: string,
+    userId: string
   ): Promise<GameSession[]> {
+    // Verify campaign ownership
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId))
+    });
+    if (!campaign) throw new NotFoundError('Campaign', campaignId);
+
     return await db.query.gameSessions.findMany({
       where: eq(gameSessions.campaignId, campaignId),
       orderBy: desc(gameSessions.sessionNumber),
@@ -243,11 +322,11 @@ export class SessionService {
    */
   static async appendCombatLog(
     sessionId: string,
+    userId: string,
     entry: unknown,
     maxEntries: number = 500
   ): Promise<void> {
-    const session = await this.getSessionById(sessionId);
-    if (!session) return;
+    const session = await this.getSessionById(sessionId, userId);
 
     // Parse existing combat log from session notes
     let combatLog: unknown[] = [];
@@ -271,7 +350,7 @@ export class SessionService {
       : merged;
 
     // Store updated log back to session notes
-    await this.updateSessionNotes(sessionId, JSON.stringify({ combatLog: trimmed }));
+    await this.updateSessionNotes(sessionId, userId, JSON.stringify({ combatLog: trimmed }));
   }
 
   /**
@@ -279,9 +358,10 @@ export class SessionService {
    */
   static async appendRollEvent(
     sessionId: string,
+    userId: string,
     event: { kind: string; payload: unknown }
   ): Promise<void> {
-    await this.appendCombatLog(sessionId, {
+    await this.appendCombatLog(sessionId, userId, {
       kind: event.kind,
       payload: event.payload,
     });
