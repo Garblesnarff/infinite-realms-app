@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Scene Settings Component
  *
@@ -11,17 +12,17 @@
  * - Weather effects input
  */
 
-import React from 'react';
 import { Sun, Moon, Cloud, Eye, Lightbulb, Grid } from 'lucide-react';
+import React, { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 
 interface SceneSettingsData {
   enableFogOfWar?: boolean;
@@ -49,7 +50,16 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
   onSave,
   isSaving = false,
 }) => {
-  const updateSetting = (key: keyof SceneSettingsData, value: any) => {
+  const gridOpacityId = useId();
+  const ambientLightId = useId();
+  const darknessId = useId();
+  const timeOfDayId = useId();
+  const weatherId = useId();
+
+  const updateSetting = (
+    key: keyof SceneSettingsData,
+    value: SceneSettingsData[keyof SceneSettingsData],
+  ): void => {
     onChange?.({ ...settings, [key]: value });
   };
 
@@ -66,17 +76,17 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
     ? Math.round(parseFloat(settings.darknessLevel) * 100)
     : 0;
 
-  const handleGridOpacityChange = (value: number[]) => {
+  const handleGridOpacityChange = (value: number[]): void => {
     const opacity = (value[0] / 100).toFixed(2);
     updateSetting('gridOpacity', opacity);
   };
 
-  const handleAmbientLightChange = (value: number[]) => {
+  const handleAmbientLightChange = (value: number[]): void => {
     const level = (value[0] / 100).toFixed(2);
     updateSetting('ambientLightLevel', level);
   };
 
-  const handleDarknessChange = (value: number[]) => {
+  const handleDarknessChange = (value: number[]): void => {
     const level = (value[0] / 100).toFixed(2);
     updateSetting('darknessLevel', level);
   };
@@ -157,15 +167,17 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Grid Opacity</Label>
+              <Label htmlFor={gridOpacityId}>Grid Opacity</Label>
               <span className="text-sm text-muted-foreground">{gridOpacityValue}%</span>
             </div>
             <Slider
+              id={gridOpacityId}
               value={[gridOpacityValue]}
               onValueChange={handleGridOpacityChange}
               min={0}
               max={100}
               step={1}
+              aria-label="Grid Opacity"
             />
           </div>
         </CardContent>
@@ -185,15 +197,17 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Ambient Light Level</Label>
+              <Label htmlFor={ambientLightId}>Ambient Light Level</Label>
               <span className="text-sm text-muted-foreground">{ambientLightValue}%</span>
             </div>
             <Slider
+              id={ambientLightId}
               value={[ambientLightValue]}
               onValueChange={handleAmbientLightChange}
               min={0}
               max={100}
               step={1}
+              aria-label="Ambient Light Level"
             />
             <p className="text-xs text-muted-foreground">
               Base light level when no light sources are present
@@ -204,15 +218,17 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Darkness Level</Label>
+              <Label htmlFor={darknessId}>Darkness Level</Label>
               <span className="text-sm text-muted-foreground">{darknessValue}%</span>
             </div>
             <Slider
+              id={darknessId}
               value={[darknessValue]}
               onValueChange={handleDarknessChange}
               min={0}
               max={100}
               step={1}
+              aria-label="Darkness Level"
             />
             <p className="text-xs text-muted-foreground">
               Global darkness overlay (useful for night scenes)
@@ -234,10 +250,11 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <Label>Time of Day</Label>
+            <Label id={timeOfDayId}>Time of Day</Label>
             <RadioGroup
               value={settings.timeOfDay || 'day'}
               onValueChange={(value) => updateSetting('timeOfDay', value)}
+              aria-labelledby={timeOfDayId}
             >
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
@@ -278,9 +295,9 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
           <Separator />
 
           <div className="space-y-2">
-            <Label htmlFor="weather">Weather Effects</Label>
+            <Label htmlFor={weatherId}>Weather Effects</Label>
             <Input
-              id="weather"
+              id={weatherId}
               placeholder="e.g., Heavy rain, Light snow, Fog"
               value={settings.weatherEffects || ''}
               onChange={(e) => updateSetting('weatherEffects', e.target.value)}
