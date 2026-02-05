@@ -78,6 +78,7 @@ export default defineConfig({
       'src/__tests__/unit/spell-class-restrictions.test.ts',
       'src/__tests__/unit/response-pipeline.test.ts',
       'server-bun/src/services/__tests__/rest-service.test.ts',
+      'server-bun/src/services/__tests__/spell-slots-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',
       'src/components/spellcasting/__tests__/SpellPreparationPanel.test.tsx',
@@ -163,6 +164,7 @@ export default defineConfig({
         'src/agents/langgraph/dm-graph.ts',
         'src/agents/langgraph/dm-service.ts',
         'src/agents/langgraph/state.ts',
+        'server-bun/src/services/spell-slots-service.ts',
       ],
       exclude: [
         '**/__tests__/**',

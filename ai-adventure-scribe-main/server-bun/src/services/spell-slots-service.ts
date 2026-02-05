@@ -3,12 +3,14 @@
  *
  * Handles D&D 5E spell slot calculation, tracking, and management
  * Implements PHB spell slot progression tables for all spellcasting classes
- * Work Unit: 2.1a
  *
  * @module server/services/spell-slots-service
  */
 
-import { supabaseService } from '../lib/supabase.js';
+import { and, eq, exists, or, count, desc } from 'drizzle-orm';
+import { db } from '../../../db/client.js';
+import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index.js';
+import { NotFoundError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import type {
   SpellSlot,
   SpellSlotUsageLog,
@@ -23,11 +25,9 @@ import type {
   SpellSlotUsageHistory,
   SpellSlotUsageQuery,
   ClassName,
-  CasterType,
   ClassSpellcasting,
   WarlockPactMagic,
 } from '../types/spell-slots.js';
-import { NotFoundError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 
 /**
  * D&D 5E Full Caster Spell Slot Progression (PHB pg. 114)
@@ -264,49 +264,77 @@ export class SpellSlotsService {
   }
 
   /**
-   * Get character's current spell slots
+   * Get character's current spell slots with ownership verification
    * @param characterId - Character UUID
+   * @param userId - User ID for ownership check
    * @returns Character's spell slots
    */
-  static async getCharacterSpellSlots(characterId: string): Promise<CharacterSpellSlots> {
-    const { data, error } = await supabaseService
-      .from('character_spell_slots')
-      .select('*')
-      .eq('character_id', characterId)
-      .order('spell_level', { ascending: true });
+  static async getCharacterSpellSlots(characterId: string, userId: string): Promise<CharacterSpellSlots> {
+    const data = await db.query.characterSpellSlots.findMany({
+      where: and(
+        eq(characterSpellSlots.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
+      orderBy: [characterSpellSlots.spellLevel],
+    });
 
-    if (error) {
-      throw new InternalServerError(`Failed to fetch spell slots: ${error.message}`, { error });
+    if (!data || data.length === 0) {
+      // Verify if character exists and is owned by user to distinguish between "not found" and "no slots"
+      const character = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ),
+      });
+
+      if (!character) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
-    const slots: SpellSlot[] = (data || []).map((row) => ({
+    const slots: SpellSlot[] = data.map((row) => ({
       id: row.id,
-      characterId: row.character_id,
-      spellLevel: row.spell_level,
-      totalSlots: row.total_slots,
-      usedSlots: row.used_slots,
-      remainingSlots: row.total_slots - row.used_slots,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
+      characterId: row.characterId,
+      spellLevel: row.spellLevel,
+      totalSlots: row.totalSlots,
+      usedSlots: row.usedSlots,
+      remainingSlots: row.totalSlots - row.usedSlots,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     }));
 
     const totalAvailableSlots = slots.reduce((sum, slot) => sum + slot.remainingSlots, 0);
     const totalUsedSlots = slots.reduce((sum, slot) => sum + slot.usedSlots, 0);
 
-    return {
+    const result: CharacterSpellSlots = {
       characterId,
       slots,
       totalAvailableSlots,
       totalUsedSlots,
     };
+
+    // Add index signature access
+    for (const slot of slots) {
+      result[slot.spellLevel] = slot;
+    }
+
+    return result;
   }
 
   /**
-   * Use a spell slot
+   * Use a spell slot with ownership verification
    * @param input - Spell slot usage input
+   * @param userId - User ID for ownership check
    * @returns Result of using the spell slot
    */
-  static async useSpellSlot(input: UseSpellSlotInput): Promise<UseSpellSlotResult> {
+  static async useSpellSlot(input: UseSpellSlotInput, userId: string): Promise<UseSpellSlotResult> {
     const { characterId, spellName, spellLevel, slotLevelUsed, sessionId } = input;
 
     // Validate spell levels
@@ -325,75 +353,84 @@ export class SpellSlotsService {
 
     const wasUpcast = spellLevel > 0 && slotLevelUsed > spellLevel;
 
-    // Get current slot state
-    const { data: slotData, error: fetchError } = await supabaseService
-      .from('character_spell_slots')
-      .select('*')
-      .eq('character_id', characterId)
-      .eq('spell_level', slotLevelUsed)
-      .single();
+    // Get current slot state with ownership verification
+    const slotData = await db.query.characterSpellSlots.findFirst({
+      where: and(
+        eq(characterSpellSlots.characterId, characterId),
+        eq(characterSpellSlots.spellLevel, slotLevelUsed),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
+    });
 
-    if (fetchError || !slotData) {
+    if (!slotData) {
       throw new NotFoundError(`Level ${slotLevelUsed} spell slots for character`, characterId);
     }
 
     // Check if slot is available
-    if (slotData.used_slots >= slotData.total_slots) {
+    if (slotData.usedSlots >= slotData.totalSlots) {
       throw new BusinessLogicError(`No available level ${slotLevelUsed} spell slots`, {
         level: slotLevelUsed,
-        used: slotData.used_slots,
-        total: slotData.total_slots
+        used: slotData.usedSlots,
+        total: slotData.totalSlots
       });
     }
 
     // Use the slot
-    const { data: updatedSlot, error: updateError } = await supabaseService
-      .from('character_spell_slots')
-      .update({ used_slots: slotData.used_slots + 1 })
-      .eq('id', slotData.id)
-      .select()
-      .single();
+    const [updatedSlot] = await db
+      .update(characterSpellSlots)
+      .set({
+        usedSlots: slotData.usedSlots + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(characterSpellSlots.id, slotData.id))
+      .returning();
 
-    if (updateError || !updatedSlot) {
-      throw new InternalServerError(`Failed to use spell slot: ${updateError?.message}`, { updateError });
+    if (!updatedSlot) {
+      throw new InternalServerError('Failed to use spell slot');
     }
 
     // Log the usage
-    const { data: logEntry, error: logError } = await supabaseService
-      .from('spell_slot_usage_log')
-      .insert({
-        character_id: characterId,
-        session_id: sessionId || null,
-        spell_name: spellName,
-        spell_level: spellLevel,
-        slot_level_used: slotLevelUsed,
+    const [logEntry] = await db
+      .insert(spellSlotUsageLog)
+      .values({
+        characterId: characterId,
+        sessionId: sessionId || null,
+        spellName: spellName,
+        spellLevel: spellLevel,
+        slotLevelUsed: slotLevelUsed,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (logError || !logEntry) {
-      throw new InternalServerError(`Failed to log spell usage: ${logError?.message}`, { logError });
+    if (!logEntry) {
+      throw new InternalServerError('Failed to log spell usage');
     }
 
     const slot: SpellSlot = {
       id: updatedSlot.id,
-      characterId: updatedSlot.character_id,
-      spellLevel: updatedSlot.spell_level,
-      totalSlots: updatedSlot.total_slots,
-      usedSlots: updatedSlot.used_slots,
-      remainingSlots: updatedSlot.total_slots - updatedSlot.used_slots,
-      createdAt: new Date(updatedSlot.created_at),
-      updatedAt: new Date(updatedSlot.updated_at),
+      characterId: updatedSlot.characterId,
+      spellLevel: updatedSlot.spellLevel,
+      totalSlots: updatedSlot.totalSlots,
+      usedSlots: updatedSlot.usedSlots,
+      remainingSlots: updatedSlot.totalSlots - updatedSlot.usedSlots,
+      createdAt: updatedSlot.createdAt,
+      updatedAt: updatedSlot.updatedAt,
     };
 
     const log: SpellSlotUsageLog = {
       id: logEntry.id,
-      characterId: logEntry.character_id,
-      sessionId: logEntry.session_id,
-      spellName: logEntry.spell_name,
-      spellLevel: logEntry.spell_level,
-      slotLevelUsed: logEntry.slot_level_used,
-      timestamp: new Date(logEntry.timestamp),
+      characterId: logEntry.characterId,
+      sessionId: logEntry.sessionId,
+      spellName: logEntry.spellName,
+      spellLevel: logEntry.spellLevel,
+      slotLevelUsed: logEntry.slotLevelUsed,
+      timestamp: logEntry.timestamp,
     };
 
     const message = wasUpcast
@@ -455,28 +492,39 @@ export class SpellSlotsService {
   }
 
   /**
-   * Restore spell slots (long rest or specific restoration)
+   * Restore spell slots (long rest or specific restoration) with ownership verification
    * @param input - Restore spell slots input
+   * @param userId - User ID for ownership check
    * @returns Result of restoration
    */
-  static async restoreSpellSlots(input: RestoreSpellSlotsInput): Promise<RestoreSpellSlotsResult> {
+  static async restoreSpellSlots(input: RestoreSpellSlotsInput, userId: string): Promise<RestoreSpellSlotsResult> {
     const { characterId, level, amount } = input;
 
-    let query = supabaseService.from('character_spell_slots').select('*').eq('character_id', characterId);
+    // Verify ownership and existence
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    const whereClauses = [eq(characterSpellSlots.characterId, characterId)];
 
     // Filter by specific level if provided
     if (level !== undefined) {
       if (level < 1 || level > 9) {
         throw new ValidationError('Spell level must be between 1 and 9', { level });
       }
-      query = query.eq('spell_level', level);
+      whereClauses.push(eq(characterSpellSlots.spellLevel, level));
     }
 
-    const { data: slots, error: fetchError } = await query;
-
-    if (fetchError) {
-      throw new InternalServerError(`Failed to fetch spell slots: ${fetchError.message}`, { fetchError });
-    }
+    const slots = await db.query.characterSpellSlots.findMany({
+      where: and(...whereClauses),
+    });
 
     if (!slots || slots.length === 0) {
       return {
@@ -491,7 +539,7 @@ export class SpellSlotsService {
 
     // Restore slots
     for (const slot of slots) {
-      const currentUsed = slot.used_slots;
+      const currentUsed = slot.usedSlots;
 
       if (currentUsed === 0) {
         continue; // Nothing to restore
@@ -510,17 +558,16 @@ export class SpellSlotsService {
       const newUsedSlots = currentUsed - restoredAmount;
 
       // Update the slot
-      const { error: updateError } = await supabaseService
-        .from('character_spell_slots')
-        .update({ used_slots: newUsedSlots })
-        .eq('id', slot.id);
-
-      if (updateError) {
-        throw new InternalServerError(`Failed to restore spell slots: ${updateError.message}`, { updateError });
-      }
+      await db
+        .update(characterSpellSlots)
+        .set({
+          usedSlots: newUsedSlots,
+          updatedAt: new Date(),
+        })
+        .where(eq(characterSpellSlots.id, slot.id));
 
       slotsRestored.push({
-        level: slot.spell_level,
+        level: slot.spellLevel,
         restoredAmount,
       });
 
@@ -535,42 +582,55 @@ export class SpellSlotsService {
   }
 
   /**
-   * Get spell slot usage history
+   * Get spell slot usage history with ownership verification
    * @param query - Usage query parameters
+   * @param userId - User ID for ownership check
    * @returns Usage history
    */
-  static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery): Promise<SpellSlotUsageHistory> {
+  static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery, userId: string): Promise<SpellSlotUsageHistory> {
     const { characterId, sessionId, limit = 50, offset = 0 } = query;
 
-    let dbQuery = supabaseService
-      .from('spell_slot_usage_log')
-      .select('*', { count: 'exact' })
-      .eq('character_id', characterId)
-      .order('timestamp', { ascending: false });
+    // Verify ownership
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
 
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    const whereClauses = [eq(spellSlotUsageLog.characterId, characterId)];
     if (sessionId) {
-      dbQuery = dbQuery.eq('session_id', sessionId);
+      whereClauses.push(eq(spellSlotUsageLog.sessionId, sessionId));
     }
 
-    dbQuery = dbQuery.range(offset, offset + limit - 1);
+    const entriesData = await db.query.spellSlotUsageLog.findMany({
+      where: and(...whereClauses),
+      orderBy: [desc(spellSlotUsageLog.timestamp)],
+      limit,
+      offset,
+    });
 
-    const { data, error, count } = await dbQuery;
+    const [totalResult] = await db
+      .select({ value: count() })
+      .from(spellSlotUsageLog)
+      .where(and(...whereClauses));
 
-    if (error) {
-      throw new InternalServerError(`Failed to fetch usage history: ${error.message}`, { error });
-    }
+    const total = totalResult?.value || 0;
 
-    const entries: SpellSlotUsageLog[] = (data || []).map((row) => ({
+    const entries: SpellSlotUsageLog[] = entriesData.map((row) => ({
       id: row.id,
-      characterId: row.character_id,
-      sessionId: row.session_id,
-      spellName: row.spell_name,
-      spellLevel: row.spell_level,
-      slotLevelUsed: row.slot_level_used,
-      timestamp: new Date(row.timestamp),
+      characterId: row.characterId,
+      sessionId: row.sessionId,
+      spellName: row.spellName,
+      spellLevel: row.spellLevel,
+      slotLevelUsed: row.slotLevelUsed,
+      timestamp: row.timestamp,
     }));
 
-    const total = count || 0;
     const hasMore = offset + entries.length < total;
 
     return {
@@ -581,15 +641,29 @@ export class SpellSlotsService {
   }
 
   /**
-   * Initialize spell slots for a character based on their class and level
+   * Initialize spell slots for a character based on their class and level with ownership verification
    * @param characterId - Character UUID
+   * @param userId - User ID for ownership check
    * @param classes - Character's classes and levels
    * @returns Initialized spell slots
    */
   static async initializeSpellSlots(
     characterId: string,
+    userId: string,
     classes: Array<{ className: ClassName; level: number }>
   ): Promise<CharacterSpellSlots> {
+    // Verify ownership
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
     // Calculate spell slots
     const calculation =
       classes.length === 1
@@ -599,25 +673,21 @@ export class SpellSlotsService {
     const slots = 'slots' in calculation ? calculation.slots : {};
 
     // Delete existing slots
-    await supabaseService.from('character_spell_slots').delete().eq('character_id', characterId);
+    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId));
 
     // Insert new slots
     const insertData = Object.entries(slots).map(([level, total]) => ({
-      character_id: characterId,
-      spell_level: parseInt(level),
-      total_slots: total,
-      used_slots: 0,
+      characterId: characterId,
+      spellLevel: parseInt(level),
+      totalSlots: total,
+      usedSlots: 0,
     }));
 
     if (insertData.length > 0) {
-      const { error } = await supabaseService.from('character_spell_slots').insert(insertData);
-
-      if (error) {
-        throw new InternalServerError(`Failed to initialize spell slots: ${error.message}`, { error });
-      }
+      await db.insert(characterSpellSlots).values(insertData);
     }
 
     // Return the initialized slots
-    return this.getCharacterSpellSlots(characterId);
+    return this.getCharacterSpellSlots(characterId, userId);
   }
 }

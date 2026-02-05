@@ -55,3 +55,6 @@ export * from './tokens.js';
 
 // Export all lore keeper tables and types
 export * from './lore-keeper.js';
+
+// Export all spell slots tables and types
+export * from './spell-slots.js';
