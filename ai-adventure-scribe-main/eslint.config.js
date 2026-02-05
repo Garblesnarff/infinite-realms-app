@@ -234,6 +234,7 @@ export default tseslint.config(
       'src/contexts/CombatContext.tsx', // 1199 lines
       'src/contexts/combat/combat-reducer.ts',
       'src/services/ai-service.ts', // 1142 lines
+      'src/services/ai/dm-response-processor.ts',
       'src/components/combat/CombatInterface.tsx', // 966 lines
 
       // Engine files needing modularization (800+ lines)
