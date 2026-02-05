@@ -35,3 +35,7 @@
 ## 2025-05-14 - Character Sheet Loading and Layout
 **Learning:** Hardcoded grid columns (e.g., `grid-cols-7`) in tabbed layouts are brittle and break when new tabs are added (e.g., "Gallery" as the 8th tab). Using responsive grids (`grid-cols-4 md:grid-cols-8`) improves mobile UX and prevents layout shifts.
 **Action:** Always check the item count against grid column classes in tabbed navigations. Prefer responsive grid columns over fixed ones. Use `Skeleton` components instead of plain text for a more "delightful" loading experience.
+
+## 2025-05-28 - Drawing Tool Accessibility and Component Standards
+**Learning:** Polishing a complex feature panel like the Drawing Tool involves standardizing accessibility attributes (role="toolbar", aria-label, aria-pressed) and migrating legacy form elements (raw checkboxes) to design system components (Switch). Keeping these changes surgical and under 50 lines ensures they are maintainable and easy to review.
+**Action:** When touching feature toolbars, always add role="toolbar" and ensure all interactive elements have appropriate state indicators (aria-pressed) and accessible names (aria-label).
