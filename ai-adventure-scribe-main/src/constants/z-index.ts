@@ -79,6 +79,9 @@ export const Z_INDEX = {
   // Loading overlays - should cover most UI
   LOADING_OVERLAY: 100,
 
+  // Drag ghosts for tokens and other elements
+  DRAG_GHOST: 110,
+
   // Image lightbox - must appear above all game UI (very high to escape stacking contexts)
   IMAGE_LIGHTBOX_BACKDROP: 9980,
   IMAGE_LIGHTBOX: 9990,

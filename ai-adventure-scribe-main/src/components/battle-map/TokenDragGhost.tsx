@@ -13,10 +13,14 @@
  * - Grid-snapped position preview
  */
 
-import * as React from 'react';
 import { useSpring, animated } from '@react-spring/three';
-import type { Token } from '@/types/token';
+import * as React from 'react';
+
 import type { Point2D } from '@/types/scene';
+import type { Token } from '@/types/token';
+
+import { Z_INDEX } from '@/constants/z-index';
+
 
 export interface TokenDragGhostProps {
   /** The token being dragged */
@@ -136,12 +140,13 @@ export function TokenDragGhost2D({
 
   return (
     <div
-      className="pointer-events-none fixed z-[9999] transition-all duration-200"
+      className="pointer-events-none fixed transition-all duration-200"
       style={{
         left: position.x,
         top: position.y,
         transform: 'translate(-50%, -50%)',
         opacity: visible ? opacity : 0,
+        zIndex: Z_INDEX.DRAG_GHOST,
       }}
     >
       <div
