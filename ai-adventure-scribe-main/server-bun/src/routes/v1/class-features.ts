@@ -12,6 +12,7 @@
 
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
@@ -31,6 +32,31 @@ async function verifyCharacterOwnership(
     return { success: false, status: 404, error: 'Character not found' };
   }
   return { success: true };
+}
+
+function mapClassFeaturesError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
 }
 
 export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
@@ -62,11 +88,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       return { features };
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_LIBRARY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get features',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get features');
     }
   })
 
@@ -86,11 +108,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_SUBCLASSES error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get subclasses',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get subclasses');
     }
   })
 
@@ -112,15 +130,11 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         return { error: ownership.error };
       }
 
-      const result = await ClassFeaturesService.getCharacterFeaturesWithUsage(params.id);
+      const result = await ClassFeaturesService.getCharacterFeaturesWithUsage(params.id, user.userId);
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_CHARACTER error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get character features',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get character features', 'Character not found');
     }
   })
 
@@ -153,17 +167,13 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         characterId: params.id,
         featureId: params.featureId,
         acquiredAtLevel,
-      });
+      }, user.userId);
 
       set.status = 201;
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_GRANT error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to grant feature',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to grant feature', 'Character not found');
     }
   })
 
@@ -203,7 +213,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         featureId: params.featureId,
         context,
         sessionId,
-      });
+      }, user.userId);
 
       if (!result.success) {
         set.status = 400;
@@ -213,11 +223,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_USE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to use feature',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to use feature', 'Character not found');
     }
   })
 
@@ -249,16 +255,12 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       const result = await ClassFeaturesService.restoreFeatures({
         characterId: params.id,
         restType,
-      });
+      }, user.userId);
 
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_RESTORE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to restore features',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to restore features', 'Character not found');
     }
   })
 
@@ -301,17 +303,13 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         className,
         subclassName,
         level,
-      });
+      }, user.userId);
 
       set.status = 201;
       return result;
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_SET_SUBCLASS error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to set subclass',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to set subclass', 'Character not found');
     }
   })
 
@@ -333,7 +331,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         return { error: ownership.error };
       }
 
-      const subclass = await ClassFeaturesService.getCharacterSubclass(params.id, params.className);
+      const subclass = await ClassFeaturesService.getCharacterSubclass(params.id, params.className, user.userId);
 
       if (!subclass) {
         set.status = 404;
@@ -343,11 +341,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       return { subclass };
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_GET_SUBCLASS error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get subclass',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get subclass', 'Character not found');
     }
   })
 
@@ -388,16 +382,12 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         featureId,
         sessionId,
         limit: limit ? parseInt(limit) : 50,
-      });
+      }, user.userId);
 
       return { history };
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_HISTORY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get feature history',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get feature history', 'Character not found');
     }
   })
 
@@ -423,10 +413,6 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       return { feature };
     } catch (error) {
       logger.error({ msg: 'CLASS_FEATURES_GET error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get feature',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapClassFeaturesError(set, error, 'Failed to get feature', 'Feature not found');
     }
   });

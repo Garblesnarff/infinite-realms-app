@@ -11,6 +11,7 @@
 
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
@@ -30,6 +31,30 @@ async function verifyCharacterOwnership(
     return { success: false, status: 404, error: 'Character not found' };
   }
   return { success: true };
+}
+
+function mapRestError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: 'Character not found' };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
 }
 
 export const restRoutes = new Elysia({ prefix: '/v1/rest' })
@@ -70,17 +95,14 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         params.id,
         hitDiceToSpend || 0,
         sessionId,
-        notes
+        notes,
+        user.userId
       );
 
       return result;
     } catch (error) {
       logger.error({ msg: 'REST_SHORT error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to complete short rest',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to complete short rest');
     }
   })
 
@@ -115,15 +137,11 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         }
       }
 
-      const result = await RestService.takeLongRest(params.id, sessionId, notes);
+      const result = await RestService.takeLongRest(params.id, sessionId, notes, user.userId);
       return result;
     } catch (error) {
       logger.error({ msg: 'REST_LONG error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to complete long rest',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to complete long rest');
     }
   })
 
@@ -145,15 +163,11 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         return { error: ownership.error };
       }
 
-      const hitDice = await RestService.getHitDice(params.id);
+      const hitDice = await RestService.getHitDice(params.id, user.userId);
       return { hitDice };
     } catch (error) {
       logger.error({ msg: 'REST_HITDICE_GET error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get hit dice',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to get hit dice');
     }
   })
 
@@ -185,7 +199,12 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         return { error: 'Count must be at least 1' };
       }
 
-      const result = await RestService.spendHitDice(params.id, count, roll ? [roll] : undefined);
+      const result = await RestService.spendHitDice(
+        params.id,
+        count,
+        roll ? [roll] : undefined,
+        user.userId
+      );
 
       return {
         hpRestored: result.hpRestored,
@@ -195,11 +214,7 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
       };
     } catch (error) {
       logger.error({ msg: 'REST_HITDICE_SPEND error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to spend hit dice',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to spend hit dice');
     }
   })
 
@@ -234,17 +249,14 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
       const rests = await RestService.getRestHistory(
         params.id,
         sessionId,
-        limit ? parseInt(limit) : undefined
+        limit ? parseInt(limit) : undefined,
+        user.userId
       );
 
       return { rests };
     } catch (error) {
       logger.error({ msg: 'REST_HISTORY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get rest history',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to get rest history');
     }
   })
 
@@ -276,16 +288,12 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         return { error: 'Valid className and level (1-20) are required' };
       }
 
-      const hitDice = await RestService.initializeHitDice(params.id, className, level);
+      const hitDice = await RestService.initializeHitDice(params.id, className, level, user.userId);
 
       set.status = 201;
       return { hitDice };
     } catch (error) {
       logger.error({ msg: 'REST_HITDICE_INIT error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to initialize hit dice',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapRestError(set, error, 'Failed to initialize hit dice');
     }
   });

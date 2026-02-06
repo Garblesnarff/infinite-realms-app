@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../../lib/auth.js';
+import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
@@ -11,6 +12,30 @@ import type {
   ApplyConditionRequest,
   AttemptSaveRequest,
 } from '../../../types/combat.js';
+
+function mapCombatError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const statusRoutes = new Elysia()
   /**
@@ -58,9 +83,7 @@ export const statusRoutes = new Elysia()
       };
     } catch (e) {
       logger.error({ msg: 'Apply condition error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to apply condition';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to apply condition', 'Combat participant not found');
     }
   })
 
@@ -97,9 +120,7 @@ export const statusRoutes = new Elysia()
       return { success: true, message: 'Condition removed' };
     } catch (e) {
       logger.error({ msg: 'Remove condition error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to remove condition';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to remove condition', 'Condition not found');
     }
   })
 
@@ -143,9 +164,7 @@ export const statusRoutes = new Elysia()
       };
     } catch (e) {
       logger.error({ msg: 'Attempt save error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to attempt save';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to attempt save', 'Condition not found');
     }
   })
 
@@ -193,9 +212,7 @@ export const statusRoutes = new Elysia()
       };
     } catch (e) {
       logger.error({ msg: 'Get active conditions error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to get active conditions';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to get active conditions', 'Encounter not found');
     }
   })
 
@@ -215,8 +232,7 @@ export const statusRoutes = new Elysia()
       return { conditions };
     } catch (e) {
       logger.error({ msg: 'Get conditions library error', error: e });
-      set.status = 500;
-      return { error: 'Failed to get conditions library' };
+      return mapCombatError(set, e, 'Failed to get conditions library');
     }
   })
 
@@ -254,11 +270,9 @@ export const statusRoutes = new Elysia()
       // 🛡️ Sentinel: Properly map NotFoundError to 404 to avoid existence leakage
       if (e.name === 'NotFoundError' || e.statusCode === 404) {
         set.status = 404;
-        return { error: e.message || 'Participant not found' };
+        return { error: 'Participant not found' };
       }
 
-      const message = e instanceof Error ? e.message : 'Failed to get participant conditions';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to get participant conditions', 'Participant not found');
     }
   });

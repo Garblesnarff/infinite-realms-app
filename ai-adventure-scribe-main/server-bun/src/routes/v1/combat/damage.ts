@@ -1,10 +1,35 @@
 import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../../lib/auth.js';
+import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatHPService } from '../../../services/combat-hp-service.js';
 
 import { verifyEncounterOwnership } from './helpers.js';
+
+function mapCombatError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const damageRoutes = new Elysia()
   /**
@@ -57,9 +82,7 @@ export const damageRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Apply damage error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to apply damage';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to apply damage', 'Combat participant not found');
     }
   })
 
@@ -103,9 +126,7 @@ export const damageRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Heal damage error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to heal damage';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to heal damage', 'Combat participant not found');
     }
   })
 
@@ -143,9 +164,7 @@ export const damageRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Set temp HP error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to set temp HP';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to set temp HP', 'Combat participant not found');
     }
   })
 
@@ -183,9 +202,7 @@ export const damageRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to roll death save';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to roll death save', 'Combat participant not found');
     }
   })
 
@@ -220,7 +237,6 @@ export const damageRoutes = new Elysia()
       return damageLog;
     } catch (e) {
       logger.error({ msg: 'Get damage log error', error: e });
-      set.status = 500;
-      return { error: 'Failed to get damage log' };
+      return mapCombatError(set, e, 'Failed to get damage log', 'Encounter not found');
     }
   });

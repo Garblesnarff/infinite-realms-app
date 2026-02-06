@@ -21,6 +21,28 @@ import { AppError } from '../../lib/errors.js';
 import { MeasurementService, type CreateTemplateData } from '../../services/measurement-service.js';
 import { protectedProcedure, router } from '../trpc.js';
 
+function throwSanitizedMeasurementError(
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string
+): never {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  if (error instanceof AppError) {
+    if (error.statusCode === 403 || error.statusCode === 404) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: notFoundMessage });
+    }
+
+    if (error.statusCode >= 400 && error.statusCode < 500) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+    }
+  }
+
+  throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: fallbackMessage });
+}
+
 /**
  * Validation schema for creating a measurement template
  */
@@ -52,10 +74,7 @@ export const measurementsRouter = router({
         const templates = await MeasurementService.listTemplates(input.sceneId, ctx.user.userId);
         return { data: templates };
       } catch (error: unknown) {
-        if (error instanceof AppError && error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        throw error;
+        throwSanitizedMeasurementError(error, 'Failed to fetch templates', 'Scene not found');
       }
     }),
 
@@ -113,10 +132,7 @@ export const measurementsRouter = router({
 
         return template;
       } catch (error: unknown) {
-        if (error instanceof AppError && error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        throw error;
+        throwSanitizedMeasurementError(error, 'Failed to create template', 'Scene not found');
       }
     }),
 
@@ -157,10 +173,11 @@ export const measurementsRouter = router({
         const result = await MeasurementService.calculateAffectedTokens(input.templateId, ctx.user.userId);
         return result;
       } catch (error: unknown) {
-        if (error instanceof AppError && error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        throw error;
+        throwSanitizedMeasurementError(
+          error,
+          'Failed to calculate affected tokens',
+          'Template not found'
+        );
       }
     }),
 
@@ -195,10 +212,7 @@ export const measurementsRouter = router({
           deletedCount,
         };
       } catch (error: unknown) {
-        if (error instanceof AppError && error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        throw error;
+        throwSanitizedMeasurementError(error, 'Failed to cleanup templates', 'Scene not found');
       }
     }),
 });

@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../../lib/auth.js';
+import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatAttackService } from '../../../services/combat-attack-service.js';
 import { verifyEncounterOwnership } from './helpers.js';
@@ -9,6 +10,30 @@ import type {
   SpellAttackInput,
   CreateWeaponAttackInput,
 } from '../../../types/combat.js';
+
+function mapActionError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const actionRoutes = new Elysia()
   /**
@@ -47,9 +72,7 @@ export const actionRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Resolve attack error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to resolve attack';
-      set.status = 500;
-      return { error: message };
+      return mapActionError(set, e, 'Failed to resolve attack', 'Combat target not found');
     }
   })
 
@@ -89,9 +112,7 @@ export const actionRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Resolve spell attack error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to resolve spell attack';
-      set.status = 500;
-      return { error: message };
+      return mapActionError(set, e, 'Failed to resolve spell attack', 'Combat target not found');
     }
   })
 
@@ -114,7 +135,7 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const attacks = await attackService.getCharacterWeapons(params.characterId);
+      const attacks = await attackService.getCharacterWeapons(params.characterId, user.userId);
 
       return { attacks };
     } catch (e) {
@@ -158,14 +179,12 @@ export const actionRoutes = new Elysia()
       const attack = await attackService.createWeaponAttack({
         characterId: params.characterId,
         ...weaponInput,
-      });
+      }, user.userId);
 
       set.status = 201;
       return { attack };
     } catch (e) {
       logger.error({ msg: 'Create weapon attack error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to create weapon attack';
-      set.status = 500;
-      return { error: message };
+      return mapActionError(set, e, 'Failed to create weapon attack', 'Character not found');
     }
   });

@@ -1,9 +1,34 @@
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../../lib/auth.js';
+import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
 import type { CreateParticipantInput } from '../../../types/combat.js';
+
+function mapCombatError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const initiativeRoutes = new Elysia()
   /**
@@ -44,8 +69,7 @@ export const initiativeRoutes = new Elysia()
       return combatState;
     } catch (e) {
       logger.error({ msg: 'Start combat error', error: e });
-      set.status = 500;
-      return { error: 'Failed to start combat encounter' };
+      return mapCombatError(set, e, 'Failed to start combat encounter', 'Session not found');
     }
   })
 
@@ -93,8 +117,7 @@ export const initiativeRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Roll initiative error', error: e });
-      set.status = 500;
-      return { error: 'Failed to roll initiative' };
+      return mapCombatError(set, e, 'Failed to roll initiative', 'Combat participant not found');
     }
   })
 
@@ -120,9 +143,7 @@ export const initiativeRoutes = new Elysia()
       return result;
     } catch (e) {
       logger.error({ msg: 'Advance turn error', error: e });
-      const message = e instanceof Error ? e.message : 'Failed to advance turn';
-      set.status = 500;
-      return { error: message };
+      return mapCombatError(set, e, 'Failed to advance turn', 'Encounter not found');
     }
   })
 
@@ -160,8 +181,7 @@ export const initiativeRoutes = new Elysia()
       return combatState;
     } catch (e) {
       logger.error({ msg: 'Reorder initiative error', error: e });
-      set.status = 500;
-      return { error: 'Failed to reorder initiative' };
+      return mapCombatError(set, e, 'Failed to reorder initiative', 'Combat participant not found');
     }
   })
 
@@ -187,8 +207,7 @@ export const initiativeRoutes = new Elysia()
       return updatedEncounter;
     } catch (e) {
       logger.error({ msg: 'End combat error', error: e });
-      set.status = 500;
-      return { error: 'Failed to end combat encounter' };
+      return mapCombatError(set, e, 'Failed to end combat encounter', 'Encounter not found');
     }
   })
 
@@ -214,7 +233,6 @@ export const initiativeRoutes = new Elysia()
       return combatState;
     } catch (e) {
       logger.error({ msg: 'Get combat status error', error: e });
-      set.status = 500;
-      return { error: 'Failed to get combat status' };
+      return mapCombatError(set, e, 'Failed to get combat status', 'Encounter not found');
     }
   });

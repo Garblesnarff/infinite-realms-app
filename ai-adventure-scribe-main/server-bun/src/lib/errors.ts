@@ -75,9 +75,7 @@ export class ForbiddenError extends AppError {
  */
 export class NotFoundError extends AppError {
   constructor(resource: string, id?: string) {
-    const message = id
-      ? `${resource} with ID '${id}' not found`
-      : `${resource} not found`;
+    const message = `${resource} not found`;
     super(404, message, 'NOT_FOUND', { resource, id });
   }
 }

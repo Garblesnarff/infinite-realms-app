@@ -12,11 +12,10 @@ import {
   restEvents,
   characterHitDice,
   characters,
-  characterStats,
   type RestEvent,
   type CharacterHitDice,
 } from '../../../db/schema/index.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or } from 'drizzle-orm';
 import type {
   RestType,
   ShortRestResult,
@@ -24,7 +23,6 @@ import type {
   SpendHitDiceResult,
   RestorableResource,
   HitDieType,
-  HIT_DICE_BY_CLASS,
 } from '../types/rest.js';
 import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
@@ -73,13 +71,36 @@ export class RestService {
   }
 
   /**
+   * Verify user owns character (direct owner or shared owner field).
+   * Throws NOT_FOUND to avoid disclosing character existence.
+   */
+  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+      columns: { id: true },
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+  }
+
+  /**
    * Initialize hit dice for a character based on their class and level
    */
   static async initializeHitDice(
     characterId: string,
     className: string,
-    level: number
+    level: number,
+    userId?: string
   ): Promise<CharacterHitDice> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const dieType = this.getHitDieType(className);
 
     // Check if hit dice already exist for this character/class
@@ -134,7 +155,11 @@ export class RestService {
   /**
    * Get all hit dice for a character
    */
-  static async getHitDice(characterId: string): Promise<CharacterHitDice[]> {
+  static async getHitDice(characterId: string, userId?: string): Promise<CharacterHitDice[]> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const hitDice = await db.query.characterHitDice.findMany({
       where: eq(characterHitDice.characterId, characterId),
     });
@@ -145,8 +170,8 @@ export class RestService {
   /**
    * Get available (unspent) hit dice count
    */
-  static async getAvailableHitDiceCount(characterId: string): Promise<number> {
-    const allHitDice = await this.getHitDice(characterId);
+  static async getAvailableHitDiceCount(characterId: string, userId?: string): Promise<number> {
+    const allHitDice = await this.getHitDice(characterId, userId);
     return allHitDice.reduce((sum, hd) => sum + (hd.totalDice - hd.usedDice), 0);
   }
 
@@ -157,8 +182,13 @@ export class RestService {
   static async spendHitDice(
     characterId: string,
     count: number,
-    preRolledValues?: number[]
+    preRolledValues?: number[],
+    userId?: string
   ): Promise<SpendHitDiceResult> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     if (count < 0) {
       throw new ValidationError('Cannot spend negative hit dice', { count });
     }
@@ -168,7 +198,7 @@ export class RestService {
         hpRestored: 0,
         hitDiceSpent: 0,
         rolls: [],
-        hitDiceRemaining: await this.getHitDice(characterId),
+        hitDiceRemaining: await this.getHitDice(characterId, userId),
       };
     }
 
@@ -191,7 +221,7 @@ export class RestService {
     const conModifier = this.calculateConModifier(character.stats.constitution);
 
     // Get all hit dice
-    const allHitDice = await this.getHitDice(characterId);
+    const allHitDice = await this.getHitDice(characterId, userId);
     const availableCount = allHitDice.reduce(
       (sum, hd) => sum + (hd.totalDice - hd.usedDice),
       0
@@ -251,7 +281,7 @@ export class RestService {
       hpRestored: totalHpRestored,
       hitDiceSpent: count,
       rolls,
-      hitDiceRemaining: await this.getHitDice(characterId),
+      hitDiceRemaining: await this.getHitDice(characterId, userId),
     };
   }
 
@@ -261,9 +291,14 @@ export class RestService {
    */
   static async restoreHitDice(
     characterId: string,
-    count?: number
+    count?: number,
+    userId?: string
   ): Promise<number> {
-    const allHitDice = await this.getHitDice(characterId);
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
+    const allHitDice = await this.getHitDice(characterId, userId);
 
     if (allHitDice.length === 0) {
       return 0;
@@ -319,8 +354,13 @@ export class RestService {
    */
   static async getRestorableResources(
     characterId: string,
-    restType: RestType
+    restType: RestType,
+    userId?: string
   ): Promise<RestorableResource[]> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const resources: RestorableResource[] = [];
 
     // Note: This is a simplified version. Full implementation would check
@@ -371,15 +411,20 @@ export class RestService {
     characterId: string,
     hitDiceToSpend: number = 0,
     sessionId?: string,
-    notes?: string
+    notes?: string,
+    userId?: string
   ): Promise<ShortRestResult> {
-    // Get character
-    const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
-    });
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    } else {
+      const character = await db.query.characters.findFirst({
+        where: eq(characters.id, characterId),
+        columns: { id: true },
+      });
 
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
+      if (!character) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
     // Spend hit dice if requested
@@ -387,13 +432,13 @@ export class RestService {
     let hitDiceSpent = 0;
 
     if (hitDiceToSpend > 0) {
-      const result = await this.spendHitDice(characterId, hitDiceToSpend);
+      const result = await this.spendHitDice(characterId, hitDiceToSpend, undefined, userId);
       hpRestored = result.hpRestored;
       hitDiceSpent = result.hitDiceSpent;
     }
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, 'short');
+    const resourcesRestored = await this.getRestorableResources(characterId, 'short', userId);
 
     // Create rest event
     const [restEvent] = await db
@@ -421,7 +466,7 @@ export class RestService {
       restType: 'short',
       hpRestored,
       hitDiceSpent,
-      hitDiceRemaining: await this.getHitDice(characterId),
+      hitDiceRemaining: await this.getHitDice(characterId, userId),
       resourcesRestored,
       restEventId: restEvent.id,
     };
@@ -434,18 +479,20 @@ export class RestService {
   static async takeLongRest(
     characterId: string,
     sessionId?: string,
-    notes?: string
+    notes?: string,
+    userId?: string
   ): Promise<LongRestResult> {
-    // Get character
-    const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
-      with: {
-        stats: true,
-      },
-    });
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    } else {
+      const character = await db.query.characters.findFirst({
+        where: eq(characters.id, characterId),
+        columns: { id: true },
+      });
 
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
+      if (!character) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
     // Note: HP restoration would be handled by updating character's current HP
@@ -454,10 +501,10 @@ export class RestService {
     const hpRestored = 0; // Would be: maxHP - currentHP
 
     // Restore hit dice (half total, minimum 1)
-    const hitDiceRestored = await this.restoreHitDice(characterId);
+    const hitDiceRestored = await this.restoreHitDice(characterId, undefined, userId);
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, 'long');
+    const resourcesRestored = await this.getRestorableResources(characterId, 'long', userId);
 
     // Create rest event
     const [restEvent] = await db
@@ -485,7 +532,7 @@ export class RestService {
       restType: 'long',
       hpRestored,
       hitDiceRestored,
-      hitDiceRemaining: await this.getHitDice(characterId),
+      hitDiceRemaining: await this.getHitDice(characterId, userId),
       resourcesRestored,
       restEventId: restEvent.id,
     };
@@ -497,8 +544,13 @@ export class RestService {
   static async getRestHistory(
     characterId: string,
     sessionId?: string,
-    limit: number = 50
+    limit: number = 50,
+    userId?: string
   ): Promise<RestEvent[]> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const conditions = [eq(restEvents.characterId, characterId)];
 
     if (sessionId) {

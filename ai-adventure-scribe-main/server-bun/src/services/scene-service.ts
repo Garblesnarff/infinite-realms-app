@@ -22,7 +22,7 @@ import {
   type NewSceneSetting,
 } from '../../../db/schema/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { InternalServerError, NotFoundError, ForbiddenError } from '../lib/errors.js';
+import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**
  * Input data for creating a new scene
@@ -225,7 +225,7 @@ export class SceneService {
 
     // Verify scene belongs to the campaign
     if (scene.campaignId !== campaignId) {
-      throw new ForbiddenError('Scene does not belong to this campaign');
+      throw new NotFoundError('Scene', sceneId);
     }
 
     // Deactivate all scenes in the campaign

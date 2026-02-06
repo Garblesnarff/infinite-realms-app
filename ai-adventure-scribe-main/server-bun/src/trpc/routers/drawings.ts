@@ -16,8 +16,40 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AppError } from '../../lib/errors.js';
 import { DrawingService, type CreateDrawingData } from '../../services/drawing-service.js';
 import { protectedProcedure, router } from '../trpc.js';
+
+function throwSanitizedDrawingError(
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string
+): never {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  if (error instanceof AppError) {
+    if (error.statusCode === 403 || error.statusCode === 404) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: notFoundMessage,
+      });
+    }
+
+    if (error.statusCode >= 400 && error.statusCode < 500) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: error.message,
+      });
+    }
+  }
+
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: fallbackMessage,
+  });
+}
 
 /**
  * Validation schema for point coordinates
@@ -70,8 +102,12 @@ export const drawingsRouter = router({
   list: protectedProcedure
     .input(z.object({ sceneId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      const drawings = await DrawingService.listDrawings(input.sceneId, ctx.user.userId);
-      return { data: drawings };
+      try {
+        const drawings = await DrawingService.listDrawings(input.sceneId, ctx.user.userId);
+        return { data: drawings };
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to fetch drawings', 'Scene not found');
+      }
     }),
 
   /**
@@ -80,16 +116,20 @@ export const drawingsRouter = router({
   getById: protectedProcedure
     .input(z.object({ drawingId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      const drawing = await DrawingService.getDrawingById(input.drawingId, ctx.user.userId);
+      try {
+        const drawing = await DrawingService.getDrawingById(input.drawingId, ctx.user.userId);
 
-      if (!drawing) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Drawing not found',
-        });
+        if (!drawing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Drawing not found',
+          });
+        }
+
+        return drawing;
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to fetch drawing', 'Drawing not found');
       }
-
-      return drawing;
     }),
 
   /**
@@ -99,34 +139,31 @@ export const drawingsRouter = router({
   create: protectedProcedure
     .input(createDrawingSchema)
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'You must be logged in to create drawings',
-        });
+      try {
+        const drawingData: CreateDrawingData = {
+          sceneId: input.sceneId,
+          drawingType: input.drawingType,
+          pointsData: input.pointsData,
+          strokeColor: input.strokeColor,
+          strokeWidth: input.strokeWidth,
+          fillColor: input.fillColor ?? null,
+          fillOpacity: input.fillOpacity ?? 0,
+          zIndex: input.zIndex ?? 0,
+          textContent: input.textContent ?? null,
+          fontSize: input.fontSize ?? null,
+          fontFamily: input.fontFamily ?? null,
+        };
+
+        const drawing = await DrawingService.createDrawing(
+          input.sceneId,
+          ctx.user.userId,
+          drawingData
+        );
+
+        return drawing;
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to create drawing', 'Scene not found');
       }
-
-      const drawingData: CreateDrawingData = {
-        sceneId: input.sceneId,
-        drawingType: input.drawingType,
-        pointsData: input.pointsData,
-        strokeColor: input.strokeColor,
-        strokeWidth: input.strokeWidth,
-        fillColor: input.fillColor ?? null,
-        fillOpacity: input.fillOpacity ?? 0,
-        zIndex: input.zIndex ?? 0,
-        textContent: input.textContent ?? null,
-        fontSize: input.fontSize ?? null,
-        fontFamily: input.fontFamily ?? null,
-      };
-
-      const drawing = await DrawingService.createDrawing(
-        input.sceneId,
-        ctx.user.userId,
-        drawingData
-      );
-
-      return drawing;
     }),
 
   /**
@@ -141,13 +178,6 @@ export const drawingsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'You must be logged in to update drawings',
-        });
-      }
-
       try {
         const updated = await DrawingService.updateDrawing(
           input.drawingId,
@@ -164,14 +194,8 @@ export const drawingsRouter = router({
         }
 
         return updated;
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Not authorized')) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Drawing not found',
-          });
-        }
-        throw error;
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to update drawing', 'Drawing not found');
       }
     }),
 
@@ -182,13 +206,6 @@ export const drawingsRouter = router({
   delete: protectedProcedure
     .input(z.object({ drawingId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'You must be logged in to delete drawings',
-        });
-      }
-
       try {
         const deleted = await DrawingService.deleteDrawing(input.drawingId, ctx.user.userId);
 
@@ -200,14 +217,8 @@ export const drawingsRouter = router({
         }
 
         return { success: true };
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Not authorized')) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Drawing not found',
-          });
-        }
-        throw error;
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to delete drawing', 'Drawing not found');
       }
     }),
 
@@ -223,13 +234,6 @@ export const drawingsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'You must be logged in to delete drawings',
-        });
-      }
-
       try {
         const deletedCount = await DrawingService.bulkDeleteDrawings(
           input.sceneId,
@@ -241,14 +245,8 @@ export const drawingsRouter = router({
           success: true,
           deletedCount,
         };
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Only scene owner')) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Scene not found',
-          });
-        }
-        throw error;
+      } catch (error: unknown) {
+        throwSanitizedDrawingError(error, 'Failed to delete drawings', 'Scene not found');
       }
     }),
 });

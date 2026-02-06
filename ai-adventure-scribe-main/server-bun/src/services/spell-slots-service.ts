@@ -9,6 +9,9 @@
  */
 
 import { supabaseService } from '../lib/supabase.js';
+import { db } from '../../../db/client.js';
+import { characters } from '../../../db/schema/index.js';
+import { and, eq, or } from 'drizzle-orm';
 import type {
   SpellSlot,
   SpellSlotUsageLog,
@@ -23,7 +26,6 @@ import type {
   SpellSlotUsageHistory,
   SpellSlotUsageQuery,
   ClassName,
-  CasterType,
   ClassSpellcasting,
   WarlockPactMagic,
 } from '../types/spell-slots.js';
@@ -116,6 +118,24 @@ const CLASS_SPELLCASTING: Record<ClassName, ClassSpellcasting> = {
  * Spell Slots Service
  */
 export class SpellSlotsService {
+  /**
+   * Verify user owns character (direct owner or shared owner field).
+   * Throws NOT_FOUND to avoid disclosing character existence.
+   */
+  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+      columns: { id: true },
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+  }
+
   /**
    * Calculate spell slots for a single class (D&D 5E PHB tables)
    * @param className - D&D 5E class name
@@ -268,7 +288,14 @@ export class SpellSlotsService {
    * @param characterId - Character UUID
    * @returns Character's spell slots
    */
-  static async getCharacterSpellSlots(characterId: string): Promise<CharacterSpellSlots> {
+  static async getCharacterSpellSlots(
+    characterId: string,
+    userId?: string
+  ): Promise<CharacterSpellSlots> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const { data, error } = await supabaseService
       .from('character_spell_slots')
       .select('*')
@@ -306,8 +333,12 @@ export class SpellSlotsService {
    * @param input - Spell slot usage input
    * @returns Result of using the spell slot
    */
-  static async useSpellSlot(input: UseSpellSlotInput): Promise<UseSpellSlotResult> {
+  static async useSpellSlot(input: UseSpellSlotInput, userId?: string): Promise<UseSpellSlotResult> {
     const { characterId, spellName, spellLevel, slotLevelUsed, sessionId } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     // Validate spell levels
     if (spellLevel < 0 || spellLevel > 9) {
@@ -461,8 +492,15 @@ export class SpellSlotsService {
    * @param input - Restore spell slots input
    * @returns Result of restoration
    */
-  static async restoreSpellSlots(input: RestoreSpellSlotsInput): Promise<RestoreSpellSlotsResult> {
+  static async restoreSpellSlots(
+    input: RestoreSpellSlotsInput,
+    userId?: string
+  ): Promise<RestoreSpellSlotsResult> {
     const { characterId, level, amount } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     let query = supabaseService.from('character_spell_slots').select('*').eq('character_id', characterId);
 
@@ -543,8 +581,15 @@ export class SpellSlotsService {
    * @param query - Usage query parameters
    * @returns Usage history
    */
-  static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery): Promise<SpellSlotUsageHistory> {
+  static async getSpellSlotUsageHistory(
+    query: SpellSlotUsageQuery,
+    userId?: string
+  ): Promise<SpellSlotUsageHistory> {
     const { characterId, sessionId, limit = 50, offset = 0 } = query;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     let dbQuery = supabaseService
       .from('spell_slot_usage_log')
@@ -592,8 +637,13 @@ export class SpellSlotsService {
    */
   static async initializeSpellSlots(
     characterId: string,
-    classes: Array<{ className: ClassName; level: number }>
+    classes: Array<{ className: ClassName; level: number }>,
+    userId?: string
   ): Promise<CharacterSpellSlots> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     // Calculate spell slots
     const calculation =
       classes.length === 1
@@ -622,6 +672,6 @@ export class SpellSlotsService {
     }
 
     // Return the initialized slots
-    return this.getCharacterSpellSlots(characterId);
+    return this.getCharacterSpellSlots(characterId, userId);
   }
 }

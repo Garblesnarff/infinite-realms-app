@@ -15,12 +15,37 @@
 import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../lib/auth.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
 import type { XPSource, LevelUpInput } from '../../types/progression.js';
+
+function mapProgressionError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: 'Character not found' };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
   /**
@@ -94,11 +119,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return result;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_AWARD_XP error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to award XP',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to award XP');
     }
   })
 
@@ -112,11 +133,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return progression;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_GET error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get progression',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to get progression');
     }
   })
 
@@ -144,11 +161,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return result;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_LEVELUP error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to level up',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to level up');
     }
   })
 
@@ -175,11 +188,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return options;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_LEVELUP_OPTIONS error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get level-up options',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to get level-up options');
     }
   })
 
@@ -209,11 +218,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return { events };
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_HISTORY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get XP history',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to get XP history');
     }
   })
 
@@ -234,11 +239,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return result;
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_MILESTONE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to set milestone level',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to set milestone level');
     }
   })
 
@@ -257,10 +258,6 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       return { xpTable };
     } catch (error) {
       logger.error({ msg: 'PROGRESSION_XPTABLE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get XP table',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapProgressionError(set, error, 'Failed to get XP table');
     }
   });

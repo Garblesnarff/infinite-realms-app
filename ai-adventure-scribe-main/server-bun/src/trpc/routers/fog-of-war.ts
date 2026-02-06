@@ -5,10 +5,10 @@
  * Each user has their own revealed areas per scene for exploration tracking.
  */
 
-/* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AppError } from '../../lib/errors.js';
 import { FogOfWarService, type RevealAreaInput } from '../../services/fog-of-war-service.js';
 import { broadcastToScene } from '../../ws.js';
 import { protectedProcedure, router } from '../trpc.js';
@@ -30,9 +30,25 @@ const revealAreaInputSchema = z.object({
   isPermanent: z.boolean().optional(),
 });
 
-function mapFogError(error: unknown, fallbackMessage: string): never {
+function mapFogError(error: unknown, fallbackMessage: string, notFoundMessage: string): never {
   if (error instanceof TRPCError) {
     throw error;
+  }
+
+  if (error instanceof AppError) {
+    if (error.statusCode === 403 || error.statusCode === 404) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: notFoundMessage,
+      });
+    }
+
+    if (error.statusCode >= 400 && error.statusCode < 500) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: error.message || 'Invalid request',
+      });
+    }
   }
 
   const e = error as { statusCode?: number; name?: string; message?: string };
@@ -40,7 +56,7 @@ function mapFogError(error: unknown, fallbackMessage: string): never {
   if (e?.statusCode === 404 || e?.name === 'NotFoundError') {
     throw new TRPCError({
       code: 'NOT_FOUND',
-      message: e.message || 'Not found',
+      message: notFoundMessage,
     });
   }
 
@@ -76,7 +92,7 @@ export const fogOfWarRouter = router({
         );
         return { revealedAreas };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to fetch revealed areas');
+        mapFogError(error, 'Failed to fetch revealed areas', 'Scene not found');
       }
     }),
 
@@ -101,7 +117,7 @@ export const fogOfWarRouter = router({
         );
         return { revealedArea };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to reveal area');
+        mapFogError(error, 'Failed to reveal area', 'Scene not found');
       }
     }),
 
@@ -126,7 +142,7 @@ export const fogOfWarRouter = router({
         );
         return { revealedAreas };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to reveal areas');
+        mapFogError(error, 'Failed to reveal areas', 'Scene not found');
       }
     }),
 
@@ -159,7 +175,7 @@ export const fogOfWarRouter = router({
 
         return { success };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to conceal area');
+        mapFogError(error, 'Failed to conceal area', 'Revealed area not found');
       }
     }),
 
@@ -184,7 +200,7 @@ export const fogOfWarRouter = router({
         );
         return { concealedAreas };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to conceal areas');
+        mapFogError(error, 'Failed to conceal areas', 'Scene not found');
       }
     }),
 
@@ -202,7 +218,7 @@ export const fogOfWarRouter = router({
         );
         return { success: true };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to reset fog of war');
+        mapFogError(error, 'Failed to reset fog of war', 'Scene not found');
       }
     }),
 
@@ -220,7 +236,7 @@ export const fogOfWarRouter = router({
         );
         return { revealedAreas: mergedAreas };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to merge revealed areas');
+        mapFogError(error, 'Failed to merge revealed areas', 'Scene not found');
       }
     }),
 
@@ -238,7 +254,7 @@ export const fogOfWarRouter = router({
         );
         return { record };
       } catch (error: unknown) {
-        mapFogError(error, 'Failed to fetch fog of war record');
+        mapFogError(error, 'Failed to fetch fog of war record', 'Scene not found');
       }
     }),
 });

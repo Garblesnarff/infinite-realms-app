@@ -12,6 +12,7 @@
 
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
@@ -19,8 +20,6 @@ import { verifySessionOwnership } from './combat/helpers.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotsService } from '../../services/spell-slots-service.js';
 import type {
-  UseSpellSlotInput,
-  RestoreSpellSlotsInput,
   SpellSlotUsageQuery,
   ClassName,
 } from '../../types/spell-slots.js';
@@ -37,6 +36,31 @@ async function verifyCharacterOwnership(
     return { success: false, status: 404, error: 'Character not found' };
   }
   return { success: true };
+}
+
+function mapSpellSlotsError(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+) {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
 }
 
 // Character-specific spell slot routes
@@ -60,15 +84,11 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         return { error: ownership.error };
       }
 
-      const spellSlots = await SpellSlotsService.getCharacterSpellSlots(params.id);
+      const spellSlots = await SpellSlotsService.getCharacterSpellSlots(params.id, user.userId);
       return spellSlots;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_GET error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to get spell slots', 'Character not found');
     }
   })
 
@@ -122,16 +142,12 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         spellLevel,
         slotLevelUsed,
         sessionId,
-      });
+      }, user.userId);
 
       return result;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOT_USE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to use spell slot',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to use spell slot', 'Spell slot not found');
     }
   })
 
@@ -159,16 +175,12 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         characterId: params.id,
         level,
         amount,
-      });
+      }, user.userId);
 
       return result;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_RESTORE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to restore spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to restore spell slots', 'Character not found');
     }
   })
 
@@ -205,15 +217,11 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         }
       }
 
-      const history = await SpellSlotsService.getSpellSlotUsageHistory(usageQuery);
+      const history = await SpellSlotsService.getSpellSlotUsageHistory(usageQuery, user.userId);
       return history;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_HISTORY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to get spell slot history',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to get spell slot history', 'Character not found');
     }
   })
 
@@ -242,17 +250,13 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         return { error: 'classes array is required' };
       }
 
-      const spellSlots = await SpellSlotsService.initializeSpellSlots(params.id, classes);
+      const spellSlots = await SpellSlotsService.initializeSpellSlots(params.id, classes, user.userId);
 
       set.status = 201;
       return spellSlots;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_INIT error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to initialize spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to initialize spell slots', 'Character not found');
     }
   });
 
@@ -298,11 +302,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       return calculation;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_CALC error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to calculate spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to calculate spell slots');
     }
   })
 
@@ -341,11 +341,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       return calculation;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_MULTICLASS error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to calculate multiclass spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to calculate multiclass spell slots');
     }
   })
 
@@ -400,10 +396,6 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       return validation;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_UPCAST error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to check upcast',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapSpellSlotsError(set, error, 'Failed to check upcast');
     }
   });

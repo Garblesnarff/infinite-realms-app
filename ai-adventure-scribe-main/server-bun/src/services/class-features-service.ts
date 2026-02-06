@@ -20,7 +20,7 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, or } from 'drizzle-orm';
 import type {
   GrantFeatureInput,
   UseFeatureInput,
@@ -144,6 +144,24 @@ export class ClassFeaturesService {
     return SUBCLASS_CHOICE_LEVELS[className] || 3;
   }
 
+  /**
+   * Verify user owns the character (direct owner or shared owner field).
+   * Throws NOT_FOUND to avoid disclosing character existence.
+   */
+  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+      columns: { id: true },
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+  }
+
   // ============================================================================
   // Character Feature Management
   // ============================================================================
@@ -151,8 +169,12 @@ export class ClassFeaturesService {
   /**
    * Grant a feature to a character
    */
-  static async grantFeature(input: GrantFeatureInput): Promise<CharacterFeature> {
+  static async grantFeature(input: GrantFeatureInput, userId?: string): Promise<CharacterFeature> {
     const { characterId, featureId, acquiredAtLevel } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     // Verify feature exists
     const feature = await this.getFeatureById(featureId);
@@ -197,7 +219,11 @@ export class ClassFeaturesService {
   /**
    * Get all features for a character
    */
-  static async getCharacterFeatures(characterId: string): Promise<CharacterFeature[]> {
+  static async getCharacterFeatures(characterId: string, userId?: string): Promise<CharacterFeature[]> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const features = await db.query.characterFeatures.findMany({
       where: eq(characterFeatures.characterId, characterId),
       with: {
@@ -214,8 +240,13 @@ export class ClassFeaturesService {
    */
   static async getFeatureUsage(
     characterId: string,
-    featureId: string
+    featureId: string,
+    userId?: string
   ): Promise<number | null> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const characterFeature = await db.query.characterFeatures.findFirst({
       where: and(
         eq(characterFeatures.characterId, characterId),
@@ -233,8 +264,12 @@ export class ClassFeaturesService {
   /**
    * Use a limited-use feature
    */
-  static async useFeature(input: UseFeatureInput): Promise<UseFeatureResult> {
+  static async useFeature(input: UseFeatureInput, userId?: string): Promise<UseFeatureResult> {
     const { characterId, featureId, context, sessionId } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     // Get character feature
     const characterFeature = await db.query.characterFeatures.findFirst({
@@ -307,9 +342,14 @@ export class ClassFeaturesService {
    * Restore features after rest
    */
   static async restoreFeatures(
-    input: RestoreFeaturesInput
+    input: RestoreFeaturesInput,
+    userId?: string
   ): Promise<RestoreFeaturesResult> {
     const { characterId, restType } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     // Get all character features
     const allFeatures = await db.query.characterFeatures.findMany({
@@ -364,16 +404,20 @@ export class ClassFeaturesService {
   /**
    * Set a character's subclass
    */
-  static async setSubclass(input: SetSubclassInput): Promise<SetSubclassResult> {
+  static async setSubclass(input: SetSubclassInput, userId?: string): Promise<SetSubclassResult> {
     const { characterId, className, subclassName, level } = input;
 
-    // Verify character exists
-    const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
-    });
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    } else {
+      // Verify character exists
+      const character = await db.query.characters.findFirst({
+        where: eq(characters.id, characterId),
+      });
 
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
+      if (!character) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
     // Verify subclass is valid for the class
@@ -435,7 +479,7 @@ export class ClassFeaturesService {
           characterId,
           featureId: feature.id,
           acquiredAtLevel: level,
-        });
+        }, userId);
         newFeatures.push(feature);
       } catch (error) {
         // Skip if already granted
@@ -455,8 +499,13 @@ export class ClassFeaturesService {
    */
   static async getCharacterSubclass(
     characterId: string,
-    className: string
+    className: string,
+    userId?: string
   ): Promise<CharacterSubclass | null> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const subclass = await db.query.characterSubclasses.findFirst({
       where: and(
         eq(characterSubclasses.characterId, characterId),
@@ -513,9 +562,14 @@ export class ClassFeaturesService {
    * Get feature usage history
    */
   static async getFeatureUsageHistory(
-    params: FeatureUsageHistoryParams
+    params: FeatureUsageHistoryParams,
+    userId?: string
   ): Promise<FeatureUsageLog[]> {
     const { characterId, featureId, sessionId, limit = 50 } = params;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     const conditions = [eq(featureUsageLog.characterId, characterId)];
 
@@ -543,9 +597,10 @@ export class ClassFeaturesService {
    * Get character features with usage information
    */
   static async getCharacterFeaturesWithUsage(
-    characterId: string
+    characterId: string,
+    userId?: string
   ): Promise<CharacterFeaturesWithUsage> {
-    const features = await this.getCharacterFeatures(characterId);
+    const features = await this.getCharacterFeatures(characterId, userId);
 
     const usesRemaining: Record<string, number> = {};
 
@@ -568,19 +623,24 @@ export class ClassFeaturesService {
   static async grantFeaturesForLevel(
     characterId: string,
     className: string,
-    level: number
+    level: number,
+    userId?: string
   ): Promise<ClassFeatureLibrary[]> {
-    // Get character to check for subclass
-    const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
-    });
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    } else {
+      // Get character to check for subclass
+      const character = await db.query.characters.findFirst({
+        where: eq(characters.id, characterId),
+      });
 
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
+      if (!character) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
     // Get subclass if character has one
-    const subclass = await this.getCharacterSubclass(characterId, className);
+    const subclass = await this.getCharacterSubclass(characterId, className, userId);
 
     // Get base class features for this level
     const classFeatures = await this.getFeaturesByLevel(className, level);
@@ -614,7 +674,7 @@ export class ClassFeaturesService {
           characterId,
           featureId: feature.id,
           acquiredAtLevel: level,
-        });
+        }, userId);
         grantedFeatures.push(feature);
       } catch (error) {
         // Skip if already granted

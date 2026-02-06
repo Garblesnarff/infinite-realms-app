@@ -14,10 +14,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Elysia } from 'elysia';
 
+import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
+import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
-import { verifySessionOwnership } from './combat/helpers.js';
 // Import service from Bun server
 import { InventoryService } from '../../services/inventory-service.js';
 
@@ -28,6 +29,30 @@ import type {
   GetInventoryOptions,
   ItemType,
 } from '../../types/inventory.js';
+
+function mapInventoryError(
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+): { error: string } {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
   /**
@@ -75,11 +100,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return inventory;
     } catch (error) {
       logger.error({ msg: 'INVENTORY_GET error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to fetch inventory',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to fetch inventory', 'Character not found');
     }
   })
 
@@ -115,11 +136,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { item };
     } catch (error) {
       logger.error({ msg: 'INVENTORY_ADD error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to add item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to add item', 'Character not found');
     }
   })
 
@@ -150,11 +167,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { item };
     } catch (error) {
       logger.error({ msg: 'INVENTORY_UPDATE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to update item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to update item', 'Item not found');
     }
   })
 
@@ -174,11 +187,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { deleted: true };
     } catch (error) {
       logger.error({ msg: 'INVENTORY_DELETE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to delete item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to delete item', 'Item not found');
     }
   })
 
@@ -222,11 +231,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       };
     } catch (error) {
       logger.error({ msg: 'INVENTORY_USE error', error });
-      set.status = 400;
-      return {
-        error: 'Failed to use item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to use item', 'Item not found');
     }
   })
 
@@ -244,11 +249,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return encumbrance;
     } catch (error) {
       logger.error({ msg: 'ENCUMBRANCE_CHECK error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to check encumbrance',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to check encumbrance', 'Character not found');
     }
   })
 
@@ -281,11 +282,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       };
     } catch (error) {
       logger.error({ msg: 'ATTUNE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to attune to item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to attune to item', 'Item not found');
     }
   })
 
@@ -305,11 +302,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { success: true, item };
     } catch (error) {
       logger.error({ msg: 'UNATTUNE error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to unattune item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to unattune item', 'Item not found');
     }
   })
 
@@ -323,11 +316,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { items };
     } catch (error) {
       logger.error({ msg: 'ATTUNED_ITEMS error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to fetch attuned items',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to fetch attuned items', 'Character not found');
     }
   })
 
@@ -351,11 +340,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { success: true, item: result.equippedItem };
     } catch (error) {
       logger.error({ msg: 'EQUIP_ITEM error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to equip item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to equip item', 'Item not found');
     }
   })
 
@@ -375,11 +360,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { success: true, item };
     } catch (error) {
       logger.error({ msg: 'UNEQUIP_ITEM error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to unequip item',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to unequip item', 'Item not found');
     }
   })
 
@@ -412,10 +393,6 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       return { history };
     } catch (error) {
       logger.error({ msg: 'USAGE_HISTORY error', error });
-      set.status = 500;
-      return {
-        error: 'Failed to fetch usage history',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return mapInventoryError(set, error, 'Failed to fetch usage history', 'Character not found');
     }
   });

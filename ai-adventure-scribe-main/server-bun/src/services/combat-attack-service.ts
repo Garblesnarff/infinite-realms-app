@@ -18,6 +18,7 @@ import {
   combatParticipants,
   weaponAttacks,
   creatureStats,
+  characters,
 } from '../../../db/schema/index.js';
 import { CombatHPService } from './combat-hp-service.js';
 
@@ -42,6 +43,24 @@ import { NotFoundError, ValidationError, InternalServerError } from '../lib/erro
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
+  }
+
+  /**
+   * Verify a user owns the character (via user_id or owner_id).
+   * Throws NOT_FOUND to mask unauthorized access.
+   */
+  private async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+      columns: { id: true },
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
   }
 
   /**
@@ -504,7 +523,7 @@ export class CombatAttackService {
   /**
    * Create a weapon attack for a character
    */
-  async createWeaponAttack(input: CreateWeaponAttackInput): Promise<WeaponAttack> {
+  async createWeaponAttack(input: CreateWeaponAttackInput, userId?: string): Promise<WeaponAttack> {
     const {
       characterId,
       name,
@@ -515,6 +534,10 @@ export class CombatAttackService {
       properties = [],
       description,
     } = input;
+
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     const [weapon] = await db
       .insert(weaponAttacks)
@@ -540,7 +563,11 @@ export class CombatAttackService {
   /**
    * Get all weapon attacks for a character
    */
-  async getCharacterWeapons(characterId: string): Promise<WeaponAttack[]> {
+  async getCharacterWeapons(characterId: string, userId?: string): Promise<WeaponAttack[]> {
+    if (userId) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
+
     const weapons = await db.query.weaponAttacks.findMany({
       where: eq(weaponAttacks.characterId, characterId),
       orderBy: [desc(weaponAttacks.createdAt)],

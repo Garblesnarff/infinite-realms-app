@@ -9,8 +9,40 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AppError } from '../../lib/errors.js';
 import { VisionBlockerService } from '../../services/vision-blocker-service.js';
 import { router, protectedProcedure } from '../trpc.js';
+
+function throwSanitizedVisionError(
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string
+): never {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  if (error instanceof AppError) {
+    if (error.statusCode === 403 || error.statusCode === 404) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: notFoundMessage,
+      });
+    }
+
+    if (error.statusCode >= 400 && error.statusCode < 500) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: error.message,
+      });
+    }
+  }
+
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: fallbackMessage,
+  });
+}
 
 /**
  * Schema for a point (x, y coordinates)
@@ -63,11 +95,8 @@ export const visionBlockersRouter = router({
           ctx.user.userId
         );
         return { blockers };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch vision blockers',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to fetch vision blockers', 'Scene not found');
       }
     }),
 
@@ -91,14 +120,8 @@ export const visionBlockersRouter = router({
         }
 
         return { blocker };
-      } catch (error: any) {
-        if (error.code === 'NOT_FOUND') {
-          throw error;
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch vision blocker',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to fetch vision blocker', 'Vision blocker not found');
       }
     }),
 
@@ -118,29 +141,8 @@ export const visionBlockersRouter = router({
           input.data
         );
         return { blocker };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-          });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Scene not found',
-          });
-        }
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to create vision blocker',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to create vision blocker', 'Scene not found');
       }
     }),
 
@@ -160,29 +162,8 @@ export const visionBlockersRouter = router({
           input.updates
         );
         return { blocker };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-          });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Vision blocker not found',
-          });
-        }
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to update vision blocker',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to update vision blocker', 'Vision blocker not found');
       }
     }),
 
@@ -206,20 +187,8 @@ export const visionBlockersRouter = router({
         }
 
         return { success };
-      } catch (error: any) {
-        if (error.code === 'NOT_FOUND') {
-          throw error;
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Vision blocker not found',
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to delete vision blocker',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to delete vision blocker', 'Vision blocker not found');
       }
     }),
 
@@ -235,29 +204,8 @@ export const visionBlockersRouter = router({
           ctx.user.userId
         );
         return { blocker };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-          });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Vision blocker not found',
-          });
-        }
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to toggle door',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to toggle door', 'Vision blocker not found');
       }
     }),
 
@@ -277,29 +225,8 @@ export const visionBlockersRouter = router({
           input.blockers
         );
         return { blockers, count: blockers.length };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-          });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Scene not found',
-          });
-        }
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to bulk create vision blockers',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to bulk create vision blockers', 'Scene not found');
       }
     }),
 
@@ -312,11 +239,8 @@ export const visionBlockersRouter = router({
       try {
         const doors = await VisionBlockerService.listDoors(input.sceneId, ctx.user.userId);
         return { doors };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch doors',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to fetch doors', 'Scene not found');
       }
     }),
 
@@ -332,23 +256,8 @@ export const visionBlockersRouter = router({
           ctx.user.userId
         );
         return { success: true, deletedCount: count };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-          });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Scene not found',
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to delete all vision blockers',
-        });
+      } catch (error: unknown) {
+        throwSanitizedVisionError(error, 'Failed to delete all vision blockers', 'Scene not found');
       }
     }),
 });

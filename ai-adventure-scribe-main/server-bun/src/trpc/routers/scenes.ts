@@ -5,10 +5,34 @@
  * Handles CRUD operations for scenes, layers, and settings with proper authorization.
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '../trpc.js';
+import { z } from 'zod';
+
+import { AppError } from '../../lib/errors.js';
 import { SceneService } from '../../services/scene-service.js';
+import { protectedProcedure, router } from '../trpc.js';
+
+function throwSanitizedSceneError(
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string
+): never {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  if (error instanceof AppError) {
+    if (error.statusCode === 403 || error.statusCode === 404) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: notFoundMessage });
+    }
+
+    if (error.statusCode >= 400 && error.statusCode < 500) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+    }
+  }
+
+  throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: fallbackMessage });
+}
 
 /**
  * Input schema for creating a new scene
@@ -80,11 +104,8 @@ export const scenesRouter = router({
       try {
         const scenes = await SceneService.listScenesForCampaign(input.campaignId, ctx.user.userId);
         return scenes;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch scenes' });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to fetch scenes', 'Campaign not found');
       }
     }),
 
@@ -102,11 +123,8 @@ export const scenesRouter = router({
         }
 
         return scene;
-      } catch (error: any) {
-        if (error.code === 'NOT_FOUND') {
-          throw error;
-        }
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch scene' });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to fetch scene', 'Scene not found');
       }
     }),
 
@@ -119,17 +137,8 @@ export const scenesRouter = router({
       try {
         const scene = await SceneService.createScene(ctx.user.userId, input);
         return scene;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to create scene'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to create scene', 'Campaign not found');
       }
     }),
 
@@ -149,17 +158,8 @@ export const scenesRouter = router({
           input.updates
         );
         return scene;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to update scene'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to update scene', 'Scene not found');
       }
     }),
 
@@ -172,17 +172,8 @@ export const scenesRouter = router({
       try {
         const success = await SceneService.deleteScene(input.sceneId, ctx.user.userId);
         return { success };
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to delete scene'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to delete scene', 'Scene not found');
       }
     }),
 
@@ -202,17 +193,8 @@ export const scenesRouter = router({
           ctx.user.userId
         );
         return scene;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to set active scene'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to set active scene', 'Scene not found');
       }
     }),
 
@@ -232,17 +214,8 @@ export const scenesRouter = router({
           input.settings
         );
         return settings;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to update scene settings'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to update scene settings', 'Scene not found');
       }
     }),
 
@@ -264,17 +237,8 @@ export const scenesRouter = router({
           input.updates
         );
         return layer;
-      } catch (error: any) {
-        if (error.statusCode === 404) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
-        }
-        if (error.statusCode === 403) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to update layer'
-        });
+      } catch (error: unknown) {
+        throwSanitizedSceneError(error, 'Failed to update layer', 'Layer not found');
       }
     }),
 });
