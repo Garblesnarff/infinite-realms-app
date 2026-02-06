@@ -96,15 +96,15 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(({
     }
   }, [assetTags, getAsset, setSceneBackground, isLastInGroup]);
 
-  // Don't render if content is empty after removing roll requests
-  if (!cleanContent || cleanContent.length === 0) {
-    return null;
-  }
-
   const { content, charCount, paragraphCount } = useMemo(
     () => formatNarrative(cleanContent),
     [cleanContent],
   );
+
+  // Don't render if content is empty after removing roll requests
+  if (!cleanContent || cleanContent.length === 0 || !content) {
+    return null;
+  }
   const exceedsClampThreshold = charCount > 800 || paragraphCount > 4;
   const shouldClamp = exceedsClampThreshold && !isExpanded;
 

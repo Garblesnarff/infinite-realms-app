@@ -111,6 +111,7 @@ export const actionRoutes = new Elysia()
         .from('characters')
         .select('user_id')
         .eq('id', params.characterId)
+        .eq('user_id', user.userId)
         .single();
 
       if (charErr || !character) {
@@ -118,10 +119,6 @@ export const actionRoutes = new Elysia()
         return { error: 'Character not found' };
       }
 
-      if (character.user_id !== user.userId) {
-        set.status = 403;
-        return { error: 'Access denied' };
-      }
 
       const attackService = new CombatAttackService();
       const attacks = await attackService.getCharacterWeapons(params.characterId);
@@ -150,6 +147,7 @@ export const actionRoutes = new Elysia()
         .from('characters')
         .select('user_id')
         .eq('id', params.characterId)
+        .eq('user_id', user.userId)
         .single();
 
       if (charErr || !character) {
@@ -157,10 +155,6 @@ export const actionRoutes = new Elysia()
         return { error: 'Character not found' };
       }
 
-      if (character.user_id !== user.userId) {
-        set.status = 403;
-        return { error: 'Access denied' };
-      }
 
       const weaponInput = body as Omit<CreateWeaponAttackInput, 'characterId'>;
 

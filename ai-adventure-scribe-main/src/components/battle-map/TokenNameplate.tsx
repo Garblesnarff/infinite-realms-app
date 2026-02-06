@@ -126,17 +126,17 @@ export const TokenNameplate: React.FC<TokenNameplateProps> = ({
     return (camera.zoom - fadeStart) / fadeRange;
   }, [camera.zoom, minZoom, shouldShow]);
 
-  // Don't render if not visible
-  if (!shouldShow || opacity === 0) {
-    return null;
-  }
-
   // Calculate scale based on zoom (inverse relationship for consistent size)
   const scale = useMemo(() => {
     // As zoom increases, HTML elements appear smaller, so we scale them up
     const baseScale = 1 / Math.max(camera.zoom, 0.5);
     return Math.min(baseScale, 2); // Cap at 2x to prevent huge text when zoomed out
   }, [camera.zoom]);
+
+  // Don't render if not visible
+  if (!shouldShow || opacity === 0) {
+    return null;
+  }
 
   return (
     <Html

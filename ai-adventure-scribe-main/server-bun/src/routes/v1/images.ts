@@ -352,12 +352,14 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
             const session = sessionData[0];
             if (session.campaign_owner !== userId && session.character_owner !== userId) {
               logger.warn({ msg: 'IMAGE_PATCH_ACCESS_DENIED', userId });
-              set.status = 403;
-              return { error: 'Access denied' };
+              set.status = 404;
+              return { error: 'Message not found' };
             }
             logger.info({ msg: 'IMAGE_PATCH_OWNERSHIP_VERIFIED' });
           } else {
-            logger.warn({ msg: 'IMAGE_PATCH_SESSION_NOT_FOUND', allowingDueToTiming: true });
+            logger.warn({ msg: 'IMAGE_PATCH_SESSION_NOT_FOUND' });
+            set.status = 404;
+            return { error: 'Message not found' };
           }
         }
 

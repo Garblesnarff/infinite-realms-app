@@ -10,6 +10,7 @@
  * @module server/trpc/routers/auth
  */
 
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import { workos, authConfig } from '../../services/workos.js';
@@ -45,7 +46,10 @@ export const authRouter = router({
         code: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (input.userId !== ctx.user.userId) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
+      }
       // Authenticate with WorkOS using the authorization code
       const { user, accessToken, refreshToken } =
         await workos.userManagement.authenticateWithCode({
@@ -125,7 +129,10 @@ export const authRouter = router({
         refreshToken: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (input.userId !== ctx.user.userId) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
+      }
       const response = await workos.userManagement.authenticateWithRefreshToken({
         clientId: authConfig.clientId,
         refreshToken: input.refreshToken,
@@ -141,7 +148,7 @@ export const authRouter = router({
    * Sync user from WorkOS to our database
    * Called after WorkOS authentication to ensure user exists in our DB
    */
-  syncUser: publicProcedure
+  syncUser: protectedProcedure
     .input(
       z.object({
         userId: z.string(),
@@ -150,7 +157,10 @@ export const authRouter = router({
         lastName: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (input.userId !== ctx.user.userId) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
+      }
       // Check if user already exists
       const existingUser = await db.query.users.findFirst({
         where: eq(users.id, input.userId),

@@ -91,7 +91,7 @@ async function verifyWorkOSToken(accessToken: string) {
 async function resolveUserPlan(userId: string, headers: Record<string, string | undefined>): Promise<string> {
   // 1) Explicit header override (useful for tests): X-Plan: free|pro|enterprise
   const hdr = headers['x-plan']?.toLowerCase();
-  if (hdr) return hdr;
+  if (hdr && process.env.NODE_ENV !== 'production') return hdr;
 
   // 2) Try to resolve from Postgres users table
   try {

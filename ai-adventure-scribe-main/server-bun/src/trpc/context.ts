@@ -34,7 +34,7 @@ async function resolveUserPlan(
 ): Promise<string> {
   // 1) Check for explicit header override (useful for tests)
   const planHeader = headers.get('x-plan');
-  if (planHeader) return planHeader.toLowerCase();
+  if (planHeader && process.env.NODE_ENV !== 'production') return planHeader.toLowerCase();
 
   // 2) Try to resolve from Postgres users table using shared Drizzle client
   try {

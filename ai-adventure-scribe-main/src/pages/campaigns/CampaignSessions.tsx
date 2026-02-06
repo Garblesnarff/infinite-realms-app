@@ -10,20 +10,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 const PAGE_SIZE = 10;
 // Session expiry times
 // Free tier: 7 days
-// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
-const SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
-
-const isSessionExpired = (session: SessionListItem) => {
-  const start = session.start_time || session.created_at;
-  if (!start) return false;
-  const startTime = new Date(start).getTime();
-  return Number.isFinite(startTime) ? Date.now() - startTime > SESSION_EXPIRY_MS : false;
-};
+// Paid tier: 6 months (182 days)
+const FREE_SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7;
+const PAID_SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 182;
 
 const CampaignSessions: React.FC = () => {
   const { id: campaignId } = useParams();
@@ -31,6 +26,18 @@ const CampaignSessions: React.FC = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { userPlan } = useAuth();
+
+  const sessionExpiryMs = userPlan && userPlan !== 'free'
+    ? PAID_SESSION_EXPIRY_MS
+    : FREE_SESSION_EXPIRY_MS;
+
+  const isSessionExpired = React.useCallback((session: SessionListItem) => {
+    const start = session.start_time || session.created_at;
+    if (!start) return false;
+    const startTime = new Date(start).getTime();
+    return Number.isFinite(startTime) ? Date.now() - startTime > sessionExpiryMs : false;
+  }, [sessionExpiryMs]);
   const [continuingId, setContinuingId] = React.useState<string | null>(null);
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } =

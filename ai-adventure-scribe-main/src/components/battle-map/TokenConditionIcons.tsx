@@ -55,18 +55,19 @@ function ConditionIcon({ condition, position, size, showTooltip, index }: Condit
   const [isHovered, setIsHovered] = React.useState(false);
   const config = CONDITION_ICONS[condition.name];
 
-  if (!config) return null;
-
-  const IconComponent = config.icon;
+  const IconComponent = config?.icon;
   const shouldPulse = shouldConditionPulse(condition.name);
 
   // Format tooltip text
   const tooltipText = useMemo(() => {
+    if (!config) return '';
     if (condition.name === 'exhaustion' && condition.level) {
       return formatExhaustionDescription(condition.level);
     }
-    return `${condition.name.charAt(0).toUpperCase() + condition.name.slice(1)}: ${config.description}`;
+    return config.description;
   }, [condition, config]);
+
+  if (!config || !IconComponent) return null;
 
   return (
     <motion.div
@@ -161,7 +162,7 @@ function ConditionIcon({ condition, position, size, showTooltip, index }: Condit
             <div className="font-bold mb-1">
               {condition.name.charAt(0).toUpperCase() + condition.name.slice(1)}
             </div>
-            <div className="text-gray-300 mb-1">{config.description}</div>
+            <div className="text-gray-300 mb-1">{tooltipText}</div>
             {condition.duration > 0 && (
               <div className="text-gray-400 text-xs">
                 Duration: {condition.duration} round{condition.duration !== 1 ? 's' : ''}
@@ -259,6 +260,8 @@ export function TokenConditionIcons({
 
   const displayConditions = sortedConditions.slice(0, maxVisible);
   const hiddenCount = Math.max(0, sortedConditions.length - maxVisible);
+
+  if (!config || !IconComponent) return null;
 
   return (
     <Html

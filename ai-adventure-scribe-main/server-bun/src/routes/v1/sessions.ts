@@ -45,8 +45,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           .single();
 
         if (campErr || !campaign || campaign.user_id !== user.userId) {
-          set.status = 403;
-          return { error: 'Campaign not found or access denied' };
+          set.status = 404;
+          return { error: 'Campaign not found' };
         }
       }
 
@@ -58,8 +58,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           .single();
 
         if (charErr || !character || character.user_id !== user.userId) {
-          set.status = 403;
-          return { error: 'Character not found or access denied' };
+          set.status = 404;
+          return { error: 'Character not found' };
         }
       }
 
@@ -125,8 +125,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       const characterOwner = (data as any).characters?.user_id;
 
       if (campaignOwner !== user.userId && characterOwner !== user.userId) {
-        set.status = 403;
-        return { error: 'Access denied' };
+        set.status = 404;
+        return { error: 'Not found' };
       }
 
       // Remove the joined data before returning
@@ -179,8 +179,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       const characterOwner = (sessionData as any).characters?.user_id;
 
       if (campaignOwner !== user.userId && characterOwner !== user.userId) {
-        set.status = 403;
-        return { error: 'Access denied' };
+        set.status = 404;
+        return { error: 'Not found' };
       }
 
       // Now update the session

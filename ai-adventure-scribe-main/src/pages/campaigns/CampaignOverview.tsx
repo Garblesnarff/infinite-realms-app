@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { useAuth } from '@/contexts/AuthContext';
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,12 +24,18 @@ interface CampaignOverviewProps {
 
 // Session expiry times
 // Free tier: 7 days
-// Paid tier: 6 months (182 days) - TODO: Implement tier check when payment system is ready
-const SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7; // 7 days for free tier
+// Paid tier: 6 months (182 days)
+const FREE_SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7;
+const PAID_SESSION_EXPIRY_MS = 1000 * 60 * 60 * 24 * 182;
 
 const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNewSession }) => {
   const { id: campaignId } = useParams();
   const navigate = useNavigate();
+  const { userPlan } = useAuth();
+
+  const sessionExpiryMs = userPlan && userPlan !== 'free'
+    ? PAID_SESSION_EXPIRY_MS
+    : FREE_SESSION_EXPIRY_MS;
 
   // Query for most recent active session
   const { data: activeSession, isLoading: isLoadingActiveSession } = useQuery({
@@ -52,7 +59,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
       if (!start) return null;
 
       const startTime = new Date(start).getTime();
-      const isExpired = Number.isFinite(startTime) ? Date.now() - startTime > SESSION_EXPIRY_MS : false;
+      const isExpired = Number.isFinite(startTime) ? Date.now() - startTime > sessionExpiryMs : false;
 
       return isExpired ? null : data;
     },

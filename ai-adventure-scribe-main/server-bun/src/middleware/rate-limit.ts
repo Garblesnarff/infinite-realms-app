@@ -155,7 +155,7 @@ function getClientIp(request: Request): string {
 function getUserPlan(user: any, headers: Headers): PlanName {
   // Allow overriding via header for tests
   const hdr = headers.get('x-plan')?.toLowerCase();
-  if (hdr) return hdr;
+  if (hdr && process.env.NODE_ENV !== 'production') return hdr;
 
   return (user?.plan || 'free').toLowerCase();
 }

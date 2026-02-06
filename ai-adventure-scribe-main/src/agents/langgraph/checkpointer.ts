@@ -8,8 +8,9 @@
  * @module agents/langgraph/checkpointer
  */
 
-import { MemorySaver } from '@langchain/langgraph';
+import { BaseCheckpointSaver, MemorySaver } from '@langchain/langgraph';
 import { CHECKPOINT_CONFIG } from './config';
+import { SupabaseCheckpointer } from './persistence/supabase-checkpointer';
 
 /**
  * In-memory checkpointer for development and testing
@@ -19,39 +20,153 @@ import { CHECKPOINT_CONFIG } from './config';
  */
 export const memoryCheckpointer = new MemorySaver();
 
+type StoredCheckpoint = {
+  checkpoint_id: string;
+  parent_checkpoint_id?: string | null;
+  state: any;
+  metadata: any;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredCheckpointMap = Record<string, StoredCheckpoint[]>;
+
+function canUseLocalStorage(): boolean {
+  try {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * LocalStorage-based checkpointer
  *
  * Persists state to browser localStorage.
  * State survives page reloads but not across devices.
- *
- * @future Implementation pending in Work Unit 6.2
  */
-export class LocalStorageCheckpointer {
+export class LocalStorageCheckpointer extends BaseCheckpointSaver {
   private readonly storageKey = 'langgraph_checkpoints';
 
-  /**
-   * Save checkpoint to localStorage
-   */
-  async save(_threadId: string, _checkpoint: any): Promise<void> {
-    // TODO: Implement in Work Unit 6.2
-    throw new Error('LocalStorageCheckpointer not yet implemented');
+  private readStore(): StoredCheckpointMap {
+    if (!canUseLocalStorage()) return {};
+    const raw = localStorage.getItem(this.storageKey);
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw) as StoredCheckpointMap;
+    } catch {
+      return {};
+    }
   }
 
-  /**
-   * Load checkpoint from localStorage
-   */
-  async load(_threadId: string): Promise<any> {
-    // TODO: Implement in Work Unit 6.2
-    throw new Error('LocalStorageCheckpointer not yet implemented');
+  private writeStore(store: StoredCheckpointMap): void {
+    if (!canUseLocalStorage()) return;
+    localStorage.setItem(this.storageKey, JSON.stringify(store));
   }
 
-  /**
-   * Delete checkpoint from localStorage
-   */
-  async delete(_threadId: string): Promise<void> {
-    // TODO: Implement in Work Unit 6.2
-    throw new Error('LocalStorageCheckpointer not yet implemented');
+  private serializeCheckpoint(checkpoint: any): any {
+    return {
+      ...checkpoint,
+      channel_values: JSON.parse(JSON.stringify(checkpoint.channel_values || {})),
+    };
+  }
+
+  private deserializeCheckpoint(data: any): any {
+    return {
+      ...data,
+      channel_values: data.channel_values || {},
+    };
+  }
+
+  async put(
+    config: { configurable?: { thread_id?: string } },
+    checkpoint: any,
+    metadata: any,
+  ): Promise<void> {
+    const threadId = config.configurable?.thread_id;
+    if (!threadId) {
+      throw new Error('thread_id is required in config.configurable');
+    }
+
+    const store = this.readStore();
+    const now = new Date().toISOString();
+    const entry: StoredCheckpoint = {
+      checkpoint_id: checkpoint.id,
+      parent_checkpoint_id: metadata?.parent_checkpoint_id ?? null,
+      state: this.serializeCheckpoint(checkpoint),
+      metadata,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const list = store[threadId] ?? [];
+    const existingIndex = list.findIndex((item) => item.checkpoint_id === checkpoint.id);
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...entry, created_at: list[existingIndex].created_at };
+    } else {
+      list.unshift(entry);
+    }
+
+    store[threadId] = list;
+    this.writeStore(store);
+    await this.cleanup();
+  }
+
+  async get(config: { configurable?: { thread_id?: string } }): Promise<any | undefined> {
+    const threadId = config.configurable?.thread_id;
+    if (!threadId) return undefined;
+
+    const store = this.readStore();
+    const list = store[threadId] ?? [];
+    if (!list.length) return undefined;
+
+    const latest = list.reduce((acc, item) => {
+      if (!acc) return item;
+      return new Date(item.created_at).getTime() > new Date(acc.created_at).getTime() ? item : acc;
+    }, list[0] as StoredCheckpoint);
+
+    return this.deserializeCheckpoint(latest.state);
+  }
+
+  async list(
+    config: { configurable?: { thread_id?: string } },
+    limit?: number,
+  ): Promise<Array<{ checkpoint: any; metadata: any }>> {
+    const threadId = config.configurable?.thread_id;
+    if (!threadId) return [];
+
+    const store = this.readStore();
+    const list = store[threadId] ?? [];
+    const sorted = [...list].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const sliced = typeof limit === 'number' ? sorted.slice(0, limit) : sorted;
+
+    return sliced.map((entry) => ({
+      checkpoint: this.deserializeCheckpoint(entry.state),
+      metadata: entry.metadata,
+    }));
+  }
+
+  async deleteCheckpoint(threadId: string, checkpointId: string): Promise<void> {
+    const store = this.readStore();
+    if (!store[threadId]) return;
+
+    store[threadId] = store[threadId].filter((item) => item.checkpoint_id !== checkpointId);
+    if (!store[threadId].length) {
+      delete store[threadId];
+    }
+    this.writeStore(store);
+  }
+
+  async deleteThread(threadId: string): Promise<void> {
+    const store = this.readStore();
+    if (store[threadId]) {
+      delete store[threadId];
+      this.writeStore(store);
+    }
   }
 
   /**
@@ -59,54 +174,34 @@ export class LocalStorageCheckpointer {
    */
   async cleanup(): Promise<void> {
     const now = Date.now();
-    const stored = localStorage.getItem(this.storageKey);
+    const store = this.readStore();
+    let hasChanges = false;
 
-    if (!stored) return;
+    Object.entries(store).forEach(([threadId, checkpoints]) => {
+      const filtered = checkpoints.filter((entry) => {
+        const createdAt = new Date(entry.created_at).getTime();
+        return now - createdAt < CHECKPOINT_CONFIG.ttl;
+      });
 
-    const checkpoints = JSON.parse(stored);
-    const filtered = Object.fromEntries(
-      Object.entries(checkpoints).filter(([_, data]: [string, any]) => {
-        return now - data.timestamp < CHECKPOINT_CONFIG.ttl;
-      }),
-    );
+      if (filtered.length !== checkpoints.length) {
+        store[threadId] = filtered;
+        hasChanges = true;
+      }
 
-    localStorage.setItem(this.storageKey, JSON.stringify(filtered));
+      if (!store[threadId].length) {
+        delete store[threadId];
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      this.writeStore(store);
+    }
   }
 }
 
-/**
- * Supabase-based checkpointer
- *
- * Persists state to Supabase database.
- * State is available across devices and sessions.
- *
- * @future Implementation pending in Work Unit 6.3
- */
-export class SupabaseCheckpointer {
-  /**
-   * Save checkpoint to Supabase
-   */
-  async save(_threadId: string, _checkpoint: any): Promise<void> {
-    // TODO: Implement in Work Unit 6.3
-    throw new Error('SupabaseCheckpointer not yet implemented');
-  }
-
-  /**
-   * Load checkpoint from Supabase
-   */
-  async load(_threadId: string): Promise<any> {
-    // TODO: Implement in Work Unit 6.3
-    throw new Error('SupabaseCheckpointer not yet implemented');
-  }
-
-  /**
-   * Delete checkpoint from Supabase
-   */
-  async delete(_threadId: string): Promise<void> {
-    // TODO: Implement in Work Unit 6.3
-    throw new Error('SupabaseCheckpointer not yet implemented');
-  }
-}
+const localStorageCheckpointer = new LocalStorageCheckpointer();
+const supabaseCheckpointer = new SupabaseCheckpointer();
 
 /**
  * Get the configured checkpointer based on environment settings
@@ -119,18 +214,14 @@ export function getCheckpointer() {
       return memoryCheckpointer;
 
     case 'localstorage':
-      console.warn(
-        '[LangGraph] LocalStorage checkpointer not yet implemented. ' +
-          'Falling back to memory checkpointer.',
-      );
-      return memoryCheckpointer;
+      if (!canUseLocalStorage()) {
+        console.warn('[LangGraph] LocalStorage unavailable. Falling back to memory checkpointer.');
+        return memoryCheckpointer;
+      }
+      return localStorageCheckpointer;
 
     case 'supabase':
-      console.warn(
-        '[LangGraph] Supabase checkpointer not yet implemented. ' +
-          'Falling back to memory checkpointer.',
-      );
-      return memoryCheckpointer;
+      return supabaseCheckpointer;
 
     default:
       console.warn(

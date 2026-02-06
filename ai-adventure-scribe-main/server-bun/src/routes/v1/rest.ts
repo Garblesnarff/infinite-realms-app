@@ -28,15 +28,13 @@ async function verifyCharacterOwnership(
     .from('characters')
     .select('user_id')
     .eq('id', characterId)
+    .eq('user_id', userId)
     .single();
 
   if (charErr || !character) {
     return { success: false, status: 404, error: 'Character not found' };
   }
 
-  if (character.user_id !== userId) {
-    return { success: false, status: 403, error: 'Access denied' };
-  }
 
   return { success: true };
 }

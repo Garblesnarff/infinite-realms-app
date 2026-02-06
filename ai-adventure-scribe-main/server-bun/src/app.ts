@@ -233,7 +233,38 @@ export function createApp() {
     // Prometheus metrics endpoint
     .get(
       '/metrics',
-      async ({ set }) => {
+      async ({ request, set }) => {
+        const metricsToken = process.env.METRICS_TOKEN;
+        const allowlistRaw = process.env.METRICS_ALLOWLIST;
+        const allowlist = allowlistRaw
+          ? allowlistRaw.split(',').map((v) => v.trim()).filter(Boolean)
+          : [];
+
+        if (metricsToken || allowlist.length > 0) {
+          const authHeader = request.headers.get('authorization') || '';
+          const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
+            ? authHeader.slice(7).trim()
+            : null;
+          const headerToken = request.headers.get('x-metrics-token');
+          const suppliedToken = bearerToken || headerToken;
+
+          if (metricsToken && suppliedToken !== metricsToken) {
+            set.status = 401;
+            return { error: 'Unauthorized' };
+          }
+
+          if (allowlist.length > 0) {
+            const forwardedFor = request.headers.get('x-forwarded-for');
+            const realIp = request.headers.get('x-real-ip');
+            const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : (realIp || '');
+
+            if (!allowlist.includes(clientIp)) {
+              set.status = 403;
+              return { error: 'Forbidden' };
+            }
+          }
+        }
+
         set.headers['Content-Type'] = register.contentType;
         return register.metrics();
       },

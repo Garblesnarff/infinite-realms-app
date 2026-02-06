@@ -12,6 +12,7 @@ import { Elysia, t } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { recordEncounterOutcome, getDifficultyAdjustment } from '../../lib/encounter-telemetry.js';
+import { verifySessionOwnership } from './combat/helpers.js';
 
 export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
 
@@ -38,6 +39,12 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { ok: false, error: 'Missing required fields' };
     }
 
+    const verification = await verifySessionOwnership(sessionId, user.userId);
+    if (!verification.success) {
+      set.status = verification.error!.status;
+      return { ok: false, error: verification.error!.message };
+    }
+
     recordEncounterOutcome(sessionId, difficulty, resourcesUsedEst);
     return { ok: true };
   })
@@ -59,6 +66,12 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
     if (!sessionId || !difficulty) {
       set.status = 400;
       return { ok: false, error: 'Missing query params' };
+    }
+
+    const verification = await verifySessionOwnership(sessionId, user.userId);
+    if (!verification.success) {
+      set.status = verification.error!.status;
+      return { ok: false, error: verification.error!.message };
     }
 
     const factor = getDifficultyAdjustment(sessionId, difficulty);

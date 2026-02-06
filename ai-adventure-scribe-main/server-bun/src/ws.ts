@@ -7,7 +7,10 @@
  */
 
 import { Elysia, t } from 'elysia';
+import { and, eq } from 'drizzle-orm';
 
+import { db } from '../../db/client.js';
+import { scenes } from '../../db/schema/index.js';
 import { logger } from './lib/logger';
 import { verifyWorkOSToken } from './services/workos';
 
@@ -21,6 +24,7 @@ interface WSData {
   };
   roomId: string;
   requestId: string;
+  allowedScenes?: Set<string>;
 }
 
 // Elysia WebSocket wrapper type (simplified for our use case)
@@ -156,9 +160,21 @@ function isValidFoundryMessage(msg: any): msg is FoundryMessage {
 }
 
 /**
+ * Verify scene access for a user
+ */
+async function verifySceneAccess(userId: string, sceneId: string): Promise<boolean> {
+  if (!userId || !sceneId) return false;
+  const scene = await db.query.scenes.findFirst({
+    where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
+    columns: { id: true },
+  });
+  return Boolean(scene);
+}
+
+/**
  * Handle incoming WebSocket messages
  */
-function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
+async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
   const { user, roomId, requestId } = ws.data;
 
   try {
@@ -199,6 +215,40 @@ function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         userId: user.userId,
         messageType: msg?.type
       }, 'ws.invalid_message');
+      return;
+    }
+
+    const allowedScenes = ws.data.allowedScenes ?? new Set<string>();
+    ws.data.allowedScenes = allowedScenes;
+
+    if (msg.type === 'scene:join') {
+      const hasAccess = await verifySceneAccess(user.userId, msg.sceneId);
+      if (!hasAccess) {
+        logger.warn({
+          requestId,
+          sceneId: msg.sceneId,
+          userId: user.userId
+        }, 'ws.scene_join_denied');
+        ws.send(JSON.stringify({
+          type: 'error',
+          sceneId: msg.sceneId,
+          message: 'Access denied to scene',
+        }));
+        return;
+      }
+      allowedScenes.add(msg.sceneId);
+    } else if (!allowedScenes.has(msg.sceneId)) {
+      logger.warn({
+        requestId,
+        sceneId: msg.sceneId,
+        userId: user.userId,
+        messageType: msg.type,
+      }, 'ws.scene_access_missing');
+      ws.send(JSON.stringify({
+        type: 'error',
+        sceneId: msg.sceneId,
+        message: 'Join the scene before sending updates',
+      }));
       return;
     }
 
@@ -244,6 +294,7 @@ function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         break;
 
       case 'scene:leave':
+        allowedScenes.delete(msg.sceneId);
         // Leave the scene room
         leaveRoom(sceneRoomId, ws);
 
@@ -479,7 +530,7 @@ export const wsPlugin = new Elysia()
     },
     // Handle incoming messages
     message(ws, message) {
-      handleMessage(ws as unknown as WSConnection, message);
+      void handleMessage(ws as unknown as WSConnection, message);
     },
     // Handle connection close
     close(ws) {

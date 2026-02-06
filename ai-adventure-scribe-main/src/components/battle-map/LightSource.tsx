@@ -62,18 +62,10 @@ export function LightSource({
   const dimLightRef = useRef<THREE.Mesh>(null);
   const animationRef = useRef({ time: 0, flickerOffset: Math.random() * 100 });
 
-  // Only render if token emits light
-  if (!token.light.emitsLight || !lightingEnabled) {
-    return null;
-  }
-
   const lightConfig = token.light;
   const brightRange = lightConfig.lightRange || 0;
   const dimRange = lightConfig.dimLightRange || 0;
-
-  if (brightRange === 0 && dimRange === 0) {
-    return null;
-  }
+  const shouldRender = token.light.emitsLight && lightingEnabled && !(brightRange === 0 && dimRange === 0);
 
   // Convert feet to pixels
   const brightRadiusPixels = (brightRange / 5) * gridSize;
@@ -86,7 +78,7 @@ export function LightSource({
 
   // Animation
   useFrame((state, delta) => {
-    if (!animated || !lightConfig.lightAnimation) return;
+    if (!shouldRender || !animated || !lightConfig.lightAnimation) return;
 
     animationRef.current.time += delta;
     const animation = lightConfig.lightAnimation;
@@ -97,7 +89,8 @@ export function LightSource({
         brightLightRef.current,
         animation,
         animationRef.current.time,
-        animationRef.current.flickerOffset
+        animationRef.current.flickerOffset,
+        delta
       );
     }
 
@@ -106,10 +99,15 @@ export function LightSource({
         dimLightRef.current,
         animation,
         animationRef.current.time,
-        animationRef.current.flickerOffset
+        animationRef.current.flickerOffset,
+        delta
       );
     }
   });
+
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <group
@@ -259,7 +257,8 @@ function applyAnimation(
   mesh: THREE.Mesh,
   animation: LightAnimation,
   time: number,
-  flickerOffset: number
+  flickerOffset: number,
+  delta: number
 ): void {
   const { type, speed, intensity, reverse } = animation;
   const animTime = time * speed;

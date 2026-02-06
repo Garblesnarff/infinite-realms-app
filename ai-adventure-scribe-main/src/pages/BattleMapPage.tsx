@@ -46,6 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
 import { trpc } from '@/infrastructure/api/trpc-client';
+import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
@@ -56,6 +57,7 @@ import { useBattleMapStore } from '@/stores/useBattleMapStore';
 export const BattleMapPage: React.FC = () => {
   const { sceneId, campaignId } = useParams<{ sceneId: string; campaignId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // State
   const [showLayersPanel, setShowLayersPanel] = useState(true);
@@ -92,6 +94,13 @@ export const BattleMapPage: React.FC = () => {
     { campaignId: campaignId! },
     { enabled: !!campaignId }
   );
+
+  const isGM = Boolean(user && (
+    (scene as any)?.userId === user.id ||
+    (scene as any)?.user_id === user.id ||
+    (campaign as any)?.userId === user.id ||
+    (campaign as any)?.user_id === user.id
+  ));
 
   // ===========================
   // Effects
@@ -361,7 +370,7 @@ export const BattleMapPage: React.FC = () => {
           >
             <Toolbar
               sceneId={sceneId}
-              isGM={true} // TODO: Get from user/campaign context
+              isGM={isGM}
               orientation="vertical"
               position="left"
               showHelp={true}
