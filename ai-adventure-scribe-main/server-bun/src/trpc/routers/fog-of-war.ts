@@ -9,7 +9,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { FogOfWarService } from '../../services/fog-of-war-service.js';
+import { FogOfWarService, type RevealAreaInput } from '../../services/fog-of-war-service.js';
 import { broadcastToScene } from '../../ws.js';
 import { protectedProcedure, router } from '../trpc.js';
 
@@ -30,6 +30,33 @@ const revealAreaInputSchema = z.object({
   isPermanent: z.boolean().optional(),
 });
 
+function mapFogError(error: unknown, fallbackMessage: string): never {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  const e = error as { statusCode?: number; name?: string; message?: string };
+
+  if (e?.statusCode === 404 || e?.name === 'NotFoundError') {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: e.message || 'Not found',
+    });
+  }
+
+  if (e?.statusCode === 400 || e?.name === 'ValidationError') {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: e.message || 'Invalid request',
+    });
+  }
+
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: e?.message || fallbackMessage,
+  });
+}
+
 /**
  * Fog of War router - all routes require authentication
  * User-specific operations - users can only access their own fog data
@@ -48,11 +75,8 @@ export const fogOfWarRouter = router({
           ctx.user.userId
         );
         return { revealedAreas };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch revealed areas',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to fetch revealed areas');
       }
     }),
 
@@ -72,21 +96,12 @@ export const fogOfWarRouter = router({
           input.sceneId,
           targetUserId,
           ctx.user.userId,
-          input.polygon,
+          input.polygon as RevealAreaInput,
           (message) => broadcastToScene(input.sceneId, message)
         );
         return { revealedArea };
-      } catch (error: any) {
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to reveal area',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to reveal area');
       }
     }),
 
@@ -106,21 +121,12 @@ export const fogOfWarRouter = router({
           input.sceneId,
           targetUserId,
           ctx.user.userId,
-          input.polygons,
+          input.polygons as RevealAreaInput[],
           (message) => broadcastToScene(input.sceneId, message)
         );
         return { revealedAreas };
-      } catch (error: any) {
-        if (error.statusCode === 400) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error.message,
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to reveal areas',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to reveal areas');
       }
     }),
 
@@ -152,14 +158,8 @@ export const fogOfWarRouter = router({
         }
 
         return { success };
-      } catch (error: any) {
-        if (error.code === 'NOT_FOUND') {
-          throw error;
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to conceal area',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to conceal area');
       }
     }),
 
@@ -183,11 +183,8 @@ export const fogOfWarRouter = router({
           (message) => broadcastToScene(input.sceneId, message)
         );
         return { concealedAreas };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to conceal areas',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to conceal areas');
       }
     }),
 
@@ -204,11 +201,8 @@ export const fogOfWarRouter = router({
           ctx.user.userId
         );
         return { success: true };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to reset fog of war',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to reset fog of war');
       }
     }),
 
@@ -225,11 +219,8 @@ export const fogOfWarRouter = router({
           ctx.user.userId
         );
         return { revealedAreas: mergedAreas };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to merge revealed areas',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to merge revealed areas');
       }
     }),
 
@@ -246,11 +237,8 @@ export const fogOfWarRouter = router({
           ctx.user.userId
         );
         return { record };
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch fog of war record',
-        });
+      } catch (error: unknown) {
+        mapFogError(error, 'Failed to fetch fog of war record');
       }
     }),
 });

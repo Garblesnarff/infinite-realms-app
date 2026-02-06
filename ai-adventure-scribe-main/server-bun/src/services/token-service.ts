@@ -71,23 +71,17 @@ export interface TokenLightConfig {
 
 export class TokenService {
   /**
-   * Verify user has access to a scene (through campaign ownership)
+   * Verify user has access to a scene.
+   * Returns NOT_FOUND for both missing and unauthorized scenes to avoid existence leaks.
    */
   private static async verifySceneAccess(sceneId: string, userId: string): Promise<boolean> {
     const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
-      with: {
-        campaign: true,
-      },
+      where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
+      columns: { id: true },
     });
 
     if (!scene) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene not found' });
-    }
-
-    // User must own the campaign
-    if (scene.campaign.userId !== userId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied to this scene' });
     }
 
     return true;
@@ -131,16 +125,19 @@ export class TokenService {
    * Get a single token by ID with full configuration
    */
   static async getTokenById(tokenId: string, userId: string): Promise<Token | null> {
-    const token = await db.query.tokens.findFirst({
-      where: eq(tokens.id, tokenId),
-    });
+    const [result] = await db
+      .select({ token: tokens })
+      .from(tokens)
+      .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          eq(scenes.userId, userId)
+        )
+      )
+      .limit(1);
 
-    if (!token) return null;
-
-    // Verify scene access
-    await this.verifySceneAccess(token.sceneId, userId);
-
-    return token;
+    return result?.token || null;
   }
 
   /**
@@ -163,7 +160,8 @@ export class TokenService {
     const [token] = await db
       .insert(tokens)
       .values({
-        sceneId: data.sceneId,
+        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
+        sceneId,
         actorId: data.actorId || null,
         createdBy: userId,
         name: data.name,
@@ -217,7 +215,12 @@ export class TokenService {
         ...updates,
         updatedAt: new Date(),
       })
-      .where(eq(tokens.id, tokenId))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          eq(tokens.sceneId, existingToken.sceneId)
+        )
+      )
       .returning();
 
     // Broadcast update via WebSocket if callback provided
@@ -238,7 +241,12 @@ export class TokenService {
 
     const result = await db
       .delete(tokens)
-      .where(eq(tokens.id, tokenId))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          eq(tokens.sceneId, existingToken.sceneId)
+        )
+      )
       .returning({ id: tokens.id });
 
     return result.length > 0;
@@ -278,7 +286,15 @@ export class TokenService {
     await this.verifyCharacterOwnership(characterId, userId);
 
     // Update token's actorId
-    await db.update(tokens).set({ actorId: characterId }).where(eq(tokens.id, tokenId));
+    await db
+      .update(tokens)
+      .set({ actorId: characterId })
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          eq(tokens.sceneId, token.sceneId)
+        )
+      );
 
     // Create or update character-token link
     try {
@@ -319,7 +335,15 @@ export class TokenService {
 
     // Clear actorId if it matches
     if (token.actorId === characterId) {
-      await db.update(tokens).set({ actorId: null }).where(eq(tokens.id, tokenId));
+      await db
+        .update(tokens)
+        .set({ actorId: null })
+        .where(
+          and(
+            eq(tokens.id, tokenId),
+            eq(tokens.sceneId, token.sceneId)
+          )
+        );
     }
 
     return true;
@@ -446,7 +470,12 @@ export class TokenService {
           ...config,
           updatedAt: new Date(),
         })
-        .where(eq(tokenConfigurations.id, existing.id))
+        .where(
+          and(
+            eq(tokenConfigurations.id, existing.id),
+            eq(tokenConfigurations.characterId, characterId)
+          )
+        )
         .returning();
 
       if (!updated) {

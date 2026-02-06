@@ -14,6 +14,7 @@ import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
+import { verifySessionOwnership } from './combat/helpers.js';
 
 // Import service from Bun server
 import { SpellSlotsService } from '../../services/spell-slots-service.js';
@@ -98,6 +99,14 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
       }
 
       const { spellName, spellLevel, slotLevelUsed, sessionId } = body as any;
+
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, user.userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
 
       // Validate input
       if (!spellName) {

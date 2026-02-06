@@ -82,7 +82,8 @@ export class MeasurementService {
     const [template] = await db
       .insert(measurementTemplates)
       .values({
-        sceneId: data.sceneId,
+        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
+        sceneId,
         createdBy: userId,
         templateType: data.templateType,
         originX: data.originX,
@@ -112,6 +113,7 @@ export class MeasurementService {
     const [existing] = await db
       .select({
         id: measurementTemplates.id,
+        sceneId: measurementTemplates.sceneId,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
@@ -133,7 +135,12 @@ export class MeasurementService {
     // Delete the template
     const result = await db
       .delete(measurementTemplates)
-      .where(eq(measurementTemplates.id, templateId))
+      .where(
+        and(
+          eq(measurementTemplates.id, templateId),
+          eq(measurementTemplates.sceneId, existing.sceneId)
+        )
+      )
       .returning({ id: measurementTemplates.id });
 
     return result.length > 0;

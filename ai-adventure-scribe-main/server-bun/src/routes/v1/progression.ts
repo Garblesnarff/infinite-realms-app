@@ -18,6 +18,7 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
+import { verifySessionOwnership } from './combat/helpers.js';
 
 import type { XPSource, LevelUpInput } from '../../types/progression.js';
 
@@ -59,6 +60,14 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
         description?: string;
         sessionId?: string;
       };
+
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, (user as { userId: string }).userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
 
       // Validate XP
       if (xp === undefined || xp < 0) {

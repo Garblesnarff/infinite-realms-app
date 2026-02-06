@@ -191,7 +191,12 @@ export class VisionBlockerService {
         ...updates,
         updatedAt: new Date(),
       })
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+        )
+      )
       .returning();
 
     if (!updated) {
@@ -216,7 +221,12 @@ export class VisionBlockerService {
 
     const result = await db
       .delete(visionBlockingShapes)
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+        )
+      )
       .returning({ id: visionBlockingShapes.id });
 
     return result.length > 0;
@@ -259,7 +269,12 @@ export class VisionBlockerService {
         blocksLight: newState === 'closed',
         updatedAt: new Date(),
       })
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+        )
+      )
       .returning();
 
     if (!updated) {

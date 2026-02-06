@@ -295,7 +295,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     }
 
     const payload = parsed.data;
-    const { postId: id } = params;
+    const { id } = params;
 
     try {
       const canManage = await canManagePost(id || '', user.userId);
@@ -423,7 +423,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     }
 
     const publishTimestamp = parsed.data.publishedAt ?? new Date().toISOString();
-    const { postId: id } = params;
+    const { id } = params;
 
     try {
       const canManage = await canManagePost(id || '', user.userId);
@@ -595,7 +595,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     }
 
     const payload = parsed.data;
-    const { postId: id } = params;
+    const { id } = params;
 
     if (Object.keys(payload).length === 0) {
       set.status = 400;
@@ -650,7 +650,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       return { error: 'Blog admin access required' };
     }
 
-    const { postId: id } = params;
+    const { id } = params;
 
     try {
       const { error: joinDeleteError } = await supabaseService
@@ -756,7 +756,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     }
 
     const payload = parsed.data;
-    const { postId: id } = params;
+    const { id } = params;
 
     if (Object.keys(payload).length === 0) {
       set.status = 400;
@@ -811,7 +811,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       return { error: 'Blog admin access required' };
     }
 
-    const { postId: id } = params;
+    const { id } = params;
 
     try {
       const { error: joinDeleteError } = await supabaseService

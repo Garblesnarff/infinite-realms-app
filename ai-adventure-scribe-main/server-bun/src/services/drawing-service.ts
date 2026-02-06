@@ -79,7 +79,8 @@ export class DrawingService {
     const [drawing] = await db
       .insert(sceneDrawings)
       .values({
-        sceneId: data.sceneId,
+        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
+        sceneId,
         createdBy: userId,
         drawingType: data.drawingType,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,7 +141,12 @@ export class DrawingService {
         ...updates,
         updatedAt: new Date(),
       })
-      .where(eq(sceneDrawings.id, drawingId))
+      .where(
+        and(
+          eq(sceneDrawings.id, drawingId),
+          eq(sceneDrawings.sceneId, existing.sceneId)
+        )
+      )
       .returning();
 
     return updated || null;
@@ -156,6 +162,7 @@ export class DrawingService {
     const [existing] = await db
       .select({
         id: sceneDrawings.id,
+        sceneId: sceneDrawings.sceneId,
       })
       .from(sceneDrawings)
       .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
@@ -173,7 +180,12 @@ export class DrawingService {
 
     const result = await db
       .delete(sceneDrawings)
-      .where(eq(sceneDrawings.id, drawingId))
+      .where(
+        and(
+          eq(sceneDrawings.id, drawingId),
+          eq(sceneDrawings.sceneId, existing.sceneId)
+        )
+      )
       .returning({ id: sceneDrawings.id });
 
     return result.length > 0;

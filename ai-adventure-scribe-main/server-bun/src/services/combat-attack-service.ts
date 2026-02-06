@@ -11,10 +11,11 @@
  * @module server/services/combat-attack-service
  */
 
-import { desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
+  combatParticipants,
   weaponAttacks,
   creatureStats,
 } from '../../../db/schema/index.js';
@@ -221,17 +222,17 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // Get target's AC and resistances
-    const targetStats = await this.getCreatureStats(targetId);
-    if (!targetStats) {
-      throw new NotFoundError('Target stats', targetId);
-    }
+    // Validate attacker/target belong to this encounter to prevent cross-encounter IDOR.
+    const [attackerParticipant, targetParticipant] = await Promise.all([
+      this.getParticipantInEncounter(attackerId, encounterId),
+      this.getParticipantInEncounter(targetId, encounterId),
+    ]);
 
     // Get weapon if provided
     let weapon: WeaponAttack | null = null;
     if (weaponId) {
       weapon = await this.getWeaponAttack(weaponId);
-      if (!weapon) {
+      if (!weapon || !attackerParticipant.characterId || weapon.characterId !== attackerParticipant.characterId) {
         throw new NotFoundError('Weapon', weaponId);
       }
     }
@@ -240,7 +241,7 @@ export class CombatAttackService {
     const hitCheck = this.checkHit({
       attackRoll,
       attackBonus: weapon?.attackBonus || attackBonus,
-      targetAC: targetStats.armorClass,
+      targetAC: targetParticipant.armorClass,
       advantage,
       disadvantage,
     });
@@ -249,7 +250,7 @@ export class CombatAttackService {
       // Miss - no damage
       return {
         hit: false,
-        targetAC: targetStats.armorClass,
+        targetAC: targetParticipant.armorClass,
         totalAttackRoll: hitCheck.totalAttackRoll,
         effectiveResistance: false,
         effectiveVulnerability: false,
@@ -270,7 +271,7 @@ export class CombatAttackService {
       // No weapon - return hit with no damage calculated
       return {
         hit: true,
-        targetAC: targetStats.armorClass,
+        targetAC: targetParticipant.armorClass,
         totalAttackRoll: hitCheck.totalAttackRoll,
         effectiveResistance: false,
         effectiveVulnerability: false,
@@ -287,9 +288,9 @@ export class CombatAttackService {
       damageBonus: weapon.damageBonus,
       damageType: weapon.damageType as DamageType,
       isCritical: isCrit,
-      resistances: (targetStats.resistances || []) as DamageType[],
-      vulnerabilities: (targetStats.vulnerabilities || []) as DamageType[],
-      immunities: (targetStats.immunities || []) as DamageType[],
+      resistances: (targetParticipant.damageResistances || []) as DamageType[],
+      vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
+      immunities: (targetParticipant.damageImmunities || []) as DamageType[],
       damageRoll,
     });
 
@@ -306,7 +307,7 @@ export class CombatAttackService {
 
       return {
         hit: true,
-        targetAC: targetStats.armorClass,
+        targetAC: targetParticipant.armorClass,
         totalAttackRoll: hitCheck.totalAttackRoll,
         damage: damageCalc.baseDamage,
         damageType: weapon.damageType as DamageType,
@@ -350,26 +351,26 @@ export class CombatAttackService {
       distanceByTargetId,
     } = input;
 
+    // Validate caster belongs to this encounter to prevent cross-encounter ID references.
+    await this.getParticipantInEncounter(casterId, encounterId);
+
     const results: AttackResult[] = [];
 
     for (const targetId of targetIds) {
-      const targetStats = await this.getCreatureStats(targetId);
-      if (!targetStats) {
-        continue;
-      }
+      const targetParticipant = await this.getParticipantInEncounter(targetId, encounterId);
 
       if (attackRoll !== undefined) {
         // Spell attack roll
         const hitCheck = this.checkHit({
           attackRoll,
           attackBonus: 0, // Spell attack bonus should be included in attackRoll
-          targetAC: targetStats.armorClass,
+          targetAC: targetParticipant.armorClass,
         });
 
         if (!hitCheck.hit) {
           results.push({
             hit: false,
-            targetAC: targetStats.armorClass,
+            targetAC: targetParticipant.armorClass,
             totalAttackRoll: hitCheck.totalAttackRoll,
             effectiveResistance: false,
             effectiveVulnerability: false,
@@ -395,9 +396,9 @@ export class CombatAttackService {
             damageBonus: 0,
             damageType,
             isCritical: spellIsCrit,
-            resistances: (targetStats.resistances || []) as DamageType[],
-            vulnerabilities: (targetStats.vulnerabilities || []) as DamageType[],
-            immunities: (targetStats.immunities || []) as DamageType[],
+            resistances: (targetParticipant.damageResistances || []) as DamageType[],
+            vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
+            immunities: (targetParticipant.damageImmunities || []) as DamageType[],
             damageRoll,
           });
 
@@ -414,7 +415,7 @@ export class CombatAttackService {
 
             results.push({
               hit: true,
-              targetAC: targetStats.armorClass,
+              targetAC: targetParticipant.armorClass,
               totalAttackRoll: hitCheck.totalAttackRoll,
               damage: damageCalc.baseDamage,
               damageType,
@@ -449,9 +450,9 @@ export class CombatAttackService {
             damageBonus: 0,
             damageType,
             isCritical: false, // Spells with saves don't crit
-            resistances: (targetStats.resistances || []) as DamageType[],
-            vulnerabilities: (targetStats.vulnerabilities || []) as DamageType[],
-            immunities: (targetStats.immunities || []) as DamageType[],
+            resistances: (targetParticipant.damageResistances || []) as DamageType[],
+            vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
+            immunities: (targetParticipant.damageImmunities || []) as DamageType[],
             damageRoll,
           });
 
@@ -606,6 +607,25 @@ export class CombatAttackService {
     const isWithin5Feet = distanceInFeet === undefined || distanceInFeet <= 5;
 
     return isWithin5Feet;
+  }
+
+  /**
+   * Get a combat participant scoped to a specific encounter.
+   * Used to prevent cross-encounter resource access.
+   */
+  private async getParticipantInEncounter(participantId: string, encounterId: string) {
+    const participant = await db.query.combatParticipants.findFirst({
+      where: and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ),
+    });
+
+    if (!participant) {
+      throw new NotFoundError('Participant', participantId);
+    }
+
+    return participant;
   }
 
   /**

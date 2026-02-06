@@ -72,7 +72,7 @@ export async function verifyEncounterOwnership(
   if (campaignOwner !== userId && characterOwner !== userId) {
     return {
       success: false,
-      error: { status: 403, message: 'Access denied' },
+      error: { status: 404, message: 'Encounter not found' },
     };
   }
 
@@ -120,7 +120,7 @@ export async function verifySessionOwnership(
   if (campaignOwner !== userId && characterOwner !== userId) {
     return {
       success: false,
-      error: { status: 403, message: 'Access denied' },
+      error: { status: 404, message: 'Session not found' },
     };
   }
 

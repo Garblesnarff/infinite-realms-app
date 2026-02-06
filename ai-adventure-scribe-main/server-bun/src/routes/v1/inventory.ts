@@ -17,6 +17,7 @@ import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
+import { verifySessionOwnership } from './combat/helpers.js';
 // Import service from Bun server
 import { InventoryService } from '../../services/inventory-service.js';
 
@@ -196,6 +197,14 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         sessionId?: string;
         context?: string;
       };
+
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, (user as any).userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
 
       const input: UseConsumableInput = {
         characterId: params.id,

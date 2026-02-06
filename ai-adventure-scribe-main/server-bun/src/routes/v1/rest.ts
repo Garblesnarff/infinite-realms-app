@@ -13,6 +13,7 @@ import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
+import { verifySessionOwnership } from './combat/helpers.js';
 
 // Import service from Bun server
 import { RestService } from '../../services/rest-service.js';
@@ -65,6 +66,14 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         notes?: string;
       };
 
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, user.userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
+
       const result = await RestService.takeShortRest(
         params.id,
         hitDiceToSpend || 0,
@@ -105,6 +114,14 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         sessionId?: string;
         notes?: string;
       };
+
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, user.userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
 
       const result = await RestService.takeLongRest(params.id, sessionId, notes);
       return result;

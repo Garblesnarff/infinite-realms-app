@@ -333,34 +333,38 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         const message = existing[0];
         logger.info({ msg: 'IMAGE_PATCH_FOUND', sessionId: message.session_id });
 
-        // Step 2: Verify ownership through session (if session exists)
-        if (message.session_id) {
-          const sessionData = await sql`
-            SELECT
-              gs.campaign_id,
-              gs.character_id,
-              c.user_id as campaign_owner,
-              ch.user_id as character_owner
-            FROM game_sessions gs
-            LEFT JOIN campaigns c ON c.id = gs.campaign_id
-            LEFT JOIN characters ch ON ch.id = gs.character_id
-            WHERE gs.id = ${message.session_id}
-            LIMIT 1
-          `;
+        // Step 2: Require session ownership to avoid orphan-message IDOR.
+        if (!message.session_id) {
+          logger.warn({ msg: 'IMAGE_PATCH_MISSING_SESSION', messageId: id });
+          set.status = 404;
+          return { error: 'Message not found' };
+        }
 
-          if (sessionData && sessionData.length > 0) {
-            const session = sessionData[0];
-            if (session.campaign_owner !== userId && session.character_owner !== userId) {
-              logger.warn({ msg: 'IMAGE_PATCH_ACCESS_DENIED', userId });
-              set.status = 404;
-              return { error: 'Message not found' };
-            }
-            logger.info({ msg: 'IMAGE_PATCH_OWNERSHIP_VERIFIED' });
-          } else {
-            logger.warn({ msg: 'IMAGE_PATCH_SESSION_NOT_FOUND' });
+        const sessionData = await sql`
+          SELECT
+            gs.campaign_id,
+            gs.character_id,
+            c.user_id as campaign_owner,
+            ch.user_id as character_owner
+          FROM game_sessions gs
+          LEFT JOIN campaigns c ON c.id = gs.campaign_id
+          LEFT JOIN characters ch ON ch.id = gs.character_id
+          WHERE gs.id = ${message.session_id}
+          LIMIT 1
+        `;
+
+        if (sessionData && sessionData.length > 0) {
+          const session = sessionData[0];
+          if (session.campaign_owner !== userId && session.character_owner !== userId) {
+            logger.warn({ msg: 'IMAGE_PATCH_ACCESS_DENIED', userId });
             set.status = 404;
             return { error: 'Message not found' };
           }
+          logger.info({ msg: 'IMAGE_PATCH_OWNERSHIP_VERIFIED' });
+        } else {
+          logger.warn({ msg: 'IMAGE_PATCH_SESSION_NOT_FOUND' });
+          set.status = 404;
+          return { error: 'Message not found' };
         }
 
         // Prepare updated images array (max 5)
@@ -372,8 +376,15 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           UPDATE dialogue_history
           SET images = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
           WHERE id = ${id}
+            AND session_id = ${message.session_id}
           RETURNING images
         `;
+
+        if (!result || result.length === 0) {
+          logger.warn({ msg: 'IMAGE_PATCH_UPDATE_MISSED', messageId: id });
+          set.status = 404;
+          return { error: 'Message not found' };
+        }
 
         logger.info({ msg: 'IMAGE_PATCH_SUCCESS' });
         return { images: result[0]?.images || [] };

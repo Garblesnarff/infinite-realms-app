@@ -227,8 +227,14 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
   .post('/generate-api-key', async ({ request, body, set }) => {
     // This endpoint should be protected in production!
     // Require a setup secret
+    const expectedSetupSecret = process.env.BLOG_SETUP_SECRET;
+    if (!expectedSetupSecret) {
+      set.status = 403;
+      return { error: 'Setup secret not configured' };
+    }
+
     const setupSecret = request.headers.get('x-setup-secret');
-    if (setupSecret !== process.env.BLOG_SETUP_SECRET) {
+    if (setupSecret !== expectedSetupSecret) {
       set.status = 401;
       return { error: 'Unauthorized' };
     }

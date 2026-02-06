@@ -10,10 +10,10 @@
 /* eslint-disable max-lines */
 import { randomUUID } from 'crypto';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
-import { fogOfWar, scenes } from '../../../db/schema/index.js';
+import { characters, fogOfWar, scenes } from '../../../db/schema/index.js';
 import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 import type { FogOfWar } from '../../../db/schema/index.js';
@@ -52,9 +52,9 @@ export class FogOfWarService {
     targetUserId: string,
     requesterId: string
   ): Promise<void> {
-    // 1. Get scene to check ownership
+    // 1. Get scene and campaign to check ownership/membership.
     const [scene] = await db
-      .select({ userId: scenes.userId })
+      .select({ userId: scenes.userId, campaignId: scenes.campaignId })
       .from(scenes)
       .where(eq(scenes.id, sceneId))
       .limit(1);
@@ -64,12 +64,24 @@ export class FogOfWarService {
     }
 
     // 2. Authorization logic:
-    // - Requester is the target user
     // - Requester is the scene owner
+    // - OR requester is the target user AND has a character in the scene's campaign
     const isTarget = requesterId === targetUserId;
     const isOwner = requesterId === scene.userId;
+    let isCampaignParticipant = false;
 
-    if (!isTarget && !isOwner) {
+    if (!isOwner && isTarget) {
+      const campaignCharacter = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.campaignId, scene.campaignId),
+          or(eq(characters.userId, requesterId), eq(characters.ownerId, requesterId))
+        ),
+        columns: { id: true },
+      });
+      isCampaignParticipant = Boolean(campaignCharacter);
+    }
+
+    if (!isOwner && !(isTarget && isCampaignParticipant)) {
       // Throw NOT_FOUND to avoid leaking association existence
       throw new NotFoundError('Scene', sceneId);
     }
@@ -149,7 +161,13 @@ export class FogOfWarService {
           revealedAreas: updatedAreas,
           updatedAt: new Date(),
         })
-        .where(eq(fogOfWar.id, existingRecord.id))
+        .where(
+          and(
+            eq(fogOfWar.id, existingRecord.id),
+            eq(fogOfWar.sceneId, sceneId),
+            eq(fogOfWar.userId, userId)
+          )
+        )
         .returning();
 
       if (!updated) {
@@ -243,7 +261,13 @@ export class FogOfWarService {
           revealedAreas: updatedAreas,
           updatedAt: new Date(),
         })
-        .where(eq(fogOfWar.id, existingRecord.id))
+        .where(
+          and(
+            eq(fogOfWar.id, existingRecord.id),
+            eq(fogOfWar.sceneId, sceneId),
+            eq(fogOfWar.userId, userId)
+          )
+        )
         .returning();
 
       if (!updated) {
@@ -315,7 +339,13 @@ export class FogOfWarService {
         revealedAreas: filteredAreas,
         updatedAt: new Date(),
       })
-      .where(eq(fogOfWar.id, existingRecord.id));
+      .where(
+        and(
+          eq(fogOfWar.id, existingRecord.id),
+          eq(fogOfWar.sceneId, sceneId),
+          eq(fogOfWar.userId, userId)
+        )
+      );
 
     // Broadcast to WebSocket if callback provided
     if (broadcast && concealedArea) {
@@ -376,7 +406,13 @@ export class FogOfWarService {
         revealedAreas: remainingAreas,
         updatedAt: new Date(),
       })
-      .where(eq(fogOfWar.id, existingRecord.id));
+      .where(
+        and(
+          eq(fogOfWar.id, existingRecord.id),
+          eq(fogOfWar.sceneId, sceneId),
+          eq(fogOfWar.userId, userId)
+        )
+      );
 
     // Broadcast to WebSocket if callback provided
     if (broadcast) {
@@ -423,7 +459,13 @@ export class FogOfWarService {
         revealedAreas: [],
         updatedAt: new Date(),
       })
-      .where(eq(fogOfWar.id, existingRecord.id));
+      .where(
+        and(
+          eq(fogOfWar.id, existingRecord.id),
+          eq(fogOfWar.sceneId, sceneId),
+          eq(fogOfWar.userId, userId)
+        )
+      );
   }
 
   /**
@@ -469,7 +511,13 @@ export class FogOfWarService {
           revealedAreas: mergedAreas,
           updatedAt: new Date(),
         })
-        .where(eq(fogOfWar.id, existingRecord.id));
+        .where(
+          and(
+            eq(fogOfWar.id, existingRecord.id),
+            eq(fogOfWar.sceneId, sceneId),
+            eq(fogOfWar.userId, userId)
+          )
+        );
     }
 
     return mergedAreas;
@@ -515,7 +563,13 @@ export class FogOfWarService {
 
     await db
       .delete(fogOfWar)
-      .where(eq(fogOfWar.id, existingRecord.id));
+      .where(
+        and(
+          eq(fogOfWar.id, existingRecord.id),
+          eq(fogOfWar.sceneId, sceneId),
+          eq(fogOfWar.userId, userId)
+        )
+      );
 
     return true;
   }
