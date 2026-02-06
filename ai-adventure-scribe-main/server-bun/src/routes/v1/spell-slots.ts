@@ -13,7 +13,7 @@
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
-import { supabaseService } from '../../lib/supabase.js';
+import { CharacterService } from '../../services/character-service.js';
 
 // Import service from Bun server
 import { SpellSlotsService } from '../../services/spell-slots-service.js';
@@ -24,56 +24,46 @@ import type {
   ClassName,
 } from '../../types/spell-slots.js';
 
-/**
- * Helper to verify character ownership
- */
-async function verifyCharacterOwnership(
-  characterId: string,
-  userId: string
-): Promise<{ success: true } | { success: false; status: number; error: string }> {
-  const { data: character, error: charErr } = await supabaseService
-    .from('characters')
-    .select('user_id')
-    .eq('id', characterId)
-    .single();
-
-  if (charErr || !character) {
-    return { success: false, status: 404, error: 'Character not found' };
-  }
-
-  if (character.user_id !== userId) {
-    return { success: false, status: 403, error: 'Access denied' };
-  }
-
-  return { success: true };
-}
-
 // Character-specific spell slot routes
 export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' })
-
   /**
-   * GET /v1/characters/:id/spell-slots
-   * Get all spell slots for a character
+   * Centralized authentication and character ownership verification
    */
-  .get('/:id/spell-slots', async ({ request, params, set }) => {
+  .derive(async ({ request }) => {
     const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, params, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
     }
 
-    try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
+    if (params.id) {
+      // 🛡️ Sentinel: Use CharacterService.getById which verifies dual-ownership (userId/ownerId)
+      // and masks existence by returning null for unauthorized access.
+      const character = await CharacterService.getById(params.id, user.userId);
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
       }
+    }
+  })
 
-      const spellSlots = await SpellSlotsService.getCharacterSpellSlots(params.id);
+  /**
+   * GET /v1/characters/:id/spell-slots
+   * Get all spell slots for a character
+   */
+  .get('/:id/spell-slots', async ({ params, set, user }) => {
+    try {
+      const spellSlots = await SpellSlotsService.getCharacterSpellSlots(
+        params.id,
+        (user as { userId: string }).userId
+      );
       return spellSlots;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_GET error', error });
-      set.status = 500;
+      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
       return {
         error: 'Failed to get spell slots',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -85,20 +75,8 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * POST /v1/characters/:id/spell-slots/use
    * Use a spell slot
    */
-  .post('/:id/spell-slots/use', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/spell-slots/use', async ({ params, body, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { spellName, spellLevel, slotLevelUsed, sessionId } = body as any;
 
       // Validate input
@@ -123,12 +101,12 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         spellLevel,
         slotLevelUsed,
         sessionId,
-      });
+      }, (user as { userId: string }).userId);
 
       return result;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOT_USE error', error });
-      set.status = 500;
+      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
       return {
         error: 'Failed to use spell slot',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -140,32 +118,20 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * POST /v1/characters/:id/spell-slots/restore
    * Restore spell slots (long rest or specific restoration)
    */
-  .post('/:id/spell-slots/restore', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/spell-slots/restore', async ({ params, body, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { level, amount } = body as any;
 
       const result = await SpellSlotsService.restoreSpellSlots({
         characterId: params.id,
         level,
         amount,
-      });
+      }, (user as { userId: string }).userId);
 
       return result;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_RESTORE error', error });
-      set.status = 500;
+      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
       return {
         error: 'Failed to restore spell slots',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -177,20 +143,8 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * GET /v1/characters/:id/spell-slots/history
    * Get spell slot usage history
    */
-  .get('/:id/spell-slots/history', async ({ request, params, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id/spell-slots/history', async ({ params, query, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const usageQuery: SpellSlotUsageQuery = {
         characterId: params.id,
         sessionId: query.sessionId as string | undefined,
@@ -198,11 +152,14 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         offset: query.offset ? parseInt(query.offset as string, 10) : 0,
       };
 
-      const history = await SpellSlotsService.getSpellSlotUsageHistory(usageQuery);
+      const history = await SpellSlotsService.getSpellSlotUsageHistory(
+        usageQuery,
+        (user as { userId: string }).userId
+      );
       return history;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_HISTORY error', error });
-      set.status = 500;
+      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
       return {
         error: 'Failed to get spell slot history',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -214,20 +171,8 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * POST /v1/characters/:id/spell-slots/initialize
    * Initialize spell slots for a character based on their class(es) and level(s)
    */
-  .post('/:id/spell-slots/initialize', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/spell-slots/initialize', async ({ params, body, set, user }) => {
     try {
-      const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
-        set.status = ownership.status;
-        return { error: ownership.error };
-      }
-
       const { classes } = body as { classes: Array<{ className: ClassName; level: number }> };
 
       if (!classes || !Array.isArray(classes) || classes.length === 0) {
@@ -235,13 +180,17 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         return { error: 'classes array is required' };
       }
 
-      const spellSlots = await SpellSlotsService.initializeSpellSlots(params.id, classes);
+      const spellSlots = await SpellSlotsService.initializeSpellSlots(
+        params.id,
+        (user as { userId: string }).userId,
+        classes
+      );
 
       set.status = 201;
       return spellSlots;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_INIT error', error });
-      set.status = 500;
+      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
       return {
         error: 'Failed to initialize spell slots',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -251,18 +200,22 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
 
 // Utility spell slot routes (not character-specific)
 export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
+  .derive(async ({ request }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, set }) => {
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+  })
 
   /**
    * GET /v1/spell-slots/calculate
    * Calculate spell slots for preview (doesn't save to database)
    */
-  .get('/calculate', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/calculate', async ({ query, set }) => {
     try {
       const { className, level } = query;
 
@@ -303,13 +256,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
    * POST /v1/spell-slots/calculate-multiclass
    * Calculate multiclass spell slots for preview
    */
-  .post('/calculate-multiclass', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/calculate-multiclass', async ({ body, set }) => {
     try {
       const { classes } = body as { classes: Array<{ className: ClassName; level: number }> };
 
@@ -346,13 +293,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
    * GET /v1/spell-slots/can-upcast
    * Check if a spell can be upcast
    */
-  .get('/can-upcast', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/can-upcast', async ({ query, set }) => {
     try {
       const { spellName, baseLevel, targetLevel } = query;
 
