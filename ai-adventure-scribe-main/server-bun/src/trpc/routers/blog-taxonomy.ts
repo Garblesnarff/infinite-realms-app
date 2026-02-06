@@ -11,12 +11,14 @@ import { z } from 'zod';
 
 import {
   blogCategories,
+  blogPosts,
   blogPostCategories,
   blogPostTags,
   blogTags,
 } from '../../../../db/schema/index.js';
-import { protectedProcedure, publicProcedure, router } from '../trpc.js';
+import { adminProcedure, protectedProcedure, publicProcedure, router } from '../trpc.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
+import { canManagePost } from './blog-helpers.js';
 
 export const blogTaxonomyRouter = router({
   /**
@@ -83,7 +85,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Create category (PROTECTED - admin only in production)
    */
-  createCategory: protectedProcedure
+  createCategory: adminProcedure
     .input(blogCategorySchema)
     .mutation(async ({ input, ctx }) => {
       try {
@@ -114,7 +116,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Update category (PROTECTED - admin only in production)
    */
-  updateCategory: protectedProcedure
+  updateCategory: adminProcedure
     .input(z.object({ id: z.string().uuid(), updates: blogCategorySchema.partial() }))
     .mutation(async ({ input, ctx }) => {
       const { id, updates } = input;
@@ -157,7 +159,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Delete category (PROTECTED)
    */
-  deleteCategory: protectedProcedure
+  deleteCategory: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       // Delete post associations
@@ -172,7 +174,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Create tag (PROTECTED - admin only in production)
    */
-  createTag: protectedProcedure.input(blogTagSchema).mutation(async ({ input, ctx }) => {
+  createTag: adminProcedure.input(blogTagSchema).mutation(async ({ input, ctx }) => {
     try {
       const [tag] = await ctx.db
         .insert(blogTags)
@@ -200,7 +202,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Update tag (PROTECTED - admin only in production)
    */
-  updateTag: protectedProcedure
+  updateTag: adminProcedure
     .input(z.object({ id: z.string().uuid(), updates: blogTagSchema.partial() }))
     .mutation(async ({ input, ctx }) => {
       const { id, updates } = input;
@@ -243,7 +245,7 @@ export const blogTaxonomyRouter = router({
   /**
    * Delete tag (PROTECTED - admin only in production)
    */
-  deleteTag: protectedProcedure
+  deleteTag: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       // Delete post associations
@@ -267,6 +269,20 @@ export const blogTaxonomyRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      const [post] = await ctx.db
+        .select({ id: blogPosts.id, authorId: blogPosts.authorId })
+        .from(blogPosts)
+        .where(eq(blogPosts.id, input.postId))
+        .limit(1);
+
+      if (!post) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
       // Delete existing category associations
       await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.postId, input.postId));
 
@@ -295,6 +311,20 @@ export const blogTaxonomyRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      const [post] = await ctx.db
+        .select({ id: blogPosts.id, authorId: blogPosts.authorId })
+        .from(blogPosts)
+        .where(eq(blogPosts.id, input.postId))
+        .limit(1);
+
+      if (!post) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
       // Delete existing tag associations
       await ctx.db.delete(blogPostTags).where(eq(blogPostTags.postId, input.postId));
 

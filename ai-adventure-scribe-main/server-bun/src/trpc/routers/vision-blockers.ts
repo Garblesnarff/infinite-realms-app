@@ -127,8 +127,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Scene not found',
           });
         }
         if (error.statusCode === 400) {
@@ -169,8 +169,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Vision blocker not found',
           });
         }
         if (error.statusCode === 400) {
@@ -212,8 +212,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Vision blocker not found',
           });
         }
         throw new TRPCError({
@@ -244,8 +244,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Vision blocker not found',
           });
         }
         if (error.statusCode === 400) {
@@ -286,8 +286,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Scene not found',
           });
         }
         if (error.statusCode === 400) {
@@ -341,8 +341,8 @@ export const visionBlockersRouter = router({
         }
         if (error.statusCode === 403) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error.message,
+            code: 'NOT_FOUND',
+            message: 'Scene not found',
           });
         }
         throw new TRPCError({

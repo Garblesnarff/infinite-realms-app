@@ -10,6 +10,7 @@ import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import {
   blogPosts,
+  blogAuthors,
   blogCategories,
   blogTags,
   blogPostCategories,
@@ -184,6 +185,7 @@ export const blogPostsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, updates } = input;
       const { categoryIds, tagIds, ...postUpdates } = updates;
+      const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
 
       const [existingPost] = await ctx.db
         .select({ id: blogPosts.id, authorId: blogPosts.authorId })
@@ -195,6 +197,33 @@ export const blogPostsRouter = router({
       if (!(await canManagePost(ctx, id, existingPost.authorId))) {
         // Mask unauthorized access as not found to avoid disclosing post existence.
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      if (postUpdates.authorId !== undefined) {
+        if (!isAdmin) {
+          if (postUpdates.authorId !== existingPost.authorId) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only admins can reassign post authors',
+            });
+          }
+
+          // Ignore no-op author updates from non-admin clients.
+          delete postUpdates.authorId;
+        } else {
+          const [targetAuthor] = await ctx.db
+            .select({ id: blogAuthors.id })
+            .from(blogAuthors)
+            .where(eq(blogAuthors.id, postUpdates.authorId))
+            .limit(1);
+
+          if (!targetAuthor) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Author not found',
+            });
+          }
+        }
       }
 
       const updatePayload: any = { ...postUpdates, updatedAt: new Date() };

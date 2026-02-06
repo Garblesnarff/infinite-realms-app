@@ -300,8 +300,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to update this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const updatePayload: Record<string, unknown> = {};
@@ -428,8 +428,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to publish this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const statusFields = normalizeStatusPayload('published', null, publishTimestamp);
@@ -480,8 +480,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to delete this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const { error: categoryJoinError } = await supabaseService
@@ -913,8 +913,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to preview this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const { data, error } = await supabaseService
@@ -1045,8 +1045,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to update this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const { data, error } = await supabaseService
@@ -1102,8 +1102,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to update this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const { data, error } = await supabaseService
@@ -1153,8 +1153,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     try {
       const canManage = await canManagePost(id || '', user.userId);
       if (!canManage) {
-        set.status = 403;
-        return { error: 'You do not have permission to update this post' };
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
 
       const { data, error } = await supabaseService

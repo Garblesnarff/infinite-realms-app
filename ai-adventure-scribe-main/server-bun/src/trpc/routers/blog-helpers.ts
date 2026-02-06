@@ -8,7 +8,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { blogAuthors, blogPostCategories, blogPostTags } from '../../../../db/schema/index.js';
 import type { Context } from '../context.js';
 
@@ -23,19 +23,46 @@ export async function resolveAuthorId(
 ): Promise<string> {
   // If explicit author ID provided, validate it exists
   if (explicitAuthorId) {
-    const [author] = await ctx.db
+    if (!ctx.user) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required',
+      });
+    }
+
+    const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
+
+    if (isAdmin) {
+      const [author] = await ctx.db
+        .select({ id: blogAuthors.id })
+        .from(blogAuthors)
+        .where(eq(blogAuthors.id, explicitAuthorId))
+        .limit(1);
+
+      if (!author) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Author not found',
+        });
+      }
+      return author.id;
+    }
+
+    const [ownAuthor] = await ctx.db
       .select({ id: blogAuthors.id })
       .from(blogAuthors)
-      .where(eq(blogAuthors.id, explicitAuthorId))
+      .where(and(eq(blogAuthors.id, explicitAuthorId), eq(blogAuthors.userId, ctx.user.userId)))
       .limit(1);
 
-    if (!author) {
+    if (!ownAuthor) {
+      // Mask unauthorized overrides as not found.
       throw new TRPCError({
-        code: 'BAD_REQUEST',
+        code: 'NOT_FOUND',
         message: 'Author not found',
       });
     }
-    return author.id;
+
+    return ownAuthor.id;
   }
 
   // Otherwise, get author ID for current user

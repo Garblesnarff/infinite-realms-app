@@ -21,7 +21,7 @@ import {
   type SceneSetting,
   type NewSceneSetting,
 } from '../../../db/schema/index.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { InternalServerError, NotFoundError, ForbiddenError } from '../lib/errors.js';
 
 /**
@@ -288,7 +288,15 @@ export class SceneService {
         ...settingsUpdates,
         updatedAt: new Date(),
       })
-      .where(eq(sceneSettings.sceneId, sceneId))
+      .where(and(
+        eq(sceneSettings.sceneId, sceneId),
+        sql`EXISTS (
+          SELECT 1
+          FROM scenes s
+          WHERE s.id = ${sceneSettings.sceneId}
+            AND s.user_id = ${userId}
+        )`
+      ))
       .returning();
 
     if (!updated) {
@@ -325,7 +333,16 @@ export class SceneService {
         ...updates,
         updatedAt: new Date(),
       })
-      .where(and(eq(sceneLayers.id, layerId), eq(sceneLayers.sceneId, sceneId)))
+      .where(and(
+        eq(sceneLayers.id, layerId),
+        eq(sceneLayers.sceneId, sceneId),
+        sql`EXISTS (
+          SELECT 1
+          FROM scenes s
+          WHERE s.id = ${sceneLayers.sceneId}
+            AND s.user_id = ${userId}
+        )`
+      ))
       .returning();
 
     if (!updated) {

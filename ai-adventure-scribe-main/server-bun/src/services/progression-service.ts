@@ -548,7 +548,15 @@ export class ProgressionService {
         })
         .where(and(
           eq(characterStats.id, character.stats.id),
-          eq(characterStats.characterId, characterId)
+          eq(characterStats.characterId, characterId),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
         ));
     }
 

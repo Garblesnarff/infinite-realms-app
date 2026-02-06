@@ -167,8 +167,8 @@ export const drawingsRouter = router({
       } catch (error) {
         if (error instanceof Error && error.message.includes('Not authorized')) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'You do not have permission to update this drawing',
+            code: 'NOT_FOUND',
+            message: 'Drawing not found',
           });
         }
         throw error;
@@ -203,8 +203,8 @@ export const drawingsRouter = router({
       } catch (error) {
         if (error instanceof Error && error.message.includes('Not authorized')) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'You do not have permission to delete this drawing',
+            code: 'NOT_FOUND',
+            message: 'Drawing not found',
           });
         }
         throw error;
@@ -244,8 +244,8 @@ export const drawingsRouter = router({
       } catch (error) {
         if (error instanceof Error && error.message.includes('Only scene owner')) {
           throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Only the scene owner can bulk delete drawings',
+            code: 'NOT_FOUND',
+            message: 'Scene not found',
           });
         }
         throw error;

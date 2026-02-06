@@ -162,7 +162,16 @@ export class InventoryService {
     const [updated] = await db
       .update(inventoryItems)
       .set(updateData)
-      .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.characterId, characterId)))
+      .where(and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.characterId, characterId),
+        sql`EXISTS (
+          SELECT 1
+          FROM characters c
+          WHERE c.id = ${inventoryItems.characterId}
+            AND (c.user_id = ${userId} OR c.owner_id = ${userId})
+        )`
+      ))
       .returning();
 
     return updated || null;
@@ -181,7 +190,16 @@ export class InventoryService {
 
     const result = await db
       .delete(inventoryItems)
-      .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.characterId, characterId)))
+      .where(and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.characterId, characterId),
+        sql`EXISTS (
+          SELECT 1
+          FROM characters c
+          WHERE c.id = ${inventoryItems.characterId}
+            AND (c.user_id = ${userId} OR c.owner_id = ${userId})
+        )`
+      ))
       .returning({ id: inventoryItems.id });
 
     return result.length > 0;

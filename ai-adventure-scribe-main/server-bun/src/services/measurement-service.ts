@@ -16,7 +16,7 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt, or } from 'drizzle-orm';
+import { eq, and, lt, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -138,7 +138,16 @@ export class MeasurementService {
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          eq(measurementTemplates.sceneId, existing.sceneId)
+          eq(measurementTemplates.sceneId, existing.sceneId),
+          or(
+            eq(measurementTemplates.createdBy, userId),
+            sql`EXISTS (
+              SELECT 1
+              FROM scenes s
+              WHERE s.id = ${measurementTemplates.sceneId}
+                AND s.user_id = ${userId}
+            )`
+          )
         )
       )
       .returning({ id: measurementTemplates.id });
@@ -408,7 +417,13 @@ export class MeasurementService {
         and(
           eq(measurementTemplates.sceneId, sceneId),
           eq(measurementTemplates.isTemporary, true),
-          lt(measurementTemplates.createdAt, cutoffDate)
+          lt(measurementTemplates.createdAt, cutoffDate),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${measurementTemplates.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning({ id: measurementTemplates.id });

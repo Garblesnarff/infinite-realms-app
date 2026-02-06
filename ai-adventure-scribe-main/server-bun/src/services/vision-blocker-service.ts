@@ -7,7 +7,7 @@
  * @module server/services/vision-blocker-service
  */
 
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -194,7 +194,13 @@ export class VisionBlockerService {
       .where(
         and(
           eq(visionBlockingShapes.id, blockerId),
-          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${visionBlockingShapes.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning();
@@ -224,7 +230,13 @@ export class VisionBlockerService {
       .where(
         and(
           eq(visionBlockingShapes.id, blockerId),
-          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${visionBlockingShapes.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning({ id: visionBlockingShapes.id });
@@ -272,7 +284,13 @@ export class VisionBlockerService {
       .where(
         and(
           eq(visionBlockingShapes.id, blockerId),
-          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId)
+          eq(visionBlockingShapes.sceneId, existingBlocker.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${visionBlockingShapes.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning();
@@ -376,7 +394,15 @@ export class VisionBlockerService {
 
     const result = await db
       .delete(visionBlockingShapes)
-      .where(eq(visionBlockingShapes.sceneId, sceneId))
+      .where(and(
+        eq(visionBlockingShapes.sceneId, sceneId),
+        sql`EXISTS (
+          SELECT 1
+          FROM scenes s
+          WHERE s.id = ${visionBlockingShapes.sceneId}
+            AND s.user_id = ${userId}
+        )`
+      ))
       .returning({ id: visionBlockingShapes.id });
 
     return result.length;
