@@ -276,6 +276,8 @@ export default tseslint.config(
       'src/utils/restMechanics.ts',
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/conditionEffects.ts',
+      'src/utils/multiclassing.ts',
+      'src/utils/__tests__/multiclassing.test.ts',
       'src/components/battle-map/LayersPanel.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
     ],

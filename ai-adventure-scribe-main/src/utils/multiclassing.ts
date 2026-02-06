@@ -9,7 +9,6 @@ import type { AbilityScores, Character, CharacterClass, ClassFeature } from '@/t
 import {
   multiclassRequirements,
   multiclassProficiencies,
-  getProficiencyBonus,
   getAllClassFeaturesUpToLevel,
 } from '@/data/levelProgression';
 
@@ -57,50 +56,70 @@ export function validateMulticlass(
   const missingRequirements: string[] = [];
   let canMulticlass = true;
 
-  // Check ability score requirements for the new class
-  const classReq = multiclassRequirements[newClass.name.toLowerCase()];
-  if (classReq && character.abilityScores) {
-    const abilityScore = character.abilityScores[classReq.ability];
-    if (abilityScore.score < classReq.minimum) {
-      const reqText = `${newClass.name}: ${classReq.ability.charAt(0).toUpperCase() + classReq.ability.slice(1)} ${classReq.minimum}+`;
-      requirements.push(reqText);
-      missingRequirements.push(reqText);
-      canMulticlass = false;
-    }
+  if (!character.abilityScores) {
+    return { canMulticlass, requirements, missingRequirements };
   }
 
-  // Special cases for classes with multiple requirements
-  if (newClass.name.toLowerCase() === 'monk' && character.abilityScores) {
-    const wisdom = character.abilityScores.wisdom;
-    if (wisdom.score < 13) {
-      const reqText = 'Monk: Wisdom 13+';
-      requirements.push(reqText);
-      missingRequirements.push(reqText);
-      canMulticlass = false;
+  const abilityScores = character.abilityScores;
+
+  // Helper to check requirements for a class
+  const checkClassReqs = (className: string): void => {
+    const nameLower = className.toLowerCase();
+    const classReq = multiclassRequirements[nameLower];
+
+    if (classReq) {
+      const abilityScore = abilityScores[classReq.ability];
+      if (abilityScore.score < classReq.minimum) {
+        const reqText = `${className}: ${classReq.ability.charAt(0).toUpperCase() + classReq.ability.slice(1)} ${classReq.minimum}+`;
+        requirements.push(reqText);
+        missingRequirements.push(reqText);
+        canMulticlass = false;
+      }
     }
+
+    // Special cases for classes with multiple requirements
+    if (nameLower === 'monk') {
+      if (abilityScores.wisdom.score < 13) {
+        const reqText = 'Monk: Wisdom 13+';
+        requirements.push(reqText);
+        missingRequirements.push(reqText);
+        canMulticlass = false;
+      }
+    } else if (nameLower === 'paladin') {
+      if (abilityScores.charisma.score < 13) {
+        const reqText = 'Paladin: Charisma 13+';
+        requirements.push(reqText);
+        missingRequirements.push(reqText);
+        canMulticlass = false;
+      }
+    } else if (nameLower === 'ranger') {
+      if (abilityScores.wisdom.score < 13) {
+        const reqText = 'Ranger: Wisdom 13+';
+        requirements.push(reqText);
+        missingRequirements.push(reqText);
+        canMulticlass = false;
+      }
+    }
+  };
+
+  // Check requirements for all EXISTING classes (multiclassing OUT)
+  if (character.classLevels && character.classLevels.length > 0) {
+    character.classLevels.forEach(cls => {
+      checkClassReqs(cls.className);
+    });
+  } else if (character.class) {
+    checkClassReqs(character.class.name);
   }
 
-  if (newClass.name.toLowerCase() === 'paladin' && character.abilityScores) {
-    const charisma = character.abilityScores.charisma;
-    if (charisma.score < 13) {
-      const reqText = 'Paladin: Charisma 13+';
-      requirements.push(reqText);
-      missingRequirements.push(reqText);
-      canMulticlass = false;
-    }
-  }
+  // Check requirements for NEW class (multiclassing INTO)
+  checkClassReqs(newClass.name);
 
-  if (newClass.name.toLowerCase() === 'ranger' && character.abilityScores) {
-    const wisdom = character.abilityScores.wisdom;
-    if (wisdom.score < 13) {
-      const reqText = 'Ranger: Wisdom 13+';
-      requirements.push(reqText);
-      missingRequirements.push(reqText);
-      canMulticlass = false;
-    }
-  }
-
-  return { canMulticlass, requirements, missingRequirements };
+  // Remove duplicates from requirements/missingRequirements
+  return {
+    canMulticlass,
+    requirements: [...new Set(requirements)],
+    missingRequirements: [...new Set(missingRequirements)]
+  };
 }
 
 // ===========================
@@ -234,31 +253,26 @@ export function calculateMulticlassHitPoints(character: Character): number {
   }
 
   let totalHP = 0;
+  const conModifier = character.abilityScores?.constitution.modifier || 0;
 
   // For each class, add the appropriate HP based on level
   character.classLevels.forEach((classLevel, index) => {
     const hitDie = classLevel.hitDie;
+    const averageHitDie = Math.floor(hitDie / 2) + 1;
 
     if (index === 0) {
-      // First class: Take full hit die at 1st level
-      totalHP += hitDie;
-    } else {
-      // Additional classes: Take half hit die (rounded up) at 1st level
-      totalHP += Math.ceil(hitDie / 2);
-    }
+      // First class: Take full hit die + CON at 1st level
+      totalHP += hitDie + conModifier;
 
-    // For levels 2+, add Constitution modifier
-    if (character.abilityScores) {
-      const conModifier = character.abilityScores.constitution.modifier;
-      totalHP += conModifier * (classLevel.level - 1);
+      // Additional levels in first class: Take average hit die + CON
+      if (classLevel.level > 1) {
+        totalHP += (averageHitDie + conModifier) * (classLevel.level - 1);
+      }
+    } else {
+      // Additional classes: ALL levels (including their first) take average hit die + CON
+      totalHP += (averageHitDie + conModifier) * classLevel.level;
     }
   });
-
-  // Add Constitution modifier for 1st level of first class again if not already added
-  if (character.abilityScores && character.classLevels.length > 0) {
-    const conModifier = character.abilityScores.constitution.modifier;
-    totalHP += conModifier;
-  }
 
   return Math.max(1, totalHP); // Minimum 1 HP
 }
@@ -303,16 +317,13 @@ export function calculateMulticlassSpellcasting(
         casterType = 'half';
         break;
 
-      // Third casters (subclass features - NOTE: Only SRD subclasses supported)
+      // Third casters
       case 'fighter':
-        // Only Champion subclass is SRD-compliant (no spellcasting)
-        // Eldritch Knight archetype is NOT available in SRD
-        // No spellcasting for fighter in SRD
-        break;
       case 'rogue':
-        // Only Thief subclass is SRD-compliant (no spellcasting)
-        // Arcane Trickster archetype is NOT available in SRD
-        // No spellcasting for rogue in SRD
+        // Note: Only Eldritch Knight and Arcane Trickster are third casters.
+        // In SRD, Fighter/Rogue don't have spellcasting by default.
+        // We include this for future expansion and to handle third-party classes.
+        casterType = 'third';
         break;
 
       // Pact casters
@@ -330,7 +341,7 @@ export function calculateMulticlassSpellcasting(
     }
   });
 
-  // Calculate combined caster level (excluding Warlocks for spell slots)
+  // Calculate combined caster level (excluding Warlocks for standard spell slots)
   let combinedCasterLevel = 0;
 
   result.spellcastingClasses.forEach((spellClass) => {
@@ -364,30 +375,33 @@ export function calculateMulticlassSpellcasting(
  * Calculate spell slots based on caster level
  */
 function calculateSpellSlots(casterLevel: number): number[] {
-  // This is a simplified version - full implementation would use the official table
-  if (casterLevel === 0) return [];
-  if (casterLevel === 1) return [2];
-  if (casterLevel === 2) return [3];
-  if (casterLevel === 3) return [4, 2];
-  if (casterLevel === 4) return [4, 3];
-  if (casterLevel === 5) return [4, 3, 2];
-  if (casterLevel === 6) return [4, 3, 3];
-  if (casterLevel === 7) return [4, 3, 3, 1];
-  if (casterLevel === 8) return [4, 3, 3, 2];
-  if (casterLevel === 9) return [4, 3, 3, 3, 1];
-  if (casterLevel === 10) return [4, 3, 3, 3, 2];
-  if (casterLevel === 11) return [4, 3, 3, 3, 2, 1];
-  if (casterLevel === 12) return [4, 3, 3, 3, 2, 1];
-  if (casterLevel === 13) return [4, 3, 3, 3, 2, 1, 1];
-  if (casterLevel === 14) return [4, 3, 3, 3, 2, 1, 1];
-  if (casterLevel === 15) return [4, 3, 3, 3, 2, 1, 1, 1];
-  if (casterLevel === 16) return [4, 3, 3, 3, 2, 1, 1, 1];
-  if (casterLevel === 17) return [4, 3, 3, 3, 2, 1, 1, 1, 1];
-  if (casterLevel === 18) return [4, 3, 3, 3, 3, 1, 1, 1, 1];
-  if (casterLevel === 19) return [4, 3, 3, 3, 3, 2, 1, 1, 1];
-  if (casterLevel >= 20) return [4, 3, 3, 3, 3, 2, 2, 1, 1];
+  if (casterLevel <= 0) return [];
 
-  return [4, 3, 3, 3, 2, 1, 1, 1, 1]; // Default for higher levels
+  // Official Multiclass Spellcaster table
+  const table: Record<number, number[]> = {
+    1: [2],
+    2: [3],
+    3: [4, 2],
+    4: [4, 3],
+    5: [4, 3, 2],
+    6: [4, 3, 3],
+    7: [4, 3, 3, 1],
+    8: [4, 3, 3, 2],
+    9: [4, 3, 3, 3, 1],
+    10: [4, 3, 3, 3, 2],
+    11: [4, 3, 3, 3, 2, 1],
+    12: [4, 3, 3, 3, 2, 1],
+    13: [4, 3, 3, 3, 2, 1, 1],
+    14: [4, 3, 3, 3, 2, 1, 1],
+    15: [4, 3, 3, 3, 2, 1, 1, 1],
+    16: [4, 3, 3, 3, 2, 1, 1, 1],
+    17: [4, 3, 3, 3, 2, 1, 1, 1, 1],
+    18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
+    19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
+    20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
+  };
+
+  return table[casterLevel] || table[20];
 }
 
 // ===========================
@@ -461,6 +475,8 @@ export function addMulticlass(
   updatedCharacter.hitPoints = {
     ...updatedCharacter.hitPoints,
     maximum: calculateMulticlassHitPoints(updatedCharacter),
+    current: calculateMulticlassHitPoints(updatedCharacter), // Reset current HP on level up/multiclass
+    temporary: 0,
   };
 
   return updatedCharacter;
@@ -497,6 +513,8 @@ export function levelUpClass(character: Character, classId: string): Character {
   updatedCharacter.hitPoints = {
     ...updatedCharacter.hitPoints,
     maximum: calculateMulticlassHitPoints(updatedCharacter),
+    current: calculateMulticlassHitPoints(updatedCharacter),
+    temporary: 0,
   };
 
   return updatedCharacter;
