@@ -546,7 +546,10 @@ export class ProgressionService {
           charisma: updatedStats.charisma,
           updatedAt: new Date(),
         })
-        .where(eq(characterStats.id, character.stats.id));
+        .where(and(
+          eq(characterStats.id, character.stats.id),
+          eq(characterStats.characterId, characterId)
+        ));
     }
 
     // Update character level and XP

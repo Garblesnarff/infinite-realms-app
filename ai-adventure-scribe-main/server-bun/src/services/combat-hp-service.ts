@@ -8,7 +8,7 @@
  * @module server/services/combat-hp-service
  */
 
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -110,6 +110,17 @@ export interface ApplyDamageOptions {
  * Combat HP Service
  */
 export class CombatHPService {
+  private static participantInEncounterExists(participantId: string, encounterId: string) {
+    return exists(
+      db.select()
+        .from(combatParticipants)
+        .where(and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId)
+        ))
+    );
+  }
+
   /**
    * Apply damage to a participant with D&D 5E rules
    * - Temp HP shields damage before real HP
@@ -240,7 +251,10 @@ export class CombatHPService {
         deathSavesFailures: newDeathSavesFailures,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId))
+      .where(and(
+        eq(combatParticipantStatus.participantId, participantId),
+        this.participantInEncounterExists(participantId, encounterId)
+      ))
       .returning();
 
     // Log damage
@@ -332,7 +346,10 @@ export class CombatHPService {
         deathSavesFailures,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(and(
+        eq(combatParticipantStatus.participantId, participantId),
+        this.participantInEncounterExists(participantId, encounterId)
+      ));
 
     return {
       participantId,
@@ -386,7 +403,10 @@ export class CombatHPService {
         tempHp: newTempHp,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(and(
+        eq(combatParticipantStatus.participantId, participantId),
+        this.participantInEncounterExists(participantId, encounterId)
+      ));
 
     return {
       participantId,
@@ -489,7 +509,10 @@ export class CombatHPService {
         isConscious,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(and(
+        eq(combatParticipantStatus.participantId, participantId),
+        this.participantInEncounterExists(participantId, encounterId)
+      ));
 
     return {
       participantId,
@@ -650,7 +673,10 @@ export class CombatHPService {
           // The creature is stable but still unconscious
           updatedAt: new Date(),
         })
-        .where(eq(combatParticipantStatus.participantId, participantId));
+        .where(and(
+          eq(combatParticipantStatus.participantId, participantId),
+          this.participantInEncounterExists(participantId, encounterId)
+        ));
     }
 
     return {

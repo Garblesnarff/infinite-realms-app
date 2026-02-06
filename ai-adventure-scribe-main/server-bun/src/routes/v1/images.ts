@@ -345,7 +345,8 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
             gs.campaign_id,
             gs.character_id,
             c.user_id as campaign_owner,
-            ch.user_id as character_owner
+            ch.user_id as character_owner,
+            ch.owner_id as character_linked_owner
           FROM game_sessions gs
           LEFT JOIN campaigns c ON c.id = gs.campaign_id
           LEFT JOIN characters ch ON ch.id = gs.character_id
@@ -355,7 +356,11 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
 
         if (sessionData && sessionData.length > 0) {
           const session = sessionData[0];
-          if (session.campaign_owner !== userId && session.character_owner !== userId) {
+          if (
+            session.campaign_owner !== userId &&
+            session.character_owner !== userId &&
+            session.character_linked_owner !== userId
+          ) {
             logger.warn({ msg: 'IMAGE_PATCH_ACCESS_DENIED', userId });
             set.status = 404;
             return { error: 'Message not found' };

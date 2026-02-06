@@ -351,6 +351,8 @@ export class SpellSlotsService {
       .from('character_spell_slots')
       .update({ used_slots: slotData.used_slots + 1 })
       .eq('id', slotData.id)
+      .eq('character_id', characterId)
+      .eq('spell_level', slotLevelUsed)
       .select()
       .single();
 
@@ -513,7 +515,9 @@ export class SpellSlotsService {
       const { error: updateError } = await supabaseService
         .from('character_spell_slots')
         .update({ used_slots: newUsedSlots })
-        .eq('id', slot.id);
+        .eq('id', slot.id)
+        .eq('character_id', characterId)
+        .eq('spell_level', slot.spell_level);
 
       if (updateError) {
         throw new InternalServerError(`Failed to restore spell slots: ${updateError.message}`, { updateError });

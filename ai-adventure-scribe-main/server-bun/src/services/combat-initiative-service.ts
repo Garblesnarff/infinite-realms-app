@@ -160,7 +160,10 @@ export class CombatInitiativeService {
         initiative: total,
         initiativeModifier,
       })
-      .where(eq(combatParticipants.id, participantId))
+      .where(and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId)
+      ))
       .returning();
 
     if (!updated) {
@@ -266,7 +269,10 @@ export class CombatInitiativeService {
         currentRound: newRoundNumber,
         updatedAt: new Date(),
       })
-      .where(eq(combatEncounters.id, encounterId));
+      .where(and(
+        eq(combatEncounters.id, encounterId),
+        eq(combatEncounters.status, 'active')
+      ));
 
     // Get new current participant from memory
     const currentParticipant = participants[nextTurnOrder];
@@ -420,10 +426,22 @@ export class CombatInitiativeService {
    * Remove a participant from combat
    */
   static async removeParticipant(participantId: string): Promise<void> {
+    const participant = await db.query.combatParticipants.findFirst({
+      where: eq(combatParticipants.id, participantId),
+      columns: { id: true, encounterId: true },
+    });
+
+    if (!participant) {
+      return;
+    }
+
     await db
       .update(combatParticipants)
       .set({ isActive: false })
-      .where(eq(combatParticipants.id, participantId));
+      .where(and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, participant.encounterId)
+      ));
   }
 
   /**

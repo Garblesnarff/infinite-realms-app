@@ -286,7 +286,11 @@ export class ClassFeaturesService {
     await db
       .update(characterFeatures)
       .set({ usesRemaining: newUsesRemaining })
-      .where(eq(characterFeatures.id, characterFeature.id));
+      .where(and(
+        eq(characterFeatures.id, characterFeature.id),
+        eq(characterFeatures.characterId, characterId),
+        eq(characterFeatures.featureId, featureId)
+      ));
 
     // Log the usage
     await this.logFeatureUsage(characterId, featureId, context, sessionId);
@@ -338,7 +342,10 @@ export class ClassFeaturesService {
         await db
           .update(characterFeatures)
           .set({ usesRemaining: feature.usesCount })
-          .where(eq(characterFeatures.id, charFeature.id));
+          .where(and(
+            eq(characterFeatures.id, charFeature.id),
+            eq(characterFeatures.characterId, characterId)
+          ));
 
         featuresRestored.push(feature.featureName);
       }

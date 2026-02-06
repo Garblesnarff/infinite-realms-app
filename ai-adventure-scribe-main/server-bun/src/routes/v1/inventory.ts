@@ -393,10 +393,19 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get('/:id/usage-history', async ({ params, query, set, user }) => {
     try {
+      const sessionId = query.sessionId as string | undefined;
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, (user as any).userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
+
       const history = await InventoryService.getUsageHistory({
         characterId: params.id,
         itemId: query.itemId as string | undefined,
-        sessionId: query.sessionId as string | undefined,
+        sessionId,
         limit: query.limit ? parseInt(query.limit as string) : undefined,
       }, (user as any).userId);
 

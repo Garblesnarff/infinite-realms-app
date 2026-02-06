@@ -68,7 +68,7 @@ export class FogOfWarService {
     // - OR requester is the target user AND has a character in the scene's campaign
     const isTarget = requesterId === targetUserId;
     const isOwner = requesterId === scene.userId;
-    let isCampaignParticipant = false;
+    let isRequesterCampaignParticipant = false;
 
     if (!isOwner && isTarget) {
       const campaignCharacter = await db.query.characters.findFirst({
@@ -78,10 +78,25 @@ export class FogOfWarService {
         ),
         columns: { id: true },
       });
-      isCampaignParticipant = Boolean(campaignCharacter);
+      isRequesterCampaignParticipant = Boolean(campaignCharacter);
     }
 
-    if (!isOwner && !(isTarget && isCampaignParticipant)) {
+    // Scene owner may manage another user's fog only if that user participates in the campaign.
+    if (isOwner && targetUserId !== requesterId) {
+      const targetCampaignCharacter = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.campaignId, scene.campaignId),
+          or(eq(characters.userId, targetUserId), eq(characters.ownerId, targetUserId))
+        ),
+        columns: { id: true },
+      });
+
+      if (!targetCampaignCharacter) {
+        throw new NotFoundError('Scene', sceneId);
+      }
+    }
+
+    if (!isOwner && !(isTarget && isRequesterCampaignParticipant)) {
       // Throw NOT_FOUND to avoid leaking association existence
       throw new NotFoundError('Scene', sceneId);
     }

@@ -109,12 +109,11 @@ export const actionRoutes = new Elysia()
     try {
       const { data: character, error: charErr } = await supabaseService
         .from('characters')
-        .select('user_id')
+        .select('user_id, owner_id')
         .eq('id', params.characterId)
-        .eq('user_id', user.userId)
         .single();
 
-      if (charErr || !character) {
+      if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
         set.status = 404;
         return { error: 'Character not found' };
       }
@@ -145,12 +144,11 @@ export const actionRoutes = new Elysia()
     try {
       const { data: character, error: charErr } = await supabaseService
         .from('characters')
-        .select('user_id')
+        .select('user_id, owner_id')
         .eq('id', params.characterId)
-        .eq('user_id', user.userId)
         .single();
 
-      if (charErr || !character) {
+      if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
         set.status = 404;
         return { error: 'Character not found' };
       }

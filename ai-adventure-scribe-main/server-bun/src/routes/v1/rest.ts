@@ -27,12 +27,11 @@ async function verifyCharacterOwnership(
 ): Promise<{ success: true } | { success: false; status: number; error: string }> {
   const { data: character, error: charErr } = await supabaseService
     .from('characters')
-    .select('user_id')
+    .select('user_id, owner_id')
     .eq('id', characterId)
-    .eq('user_id', userId)
     .single();
 
-  if (charErr || !character) {
+  if (charErr || !character || (character.user_id !== userId && character.owner_id !== userId)) {
     return { success: false, status: 404, error: 'Character not found' };
   }
 
@@ -230,6 +229,14 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
       }
 
       const { sessionId, limit } = query as { sessionId?: string; limit?: string };
+
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, user.userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
 
       const rests = await RestService.getRestHistory(
         params.id,

@@ -42,9 +42,10 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           .from('campaigns')
           .select('user_id')
           .eq('id', campaign_id)
+          .eq('user_id', user.userId)
           .single();
 
-        if (campErr || !campaign || campaign.user_id !== user.userId) {
+        if (campErr || !campaign) {
           set.status = 404;
           return { error: 'Campaign not found' };
         }
@@ -53,11 +54,11 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       if (character_id) {
         const { data: character, error: charErr } = await supabaseService
           .from('characters')
-          .select('user_id')
+          .select('user_id, owner_id')
           .eq('id', character_id)
           .single();
 
-        if (charErr || !character || character.user_id !== user.userId) {
+        if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
           set.status = 404;
           return { error: 'Character not found' };
         }
@@ -103,7 +104,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       // Fetch session with related campaign and character to verify ownership
       const { data, error } = await supabaseService
         .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
+        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
         .eq('id', id)
         .single();
 
@@ -123,8 +124,13 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       // Verify ownership through campaign or character
       const campaignOwner = (data as any).campaigns?.user_id;
       const characterOwner = (data as any).characters?.user_id;
+      const characterLinkedOwner = (data as any).characters?.owner_id;
 
-      if (campaignOwner !== user.userId && characterOwner !== user.userId) {
+      if (
+        campaignOwner !== user.userId &&
+        characterOwner !== user.userId &&
+        characterLinkedOwner !== user.userId
+      ) {
         set.status = 404;
         return { error: 'Not found' };
       }
@@ -157,7 +163,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       // First verify ownership
       const { data: sessionData, error: fetchError } = await supabaseService
         .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
+        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
         .eq('id', id)
         .single();
 
@@ -177,8 +183,13 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       // Verify ownership through campaign or character
       const campaignOwner = (sessionData as any).campaigns?.user_id;
       const characterOwner = (sessionData as any).characters?.user_id;
+      const characterLinkedOwner = (sessionData as any).characters?.owner_id;
 
-      if (campaignOwner !== user.userId && characterOwner !== user.userId) {
+      if (
+        campaignOwner !== user.userId &&
+        characterOwner !== user.userId &&
+        characterLinkedOwner !== user.userId
+      ) {
         set.status = 404;
         return { error: 'Not found' };
       }

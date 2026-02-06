@@ -98,7 +98,11 @@ export class RestService {
           totalDice: level,
           updatedAt: new Date(),
         })
-        .where(eq(characterHitDice.id, existing.id))
+        .where(and(
+          eq(characterHitDice.id, existing.id),
+          eq(characterHitDice.characterId, characterId),
+          eq(characterHitDice.className, className)
+        ))
         .returning();
 
       if (!updated) {
@@ -234,7 +238,10 @@ export class RestService {
             usedDice: hitDie.usedDice + toSpend,
             updatedAt: new Date(),
           })
-          .where(eq(characterHitDice.id, hitDie.id));
+          .where(and(
+            eq(characterHitDice.id, hitDie.id),
+            eq(characterHitDice.characterId, characterId)
+          ));
 
         remaining -= toSpend;
       }
@@ -295,7 +302,10 @@ export class RestService {
             usedDice: hitDie.usedDice - canRestore,
             updatedAt: new Date(),
           })
-          .where(eq(characterHitDice.id, hitDie.id));
+          .where(and(
+            eq(characterHitDice.id, hitDie.id),
+            eq(characterHitDice.characterId, characterId)
+          ));
 
         remaining -= canRestore;
       }

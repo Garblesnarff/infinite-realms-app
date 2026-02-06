@@ -191,6 +191,14 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
     try {
       const { sessionId, limit } = query as { sessionId?: string; limit?: string };
 
+      if (sessionId) {
+        const verification = await verifySessionOwnership(sessionId, (user as { userId: string }).userId);
+        if (!verification.success) {
+          set.status = verification.error!.status;
+          return { error: verification.error!.message };
+        }
+      }
+
       const events = await ProgressionService.getXPHistory(
         params.id,
         (user as { userId: string }).userId,
