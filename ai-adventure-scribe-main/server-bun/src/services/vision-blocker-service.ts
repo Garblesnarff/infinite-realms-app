@@ -7,7 +7,7 @@
  * @module server/services/vision-blocker-service
  */
 
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -38,19 +38,6 @@ export interface CreateVisionBlockerData {
 export type UpdateVisionBlockerData = Partial<Omit<CreateVisionBlockerData, 'sceneId'>>;
 
 export class VisionBlockerService {
-  /**
-   * Verify that a user owns the scene (is the GM)
-   */
-  private static async verifySceneOwnership(sceneId: string, userId: string): Promise<void> {
-    const scene = await db.query.scenes.findFirst({
-      where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
-    });
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-  }
-
   /**
    * List all vision blockers for a scene
    */
@@ -97,8 +84,16 @@ export class VisionBlockerService {
     userId: string,
     data: Omit<CreateVisionBlockerData, 'sceneId'>
   ): Promise<VisionBlockingShape> {
-    // Verify scene ownership
-    await this.verifySceneOwnership(sceneId, userId);
+    // 🛡️ Sentinel: Verify scene ownership with existence masking
+    const [sceneAccess] = await db
+      .select({ id: scenes.id })
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      .limit(1);
+
+    if (!sceneAccess) {
+      throw new NotFoundError('Scene', sceneId);
+    }
 
     // Validate points
     if (!data.pointsData || data.pointsData.length < 2) {
@@ -152,14 +147,11 @@ export class VisionBlockerService {
     userId: string,
     updates: UpdateVisionBlockerData
   ): Promise<VisionBlockingShape> {
-    // Get the existing blocker
+    // 🛡️ Sentinel: Get existing blocker (already checks scene ownership via join)
     const existingBlocker = await this.getVisionBlocker(blockerId, userId);
     if (!existingBlocker) {
       throw new NotFoundError('Vision blocker', blockerId);
     }
-
-    // Verify scene ownership
-    await this.verifySceneOwnership(existingBlocker.sceneId, userId);
 
     // Validate points if provided
     if (updates.pointsData) {
@@ -185,13 +177,28 @@ export class VisionBlockerService {
       }
     }
 
+    // 🛡️ Sentinel: Incorporate ownership check directly into the update query (Defense in Depth)
     const [updated] = await db
       .update(visionBlockingShapes)
       .set({
         ...updates,
         updatedAt: new Date(),
       })
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          exists(
+            db.select()
+              .from(scenes)
+              .where(
+                and(
+                  eq(scenes.id, visionBlockingShapes.sceneId),
+                  eq(scenes.userId, userId)
+                )
+              )
+          )
+        )
+      )
       .returning();
 
     if (!updated) {
@@ -205,18 +212,24 @@ export class VisionBlockerService {
    * Delete a vision blocker (GM only)
    */
   static async deleteVisionBlocker(blockerId: string, userId: string): Promise<boolean> {
-    // Get the existing blocker
-    const existingBlocker = await this.getVisionBlocker(blockerId, userId);
-    if (!existingBlocker) {
-      return false;
-    }
-
-    // Verify scene ownership
-    await this.verifySceneOwnership(existingBlocker.sceneId, userId);
-
+    // 🛡️ Sentinel: Atomic delete with ownership check via exists subquery
     const result = await db
       .delete(visionBlockingShapes)
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          exists(
+            db.select()
+              .from(scenes)
+              .where(
+                and(
+                  eq(scenes.id, visionBlockingShapes.sceneId),
+                  eq(scenes.userId, userId)
+                )
+              )
+          )
+        )
+      )
       .returning({ id: visionBlockingShapes.id });
 
     return result.length > 0;
@@ -227,14 +240,11 @@ export class VisionBlockerService {
    * Locked doors cannot be toggled with this method - use updateVisionBlocker to unlock first
    */
   static async toggleDoor(blockerId: string, userId: string): Promise<VisionBlockingShape> {
-    // Get the existing blocker
+    // 🛡️ Sentinel: Get existing blocker (already checks scene ownership)
     const existingBlocker = await this.getVisionBlocker(blockerId, userId);
     if (!existingBlocker) {
       throw new NotFoundError('Vision blocker', blockerId);
     }
-
-    // Verify scene ownership
-    await this.verifySceneOwnership(existingBlocker.sceneId, userId);
 
     // Verify it's a door
     if (existingBlocker.shapeType !== 'door') {
@@ -249,6 +259,7 @@ export class VisionBlockerService {
     // Toggle the door state
     const newState = existingBlocker.doorState === 'open' ? 'closed' : 'open';
 
+    // 🛡️ Sentinel: Atomic update with ownership check (Defense in Depth)
     const [updated] = await db
       .update(visionBlockingShapes)
       .set({
@@ -259,7 +270,21 @@ export class VisionBlockerService {
         blocksLight: newState === 'closed',
         updatedAt: new Date(),
       })
-      .where(eq(visionBlockingShapes.id, blockerId))
+      .where(
+        and(
+          eq(visionBlockingShapes.id, blockerId),
+          exists(
+            db.select()
+              .from(scenes)
+              .where(
+                and(
+                  eq(scenes.id, visionBlockingShapes.sceneId),
+                  eq(scenes.userId, userId)
+                )
+              )
+          )
+        )
+      )
       .returning();
 
     if (!updated) {
@@ -278,8 +303,16 @@ export class VisionBlockerService {
     userId: string,
     blockers: Array<Omit<CreateVisionBlockerData, 'sceneId'>>
   ): Promise<VisionBlockingShape[]> {
-    // Verify scene ownership once
-    await this.verifySceneOwnership(sceneId, userId);
+    // 🛡️ Sentinel: Verify scene ownership once with existence masking
+    const [sceneAccess] = await db
+      .select({ id: scenes.id })
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      .limit(1);
+
+    if (!sceneAccess) {
+      throw new NotFoundError('Scene', sceneId);
+    }
 
     if (!blockers || blockers.length === 0) {
       return [];
@@ -356,12 +389,19 @@ export class VisionBlockerService {
    * Useful when resetting a scene or clearing all walls
    */
   static async deleteAllBlockersForScene(sceneId: string, userId: string): Promise<number> {
-    // Verify scene ownership
-    await this.verifySceneOwnership(sceneId, userId);
-
+    // 🛡️ Sentinel: Atomic bulk delete with ownership check
     const result = await db
       .delete(visionBlockingShapes)
-      .where(eq(visionBlockingShapes.sceneId, sceneId))
+      .where(
+        and(
+          eq(visionBlockingShapes.sceneId, sceneId),
+          exists(
+            db.select()
+              .from(scenes)
+              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+          )
+        )
+      )
       .returning({ id: visionBlockingShapes.id });
 
     return result.length;

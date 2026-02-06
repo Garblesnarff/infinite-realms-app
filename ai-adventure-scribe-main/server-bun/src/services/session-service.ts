@@ -128,19 +128,20 @@ export class SessionService {
 
     const session = await this.getSessionById(sessionId, userId);
 
-    // Get messages with pagination
-    const messages = await db.query.dialogueHistory.findMany({
-      where: eq(dialogueHistory.sessionId, sessionId),
-      orderBy: asc(dialogueHistory.timestamp),
-      limit,
-      offset,
-    });
-
-    // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId));
+    // ⚡ Bolt: Parallelize message fetch and count query to reduce total latency.
+    // Since sessionId and ownership are already verified, these can run concurrently.
+    const [messages, countResult] = await Promise.all([
+      db.query.dialogueHistory.findMany({
+        where: eq(dialogueHistory.sessionId, sessionId),
+        orderBy: asc(dialogueHistory.timestamp),
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId)),
+    ]);
 
     return {
       session,
@@ -274,19 +275,20 @@ export class SessionService {
     // Verify ownership first
     await this.getSessionById(sessionId, userId);
 
-    // Get messages ordered by timestamp (newest first for pagination)
-    const messages = await db.query.dialogueHistory.findMany({
-      where: eq(dialogueHistory.sessionId, sessionId),
-      orderBy: desc(dialogueHistory.timestamp),
-      limit,
-      offset,
-    });
-
-    // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId));
+    // ⚡ Bolt: Parallelize message fetch and count query to reduce total latency.
+    // Reducing database round-trips from sequential to concurrent.
+    const [messages, countResult] = await Promise.all([
+      db.query.dialogueHistory.findMany({
+        where: eq(dialogueHistory.sessionId, sessionId),
+        orderBy: desc(dialogueHistory.timestamp),
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId)),
+    ]);
 
     const total = countResult[0]?.count || 0;
     const hasMore = offset + limit < total;
