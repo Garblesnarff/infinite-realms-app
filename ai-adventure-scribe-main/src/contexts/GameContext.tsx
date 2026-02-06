@@ -460,20 +460,39 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [state.diceRollQueue.pendingRolls, combatState.isInCombat, combatState.activeEncounter, dealDamage]);
 
-  const contextValue: GameContextValue = {
-    state,
-    dispatch,
-    requestDiceRoll,
-    completeDiceRoll,
-    cancelDiceRoll,
-    getCurrentDiceRoll,
-    isBatchComplete,
-    getBatchResults,
-    clearBatch,
-    setGamePhase: throttledSetGamePhase,
-    processAiResponse: throttledProcessAiResponse,
-    updateCombatState: throttledUpdateCombatState,
-  };
+  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
+  // Using useMemo ensures that components consuming this context only re-render
+  // when the actual state or dependent actions change.
+  const contextValue: GameContextValue = useMemo(
+    () => ({
+      state,
+      dispatch,
+      requestDiceRoll,
+      completeDiceRoll,
+      cancelDiceRoll,
+      getCurrentDiceRoll,
+      isBatchComplete,
+      getBatchResults,
+      clearBatch,
+      setGamePhase: throttledSetGamePhase,
+      processAiResponse: throttledProcessAiResponse,
+      updateCombatState: throttledUpdateCombatState,
+    }),
+    [
+      state,
+      dispatch,
+      requestDiceRoll,
+      completeDiceRoll,
+      cancelDiceRoll,
+      getCurrentDiceRoll,
+      isBatchComplete,
+      getBatchResults,
+      clearBatch,
+      throttledSetGamePhase,
+      throttledProcessAiResponse,
+      throttledUpdateCombatState,
+    ],
+  );
 
   return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;
 };

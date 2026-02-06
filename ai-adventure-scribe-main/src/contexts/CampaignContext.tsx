@@ -107,9 +107,18 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   // Used ReactNode
   const [state, dispatch] = useReducer(campaignReducer, initialState);
 
-  return (
-    <CampaignContext.Provider value={{ state, dispatch }}>{children}</CampaignContext.Provider>
+  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
+  // Using useMemo ensures that components consuming this context only re-render
+  // when the actual campaign state changes.
+  const value = useMemo(
+    () => ({
+      state,
+      dispatch,
+    }),
+    [state, dispatch],
   );
+
+  return <CampaignContext.Provider value={value}>{children}</CampaignContext.Provider>;
 }
 
 /**
