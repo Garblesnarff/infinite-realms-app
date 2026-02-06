@@ -13,7 +13,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 // Mock the LLM API client
-vi.mock('@/services/llm-api-client', () => ({
+vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
     generateText: vi.fn().mockResolvedValue('Mock response'),
   },
