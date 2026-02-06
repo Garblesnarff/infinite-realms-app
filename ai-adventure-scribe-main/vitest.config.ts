@@ -81,6 +81,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/rest-service.test.ts',
       'server-bun/src/services/__tests__/spell-slots-service.test.ts',
       'server-bun/src/services/__tests__/character-folder-service.test.ts',
+      'server-bun/src/services/__tests__/class-features-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',
       'src/components/spellcasting/__tests__/SpellPreparationPanel.test.tsx',
@@ -169,6 +170,7 @@ export default defineConfig({
         'src/agents/langgraph/dm-service.ts',
         'src/agents/langgraph/state.ts',
         'server-bun/src/services/spell-slots-service.ts',
+        'server-bun/src/services/class-features-service.ts',
       ],
       exclude: [
         '**/__tests__/**',
