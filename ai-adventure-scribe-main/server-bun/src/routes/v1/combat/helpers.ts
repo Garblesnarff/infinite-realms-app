@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../../../db/client.js';
 import {
@@ -42,25 +42,20 @@ export async function verifyEncounterOwnership(
     .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
     .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-    .where(eq(combatEncounters.id, encounterId))
+    .where(and(
+      eq(combatEncounters.id, encounterId),
+      or(
+        eq(campaigns.userId, userId),
+        eq(characters.userId, userId),
+        eq(characters.ownerId, userId)
+      )
+    ))
     .limit(1);
 
   if (!result) {
     return { success: false, error: { status: 404, message: 'Encounter not found' } };
   }
-
-  const { encounter, session, campaignOwnerId, characterUserId, characterOwnerId } = result;
-
-  // 🛡️ Sentinel: Verify ownership through campaign OR character (both userId and ownerId)
-  // Incorporating all ownership fields prevents unauthorized access to encounters.
-  if (
-    campaignOwnerId !== userId &&
-    characterUserId !== userId &&
-    characterOwnerId !== userId
-  ) {
-    return { success: false, error: { status: 404, message: 'Encounter not found' } };
-  }
-
+  const { encounter, session } = result;
   return { success: true, encounter, session };
 }
 
@@ -87,23 +82,19 @@ export async function verifySessionOwnership(
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
     .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-    .where(eq(gameSessions.id, sessionId))
+    .where(and(
+      eq(gameSessions.id, sessionId),
+      or(
+        eq(campaigns.userId, userId),
+        eq(characters.userId, userId),
+        eq(characters.ownerId, userId)
+      )
+    ))
     .limit(1);
 
   if (!result) {
     return { success: false, error: { status: 404, message: 'Session not found' } };
   }
-
-  const { session, campaignOwnerId, characterUserId, characterOwnerId } = result;
-
-  // 🛡️ Sentinel: Verify ownership through campaign OR character (both userId and ownerId)
-  if (
-    campaignOwnerId !== userId &&
-    characterUserId !== userId &&
-    characterOwnerId !== userId
-  ) {
-    return { success: false, error: { status: 404, message: 'Session not found' } };
-  }
-
+  const { session } = result;
   return { success: true, session };
 }

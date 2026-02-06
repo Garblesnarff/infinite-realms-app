@@ -3,7 +3,7 @@ import { authenticateRequest } from '../../../lib/auth.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatAttackService } from '../../../services/combat-attack-service.js';
 import { verifyEncounterOwnership } from './helpers.js';
-import { supabaseService } from '../../../lib/supabase.js';
+import { CharacterService } from '../../../services/character-service.js';
 import type {
   AttackRollInput,
   SpellAttackInput,
@@ -107,17 +107,11 @@ export const actionRoutes = new Elysia()
     }
 
     try {
-      const { data: character, error: charErr } = await supabaseService
-        .from('characters')
-        .select('user_id, owner_id')
-        .eq('id', params.characterId)
-        .single();
-
-      if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
+      const character = await CharacterService.getById(params.characterId, user.userId);
+      if (!character) {
         set.status = 404;
         return { error: 'Character not found' };
       }
-
 
       const attackService = new CombatAttackService();
       const attacks = await attackService.getCharacterWeapons(params.characterId);
@@ -142,17 +136,11 @@ export const actionRoutes = new Elysia()
     }
 
     try {
-      const { data: character, error: charErr } = await supabaseService
-        .from('characters')
-        .select('user_id, owner_id')
-        .eq('id', params.characterId)
-        .single();
-
-      if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
+      const character = await CharacterService.getById(params.characterId, user.userId);
+      if (!character) {
         set.status = 404;
         return { error: 'Character not found' };
       }
-
 
       const weaponInput = body as Omit<CreateWeaponAttackInput, 'characterId'>;
 

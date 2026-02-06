@@ -9,11 +9,13 @@
  * Ported from /server/src/routes/v1/sessions.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
+import { sql } from '../../lib/db.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { supabaseService } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { CharacterService } from '../../services/character-service.js';
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
 
@@ -52,13 +54,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       }
 
       if (character_id) {
-        const { data: character, error: charErr } = await supabaseService
-          .from('characters')
-          .select('user_id, owner_id')
-          .eq('id', character_id)
-          .single();
-
-        if (charErr || !character || (character.user_id !== user.userId && character.owner_id !== user.userId)) {
+        const character = await CharacterService.getById(character_id, user.userId);
+        if (!character) {
           set.status = 404;
           return { error: 'Character not found' };
         }
@@ -101,42 +98,26 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { id } = params;
 
     try {
-      // Fetch session with related campaign and character to verify ownership
-      const { data, error } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
-        .eq('id', id)
-        .single();
+      const rows = await sql`
+        SELECT gs.*
+        FROM game_sessions gs
+        LEFT JOIN campaigns c ON c.id = gs.campaign_id
+        LEFT JOIN characters ch ON ch.id = gs.character_id
+        WHERE gs.id = ${id}
+          AND (
+            c.user_id = ${user.userId}
+            OR ch.user_id = ${user.userId}
+            OR ch.owner_id = ${user.userId}
+          )
+        LIMIT 1
+      `;
 
-      if (error) {
-        if ((error as any).code === 'PGRST116') {
-          set.status = 404;
-          return { error: 'Not found' };
-        }
-        throw error;
-      }
-
-      if (!data) {
+      const session = rows?.[0];
+      if (!session) {
         set.status = 404;
         return { error: 'Not found' };
       }
 
-      // Verify ownership through campaign or character
-      const campaignOwner = (data as any).campaigns?.user_id;
-      const characterOwner = (data as any).characters?.user_id;
-      const characterLinkedOwner = (data as any).characters?.owner_id;
-
-      if (
-        campaignOwner !== user.userId &&
-        characterOwner !== user.userId &&
-        characterLinkedOwner !== user.userId
-      ) {
-        set.status = 404;
-        return { error: 'Not found' };
-      }
-
-      // Remove the joined data before returning
-      const { campaigns, characters, ...session } = data as any;
       return session;
     } catch (e) {
       logger.error({ msg: 'SESSION_GET error', error: e });
@@ -160,59 +141,36 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { summary } = body as { summary?: string };
 
     try {
-      // First verify ownership
-      const { data: sessionData, error: fetchError } = await supabaseService
-        .from('game_sessions')
-        .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
-        .eq('id', id)
-        .single();
+      const updated = await sql`
+        UPDATE game_sessions gs
+        SET
+          end_time = NOW(),
+          status = 'completed',
+          summary = ${summary || null},
+          updated_at = NOW()
+        WHERE gs.id = ${id}
+          AND EXISTS (
+            SELECT 1
+            FROM game_sessions own
+            LEFT JOIN campaigns c ON c.id = own.campaign_id
+            LEFT JOIN characters ch ON ch.id = own.character_id
+            WHERE own.id = gs.id
+              AND (
+                c.user_id = ${user.userId}
+                OR ch.user_id = ${user.userId}
+                OR ch.owner_id = ${user.userId}
+              )
+          )
+        RETURNING gs.*
+      `;
 
-      if (fetchError) {
-        if ((fetchError as any).code === 'PGRST116') {
-          set.status = 404;
-          return { error: 'Not found' };
-        }
-        throw fetchError;
-      }
-
-      if (!sessionData) {
+      const session = updated?.[0];
+      if (!session) {
         set.status = 404;
         return { error: 'Not found' };
       }
 
-      // Verify ownership through campaign or character
-      const campaignOwner = (sessionData as any).campaigns?.user_id;
-      const characterOwner = (sessionData as any).characters?.user_id;
-      const characterLinkedOwner = (sessionData as any).characters?.owner_id;
-
-      if (
-        campaignOwner !== user.userId &&
-        characterOwner !== user.userId &&
-        characterLinkedOwner !== user.userId
-      ) {
-        set.status = 404;
-        return { error: 'Not found' };
-      }
-
-      // Now update the session
-      const { data, error } = await supabaseService
-        .from('game_sessions')
-        .update({
-          end_time: new Date().toISOString(),
-          status: 'completed',
-          summary: summary || null,
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      if (!data) {
-        set.status = 404;
-        return { error: 'Not found' };
-      }
-
-      return data;
+      return session;
     } catch (e) {
       logger.error({ msg: 'SESSION_COMPLETE error', error: e });
       set.status = 500;

@@ -9,7 +9,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -218,7 +218,13 @@ export class TokenService {
       .where(
         and(
           eq(tokens.id, tokenId),
-          eq(tokens.sceneId, existingToken.sceneId)
+          eq(tokens.sceneId, existingToken.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${tokens.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning();
@@ -244,7 +250,13 @@ export class TokenService {
       .where(
         and(
           eq(tokens.id, tokenId),
-          eq(tokens.sceneId, existingToken.sceneId)
+          eq(tokens.sceneId, existingToken.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${tokens.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       )
       .returning({ id: tokens.id });
@@ -292,7 +304,13 @@ export class TokenService {
       .where(
         and(
           eq(tokens.id, tokenId),
-          eq(tokens.sceneId, token.sceneId)
+          eq(tokens.sceneId, token.sceneId),
+          sql`EXISTS (
+            SELECT 1
+            FROM scenes s
+            WHERE s.id = ${tokens.sceneId}
+              AND s.user_id = ${userId}
+          )`
         )
       );
 
@@ -341,7 +359,13 @@ export class TokenService {
         .where(
           and(
             eq(tokens.id, tokenId),
-            eq(tokens.sceneId, token.sceneId)
+            eq(tokens.sceneId, token.sceneId),
+            sql`EXISTS (
+              SELECT 1
+              FROM scenes s
+              WHERE s.id = ${tokens.sceneId}
+                AND s.user_id = ${userId}
+            )`
           )
         );
     }

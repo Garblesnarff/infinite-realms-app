@@ -8,7 +8,7 @@
  * @module server/services/drawing-service
  */
 
-import { eq, and, asc, or, inArray } from 'drizzle-orm';
+import { eq, and, asc, or, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -144,7 +144,16 @@ export class DrawingService {
       .where(
         and(
           eq(sceneDrawings.id, drawingId),
-          eq(sceneDrawings.sceneId, existing.sceneId)
+          eq(sceneDrawings.sceneId, existing.sceneId),
+          or(
+            eq(sceneDrawings.createdBy, userId),
+            sql`EXISTS (
+              SELECT 1
+              FROM scenes s
+              WHERE s.id = ${sceneDrawings.sceneId}
+                AND s.user_id = ${userId}
+            )`
+          )
         )
       )
       .returning();
@@ -183,7 +192,16 @@ export class DrawingService {
       .where(
         and(
           eq(sceneDrawings.id, drawingId),
-          eq(sceneDrawings.sceneId, existing.sceneId)
+          eq(sceneDrawings.sceneId, existing.sceneId),
+          or(
+            eq(sceneDrawings.createdBy, userId),
+            sql`EXISTS (
+              SELECT 1
+              FROM scenes s
+              WHERE s.id = ${sceneDrawings.sceneId}
+                AND s.user_id = ${userId}
+            )`
+          )
         )
       )
       .returning({ id: sceneDrawings.id });

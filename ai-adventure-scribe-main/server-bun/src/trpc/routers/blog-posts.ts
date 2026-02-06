@@ -193,7 +193,8 @@ export const blogPostsRouter = router({
 
       if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       if (!(await canManagePost(ctx, id, existingPost.authorId))) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Permission denied' });
+        // Mask unauthorized access as not found to avoid disclosing post existence.
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
       const updatePayload: any = { ...postUpdates, updatedAt: new Date() };
@@ -221,7 +222,8 @@ export const blogPostsRouter = router({
 
     if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
     if (!(await canManagePost(ctx, input.id, existingPost.authorId))) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Permission denied' });
+      // Mask unauthorized access as not found to avoid disclosing post existence.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
     }
 
     await ctx.db.delete(blogPosts).where(eq(blogPosts.id, input.id));

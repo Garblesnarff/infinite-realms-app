@@ -13,10 +13,10 @@
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
-import { supabaseService } from '../../lib/supabase.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
 // Import service from Bun server
+import { CharacterService } from '../../services/character-service.js';
 import { ClassFeaturesService } from '../../services/class-features-service.js';
 
 /**
@@ -26,17 +26,10 @@ async function verifyCharacterOwnership(
   characterId: string,
   userId: string
 ): Promise<{ success: true } | { success: false; status: number; error: string }> {
-  const { data: character, error: charErr } = await supabaseService
-    .from('characters')
-    .select('user_id, owner_id')
-    .eq('id', characterId)
-    .single();
-
-  if (charErr || !character || (character.user_id !== userId && character.owner_id !== userId)) {
+  const character = await CharacterService.getById(characterId, userId);
+  if (!character) {
     return { success: false, status: 404, error: 'Character not found' };
   }
-
-
   return { success: true };
 }
 
@@ -114,7 +107,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -144,7 +137,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -187,7 +180,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -241,7 +234,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -282,7 +275,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -335,7 +328,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
@@ -371,7 +364,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
 
     try {
       const ownership = await verifyCharacterOwnership(params.id, user.userId);
-      if (!ownership.success) {
+      if (ownership.success === false) {
         set.status = ownership.status;
         return { error: ownership.error };
       }
