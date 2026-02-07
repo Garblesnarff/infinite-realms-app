@@ -229,8 +229,8 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
     // Require a setup secret
     const expectedSetupSecret = process.env.BLOG_SETUP_SECRET;
     if (!expectedSetupSecret) {
-      set.status = 403;
-      return { error: 'Setup secret not configured' };
+      set.status = 401;
+      return { error: 'Unauthorized' };
     }
 
     const setupSecret = request.headers.get('x-setup-secret');

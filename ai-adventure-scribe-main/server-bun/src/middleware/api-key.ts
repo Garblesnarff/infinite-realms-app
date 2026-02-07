@@ -103,12 +103,12 @@ export function hasPermission(permission: string) {
     .onBeforeHandle(({ apiKey, set }) => {
       if (!apiKey) {
         set.status = 401;
-        return { error: 'API key required' };
+        return { error: 'Unauthorized' };
       }
 
       if (!apiKey.permissions.includes(permission) && !apiKey.permissions.includes('*')) {
         set.status = 403;
-        return { error: `Missing permission: ${permission}` };
+        return { error: 'Forbidden' };
       }
     });
 }
