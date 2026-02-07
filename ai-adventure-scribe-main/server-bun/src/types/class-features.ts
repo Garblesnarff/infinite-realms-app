@@ -88,6 +88,7 @@ export interface GrantFeatureInput {
   characterId: string;
   featureId: string;
   acquiredAtLevel: number;
+  userId?: string;
 }
 
 /**
@@ -98,6 +99,7 @@ export interface UseFeatureInput {
   featureId: string;
   context?: string;
   sessionId?: string;
+  userId?: string;
 }
 
 /**
@@ -116,6 +118,7 @@ export interface UseFeatureResult {
 export interface RestoreFeaturesInput {
   characterId: string;
   restType: 'short' | 'long';
+  userId?: string;
 }
 
 /**
@@ -134,6 +137,7 @@ export interface SetSubclassInput {
   className: string;
   subclassName: string;
   level: number;
+  userId?: string;
 }
 
 /**
@@ -178,6 +182,7 @@ export interface FeatureUsageHistoryParams {
   featureId?: string;
   sessionId?: string;
   limit?: number;
+  userId?: string;
 }
 
 /**
