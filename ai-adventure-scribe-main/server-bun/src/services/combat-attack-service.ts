@@ -11,13 +11,17 @@
  * @module server/services/combat-attack-service
  */
 
-import { desc, eq, inArray, or } from 'drizzle-orm';
+/* eslint-disable max-lines */
+import { and, desc, eq, exists, inArray, or } from 'drizzle-orm';
 
 import { CombatHPService } from './combat-hp-service.js';
 import { db } from '../../../db/client.js';
 import {
   weaponAttacks,
   creatureStats,
+  characters,
+  npcs,
+  campaigns,
 } from '../../../db/schema/index.js';
 import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
@@ -39,7 +43,6 @@ import type {
   DamageType,
 } from '../types/combat.js';
 
-
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
@@ -56,7 +59,7 @@ export class CombatAttackService {
    * - Advantage + Disadvantage = cancel out (straight roll)
    */
   checkHit(input: HitCheckInput): HitCheckResult {
-    const { attackRoll, attackBonus, targetAC, advantage, disadvantage } = input;
+    const { attackRoll, attackBonus, targetAC, advantage: _advantage, disadvantage: _disadvantage } = input;
 
     // Determine if this is a natural 1 or natural 20
     const isNaturalOne = attackRoll === 1;
@@ -206,7 +209,8 @@ export class CombatAttackService {
    */
   async resolveAttack(
     encounterId: string,
-    input: AttackRollInput
+    input: AttackRollInput,
+    userId: string
   ): Promise<AttackResult> {
     const {
       attackerId,
@@ -214,7 +218,7 @@ export class CombatAttackService {
       attackRoll,
       attackBonus = 0,
       weaponId,
-      attackType,
+      attackType: _attackType,
       isCritical: forceCritical = false,
       advantage = false,
       disadvantage = false,
@@ -224,9 +228,10 @@ export class CombatAttackService {
     } = input;
 
     // ⚡ Bolt: Parallelize target stats and weapon fetch to reduce database round-trips
+    // 🛡️ Sentinel: Pass userId for ownership verification
     const [targetStats, weapon] = await Promise.all([
-      this.getCreatureStats(targetId),
-      weaponId ? this.getWeaponAttack(weaponId) : Promise.resolve(null),
+      this.getCreatureStats(targetId, userId),
+      weaponId ? this.getWeaponAttack(weaponId, userId) : Promise.resolve(null),
     ]);
 
     if (!targetStats) {
@@ -334,7 +339,8 @@ export class CombatAttackService {
    */
   async resolveSpellAttack(
     encounterId: string,
-    input: SpellAttackInput
+    input: SpellAttackInput,
+    userId: string
   ): Promise<SpellAttackResult> {
     const {
       casterId,
@@ -353,23 +359,10 @@ export class CombatAttackService {
 
     const results: AttackResult[] = [];
 
-    // ⚡ Bolt: Batch fetch all creature stats for targets to avoid N+1 query pattern.
-    const allStats = await db.query.creatureStats.findMany({
-      where: or(
-        inArray(creatureStats.characterId, targetIds),
-        inArray(creatureStats.npcId, targetIds)
-      ),
-    });
-
-    const statsMap = new Map<string, CreatureStats>();
-    allStats.forEach((s) => {
-      if (s.characterId) statsMap.set(s.characterId, s);
-      if (s.npcId) statsMap.set(s.npcId, s);
-    });
-
-    // ⚡ Bolt: Parallelize spell resolution for all targets to avoid sequential database round-trips for HP updates.
+    // ⚡ Bolt: Parallelize spell resolution for all targets
+    // 🛡️ Sentinel: Use getCreatureStats with userId for ownership verification
     const resolutionPromises = targetIds.map(async (targetId) => {
-      const targetStats = statsMap.get(targetId);
+      const targetStats = await this.getCreatureStats(targetId, userId);
       if (!targetStats) {
         return null;
       }
@@ -524,7 +517,7 @@ export class CombatAttackService {
   /**
    * Create a weapon attack for a character
    */
-  async createWeaponAttack(input: CreateWeaponAttackInput): Promise<WeaponAttack> {
+  async createWeaponAttack(input: CreateWeaponAttackInput, userId: string): Promise<WeaponAttack> {
     const {
       characterId,
       name,
@@ -535,6 +528,18 @@ export class CombatAttackService {
       properties = [],
       description,
     } = input;
+
+    // 🛡️ Sentinel: Verify character ownership before creation
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
 
     const [weapon] = await db
       .insert(weaponAttacks)
@@ -560,9 +565,19 @@ export class CombatAttackService {
   /**
    * Get all weapon attacks for a character
    */
-  async getCharacterWeapons(characterId: string): Promise<WeaponAttack[]> {
+  async getCharacterWeapons(characterId: string, userId: string): Promise<WeaponAttack[]> {
     const weapons = await db.query.weaponAttacks.findMany({
-      where: eq(weaponAttacks.characterId, characterId),
+      where: and(
+        eq(weaponAttacks.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, weaponAttacks.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
       orderBy: [desc(weaponAttacks.createdAt)],
     });
 
@@ -572,9 +587,19 @@ export class CombatAttackService {
   /**
    * Get a specific weapon attack
    */
-  async getWeaponAttack(weaponId: string): Promise<WeaponAttack | null> {
+  async getWeaponAttack(weaponId: string, userId: string): Promise<WeaponAttack | null> {
     const weapon = await db.query.weaponAttacks.findFirst({
-      where: eq(weaponAttacks.id, weaponId),
+      where: and(
+        eq(weaponAttacks.id, weaponId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, weaponAttacks.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
     });
 
     return weapon || null;
@@ -583,12 +608,35 @@ export class CombatAttackService {
   /**
    * Get creature stats (AC, resistances, etc.)
    */
-  async getCreatureStats(creatureId: string): Promise<CreatureStats | null> {
-    // Try to find by character_id or npc_id
+  async getCreatureStats(creatureId: string, userId: string): Promise<CreatureStats | null> {
+    // 🛡️ Sentinel: Verify access to character OR NPC (via campaign)
     const stats = await db.query.creatureStats.findFirst({
-      where: or(
-        eq(creatureStats.characterId, creatureId),
-        eq(creatureStats.npcId, creatureId)
+      where: and(
+        or(
+          eq(creatureStats.characterId, creatureId),
+          eq(creatureStats.npcId, creatureId)
+        ),
+        or(
+          // Access via owned character
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, creatureStats.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          ),
+          // Access via owned campaign (NPCs)
+          exists(
+            db.select()
+              .from(npcs)
+              .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+              .where(and(
+                eq(npcs.id, creatureStats.npcId),
+                eq(campaigns.userId, userId)
+              ))
+          )
+        )
       ),
     });
 
