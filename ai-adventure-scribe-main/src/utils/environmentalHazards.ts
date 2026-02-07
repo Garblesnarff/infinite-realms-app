@@ -45,19 +45,19 @@ export function detectHazard(
     case 'perception':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
       if (character.skillProficiencies?.includes('Perception')) {
-        skillModifier += Math.floor((character.level || 1) / 4) + 2;
+        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
       }
       break;
     case 'investigation':
       skillModifier = character.abilityScores?.intelligence?.modifier || 0;
       if (character.skillProficiencies?.includes('Investigation')) {
-        skillModifier += Math.floor((character.level || 1) / 4) + 2;
+        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
       }
       break;
     case 'survival':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
       if (character.skillProficiencies?.includes('Survival')) {
-        skillModifier += Math.floor((character.level || 1) / 4) + 2;
+        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
       }
       break;
   }
@@ -115,7 +115,7 @@ export function interactWithHazard(
   }
 
   // Check for proficiency or special bonuses
-  const proficiencyBonus = Math.floor((character.level || 1) / 4) + 2;
+  const proficiencyBonus = Math.floor(((character.level || 1) - 1) / 4) + 2;
 
   // Some classes have bonuses to certain saves
   let saveBonus = 0;
@@ -205,10 +205,10 @@ export function applyHazardEffects(
   if (saveResult.damageTaken && saveResult.damageTaken > 0) {
     // Apply to current HP
     if (updatedCharacter.hitPoints) {
-      updatedCharacter.hitPoints.current = Math.max(
-        0,
-        updatedCharacter.hitPoints.current - saveResult.damageTaken,
-      );
+      updatedCharacter.hitPoints = {
+        ...updatedCharacter.hitPoints,
+        current: Math.max(0, updatedCharacter.hitPoints.current - saveResult.damageTaken),
+      };
     }
   }
 
