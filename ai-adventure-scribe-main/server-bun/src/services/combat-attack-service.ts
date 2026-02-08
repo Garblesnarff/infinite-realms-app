@@ -11,14 +11,16 @@
  * @module server/services/combat-attack-service
  */
 
-import { desc, eq, or } from 'drizzle-orm';
+import { desc, eq, inArray, or } from 'drizzle-orm';
 
+import { CombatHPService } from './combat-hp-service.js';
 import { db } from '../../../db/client.js';
 import {
   weaponAttacks,
   creatureStats,
 } from '../../../db/schema/index.js';
-import { CombatHPService } from './combat-hp-service.js';
+import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 import type {
   WeaponAttack,
@@ -36,7 +38,7 @@ import type {
   CreateWeaponAttackInput,
   DamageType,
 } from '../types/combat.js';
-import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
+
 
 export class CombatAttackService {
   constructor() {
@@ -323,7 +325,7 @@ export class CombatAttackService {
         isNaturalTwenty: hitCheck.isNaturalTwenty,
       };
     } catch (error) {
-      console.error('Failed to apply damage to HP:', error);
+      logger.error({ msg: 'Failed to apply damage to HP', error });
       throw new InternalServerError('Attack succeeded but damage application failed', { error });
     }
   }
@@ -352,8 +354,22 @@ export class CombatAttackService {
 
     const results: AttackResult[] = [];
 
+    // ⚡ Bolt: Batch fetch all creature stats for targets to avoid N+1 query pattern.
+    const allStats = await db.query.creatureStats.findMany({
+      where: or(
+        inArray(creatureStats.characterId, targetIds),
+        inArray(creatureStats.npcId, targetIds)
+      ),
+    });
+
+    const statsMap = new Map<string, CreatureStats>();
+    allStats.forEach((s) => {
+      if (s.characterId) statsMap.set(s.characterId, s);
+      if (s.npcId) statsMap.set(s.npcId, s);
+    });
+
     for (const targetId of targetIds) {
-      const targetStats = await this.getCreatureStats(targetId);
+      const targetStats = statsMap.get(targetId);
       if (!targetStats) {
         continue;
       }
@@ -431,7 +447,7 @@ export class CombatAttackService {
               isNaturalTwenty: hitCheck.isNaturalTwenty,
             });
           } catch (error) {
-            console.error('Failed to apply spell attack damage to HP:', error);
+            logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
             throw new InternalServerError('Spell attack succeeded but damage application failed', { error });
           }
         }
@@ -490,7 +506,7 @@ export class CombatAttackService {
               isNaturalTwenty: false,
             });
           } catch (error) {
-            console.error('Failed to apply spell save damage to HP:', error);
+            logger.error({ msg: 'Failed to apply spell save damage to HP', error });
             throw new InternalServerError('Spell save resolved but damage application failed', { error });
           }
         }
