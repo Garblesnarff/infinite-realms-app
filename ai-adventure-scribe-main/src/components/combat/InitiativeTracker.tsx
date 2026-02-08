@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Initiative Tracker Component
  *
@@ -9,8 +10,6 @@
 
 import { Sword, Shield, Heart, Clock, UserX, Skull, ChevronRight, Dices, Plus } from 'lucide-react';
 import React from 'react';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
 
 import type { CombatParticipant, ConditionName } from '@/types/combat';
 
@@ -18,15 +17,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useCombat } from '@/contexts/CombatContext';
+import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useCombat } from '@/contexts/CombatContext';
 import { cn } from '@/lib/utils';
 
 // ===========================
 // Condition Icons & Colors
 // ===========================
 
-const CONDITION_ICONS: Record<ConditionName, { icon: React.ComponentType<any>; color: string }> = {
+const CONDITION_ICONS: Record<ConditionName, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
   blinded: { icon: UserX, color: 'bg-gray-500' },
   charmed: { icon: Heart, color: 'bg-pink-500' },
   deafened: { icon: UserX, color: 'bg-slate-500' },
@@ -60,7 +60,7 @@ interface ParticipantRowProps {
 const ParticipantRow: React.FC<ParticipantRowProps> = ({
   participant,
   isCurrentTurn,
-  roundNumber,
+  roundNumber: _roundNumber,
   onSelectParticipant,
   getAssetImageUrl,
 }) => {
@@ -69,7 +69,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
       ? (participant.currentHitPoints / participant.maxHitPoints) * 100
       : 0;
   const isDead = participant.currentHitPoints === 0 && participant.deathSaves.failures >= 3;
-  const isUnconscious = participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
+  const _isUnconscious = participant.currentHitPoints === 0 && participant.deathSaves.failures < 3;
   const needsDeathSave = participant.currentHitPoints === 0 && !isDead;
 
   // Look up portrait from campaign assets
@@ -77,7 +77,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   const assetType = participant.participantType === 'monster' || participant.participantType === 'enemy' ? 'monster' : 'npc';
   const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
-  const getParticipantTypeIcon = () => {
+  const getParticipantTypeIcon = (): React.ReactNode => {
     switch (participant.participantType) {
       case 'player':
         return <Shield className="w-4 h-4 text-blue-500" />;
@@ -276,7 +276,10 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
 
   return (
     <Card className={cn('flex h-full w-full flex-col', className)}>
-      <CardHeader className="sticky top-0 z-10 space-y-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+      <CardHeader
+        className="sticky top-0 space-y-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:backdrop-blur"
+        style={{ zIndex: Z_INDEX.STICKY }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-base font-semibold tracking-tight">Initiative Order</h3>

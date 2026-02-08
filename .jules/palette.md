@@ -43,3 +43,7 @@
 ## 2025-05-29 - Tree Item Accessibility Pattern
 **Learning:** Custom tree items (like `FolderTree`) require `role="button"`, `tabIndex={0}`, and `aria-selected` to be properly navigable for keyboard and screen reader users. Nested actions (like expand/collapse or context menus) must be clearly labeled with `aria-label` and `aria-expanded` and should ideally be revealed on focus (`focus-visible:opacity-100`) to ensure they are discoverable without a mouse.
 **Action:** Implement interactive list/tree items with appropriate ARIA roles, keyboard event handlers (`onKeyDown` for Enter/Space), and ensure all icon-only sub-actions are accessible and visible on focus.
+
+## 2025-05-30 - Floating Action Panel Accessibility and Layering
+**Learning:** Standardizing accessibility on floating panels involves adding `aria-label` to state toggles and ensuring z-index reliability. Descriptive `aria-label` for "Open/Close" and "Expand/Collapse" states provides essential context for screen reader users. Using `style={{ zIndex: Z_INDEX.CONSTANT }}` prevents layering issues that Tailwind's dynamic classes might occasionally skip.
+**Action:** Always add descriptive `aria-label` to floating action buttons and use inline styles for z-index standardization.
