@@ -1,5 +1,6 @@
-import { supabaseService } from '../lib/supabase.js';
 import { blogAutomation } from './blog-automation.js';
+import { logger } from '../lib/logger.js';
+import { supabaseService } from '../lib/supabase.js';
 
 const CHECK_INTERVAL_MS = 60_000; // Check every minute
 const BLOG_POSTS_TABLE = process.env.SUPABASE_BLOG_TABLE || 'blog_posts';
@@ -13,12 +14,12 @@ export class BlogScheduler {
 
   start(): void {
     if (this.intervalId) {
-      console.log('[BlogScheduler] Already running');
+      logger.info('[BlogScheduler] Already running');
       return;
     }
 
-    console.log('[BlogScheduler] Starting scheduler (checking every 60 seconds)');
-    console.log('[BlogScheduler] Starting daily blog automation (checking every hour)');
+    logger.info('[BlogScheduler] Starting scheduler (checking every 60 seconds)');
+    logger.info('[BlogScheduler] Starting daily blog automation (checking every hour)');
 
     // Run immediately on start, then at intervals
     this.processScheduledPosts();
@@ -38,7 +39,7 @@ export class BlogScheduler {
       clearInterval(this.dailyIntervalId);
       this.dailyIntervalId = null;
     }
-    console.log('[BlogScheduler] Stopped');
+    logger.info('[BlogScheduler] Stopped');
   }
 
   async processScheduledPosts(): Promise<void> {
@@ -61,7 +62,7 @@ export class BlogScheduler {
         .order('scheduled_for', { ascending: true });
 
       if (fetchError) {
-        console.error('[BlogScheduler] Error fetching scheduled posts:', fetchError.message);
+        logger.error({ msg: '[BlogScheduler] Error fetching scheduled posts', error: fetchError.message });
         return;
       }
 
@@ -69,31 +70,31 @@ export class BlogScheduler {
         return;
       }
 
-      console.log(`[BlogScheduler] Found ${posts.length} post(s) to publish`);
+      logger.info({ msg: '[BlogScheduler] Processing scheduled posts', count: posts.length });
 
-      for (const post of posts) {
-        try {
-          const { error: updateError } = await supabaseService
-            .from(BLOG_POSTS_TABLE)
-            .update({
-              status: 'published',
-              published_at: now,
-              updated_at: now,
-            })
-            .eq('id', post.id);
+      // ⚡ Bolt: Optimized N+1 update loop into a single batched update using .in()
+      // This reduces N database round-trips to O(1) and uses .select() to retrieve updated records for logging.
+      const { data: updatedPosts, error: updateError } = await supabaseService
+        .from(BLOG_POSTS_TABLE)
+        .update({
+          status: 'published',
+          published_at: now,
+          updated_at: now,
+        })
+        .in('id', posts.map(p => p.id))
+        .select('id, title, slug');
 
-          if (updateError) {
-            console.error(`[BlogScheduler] Failed to publish "${post.title}":`, updateError.message);
-            continue;
-          }
+      if (updateError) {
+        logger.error({ msg: '[BlogScheduler] Failed to batch publish posts', error: updateError.message });
+      }
 
-          console.log(`[BlogScheduler] Published: "${post.title}" (${post.slug})`);
-        } catch (postError) {
-          console.error(`[BlogScheduler] Error processing post ${post.id}:`, postError);
+      if (updatedPosts) {
+        for (const post of updatedPosts) {
+          logger.info({ msg: '[BlogScheduler] Published', title: post.title, slug: post.slug });
         }
       }
     } catch (error) {
-      console.error('[BlogScheduler] Unexpected error:', error);
+      logger.error({ msg: '[BlogScheduler] Unexpected error', error });
     } finally {
       this.isProcessing = false;
     }
@@ -111,12 +112,12 @@ export class BlogScheduler {
       const result = await blogAutomation.generateDailyPost();
 
       if (result.success) {
-        console.log(`[BlogScheduler] Daily blog post published: ${result.url}`);
+        logger.info({ msg: '[BlogScheduler] Daily blog post published', url: result.url });
       } else if (result.error && !result.error.includes('Already generated')) {
-        console.error(`[BlogScheduler] Failed to generate daily post: ${result.error}`);
+        logger.error({ msg: '[BlogScheduler] Failed to generate daily post', error: result.error });
       }
     } catch (error) {
-      console.error('[BlogScheduler] Unexpected error in daily blog automation:', error);
+      logger.error({ msg: '[BlogScheduler] Unexpected error in daily blog automation', error });
     } finally {
       this.isDailyProcessing = false;
     }
