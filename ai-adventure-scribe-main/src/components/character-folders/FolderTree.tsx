@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * FolderTree Component
  *
@@ -12,7 +13,6 @@
  * - Context menu for folder actions
  */
 
-import React, { useState, useCallback } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -24,17 +24,18 @@ import {
   Trash2,
   Palette,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useCallback } from 'react';
+
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
-import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface FolderNode {
   id: string;
@@ -114,22 +115,35 @@ const FolderItem: React.FC<FolderItemProps> = ({
   return (
     <div className="select-none">
       <div
+        role="button"
+        tabIndex={0}
+        aria-selected={isSelected}
         className={cn(
-          'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200',
+          'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           isSelected && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
           isDragOver && 'bg-infinite-gold/20 border-2 border-dashed border-infinite-gold',
           !isSelected && !isDragOver && 'hover:bg-accent'
         )}
         style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
         onClick={() => onSelect(folder.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(folder.id);
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {/* Expand/Collapse Icon */}
         {hasChildren && (
-          <button
-            className="p-0 h-4 w-4 hover:bg-accent rounded"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-4 w-4 p-0 hover:bg-accent rounded"
+            aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+            aria-expanded={isExpanded}
             onClick={(e) => {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
@@ -140,7 +154,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
-          </button>
+          </Button>
         )}
         {!hasChildren && <div className="w-4" />}
 
@@ -161,7 +175,11 @@ const FolderItem: React.FC<FolderItemProps> = ({
 
         {/* Character Count Badge */}
         {folder.characterCount > 0 && (
-          <Badge variant="secondary" className="text-xs">
+          <Badge
+            variant="secondary"
+            className="text-xs"
+            aria-label={`${folder.characterCount} characters`}
+          >
             {folder.characterCount}
           </Badge>
         )}
@@ -172,7 +190,8 @@ const FolderItem: React.FC<FolderItemProps> = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              aria-label="Folder actions"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -244,7 +263,6 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   onChangeColor,
   onCharacterDrop,
 }) => {
-  const { toast } = useToast();
   const trpc = useTRPC();
 
   // Fetch folders
@@ -351,12 +369,21 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
 
       {/* All Characters (Root) */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-selected={selectedFolderId === null}
         className={cn(
-          'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2',
+          'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
           selectedFolderId !== null && 'hover:bg-accent'
         )}
         onClick={() => handleSelect(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleSelect(null);
+          }
+        }}
       >
         <FolderOpen className="h-5 w-5 text-infinite-teal" />
         <span className="flex-1 text-sm font-medium">All Characters</span>

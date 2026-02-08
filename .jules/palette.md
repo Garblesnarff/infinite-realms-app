@@ -39,3 +39,7 @@
 ## 2025-05-28 - Drawing Tool Accessibility and Component Standards
 **Learning:** Polishing a complex feature panel like the Drawing Tool involves standardizing accessibility attributes (role="toolbar", aria-label, aria-pressed) and migrating legacy form elements (raw checkboxes) to design system components (Switch). Keeping these changes surgical and under 50 lines ensures they are maintainable and easy to review.
 **Action:** When touching feature toolbars, always add role="toolbar" and ensure all interactive elements have appropriate state indicators (aria-pressed) and accessible names (aria-label).
+
+## 2025-05-29 - Tree Item Accessibility Pattern
+**Learning:** Custom tree items (like `FolderTree`) require `role="button"`, `tabIndex={0}`, and `aria-selected` to be properly navigable for keyboard and screen reader users. Nested actions (like expand/collapse or context menus) must be clearly labeled with `aria-label` and `aria-expanded` and should ideally be revealed on focus (`focus-visible:opacity-100`) to ensure they are discoverable without a mouse.
+**Action:** Implement interactive list/tree items with appropriate ARIA roles, keyboard event handlers (`onKeyDown` for Enter/Space), and ensure all icon-only sub-actions are accessible and visible on focus.
