@@ -7,10 +7,12 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, or, count, desc } from 'drizzle-orm';
+import { and, eq, exists, or, count, desc, inArray, sql } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index.js';
 import { NotFoundError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
+
 import type {
   SpellSlot,
   SpellSlotUsageLog,
@@ -534,45 +536,40 @@ export class SpellSlotsService {
       };
     }
 
-    const slotsRestored: Array<{ level: number; restoredAmount: number }> = [];
-    let totalRestored = 0;
+    const slotsToUpdate = slots.filter(s => s.usedSlots > 0);
 
-    // Restore slots
-    for (const slot of slots) {
-      const currentUsed = slot.usedSlots;
+    if (slotsToUpdate.length === 0) {
+      return {
+        characterId,
+        slotsRestored: [],
+        totalRestored: 0,
+      };
+    }
 
-      if (currentUsed === 0) {
-        continue; // Nothing to restore
-      }
+    const slotsRestored = slotsToUpdate.map(slot => {
+      const restoredAmount = (amount !== undefined && amount >= 0)
+        ? Math.min(amount, slot.usedSlots)
+        : slot.usedSlots;
 
-      let restoredAmount: number;
-
-      if (amount !== undefined && amount >= 0) {
-        // Restore specific amount
-        restoredAmount = Math.min(amount, currentUsed);
-      } else {
-        // Restore all
-        restoredAmount = currentUsed;
-      }
-
-      const newUsedSlots = currentUsed - restoredAmount;
-
-      // Update the slot
-      await db
-        .update(characterSpellSlots)
-        .set({
-          usedSlots: newUsedSlots,
-          updatedAt: new Date(),
-        })
-        .where(eq(characterSpellSlots.id, slot.id));
-
-      slotsRestored.push({
+      return {
         level: slot.spellLevel,
         restoredAmount,
-      });
+      };
+    });
 
-      totalRestored += restoredAmount;
-    }
+    const totalRestored = slotsRestored.reduce((sum, r) => sum + r.restoredAmount, 0);
+
+    // ⚡ Bolt: Optimized N+1 update loop into a single batch update query.
+    // This reduces database round-trips from N (number of slot levels) to 1.
+    await db
+      .update(characterSpellSlots)
+      .set({
+        usedSlots: amount !== undefined && amount >= 0
+          ? sql`GREATEST(0, ${characterSpellSlots.usedSlots} - ${amount})`
+          : 0,
+        updatedAt: new Date(),
+      })
+      .where(inArray(characterSpellSlots.id, slotsToUpdate.map(s => s.id)));
 
     return {
       characterId,
