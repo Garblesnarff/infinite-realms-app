@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Token Service
  *
@@ -9,7 +10,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -75,19 +76,12 @@ export class TokenService {
    */
   private static async verifySceneAccess(sceneId: string, userId: string): Promise<boolean> {
     const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
-      with: {
-        campaign: true,
-      },
+      where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
     });
 
     if (!scene) {
+      // 🛡️ Sentinel: Throw NOT_FOUND instead of FORBIDDEN to mask resource existence
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene not found' });
-    }
-
-    // User must own the campaign
-    if (scene.campaign.userId !== userId) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied to this scene' });
     }
 
     return true;
@@ -116,31 +110,39 @@ export class TokenService {
    * List all tokens for a scene
    */
   static async listTokensForScene(sceneId: string, userId: string): Promise<Token[]> {
-    // Verify scene access
-    await this.verifySceneAccess(sceneId, userId);
+    // 🛡️ Sentinel: Combine ownership check into the query to prevent existence leakage
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = await (db as any)
+      .select({ token: tokens })
+      .from(tokens)
+      .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .where(and(
+        eq(tokens.sceneId, sceneId),
+        eq(scenes.userId, userId)
+      ))
+      .orderBy(desc(tokens.createdAt));
 
-    const sceneTokens = await db.query.tokens.findMany({
-      where: eq(tokens.sceneId, sceneId),
-      orderBy: [desc(tokens.createdAt)],
-    });
-
-    return sceneTokens;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return results.map((r: any) => r.token);
   }
 
   /**
    * Get a single token by ID with full configuration
    */
   static async getTokenById(tokenId: string, userId: string): Promise<Token | null> {
-    const token = await db.query.tokens.findFirst({
-      where: eq(tokens.id, tokenId),
-    });
+    // 🛡️ Sentinel: Combine ownership check into the query to prevent existence leakage
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [result] = await (db as any)
+      .select({ token: tokens })
+      .from(tokens)
+      .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .where(and(
+        eq(tokens.id, tokenId),
+        eq(scenes.userId, userId)
+      ))
+      .limit(1);
 
-    if (!token) return null;
-
-    // Verify scene access
-    await this.verifySceneAccess(token.sceneId, userId);
-
-    return token;
+    return result?.token || null;
   }
 
   /**
@@ -206,18 +208,28 @@ export class TokenService {
     updates: Partial<NewToken>,
     onBroadcast?: (sceneId: string, token: Token) => void
   ): Promise<Token | null> {
-    // Get existing token
-    const existingToken = await this.getTokenById(tokenId, userId);
-    if (!existingToken) return null;
+    // 🛡️ Sentinel: Atomic update with ownership check via exists subquery
+    // We specifically omit internal/security fields from the update object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { id: _id, sceneId: _sceneId, createdBy: _createdBy, ...safeUpdates } = updates as any;
 
-    // Update token
     const [updated] = await db
       .update(tokens)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
-      .where(eq(tokens.id, tokenId))
+      .where(and(
+        eq(tokens.id, tokenId),
+        exists(
+          db.select()
+            .from(scenes)
+            .where(and(
+              eq(scenes.id, tokens.sceneId),
+              eq(scenes.userId, userId)
+            ))
+        )
+      ))
       .returning();
 
     // Broadcast update via WebSocket if callback provided
@@ -232,13 +244,20 @@ export class TokenService {
    * Delete a token
    */
   static async deleteToken(tokenId: string, userId: string): Promise<boolean> {
-    // Get existing token to verify access
-    const existingToken = await this.getTokenById(tokenId, userId);
-    if (!existingToken) return false;
-
+    // 🛡️ Sentinel: Atomic delete with ownership check via exists subquery
     const result = await db
       .delete(tokens)
-      .where(eq(tokens.id, tokenId))
+      .where(and(
+        eq(tokens.id, tokenId),
+        exists(
+          db.select()
+            .from(scenes)
+            .where(and(
+              eq(scenes.id, tokens.sceneId),
+              eq(scenes.userId, userId)
+            ))
+        )
+      ))
       .returning({ id: tokens.id });
 
     return result.length > 0;
@@ -268,17 +287,29 @@ export class TokenService {
     characterId: string,
     userId: string
   ): Promise<boolean> {
-    // Verify token access
-    const token = await this.getTokenById(tokenId, userId);
-    if (!token) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
-    }
-
-    // Verify character ownership
+    // Verify character ownership first
     await this.verifyCharacterOwnership(characterId, userId);
 
-    // Update token's actorId
-    await db.update(tokens).set({ actorId: characterId }).where(eq(tokens.id, tokenId));
+    // 🛡️ Sentinel: Update token's actorId with atomic ownership check
+    const [updated] = await db
+      .update(tokens)
+      .set({ actorId: characterId, updatedAt: new Date() })
+      .where(and(
+        eq(tokens.id, tokenId),
+        exists(
+          db.select()
+            .from(scenes)
+            .where(and(
+              eq(scenes.id, tokens.sceneId),
+              eq(scenes.userId, userId)
+            ))
+        )
+      ))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
+    }
 
     // Create or update character-token link
     try {
@@ -301,13 +332,7 @@ export class TokenService {
     characterId: string,
     userId: string
   ): Promise<boolean> {
-    // Verify token access
-    const token = await this.getTokenById(tokenId, userId);
-    if (!token) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
-    }
-
-    // Verify character ownership
+    // Verify character ownership first
     await this.verifyCharacterOwnership(characterId, userId);
 
     // Remove character-token link
@@ -317,10 +342,22 @@ export class TokenService {
         and(eq(characterTokens.characterId, characterId), eq(characterTokens.tokenId, tokenId))
       );
 
-    // Clear actorId if it matches
-    if (token.actorId === characterId) {
-      await db.update(tokens).set({ actorId: null }).where(eq(tokens.id, tokenId));
-    }
+    // 🛡️ Sentinel: Clear actorId with atomic ownership check
+    await db
+      .update(tokens)
+      .set({ actorId: null, updatedAt: new Date() })
+      .where(and(
+        eq(tokens.id, tokenId),
+        eq(tokens.actorId, characterId),
+        exists(
+          db.select()
+            .from(scenes)
+            .where(and(
+              eq(scenes.id, tokens.sceneId),
+              eq(scenes.userId, userId)
+            ))
+        )
+      ));
 
     return true;
   }
