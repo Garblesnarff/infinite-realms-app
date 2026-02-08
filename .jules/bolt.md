@@ -31,3 +31,7 @@
 ## 2025-05-23 - [Blocking Event Loop with Synchronous Logging]
 **Learning:** High-frequency WebSocket handlers and tRPC middleware using `console.log(JSON.stringify(...))` block the Bun event loop synchronously, causing measurable latency under load.
 **Action:** Replace all `console.log` in request/message processing paths with a pino-based `logger` utility. Use structured logging (passing objects) to ensure asynchronous, non-blocking log output.
+
+## 2025-02-07 - [Combat Condition Management Optimizations]
+**Learning:** Found N+1 update patterns in `ConditionsService.applyCondition` where superseded conditions were removed individually. Also identified sequential `await` calls in the combat status route that could be parallelized.
+**Action:** Use batch updates with `IN` clauses for condition deactivation. Parallelize independent data fetches using `Promise.all` in API routes to reduce response times.
