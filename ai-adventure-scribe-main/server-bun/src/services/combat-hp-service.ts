@@ -230,8 +230,8 @@ export class CombatHPService {
 
     const isDead = newDeathSavesFailures >= 3;
 
-    // Update status
-    const [updatedStatus] = await db
+    // ⚡ Bolt: Parallelize status update and damage logging to reduce sequential database round-trips.
+    const updatePromise = db
       .update(combatParticipantStatus)
       .set({
         currentHp: newCurrentHp,
@@ -243,12 +243,12 @@ export class CombatHPService {
       .where(eq(combatParticipantStatus.participantId, participantId))
       .returning();
 
-    // Log damage
+    let logPromise = Promise.resolve() as any;
     if (damageAmount > 0) {
       // ⚡ Bolt: Use joined encounter data instead of fetching it again
       const encounter = (participant as any).encounter;
 
-      await db.insert(combatDamageLog).values({
+      logPromise = db.insert(combatDamageLog).values({
         encounterId: participant.encounterId,
         participantId,
         damageAmount: modifiedDamage,
@@ -258,6 +258,8 @@ export class CombatHPService {
         roundNumber: encounter?.currentRound || 1,
       });
     }
+
+    await Promise.all([updatePromise, logPromise]);
 
     return {
       participantId,

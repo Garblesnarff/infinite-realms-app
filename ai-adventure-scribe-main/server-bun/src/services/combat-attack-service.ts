@@ -223,19 +223,18 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // Get target's AC and resistances
-    const targetStats = await this.getCreatureStats(targetId);
+    // ⚡ Bolt: Parallelize target stats and weapon fetch to reduce database round-trips
+    const [targetStats, weapon] = await Promise.all([
+      this.getCreatureStats(targetId),
+      weaponId ? this.getWeaponAttack(weaponId) : Promise.resolve(null),
+    ]);
+
     if (!targetStats) {
       throw new NotFoundError('Target stats', targetId);
     }
 
-    // Get weapon if provided
-    let weapon: WeaponAttack | null = null;
-    if (weaponId) {
-      weapon = await this.getWeaponAttack(weaponId);
-      if (!weapon) {
-        throw new NotFoundError('Weapon', weaponId);
-      }
+    if (weaponId && !weapon) {
+      throw new NotFoundError('Weapon', weaponId);
     }
 
     // Check if attack hits
@@ -368,10 +367,11 @@ export class CombatAttackService {
       if (s.npcId) statsMap.set(s.npcId, s);
     });
 
-    for (const targetId of targetIds) {
+    // ⚡ Bolt: Parallelize spell resolution for all targets to avoid sequential database round-trips for HP updates.
+    const resolutionPromises = targetIds.map(async (targetId) => {
       const targetStats = statsMap.get(targetId);
       if (!targetStats) {
-        continue;
+        return null;
       }
 
       if (attackRoll !== undefined) {
@@ -383,7 +383,7 @@ export class CombatAttackService {
         });
 
         if (!hitCheck.hit) {
-          results.push({
+          return {
             hit: false,
             targetAC: targetStats.armorClass,
             totalAttackRoll: hitCheck.totalAttackRoll,
@@ -394,8 +394,7 @@ export class CombatAttackService {
             isCritical: false,
             isNaturalOne: hitCheck.isNaturalOne,
             isNaturalTwenty: hitCheck.isNaturalTwenty,
-          });
-          continue;
+          };
         }
 
         // Hit - calculate damage
@@ -428,7 +427,7 @@ export class CombatAttackService {
               ignoreImmunities: true,  // Already applied in damage calculation
             });
 
-            results.push({
+            return {
               hit: true,
               targetAC: targetStats.armorClass,
               totalAttackRoll: hitCheck.totalAttackRoll,
@@ -445,7 +444,7 @@ export class CombatAttackService {
               isCritical: spellIsCrit,
               isNaturalOne: hitCheck.isNaturalOne,
               isNaturalTwenty: hitCheck.isNaturalTwenty,
-            });
+            };
           } catch (error) {
             logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
             throw new InternalServerError('Spell attack succeeded but damage application failed', { error });
@@ -455,7 +454,7 @@ export class CombatAttackService {
         // Saving throw spell
         const saveRoll = saveRolls[targetId];
         if (saveRoll === undefined) {
-          continue;
+          return null;
         }
         const savedSuccessfully = saveRoll >= saveDC;
 
@@ -487,7 +486,7 @@ export class CombatAttackService {
               ignoreImmunities: true,  // Already applied in damage calculation
             });
 
-            results.push({
+            return {
               hit: !savedSuccessfully,
               targetAC: 0, // Not applicable for saves
               totalAttackRoll: saveRoll ?? 0,
@@ -504,14 +503,20 @@ export class CombatAttackService {
               isCritical: false,
               isNaturalOne: false,
               isNaturalTwenty: false,
-            });
+            };
           } catch (error) {
             logger.error({ msg: 'Failed to apply spell save damage to HP', error });
             throw new InternalServerError('Spell save resolved but damage application failed', { error });
           }
         }
       }
-    }
+      return null;
+    });
+
+    const resolutionResults = await Promise.all(resolutionPromises);
+    resolutionResults.forEach((res) => {
+      if (res) results.push(res);
+    });
 
     return { results };
   }
