@@ -76,6 +76,7 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/message-adapters.test.ts',
       'src/agents/langgraph/__tests__/dm-service-integration.test.ts',
       'src/hooks/__tests__/useSpellSelection.test.ts',
+      'src/hooks/__tests__/use-character-data.test.ts',
       'src/__tests__/unit/spell-class-restrictions.test.ts',
       'src/__tests__/unit/response-pipeline.test.ts',
       'server-bun/src/services/__tests__/rest-service.test.ts',
@@ -164,6 +165,7 @@ export default defineConfig({
         'src/agents/langgraph/nodes/rules-validator.ts',
         'src/agents/langgraph/nodes/response-generator.ts',
         'src/hooks/useSpellSelection.ts',
+        'src/hooks/use-character-data.ts',
         'src/engine/**/*.ts',
         // LangGraph implementation
         'src/agents/langgraph/nodes/*.ts',
