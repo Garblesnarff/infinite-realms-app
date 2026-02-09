@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /// <reference types="vitest" />
 import path from 'path'; // Added path import
 
@@ -45,6 +46,7 @@ export default defineConfig({
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/__tests__/conditionEffects.test.ts',
       'src/utils/__tests__/twoWeaponFighting.test.ts',
+      'src/utils/__tests__/fightingStyles.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/combat/__tests__/npc-auto-roller.test.ts',
@@ -139,6 +141,7 @@ export default defineConfig({
         'src/utils/restMechanics.ts',
         'src/utils/conditionEffects.ts',
         'src/utils/twoWeaponFighting.ts',
+        'src/utils/fightingStyles.ts',
         'src/utils/character-calculations.ts',
         'src/utils/multiclassing.ts',
         'server-bun/src/services/character-folder-service.ts',
