@@ -7,7 +7,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { // Added resolve configuration
+  resolve: {
+    // Added resolve configuration
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
@@ -47,6 +48,8 @@ export default defineConfig({
       'src/utils/__tests__/conditionEffects.test.ts',
       'src/utils/__tests__/twoWeaponFighting.test.ts',
       'src/utils/__tests__/fightingStyles.test.ts',
+      'src/utils/__tests__/racialTraits.test.ts',
+      'src/utils/__tests__/racialAbilityBonuses.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/combat/__tests__/npc-auto-roller.test.ts',
@@ -90,6 +93,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/class-features-service.test.ts',
       'server-bun/src/services/__tests__/combat-attack-service.test.ts',
       'server-bun/src/services/__tests__/session-service.test.ts',
+      'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',
       'src/components/spellcasting/__tests__/SpellPreparationPanel.test.tsx',
@@ -104,7 +108,7 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/integration.test.ts',
       'src/agents/langgraph/__tests__/performance.test.ts',
       'tests/services/passive-skills-service.test.ts',
-      'tests/utils/character-converter.test.ts'
+      'tests/utils/character-converter.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -121,7 +125,7 @@ export default defineConfig({
       // Keep components tests excluded by default; curated ones are included explicitly above
       // Temporarily exclude flaky/unit tests pending mock alignment (keep diceRolls enabled)
       // 'src/agents/services/intent/PlayerIntentDetector.test.ts', // now enabled
-      'src/test/**'
+      'src/test/**',
     ],
     coverage: {
       enabled: true,
@@ -178,6 +182,7 @@ export default defineConfig({
         'src/hooks/use-environmental-hazards.ts',
         'src/hooks/use-character-stats.ts',
         'src/utils/racialAbilityBonuses.ts',
+        'src/utils/racialTraits.ts',
         'src/engine/**/*.ts',
         // LangGraph implementation
         'src/agents/langgraph/nodes/*.ts',
@@ -188,6 +193,7 @@ export default defineConfig({
         'server-bun/src/services/class-features-service.ts',
         'server-bun/src/services/combat-attack-service.ts',
         'server-bun/src/services/session-service.ts',
+        'server-bun/src/services/exhaustion-service.ts',
       ],
       exclude: [
         '**/__tests__/**',
@@ -212,6 +218,6 @@ export default defineConfig({
         functions: 80,
         lines: 80,
       },
-    }
+    },
   },
 });

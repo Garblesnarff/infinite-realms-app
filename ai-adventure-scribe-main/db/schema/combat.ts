@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Combat Schema
  *
@@ -8,12 +9,22 @@
  */
 
 import { relations } from 'drizzle-orm';
-import { pgTable, uuid, text, timestamp, integer, boolean, index, jsonb, unique } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  index,
+  jsonb,
+  unique,
+} from 'drizzle-orm/pg-core';
 
-import { gameSessions , characters } from './game.js';
+import { gameSessions, characters } from './game.js';
 import { npcs } from './world.js';
 
-import type { InferSelectModel, InferInsertModel} from 'drizzle-orm';
+import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
  * Combat Encounters Table
@@ -23,7 +34,9 @@ export const combatEncounters = pgTable(
   'combat_encounters',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    sessionId: uuid('session_id').notNull().references(() => gameSessions.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => gameSessions.id, { onDelete: 'cascade' }),
 
     // Combat state
     status: text('status').notNull().default('active'), // 'active' | 'paused' | 'completed'
@@ -44,7 +57,7 @@ export const combatEncounters = pgTable(
   (table) => ({
     sessionIdx: index('idx_combat_encounters_session').on(table.sessionId),
     statusIdx: index('idx_combat_encounters_status').on(table.status),
-  })
+  }),
 );
 
 /**
@@ -55,7 +68,9 @@ export const combatParticipants = pgTable(
   'combat_participants',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    encounterId: uuid('encounter_id').notNull().references(() => combatEncounters.id, { onDelete: 'cascade' }),
+    encounterId: uuid('encounter_id')
+      .notNull()
+      .references(() => combatEncounters.id, { onDelete: 'cascade' }),
 
     // Entity references
     characterId: uuid('character_id').references(() => characters.id, { onDelete: 'set null' }),
@@ -90,11 +105,17 @@ export const combatParticipants = pgTable(
   },
   (table) => ({
     encounterIdx: index('idx_combat_participants_encounter').on(table.encounterId),
-    turnOrderIdx: index('idx_combat_participants_turn_order').on(table.encounterId, table.turnOrder),
+    turnOrderIdx: index('idx_combat_participants_turn_order').on(
+      table.encounterId,
+      table.turnOrder,
+    ),
     characterIdx: index('idx_combat_participants_character').on(table.characterId),
     npcIdx: index('idx_combat_participants_npc').on(table.npcId),
-    initiativeIdx: index('idx_combat_participants_initiative').on(table.encounterId, table.initiative),
-  })
+    initiativeIdx: index('idx_combat_participants_initiative').on(
+      table.encounterId,
+      table.initiative,
+    ),
+  }),
 );
 
 /**
@@ -106,7 +127,9 @@ export const combatParticipantStatus = pgTable(
   'combat_participant_status',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    participantId: uuid('participant_id').notNull().references(() => combatParticipants.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => combatParticipants.id, { onDelete: 'cascade' }),
 
     // Hit points
     currentHp: integer('current_hp').notNull(),
@@ -118,13 +141,16 @@ export const combatParticipantStatus = pgTable(
     deathSavesSuccesses: integer('death_saves_successes').notNull().default(0),
     deathSavesFailures: integer('death_saves_failures').notNull().default(0),
 
+    // Exhaustion level (0-6)
+    exhaustionLevel: integer('exhaustion_level').notNull().default(0),
+
     // Timestamp
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
     participantIdx: index('idx_combat_participant_status_participant').on(table.participantId),
     uniqueParticipant: unique('unique_participant_status').on(table.participantId),
-  })
+  }),
 );
 
 /**
@@ -135,15 +161,21 @@ export const combatDamageLog = pgTable(
   'combat_damage_log',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    encounterId: uuid('encounter_id').notNull().references(() => combatEncounters.id, { onDelete: 'cascade' }),
-    participantId: uuid('participant_id').notNull().references(() => combatParticipants.id, { onDelete: 'cascade' }),
+    encounterId: uuid('encounter_id')
+      .notNull()
+      .references(() => combatEncounters.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => combatParticipants.id, { onDelete: 'cascade' }),
 
     // Damage details
     damageAmount: integer('damage_amount').notNull(),
     damageType: text('damage_type').notNull(),
 
     // Source tracking
-    sourceParticipantId: uuid('source_participant_id').references(() => combatParticipants.id, { onDelete: 'set null' }),
+    sourceParticipantId: uuid('source_participant_id').references(() => combatParticipants.id, {
+      onDelete: 'set null',
+    }),
     sourceDescription: text('source_description'),
 
     // Round tracking
@@ -156,7 +188,7 @@ export const combatDamageLog = pgTable(
     encounterIdx: index('idx_combat_damage_log_encounter').on(table.encounterId),
     participantIdx: index('idx_combat_damage_log_participant').on(table.participantId),
     roundIdx: index('idx_combat_damage_log_round').on(table.encounterId, table.roundNumber),
-  })
+  }),
 );
 
 /**
@@ -175,7 +207,7 @@ export const conditionsLibrary = pgTable(
   },
   (table) => ({
     nameIdx: index('idx_conditions_library_name').on(table.name),
-  })
+  }),
 );
 
 /**
@@ -186,8 +218,12 @@ export const combatParticipantConditions = pgTable(
   'combat_participant_conditions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    participantId: uuid('participant_id').notNull().references(() => combatParticipants.id, { onDelete: 'cascade' }),
-    conditionId: uuid('condition_id').notNull().references(() => conditionsLibrary.id, { onDelete: 'cascade' }),
+    participantId: uuid('participant_id')
+      .notNull()
+      .references(() => combatParticipants.id, { onDelete: 'cascade' }),
+    conditionId: uuid('condition_id')
+      .notNull()
+      .references(() => conditionsLibrary.id, { onDelete: 'cascade' }),
 
     // Duration tracking
     durationType: text('duration_type').notNull(), // 'rounds' | 'minutes' | 'hours' | 'until_save' | 'permanent'
@@ -212,7 +248,7 @@ export const combatParticipantConditions = pgTable(
     participantIdx: index('idx_conditions_participant').on(table.participantId),
     activeIdx: index('idx_conditions_active').on(table.participantId, table.isActive),
     expiryIdx: index('idx_conditions_expiry').on(table.expiresAtRound, table.isActive),
-  })
+  }),
 );
 
 /**
@@ -241,7 +277,7 @@ export const creatureStats = pgTable(
   (table) => ({
     characterIdx: index('idx_creature_stats_character').on(table.characterId),
     npcIdx: index('idx_creature_stats_npc').on(table.npcId),
-  })
+  }),
 );
 
 /**
@@ -252,7 +288,9 @@ export const weaponAttacks = pgTable(
   'weapon_attacks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    characterId: uuid('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     attackBonus: integer('attack_bonus').notNull(),
     damageDice: text('damage_dice').notNull(),
@@ -264,7 +302,7 @@ export const weaponAttacks = pgTable(
   },
   (table) => ({
     characterIdx: index('idx_weapon_attacks_character').on(table.characterId),
-  })
+  }),
 );
 
 // =====================================================
@@ -327,16 +365,19 @@ export const conditionsLibraryRelations = relations(conditionsLibrary, ({ many }
   appliedConditions: many(combatParticipantConditions),
 }));
 
-export const combatParticipantConditionsRelations = relations(combatParticipantConditions, ({ one }) => ({
-  participant: one(combatParticipants, {
-    fields: [combatParticipantConditions.participantId],
-    references: [combatParticipants.id],
+export const combatParticipantConditionsRelations = relations(
+  combatParticipantConditions,
+  ({ one }) => ({
+    participant: one(combatParticipants, {
+      fields: [combatParticipantConditions.participantId],
+      references: [combatParticipants.id],
+    }),
+    condition: one(conditionsLibrary, {
+      fields: [combatParticipantConditions.conditionId],
+      references: [conditionsLibrary.id],
+    }),
   }),
-  condition: one(conditionsLibrary, {
-    fields: [combatParticipantConditions.conditionId],
-    references: [conditionsLibrary.id],
-  }),
-}));
+);
 
 export const creatureStatsRelations = relations(creatureStats, ({ one }) => ({
   character: one(characters, {

@@ -1,4 +1,4 @@
-import type { CharacterRace } from '@/types/character';
+import type { CharacterRace, Subrace } from '@/types/character';
 
 /**
  * Utility functions for calculating and applying racial ability score bonuses
@@ -30,7 +30,7 @@ export interface RacialBonus {
  */
 export function calculateRacialBonuses(
   race: CharacterRace | null,
-  subrace: import('@/types/character').Subrace | null,
+  subrace: Subrace | null,
   racialAbilityChoices?: {
     halfElf?: [string, string];
     variantHuman?: [string, string];
@@ -115,8 +115,16 @@ export function applyRacialBonuses(
   racialBonuses: RacialBonus[],
 ): Record<AbilityScoreName, number> {
   const finalScores = { ...baseScores };
+  const abilities: AbilityScoreName[] = [
+    'strength',
+    'dexterity',
+    'constitution',
+    'intelligence',
+    'wisdom',
+    'charisma',
+  ];
 
-  (Object.keys(finalScores) as AbilityScoreName[]).forEach((ability) => {
+  abilities.forEach((ability) => {
     const totalBonus = getTotalRacialBonus(ability, racialBonuses);
     const finalScore = (finalScores[ability] || 0) + totalBonus;
 

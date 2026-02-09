@@ -43,3 +43,7 @@
 ## 2025-05-30 - [Environmental Hazards Bug Fixes]
 **Learning:** Found two bugs in `environmentalHazards.ts`: 1) Incorrect proficiency bonus calculation at level 4 (was +3, should be +2). 2) Shallow copy mutation in `applyHazardEffects` where nested `hitPoints` object was being modified directly.
 **Action:** Always use `Math.floor((level - 1) / 4) + 2` for D&D 5e proficiency bonus. Ensure deep copies or nested spread operators when updating character state in utility functions to avoid side effects in React.
+
+## 2025-06-10 - [Racial Utilities Coverage & Bug Fix]
+**Learning:** Found that `applyRacialBonuses` only applied bonuses to abilities already present in the `baseScores` object because it used `Object.keys(baseScores)`. This could lead to missing bonuses if the character object was partial. Also learned that `vitest.config.ts` is strictly limited to 200 lines and requires `/* eslint-disable max-lines */` if it grows, and that `import()` type annotations are forbidden by lint rules.
+**Action:** Always iterate over an exhaustive list of known ability names when applying bonuses to ensure completeness. Use top-level `import type` instead of inline `import()` for TypeScript types.

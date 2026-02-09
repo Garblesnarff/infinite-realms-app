@@ -90,11 +90,14 @@ export class TokenService {
   /**
    * Verify user owns a character
    */
-  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<boolean> {
+  private static async verifyCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<boolean> {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
     });
 
@@ -116,10 +119,7 @@ export class TokenService {
       .select({ token: tokens })
       .from(tokens)
       .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
-      .where(and(
-        eq(tokens.sceneId, sceneId),
-        eq(scenes.userId, userId)
-      ))
+      .where(and(eq(tokens.sceneId, sceneId), eq(scenes.userId, userId)))
       .orderBy(desc(tokens.createdAt));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,10 +136,7 @@ export class TokenService {
       .select({ token: tokens })
       .from(tokens)
       .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
-      .where(and(
-        eq(tokens.id, tokenId),
-        eq(scenes.userId, userId)
-      ))
+      .where(and(eq(tokens.id, tokenId), eq(scenes.userId, userId)))
       .limit(1);
 
     return result?.token || null;
@@ -148,18 +145,12 @@ export class TokenService {
   /**
    * Create a new token
    */
-  static async createToken(
-    sceneId: string,
-    userId: string,
-    data: CreateTokenData
-  ): Promise<Token> {
-    // Verify scene access
-    await this.verifySceneAccess(sceneId, userId);
-
-    // If actorId is provided, verify character ownership
-    if (data.actorId) {
-      await this.verifyCharacterOwnership(data.actorId, userId);
-    }
+  static async createToken(sceneId: string, userId: string, data: CreateTokenData): Promise<Token> {
+    // ⚡ Bolt: Parallelize independent authorization checks to reduce aggregate database latency.
+    await Promise.all([
+      this.verifySceneAccess(sceneId, userId),
+      data.actorId ? this.verifyCharacterOwnership(data.actorId, userId) : Promise.resolve(true),
+    ]);
 
     // Create token
     const [token] = await db
@@ -206,7 +197,7 @@ export class TokenService {
     tokenId: string,
     userId: string,
     updates: Partial<NewToken>,
-    onBroadcast?: (sceneId: string, token: Token) => void
+    onBroadcast?: (sceneId: string, token: Token) => void,
   ): Promise<Token | null> {
     // 🛡️ Sentinel: Atomic update with ownership check via exists subquery
     // We specifically omit internal/security fields from the update object
@@ -219,17 +210,17 @@ export class TokenService {
         ...safeUpdates,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(tokens.id, tokenId),
-        exists(
-          db.select()
-            .from(scenes)
-            .where(and(
-              eq(scenes.id, tokens.sceneId),
-              eq(scenes.userId, userId)
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
+      )
       .returning();
 
     // Broadcast update via WebSocket if callback provided
@@ -247,17 +238,17 @@ export class TokenService {
     // 🛡️ Sentinel: Atomic delete with ownership check via exists subquery
     const result = await db
       .delete(tokens)
-      .where(and(
-        eq(tokens.id, tokenId),
-        exists(
-          db.select()
-            .from(scenes)
-            .where(and(
-              eq(scenes.id, tokens.sceneId),
-              eq(scenes.userId, userId)
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
+      )
       .returning({ id: tokens.id });
 
     return result.length > 0;
@@ -271,12 +262,17 @@ export class TokenService {
     userId: string,
     newX: number,
     newY: number,
-    onBroadcast?: (sceneId: string, token: Token) => void
+    onBroadcast?: (sceneId: string, token: Token) => void,
   ): Promise<Token | null> {
-    return this.updateToken(tokenId, userId, {
-      positionX: String(newX),
-      positionY: String(newY),
-    }, onBroadcast);
+    return this.updateToken(
+      tokenId,
+      userId,
+      {
+        positionX: String(newX),
+        positionY: String(newY),
+      },
+      onBroadcast,
+    );
   }
 
   /**
@@ -285,30 +281,42 @@ export class TokenService {
   static async linkToCharacter(
     tokenId: string,
     characterId: string,
-    userId: string
+    userId: string,
   ): Promise<boolean> {
-    // Verify character ownership first
-    await this.verifyCharacterOwnership(characterId, userId);
-
-    // 🛡️ Sentinel: Update token's actorId with atomic ownership check
+    // ⚡ Bolt: Consolidate authorization and update into fewer round-trips.
+    // We check both scene and character ownership directly in the token update.
     const [updated] = await db
       .update(tokens)
       .set({ actorId: characterId, updatedAt: new Date() })
-      .where(and(
-        eq(tokens.id, tokenId),
-        exists(
-          db.select()
-            .from(scenes)
-            .where(and(
-              eq(scenes.id, tokens.sceneId),
-              eq(scenes.userId, userId)
-            ))
-        )
-      ))
+      .where(
+        and(
+          eq(tokens.id, tokenId),
+          // Scene ownership check
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
+          ),
+          // Character ownership check
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
       .returning();
 
     if (!updated) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
+      // 🛡️ Sentinel: Throw NOT_FOUND to mask whether it was the token or character that was missing/unauthorized
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token or character not found' });
     }
 
     // Create or update character-token link
@@ -330,34 +338,36 @@ export class TokenService {
   static async unlinkFromCharacter(
     tokenId: string,
     characterId: string,
-    userId: string
+    userId: string,
   ): Promise<boolean> {
     // Verify character ownership first
     await this.verifyCharacterOwnership(characterId, userId);
 
-    // Remove character-token link
-    await db
-      .delete(characterTokens)
-      .where(
-        and(eq(characterTokens.characterId, characterId), eq(characterTokens.tokenId, tokenId))
-      );
-
-    // 🛡️ Sentinel: Clear actorId with atomic ownership check
-    await db
-      .update(tokens)
-      .set({ actorId: null, updatedAt: new Date() })
-      .where(and(
-        eq(tokens.id, tokenId),
-        eq(tokens.actorId, characterId),
-        exists(
-          db.select()
-            .from(scenes)
-            .where(and(
-              eq(scenes.id, tokens.sceneId),
-              eq(scenes.userId, userId)
-            ))
-        )
-      ));
+    // ⚡ Bolt: Parallelize independent database operations to reduce aggregate latency.
+    await Promise.all([
+      // Remove character-token link
+      db
+        .delete(characterTokens)
+        .where(
+          and(eq(characterTokens.characterId, characterId), eq(characterTokens.tokenId, tokenId)),
+        ),
+      // 🛡️ Sentinel: Clear actorId with atomic ownership check
+      db
+        .update(tokens)
+        .set({ actorId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(tokens.id, tokenId),
+            eq(tokens.actorId, characterId),
+            exists(
+              db
+                .select()
+                .from(scenes)
+                .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
+            ),
+          ),
+        ),
+    ]);
 
     return true;
   }
@@ -389,7 +399,7 @@ export class TokenService {
   static async updateVision(
     tokenId: string,
     userId: string,
-    visionConfig: TokenVisionConfig
+    visionConfig: TokenVisionConfig,
   ): Promise<Token | null> {
     const updates: Partial<NewToken> = {};
 
@@ -418,7 +428,7 @@ export class TokenService {
   static async updateLight(
     tokenId: string,
     userId: string,
-    lightConfig: TokenLightConfig
+    lightConfig: TokenLightConfig,
   ): Promise<Token | null> {
     const updates: Partial<NewToken> = {};
 
@@ -450,15 +460,31 @@ export class TokenService {
   /**
    * Get default token configuration for a character
    */
-  static async getDefaultTokenConfig(characterId: string, userId: string): Promise<TokenConfiguration | null> {
-    // Verify character ownership to ensure the user has access to this configuration
-    await this.verifyCharacterOwnership(characterId, userId);
+  static async getDefaultTokenConfig(
+    characterId: string,
+    userId: string,
+  ): Promise<TokenConfiguration | null> {
+    // ⚡ Bolt: Consolidate configuration fetching and ownership verification into a single database operation
+    // using a JOIN to reduce round-trips. This masks resource existence for unauthorized users.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [result] = await (db as any)
+      .select({ config: tokenConfigurations })
+      .from(characters)
+      .leftJoin(tokenConfigurations, eq(characters.id, tokenConfigurations.characterId))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
 
-    const config = await db.query.tokenConfigurations.findFirst({
-      where: eq(tokenConfigurations.characterId, characterId),
-    });
+    if (!result) {
+      // 🛡️ Sentinel: Character not found or unauthorized - throw NOT_FOUND to mask existence
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
+    }
 
-    return config || null;
+    return result.config;
   }
 
   /**
@@ -467,12 +493,10 @@ export class TokenService {
   static async updateDefaultTokenConfig(
     characterId: string,
     userId: string,
-    config: Partial<NewTokenConfiguration>
+    config: Partial<NewTokenConfiguration>,
   ): Promise<TokenConfiguration> {
-    // Verify character ownership
-    await this.verifyCharacterOwnership(characterId, userId);
-
-    // Check if config exists
+    // ⚡ Bolt: Removed redundant verifyCharacterOwnership call as getDefaultTokenConfig
+    // now performs this check atomically in a single database operation.
     const existing = await this.getDefaultTokenConfig(characterId, userId);
 
     if (existing) {
