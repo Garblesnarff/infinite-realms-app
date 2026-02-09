@@ -483,22 +483,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const value = {
-    user,
-    session,
-    loading,
-    blogRole,
-    blogRoleLoading,
-    isBlogAdmin: blogRole === 'admin',
-    refreshBlogRole: fetchBlogRole,
-    userPlan,
-    userPlanLoading,
-    refreshUserPlan: fetchUserPlan,
-    refreshAuth,
-    signUp,
-    signIn,
-    signOut,
-  };
+  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
+  // Using useMemo ensures that components consuming this context only re-render
+  // when the actual auth state or user profile data changes.
+  const value = useMemo(
+    () => ({
+      user,
+      session,
+      loading,
+      blogRole,
+      blogRoleLoading,
+      isBlogAdmin: blogRole === 'admin',
+      refreshBlogRole: fetchBlogRole,
+      userPlan,
+      userPlanLoading,
+      refreshUserPlan: fetchUserPlan,
+      refreshAuth,
+      signUp,
+      signIn,
+      signOut,
+    }),
+    [
+      user,
+      session,
+      loading,
+      blogRole,
+      blogRoleLoading,
+      fetchBlogRole,
+      userPlan,
+      userPlanLoading,
+      fetchUserPlan,
+      refreshAuth,
+      signUp,
+      signIn,
+      signOut,
+    ],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
