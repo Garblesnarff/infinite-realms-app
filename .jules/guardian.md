@@ -35,3 +35,7 @@
 ## 2026-02-06 - [Hook Testing & Mock Path Sensitivity]
 **Learning:** When testing hooks like `useCharacterData`, all dependencies (Supabase, Auth, Toast, etc.) must be mocked using `vi.mock()` BEFORE importing the module under test. Vitest is sensitive to the import path; if the source uses a relative path like `../lib/logger`, the mock in the test file should ideally match or use a correctly resolving path.
 **Action:** Always place `vi.mock()` calls at the top of the test file, immediately after importing testing utilities but before project-specific imports. Ensure `vitest.config.ts` is updated in both `include` and `coverage.include` for new hook tests.
+
+## 2025-05-30 - [Environmental Hazards Bug Fixes]
+**Learning:** Found two bugs in `environmentalHazards.ts`: 1) Incorrect proficiency bonus calculation at level 4 (was +3, should be +2). 2) Shallow copy mutation in `applyHazardEffects` where nested `hitPoints` object was being modified directly.
+**Action:** Always use `Math.floor((level - 1) / 4) + 2` for D&D 5e proficiency bonus. Ensure deep copies or nested spread operators when updating character state in utility functions to avoid side effects in React.
