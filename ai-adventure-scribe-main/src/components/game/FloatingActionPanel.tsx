@@ -90,6 +90,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
                 size="sm"
                 onClick={() => setIsExpanded(!isExpanded)}
                 aria-label={isExpanded ? 'Collapse actions' : 'Expand actions'}
+                aria-pressed={isExpanded}
                 className="h-6 w-6 p-0 rounded-full hover:bg-infinite-purple/20"
               >
                 {isExpanded ? '−' : '+'}

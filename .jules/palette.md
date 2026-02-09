@@ -47,3 +47,7 @@
 ## 2025-05-30 - Floating Action Panel Accessibility and Layering
 **Learning:** Standardizing accessibility on floating panels involves adding `aria-label` to state toggles and ensuring z-index reliability. Descriptive `aria-label` for "Open/Close" and "Expand/Collapse" states provides essential context for screen reader users. Using `style={{ zIndex: Z_INDEX.CONSTANT }}` prevents layering issues that Tailwind's dynamic classes might occasionally skip.
 **Action:** Always add descriptive `aria-label` to floating action buttons and use inline styles for z-index standardization.
+
+## 2025-06-01 - Audio Control Accessibility and Live Status
+**Learning:** Audio controls require specific ARIA attributes for a complete UX: `aria-label` and `aria-pressed` for mute/unmute toggles, and `aria-label` for sliders. Crucially, visual-only indicators like "Speaking..." pulses should be accompanied by `role="status"` and `aria-live="polite"` so screen reader users are aware of activity. Redundant component structures (e.g., in `src/components/game` and `src/features/game-session`) must be updated in tandem to ensure a consistent experience.
+**Action:** Implement `aria-pressed` for toggles, `aria-label` for icon-only buttons/sliders, and `aria-live` for status indicators. Always check for duplicate component definitions across feature directories.
