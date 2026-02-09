@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Exhaustion Service
  *
@@ -14,8 +15,16 @@
  * @module server/services/exhaustion-service
  */
 
+import { and, eq, exists, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
-import { sql } from 'drizzle-orm';
+import {
+  campaigns,
+  characters,
+  combatParticipants,
+  combatParticipantStatus,
+  npcs,
+} from '../../../db/schema/index.js';
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
 
 /**
@@ -153,23 +162,49 @@ export class ExhaustionService {
 
   /**
    * Get current exhaustion level for a participant
+   * @param participantId - The participant ID
+   * @param userId - User ID for ownership verification
    */
-  static async getExhaustionLevel(participantId: string): Promise<ExhaustionLevel> {
-    const result = await db.execute<Record<string, unknown>>(
-      sql`
-        SELECT exhaustion_level
-        FROM combat_participant_status
-        WHERE participant_id = ${participantId}
-        LIMIT 1
-      `
-    );
+  static async getExhaustionLevel(participantId: string, userId: string): Promise<ExhaustionLevel> {
+    // 🛡️ Sentinel: Verify ownership of the participant while fetching their status.
+    // This distinguishes between "no access" (throws 404) and "no record" (returns 0).
+    const participant = await db.query.combatParticipants.findFirst({
+      where: and(
+        eq(combatParticipants.id, participantId),
+        or(
+          // Access via owned character
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, combatParticipants.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+          // Access via owned campaign (NPCs)
+          exists(
+            db
+              .select()
+              .from(npcs)
+              .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+              .where(and(eq(npcs.id, combatParticipants.npcId), eq(campaigns.userId, userId))),
+          ),
+        ),
+      ),
+      with: {
+        status: true,
+      },
+    });
 
-    if (!result || result.length === 0) {
-      // No status record - assume 0 exhaustion
-      return 0;
+    if (!participant) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Participant', participantId);
     }
 
-    const level = (result[0]!.exhaustion_level as number) || 0;
+    const level = participant.status?.exhaustionLevel || 0;
     return Math.min(6, Math.max(0, level)) as ExhaustionLevel;
   }
 
@@ -178,29 +213,68 @@ export class ExhaustionService {
    *
    * @param participantId - The participant to affect
    * @param levels - Number of levels to add (positive) or remove (negative)
+   * @param userId - User ID for ownership verification
    * @param cause - Optional cause for logging
    */
   static async applyExhaustion(
     participantId: string,
     levels: number,
-    cause?: ExhaustionCause
+    userId: string,
+    cause?: ExhaustionCause,
   ): Promise<ExhaustionResult> {
-    // Get current level
-    const previousLevel = await this.getExhaustionLevel(participantId);
+    // Get current level (verified for ownership)
+    const previousLevel = await this.getExhaustionLevel(participantId, userId);
 
     // Calculate new level (clamped 0-6)
     const newLevel = Math.min(6, Math.max(0, previousLevel + levels)) as ExhaustionLevel;
 
     // Update database
-    await db.execute(
-      sql`
-        UPDATE combat_participant_status
-        SET
-          exhaustion_level = ${newLevel},
-          updated_at = NOW()
-        WHERE participant_id = ${participantId}
-      `
-    );
+    // 🛡️ Sentinel: Re-verify ownership during update for defense in depth.
+    await db
+      .update(combatParticipantStatus)
+      .set({
+        exhaustionLevel: newLevel,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          exists(
+            db
+              .select()
+              .from(combatParticipants)
+              .where(
+                and(
+                  eq(combatParticipants.id, participantId),
+                  or(
+                    // Access via owned character
+                    exists(
+                      db
+                        .select()
+                        .from(characters)
+                        .where(
+                          and(
+                            eq(characters.id, combatParticipants.characterId),
+                            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                          ),
+                        ),
+                    ),
+                    // Access via owned campaign (NPCs)
+                    exists(
+                      db
+                        .select()
+                        .from(npcs)
+                        .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+                        .where(
+                          and(eq(npcs.id, combatParticipants.npcId), eq(campaigns.userId, userId)),
+                        ),
+                    ),
+                  ),
+                ),
+              ),
+          ),
+        ),
+      );
 
     const effects = this.getExhaustionEffects(newLevel);
     const levelChanged = previousLevel !== newLevel;
@@ -240,17 +314,17 @@ export class ExhaustionService {
    */
   static async reduceExhaustion(
     participantId: string,
+    userId: string,
     levels: number = 1,
-    hasFood: boolean = true
+    hasFood: boolean = true,
   ): Promise<ExhaustionResult> {
     if (!hasFood) {
-      throw new BusinessLogicError(
-        'Cannot reduce exhaustion without food and drink',
-        { participantId }
-      );
+      throw new BusinessLogicError('Cannot reduce exhaustion without food and drink', {
+        participantId,
+      });
     }
 
-    return this.applyExhaustion(participantId, -Math.abs(levels));
+    return this.applyExhaustion(participantId, -Math.abs(levels), userId);
   }
 
   /**
@@ -258,12 +332,13 @@ export class ExhaustionService {
    */
   static async setExhaustionLevel(
     participantId: string,
-    level: ExhaustionLevel
+    level: ExhaustionLevel,
+    userId: string,
   ): Promise<ExhaustionResult> {
-    const previousLevel = await this.getExhaustionLevel(participantId);
+    const previousLevel = await this.getExhaustionLevel(participantId, userId);
     const difference = level - previousLevel;
 
-    return this.applyExhaustion(participantId, difference);
+    return this.applyExhaustion(participantId, difference, userId);
   }
 
   /**
@@ -331,19 +406,25 @@ export class ExhaustionService {
   /**
    * Common exhaustion scenarios
    */
-  static getExhaustionScenarios(): Record<ExhaustionCause, { levels: number; description: string }> {
+  static getExhaustionScenarios(): Record<
+    ExhaustionCause,
+    { levels: number; description: string }
+  > {
     return {
       forced_march: {
         levels: 1,
-        description: 'Each hour of travel beyond 8 hours requires a DC 10 + hours beyond 8 CON save or gain 1 level',
+        description:
+          'Each hour of travel beyond 8 hours requires a DC 10 + hours beyond 8 CON save or gain 1 level',
       },
       starvation: {
         levels: 1,
-        description: 'Going without food for days equal to 3 + CON modifier causes 1 level per day thereafter',
+        description:
+          'Going without food for days equal to 3 + CON modifier causes 1 level per day thereafter',
       },
       dehydration: {
         levels: 1,
-        description: 'Going without water for 1 day (or half day in hot weather) causes 1 level per day/half-day',
+        description:
+          'Going without water for 1 day (or half day in hot weather) causes 1 level per day/half-day',
       },
       extreme_cold: {
         levels: 1,
