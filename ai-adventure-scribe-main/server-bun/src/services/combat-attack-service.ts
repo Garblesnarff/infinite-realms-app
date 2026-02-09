@@ -359,10 +359,13 @@ export class CombatAttackService {
 
     const results: AttackResult[] = [];
 
-    // ⚡ Bolt: Parallelize spell resolution for all targets
-    // 🛡️ Sentinel: Use getCreatureStats with userId for ownership verification
+    // ⚡ Bolt: Fetch all target statistics in a single batch query to avoid N+1 database round-trips.
+    // 🛡️ Sentinel: Use getCreatureStatsBatch with userId for ownership verification.
+    const allTargetStats = await this.getCreatureStatsBatch(targetIds, userId);
+
+    // ⚡ Bolt: Parallelize spell resolution for all targets using the pre-fetched stats map.
     const resolutionPromises = targetIds.map(async (targetId) => {
-      const targetStats = await this.getCreatureStats(targetId, userId);
+      const targetStats = allTargetStats.get(targetId);
       if (!targetStats) {
         return null;
       }
@@ -608,6 +611,51 @@ export class CombatAttackService {
   /**
    * Get creature stats (AC, resistances, etc.)
    */
+  /**
+   * ⚡ Bolt: Fetch multiple creature statistics in a single batch query to avoid N+1 problems.
+   * Includes same ownership verification as getCreatureStats.
+   */
+  async getCreatureStatsBatch(creatureIds: string[], userId: string): Promise<Map<string, CreatureStats>> {
+    if (creatureIds.length === 0) return new Map();
+
+    const statsList = await db.query.creatureStats.findMany({
+      where: and(
+        or(
+          inArray(creatureStats.characterId, creatureIds),
+          inArray(creatureStats.npcId, creatureIds)
+        ),
+        or(
+          // Access via owned character
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, creatureStats.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          ),
+          // Access via owned campaign (NPCs)
+          exists(
+            db.select()
+              .from(npcs)
+              .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+              .where(and(
+                eq(npcs.id, creatureStats.npcId),
+                eq(campaigns.userId, userId)
+              ))
+          )
+        )
+      ),
+    });
+
+    const statsMap = new Map<string, CreatureStats>();
+    statsList.forEach((stats) => {
+      const id = stats.characterId || stats.npcId;
+      if (id) statsMap.set(id, stats);
+    });
+    return statsMap;
+  }
+
   async getCreatureStats(creatureId: string, userId: string): Promise<CreatureStats | null> {
     // 🛡️ Sentinel: Verify access to character OR NPC (via campaign)
     const stats = await db.query.creatureStats.findFirst({

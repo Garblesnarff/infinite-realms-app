@@ -35,3 +35,7 @@
 ## 2025-02-07 - [Combat Condition Management Optimizations]
 **Learning:** Found N+1 update patterns in `ConditionsService.applyCondition` where superseded conditions were removed individually. Also identified sequential `await` calls in the combat status route that could be parallelized.
 **Action:** Use batch updates with `IN` clauses for condition deactivation. Parallelize independent data fetches using `Promise.all` in API routes to reduce response times.
+
+## 2026-02-09 - Combat Creature Stats Batching
+**Learning:** Multiple targets in spell attacks (e.g. Area of Effect) were causing N+1 database queries because creature statistics were fetched individually for each target.
+**Action:** Implemented `getCreatureStatsBatch` using Drizzle's `inArray` to fetch all target statistics in a single query. Updated `resolveSpellAttack` to use this batch fetch, reducing database round-trips from O(N) to O(1) for statistics retrieval.
