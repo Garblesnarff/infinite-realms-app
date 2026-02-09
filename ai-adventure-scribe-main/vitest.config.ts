@@ -7,7 +7,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { // Added resolve configuration
+  resolve: {
+    // Added resolve configuration
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
@@ -46,6 +47,7 @@ export default defineConfig({
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/__tests__/conditionEffects.test.ts',
       'src/utils/__tests__/twoWeaponFighting.test.ts',
+      'src/utils/__tests__/fightingStyles.test.ts',
       'src/utils/__tests__/racialTraits.test.ts',
       'src/utils/__tests__/racialAbilityBonuses.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
@@ -106,7 +108,7 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/integration.test.ts',
       'src/agents/langgraph/__tests__/performance.test.ts',
       'tests/services/passive-skills-service.test.ts',
-      'tests/utils/character-converter.test.ts'
+      'tests/utils/character-converter.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -123,7 +125,7 @@ export default defineConfig({
       // Keep components tests excluded by default; curated ones are included explicitly above
       // Temporarily exclude flaky/unit tests pending mock alignment (keep diceRolls enabled)
       // 'src/agents/services/intent/PlayerIntentDetector.test.ts', // now enabled
-      'src/test/**'
+      'src/test/**',
     ],
     coverage: {
       enabled: true,
@@ -143,6 +145,7 @@ export default defineConfig({
         'src/utils/restMechanics.ts',
         'src/utils/conditionEffects.ts',
         'src/utils/twoWeaponFighting.ts',
+        'src/utils/fightingStyles.ts',
         'src/utils/character-calculations.ts',
         'src/utils/multiclassing.ts',
         'server-bun/src/services/character-folder-service.ts',
@@ -215,6 +218,6 @@ export default defineConfig({
         functions: 80,
         lines: 80,
       },
-    }
+    },
   },
 });

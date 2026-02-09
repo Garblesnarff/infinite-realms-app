@@ -49,7 +49,7 @@ vi.mock('../../../../db/client.js', () => {
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     and: vi.fn((...args) => ({ type: 'and', args })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
@@ -96,14 +96,15 @@ describe('ExhaustionService', () => {
     it('should throw NotFoundError if participant is not found or not owned', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue(null);
 
-      await expect(ExhaustionService.getExhaustionLevel(mockParticipantId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        ExhaustionService.getExhaustionLevel(mockParticipantId, mockUserId),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should return exhaustion level if owned', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 2 }
+        status: { exhaustionLevel: 2 },
       });
 
       const level = await ExhaustionService.getExhaustionLevel(mockParticipantId, mockUserId);
@@ -114,7 +115,7 @@ describe('ExhaustionService', () => {
     it('should return 0 if owned but no status record exists', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: null
+        status: null,
       });
 
       const level = await ExhaustionService.getExhaustionLevel(mockParticipantId, mockUserId);
@@ -126,26 +127,32 @@ describe('ExhaustionService', () => {
     it('should throw NotFoundError if participant is not owned', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue(null);
 
-      await expect(ExhaustionService.applyExhaustion(mockParticipantId, 1, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        ExhaustionService.applyExhaustion(mockParticipantId, 1, mockUserId),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should update exhaustion level if owned', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 1 }
+        status: { exhaustionLevel: 1 },
       });
 
       const mockReturning = vi.fn().mockResolvedValue([{ exhaustionLevel: 2 }]);
       (db.update as any).mockImplementation(() => {
-          const c: any = vi.fn(() => c);
-          c.set = vi.fn(() => c);
-          c.where = vi.fn(() => c);
-          c.returning = mockReturning;
-          return c;
+        const c: any = vi.fn(() => c);
+        c.set = vi.fn(() => c);
+        c.where = vi.fn(() => c);
+        c.returning = mockReturning;
+        return c;
       });
 
-      const result = await ExhaustionService.applyExhaustion(mockParticipantId, 1, mockUserId, 'forced_march');
+      const result = await ExhaustionService.applyExhaustion(
+        mockParticipantId,
+        1,
+        mockUserId,
+        'forced_march',
+      );
 
       expect(result.newLevel).toBe(2);
       expect(result.message).toContain('forced march');
@@ -155,16 +162,16 @@ describe('ExhaustionService', () => {
     it('should handle zero levels change', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 1 }
+        status: { exhaustionLevel: 1 },
       });
 
       const mockReturning = vi.fn().mockResolvedValue([{ exhaustionLevel: 1 }]);
       (db.update as any).mockImplementation(() => {
-          const c: any = vi.fn(() => c);
-          c.set = vi.fn(() => c);
-          c.where = vi.fn(() => c);
-          c.returning = mockReturning;
-          return c;
+        const c: any = vi.fn(() => c);
+        c.set = vi.fn(() => c);
+        c.where = vi.fn(() => c);
+        c.returning = mockReturning;
+        return c;
       });
 
       const result = await ExhaustionService.applyExhaustion(mockParticipantId, 0, mockUserId);
@@ -174,16 +181,16 @@ describe('ExhaustionService', () => {
     it('should include death message at level 6', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 5 }
+        status: { exhaustionLevel: 5 },
       });
 
       const mockReturning = vi.fn().mockResolvedValue([{ exhaustionLevel: 6 }]);
       (db.update as any).mockImplementation(() => {
-          const c: any = vi.fn(() => c);
-          c.set = vi.fn(() => c);
-          c.where = vi.fn(() => c);
-          c.returning = mockReturning;
-          return c;
+        const c: any = vi.fn(() => c);
+        c.set = vi.fn(() => c);
+        c.where = vi.fn(() => c);
+        c.returning = mockReturning;
+        return c;
       });
 
       const result = await ExhaustionService.applyExhaustion(mockParticipantId, 1, mockUserId);
@@ -193,26 +200,32 @@ describe('ExhaustionService', () => {
 
   describe('Security: reduceExhaustion', () => {
     it('should throw BusinessLogicError if no food provided', async () => {
-      await expect(ExhaustionService.reduceExhaustion(mockParticipantId, mockUserId, 1, false))
-        .rejects.toThrow(BusinessLogicError);
+      await expect(
+        ExhaustionService.reduceExhaustion(mockParticipantId, mockUserId, 1, false),
+      ).rejects.toThrow(BusinessLogicError);
     });
 
     it('should reduce exhaustion if owned and has food', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 1 }
+        status: { exhaustionLevel: 1 },
       });
 
       const mockReturning = vi.fn().mockResolvedValue([{ exhaustionLevel: 0 }]);
       (db.update as any).mockImplementation(() => {
-          const c: any = vi.fn(() => c);
-          c.set = vi.fn(() => c);
-          c.where = vi.fn(() => c);
-          c.returning = mockReturning;
-          return c;
+        const c: any = vi.fn(() => c);
+        c.set = vi.fn(() => c);
+        c.where = vi.fn(() => c);
+        c.returning = mockReturning;
+        return c;
       });
 
-      const result = await ExhaustionService.reduceExhaustion(mockParticipantId, mockUserId, 1, true);
+      const result = await ExhaustionService.reduceExhaustion(
+        mockParticipantId,
+        mockUserId,
+        1,
+        true,
+      );
 
       expect(result.newLevel).toBe(0);
       expect(db.update).toHaveBeenCalled();
@@ -223,16 +236,16 @@ describe('ExhaustionService', () => {
     it('should set exact exhaustion level if owned', async () => {
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: mockParticipantId,
-        status: { exhaustionLevel: 1 }
+        status: { exhaustionLevel: 1 },
       });
 
       const mockReturning = vi.fn().mockResolvedValue([{ exhaustionLevel: 4 }]);
       (db.update as any).mockImplementation(() => {
-          const c: any = vi.fn(() => c);
-          c.set = vi.fn(() => c);
-          c.where = vi.fn(() => c);
-          c.returning = mockReturning;
-          return c;
+        const c: any = vi.fn(() => c);
+        c.set = vi.fn(() => c);
+        c.where = vi.fn(() => c);
+        c.returning = mockReturning;
+        return c;
       });
 
       const result = await ExhaustionService.setExhaustionLevel(mockParticipantId, 4, mockUserId);

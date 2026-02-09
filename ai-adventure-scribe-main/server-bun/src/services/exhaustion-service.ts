@@ -174,24 +174,25 @@ export class ExhaustionService {
         or(
           // Access via owned character
           exists(
-            db.select()
+            db
+              .select()
               .from(characters)
-              .where(and(
-                eq(characters.id, combatParticipants.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
+              .where(
+                and(
+                  eq(characters.id, combatParticipants.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
           ),
           // Access via owned campaign (NPCs)
           exists(
-            db.select()
+            db
+              .select()
               .from(npcs)
               .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
-              .where(and(
-                eq(npcs.id, combatParticipants.npcId),
-                eq(campaigns.userId, userId)
-              ))
-          )
-        )
+              .where(and(eq(npcs.id, combatParticipants.npcId), eq(campaigns.userId, userId))),
+          ),
+        ),
       ),
       with: {
         status: true,
@@ -219,7 +220,7 @@ export class ExhaustionService {
     participantId: string,
     levels: number,
     userId: string,
-    cause?: ExhaustionCause
+    cause?: ExhaustionCause,
   ): Promise<ExhaustionResult> {
     // Get current level (verified for ownership)
     const previousLevel = await this.getExhaustionLevel(participantId, userId);
@@ -235,37 +236,45 @@ export class ExhaustionService {
         exhaustionLevel: newLevel,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(combatParticipantStatus.participantId, participantId),
-        exists(
-          db.select()
-            .from(combatParticipants)
-            .where(and(
-              eq(combatParticipants.id, participantId),
-              or(
-                // Access via owned character
-                exists(
-                  db.select()
-                    .from(characters)
-                    .where(and(
-                      eq(characters.id, combatParticipants.characterId),
-                      or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                    ))
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          exists(
+            db
+              .select()
+              .from(combatParticipants)
+              .where(
+                and(
+                  eq(combatParticipants.id, participantId),
+                  or(
+                    // Access via owned character
+                    exists(
+                      db
+                        .select()
+                        .from(characters)
+                        .where(
+                          and(
+                            eq(characters.id, combatParticipants.characterId),
+                            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                          ),
+                        ),
+                    ),
+                    // Access via owned campaign (NPCs)
+                    exists(
+                      db
+                        .select()
+                        .from(npcs)
+                        .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+                        .where(
+                          and(eq(npcs.id, combatParticipants.npcId), eq(campaigns.userId, userId)),
+                        ),
+                    ),
+                  ),
                 ),
-                // Access via owned campaign (NPCs)
-                exists(
-                  db.select()
-                    .from(npcs)
-                    .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
-                    .where(and(
-                      eq(npcs.id, combatParticipants.npcId),
-                      eq(campaigns.userId, userId)
-                    ))
-                )
-              )
-            ))
-        )
-      ));
+              ),
+          ),
+        ),
+      );
 
     const effects = this.getExhaustionEffects(newLevel);
     const levelChanged = previousLevel !== newLevel;
@@ -307,13 +316,12 @@ export class ExhaustionService {
     participantId: string,
     userId: string,
     levels: number = 1,
-    hasFood: boolean = true
+    hasFood: boolean = true,
   ): Promise<ExhaustionResult> {
     if (!hasFood) {
-      throw new BusinessLogicError(
-        'Cannot reduce exhaustion without food and drink',
-        { participantId }
-      );
+      throw new BusinessLogicError('Cannot reduce exhaustion without food and drink', {
+        participantId,
+      });
     }
 
     return this.applyExhaustion(participantId, -Math.abs(levels), userId);
@@ -325,7 +333,7 @@ export class ExhaustionService {
   static async setExhaustionLevel(
     participantId: string,
     level: ExhaustionLevel,
-    userId: string
+    userId: string,
   ): Promise<ExhaustionResult> {
     const previousLevel = await this.getExhaustionLevel(participantId, userId);
     const difference = level - previousLevel;
@@ -398,19 +406,25 @@ export class ExhaustionService {
   /**
    * Common exhaustion scenarios
    */
-  static getExhaustionScenarios(): Record<ExhaustionCause, { levels: number; description: string }> {
+  static getExhaustionScenarios(): Record<
+    ExhaustionCause,
+    { levels: number; description: string }
+  > {
     return {
       forced_march: {
         levels: 1,
-        description: 'Each hour of travel beyond 8 hours requires a DC 10 + hours beyond 8 CON save or gain 1 level',
+        description:
+          'Each hour of travel beyond 8 hours requires a DC 10 + hours beyond 8 CON save or gain 1 level',
       },
       starvation: {
         levels: 1,
-        description: 'Going without food for days equal to 3 + CON modifier causes 1 level per day thereafter',
+        description:
+          'Going without food for days equal to 3 + CON modifier causes 1 level per day thereafter',
       },
       dehydration: {
         levels: 1,
-        description: 'Going without water for 1 day (or half day in hot weather) causes 1 level per day/half-day',
+        description:
+          'Going without water for 1 day (or half day in hot weather) causes 1 level per day/half-day',
       },
       extreme_cold: {
         levels: 1,

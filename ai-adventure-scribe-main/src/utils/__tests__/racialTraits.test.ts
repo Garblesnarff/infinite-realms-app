@@ -82,7 +82,9 @@ describe('racialTraits', () => {
     });
 
     it('should return true for poison_resistance against poison', () => {
-      const traits: RacialTrait[] = [{ name: 'poison_resistance', type: 'passive', description: '' }];
+      const traits: RacialTrait[] = [
+        { name: 'poison_resistance', type: 'passive', description: '' },
+      ];
       expect(hasRacialSaveAdvantage(traits, 'poison')).toBe(true);
     });
 
@@ -180,9 +182,30 @@ describe('racialTraits', () => {
 
     describe('restoreRacialTraits', () => {
       const traits: RacialTrait[] = [
-        { name: 'short_trait', type: 'active', description: '', usesPerRest: 'short', maxUses: 1, currentUses: 0 },
-        { name: 'long_trait', type: 'active', description: '', usesPerRest: 'long', maxUses: 1, currentUses: 0 },
-        { name: 'none_trait', type: 'active', description: '', usesPerRest: 'none', maxUses: 1, currentUses: 0 },
+        {
+          name: 'short_trait',
+          type: 'active',
+          description: '',
+          usesPerRest: 'short',
+          maxUses: 1,
+          currentUses: 0,
+        },
+        {
+          name: 'long_trait',
+          type: 'active',
+          description: '',
+          usesPerRest: 'long',
+          maxUses: 1,
+          currentUses: 0,
+        },
+        {
+          name: 'none_trait',
+          type: 'active',
+          description: '',
+          usesPerRest: 'none',
+          maxUses: 1,
+          currentUses: 0,
+        },
       ];
 
       it('should restore short rest traits on short rest', () => {
