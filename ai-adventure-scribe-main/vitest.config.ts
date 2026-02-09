@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /// <reference types="vitest" />
 import path from 'path'; // Added path import
 
@@ -45,6 +46,8 @@ export default defineConfig({
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/__tests__/conditionEffects.test.ts',
       'src/utils/__tests__/twoWeaponFighting.test.ts',
+      'src/utils/__tests__/racialTraits.test.ts',
+      'src/utils/__tests__/racialAbilityBonuses.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/combat/__tests__/npc-auto-roller.test.ts',
@@ -175,6 +178,7 @@ export default defineConfig({
         'src/hooks/use-environmental-hazards.ts',
         'src/hooks/use-character-stats.ts',
         'src/utils/racialAbilityBonuses.ts',
+        'src/utils/racialTraits.ts',
         'src/engine/**/*.ts',
         // LangGraph implementation
         'src/agents/langgraph/nodes/*.ts',
