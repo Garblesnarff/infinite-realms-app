@@ -5,7 +5,7 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, isNull, desc, asc, sql, or } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -32,6 +32,56 @@ export interface MessagePage {
  * Provides type-safe database operations for game sessions and messages
  */
 export class SessionService {
+  /**
+   * Ownership predicate for game_sessions rows.
+   */
+  private static buildSessionOwnershipPredicate(userId: string) {
+    return or(
+      exists(
+        db.select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(
+            eq(campaigns.id, gameSessions.campaignId),
+            eq(campaigns.userId, userId)
+          ))
+      ),
+      exists(
+        db.select({ id: characters.id })
+          .from(characters)
+          .where(and(
+            eq(characters.id, gameSessions.characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    );
+  }
+
+  /**
+   * Ownership predicate for dialogue_history rows via session ownership.
+   */
+  private static buildDialogueOwnershipPredicate(userId: string) {
+    return or(
+      exists(
+        db.select({ id: campaigns.id })
+          .from(gameSessions)
+          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+          .where(and(
+            eq(gameSessions.id, dialogueHistory.sessionId),
+            eq(campaigns.userId, userId)
+          ))
+      ),
+      exists(
+        db.select({ id: characters.id })
+          .from(gameSessions)
+          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+          .where(and(
+            eq(gameSessions.id, dialogueHistory.sessionId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    );
+  }
+
   /**
    * Validate campaign visibility for the current user.
    */
@@ -184,9 +234,16 @@ export class SessionService {
       return { session: undefined, messages: [], total: 0 };
     }
 
+    const messageOwnershipPredicate = userId
+      ? this.buildDialogueOwnershipPredicate(userId)
+      : undefined;
+
     // Get messages with pagination
     const messages = await db.query.dialogueHistory.findMany({
-      where: eq(dialogueHistory.sessionId, sessionId),
+      where: and(
+        eq(dialogueHistory.sessionId, sessionId),
+        messageOwnershipPredicate
+      ),
       orderBy: asc(dialogueHistory.timestamp),
       limit,
       offset,
@@ -196,7 +253,10 @@ export class SessionService {
     const countResult = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId));
+      .where(and(
+        eq(dialogueHistory.sessionId, sessionId),
+        messageOwnershipPredicate
+      ));
 
     return {
       session,
@@ -273,6 +333,10 @@ export class SessionService {
       await this.assertSessionAccess(sessionId, userId);
     }
 
+    const ownershipPredicate = userId
+      ? this.buildSessionOwnershipPredicate(userId)
+      : undefined;
+
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -281,7 +345,10 @@ export class SessionService {
         summary: summary || null,
         updatedAt: new Date(),
       })
-      .where(eq(gameSessions.id, sessionId))
+      .where(and(
+        eq(gameSessions.id, sessionId),
+        ownershipPredicate
+      ))
       .returning();
 
     if (!updated && userId) {
@@ -303,13 +370,20 @@ export class SessionService {
       await this.assertSessionAccess(sessionId, userId);
     }
 
+    const ownershipPredicate = userId
+      ? this.buildSessionOwnershipPredicate(userId)
+      : undefined;
+
     const [updated] = await db
       .update(gameSessions)
       .set({
         sessionNotes: notes,
         updatedAt: new Date(),
       })
-      .where(eq(gameSessions.id, sessionId))
+      .where(and(
+        eq(gameSessions.id, sessionId),
+        ownershipPredicate
+      ))
       .returning();
 
     if (!updated && userId) {
@@ -332,6 +406,34 @@ export class SessionService {
   }, userId?: string): Promise<DialogueHistory> {
     if (userId) {
       await this.assertSessionAccess(data.sessionId, userId);
+
+      const ownershipPredicate = this.buildSessionOwnershipPredicate(userId);
+      const [msg] = await db
+        .insert(dialogueHistory)
+        .select(
+          db.select({
+            sessionId: sql`${data.sessionId}`,
+            speakerType: sql`${data.speakerType}`,
+            speakerId: sql`${data.speakerId || null}`,
+            message: sql`${data.message}`,
+            context: sql`${data.context || null}`,
+            timestamp: sql`NOW()`,
+            createdAt: sql`NOW()`,
+            updatedAt: sql`NOW()`,
+          })
+            .from(gameSessions)
+            .where(and(
+              eq(gameSessions.id, data.sessionId),
+              ownershipPredicate
+            ))
+        )
+        .returning();
+
+      if (!msg) {
+        throw new NotFoundError('Session', data.sessionId);
+      }
+
+      return msg;
     }
 
     const [msg] = await db
@@ -363,9 +465,16 @@ export class SessionService {
       await this.assertSessionAccess(sessionId, userId);
     }
 
+    const messageOwnershipPredicate = userId
+      ? this.buildDialogueOwnershipPredicate(userId)
+      : undefined;
+
     // Get messages ordered by timestamp (newest first for pagination)
     const messages = await db.query.dialogueHistory.findMany({
-      where: eq(dialogueHistory.sessionId, sessionId),
+      where: and(
+        eq(dialogueHistory.sessionId, sessionId),
+        messageOwnershipPredicate
+      ),
       orderBy: desc(dialogueHistory.timestamp),
       limit,
       offset,
@@ -375,7 +484,10 @@ export class SessionService {
     const countResult = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId));
+      .where(and(
+        eq(dialogueHistory.sessionId, sessionId),
+        messageOwnershipPredicate
+      ));
 
     const total = countResult[0]?.count || 0;
     const hasMore = offset + limit < total;

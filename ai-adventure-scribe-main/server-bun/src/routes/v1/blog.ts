@@ -28,8 +28,10 @@ import {
 import {
   handleValidationError,
   syncPostRelations,
+  deletePostRelations,
   slugNotFoundError,
   ensureAuthorExists,
+  fetchAuthorIdForUser,
   resolveAuthorIdForRequest,
   normalizeSeoKeywords,
   normalizeMetadata,
@@ -37,6 +39,17 @@ import {
   BLOG_POST_SELECT,
   BLOG_POST_SUMMARY_SELECT,
 } from './blog/helpers.js';
+
+async function getAuthorScopeIdForMutation(
+  blogRole: BlogRole,
+  userId: string
+): Promise<string | null> {
+  if (blogRole === 'admin') {
+    return null;
+  }
+
+  return await fetchAuthorIdForUser(userId);
+}
 
 export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
   .use(planRateLimit('default'))
@@ -304,6 +317,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
       const updatePayload: Record<string, unknown> = {};
 
       if (payload.title !== undefined) updatePayload.title = payload.title;
@@ -351,12 +370,14 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
       if (hasUpdates) {
         updatePayload.updated_at = new Date().toISOString();
-        const { error: updateError } = await supabaseService
+        let updateQuery = supabaseService
           .from('blog_posts')
           .update(updatePayload)
-          .eq('id', id)
-          .select('id')
-          .single();
+          .eq('id', id);
+        if (authorScopeId) {
+          updateQuery = updateQuery.eq('author_id', authorScopeId);
+        }
+        const { error: updateError } = await updateQuery.select('id').single();
 
         if (updateError) {
           if ((updateError as any)?.code === '23505') {
@@ -372,14 +393,17 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       }
 
       if (payload.categoryIds !== undefined || payload.tagIds !== undefined) {
-        await syncPostRelations(id || '', payload.categoryIds, payload.tagIds);
+        await syncPostRelations(id || '', payload.categoryIds, payload.tagIds, authorScopeId);
       }
 
-      const { data, error } = await supabaseService
+      let fetchQuery = supabaseService
         .from('blog_posts')
         .select(BLOG_POST_SELECT)
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        fetchQuery = fetchQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await fetchQuery.single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {
@@ -394,6 +418,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       if (error instanceof Error && error.message === 'BLOG_AUTHOR_NOT_FOUND') {
         set.status = 400;
         return { error: 'Author not found' };
+      }
+      if (error instanceof Error && error.message === 'BLOG_POST_NOT_FOUND') {
+        set.status = 404;
+        return { error: 'Blog post not found' };
       }
       set.status = 500;
       return { error: 'Failed to update blog post' };
@@ -432,17 +460,25 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
       const statusFields = normalizeStatusPayload('published', null, publishTimestamp);
 
-      const { data, error } = await supabaseService
+      let publishQuery = supabaseService
         .from('blog_posts')
         .update({
           ...statusFields,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', id)
-        .select(BLOG_POST_SELECT)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        publishQuery = publishQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await publishQuery.select(BLOG_POST_SELECT).single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {
@@ -484,24 +520,22 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      const { error: categoryJoinError } = await supabaseService
-        .from('blog_post_categories')
-        .delete()
-        .eq('post_id', id);
-      if (categoryJoinError) throw categoryJoinError;
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
 
-      const { error: tagJoinError } = await supabaseService
-        .from('blog_post_tags')
-        .delete()
-        .eq('post_id', id);
-      if (tagJoinError) throw tagJoinError;
+      await deletePostRelations(id || '', authorScopeId);
 
-      const { error } = await supabaseService
+      let deleteQuery = supabaseService
         .from('blog_posts')
         .delete()
-        .eq('id', id)
-        .select('id')
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        deleteQuery = deleteQuery.eq('author_id', authorScopeId);
+      }
+      const { error } = await deleteQuery.select('id').single();
 
       if (error) {
         if (slugNotFoundError(error)) {
@@ -514,6 +548,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       set.status = 204;
       return null;
     } catch (error) {
+      if (error instanceof Error && error.message === 'BLOG_POST_NOT_FOUND') {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
       set.status = 500;
       return { error: 'Failed to delete blog post' };
     }
@@ -917,11 +955,20 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      const { data, error } = await supabaseService
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
+      let previewQuery = supabaseService
         .from('blog_posts')
         .select(BLOG_POST_SELECT)
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        previewQuery = previewQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await previewQuery.single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {
@@ -1049,15 +1096,23 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      const { data, error } = await supabaseService
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
+      let requestReviewQuery = supabaseService
         .from('blog_posts')
         .update({
           status: 'review',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', id)
-        .select(BLOG_POST_SELECT)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        requestReviewQuery = requestReviewQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await requestReviewQuery.select(BLOG_POST_SELECT).single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {
@@ -1106,16 +1161,24 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      const { data, error } = await supabaseService
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
+      let scheduleQuery = supabaseService
         .from('blog_posts')
         .update({
           status: 'scheduled',
           scheduled_for: scheduledFor,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', id)
-        .select(BLOG_POST_SELECT)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        scheduleQuery = scheduleQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await scheduleQuery.select(BLOG_POST_SELECT).single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {
@@ -1157,15 +1220,23 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      const { data, error } = await supabaseService
+      const authorScopeId = await getAuthorScopeIdForMutation(blogRole, user.userId);
+      if (blogRole !== 'admin' && !authorScopeId) {
+        set.status = 404;
+        return { error: 'Blog post not found' };
+      }
+
+      let archiveQuery = supabaseService
         .from('blog_posts')
         .update({
           status: 'archived',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', id)
-        .select(BLOG_POST_SELECT)
-        .single();
+        .eq('id', id);
+      if (authorScopeId) {
+        archiveQuery = archiveQuery.eq('author_id', authorScopeId);
+      }
+      const { data, error } = await archiveQuery.select(BLOG_POST_SELECT).single();
 
       if (error || !data) {
         if (slugNotFoundError(error)) {

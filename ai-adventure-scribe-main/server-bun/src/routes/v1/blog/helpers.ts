@@ -4,6 +4,7 @@
  * Extracted from blog.ts for modularity
  */
 
+import { sql } from '../../../lib/db.js';
 import { supabaseService } from '../../../lib/supabase.js';
 
 export type BlogRole = 'viewer' | 'author' | 'admin';
@@ -21,44 +22,171 @@ export function handleValidationError(error: any) {
 /**
  * Sync post-category and post-tag relations
  */
-export async function syncPostRelations(postId: string, categoryIds?: string[], tagIds?: string[]) {
-  if (categoryIds !== undefined) {
-    const { error: deleteError } = await supabaseService
-      .from('blog_post_categories')
-      .delete()
-      .eq('post_id', postId);
-    if (deleteError) throw deleteError;
+export async function syncPostRelations(
+  postId: string,
+  categoryIds?: string[],
+  tagIds?: string[],
+  authorScopeId?: string | null
+) {
+  if (authorScopeId) {
+    const { data: scopedPost, error: scopedError } = await supabaseService
+      .from('blog_posts')
+      .select('id')
+      .eq('id', postId)
+      .eq('author_id', authorScopeId)
+      .maybeSingle();
 
-    if (categoryIds.length > 0) {
-      const insertPayload = categoryIds.map((categoryId) => ({
-        post_id: postId,
-        category_id: categoryId,
-      }));
-      const { error: insertError } = await supabaseService
+    if (scopedError) throw scopedError;
+    if (!scopedPost) throw new Error('BLOG_POST_NOT_FOUND');
+  }
+
+  if (categoryIds !== undefined) {
+    if (authorScopeId) {
+      await sql`
+        DELETE FROM blog_post_categories bpc
+        WHERE bpc.post_id = ${postId}
+          AND EXISTS (
+            SELECT 1
+            FROM blog_posts bp
+            WHERE bp.id = bpc.post_id
+              AND bp.author_id = ${authorScopeId}
+          )
+      `;
+
+      for (const categoryId of categoryIds) {
+        await sql`
+          INSERT INTO blog_post_categories (post_id, category_id)
+          SELECT ${postId}, ${categoryId}
+          WHERE EXISTS (
+            SELECT 1
+            FROM blog_posts bp
+            WHERE bp.id = ${postId}
+              AND bp.author_id = ${authorScopeId}
+          )
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    } else {
+      const { error: deleteError } = await supabaseService
         .from('blog_post_categories')
-        .insert(insertPayload);
-      if (insertError) throw insertError;
+        .delete()
+        .eq('post_id', postId);
+      if (deleteError) throw deleteError;
+
+      if (categoryIds.length > 0) {
+        const insertPayload = categoryIds.map((categoryId) => ({
+          post_id: postId,
+          category_id: categoryId,
+        }));
+        const { error: insertError } = await supabaseService
+          .from('blog_post_categories')
+          .insert(insertPayload);
+        if (insertError) throw insertError;
+      }
     }
   }
 
   if (tagIds !== undefined) {
-    const { error: deleteError } = await supabaseService
-      .from('blog_post_tags')
-      .delete()
-      .eq('post_id', postId);
-    if (deleteError) throw deleteError;
+    if (authorScopeId) {
+      await sql`
+        DELETE FROM blog_post_tags bpt
+        WHERE bpt.post_id = ${postId}
+          AND EXISTS (
+            SELECT 1
+            FROM blog_posts bp
+            WHERE bp.id = bpt.post_id
+              AND bp.author_id = ${authorScopeId}
+          )
+      `;
 
-    if (tagIds.length > 0) {
-      const insertPayload = tagIds.map((tagId) => ({
-        post_id: postId,
-        tag_id: tagId,
-      }));
-      const { error: insertError } = await supabaseService
+      for (const tagId of tagIds) {
+        await sql`
+          INSERT INTO blog_post_tags (post_id, tag_id)
+          SELECT ${postId}, ${tagId}
+          WHERE EXISTS (
+            SELECT 1
+            FROM blog_posts bp
+            WHERE bp.id = ${postId}
+              AND bp.author_id = ${authorScopeId}
+          )
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    } else {
+      const { error: deleteError } = await supabaseService
         .from('blog_post_tags')
-        .insert(insertPayload);
-      if (insertError) throw insertError;
+        .delete()
+        .eq('post_id', postId);
+      if (deleteError) throw deleteError;
+
+      if (tagIds.length > 0) {
+        const insertPayload = tagIds.map((tagId) => ({
+          post_id: postId,
+          tag_id: tagId,
+        }));
+        const { error: insertError } = await supabaseService
+          .from('blog_post_tags')
+          .insert(insertPayload);
+        if (insertError) throw insertError;
+      }
     }
   }
+}
+
+/**
+ * Delete all category/tag relations for a post, optionally scoped to an author.
+ */
+export async function deletePostRelations(
+  postId: string,
+  authorScopeId?: string | null
+) {
+  if (authorScopeId) {
+    const { data: scopedPost, error: scopedError } = await supabaseService
+      .from('blog_posts')
+      .select('id')
+      .eq('id', postId)
+      .eq('author_id', authorScopeId)
+      .maybeSingle();
+
+    if (scopedError) throw scopedError;
+    if (!scopedPost) throw new Error('BLOG_POST_NOT_FOUND');
+
+    await sql`
+      DELETE FROM blog_post_categories bpc
+      WHERE bpc.post_id = ${postId}
+        AND EXISTS (
+          SELECT 1
+          FROM blog_posts bp
+          WHERE bp.id = bpc.post_id
+            AND bp.author_id = ${authorScopeId}
+        )
+    `;
+
+    await sql`
+      DELETE FROM blog_post_tags bpt
+      WHERE bpt.post_id = ${postId}
+        AND EXISTS (
+          SELECT 1
+          FROM blog_posts bp
+          WHERE bp.id = bpt.post_id
+            AND bp.author_id = ${authorScopeId}
+        )
+    `;
+
+    return;
+  }
+
+  const { error: categoryDeleteError } = await supabaseService
+    .from('blog_post_categories')
+    .delete()
+    .eq('post_id', postId);
+  if (categoryDeleteError) throw categoryDeleteError;
+
+  const { error: tagDeleteError } = await supabaseService
+    .from('blog_post_tags')
+    .delete()
+    .eq('post_id', postId);
+  if (tagDeleteError) throw tagDeleteError;
 }
 
 /**
