@@ -2,41 +2,35 @@ import { useMemo } from 'react';
 
 import type { Character, Ability, AbilityScores } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
+import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
 import logger from '@/lib/logger';
 import { calculateAllCharacterStats } from '@/utils/character-calculations';
+import { calculateRacialBonuses, getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
 
 /**
  * Hook for calculating and memoizing character statistics
  * Provides real-time D&D 5e calculations for character sheets
  */
 export const useCharacterStats = (character: Character | null): CharacterStats | null => {
+  const effectiveAbilityScores = useEffectiveAbilityScores(character);
+
   return useMemo(() => {
-    if (!character) return null;
+    if (!character || !effectiveAbilityScores) return null;
 
     try {
-      return calculateAllCharacterStats(character);
+      // Create a modified character with effective scores for derived calculations
+      const modifiedCharacter = {
+        ...character,
+        abilityScores: effectiveAbilityScores as AbilityScores,
+      };
+
+      return calculateAllCharacterStats(modifiedCharacter);
     } catch (error) {
       logger.error('Error calculating character stats:', error);
       return null;
     }
-  }, [
-    character?.level,
-    character?.class,
-    character?.race,
-    character?.abilityScores?.strength?.score,
-    character?.abilityScores?.dexterity?.score,
-    character?.abilityScores?.constitution?.score,
-    character?.abilityScores?.intelligence?.score,
-    character?.abilityScores?.wisdom?.score,
-    character?.abilityScores?.charisma?.score,
-    character?.abilityScores?.strength?.modifier,
-    character?.abilityScores?.dexterity?.modifier,
-    character?.abilityScores?.constitution?.modifier,
-    character?.abilityScores?.intelligence?.modifier,
-    character?.abilityScores?.wisdom?.modifier,
-    character?.abilityScores?.charisma?.modifier,
-  ]);
+  }, [character, effectiveAbilityScores]);
 };
 
 /**
@@ -72,7 +66,7 @@ export const useIsSpellcaster = (character: Character | null): boolean => {
     ];
 
     return spellcastingClasses.includes(character.class.name);
-  }, [character?.class?.name]);
+  }, [character?.class]);
 };
 
 /**
@@ -108,7 +102,7 @@ export const useLevelProgression = (character: Character | null) => {
       canLevelUp: currentXP >= nextLevelXP && currentLevel < 20,
       isMaxLevel: currentLevel >= 20,
     };
-  }, [character?.level, character?.experience]);
+  }, [character]);
 };
 
 /**
@@ -119,14 +113,15 @@ export const useEffectiveAbilityScores = (character: Character | null) => {
     if (!character?.abilityScores) return null;
 
     const baseScores = character.abilityScores;
-    const racialBonuses = {
-      ...character.race?.abilityScoreIncrease,
-      ...character.subrace?.abilityScoreIncrease,
-    };
+    const racialBonuses = calculateRacialBonuses(
+      character.race || null,
+      character.subrace || null,
+      character.racialAbilityChoices,
+    );
 
     const effectiveScores = (Object.entries(baseScores) as [keyof AbilityScores, Ability][]).reduce(
       (acc, [ability, data]) => {
-        const racialBonus = racialBonuses[ability] || 0;
+        const racialBonus = getTotalRacialBonus(ability as AbilityScoreName, racialBonuses);
         const effectiveScore = data.score + racialBonus;
 
         acc[ability] = {
@@ -145,7 +140,8 @@ export const useEffectiveAbilityScores = (character: Character | null) => {
     return effectiveScores;
   }, [
     character?.abilityScores,
-    character?.race?.abilityScoreIncrease,
-    character?.subrace?.abilityScoreIncrease,
+    character?.race,
+    character?.subrace,
+    character?.racialAbilityChoices,
   ]);
 };

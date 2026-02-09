@@ -79,6 +79,7 @@ export default defineConfig({
       'src/hooks/__tests__/useSpellSelection.test.ts',
       'src/hooks/__tests__/use-character-data.test.ts',
       'src/hooks/__tests__/useEnvironmentalHazards.test.ts',
+      'src/hooks/__tests__/use-character-stats.test.ts',
       'src/__tests__/unit/spell-class-restrictions.test.ts',
       'src/__tests__/unit/response-pipeline.test.ts',
       'server-bun/src/services/__tests__/rest-service.test.ts',
@@ -170,6 +171,8 @@ export default defineConfig({
         'src/hooks/useSpellSelection.ts',
         'src/hooks/use-character-data.ts',
         'src/hooks/use-environmental-hazards.ts',
+        'src/hooks/use-character-stats.ts',
+        'src/utils/racialAbilityBonuses.ts',
         'src/engine/**/*.ts',
         // LangGraph implementation
         'src/agents/langgraph/nodes/*.ts',
