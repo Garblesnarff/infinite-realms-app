@@ -17,7 +17,7 @@ import {
   weaponQualifiesForStyle,
   getFightingStyleRecommendations,
   getTotalAC,
-  FIGHTING_STYLES
+  FIGHTING_STYLES,
 } from '../fightingStyles';
 
 import type { CombatParticipant, WeaponProperties } from '@/types/combat';
@@ -32,7 +32,10 @@ describe('fightingStyles', () => {
 
   describe('hasFightingStyle', () => {
     it('should return true if the participant has the style', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.defense] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.defense],
+      } as CombatParticipant;
       expect(hasFightingStyle(p, 'defense')).toBe(true);
     });
 
@@ -68,7 +71,10 @@ describe('fightingStyles', () => {
     });
 
     it('should not add duplicate styles', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.archery] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.archery],
+      } as CombatParticipant;
       const updated = addFightingStyle(p, 'archery');
       expect(updated.fightingStyles?.length).toBe(1);
     });
@@ -76,24 +82,36 @@ describe('fightingStyles', () => {
 
   describe('getFightingStyleACBonus', () => {
     it('should return 1 for defense style', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.defense] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.defense],
+      } as CombatParticipant;
       expect(getFightingStyleACBonus(p)).toBe(1);
     });
 
     it('should return 0 for other styles', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.archery] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.archery],
+      } as CombatParticipant;
       expect(getFightingStyleACBonus(p)).toBe(0);
     });
   });
 
   describe('getFightingStyleAttackBonus', () => {
     it('should return 2 for archery style with ranged attack', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.archery] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.archery],
+      } as CombatParticipant;
       expect(getFightingStyleAttackBonus(p, true)).toBe(2);
     });
 
     it('should return 0 for archery style with melee attack', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.archery] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.archery],
+      } as CombatParticipant;
       expect(getFightingStyleAttackBonus(p, false)).toBe(0);
     });
   });
@@ -103,7 +121,10 @@ describe('fightingStyles', () => {
     const twoHandedWeapon = { properties: { twoHanded: true } as WeaponProperties };
 
     it('should return 2 for dueling style with one-handed melee weapon', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.dueling] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.dueling],
+      } as CombatParticipant;
       expect(getFightingStyleDamageBonus(p, meleeWeapon)).toBe(2);
     });
 
@@ -111,13 +132,16 @@ describe('fightingStyles', () => {
       const p = {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.dueling],
-        offHandWeapon: {} as any
+        offHandWeapon: {} as any,
       } as CombatParticipant;
       expect(getFightingStyleDamageBonus(p, meleeWeapon)).toBe(0);
     });
 
     it('should return 0 for dueling style with two-handed weapon', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.dueling] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.dueling],
+      } as CombatParticipant;
       expect(getFightingStyleDamageBonus(p, twoHandedWeapon)).toBe(0);
     });
   });
@@ -128,11 +152,14 @@ describe('fightingStyles', () => {
       dieType: 10,
       results: [1, 5],
       modifier: 2,
-      total: 8
+      total: 8,
     };
 
     it('should reroll 1s and 2s if participant has style and weapon is two-handed', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.great_weapon_fighting] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.great_weapon_fighting],
+      } as CombatParticipant;
       const result = applyGreatWeaponFighting(p, damageRoll as any, twoHandedWeapon);
       expect(result.results).toEqual([1, 5]); // Original results kept
       expect(result.keptResults![0]).not.toBe(1); // 1 should be rerolled
@@ -140,8 +167,13 @@ describe('fightingStyles', () => {
     });
 
     it('should not reroll if weapon is not two-handed', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.great_weapon_fighting] } as CombatParticipant;
-      const result = applyGreatWeaponFighting(p, damageRoll as any, { properties: { twoHanded: false } });
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.great_weapon_fighting],
+      } as CombatParticipant;
+      const result = applyGreatWeaponFighting(p, damageRoll as any, {
+        properties: { twoHanded: false },
+      });
       expect(result).toEqual(damageRoll);
     });
   });
@@ -152,7 +184,7 @@ describe('fightingStyles', () => {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.protection],
         reactionTaken: false,
-        armorClass: 16 // Shield detection simplified
+        armorClass: 16, // Shield detection simplified
       } as CombatParticipant;
       const ally = { id: '2' } as CombatParticipant;
       const attacker = { id: '3' } as CombatParticipant;
@@ -164,7 +196,7 @@ describe('fightingStyles', () => {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.protection],
         reactionTaken: true,
-        armorClass: 16
+        armorClass: 16,
       } as CombatParticipant;
       expect(canUseProtection(p, {} as any, {} as any).canUse).toBe(false);
     });
@@ -175,7 +207,7 @@ describe('fightingStyles', () => {
       const p = {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.blind_fighting],
-        visionTypes: [{ type: 'normal', range: 60 }]
+        visionTypes: [{ type: 'normal', range: 60 }],
       } as any;
       const updated = applyBlindFighting(p);
       expect(updated.visionTypes).toContainEqual({ type: 'blindsight', range: 10 });
@@ -185,7 +217,7 @@ describe('fightingStyles', () => {
       const p = {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.blind_fighting],
-        visionTypes: [{ type: 'blindsight', range: 10 }]
+        visionTypes: [{ type: 'blindsight', range: 10 }],
       } as any;
       const updated = applyBlindFighting(p);
       expect(updated.visionTypes.filter((v: any) => v.type === 'blindsight').length).toBe(1);
@@ -199,7 +231,10 @@ describe('fightingStyles', () => {
 
   describe('getBlessedWarriorCantrips', () => {
     it('should return cantrips for blessed warrior style', () => {
-      const p = { ...mockParticipant, fightingStyles: [FIGHTING_STYLES.blessed_warrior] } as CombatParticipant;
+      const p = {
+        ...mockParticipant,
+        fightingStyles: [FIGHTING_STYLES.blessed_warrior],
+      } as CombatParticipant;
       const cantrips = getBlessedWarriorCantrips(p);
       expect(cantrips).toContain('guidance');
       expect(cantrips.length).toBeGreaterThan(0);
@@ -218,14 +253,27 @@ describe('fightingStyles', () => {
     });
 
     it('should validate great weapon fighting style', () => {
-      expect(weaponQualifiesForStyle({ properties: { twoHanded: true } }, 'great_weapon_fighting')).toBe(true);
-      expect(weaponQualifiesForStyle({ properties: { versatile: true } }, 'great_weapon_fighting')).toBe(true);
-      expect(weaponQualifiesForStyle({ properties: { twoHanded: false, versatile: false } }, 'great_weapon_fighting')).toBe(false);
+      expect(
+        weaponQualifiesForStyle({ properties: { twoHanded: true } }, 'great_weapon_fighting'),
+      ).toBe(true);
+      expect(
+        weaponQualifiesForStyle({ properties: { versatile: true } }, 'great_weapon_fighting'),
+      ).toBe(true);
+      expect(
+        weaponQualifiesForStyle(
+          { properties: { twoHanded: false, versatile: false } },
+          'great_weapon_fighting',
+        ),
+      ).toBe(false);
     });
 
     it('should validate two weapon fighting style', () => {
-      expect(weaponQualifiesForStyle({ properties: { light: true } }, 'two_weapon_fighting')).toBe(true);
-      expect(weaponQualifiesForStyle({ properties: { light: false } }, 'two_weapon_fighting')).toBe(false);
+      expect(weaponQualifiesForStyle({ properties: { light: true } }, 'two_weapon_fighting')).toBe(
+        true,
+      );
+      expect(weaponQualifiesForStyle({ properties: { light: false } }, 'two_weapon_fighting')).toBe(
+        false,
+      );
     });
   });
 
@@ -251,7 +299,7 @@ describe('fightingStyles', () => {
       const p = {
         ...mockParticipant,
         armorClass: 15,
-        fightingStyles: [FIGHTING_STYLES.defense]
+        fightingStyles: [FIGHTING_STYLES.defense],
       } as CombatParticipant;
       expect(getTotalAC(p)).toBe(16);
     });
@@ -260,7 +308,7 @@ describe('fightingStyles', () => {
       const p = {
         ...mockParticipant,
         armorClass: 15,
-        cover: { acBonus: 2 }
+        cover: { acBonus: 2 },
       } as any;
       expect(getTotalAC(p)).toBe(17);
     });

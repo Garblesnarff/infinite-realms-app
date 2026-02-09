@@ -93,6 +93,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/class-features-service.test.ts',
       'server-bun/src/services/__tests__/combat-attack-service.test.ts',
       'server-bun/src/services/__tests__/session-service.test.ts',
+      'server-bun/src/services/__tests__/token-service.test.ts',
       'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',

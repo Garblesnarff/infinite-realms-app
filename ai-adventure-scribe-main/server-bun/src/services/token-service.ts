@@ -146,10 +146,10 @@ export class TokenService {
    * Create a new token
    */
   static async createToken(sceneId: string, userId: string, data: CreateTokenData): Promise<Token> {
-    // ⚡ Bolt: Parallelize independent authorization checks to reduce aggregate database latency.
+    // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
     await Promise.all([
       this.verifySceneAccess(sceneId, userId),
-      data.actorId ? this.verifyCharacterOwnership(data.actorId, userId) : Promise.resolve(true),
+      data.actorId ? this.verifyCharacterOwnership(data.actorId, userId) : Promise.resolve(),
     ]);
 
     // Create token
@@ -464,11 +464,14 @@ export class TokenService {
     characterId: string,
     userId: string,
   ): Promise<TokenConfiguration | null> {
-    // ⚡ Bolt: Consolidate configuration fetching and ownership verification into a single database operation
-    // using a JOIN to reduce round-trips. This masks resource existence for unauthorized users.
+    // ⚡ Bolt: Consolidate ownership verification and configuration retrieval into a single query.
+    // This reduces database round-trips from 2 to 1 and maintains security masking by throwing 404 if the character is missing or unowned.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [result] = await (db as any)
-      .select({ config: tokenConfigurations })
+      .select({
+        characterId: characters.id,
+        config: tokenConfigurations,
+      })
       .from(characters)
       .leftJoin(tokenConfigurations, eq(characters.id, tokenConfigurations.characterId))
       .where(
@@ -480,11 +483,13 @@ export class TokenService {
       .limit(1);
 
     if (!result) {
-      // 🛡️ Sentinel: Character not found or unauthorized - throw NOT_FOUND to mask existence
+      // 🛡️ Sentinel: Throw NOT_FOUND if character doesn't exist or user doesn't own it
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
     }
 
-    return result.config;
+    // Drizzle returns an object with null fields for left-joined tables if no row matches.
+    // We check for the presence of the config ID to determine if a configuration actually exists.
+    return result.config?.id ? result.config : null;
   }
 
   /**
@@ -495,8 +500,8 @@ export class TokenService {
     userId: string,
     config: Partial<NewTokenConfiguration>,
   ): Promise<TokenConfiguration> {
-    // ⚡ Bolt: Removed redundant verifyCharacterOwnership call as getDefaultTokenConfig
-    // now performs this check atomically in a single database operation.
+    // ⚡ Bolt: Removed redundant verifyCharacterOwnership call as it's now handled by consolidated getDefaultTokenConfig.
+    // This reduces total round-trips in the update path from 4 to 2.
     const existing = await this.getDefaultTokenConfig(characterId, userId);
 
     if (existing) {
