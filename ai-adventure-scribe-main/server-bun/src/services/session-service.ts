@@ -126,11 +126,15 @@ export class SessionService {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
 
-    const session = await this.getSessionById(sessionId, userId);
-
-    // ⚡ Bolt: Parallelize message fetch and count query to reduce total latency.
-    // Since sessionId and ownership are already verified, these can run concurrently.
-    const [messages, countResult] = await Promise.all([
+    // ⚡ Bolt: Parallelize session fetch, message fetch and count query to reduce total latency.
+    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
+    const [session, messages, countResult] = await Promise.all([
+      db.query.gameSessions.findFirst({
+        where: and(
+          eq(gameSessions.id, sessionId),
+          this.getOwnershipCondition(userId)
+        ),
+      }),
       db.query.dialogueHistory.findMany({
         where: eq(dialogueHistory.sessionId, sessionId),
         orderBy: asc(dialogueHistory.timestamp),
@@ -142,6 +146,8 @@ export class SessionService {
         .from(dialogueHistory)
         .where(eq(dialogueHistory.sessionId, sessionId)),
     ]);
+
+    if (!session) throw new NotFoundError('Session', sessionId);
 
     return {
       session,
@@ -185,9 +191,8 @@ export class SessionService {
     userId: string,
     summary?: string
   ): Promise<GameSession> {
-    // Verify ownership first
-    await this.getSessionById(sessionId, userId);
-
+    // ⚡ Bolt: Removed redundant getSessionById call.
+    // The update query already enforces ownership via the WHERE clause.
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -202,7 +207,7 @@ export class SessionService {
       ))
       .returning();
 
-    if (!updated) throw new InternalServerError('Failed to complete session');
+    if (!updated) throw new NotFoundError('Session', sessionId);
     return updated;
   }
 
@@ -214,9 +219,8 @@ export class SessionService {
     userId: string,
     notes: string
   ): Promise<GameSession> {
-    // Verify ownership first
-    await this.getSessionById(sessionId, userId);
-
+    // ⚡ Bolt: Removed redundant getSessionById call.
+    // Ownership is verified atomically within the UPDATE query's WHERE clause.
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -229,7 +233,7 @@ export class SessionService {
       ))
       .returning();
 
-    if (!updated) throw new InternalServerError('Failed to update session notes');
+    if (!updated) throw new NotFoundError('Session', sessionId);
     return updated;
   }
 
@@ -272,12 +276,15 @@ export class SessionService {
     limit: number = 50,
     offset: number = 0
   ): Promise<MessagePage> {
-    // Verify ownership first
-    await this.getSessionById(sessionId, userId);
-
-    // ⚡ Bolt: Parallelize message fetch and count query to reduce total latency.
-    // Reducing database round-trips from sequential to concurrent.
-    const [messages, countResult] = await Promise.all([
+    // ⚡ Bolt: Parallelize session verification, message fetch and count query to reduce total latency.
+    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
+    const [session, messages, countResult] = await Promise.all([
+      db.query.gameSessions.findFirst({
+        where: and(
+          eq(gameSessions.id, sessionId),
+          this.getOwnershipCondition(userId)
+        ),
+      }),
       db.query.dialogueHistory.findMany({
         where: eq(dialogueHistory.sessionId, sessionId),
         orderBy: desc(dialogueHistory.timestamp),
@@ -289,6 +296,8 @@ export class SessionService {
         .from(dialogueHistory)
         .where(eq(dialogueHistory.sessionId, sessionId)),
     ]);
+
+    if (!session) throw new NotFoundError('Session', sessionId);
 
     const total = countResult[0]?.count || 0;
     const hasMore = offset + limit < total;
