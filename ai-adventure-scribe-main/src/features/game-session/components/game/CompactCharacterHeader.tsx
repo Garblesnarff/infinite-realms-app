@@ -1,12 +1,22 @@
 import { Heart, Shield, Zap, Skull } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { getParticipantStatus } from '@/services/combat/damage-integrator';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { getParticipantStatus } from '@/services/combat/damage-integrator';
+
+// ⚡ Bolt: Move helper functions and static constants outside the component definition
+// to avoid re-creation on every render.
+const getModifier = (score?: number): string => {
+  if (!score) return '+0';
+  const mod = Math.floor((score - 10) / 2);
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+};
+
+const DEFAULT_BACKGROUND_IMAGE = new URL('/card-background.jpeg', import.meta.url).href;
 
 /**
  * CompactCharacterHeader - Quick view of character essentials for game sidebar
@@ -19,9 +29,11 @@ import logger from '@/lib/logger';
  *
  * Usage: Render in sidebar tabs; updates automatically on character changes
  */
-export const CompactCharacterHeader: React.FC = () => {
+export const CompactCharacterHeader: React.FC = React.memo(() => {
   const { state: characterState } = useCharacter();
-  const character = characterState.character || ({} as any);
+
+  // ⚡ Bolt: Wrap character initialization in useMemo to avoid re-calculating dependency objects
+  const character = useMemo(() => characterState.character || ({} as any), [characterState.character]);
 
   // Combat HP state
   const [combatHP, setCombatHP] = useState<{
@@ -121,7 +133,57 @@ export const CompactCharacterHeader: React.FC = () => {
     });
   }, [character, combatHP]);
 
-  if (!character) {
+  // ⚡ Bolt: Memoize all derived stats to prevent recalculation on every render.
+  // This ensures pure UI updates don't trigger expensive D&D calculations.
+  const stats = useMemo(() => {
+    if (!characterState.character) return null;
+
+    const char = characterState.character;
+    const lvl = char.level ?? 1;
+    const hitDie = char.class?.hitDie ?? 8;
+    const conMod = char.abilityScores?.constitution?.modifier ?? 0;
+    const dexMod = char.abilityScores?.dexterity?.modifier ?? 0;
+    const wisMod = char.abilityScores?.wisdom?.modifier ?? 0;
+
+    // Calculate HP (max HP formula from character sheet)
+    const maxHp = Math.max(1, lvl * hitDie + conMod * lvl);
+
+    // Calculate AC with unarmored defense support
+    let armorClass = 10 + dexMod;
+    const className = (char.class?.name ?? '').toString().toLowerCase();
+    const hasUnarmoredDefense = className === 'barbarian' || className === 'monk';
+    const isWearingArmor = !!char.equippedArmor;
+
+    if (hasUnarmoredDefense && !isWearingArmor) {
+      if (className === 'barbarian') {
+        armorClass = 10 + dexMod + conMod;
+      } else if (className === 'monk') {
+        armorClass = 10 + dexMod + wisMod;
+      }
+    }
+
+    const proficiency = Math.floor((lvl - 1) / 4) + 2;
+
+    return {
+      maxHp,
+      armorClass,
+      proficiency,
+    };
+  }, [characterState.character]);
+
+  const handleShortRest = useCallback(() => {
+    logger.info('Short rest initiated');
+  }, []);
+
+  const handleLongRest = useCallback(() => {
+    logger.info('Long rest initiated');
+  }, []);
+
+  const backgroundImage = useMemo(() =>
+    character.background_image || DEFAULT_BACKGROUND_IMAGE
+  , [character.background_image]);
+
+  if (!characterState.character) {
     return (
       <Card className="p-4 text-center text-muted-foreground">
         <p>No character loaded</p>
@@ -129,60 +191,7 @@ export const CompactCharacterHeader: React.FC = () => {
     );
   }
 
-  // Calculate HP (max HP formula from character sheet)
-  const lvl = character.level ?? 1;
-  const hitDie = character.class?.hitDie ?? 8;
-  const conMod = character?.abilityScores?.constitution?.modifier ?? 0;
-  const maxHp = Math.max(1, lvl * hitDie + conMod * lvl);
-
-  // Calculate AC with unarmored defense support
-  const armorClass = (() => {
-    const dexMod = character?.abilityScores?.dexterity?.modifier ?? 0;
-    let ac = 10 + dexMod;
-    const className = (character.class?.name ?? '').toString().toLowerCase();
-    const hasUnarmoredDefense = className === 'barbarian' || className === 'monk';
-    const isWearingArmor = !!character.equippedArmor;
-
-    if (hasUnarmoredDefense && !isWearingArmor) {
-      switch (character.class!.name.toLowerCase()) {
-        case 'barbarian':
-          ac =
-            10 +
-            (character?.abilityScores?.dexterity?.modifier ?? 0) +
-            (character?.abilityScores?.constitution?.modifier ?? 0);
-          break;
-        case 'monk':
-          ac =
-            10 +
-            (character?.abilityScores?.dexterity?.modifier ?? 0) +
-            (character?.abilityScores?.wisdom?.modifier ?? 0);
-          break;
-      }
-    }
-    return ac;
-  })();
-
-  // Proficiency bonus
-  const proficiency = Math.floor((lvl - 1) / 4) + 2;
-
-  const handleShortRest = () => {
-    logger.info('Short rest initiated');
-  };
-
-  const handleLongRest = () => {
-    logger.info('Long rest initiated');
-  };
-
-  // Resolve background image
-  const backgroundImage =
-    character.background_image || new URL('/card-background.jpeg', import.meta.url).href;
-
-  // Helper function to calculate ability modifier
-  const getModifier = (score?: number) => {
-    if (!score) return '+0';
-    const mod = Math.floor((score - 10) / 2);
-    return mod >= 0 ? `+${mod}` : `${mod}`;
-  };
+  const { maxHp, armorClass, proficiency } = stats!;
 
   return (
     <Card
@@ -331,4 +340,4 @@ export const CompactCharacterHeader: React.FC = () => {
       </div>
     </Card>
   );
-};
+});
