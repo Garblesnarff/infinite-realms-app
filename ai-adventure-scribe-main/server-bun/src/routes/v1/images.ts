@@ -176,7 +176,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey) {
           set.status = 500;
-          return { error: 'Server not configured for image generation' };
+          return { error: 'Service unavailable' };
         }
 
         // If caller passed an OpenAI image model, pick a valid OpenRouter image-capable default instead
@@ -222,7 +222,10 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           logger.error({ msg: 'IMAGE_OPENROUTER_ERROR', status, errText });
           breaker.onFailure();
           set.status = status;
-          return { error: 'Image request failed', details: errText };
+          if (process.env.NODE_ENV !== 'production') {
+            return { error: 'Image request failed', details: errText };
+          }
+          return { error: 'Image request failed' };
         }
 
         breaker.onSuccess();
@@ -351,6 +354,18 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
           SET images = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
           WHERE id = ${id}
             AND session_id = ${message.session_id}
+            AND EXISTS (
+              SELECT 1
+              FROM game_sessions gs
+              LEFT JOIN campaigns c ON c.id = gs.campaign_id
+              LEFT JOIN characters ch ON ch.id = gs.character_id
+              WHERE gs.id = dialogue_history.session_id
+                AND (
+                  c.user_id = ${userId}
+                  OR ch.user_id = ${userId}
+                  OR ch.owner_id = ${userId}
+                )
+            )
           RETURNING images
         `;
 

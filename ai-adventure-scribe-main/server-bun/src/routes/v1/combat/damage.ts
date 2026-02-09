@@ -70,14 +70,19 @@ export const damageRoutes = new Elysia()
         return { error: 'damageAmount must be non-negative' };
       }
 
-      const result = await CombatHPService.applyDamage(participantId, params.encounterId, {
-        damageAmount,
-        damageType,
-        sourceParticipantId,
-        sourceDescription,
-        ignoreResistances,
-        ignoreImmunities,
-      });
+      const result = await CombatHPService.applyDamage(
+        participantId,
+        params.encounterId,
+        {
+          damageAmount,
+          damageType,
+          sourceParticipantId,
+          sourceDescription,
+          ignoreResistances,
+          ignoreImmunities,
+        },
+        user.userId
+      );
 
       return result;
     } catch (e) {
@@ -120,7 +125,8 @@ export const damageRoutes = new Elysia()
         participantId,
         params.encounterId,
         healingAmount,
-        sourceDescription
+        sourceDescription,
+        user.userId
       );
 
       return result;
@@ -160,7 +166,7 @@ export const damageRoutes = new Elysia()
         return { error: 'tempHp must be non-negative' };
       }
 
-      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp);
+      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Set temp HP error', error: e });
@@ -198,7 +204,7 @@ export const damageRoutes = new Elysia()
         return { error: 'roll must be between 1 and 20' };
       }
 
-      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll);
+      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });
@@ -231,7 +237,8 @@ export const damageRoutes = new Elysia()
       const damageLog = await CombatHPService.getDamageLog(
         params.encounterId,
         participantId,
-        roundNum
+        roundNum,
+        user.userId
       );
 
       return damageLog;

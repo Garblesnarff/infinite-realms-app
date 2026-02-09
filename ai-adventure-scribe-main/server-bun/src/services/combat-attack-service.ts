@@ -15,7 +15,10 @@ import { and, desc, eq, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
+  combatEncounters,
   combatParticipants,
+  gameSessions,
+  campaigns,
   weaponAttacks,
   creatureStats,
   characters,
@@ -60,6 +63,32 @@ export class CombatAttackService {
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
+    }
+  }
+
+  /**
+   * Verify encounter ownership through session campaign/character links.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(and(
+        eq(combatEncounters.id, encounterId),
+        or(
+          eq(campaigns.userId, userId),
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Combat encounter', encounterId);
     }
   }
 
@@ -224,8 +253,13 @@ export class CombatAttackService {
    */
   async resolveAttack(
     encounterId: string,
-    input: AttackRollInput
+    input: AttackRollInput,
+    userId?: string
   ): Promise<AttackResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const {
       attackerId,
       targetId,
@@ -322,7 +356,7 @@ export class CombatAttackService {
         sourceDescription: weapon.name || 'attack',
         ignoreResistances: true, // Already applied in damage calculation
         ignoreImmunities: true,  // Already applied in damage calculation
-      });
+      }, userId);
 
       return {
         hit: true,
@@ -353,8 +387,13 @@ export class CombatAttackService {
    */
   async resolveSpellAttack(
     encounterId: string,
-    input: SpellAttackInput
+    input: SpellAttackInput,
+    userId?: string
   ): Promise<SpellAttackResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const {
       casterId,
       targetIds,
@@ -430,7 +469,7 @@ export class CombatAttackService {
               sourceDescription: spellName,
               ignoreResistances: true, // Already applied in damage calculation
               ignoreImmunities: true,  // Already applied in damage calculation
-            });
+            }, userId);
 
             results.push({
               hit: true,
@@ -489,7 +528,7 @@ export class CombatAttackService {
               sourceDescription: spellName,
               ignoreResistances: true, // Already applied in damage calculation
               ignoreImmunities: true,  // Already applied in damage calculation
-            });
+            }, userId);
 
             results.push({
               hit: !savedSuccessfully,

@@ -8,13 +8,17 @@
  * @module server/services/combat-hp-service
  */
 
-import { and, desc, eq, exists } from 'drizzle-orm';
+import { and, desc, eq, exists, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
   combatParticipants,
   combatParticipantStatus,
   combatDamageLog,
+  combatEncounters,
+  gameSessions,
+  campaigns,
+  characters,
   type CombatParticipantStatus,
   type CombatDamageLog,
 } from '../../../db/schema/index.js';
@@ -110,6 +114,32 @@ export interface ApplyDamageOptions {
  * Combat HP Service
  */
 export class CombatHPService {
+  /**
+   * Verify encounter ownership through its session's campaign/character links.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(and(
+        eq(combatEncounters.id, encounterId),
+        or(
+          eq(campaigns.userId, userId),
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Combat encounter', encounterId);
+    }
+  }
+
   private static participantInEncounterExists(participantId: string, encounterId: string) {
     return exists(
       db.select()
@@ -119,6 +149,63 @@ export class CombatHPService {
           eq(combatParticipants.encounterId, encounterId)
         ))
     );
+  }
+
+  /**
+   * Fetch participant status, optionally scoped by user ownership.
+   * When userId is provided, unauthorized and missing participants both return null.
+   */
+  private static async getParticipantStatusScoped(
+    participantId: string,
+    userId?: string
+  ): Promise<{ encounterId: string; status: CombatParticipantStatus | null } | null> {
+    if (userId) {
+      const [scopedParticipant] = await db
+        .select({
+          encounterId: combatParticipants.encounterId,
+          status: combatParticipantStatus,
+        })
+        .from(combatParticipants)
+        .leftJoin(combatParticipantStatus, eq(combatParticipantStatus.participantId, combatParticipants.id))
+        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(and(
+          eq(combatParticipants.id, participantId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        ))
+        .limit(1);
+
+      if (!scopedParticipant) {
+        return null;
+      }
+
+      return {
+        encounterId: scopedParticipant.encounterId,
+        status: scopedParticipant.status,
+      };
+    }
+
+    const participant = await db.query.combatParticipants.findFirst({
+      where: eq(combatParticipants.id, participantId),
+      with: {
+        status: true,
+      },
+    });
+
+    if (!participant) {
+      return null;
+    }
+
+    return {
+      encounterId: participant.encounterId,
+      status: participant.status || null,
+    };
   }
 
   /**
@@ -132,8 +219,13 @@ export class CombatHPService {
   static async applyDamage(
     participantId: string,
     encounterId: string,
-    options: ApplyDamageOptions
+    options: ApplyDamageOptions,
+    userId?: string
   ): Promise<DamageResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const {
       damageAmount,
       damageType,
@@ -300,8 +392,13 @@ export class CombatHPService {
     participantId: string,
     encounterId: string,
     healingAmount: number,
-    sourceDescription?: string
+    sourceDescription?: string,
+    userId?: string
   ): Promise<HealingResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     if (healingAmount < 0) {
       throw new ValidationError('Healing amount must be non-negative', { healingAmount });
     }
@@ -370,8 +467,13 @@ export class CombatHPService {
   static async setTempHP(
     participantId: string,
     encounterId: string,
-    tempHpAmount: number
+    tempHpAmount: number,
+    userId?: string
   ): Promise<{ participantId: string; oldTempHp: number; newTempHp: number }> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     if (tempHpAmount < 0) {
       throw new ValidationError('Temporary HP amount must be non-negative', { tempHpAmount });
     }
@@ -427,8 +529,13 @@ export class CombatHPService {
   static async rollDeathSave(
     participantId: string,
     encounterId: string,
-    roll: number
+    roll: number,
+    userId?: string
   ): Promise<DeathSaveResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     if (roll < 1 || roll > 20) {
       throw new ValidationError('Death save roll must be between 1 and 20', { roll });
     }
@@ -531,13 +638,8 @@ export class CombatHPService {
   /**
    * Check if a participant is conscious
    */
-  static async checkConscious(participantId: string): Promise<boolean> {
-    const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
-      with: {
-        status: true,
-      },
-    });
+  static async checkConscious(participantId: string, userId?: string): Promise<boolean> {
+    const participant = await this.getParticipantStatusScoped(participantId, userId);
 
     if (!participant || !participant.status) {
       throw new NotFoundError('Participant', participantId);
@@ -552,8 +654,13 @@ export class CombatHPService {
   static async getDamageLog(
     encounterId: string,
     participantId?: string,
-    round?: number
+    round?: number,
+    userId?: string
   ): Promise<CombatDamageLog[]> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const conditions = [eq(combatDamageLog.encounterId, encounterId)];
 
     if (participantId) {
@@ -576,16 +683,16 @@ export class CombatHPService {
    * Get participant status
    */
   static async getParticipantStatus(
-    participantId: string
+    participantId: string,
+    userId?: string
   ): Promise<CombatParticipantStatus | null> {
-    const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
-      with: {
-        status: true,
-      },
-    });
+    const participant = await this.getParticipantStatusScoped(participantId, userId);
 
-    return participant?.status || null;
+    if (!participant) {
+      return null;
+    }
+
+    return participant.status || null;
   }
 
   /**
@@ -630,8 +737,13 @@ export class CombatHPService {
     participantId: string,
     encounterId: string,
     roll: number,
-    modifier: number
+    modifier: number,
+    userId?: string
   ): Promise<StabilizationResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const DC = 10;
     const total = roll + modifier;
     const success = total >= DC;

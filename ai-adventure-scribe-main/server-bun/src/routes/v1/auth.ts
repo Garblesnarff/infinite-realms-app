@@ -180,16 +180,16 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
     // SECURITY: Require the secret to be explicitly set
     if (!TEST_AUTH_SECRET) {
-      set.status = 403;
-      return { error: 'Test auth not configured' };
+      set.status = 401;
+      return { error: 'Unauthorized' };
     }
 
     const secret = query.secret as string | undefined;
 
     // Verify test auth secret
     if (secret !== TEST_AUTH_SECRET) {
-      set.status = 403;
-      return { error: 'Invalid test auth secret' };
+      set.status = 401;
+      return { error: 'Unauthorized' };
     }
 
     try {
@@ -199,8 +199,8 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       });
 
       if (!testUser) {
-        set.status = 404;
-        return { error: 'Test user not found in database' };
+        set.status = 401;
+        return { error: 'Unauthorized' };
       }
 
       // Generate pseudo-JWT tokens
@@ -211,13 +211,13 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
           iat: Math.floor(Date.now() / 1000),
           exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
         },
-        'test_secret_key',
+        TEST_AUTH_SECRET,
         { algorithm: 'HS256' }
       );
 
       const refreshToken = jwt.sign(
         { sub: testUser.id, type: 'refresh' },
-        'test_secret_key',
+        TEST_AUTH_SECRET,
         { algorithm: 'HS256', expiresIn: '7d' }
       );
 

@@ -43,7 +43,7 @@ export async function verifyEncounterOwnership(
   }
 
   // Get encounter
-  const encounter = await CombatInitiativeService.getEncounterById(encounterId);
+  const encounter = await CombatInitiativeService.getEncounterById(encounterId, userId);
   if (!encounter) {
     return {
       success: false,
@@ -54,7 +54,7 @@ export async function verifyEncounterOwnership(
   // Get session and verify ownership
   const { data: session, error: sessionErr } = await supabaseService
     .from('game_sessions')
-    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
+    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
     .eq('id', encounter.sessionId)
     .single();
 
@@ -68,8 +68,9 @@ export async function verifyEncounterOwnership(
   // Verify ownership - user must own either campaign or character
   const campaignOwner = (session as any).campaigns?.user_id;
   const characterOwner = (session as any).characters?.user_id;
+  const characterSharedOwner = (session as any).characters?.owner_id;
 
-  if (campaignOwner !== userId && characterOwner !== userId) {
+  if (campaignOwner !== userId && characterOwner !== userId && characterSharedOwner !== userId) {
     return {
       success: false,
       error: { status: 404, message: 'Encounter not found' },
@@ -103,7 +104,7 @@ export async function verifySessionOwnership(
 
   const { data: session, error: sessionErr } = await supabaseService
     .from('game_sessions')
-    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id)')
+    .select('*, campaigns!game_sessions_campaign_id_fkey(user_id), characters!game_sessions_character_id_fkey(user_id, owner_id)')
     .eq('id', sessionId)
     .single();
 
@@ -116,8 +117,9 @@ export async function verifySessionOwnership(
 
   const campaignOwner = (session as any).campaigns?.user_id;
   const characterOwner = (session as any).characters?.user_id;
+  const characterSharedOwner = (session as any).characters?.owner_id;
 
-  if (campaignOwner !== userId && characterOwner !== userId) {
+  if (campaignOwner !== userId && characterOwner !== userId && characterSharedOwner !== userId) {
     return {
       success: false,
       error: { status: 404, message: 'Session not found' },

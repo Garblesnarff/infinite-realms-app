@@ -65,13 +65,13 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
   const token = getBearerToken(authHeader);
 
   if (!token) {
-    return { user: null, error: 'Missing token' };
+    return { user: null, error: 'Unauthorized' };
   }
 
   try {
     const workosUser = await verifyWorkOSToken(token);
     if (!workosUser) {
-      return { user: null, error: 'Invalid token' };
+      return { user: null, error: 'Unauthorized' };
     }
 
     const plan = await resolveUserPlan(workosUser.userId);
@@ -95,9 +95,9 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
         errorMessage: error.message,
         errorName: error.name,
       });
-      return { user: null, error: isExpired ? 'Token expired' : 'Invalid token' };
+      return { user: null, error: 'Unauthorized' };
     }
     logger.error('Auth verification failed:', error);
-    return { user: null, error: 'Invalid token' };
+    return { user: null, error: 'Unauthorized' };
   }
 }

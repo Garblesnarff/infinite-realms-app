@@ -870,7 +870,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
     if (!bucket) {
       set.status = 500;
-      return { error: 'BLOG_MEDIA_BUCKET is not configured' };
+      return { error: 'Internal server error' };
     }
 
     try {

@@ -72,7 +72,8 @@ export const statusRoutes = new Elysia()
         conditionRequest.saveDc,
         conditionRequest.saveAbility,
         conditionRequest.source,
-        verification.encounter.currentRound
+        verification.encounter.currentRound,
+        user.userId
       );
 
       set.status = 201;
@@ -110,7 +111,7 @@ export const statusRoutes = new Elysia()
         return { error: 'conditionId is required' };
       }
 
-      const removed = await ConditionsService.removeCondition(params.conditionId, params.encounterId);
+      const removed = await ConditionsService.removeCondition(params.conditionId, params.encounterId, user.userId);
 
       if (!removed) {
         set.status = 404;
@@ -154,7 +155,7 @@ export const statusRoutes = new Elysia()
         return { error: 'saveRoll must be between 1 and 20' };
       }
 
-      const result = await ConditionsService.attemptSave(params.conditionId, params.encounterId, saveRoll);
+      const result = await ConditionsService.attemptSave(params.conditionId, params.encounterId, saveRoll, user.userId);
 
       return {
         success: true,
@@ -186,9 +187,10 @@ export const statusRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId);
+      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
       const encounterConditions = await ConditionsService.getEncounterConditions(
-        params.encounterId
+        params.encounterId,
+        user.userId
       );
       const participantConditions: Record<string, any> = {};
 

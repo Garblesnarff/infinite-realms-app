@@ -67,6 +67,29 @@ interface EncounterConditionRow {
 
 export class ConditionsService {
   /**
+   * Verify encounter ownership via session campaign/character links.
+   * Throws NOT_FOUND for missing or unauthorized encounters.
+   */
+  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
+    const encounterAccess = await db.execute<Record<string, unknown>>(
+      sql`
+        SELECT ce.id
+        FROM combat_encounters ce
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        WHERE ce.id = ${encounterId}
+          AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
+        LIMIT 1
+      `
+    );
+
+    if (!encounterAccess || encounterAccess.length === 0) {
+      throw new NotFoundError('Encounter', encounterId);
+    }
+  }
+
+  /**
    * Apply a condition to a combat participant
    */
   static async applyCondition(
@@ -78,8 +101,13 @@ export class ConditionsService {
     saveDC?: number,
     saveAbility?: SaveAbility,
     source?: string,
-    currentRound?: number
+    currentRound?: number,
+    userId?: string
   ): Promise<{ condition: ParticipantConditionWithDetails; warnings: string[] }> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const warnings: string[] = [];
 
     // Get condition from library
@@ -126,12 +154,12 @@ export class ConditionsService {
     }
 
     // Check for conflicts
-    const conflicts = await this.checkConditionConflicts(participantId, conditionName);
+    const conflicts = await this.checkConditionConflicts(participantId, conditionName, userId);
     conflicts.forEach(conflict => {
       warnings.push(conflict.message);
       // Auto-remove superseded conditions
       if (conflict.conflictType === 'superseded') {
-        this.removeCondition(conflict.existingCondition.id, encounterId).catch(err => {
+        this.removeCondition(conflict.existingCondition.id, encounterId, userId).catch(err => {
           console.error('Failed to remove superseded condition:', err);
         });
       }
@@ -184,7 +212,11 @@ export class ConditionsService {
   /**
    * Remove a condition from a participant
    */
-  static async removeCondition(conditionId: string, encounterId: string): Promise<boolean> {
+  static async removeCondition(conditionId: string, encounterId: string, userId?: string): Promise<boolean> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const result = await db.execute<Record<string, unknown>>(
       sql`
         UPDATE combat_participant_conditions
@@ -204,8 +236,13 @@ export class ConditionsService {
   static async attemptSave(
     conditionId: string,
     encounterId: string,
-    saveRoll: number
+    saveRoll: number,
+    userId?: string
   ): Promise<{ saved: boolean; conditionRemoved: boolean; message: string }> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Get the condition and verify encounterId
     const result = await db.execute<Record<string, unknown>>(
       sql`
@@ -233,7 +270,7 @@ export class ConditionsService {
 
     if (saved) {
       // Remove the condition
-      await this.removeCondition(conditionId, encounterId);
+      await this.removeCondition(conditionId, encounterId, userId);
       conditionRemoved = true;
       message = `Saving throw successful (${saveRoll})! Condition removed.`;
     } else {
@@ -252,6 +289,28 @@ export class ConditionsService {
     participantId: string,
     userId?: string
   ): Promise<ParticipantConditionWithDetails[]> {
+    // When user context is provided, explicitly verify access first so callers
+    // get a consistent NOT_FOUND for missing/unauthorized participants.
+    if (userId) {
+      const participantAccess = await db.execute<Record<string, unknown>>(
+        sql`
+          SELECT cp.id
+          FROM combat_participants cp
+          JOIN combat_encounters ce ON ce.id = cp.encounter_id
+          JOIN game_sessions gs ON gs.id = ce.session_id
+          LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+          LEFT JOIN characters char ON char.id = gs.character_id
+          WHERE cp.id = ${participantId}
+            AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
+          LIMIT 1
+        `
+      );
+
+      if (!participantAccess || participantAccess.length === 0) {
+        throw new NotFoundError('Participant', participantId);
+      }
+    }
+
     // 🛡️ Sentinel: Incorporate ownership check directly into the query when userId is provided
     // This prevents IDOR and existence leakage.
     const result = await db.execute<Record<string, unknown>>(
@@ -350,7 +409,7 @@ export class ConditionsService {
   /**
    * Get all active conditions for all participants in an encounter
    */
-  static async getEncounterConditions(encounterId: string): Promise<
+  static async getEncounterConditions(encounterId: string, userId?: string): Promise<
     Record<
       string,
       {
@@ -359,6 +418,12 @@ export class ConditionsService {
       }
     >
   > {
+    // Verify encounter visibility for user-scoped calls to avoid leaking whether
+    // an encounter exists.
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const result = await db.execute<Record<string, unknown>>(
       sql`
         SELECT
@@ -371,8 +436,23 @@ export class ConditionsService {
         FROM combat_participant_conditions cpc
         JOIN conditions_library cl ON cl.id = cpc.condition_id
         JOIN combat_participants cp ON cp.id = cpc.participant_id
+        ${
+          userId
+            ? sql`
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        `
+            : sql``
+        }
         WHERE cp.encounter_id = ${encounterId}
           AND cpc.is_active = true
+          ${
+            userId
+              ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+              : sql``
+          }
         ORDER BY cpc.applied_at_round DESC
       `
     );
@@ -466,11 +546,16 @@ export class ConditionsService {
    */
   static async advanceConditionDurations(
     encounterId: string,
-    currentRound: number
+    currentRound: number,
+    userId?: string
   ): Promise<{
     expiredConditions: ParticipantConditionWithDetails[];
     savingThrowsNeeded: Array<{ participantId: string; conditionId: string; saveAbility: SaveAbility; saveDc: number }>;
   }> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Get all active conditions for this encounter's participants
     const result = await db.execute<Record<string, unknown>>(
       sql`
@@ -556,9 +641,10 @@ export class ConditionsService {
    */
   static async checkConditionConflicts(
     participantId: string,
-    newConditionName: string
+    newConditionName: string,
+    userId?: string
   ): Promise<ConditionConflict[]> {
-    const activeConditions = await this.getActiveConditions(participantId);
+    const activeConditions = await this.getActiveConditions(participantId, userId);
     const conflicts: ConditionConflict[] = [];
 
     for (const existingCondition of activeConditions) {
@@ -653,12 +739,12 @@ export class ConditionsService {
    * Get attack roll modifiers for an attacker based on their conditions
    * Returns sources of advantage and disadvantage on the attacker's rolls
    */
-  static async getAttackerModifiers(attackerId: string): Promise<{
+  static async getAttackerModifiers(attackerId: string, userId?: string): Promise<{
     hasAdvantage: boolean;
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(attackerId);
+    const effects = await this.getMechanicalEffects(attackerId, userId);
     const reasons: string[] = [];
 
     let hasAdvantage = false;
@@ -715,14 +801,15 @@ export class ConditionsService {
   static async getTargetModifiers(
     targetId: string,
     attackType: 'melee' | 'ranged' | 'spell',
-    distanceInFeet?: number
+    distanceInFeet?: number,
+    userId?: string
   ): Promise<{
     hasAdvantage: boolean;
     hasDisadvantage: boolean;
     isAutoCrit: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(targetId);
+    const effects = await this.getMechanicalEffects(targetId, userId);
     const reasons: string[] = [];
 
     let hasAdvantage = false;
@@ -798,14 +885,15 @@ export class ConditionsService {
    */
   static async getSaveModifiers(
     participantId: string,
-    saveAbility: SaveAbility
+    saveAbility: SaveAbility,
+    userId?: string
   ): Promise<{
     autoFail: boolean;
     hasAdvantage: boolean;
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId);
+    const effects = await this.getMechanicalEffects(participantId, userId);
     const reasons: string[] = [];
 
     let autoFail = false;
@@ -874,11 +962,11 @@ export class ConditionsService {
   /**
    * Get ability check modifiers for a participant
    */
-  static async getAbilityCheckModifiers(participantId: string): Promise<{
+  static async getAbilityCheckModifiers(participantId: string, userId?: string): Promise<{
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId);
+    const effects = await this.getMechanicalEffects(participantId, userId);
     const reasons: string[] = [];
     let hasDisadvantage = false;
 
@@ -900,12 +988,12 @@ export class ConditionsService {
   /**
    * Check if participant can take actions
    */
-  static async canTakeActions(participantId: string): Promise<{
+  static async canTakeActions(participantId: string, userId?: string): Promise<{
     canAct: boolean;
     canReact: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId);
+    const effects = await this.getMechanicalEffects(participantId, userId);
     const reasons: string[] = [];
 
     let canAct = true;
@@ -939,12 +1027,12 @@ export class ConditionsService {
   /**
    * Get speed modifiers for a participant
    */
-  static async getSpeedModifiers(participantId: string): Promise<{
+  static async getSpeedModifiers(participantId: string, userId?: string): Promise<{
     speedMultiplier: number;
     speedOverride?: number;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId);
+    const effects = await this.getMechanicalEffects(participantId, userId);
     const reasons: string[] = [];
 
     let speedMultiplier = 1;

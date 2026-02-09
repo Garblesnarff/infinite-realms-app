@@ -67,7 +67,7 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const result = await attackService.resolveAttack(params.encounterId, attackInput);
+      const result = await attackService.resolveAttack(params.encounterId, attackInput, user.userId);
 
       return result;
     } catch (e) {
@@ -107,7 +107,7 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const result = await attackService.resolveSpellAttack(params.encounterId, spellInput);
+      const result = await attackService.resolveSpellAttack(params.encounterId, spellInput, user.userId);
 
       return result;
     } catch (e) {

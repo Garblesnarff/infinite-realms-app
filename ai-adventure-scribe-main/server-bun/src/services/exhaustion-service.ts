@@ -92,6 +92,30 @@ export type ExhaustionCause =
 
 export class ExhaustionService {
   /**
+   * Verify participant access via encounter/session ownership.
+   * Throws NOT_FOUND for missing or unauthorized participants.
+   */
+  private static async verifyParticipantAccess(participantId: string, userId: string): Promise<void> {
+    const result = await db.execute<Record<string, unknown>>(
+      sql`
+        SELECT cp.id
+        FROM combat_participants cp
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        WHERE cp.id = ${participantId}
+          AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
+        LIMIT 1
+      `
+    );
+
+    if (!result || result.length === 0) {
+      throw new NotFoundError('Participant', participantId);
+    }
+  }
+
+  /**
    * Get the mechanical effects for a given exhaustion level
    * Effects are cumulative - higher levels include all lower level effects
    */
@@ -154,7 +178,11 @@ export class ExhaustionService {
   /**
    * Get current exhaustion level for a participant
    */
-  static async getExhaustionLevel(participantId: string): Promise<ExhaustionLevel> {
+  static async getExhaustionLevel(participantId: string, userId?: string): Promise<ExhaustionLevel> {
+    if (userId) {
+      await this.verifyParticipantAccess(participantId, userId);
+    }
+
     const result = await db.execute<Record<string, unknown>>(
       sql`
         SELECT exhaustion_level
@@ -183,10 +211,11 @@ export class ExhaustionService {
   static async applyExhaustion(
     participantId: string,
     levels: number,
-    cause?: ExhaustionCause
+    cause?: ExhaustionCause,
+    userId?: string
   ): Promise<ExhaustionResult> {
     // Get current level
-    const previousLevel = await this.getExhaustionLevel(participantId);
+    const previousLevel = await this.getExhaustionLevel(participantId, userId);
 
     // Calculate new level (clamped 0-6)
     const newLevel = Math.min(6, Math.max(0, previousLevel + levels)) as ExhaustionLevel;
@@ -199,6 +228,22 @@ export class ExhaustionService {
           exhaustion_level = ${newLevel},
           updated_at = NOW()
         WHERE participant_id = ${participantId}
+          ${
+            userId
+              ? sql`
+                AND EXISTS (
+                  SELECT 1
+                  FROM combat_participants cp
+                  JOIN combat_encounters ce ON ce.id = cp.encounter_id
+                  JOIN game_sessions gs ON gs.id = ce.session_id
+                  LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+                  LEFT JOIN characters char ON char.id = gs.character_id
+                  WHERE cp.id = combat_participant_status.participant_id
+                    AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
+                )
+              `
+              : sql``
+          }
       `
     );
 
@@ -241,7 +286,8 @@ export class ExhaustionService {
   static async reduceExhaustion(
     participantId: string,
     levels: number = 1,
-    hasFood: boolean = true
+    hasFood: boolean = true,
+    userId?: string
   ): Promise<ExhaustionResult> {
     if (!hasFood) {
       throw new BusinessLogicError(
@@ -250,7 +296,7 @@ export class ExhaustionService {
       );
     }
 
-    return this.applyExhaustion(participantId, -Math.abs(levels));
+    return this.applyExhaustion(participantId, -Math.abs(levels), undefined, userId);
   }
 
   /**
@@ -258,12 +304,13 @@ export class ExhaustionService {
    */
   static async setExhaustionLevel(
     participantId: string,
-    level: ExhaustionLevel
+    level: ExhaustionLevel,
+    userId?: string
   ): Promise<ExhaustionResult> {
-    const previousLevel = await this.getExhaustionLevel(participantId);
+    const previousLevel = await this.getExhaustionLevel(participantId, userId);
     const difference = level - previousLevel;
 
-    return this.applyExhaustion(participantId, difference);
+    return this.applyExhaustion(participantId, difference, undefined, userId);
   }
 
   /**

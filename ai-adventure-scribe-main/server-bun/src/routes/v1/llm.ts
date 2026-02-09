@@ -200,7 +200,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           const apiKey = process.env.OPENROUTER_API_KEY;
           if (!apiKey) {
             set.status = 500;
-            return { error: 'Server not configured for OpenRouter' };
+            return { error: 'Service unavailable' };
           }
 
           const textModel = model || process.env.OPENROUTER_TEXT_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free';
@@ -237,7 +237,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.error({ msg: 'LLM_OPENROUTER_ERROR', status, errText });
             breaker.onFailure();
             set.status = status;
-            return { error: 'LLM request failed', details: errText };
+            if (process.env.NODE_ENV !== 'production') {
+              return { error: 'LLM request failed', details: errText };
+            }
+            return { error: 'LLM request failed' };
           }
 
           breaker.onSuccess();
@@ -264,7 +267,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           const apiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
           if (!apiKey) {
             set.status = 500;
-            return { error: 'Server not configured for Gemini' };
+            return { error: 'Service unavailable' };
           }
 
           const preferredModel = (typeof model === 'string' && model.trim())
@@ -352,7 +355,10 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             const status = lastFailure?.status ?? 400;
             const details = lastFailure?.details || `All Gemini model attempts failed. Tried: ${attempts.join(', ')}`;
             set.status = status;
-            return { error: 'LLM request failed', details, attempts };
+            if (process.env.NODE_ENV !== 'production') {
+              return { error: 'LLM request failed', details, attempts };
+            }
+            return { error: 'LLM request failed' };
           }
 
           if (successModel !== preferredModel) {
@@ -436,7 +442,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) {
         set.status = 500;
-        return { error: 'Server not configured for OpenRouter' };
+        return { error: 'Service unavailable' };
       }
 
       // Models to try: free primary, cheap fallback

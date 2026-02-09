@@ -46,10 +46,7 @@ export const authRouter = router({
         code: z.string(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
-      if (input.userId !== ctx.user.userId) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
-      }
+    .mutation(async ({ input }) => {
       // Authenticate with WorkOS using the authorization code
       const { user, accessToken, refreshToken } =
         await workos.userManagement.authenticateWithCode({
@@ -129,10 +126,7 @@ export const authRouter = router({
         refreshToken: z.string(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
-      if (input.userId !== ctx.user.userId) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
-      }
+    .mutation(async ({ input }) => {
       const response = await workos.userManagement.authenticateWithRefreshToken({
         clientId: authConfig.clientId,
         refreshToken: input.refreshToken,
@@ -159,7 +153,7 @@ export const authRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       if (input.userId !== ctx.user.userId) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot sync another user' });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Forbidden' });
       }
       // Check if user already exists
       const existingUser = await db.query.users.findFirst({

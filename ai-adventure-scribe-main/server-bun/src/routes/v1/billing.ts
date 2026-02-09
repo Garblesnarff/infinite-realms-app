@@ -98,8 +98,8 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         // Use provided priceId or default from env
         const finalPriceId = priceId || env.STRIPE_PRICE_ID;
         if (!finalPriceId) {
-          set.status = 400;
-          return { error: 'No price ID configured' };
+          set.status = 503;
+          return { error: 'Billing unavailable' };
         }
 
         // Get or create Stripe customer
@@ -238,7 +238,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
       if (!webhookSecret) {
         logger.error({ msg: 'STRIPE_WEBHOOK_SECRET not configured' });
         set.status = 500;
-        return { error: 'Webhook secret not configured' };
+        return { error: 'Internal server error' };
       }
 
       const signature = request.headers.get('stripe-signature');
@@ -257,7 +257,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
       } catch (err: any) {
         logger.error({ msg: 'WEBHOOK_SIGNATURE_FAILED', error: err.message });
         set.status = 400;
-        return { error: `Webhook signature verification failed: ${err.message}` };
+        return { error: 'Invalid webhook signature' };
       }
 
       logger.info({

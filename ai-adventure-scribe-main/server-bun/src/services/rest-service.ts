@@ -204,7 +204,12 @@ export class RestService {
 
     // Get character and stats
     const character = await db.query.characters.findFirst({
-      where: eq(characters.id, characterId),
+      where: userId
+        ? and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+        : eq(characters.id, characterId),
       with: {
         stats: true,
       },

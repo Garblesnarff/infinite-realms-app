@@ -62,7 +62,8 @@ export const initiativeRoutes = new Elysia()
       const combatState = await CombatInitiativeService.startCombat(
         params.sessionId,
         participants,
-        surpriseRound || false
+        surpriseRound || false,
+        user.userId
       );
 
       set.status = 201;
@@ -111,7 +112,8 @@ export const initiativeRoutes = new Elysia()
         params.encounterId,
         participantId,
         roll,
-        modifier
+        modifier,
+        user.userId
       );
 
       return result;
@@ -139,7 +141,7 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const result = await CombatInitiativeService.advanceTurn(params.encounterId);
+      const result = await CombatInitiativeService.advanceTurn(params.encounterId, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Advance turn error', error: e });
@@ -175,8 +177,13 @@ export const initiativeRoutes = new Elysia()
         return { error: 'participantId and newInitiative are required' };
       }
 
-      await CombatInitiativeService.reorderInitiative(params.encounterId, participantId, newInitiative);
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId);
+      await CombatInitiativeService.reorderInitiative(
+        params.encounterId,
+        participantId,
+        newInitiative,
+        user.userId
+      );
+      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
 
       return combatState;
     } catch (e) {
@@ -203,7 +210,7 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const updatedEncounter = await CombatInitiativeService.endCombat(params.encounterId);
+      const updatedEncounter = await CombatInitiativeService.endCombat(params.encounterId, user.userId);
       return updatedEncounter;
     } catch (e) {
       logger.error({ msg: 'End combat error', error: e });
@@ -229,7 +236,7 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId);
+      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
       return combatState;
     } catch (e) {
       logger.error({ msg: 'Get combat status error', error: e });

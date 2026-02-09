@@ -217,13 +217,14 @@ export class CriticalRulesValidator {
       type: 'action' | 'bonus_action' | 'reaction';
       isSpell?: boolean;
       spellLevel?: number;
-    }
+    },
+    userId?: string
   ): Promise<ActionEconomyValidation> {
     const violations: string[] = [];
     const warnings: string[] = [];
 
     // Check conditions
-    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId);
+    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId, userId);
 
     if (proposedAction.type === 'action' || proposedAction.type === 'bonus_action') {
       if (!canAct) {
@@ -331,7 +332,8 @@ export class CriticalRulesValidator {
       offHandWeapon?: WeaponForTWF;
       abilityModifier?: number;
       hasTWFStyle?: boolean;
-    }
+    },
+    userId?: string
   ): Promise<CombatActionValidation> {
     const criticalViolations: string[] = [];
     const warnings: string[] = [];
@@ -357,7 +359,8 @@ export class CriticalRulesValidator {
           type: action.type as 'action' | 'bonus_action' | 'reaction',
           isSpell: action.isSpell,
           spellLevel: action.spellLevel,
-        }
+        },
+        userId
       );
       criticalViolations.push(...economyValidation.violations);
       warnings.push(...economyValidation.warnings);
@@ -416,7 +419,7 @@ export class CriticalRulesValidator {
     /**
      * Can this participant take their turn?
      */
-    canTakeTurn: async (participant: ParticipantCombatState): Promise<{ can: boolean; reason?: string }> => {
+    canTakeTurn: async (participant: ParticipantCombatState, userId?: string): Promise<{ can: boolean; reason?: string }> => {
       // Dead from exhaustion
       const exhaustionMods = ExhaustionService.getExhaustionModifiers(participant.exhaustionLevel);
       if (exhaustionMods.isDead) {
@@ -429,7 +432,7 @@ export class CriticalRulesValidator {
       }
 
       // Check conditions
-      const { canAct, reasons } = await ConditionsService.canTakeActions(participant.participantId);
+      const { canAct, reasons } = await ConditionsService.canTakeActions(participant.participantId, userId);
       if (!canAct) {
         return { can: false, reason: reasons.join(', ') };
       }

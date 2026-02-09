@@ -282,13 +282,14 @@ export class CombatActionService {
   static async canTakeAction(
     participantId: string,
     turnState: TurnActionState,
-    actionType: ActionType
+    actionType: ActionType,
+    userId?: string
   ): Promise<{
     canTake: boolean;
     reason?: string;
   }> {
     // Check conditions first
-    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId);
+    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId, userId);
 
     switch (actionType) {
       case 'action':
@@ -318,16 +319,17 @@ export class CombatActionService {
         }
         return { canTake: true };
 
-      case 'movement':
+      case 'movement': {
         if (turnState.movementUsed >= turnState.maxMovement) {
           return { canTake: false, reason: 'No movement remaining' };
         }
         // Check for speed = 0 conditions
-        const speedMods = await ConditionsService.getSpeedModifiers(participantId);
+        const speedMods = await ConditionsService.getSpeedModifiers(participantId, userId);
         if (speedMods.speedOverride === 0) {
           return { canTake: false, reason: speedMods.reasons.join(', ') };
         }
         return { canTake: true };
+      }
 
       case 'free_action':
         // Free actions (like dropping an item) are almost always available
@@ -345,7 +347,7 @@ export class CombatActionService {
     turnState: TurnActionState,
     actionType: ActionType,
     isSpell: boolean = false,
-    spellLevel: number = 0,
+    _spellLevel: number = 0,
     movementUsed: number = 0
   ): TurnActionState {
     const newState = { ...turnState };
@@ -369,9 +371,10 @@ export class CombatActionService {
         newState.reactionUsed = true;
         break;
 
-      case 'movement':
+      case 'movement': {
         newState.movementUsed += movementUsed;
         break;
+      }
     }
 
     return newState;
@@ -382,13 +385,14 @@ export class CombatActionService {
    */
   static async getRemainingMovement(
     participantId: string,
-    turnState: TurnActionState
+    turnState: TurnActionState,
+    userId?: string
   ): Promise<{
     remaining: number;
     effectiveSpeed: number;
     reasons: string[];
   }> {
-    const speedMods = await ConditionsService.getSpeedModifiers(participantId);
+    const speedMods = await ConditionsService.getSpeedModifiers(participantId, userId);
 
     let effectiveSpeed = turnState.maxMovement;
     const reasons: string[] = [];

@@ -13,7 +13,7 @@ import { logger } from '../lib/logger';
 // Environment variables for blog admin auth
 const BLOG_ADMIN_USERNAME = process.env.BLOG_ADMIN_USERNAME;
 const BLOG_ADMIN_PASSWORD_HASH = process.env.BLOG_ADMIN_PASSWORD_HASH;
-const BLOG_ADMIN_JWT_SECRET = process.env.BLOG_ADMIN_JWT_SECRET || 'fallback_secret_change_me';
+const BLOG_ADMIN_JWT_SECRET = process.env.BLOG_ADMIN_JWT_SECRET;
 
 export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
   /**
@@ -31,10 +31,10 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
         logger.info('[BlogAdminAuth] Login attempt for:', username);
 
         // Check if blog admin credentials are configured
-        if (!BLOG_ADMIN_USERNAME || !BLOG_ADMIN_PASSWORD_HASH) {
+        if (!BLOG_ADMIN_USERNAME || !BLOG_ADMIN_PASSWORD_HASH || !BLOG_ADMIN_JWT_SECRET) {
           logger.error('[BlogAdminAuth] Blog admin credentials not configured');
-          set.status = 500;
-          return { error: 'Blog admin not configured' };
+          set.status = 401;
+          return { error: 'Invalid credentials' };
         }
 
         // Verify username
@@ -99,9 +99,14 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
     async ({ headers, set }) => {
       const authHeader = headers.authorization;
 
+      if (!BLOG_ADMIN_JWT_SECRET) {
+        set.status = 401;
+        return { error: 'Unauthorized' };
+      }
+
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         set.status = 401;
-        return { error: 'No token provided' };
+        return { error: 'Unauthorized' };
       }
 
       const token = authHeader.substring(7);
@@ -115,7 +120,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
 
         if (payload.type !== 'blog_admin') {
           set.status = 401;
-          return { error: 'Invalid token type' };
+          return { error: 'Unauthorized' };
         }
 
         return {
@@ -126,7 +131,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
       } catch (error) {
         logger.warn('[BlogAdminAuth] Token verification failed:', error);
         set.status = 401;
-        return { error: 'Invalid or expired token' };
+        return { error: 'Unauthorized' };
       }
     },
     {

@@ -5,12 +5,15 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
   combatEncounters,
   combatParticipants,
+  gameSessions,
+  campaigns,
+  characters,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../db/schema/index.js';
@@ -37,6 +40,79 @@ function rollD20(): number {
  */
 export class CombatInitiativeService {
   /**
+   * Verify session ownership through campaign/character links.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifySessionAccess(sessionId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: gameSessions.id })
+      .from(gameSessions)
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(and(
+        eq(gameSessions.id, sessionId),
+        or(
+          eq(campaigns.userId, userId),
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Session', sessionId);
+    }
+  }
+
+  /**
+   * Verify encounter ownership through its session's campaign/character links.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(and(
+        eq(combatEncounters.id, encounterId),
+        or(
+          eq(campaigns.userId, userId),
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Combat encounter', encounterId);
+    }
+  }
+
+  /**
+   * Verify character ownership through user_id/owner_id.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifyCharacterAccess(characterId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Character', characterId);
+    }
+  }
+
+  /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
    * @param participantInputs - Array of participants to add
@@ -46,8 +122,23 @@ export class CombatInitiativeService {
   static async startCombat(
     sessionId: string,
     participantInputs: CreateParticipantInput[],
-    surpriseRound: boolean = false
+    surpriseRound: boolean = false,
+    userId?: string
   ): Promise<CombatState> {
+    if (userId) {
+      await this.verifySessionAccess(sessionId, userId);
+
+      // Prevent cross-tenant references by validating all character-linked participants.
+      const characterIds = [
+        ...new Set(
+          participantInputs
+            .map((input) => input.characterId)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+      await Promise.all(characterIds.map((characterId) => this.verifyCharacterAccess(characterId, userId)));
+    }
+
     // Create the encounter
     const [encounter] = await db
       .insert(combatEncounters)
@@ -87,7 +178,7 @@ export class CombatInitiativeService {
     await this.calculateTurnOrder(encounter.id);
 
     // Get the updated state
-    return await this.getCombatState(encounter.id);
+    return await this.getCombatState(encounter.id, userId);
   }
 
   /**
@@ -95,8 +186,16 @@ export class CombatInitiativeService {
    */
   static async addParticipant(
     encounterId: string,
-    input: CreateParticipantInput
+    input: CreateParticipantInput,
+    userId?: string
   ): Promise<CombatParticipant> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+      if (input.characterId) {
+        await this.verifyCharacterAccess(input.characterId, userId);
+      }
+    }
+
     // Roll initiative (d20 + modifier)
     const roll = rollD20();
     const initiative = roll + input.initiativeModifier;
@@ -134,8 +233,13 @@ export class CombatInitiativeService {
     encounterId: string,
     participantId: string,
     roll?: number,
-    modifier?: number
+    modifier?: number,
+    userId?: string
   ): Promise<InitiativeRoll> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Get participant
     const participant = await db.query.combatParticipants.findFirst({
       where: (cp, { eq, and }) => and(
@@ -226,7 +330,11 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Result with previous and current participants
    */
-  static async advanceTurn(encounterId: string): Promise<AdvanceTurnResult> {
+  static async advanceTurn(encounterId: string, userId?: string): Promise<AdvanceTurnResult> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Single relational query to fetch encounter and active participants
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
       where: (ce, { eq }) => eq(ce.id, encounterId),
@@ -294,7 +402,11 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Current participant or null
    */
-  static async getCurrentTurn(encounterId: string): Promise<CombatParticipant | null> {
+  static async getCurrentTurn(encounterId: string, userId?: string): Promise<CombatParticipant | null> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
       where: (ce, { eq }) => eq(ce.id, encounterId),
       with: {
@@ -321,8 +433,13 @@ export class CombatInitiativeService {
   static async reorderInitiative(
     encounterId: string,
     participantId: string,
-    newInitiative: number
+    newInitiative: number,
+    userId?: string
   ): Promise<void> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Update participant initiative
     await db
       .update(combatParticipants)
@@ -341,7 +458,11 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Updated encounter
    */
-  static async endCombat(encounterId: string): Promise<CombatEncounter> {
+  static async endCombat(encounterId: string, userId?: string): Promise<CombatEncounter> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     const [updated] = await db
       .update(combatEncounters)
       .set({
@@ -353,7 +474,7 @@ export class CombatInitiativeService {
       .returning();
 
     if (!updated) {
-      throw new InternalServerError('Failed to end combat encounter');
+      throw new NotFoundError('Combat encounter', encounterId);
     }
 
     return updated;
@@ -364,7 +485,11 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Complete combat state with participants and turn order
    */
-  static async getCombatState(encounterId: string): Promise<CombatState> {
+  static async getCombatState(encounterId: string, userId?: string): Promise<CombatState> {
+    if (userId) {
+      await this.verifyEncounterAccess(encounterId, userId);
+    }
+
     // Single relational query to fetch encounter and all participants
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
       where: (ce, { eq }) => eq(ce.id, encounterId),
@@ -404,7 +529,27 @@ export class CombatInitiativeService {
   /**
    * Get encounter by ID
    */
-  static async getEncounterById(encounterId: string): Promise<CombatEncounter | undefined> {
+  static async getEncounterById(encounterId: string, userId?: string): Promise<CombatEncounter | undefined> {
+    if (userId) {
+      const [result] = await db
+        .select({ encounter: combatEncounters })
+        .from(combatEncounters)
+        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(and(
+          eq(combatEncounters.id, encounterId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        ))
+        .limit(1);
+
+      return result?.encounter;
+    }
+
     return await db.query.combatEncounters.findFirst({
       where: (ce, { eq }) => eq(ce.id, encounterId),
     });
@@ -413,7 +558,28 @@ export class CombatInitiativeService {
   /**
    * Get active encounter for a session
    */
-  static async getActiveEncounter(sessionId: string): Promise<CombatEncounter | undefined> {
+  static async getActiveEncounter(sessionId: string, userId?: string): Promise<CombatEncounter | undefined> {
+    if (userId) {
+      const [result] = await db
+        .select({ encounter: combatEncounters })
+        .from(combatEncounters)
+        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(and(
+          eq(combatEncounters.sessionId, sessionId),
+          eq(combatEncounters.status, 'active'),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        ))
+        .limit(1);
+
+      return result?.encounter;
+    }
+
     return await db.query.combatEncounters.findFirst({
       where: (ce, { eq, and }) => and(
         eq(ce.sessionId, sessionId),
@@ -425,14 +591,44 @@ export class CombatInitiativeService {
   /**
    * Remove a participant from combat
    */
-  static async removeParticipant(participantId: string): Promise<void> {
-    const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
-      columns: { id: true, encounterId: true },
-    });
+  static async removeParticipant(participantId: string, userId?: string): Promise<void> {
+    let participant: { id: string; encounterId: string } | undefined;
 
-    if (!participant) {
-      return;
+    if (userId) {
+      const [scopedParticipant] = await db
+        .select({
+          id: combatParticipants.id,
+          encounterId: combatParticipants.encounterId,
+        })
+        .from(combatParticipants)
+        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(and(
+          eq(combatParticipants.id, participantId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        ))
+        .limit(1);
+
+      if (!scopedParticipant) {
+        return;
+      }
+
+      participant = scopedParticipant;
+    } else {
+      participant = await db.query.combatParticipants.findFirst({
+        where: eq(combatParticipants.id, participantId),
+        columns: { id: true, encounterId: true },
+      });
+
+      if (!participant) {
+        return;
+      }
     }
 
     await db
