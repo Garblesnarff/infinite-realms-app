@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Combat Schema
  *
@@ -117,6 +118,9 @@ export const combatParticipantStatus = pgTable(
     isConscious: boolean('is_conscious').notNull().default(true),
     deathSavesSuccesses: integer('death_saves_successes').notNull().default(0),
     deathSavesFailures: integer('death_saves_failures').notNull().default(0),
+
+    // Exhaustion level (0-6)
+    exhaustionLevel: integer('exhaustion_level').notNull().default(0),
 
     // Timestamp
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
