@@ -110,6 +110,7 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/performance.test.ts',
       'tests/services/passive-skills-service.test.ts',
       'tests/utils/character-converter.test.ts',
+      'src/utils/__tests__/reactionSystem.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -198,6 +199,7 @@ export default defineConfig({
         'server-bun/src/services/rest-service.ts',
         'server-bun/src/services/character-folder-service.ts',
         'server-bun/src/services/token-service.ts',
+        'src/utils/reactionSystem.ts',
       ],
       exclude: [
         '**/__tests__/**',
