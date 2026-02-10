@@ -117,8 +117,7 @@ export class SessionService {
     options?: {
       limit?: number;
       offset?: number;
-    },
-    userId?: string
+    }
   ): Promise<{
     session: GameSession;
     messages: DialogueHistory[];
@@ -275,8 +274,7 @@ export class SessionService {
     sessionId: string,
     userId: string,
     limit: number = 50,
-    offset: number = 0,
-    userId?: string
+    offset: number = 0
   ): Promise<MessagePage> {
     // ⚡ Bolt: Parallelize session verification, message fetch and count query to reduce total latency.
     // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
@@ -337,8 +335,7 @@ export class SessionService {
     sessionId: string,
     userId: string,
     entry: unknown,
-    maxEntries: number = 500,
-    userId?: string
+    maxEntries: number = 500
   ): Promise<void> {
     const session = await this.getSessionById(sessionId, userId);
 

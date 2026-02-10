@@ -36,7 +36,7 @@ interface DiceRollMessageProps {
  * Dice Roll Message Component for Chat
  * Displays dice roll results with visual styling similar to CombatMessage
  */
-export const DiceRollMessage: React.FC<DiceRollMessageProps> = ({
+export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(({
   data,
   playerName,
   className,
@@ -174,4 +174,4 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = ({
       </div>
     </Card>
   );
-};
+});

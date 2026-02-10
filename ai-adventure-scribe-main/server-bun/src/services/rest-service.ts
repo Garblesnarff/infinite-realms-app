@@ -440,9 +440,8 @@ export class RestService {
       ),
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Spend hit dice if requested
@@ -512,9 +511,8 @@ export class RestService {
       },
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Note: HP restoration would be handled by updating character's current HP
