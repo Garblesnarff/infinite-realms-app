@@ -47,7 +47,7 @@ import {
 import { rollDie } from '@/utils/diceRolls';
 import { calculateDamage } from '@/utils/diceUtils';
 import { processMovementAction } from '@/utils/movementUtils';
-import { checkReactionTriggers } from '@/utils/reactionSystem';
+import { checkReactionTriggers } from '@/utils/reactionTriggers';
 import { checkConcentration } from '@/utils/spell-management';
 
 // ===========================

@@ -8,9 +8,9 @@ import {
   processMovementAction
 } from '../movementUtils';
 
-import { checkMovementOpportunityAttacks } from '@/utils/reactionSystem';
+import { checkMovementOpportunityAttacks } from '@/utils/reactionTriggers';
 
-vi.mock('@/utils/reactionSystem', () => ({
+vi.mock('@/utils/reactionTriggers', () => ({
   checkMovementOpportunityAttacks: vi.fn()
 }));
 
