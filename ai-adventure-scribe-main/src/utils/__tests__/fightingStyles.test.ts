@@ -160,10 +160,16 @@ describe('fightingStyles', () => {
         ...mockParticipant,
         fightingStyles: [FIGHTING_STYLES.great_weapon_fighting],
       } as CombatParticipant;
+
+      // Mock Math.random to return 0.5 (results in 6 on d10)
+      const spy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
       const result = applyGreatWeaponFighting(p, damageRoll as any, twoHandedWeapon);
       expect(result.results).toEqual([1, 5]); // Original results kept
-      expect(result.keptResults![0]).not.toBe(1); // 1 should be rerolled
+      expect(result.keptResults![0]).toBe(6); // 1 should be rerolled to 6
       expect(result.keptResults![1]).toBe(5); // 5 should stay
+
+      spy.mockRestore();
     });
 
     it('should not reroll if weapon is not two-handed', () => {
