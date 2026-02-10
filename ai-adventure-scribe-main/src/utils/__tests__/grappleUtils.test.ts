@@ -77,9 +77,9 @@ describe('grappleUtils', () => {
       mockParticipant.level = 1;
       expect(calculateGrappleDC(mockParticipant)).toBe(13);
 
-      // level 12: prof bonus is 5. base 8 + prof 5 + str 3 = 16
+      // level 12: prof bonus is 4. base 8 + prof 4 + str 3 = 15
       mockParticipant.level = 12;
-      expect(calculateGrappleDC(mockParticipant)).toBe(16);
+      expect(calculateGrappleDC(mockParticipant)).toBe(15);
     });
 
     it('should use level 1 if level is missing', () => {

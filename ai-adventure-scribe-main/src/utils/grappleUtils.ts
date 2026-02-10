@@ -6,6 +6,7 @@
 
 import type { CombatParticipant, Condition, DiceRoll } from '@/types/combat';
 
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollDice } from '@/utils/diceUtils';
 
 /**
@@ -35,7 +36,7 @@ export function canAttemptGrapple(participant: CombatParticipant): boolean {
 export function calculateGrappleDC(participant: CombatParticipant): number {
   // Simplified calculation - would normally use actual ability scores
   const baseDC = 8;
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const strengthModifier = 3; // Simplified - would use actual Strength modifier
 
   return baseDC + proficiencyBonus + strengthModifier;
@@ -57,7 +58,7 @@ export function rollGrappleCheck(
 
   // Roll 1d20 + Strength modifier + proficiency bonus
   const strengthModifier = 3; // Simplified - would use actual Strength modifier
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const modifier = strengthModifier + proficiencyBonus;
 
   const roll = rollDice(20, 1, modifier);
@@ -133,7 +134,7 @@ export function escapeGrapple(
 } {
   // Roll Strength (Athletics) check against grappler's grapple DC
   const targetStrengthModifier = 3; // Simplified - would use actual Strength modifier
-  const targetProficiencyBonus = Math.floor((target.level || 1) / 4) + 2;
+  const targetProficiencyBonus = calculateProficiencyBonus(target.level || 1);
   const targetModifier = targetStrengthModifier + targetProficiencyBonus;
 
   const roll = rollDice(20, 1, targetModifier);

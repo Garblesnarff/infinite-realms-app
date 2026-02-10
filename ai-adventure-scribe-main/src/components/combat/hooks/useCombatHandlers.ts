@@ -12,6 +12,7 @@ import { calculateAttackDamage } from '@/utils/attackUtils';
 import { canUseClassFeature, getRageDamageBonus } from '@/utils/classFeatures';
 import { rollDeathSave, needsDeathSaves } from '@/utils/combat/deathSaves';
 import { rollDice, rollAttack } from '@/utils/diceUtils';
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { createDefaultLightWeapons, equipMainHandWeapon, equipOffHandWeapon } from '@/utils/equipmentUtils';
 import { canUseRacialTrait } from '@/utils/racialTraits';
 import { processReactionResponse } from '@/utils/reactionSystem';
@@ -332,7 +333,7 @@ export function useCombatHandlers({
     if (!participant || !(participant as any).activeConcentration) return;
 
     const conMod = (participant as any).abilityScores?.constitution?.modifier || 0;
-    const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+    const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
     const saveBonus = conMod + proficiencyBonus;
     const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;
     const succeeded = rollResult >= dc;
