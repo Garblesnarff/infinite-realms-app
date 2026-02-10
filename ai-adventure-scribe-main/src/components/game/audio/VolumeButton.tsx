@@ -26,6 +26,8 @@ export const VolumeButton: React.FC<VolumeButtonProps> = ({
           variant="ghost"
           size="icon"
           onClick={onToggleMute}
+          aria-label={isMuted ? 'Unmute voice' : 'Mute voice'}
+          aria-pressed={isMuted}
           className={`bg-primary/10 hover:bg-primary/20 transition-colors ${
             isSpeaking ? 'animate-pulse ring-2 ring-primary shadow-lg shadow-primary/50' : ''
           }`}

@@ -581,7 +581,53 @@ See `~/.claude/skills/dev-browser/SKILL.md` for full documentation.
 
 ---
 
-**Last Updated**: 2026-01-17
+## Blog Hero Image Generation (fal.ai)
+
+Blog hero images are generated using **fal.ai Z-Image Turbo** (`~$0.008/image`).
+
+**API Key**: `FAL_API_KEY` from `/var/www/imagineink/server-bun/.env` (shared with Imagine Ink)
+
+**Quick generation pattern** (Bun):
+```bash
+export $(grep FAL_API_KEY /var/www/imagineink/server-bun/.env | head -1)
+bun -e "
+const res = await fetch('https://queue.fal.run/fal-ai/z-image/turbo', {
+  method: 'POST',
+  headers: { Authorization: 'Key ' + process.env.FAL_API_KEY, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    prompt: 'your prompt here, always end with: no text no words no letters',
+    image_size: { width: 1200, height: 630 },
+    num_images: 1
+  })
+});
+const q = await res.json();
+for (let i = 0; i < 30; i++) {
+  await Bun.sleep(2000);
+  const r = await (await fetch(q.response_url, { headers: { Authorization: 'Key ' + process.env.FAL_API_KEY } })).json();
+  if (r.status === 'IN_QUEUE' || r.status === 'IN_PROGRESS') continue;
+  if (r.images?.[0]?.url) {
+    const img = await (await fetch(r.images[0].url)).arrayBuffer();
+    await Bun.write('/path/to/hero.png', img);
+    break;
+  }
+}
+"
+```
+
+**Image storage convention**:
+- **Source**: `public/blog-assets/images/posts/YYYY/MM-month/slug/hero.png`
+- **Served**: `dist/blog-assets/images/posts/YYYY/MM-month/slug/hero.png` (copy here too!)
+- **DB field**: `featured_image_url` = `/blog-assets/images/posts/...` (relative path)
+- **Alt text**: `hero_image_alt` field for SEO/accessibility
+- **Dimensions**: 1200×630 (standard blog/social hero size)
+- **Auth header**: `Key <api_key>` (NOT `Bearer`)
+- **Queue-based**: Submit → poll `response_url` every 2s → download from `images[0].url`
+
+**Always** save to both `public/` AND `dist/` — nginx serves from `dist/`, but `public/` survives rebuilds.
+
+---
+
+**Last Updated**: 2026-02-10
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based Supabase, **Bun 1.3.4 + Elysia**
 **Blog**: https://blog.infiniterealms.app (SSR via Bun/Elysia, Cloudflare-proxied, Let's Encrypt SSL)

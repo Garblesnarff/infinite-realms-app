@@ -1,5 +1,7 @@
-import { blogIdeation } from './blog-ideation.js';
+/* eslint-disable max-lines */
 import { blogContentGenerator } from './blog-content-generator.js';
+import { blogIdeation } from './blog-ideation.js';
+import { logger } from '../lib/logger.js';
 import { supabaseService } from '../lib/supabase.js';
 
 interface DailyBlogResult {
@@ -16,11 +18,11 @@ export class BlogAutomation {
 
   async generateDailyPost(): Promise<DailyBlogResult> {
     try {
-      console.log('[BlogAutomation] Starting daily blog post generation...');
+      logger.info('[BlogAutomation] Starting daily blog post generation...');
 
       // Check if we've already generated a post today
       if (this.hasRunToday()) {
-        console.log('[BlogAutomation] Already generated a post today, skipping');
+        logger.info('[BlogAutomation] Already generated a post today, skipping');
         return {
           success: false,
           error: 'Already generated a post today',
@@ -31,23 +33,23 @@ export class BlogAutomation {
       const recentPosts = await this.getRecentPosts(7);
       const recentTitles = recentPosts.map(p => p.title);
 
-      console.log('[BlogAutomation] Recent posts:', recentTitles);
+      logger.info({ msg: '[BlogAutomation] Recent posts', count: recentTitles.length });
 
       // Generate topic ideas
-      console.log('[BlogAutomation] Generating topic ideas...');
+      logger.info('[BlogAutomation] Generating topic ideas...');
       const topics = await blogIdeation.generateTopicIdeas({
         recentPosts: recentTitles,
         focus: this.getDailyFocus(),
       }, 5);
 
-      console.log('[BlogAutomation] Generated', topics.length, 'topic ideas');
+      logger.info({ msg: '[BlogAutomation] Generated topic ideas', count: topics.length });
 
       // Select the best topic
       const bestTopic = await blogIdeation.selectBestTopic(topics);
-      console.log('[BlogAutomation] Selected topic:', bestTopic.title);
+      logger.info({ msg: '[BlogAutomation] Selected topic', title: bestTopic.title });
 
       // Generate content for the selected topic
-      console.log('[BlogAutomation] Generating content...');
+      logger.info('[BlogAutomation] Generating content...');
       const content = await blogContentGenerator.generateBlogPost(bestTopic.title, {
         keywords: bestTopic.keywords,
         tone: bestTopic.tone,
@@ -55,7 +57,7 @@ export class BlogAutomation {
         targetAudience: bestTopic.targetAudience,
       });
 
-      console.log('[BlogAutomation] Content generated:', content.title);
+      logger.info({ msg: '[BlogAutomation] Content generated', title: content.title });
 
       // Create slug
       const slug = this.createSlug(content.title);
@@ -104,7 +106,7 @@ export class BlogAutomation {
       const baseUrl = process.env.BLOG_BASE_URL || 'https://blog.infiniterealms.app';
       const url = `${baseUrl}/${slug}`;
 
-      console.log('[BlogAutomation] Daily blog post published:', url);
+      logger.info({ msg: '[BlogAutomation] Daily blog post published', url });
 
       return {
         success: true,
@@ -114,7 +116,7 @@ export class BlogAutomation {
         url,
       };
     } catch (error) {
-      console.error('[BlogAutomation] Error generating daily post:', error);
+      logger.error({ msg: '[BlogAutomation] Error generating daily post', error });
       return {
         success: false,
         error: (error as Error).message,
@@ -154,7 +156,7 @@ export class BlogAutomation {
       .limit(10);
 
     if (error) {
-      console.error('[BlogAutomation] Error fetching recent posts:', error);
+      logger.error({ msg: '[BlogAutomation] Error fetching recent posts', error });
       return [];
     }
 
@@ -196,80 +198,106 @@ export class BlogAutomation {
   }
 
   private async addTags(postId: string, tags: string[]) {
-    for (const tagName of tags) {
-      // Get or create tag
-      const { data: tag, error: tagError } = await supabaseService
+    const tagData = tags.map(name => ({
+      name,
+      slug: this.createSlug(name)
+    }));
+    const slugs = tagData.map(t => t.slug);
+
+    // ⚡ Bolt: Batch fetch existing tags to avoid N+1 SELECT pattern
+    const { data: existingTags, error: fetchError } = await supabaseService
+      .from('blog_tags')
+      .select('id, slug')
+      .in('slug', slugs);
+
+    if (fetchError) {
+      logger.error({ msg: '[BlogAutomation] Error fetching existing tags', error: fetchError });
+    }
+
+    const existingSlugs = new Set(existingTags?.map(t => t.slug) || []);
+    const newTags = tagData.filter(t => !existingSlugs.has(t.slug));
+
+    // ⚡ Bolt: Batch insert missing tags to avoid N+1 INSERT pattern
+    const allTags = [...(existingTags || [])];
+    if (newTags.length > 0) {
+      const { data: createdTags, error: createError } = await supabaseService
         .from('blog_tags')
-        .select('id')
-        .eq('slug', this.createSlug(tagName))
-        .maybeSingle();
+        .insert(newTags)
+        .select('id, slug');
 
-      let tagId;
-      if (!tag) {
-        const { data: newTag, error: createError } = await supabaseService
-          .from('blog_tags')
-          .insert({
-            name: tagName,
-            slug: this.createSlug(tagName),
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          console.error('[BlogAutomation] Error creating tag:', createError);
-          continue;
-        }
-        tagId = newTag.id;
-      } else {
-        tagId = tag.id;
+      if (createError) {
+        logger.error({ msg: '[BlogAutomation] Error creating new tags', error: createError });
+      } else if (createdTags) {
+        allTags.push(...createdTags);
       }
+    }
 
-      // Link to post
-      await supabaseService
+    // ⚡ Bolt: Batch link tags to post in a single round-trip
+    if (allTags.length > 0) {
+      const postTags = allTags.map(t => ({
+        post_id: postId,
+        tag_id: t.id
+      }));
+
+      const { error: linkError } = await supabaseService
         .from('blog_post_tags')
-        .insert({
-          post_id: postId,
-          tag_id: tagId,
-        });
+        .insert(postTags);
+
+      if (linkError) {
+        logger.error({ msg: '[BlogAutomation] Error linking tags to post', error: linkError });
+      }
     }
   }
 
   private async addCategories(postId: string, categories: string[]) {
-    for (const categoryName of categories) {
-      // Get or create category
-      const { data: category, error: categoryError } = await supabaseService
+    const categoryData = categories.map(name => ({
+      name,
+      slug: this.createSlug(name)
+    }));
+    const slugs = categoryData.map(c => c.slug);
+
+    // ⚡ Bolt: Batch fetch existing categories to avoid N+1 SELECT pattern
+    const { data: existingCategories, error: fetchError } = await supabaseService
+      .from('blog_categories')
+      .select('id, slug')
+      .in('slug', slugs);
+
+    if (fetchError) {
+      logger.error({ msg: '[BlogAutomation] Error fetching existing categories', error: fetchError });
+    }
+
+    const existingSlugs = new Set(existingCategories?.map(c => c.slug) || []);
+    const newCategories = categoryData.filter(c => !existingSlugs.has(c.slug));
+
+    // ⚡ Bolt: Batch insert missing categories to avoid N+1 INSERT pattern
+    const allCategories = [...(existingCategories || [])];
+    if (newCategories.length > 0) {
+      const { data: createdCategories, error: createError } = await supabaseService
         .from('blog_categories')
-        .select('id')
-        .eq('slug', this.createSlug(categoryName))
-        .maybeSingle();
+        .insert(newCategories)
+        .select('id, slug');
 
-      let categoryId;
-      if (!category) {
-        const { data: newCategory, error: createError } = await supabaseService
-          .from('blog_categories')
-          .insert({
-            name: categoryName,
-            slug: this.createSlug(categoryName),
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          console.error('[BlogAutomation] Error creating category:', createError);
-          continue;
-        }
-        categoryId = newCategory.id;
-      } else {
-        categoryId = category.id;
+      if (createError) {
+        logger.error({ msg: '[BlogAutomation] Error creating new categories', error: createError });
+      } else if (createdCategories) {
+        allCategories.push(...createdCategories);
       }
+    }
 
-      // Link to post
-      await supabaseService
+    // ⚡ Bolt: Batch link categories to post in a single round-trip
+    if (allCategories.length > 0) {
+      const postCategories = allCategories.map(c => ({
+        post_id: postId,
+        category_id: c.id
+      }));
+
+      const { error: linkError } = await supabaseService
         .from('blog_post_categories')
-        .insert({
-          post_id: postId,
-          category_id: categoryId,
-        });
+        .insert(postCategories);
+
+      if (linkError) {
+        logger.error({ msg: '[BlogAutomation] Error linking categories to post', error: linkError });
+      }
     }
   }
 }

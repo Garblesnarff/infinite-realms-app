@@ -11,8 +11,10 @@
  * @module server/services/combat-attack-service
  */
 
-import { and, desc, eq, or } from 'drizzle-orm';
+/* eslint-disable max-lines */
+import { and, desc, eq, exists, inArray, or } from 'drizzle-orm';
 
+import { CombatHPService } from './combat-hp-service.js';
 import { db } from '../../../db/client.js';
 import {
   combatEncounters,
@@ -22,8 +24,11 @@ import {
   weaponAttacks,
   creatureStats,
   characters,
+  npcs,
+  campaigns,
 } from '../../../db/schema/index.js';
-import { CombatHPService } from './combat-hp-service.js';
+import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 import type {
   WeaponAttack,
@@ -41,7 +46,6 @@ import type {
   CreateWeaponAttackInput,
   DamageType,
 } from '../types/combat.js';
-import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
 
 export class CombatAttackService {
   constructor() {
@@ -103,7 +107,7 @@ export class CombatAttackService {
    * - Advantage + Disadvantage = cancel out (straight roll)
    */
   checkHit(input: HitCheckInput): HitCheckResult {
-    const { attackRoll, attackBonus, targetAC, advantage, disadvantage } = input;
+    const { attackRoll, attackBonus, targetAC, advantage: _advantage, disadvantage: _disadvantage } = input;
 
     // Determine if this is a natural 1 or natural 20
     const isNaturalOne = attackRoll === 1;
@@ -254,7 +258,7 @@ export class CombatAttackService {
   async resolveAttack(
     encounterId: string,
     input: AttackRollInput,
-    userId?: string
+    userId: string
   ): Promise<AttackResult> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -266,7 +270,7 @@ export class CombatAttackService {
       attackRoll,
       attackBonus = 0,
       weaponId,
-      attackType,
+      attackType: _attackType,
       isCritical: forceCritical = false,
       advantage = false,
       disadvantage = false,
@@ -275,19 +279,19 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // Validate attacker/target belong to this encounter to prevent cross-encounter IDOR.
-    const [attackerParticipant, targetParticipant] = await Promise.all([
-      this.getParticipantInEncounter(attackerId, encounterId),
-      this.getParticipantInEncounter(targetId, encounterId),
+    // ⚡ Bolt: Parallelize target stats and weapon fetch to reduce database round-trips
+    // 🛡️ Sentinel: Pass userId for ownership verification
+    const [targetStats, weapon] = await Promise.all([
+      this.getCreatureStats(targetId, userId),
+      weaponId ? this.getWeaponAttack(weaponId, userId) : Promise.resolve(null),
     ]);
 
-    // Get weapon if provided
-    let weapon: WeaponAttack | null = null;
-    if (weaponId) {
-      weapon = await this.getWeaponAttack(weaponId);
-      if (!weapon || !attackerParticipant.characterId || weapon.characterId !== attackerParticipant.characterId) {
-        throw new NotFoundError('Weapon', weaponId);
-      }
+    if (!targetStats) {
+      throw new NotFoundError('Target stats', targetId);
+    }
+
+    if (weaponId && !weapon) {
+      throw new NotFoundError('Weapon', weaponId);
     }
 
     // Check if attack hits
@@ -377,7 +381,7 @@ export class CombatAttackService {
         isNaturalTwenty: hitCheck.isNaturalTwenty,
       };
     } catch (error) {
-      console.error('Failed to apply damage to HP:', error);
+      logger.error({ msg: 'Failed to apply damage to HP', error });
       throw new InternalServerError('Attack succeeded but damage application failed', { error });
     }
   }
@@ -388,7 +392,7 @@ export class CombatAttackService {
   async resolveSpellAttack(
     encounterId: string,
     input: SpellAttackInput,
-    userId?: string
+    userId: string
   ): Promise<SpellAttackResult> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -414,8 +418,16 @@ export class CombatAttackService {
 
     const results: AttackResult[] = [];
 
-    for (const targetId of targetIds) {
-      const targetParticipant = await this.getParticipantInEncounter(targetId, encounterId);
+    // ⚡ Bolt: Fetch all target statistics in a single batch query to avoid N+1 database round-trips.
+    // 🛡️ Sentinel: Use getCreatureStatsBatch with userId for ownership verification.
+    const allTargetStats = await this.getCreatureStatsBatch(targetIds, userId);
+
+    // ⚡ Bolt: Parallelize spell resolution for all targets using the pre-fetched stats map.
+    const resolutionPromises = targetIds.map(async (targetId) => {
+      const targetStats = allTargetStats.get(targetId);
+      if (!targetStats) {
+        return null;
+      }
 
       if (attackRoll !== undefined) {
         // Spell attack roll
@@ -426,7 +438,7 @@ export class CombatAttackService {
         });
 
         if (!hitCheck.hit) {
-          results.push({
+          return {
             hit: false,
             targetAC: targetParticipant.armorClass,
             totalAttackRoll: hitCheck.totalAttackRoll,
@@ -437,8 +449,7 @@ export class CombatAttackService {
             isCritical: false,
             isNaturalOne: hitCheck.isNaturalOne,
             isNaturalTwenty: hitCheck.isNaturalTwenty,
-          });
-          continue;
+          };
         }
 
         // Hit - calculate damage
@@ -471,7 +482,7 @@ export class CombatAttackService {
               ignoreImmunities: true,  // Already applied in damage calculation
             }, userId);
 
-            results.push({
+            return {
               hit: true,
               targetAC: targetParticipant.armorClass,
               totalAttackRoll: hitCheck.totalAttackRoll,
@@ -488,9 +499,9 @@ export class CombatAttackService {
               isCritical: spellIsCrit,
               isNaturalOne: hitCheck.isNaturalOne,
               isNaturalTwenty: hitCheck.isNaturalTwenty,
-            });
+            };
           } catch (error) {
-            console.error('Failed to apply spell attack damage to HP:', error);
+            logger.error({ msg: 'Failed to apply spell attack damage to HP', error });
             throw new InternalServerError('Spell attack succeeded but damage application failed', { error });
           }
         }
@@ -498,7 +509,7 @@ export class CombatAttackService {
         // Saving throw spell
         const saveRoll = saveRolls[targetId];
         if (saveRoll === undefined) {
-          continue;
+          return null;
         }
         const savedSuccessfully = saveRoll >= saveDC;
 
@@ -530,7 +541,7 @@ export class CombatAttackService {
               ignoreImmunities: true,  // Already applied in damage calculation
             }, userId);
 
-            results.push({
+            return {
               hit: !savedSuccessfully,
               targetAC: 0, // Not applicable for saves
               totalAttackRoll: saveRoll ?? 0,
@@ -547,14 +558,20 @@ export class CombatAttackService {
               isCritical: false,
               isNaturalOne: false,
               isNaturalTwenty: false,
-            });
+            };
           } catch (error) {
-            console.error('Failed to apply spell save damage to HP:', error);
+            logger.error({ msg: 'Failed to apply spell save damage to HP', error });
             throw new InternalServerError('Spell save resolved but damage application failed', { error });
           }
         }
       }
-    }
+      return null;
+    });
+
+    const resolutionResults = await Promise.all(resolutionPromises);
+    resolutionResults.forEach((res) => {
+      if (res) results.push(res);
+    });
 
     return { results };
   }
@@ -562,7 +579,7 @@ export class CombatAttackService {
   /**
    * Create a weapon attack for a character
    */
-  async createWeaponAttack(input: CreateWeaponAttackInput, userId?: string): Promise<WeaponAttack> {
+  async createWeaponAttack(input: CreateWeaponAttackInput, userId: string): Promise<WeaponAttack> {
     const {
       characterId,
       name,
@@ -574,8 +591,16 @@ export class CombatAttackService {
       description,
     } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
+    // 🛡️ Sentinel: Verify character ownership before creation
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     const [weapon] = await db
@@ -602,13 +627,19 @@ export class CombatAttackService {
   /**
    * Get all weapon attacks for a character
    */
-  async getCharacterWeapons(characterId: string, userId?: string): Promise<WeaponAttack[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
+  async getCharacterWeapons(characterId: string, userId: string): Promise<WeaponAttack[]> {
     const weapons = await db.query.weaponAttacks.findMany({
-      where: eq(weaponAttacks.characterId, characterId),
+      where: and(
+        eq(weaponAttacks.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, weaponAttacks.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
       orderBy: [desc(weaponAttacks.createdAt)],
     });
 
@@ -618,9 +649,19 @@ export class CombatAttackService {
   /**
    * Get a specific weapon attack
    */
-  async getWeaponAttack(weaponId: string): Promise<WeaponAttack | null> {
+  async getWeaponAttack(weaponId: string, userId: string): Promise<WeaponAttack | null> {
     const weapon = await db.query.weaponAttacks.findFirst({
-      where: eq(weaponAttacks.id, weaponId),
+      where: and(
+        eq(weaponAttacks.id, weaponId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, weaponAttacks.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
     });
 
     return weapon || null;
@@ -629,12 +670,80 @@ export class CombatAttackService {
   /**
    * Get creature stats (AC, resistances, etc.)
    */
-  async getCreatureStats(creatureId: string): Promise<CreatureStats | null> {
-    // Try to find by character_id or npc_id
+  /**
+   * ⚡ Bolt: Fetch multiple creature statistics in a single batch query to avoid N+1 problems.
+   * Includes same ownership verification as getCreatureStats.
+   */
+  async getCreatureStatsBatch(creatureIds: string[], userId: string): Promise<Map<string, CreatureStats>> {
+    if (creatureIds.length === 0) return new Map();
+
+    const statsList = await db.query.creatureStats.findMany({
+      where: and(
+        or(
+          inArray(creatureStats.characterId, creatureIds),
+          inArray(creatureStats.npcId, creatureIds)
+        ),
+        or(
+          // Access via owned character
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, creatureStats.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          ),
+          // Access via owned campaign (NPCs)
+          exists(
+            db.select()
+              .from(npcs)
+              .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+              .where(and(
+                eq(npcs.id, creatureStats.npcId),
+                eq(campaigns.userId, userId)
+              ))
+          )
+        )
+      ),
+    });
+
+    const statsMap = new Map<string, CreatureStats>();
+    statsList.forEach((stats) => {
+      const id = stats.characterId || stats.npcId;
+      if (id) statsMap.set(id, stats);
+    });
+    return statsMap;
+  }
+
+  async getCreatureStats(creatureId: string, userId: string): Promise<CreatureStats | null> {
+    // 🛡️ Sentinel: Verify access to character OR NPC (via campaign)
     const stats = await db.query.creatureStats.findFirst({
-      where: or(
-        eq(creatureStats.characterId, creatureId),
-        eq(creatureStats.npcId, creatureId)
+      where: and(
+        or(
+          eq(creatureStats.characterId, creatureId),
+          eq(creatureStats.npcId, creatureId)
+        ),
+        or(
+          // Access via owned character
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, creatureStats.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          ),
+          // Access via owned campaign (NPCs)
+          exists(
+            db.select()
+              .from(npcs)
+              .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+              .where(and(
+                eq(npcs.id, creatureStats.npcId),
+                eq(campaigns.userId, userId)
+              ))
+          )
+        )
       ),
     });
 

@@ -35,3 +35,19 @@
 ## 2025-05-14 - Character Sheet Loading and Layout
 **Learning:** Hardcoded grid columns (e.g., `grid-cols-7`) in tabbed layouts are brittle and break when new tabs are added (e.g., "Gallery" as the 8th tab). Using responsive grids (`grid-cols-4 md:grid-cols-8`) improves mobile UX and prevents layout shifts.
 **Action:** Always check the item count against grid column classes in tabbed navigations. Prefer responsive grid columns over fixed ones. Use `Skeleton` components instead of plain text for a more "delightful" loading experience.
+
+## 2025-05-28 - Drawing Tool Accessibility and Component Standards
+**Learning:** Polishing a complex feature panel like the Drawing Tool involves standardizing accessibility attributes (role="toolbar", aria-label, aria-pressed) and migrating legacy form elements (raw checkboxes) to design system components (Switch). Keeping these changes surgical and under 50 lines ensures they are maintainable and easy to review.
+**Action:** When touching feature toolbars, always add role="toolbar" and ensure all interactive elements have appropriate state indicators (aria-pressed) and accessible names (aria-label).
+
+## 2025-05-29 - Tree Item Accessibility Pattern
+**Learning:** Custom tree items (like `FolderTree`) require `role="button"`, `tabIndex={0}`, and `aria-selected` to be properly navigable for keyboard and screen reader users. Nested actions (like expand/collapse or context menus) must be clearly labeled with `aria-label` and `aria-expanded` and should ideally be revealed on focus (`focus-visible:opacity-100`) to ensure they are discoverable without a mouse.
+**Action:** Implement interactive list/tree items with appropriate ARIA roles, keyboard event handlers (`onKeyDown` for Enter/Space), and ensure all icon-only sub-actions are accessible and visible on focus.
+
+## 2025-05-30 - Floating Action Panel Accessibility and Layering
+**Learning:** Standardizing accessibility on floating panels involves adding `aria-label` to state toggles and ensuring z-index reliability. Descriptive `aria-label` for "Open/Close" and "Expand/Collapse" states provides essential context for screen reader users. Using `style={{ zIndex: Z_INDEX.CONSTANT }}` prevents layering issues that Tailwind's dynamic classes might occasionally skip.
+**Action:** Always add descriptive `aria-label` to floating action buttons and use inline styles for z-index standardization.
+
+## 2025-06-01 - Audio Control Accessibility and Live Status
+**Learning:** Audio controls require specific ARIA attributes for a complete UX: `aria-label` and `aria-pressed` for mute/unmute toggles, and `aria-label` for sliders. Crucially, visual-only indicators like "Speaking..." pulses should be accompanied by `role="status"` and `aria-live="polite"` so screen reader users are aware of activity. Redundant component structures (e.g., in `src/components/game` and `src/features/game-session`) must be updated in tandem to ensure a consistent experience.
+**Action:** Implement `aria-pressed` for toggles, `aria-label` for icon-only buttons/sliders, and `aria-live` for status indicators. Always check for duplicate component definitions across feature directories.

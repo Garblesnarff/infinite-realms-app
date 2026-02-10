@@ -6,31 +6,58 @@
  * - GET /v1/sessions/:id - Get session
  * - POST /v1/sessions/:id/complete - Complete session
  *
- * Ported from /server/src/routes/v1/sessions.ts
+ * Refactored to use SessionService with proper ownership verification
+ * and existence masking.
  */
 
 import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { supabaseService } from '../../lib/supabase.js';
+import { SessionService } from '../../services/session-service.js';
 import { logger } from '../../lib/logger.js';
-import { CharacterService } from '../../services/character-service.js';
+import { NotFoundError } from '../../lib/errors.js';
+
+/**
+ * Helper to map camelCase Session to snake_case for API compatibility
+ */
+const mapSessionToApi = (session: any) => ({
+  id: session.id,
+  campaign_id: session.campaignId,
+  character_id: session.characterId,
+  session_number: session.sessionNumber,
+  start_time: session.startTime,
+  end_time: session.endTime,
+  status: session.status,
+  current_scene_description: session.currentSceneDescription,
+  summary: session.summary,
+  session_notes: session.sessionNotes,
+  turn_count: session.turnCount,
+  starter_campaign_id: session.starterCampaignId,
+  campaign_version: session.campaignVersion,
+  ruleset: session.ruleset,
+  created_at: session.createdAt,
+  updated_at: session.updatedAt,
+});
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
+  .derive(async ({ request }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(({ user, authError, set }) => {
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+  })
 
   /**
    * POST /v1/sessions
    * Create a new game session
    */
   .use(planRateLimit('default'))
-  .post('/', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/', async ({ body, set, user }) => {
     const { campaign_id, character_id, session_number } = body as {
       campaign_id?: string;
       character_id?: string;
@@ -38,47 +65,20 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     };
 
     try {
-      // SECURITY: Verify user owns the campaign or character before creating session
-      if (campaign_id) {
-        const { data: campaign, error: campErr } = await supabaseService
-          .from('campaigns')
-          .select('user_id')
-          .eq('id', campaign_id)
-          .eq('user_id', user.userId)
-          .single();
+      const session = await SessionService.createSession({
+        campaignId: campaign_id,
+        characterId: character_id,
+        sessionNumber: session_number,
+      }, (user as any).userId);
 
-        if (campErr || !campaign) {
-          set.status = 404;
-          return { error: 'Campaign not found' };
-        }
-      }
-
-      if (character_id) {
-        const character = await CharacterService.getById(character_id, user.userId);
-        if (!character) {
-          set.status = 404;
-          return { error: 'Character not found' };
-        }
-      }
-
-      // Create session only after ownership verified
-      const { data, error } = await supabaseService
-        .from('game_sessions')
-        .insert({
-          campaign_id: campaign_id || null,
-          character_id: character_id || null,
-          session_number: session_number || 1,
-          status: 'active',
-          start_time: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
       set.status = 201;
-      return data;
-    } catch (e) {
-      logger.error({ msg: 'SESSION_CREATE error', error: e });
+      return mapSessionToApi(session);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        set.status = 404;
+        return { error: error.message };
+      }
+      logger.error({ msg: 'SESSION_CREATE error', error });
       set.status = 500;
       return { error: 'Failed to create session' };
     }
@@ -88,39 +88,18 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * GET /v1/sessions/:id
    * Get a session by ID (with ownership verification)
    */
-  .get('/:id', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/:id', async ({ params, set, user }) => {
     const { id } = params;
 
     try {
-      const rows = await sql`
-        SELECT gs.*
-        FROM game_sessions gs
-        LEFT JOIN campaigns c ON c.id = gs.campaign_id
-        LEFT JOIN characters ch ON ch.id = gs.character_id
-        WHERE gs.id = ${id}
-          AND (
-            c.user_id = ${user.userId}
-            OR ch.user_id = ${user.userId}
-            OR ch.owner_id = ${user.userId}
-          )
-        LIMIT 1
-      `;
-
-      const session = rows?.[0];
-      if (!session) {
+      const session = await SessionService.getSessionById(id, (user as any).userId);
+      return mapSessionToApi(session);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
         set.status = 404;
         return { error: 'Not found' };
       }
-
-      return session;
-    } catch (e) {
-      logger.error({ msg: 'SESSION_GET error', error: e });
+      logger.error({ msg: 'SESSION_GET error', error });
       set.status = 500;
       return { error: 'Failed to fetch session' };
     }
@@ -130,49 +109,19 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * POST /v1/sessions/:id/complete
    * Mark a session as complete
    */
-  .post('/:id/complete', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/complete', async ({ params, body, set, user }) => {
     const { id } = params;
     const { summary } = body as { summary?: string };
 
     try {
-      const updated = await sql`
-        UPDATE game_sessions gs
-        SET
-          end_time = NOW(),
-          status = 'completed',
-          summary = ${summary || null},
-          updated_at = NOW()
-        WHERE gs.id = ${id}
-          AND EXISTS (
-            SELECT 1
-            FROM game_sessions own
-            LEFT JOIN campaigns c ON c.id = own.campaign_id
-            LEFT JOIN characters ch ON ch.id = own.character_id
-            WHERE own.id = gs.id
-              AND (
-                c.user_id = ${user.userId}
-                OR ch.user_id = ${user.userId}
-                OR ch.owner_id = ${user.userId}
-              )
-          )
-        RETURNING gs.*
-      `;
-
-      const session = updated?.[0];
-      if (!session) {
+      const session = await SessionService.completeSession(id, (user as any).userId, summary);
+      return mapSessionToApi(session);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
         set.status = 404;
         return { error: 'Not found' };
       }
-
-      return session;
-    } catch (e) {
-      logger.error({ msg: 'SESSION_COMPLETE error', error: e });
+      logger.error({ msg: 'SESSION_COMPLETE error', error });
       set.status = 500;
       return { error: 'Failed to complete session' };
     }

@@ -20,7 +20,7 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, sql, or } from 'drizzle-orm';
+import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 import type {
   GrantFeatureInput,
   UseFeatureInput,
@@ -169,8 +169,8 @@ export class ClassFeaturesService {
   /**
    * Grant a feature to a character
    */
-  static async grantFeature(input: GrantFeatureInput, userId?: string): Promise<CharacterFeature> {
-    const { characterId, featureId, acquiredAtLevel } = input;
+  static async grantFeature(input: GrantFeatureInput & { userId: string }): Promise<CharacterFeature> {
+    const { characterId, featureId, acquiredAtLevel, userId } = input;
 
     if (userId) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -182,11 +182,19 @@ export class ClassFeaturesService {
       throw new NotFoundError('Feature', featureId);
     }
 
-    // Check if feature is already granted
+    // Check if feature is already granted AND verify character ownership
     const existing = await db.query.characterFeatures.findFirst({
       where: and(
         eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId)
+        eq(characterFeatures.featureId, featureId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ),
     });
 
@@ -195,6 +203,20 @@ export class ClassFeaturesService {
         featureId,
         characterId,
       });
+    }
+
+    // Verify ownership before granting
+    const [character] = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Grant the feature
@@ -219,13 +241,19 @@ export class ClassFeaturesService {
   /**
    * Get all features for a character
    */
-  static async getCharacterFeatures(characterId: string, userId?: string): Promise<CharacterFeature[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
+  static async getCharacterFeatures(characterId: string, userId: string): Promise<CharacterFeature[]> {
     const features = await db.query.characterFeatures.findMany({
-      where: eq(characterFeatures.characterId, characterId),
+      where: and(
+        eq(characterFeatures.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
       with: {
         feature: true,
       },
@@ -241,7 +269,7 @@ export class ClassFeaturesService {
   static async getFeatureUsage(
     characterId: string,
     featureId: string,
-    userId?: string
+    userId: string
   ): Promise<number | null> {
     if (userId) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -250,7 +278,15 @@ export class ClassFeaturesService {
     const characterFeature = await db.query.characterFeatures.findFirst({
       where: and(
         eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId)
+        eq(characterFeatures.featureId, featureId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ),
     });
 
@@ -264,18 +300,22 @@ export class ClassFeaturesService {
   /**
    * Use a limited-use feature
    */
-  static async useFeature(input: UseFeatureInput, userId?: string): Promise<UseFeatureResult> {
-    const { characterId, featureId, context, sessionId } = input;
+  static async useFeature(input: UseFeatureInput & { userId: string }): Promise<UseFeatureResult> {
+    const { characterId, featureId, context, sessionId, userId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    // Get character feature
+    // Get character feature with ownership check
     const characterFeature = await db.query.characterFeatures.findFirst({
       where: and(
         eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId)
+        eq(characterFeatures.featureId, featureId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ),
       with: {
         feature: true,
@@ -296,7 +336,7 @@ export class ClassFeaturesService {
     // Check if feature has limited uses
     if (feature.usageType !== 'limited_use' && feature.usesCount === null) {
       // Passive or at-will features don't track uses, but we still log them
-      await this.logFeatureUsage(characterId, featureId, context, sessionId);
+      await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
 
       return {
         success: true,
@@ -328,7 +368,7 @@ export class ClassFeaturesService {
       ));
 
     // Log the usage
-    await this.logFeatureUsage(characterId, featureId, context, sessionId);
+    await this.logFeatureUsage(characterId, featureId, userId, context, sessionId);
 
     return {
       success: true,
@@ -342,18 +382,23 @@ export class ClassFeaturesService {
    * Restore features after rest
    */
   static async restoreFeatures(
-    input: RestoreFeaturesInput,
-    userId?: string
+    input: RestoreFeaturesInput & { userId: string }
   ): Promise<RestoreFeaturesResult> {
-    const { characterId, restType } = input;
+    const { characterId, restType, userId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    // Get all character features
+    // Get all character features with ownership check
     const allFeatures = await db.query.characterFeatures.findMany({
-      where: eq(characterFeatures.characterId, characterId),
+      where: and(
+        eq(characterFeatures.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
       with: {
         feature: true,
       },
@@ -404,16 +449,16 @@ export class ClassFeaturesService {
   /**
    * Set a character's subclass
    */
-  static async setSubclass(input: SetSubclassInput, userId?: string): Promise<SetSubclassResult> {
-    const { characterId, className, subclassName, level } = input;
+  static async setSubclass(input: SetSubclassInput & { userId: string }): Promise<SetSubclassResult> {
+    const { characterId, className, subclassName, level, userId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    } else {
-      // Verify character exists
-      const character = await db.query.characters.findFirst({
-        where: eq(characters.id, characterId),
-      });
+    // Verify character exists and verify ownership
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
 
       if (!character) {
         throw new NotFoundError('Character', characterId);
@@ -479,7 +524,8 @@ export class ClassFeaturesService {
           characterId,
           featureId: feature.id,
           acquiredAtLevel: level,
-        }, userId);
+          userId,
+        });
         newFeatures.push(feature);
       } catch (error) {
         // Skip if already granted
@@ -500,7 +546,7 @@ export class ClassFeaturesService {
   static async getCharacterSubclass(
     characterId: string,
     className: string,
-    userId?: string
+    userId: string
   ): Promise<CharacterSubclass | null> {
     if (userId) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -509,7 +555,15 @@ export class ClassFeaturesService {
     const subclass = await db.query.characterSubclasses.findFirst({
       where: and(
         eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className)
+        eq(characterSubclasses.className, className),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ),
     });
 
@@ -538,9 +592,24 @@ export class ClassFeaturesService {
   static async logFeatureUsage(
     characterId: string,
     featureId: string,
+    userId: string,
     context?: string,
     sessionId?: string
   ): Promise<FeatureUsageLog> {
+    // Verify ownership before logging
+    const [character] = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
+
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
     const [log] = await db
       .insert(featureUsageLog)
       .values({
@@ -562,16 +631,21 @@ export class ClassFeaturesService {
    * Get feature usage history
    */
   static async getFeatureUsageHistory(
-    params: FeatureUsageHistoryParams,
-    userId?: string
+    params: FeatureUsageHistoryParams & { userId: string }
   ): Promise<FeatureUsageLog[]> {
-    const { characterId, featureId, sessionId, limit = 50 } = params;
+    const { characterId, featureId, sessionId, limit = 50, userId } = params;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    const conditions = [eq(featureUsageLog.characterId, characterId)];
+    const conditions = [
+      eq(featureUsageLog.characterId, characterId),
+      exists(
+        db.select()
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    ];
 
     if (featureId) {
       conditions.push(eq(featureUsageLog.featureId, featureId));
@@ -598,7 +672,7 @@ export class ClassFeaturesService {
    */
   static async getCharacterFeaturesWithUsage(
     characterId: string,
-    userId?: string
+    userId: string
   ): Promise<CharacterFeaturesWithUsage> {
     const features = await this.getCharacterFeatures(characterId, userId);
 
@@ -624,15 +698,15 @@ export class ClassFeaturesService {
     characterId: string,
     className: string,
     level: number,
-    userId?: string
+    userId: string
   ): Promise<ClassFeatureLibrary[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    } else {
-      // Get character to check for subclass
-      const character = await db.query.characters.findFirst({
-        where: eq(characters.id, characterId),
-      });
+    // Get character to check for subclass and verify ownership
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
 
       if (!character) {
         throw new NotFoundError('Character', characterId);
@@ -674,7 +748,8 @@ export class ClassFeaturesService {
           characterId,
           featureId: feature.id,
           acquiredAtLevel: level,
-        }, userId);
+          userId,
+        });
         grantedFeatures.push(feature);
       } catch (error) {
         // Skip if already granted

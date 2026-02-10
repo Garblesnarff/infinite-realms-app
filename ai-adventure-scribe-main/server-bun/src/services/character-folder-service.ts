@@ -9,7 +9,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, asc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -84,18 +84,23 @@ export class CharacterFolderService {
       orderBy: [asc(characterFolders.sortOrder)],
     });
 
-    // Get character counts for each folder
-    const allCharacters = await db.query.characters.findMany({
-      where: or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-      columns: { id: true, folderId: true },
-    });
+    // ⚡ Bolt: Use SQL aggregation (count/groupBy) instead of fetching all characters to memory.
+    // This significantly reduces data transfer and memory usage as the character list grows.
+    const counts = await db
+      .select({
+        folderId: characters.folderId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(characters)
+      .where(and(
+        isNotNull(characters.folderId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .groupBy(characters.folderId);
 
-    const folderCounts = new Map<string, number>();
-    for (const char of allCharacters) {
-      if (char.folderId) {
-        folderCounts.set(char.folderId, (folderCounts.get(char.folderId) || 0) + 1);
-      }
-    }
+    const folderCounts = new Map<string, number>(
+      counts.map(c => [c.folderId as string, c.count])
+    );
 
     const foldersWithCounts = folders.map(folder => ({
       ...folder,

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * DoorObject Component
  *
@@ -12,12 +13,16 @@
  * @module components/battle-map/DoorObject
  */
 
+import { Line, Html } from '@react-three/drei';
+import { Lock, Unlock, DoorOpen, X } from 'lucide-react';
 import React, { useMemo, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ThreeEvent } from '@react-three/fiber';
-import { Line, Html } from '@react-three/drei';
+
 import type { Point2D, VisionBlocker, DoorState } from '@/types/scene';
-import { Lock, Unlock, DoorOpen } from 'lucide-react';
+import type { ThreeEvent } from '@react-three/fiber';
+
+import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 
 // ===========================
 // Types
@@ -318,22 +323,28 @@ export interface DoorControlPanelProps {
 }
 
 export function DoorControlPanel({
-  door,
+  door: _door,
   doorState,
   onStateChange,
   onDelete,
   onClose,
 }: DoorControlPanelProps) {
   return (
-    <div className="absolute top-4 right-4 bg-card p-4 rounded-lg border border-border shadow-lg w-64 z-10">
+    <div
+      className="absolute top-4 right-4 bg-card p-4 rounded-lg border border-border shadow-lg w-64"
+      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold">Door Controls</h3>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="text-muted-foreground hover:text-foreground"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          aria-label="Close"
         >
-          ×
-        </button>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="space-y-3">
@@ -341,59 +352,56 @@ export function DoorControlPanel({
         <div className="space-y-2">
           <label className="text-sm text-muted-foreground">Door State</label>
           <div className="grid grid-cols-3 gap-2">
-            <button
+            <Button
+              variant={doorState === 'open' ? 'default' : 'outline'}
+              size="sm"
               onClick={() => onStateChange('open')}
-              className={`px-2 py-1 text-xs rounded border ${
-                doorState === 'open'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-accent'
-              }`}
+              className="h-8 text-xs"
+              aria-pressed={doorState === 'open'}
             >
               Open
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={doorState === 'closed' ? 'default' : 'outline'}
+              size="sm"
               onClick={() => onStateChange('closed')}
-              className={`px-2 py-1 text-xs rounded border ${
-                doorState === 'closed'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-accent'
-              }`}
+              className="h-8 text-xs"
+              aria-pressed={doorState === 'closed'}
             >
               Closed
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={doorState === 'locked' ? 'default' : 'outline'}
+              size="sm"
               onClick={() => onStateChange('locked')}
-              className={`px-2 py-1 text-xs rounded border ${
-                doorState === 'locked'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-accent'
-              }`}
+              className="h-8 text-xs"
+              aria-pressed={doorState === 'locked'}
             >
               Locked
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Quick Actions */}
         <div className="space-y-2">
           <label className="text-sm text-muted-foreground">Quick Actions</label>
-          <button
-            onClick={() =>
-              onStateChange(doorState === 'open' ? 'closed' : 'open')
-            }
-            className="w-full px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded hover:bg-secondary/80"
+          <Button
+            variant="secondary"
+            onClick={() => onStateChange(doorState === 'open' ? 'closed' : 'open')}
+            className="w-full h-9 text-sm"
           >
             {doorState === 'open' ? 'Close Door' : 'Open Door'}
-          </button>
+          </Button>
         </div>
 
         {/* Delete Button */}
-        <button
+        <Button
+          variant="destructive"
           onClick={onDelete}
-          className="w-full px-3 py-2 text-sm bg-destructive text-destructive-foreground rounded hover:bg-destructive/90"
+          className="w-full h-9 text-sm"
         >
           Delete Door
-        </button>
+        </Button>
       </div>
     </div>
   );

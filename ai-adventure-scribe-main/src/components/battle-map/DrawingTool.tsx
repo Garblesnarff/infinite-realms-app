@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Z_INDEX } from '@/constants/z-index';
 import { useDrawingTool } from '@/hooks/use-drawing-tool';
 import logger from '@/lib/logger';
@@ -222,6 +223,8 @@ export function DrawingTool({
 
     return (
       <div
+        role="toolbar"
+        aria-label="Drawing tools"
         className={cn(
           'bg-background/95 backdrop-blur-sm border shadow-lg rounded-lg p-2',
           isVertical ? 'flex flex-col gap-2' : 'flex flex-row gap-2 items-center flex-wrap'
@@ -239,6 +242,7 @@ export function DrawingTool({
                 onClick={() => handleToolSelect(tool.type)}
                 title={`${tool.label} (${tool.shortcut})`}
                 aria-label={tool.label}
+                aria-pressed={state.activeTool === tool.type}
               >
                 <Icon className="h-4 w-4" />
               </Button>
@@ -276,6 +280,7 @@ export function DrawingTool({
             value={[state.strokeWidth]}
             onValueChange={([value]) => setStrokeWidth(value)}
             className="flex-1"
+            aria-label="Stroke width"
           />
         </div>
 
@@ -283,12 +288,10 @@ export function DrawingTool({
 
         {/* Fill toggle */}
         <div className="flex items-center gap-2">
-          <input
+          <Switch
             id="fill-enabled"
-            type="checkbox"
             checked={state.fillEnabled}
-            onChange={(e) => setFillEnabled(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+            onCheckedChange={setFillEnabled}
           />
           <Label htmlFor="fill-enabled" className="text-xs cursor-pointer">
             Fill
@@ -325,6 +328,7 @@ export function DrawingTool({
                 value={[state.fillOpacity]}
                 onValueChange={([value]) => setFillOpacity(value)}
                 className="flex-1"
+                aria-label="Fill opacity"
               />
             </div>
           </>

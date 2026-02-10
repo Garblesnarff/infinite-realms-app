@@ -12,10 +12,14 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
+
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
+import type {
+  FogPolygon} from '@/utils/fog-calculations';
+
+import logger from '@/lib/logger';
 import {
-  FogPolygon,
   calculateRevealedArea,
   mergeFogPolygons,
   isPointRevealed,
@@ -234,12 +238,12 @@ export function useFogOfWar(options: FogOfWarOptions): FogOfWarState & FogOfWarA
    * A full implementation would use polygon difference operations.
    */
   const concealArea = useCallback(
-    (points: Point2D[]) => {
+    (_points: Point2D[]) => {
       if (!enabled) return;
 
       // For now, just clear all revealed areas (simplified)
       // Full implementation would use polygon difference
-      console.warn('concealArea: Full implementation requires polygon clipping library');
+      logger.warn('concealArea: Full implementation requires polygon clipping library');
     },
     [enabled]
   );
@@ -300,10 +304,10 @@ export function useFogOfWar(options: FogOfWarOptions): FogOfWarState & FogOfWarA
       //   })),
       // });
 
-      console.log('Fog state saved:', { sceneId, count: revealedAreas.length });
+      logger.info('Fog state saved:', { sceneId, count: revealedAreas.length });
     } catch (err) {
       setError(err as Error);
-      console.error('Failed to save fog state:', err);
+      logger.error('Failed to save fog state:', { error: err, sceneId });
     } finally {
       setIsLoading(false);
     }
@@ -330,10 +334,10 @@ export function useFogOfWar(options: FogOfWarOptions): FogOfWarState & FogOfWarA
       //   );
       // }
 
-      console.log('Fog state loaded:', { sceneId });
+      logger.info('Fog state loaded:', { sceneId });
     } catch (err) {
       setError(err as Error);
-      console.error('Failed to load fog state:', err);
+      logger.error('Failed to load fog state:', { error: err, sceneId });
     } finally {
       setIsLoading(false);
     }

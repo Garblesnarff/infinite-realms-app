@@ -7,24 +7,26 @@
  * @module server/services/rest-service
  */
 
+import { and, desc, eq, exists, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
-  restEvents,
   characterHitDice,
   characters,
-  type RestEvent,
+  restEvents,
   type CharacterHitDice,
+  type RestEvent,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { BusinessLogicError, NotFoundError, ValidationError } from '../lib/errors.js';
+
 import type {
+  HitDieType,
+  LongRestResult,
+  RestorableResource,
   RestType,
   ShortRestResult,
-  LongRestResult,
   SpendHitDiceResult,
-  RestorableResource,
-  HitDieType,
 } from '../types/rest.js';
-import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
 /**
  * Hit dice by class mapping
@@ -93,6 +95,7 @@ export class RestService {
    */
   static async initializeHitDice(
     characterId: string,
+    userId: string,
     className: string,
     level: number,
     userId?: string
@@ -107,7 +110,15 @@ export class RestService {
     const existing = await db.query.characterHitDice.findFirst({
       where: and(
         eq(characterHitDice.characterId, characterId),
-        eq(characterHitDice.className, className)
+        eq(characterHitDice.className, className),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ),
     });
 
@@ -155,13 +166,19 @@ export class RestService {
   /**
    * Get all hit dice for a character
    */
-  static async getHitDice(characterId: string, userId?: string): Promise<CharacterHitDice[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
+  static async getHitDice(characterId: string, userId: string): Promise<CharacterHitDice[]> {
     const hitDice = await db.query.characterHitDice.findMany({
-      where: eq(characterHitDice.characterId, characterId),
+      where: and(
+        eq(characterHitDice.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
     });
 
     return hitDice;
@@ -170,7 +187,7 @@ export class RestService {
   /**
    * Get available (unspent) hit dice count
    */
-  static async getAvailableHitDiceCount(characterId: string, userId?: string): Promise<number> {
+  static async getAvailableHitDiceCount(characterId: string, userId: string): Promise<number> {
     const allHitDice = await this.getHitDice(characterId, userId);
     return allHitDice.reduce((sum, hd) => sum + (hd.totalDice - hd.usedDice), 0);
   }
@@ -181,6 +198,7 @@ export class RestService {
    */
   static async spendHitDice(
     characterId: string,
+    userId: string,
     count: number,
     preRolledValues?: number[],
     userId?: string
@@ -204,12 +222,10 @@ export class RestService {
 
     // Get character and stats
     const character = await db.query.characters.findFirst({
-      where: userId
-        ? and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        )
-        : eq(characters.id, characterId),
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
       with: {
         stats: true,
       },
@@ -296,13 +312,9 @@ export class RestService {
    */
   static async restoreHitDice(
     characterId: string,
-    count?: number,
-    userId?: string
+    userId: string,
+    count?: number
   ): Promise<number> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
     const allHitDice = await this.getHitDice(characterId, userId);
 
     if (allHitDice.length === 0) {
@@ -359,8 +371,8 @@ export class RestService {
    */
   static async getRestorableResources(
     characterId: string,
-    restType: RestType,
-    userId?: string
+    userId: string,
+    restType: RestType
   ): Promise<RestorableResource[]> {
     if (userId) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -414,18 +426,19 @@ export class RestService {
    */
   static async takeShortRest(
     characterId: string,
+    userId: string,
     hitDiceToSpend: number = 0,
     sessionId?: string,
     notes?: string,
     userId?: string
   ): Promise<ShortRestResult> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    } else {
-      const character = await db.query.characters.findFirst({
-        where: eq(characters.id, characterId),
-        columns: { id: true },
-      });
+    // Get character
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+    });
 
       if (!character) {
         throw new NotFoundError('Character', characterId);
@@ -437,13 +450,13 @@ export class RestService {
     let hitDiceSpent = 0;
 
     if (hitDiceToSpend > 0) {
-      const result = await this.spendHitDice(characterId, hitDiceToSpend, undefined, userId);
+      const result = await this.spendHitDice(characterId, userId, hitDiceToSpend);
       hpRestored = result.hpRestored;
       hitDiceSpent = result.hitDiceSpent;
     }
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, 'short', userId);
+    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short');
 
     // Create rest event
     const [restEvent] = await db
@@ -483,17 +496,21 @@ export class RestService {
    */
   static async takeLongRest(
     characterId: string,
+    userId: string,
     sessionId?: string,
     notes?: string,
     userId?: string
   ): Promise<LongRestResult> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    } else {
-      const character = await db.query.characters.findFirst({
-        where: eq(characters.id, characterId),
-        columns: { id: true },
-      });
+    // Get character
+    const character = await db.query.characters.findFirst({
+      where: and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ),
+      with: {
+        stats: true,
+      },
+    });
 
       if (!character) {
         throw new NotFoundError('Character', characterId);
@@ -506,10 +523,10 @@ export class RestService {
     const hpRestored = 0; // Would be: maxHP - currentHP
 
     // Restore hit dice (half total, minimum 1)
-    const hitDiceRestored = await this.restoreHitDice(characterId, undefined, userId);
+    const hitDiceRestored = await this.restoreHitDice(characterId, userId);
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, 'long', userId);
+    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long');
 
     // Create rest event
     const [restEvent] = await db
@@ -548,22 +565,29 @@ export class RestService {
    */
   static async getRestHistory(
     characterId: string,
+    userId: string,
     sessionId?: string,
     limit: number = 50,
     userId?: string
   ): Promise<RestEvent[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    const conditions = [eq(restEvents.characterId, characterId)];
+    const conditions = [
+      eq(restEvents.characterId, characterId),
+      exists(
+        db.select()
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    ];
 
     if (sessionId) {
       conditions.push(eq(restEvents.sessionId, sessionId));
     }
 
     const history = await db.query.restEvents.findMany({
-      where: conditions.length > 1 ? and(...conditions) : conditions[0],
+      where: and(...conditions),
       orderBy: [desc(restEvents.startedAt)],
       limit,
     });

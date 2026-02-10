@@ -24,6 +24,26 @@
 **Learning:** Found that `getConditionModifiers` in `src/utils/conditionEffects.ts` had incorrect logic for several conditions (like `blinded`) because it relied on `participantType === 'player'` instead of the `rollType`. This meant players never received the correct defensive penalties for being blinded.
 **Action:** Always use `rollType` (e.g., 'attack', 'defense', 'save') to determine which side of a condition's effect to apply. When testing situational advantage/disadvantage, call `getConditionModifiers` on the participant *possessing* the condition with the appropriate `rollType` (e.g., 'defense' if they are being targeted).
 
-## 2025-05-28 - [Exhaustion System Coverage]
+## 2025-05-28 - [Grapple Mechanics Coverage]
+**Learning:** The grapple system in `src/utils/grappleUtils.ts` uses a simplified DC-based approach (8 + prof + STR) instead of contested checks. It correctly enforces state-based restrictions (incapacitated) and equipment restrictions (two-handed weapons).
+**Action:** When testing grapple mechanics, ensure to cover the transition from healthy to incapacitated states and verify that weapon properties (especially `twoHanded`) correctly prevent grapple attempts. Always test for missing optional fields like `level` to ensure the `|| 1` fallback logic is covered.
+
+## 2025-05-29 - [Exhaustion System Coverage]
 **Learning:** The exhaustion system in `src/utils/exhaustionUtils.ts` handles cumulative penalties across 6 levels. Testing it confirmed correct D&D 5e behavior, specifically the rounding down (floor) of hit point maximums when halved at level 4.
 **Action:** Always include both the test file and the module under test in the `vitest.config.ts` explicit `include` and `coverage.include` arrays to ensure visibility in reports. Use the AAA pattern and clear mock participants to test cumulative state changes.
+
+## 2026-02-06 - [Fighting Style Mechanics Coverage]
+**Learning:** The fighting style system in `src/utils/fightingStyles.ts` handles various combat bonuses (AC, attack, damage rerolls). Some conditions (like Protection and Dueling) have complex requirements (wielding one hand, no other weapons, shield equipped). Simplified implementations in the code (e.g., hardcoded `true` for range checks) can lead to unreachable code branches in tests.
+**Action:** When testing combat utilities, verify that each style's specific requirement (one-handed vs two-handed, ranged vs melee) is correctly enforced. Use `eslint-disable max-lines` if the test file or config file exceeds the 200-line limit.
+
+## 2026-02-06 - [Hook Testing & Mock Path Sensitivity]
+**Learning:** When testing hooks like `useCharacterData`, all dependencies (Supabase, Auth, Toast, etc.) must be mocked using `vi.mock()` BEFORE importing the module under test. Vitest is sensitive to the import path; if the source uses a relative path like `../lib/logger`, the mock in the test file should ideally match or use a correctly resolving path.
+**Action:** Always place `vi.mock()` calls at the top of the test file, immediately after importing testing utilities but before project-specific imports. Ensure `vitest.config.ts` is updated in both `include` and `coverage.include` for new hook tests.
+
+## 2025-05-30 - [Environmental Hazards Bug Fixes]
+**Learning:** Found two bugs in `environmentalHazards.ts`: 1) Incorrect proficiency bonus calculation at level 4 (was +3, should be +2). 2) Shallow copy mutation in `applyHazardEffects` where nested `hitPoints` object was being modified directly.
+**Action:** Always use `Math.floor((level - 1) / 4) + 2` for D&D 5e proficiency bonus. Ensure deep copies or nested spread operators when updating character state in utility functions to avoid side effects in React.
+
+## 2025-06-10 - [Racial Utilities Coverage & Bug Fix]
+**Learning:** Found that `applyRacialBonuses` only applied bonuses to abilities already present in the `baseScores` object because it used `Object.keys(baseScores)`. This could lead to missing bonuses if the character object was partial. Also learned that `vitest.config.ts` is strictly limited to 200 lines and requires `/* eslint-disable max-lines */` if it grows, and that `import()` type annotations are forbidden by lint rules.
+**Action:** Always iterate over an exhaustive list of known ability names when applying bonuses to ensure completeness. Use top-level `import type` instead of inline `import()` for TypeScript types.

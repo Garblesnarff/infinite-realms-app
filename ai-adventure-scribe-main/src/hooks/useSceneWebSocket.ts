@@ -13,7 +13,9 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+
 import { useAuth } from '@/contexts/auth-context';
+import logger from '@/lib/logger';
 
 // WebSocket message types matching server
 export type WebSocketMessageType =
@@ -106,7 +108,7 @@ export function useSceneWebSocket(
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[WebSocket] Cannot send message: not connected', message);
+      logger.warn('[WebSocket] Cannot send message: not connected', { message });
     }
   }, []);
 
@@ -128,7 +130,7 @@ export function useSceneWebSocket(
           onTokenUpdate(message.data as TokenUpdateData);
         }
       } catch (error) {
-        console.error('[WebSocket] Failed to parse message:', error);
+        logger.error('[WebSocket] Failed to parse message', { error });
       }
     },
     [onMessage, onTokenUpdate]
@@ -139,7 +141,7 @@ export function useSceneWebSocket(
    */
   const connect = useCallback(() => {
     if (!sceneId || !session?.access_token) {
-      console.warn('[WebSocket] Cannot connect: missing sceneId or token');
+      logger.warn('[WebSocket] Cannot connect: missing sceneId or token', { sceneId });
       return;
     }
 
@@ -157,13 +159,16 @@ export function useSceneWebSocket(
     const host = process.env.NEXT_PUBLIC_WS_URL || window.location.host;
     const wsUrl = `${protocol}//${host}/ws?token=${session.access_token}&sessionId=scene:${sceneId}`;
 
-    console.log('[WebSocket] Connecting to:', wsUrl.replace(session.access_token, '***'));
+    logger.info('[WebSocket] Connecting to scene', {
+      sceneId,
+      url: wsUrl.replace(session.access_token, '***'),
+    });
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[WebSocket] Connected to scene:', sceneId);
+      logger.info('[WebSocket] Connected to scene', { sceneId });
       setConnectionState('connected');
       reconnectAttemptsRef.current = 0;
 
@@ -177,12 +182,16 @@ export function useSceneWebSocket(
     ws.onmessage = handleMessage;
 
     ws.onerror = (error) => {
-      console.error('[WebSocket] Error:', error);
+      logger.error('[WebSocket] Error', { error, sceneId });
       setConnectionState('error');
     };
 
     ws.onclose = (event) => {
-      console.log('[WebSocket] Disconnected:', event.code, event.reason);
+      logger.info('[WebSocket] Disconnected', {
+        sceneId,
+        code: event.code,
+        reason: event.reason,
+      });
       wsRef.current = null;
       setConnectionState('disconnected');
 
@@ -193,9 +202,11 @@ export function useSceneWebSocket(
         (maxReconnectAttempts === 0 || reconnectAttemptsRef.current < maxReconnectAttempts)
       ) {
         reconnectAttemptsRef.current += 1;
-        console.log(
-          `[WebSocket] Reconnecting (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts || '∞'})...`
-        );
+        logger.info('[WebSocket] Reconnecting', {
+          sceneId,
+          attempt: reconnectAttemptsRef.current,
+          maxAttempts: maxReconnectAttempts || 'unlimited',
+        });
 
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();

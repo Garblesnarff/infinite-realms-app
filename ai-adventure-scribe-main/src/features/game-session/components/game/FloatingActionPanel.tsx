@@ -24,7 +24,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
   combatMode,
 }) => {
   const { state: characterState } = useCharacter();
-  const { state: combatState } = useCombat();
+  const { state: _combatState } = useCombat();
   const character = characterState.character;
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -41,7 +41,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
   const armorClass = 10 + character.abilityScores.dexterity.modifier;
   const proficiency = Math.floor((character.level - 1) / 4) + 2;
 
-  const handleQuickRoll = (type: string) => {
+  const handleQuickRoll = (type: string): void => {
     // This would integrate with your dice rolling system
     logger.info(`Quick rolling ${type}`);
     // You could dispatch a dice roll event or call a dice service here
@@ -49,10 +49,14 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
 
   if (!isVisible) {
     return (
-      <div className={`fixed left-4 bottom-4 z-[${Z_INDEX.FLOATING_PANEL}] md:left-6 md:bottom-6`}>
+      <div
+        className="fixed left-4 bottom-4 md:left-6 md:bottom-6"
+        style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+      >
         <Button
           onClick={onToggle}
           size="sm"
+          aria-label="Open Quick Actions"
           className={`rounded-full p-3 h-auto w-auto shadow-xl border-2 transition-all duration-300 hover:scale-110 hover-glow focus-glow ${
             combatMode
               ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
@@ -69,7 +73,8 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
 
   return (
     <div
-      className={`fixed left-4 bottom-4 z-[${Z_INDEX.FLOATING_PANEL}] md:left-6 md:bottom-6 animate-in slide-in-from-bottom-2 duration-300`}
+      className="fixed left-4 bottom-4 md:left-6 md:bottom-6 animate-in slide-in-from-bottom-2 duration-300"
+      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
     >
       <Card className="glass-strong border-2 border-infinite-purple/30 shadow-2xl overflow-hidden">
         {/* Header */}
@@ -83,6 +88,8 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsExpanded(!isExpanded)}
+                aria-label={isExpanded ? 'Collapse actions' : 'Expand actions'}
+                aria-pressed={isExpanded}
                 className="h-6 w-6 p-0 rounded-full hover:bg-infinite-purple/20"
               >
                 {isExpanded ? '−' : '+'}
@@ -91,6 +98,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onToggle}
+                aria-label="Close Quick Actions"
                 className="h-6 w-6 p-0 rounded-full hover:bg-red-500/20"
               >
                 <X className="h-3 w-3" />

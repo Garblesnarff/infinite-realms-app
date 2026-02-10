@@ -11,5 +11,9 @@ interface SpeakingIndicatorProps {
 export const SpeakingIndicator: React.FC<SpeakingIndicatorProps> = ({ isSpeaking }) => {
   if (!isSpeaking) return null;
 
-  return <div className="text-xs font-medium text-primary animate-pulse">Speaking...</div>;
+  return (
+    <div role="status" aria-live="polite" className="text-xs font-medium text-primary animate-pulse">
+      Speaking...
+    </div>
+  );
 };

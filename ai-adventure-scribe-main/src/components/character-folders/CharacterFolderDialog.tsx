@@ -9,16 +9,8 @@
  * - Parent folder selector for nesting
  */
 
-import React, { useState, useEffect } from 'react';
-import { Folder, Palette, Users } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import React, { useState, useEffect, useId } from 'react';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +21,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -36,9 +39,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 
@@ -98,6 +98,9 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
   const [selectedParentId, setSelectedParentId] = useState<string | null>(
     parentFolderId || null
   );
+
+  const parentFolderSelectId = useId();
+  const colorGroupId = useId();
 
   const { data: folders } = trpc.characterFolders.list.useQuery();
   const createMutation = trpc.characterFolders.create.useMutation({
@@ -166,11 +169,16 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
 
           {/* Color Picker */}
           <div className="space-y-2">
-            <Label>Folder Color</Label>
-            <div className="grid grid-cols-4 gap-2">
+            <Label id={colorGroupId}>Folder Color</Label>
+            <div
+              className="grid grid-cols-4 gap-2"
+              role="group"
+              aria-labelledby={colorGroupId}
+            >
               {FOLDER_COLORS.map((colorOption) => (
                 <button
                   key={colorOption.value}
+                  type="button"
                   className={`h-10 rounded-md border-2 transition-all ${
                     color === colorOption.value
                       ? 'border-foreground scale-110'
@@ -179,6 +187,8 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                   style={{ backgroundColor: colorOption.value }}
                   onClick={() => setColor(colorOption.value)}
                   title={colorOption.name}
+                  aria-label={colorOption.name}
+                  aria-pressed={color === colorOption.value}
                 />
               ))}
             </div>
@@ -186,12 +196,12 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
 
           {/* Parent Folder Selector */}
           <div className="space-y-2">
-            <Label>Parent Folder (Optional)</Label>
+            <Label htmlFor={parentFolderSelectId}>Parent Folder (Optional)</Label>
             <Select
               value={selectedParentId || 'none'}
               onValueChange={(value) => setSelectedParentId(value === 'none' ? null : value)}
             >
-              <SelectTrigger>
+              <SelectTrigger id={parentFolderSelectId} aria-label="Select parent folder">
                 <SelectValue placeholder="No parent (root level)" />
               </SelectTrigger>
               <SelectContent>
@@ -235,6 +245,7 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
 
   const [name, setName] = useState(currentName);
   const [color, setColor] = useState(currentColor);
+  const colorGroupId = useId();
 
   useEffect(() => {
     setName(currentName);
@@ -307,11 +318,16 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
 
           {/* Color Picker */}
           <div className="space-y-2">
-            <Label>Folder Color</Label>
-            <div className="grid grid-cols-4 gap-2">
+            <Label id={colorGroupId}>Folder Color</Label>
+            <div
+              className="grid grid-cols-4 gap-2"
+              role="group"
+              aria-labelledby={colorGroupId}
+            >
               {FOLDER_COLORS.map((colorOption) => (
                 <button
                   key={colorOption.value}
+                  type="button"
                   className={`h-10 rounded-md border-2 transition-all ${
                     color === colorOption.value
                       ? 'border-foreground scale-110'
@@ -320,6 +336,8 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
                   style={{ backgroundColor: colorOption.value }}
                   onClick={() => setColor(colorOption.value)}
                   title={colorOption.name}
+                  aria-label={colorOption.name}
+                  aria-pressed={color === colorOption.value}
                 />
               ))}
             </div>
@@ -413,6 +431,7 @@ export const MoveCharactersDialog: React.FC<MoveCharactersDialogProps> = ({
   const utils = useTRPCUtils();
 
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const destinationFolderSelectId = useId();
 
   const { data: folders } = trpc.characterFolders.list.useQuery();
   const moveMutation = trpc.characterFolders.moveCharacter.useMutation({
@@ -457,12 +476,12 @@ export const MoveCharactersDialog: React.FC<MoveCharactersDialogProps> = ({
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Destination Folder</Label>
+            <Label htmlFor={destinationFolderSelectId}>Destination Folder</Label>
             <Select
               value={selectedFolderId || 'none'}
               onValueChange={(value) => setSelectedFolderId(value === 'none' ? null : value)}
             >
-              <SelectTrigger>
+              <SelectTrigger id={destinationFolderSelectId} aria-label="Select destination folder">
                 <SelectValue placeholder="Select a folder..." />
               </SelectTrigger>
               <SelectContent>

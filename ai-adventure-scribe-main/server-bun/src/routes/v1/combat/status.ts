@@ -1,12 +1,12 @@
 import { Elysia } from 'elysia';
 
+import { verifyEncounterOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
 
-import { verifyEncounterOwnership } from './helpers.js';
 
 import type {
   ApplyConditionRequest,
@@ -187,11 +187,11 @@ export const statusRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
-      const encounterConditions = await ConditionsService.getEncounterConditions(
-        params.encounterId,
-        user.userId
-      );
+      // ⚡ Bolt: Parallelize data fetching to reduce request latency
+      const [combatState, encounterConditions] = await Promise.all([
+        CombatInitiativeService.getCombatState(params.encounterId),
+        ConditionsService.getEncounterConditions(params.encounterId),
+      ]);
       const participantConditions: Record<string, any> = {};
 
       for (const participant of combatState.participants) {

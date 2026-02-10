@@ -19,6 +19,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, onVolumeChan
       <TooltipTrigger asChild>
         <div className="w-32">
           <Slider
+            aria-label="Adjust volume"
             value={[volume * 100]}
             max={100}
             step={1}

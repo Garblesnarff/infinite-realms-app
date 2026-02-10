@@ -7,30 +7,16 @@
  */
 
 import {
-  Sword,
-  Shield,
-  Zap,
-  Wind,
-  Eye,
-  Heart,
-  Search,
-  Package,
-  Clock,
   MessageSquare,
   Dice6,
   RotateCcw,
-  Moon,
-  Coffee,
-  UserX,
-  Skull,
-  Plus,
 } from 'lucide-react';
 import React, { useState } from 'react';
 
-import AttackRollVisualization, { type AttackResult } from './AttackRollVisualization';
+import { type ActionDefinition, MANAGEMENT_ACTIONS } from './actions/ActionDefinitions';
+import { CombatActionGrid } from './actions/CombatActionGrid';
 import { ConditionApplicationPanel } from './ConditionApplicationPanel';
 
-import type { Equipment } from '@/data/equipmentOptions';
 import type { ActionType, ConditionName, Condition, CombatParticipant } from '@/types/combat';
 
 import SpellSlotPanel from '@/components/spellcasting/SpellSlotPanel';
@@ -41,131 +27,15 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombat } from '@/contexts/CombatContext';
-import { allEquipment } from '@/data/equipmentOptions';
 import logger from '@/lib/logger';
-import { performAttack, canUseSneakAttack } from '@/utils/attackUtils';
 
-// ===========================
-// Action Definitions
-// ===========================
-
-// Special management panel (not a combat action)
-interface ManagementAction {
-  type: string;
-  name: string;
-  icon: React.ComponentType<any>;
-  description: string;
-}
-
-const MANAGEMENT_ACTIONS: ManagementAction[] = [
-  {
-    type: 'manage_conditions',
-    name: 'Manage Conditions',
-    icon: UserX,
-    description: 'Apply, remove, or manage D&D conditions',
-  },
-];
-
-interface ActionDefinition {
-  type: ActionType;
-  name: string;
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-  actionRequired: boolean; // Uses action slot
-  bonusAction: boolean; // Uses bonus action slot
-  quickAction: boolean; // Can be done without detailed input
-}
-
-const COMBAT_ACTIONS: ActionDefinition[] = [
-  {
-    type: 'attack',
-    name: 'Attack',
-    icon: Sword,
-    description: 'Make a weapon or unarmed attack',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'cast_spell',
-    name: 'Cast Spell',
-    icon: Zap,
-    description: 'Cast a spell or use a magical ability',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'dash',
-    name: 'Dash',
-    icon: Wind,
-    description: 'Move up to your speed again',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: true,
-  },
-  {
-    type: 'dodge',
-    name: 'Dodge',
-    icon: Shield,
-    description: 'Focus entirely on avoiding attacks',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: true,
-  },
-  {
-    type: 'help',
-    name: 'Help',
-    icon: Heart,
-    description: 'Give an ally advantage on their next ability check or attack',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'hide',
-    name: 'Hide',
-    icon: Eye,
-    description: 'Attempt to hide from enemies',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'ready',
-    name: 'Ready',
-    icon: Clock,
-    description: 'Prepare an action for later',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'search',
-    name: 'Search',
-    icon: Search,
-    description: 'Look for hidden objects, creatures, or other details',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-  {
-    type: 'use_object',
-    name: 'Use Object',
-    icon: Package,
-    description: 'Interact with an object or use an item',
-    actionRequired: true,
-    bonusAction: false,
-    quickAction: false,
-  },
-];
 
 // ===========================
 // Component Props
 // ===========================
 
 interface CombatActionPanelProps {
-  onActionSubmit: (actionType: ActionType, description: string, additionalData?: any) => void;
+  onActionSubmit: (actionType: ActionType, description: string, additionalData?: unknown) => void;
   className?: string;
 }
 
@@ -187,11 +57,6 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const [selectedSpell, setSelectedSpell] = useState<string | null>(null);
   const [selectedSpellLevel, setSelectedSpellLevel] = useState<number>(1);
   const [hitDiceToRoll, setHitDiceToRoll] = useState<number>(1);
-
-  // Attack-specific state
-  const [selectedWeapon, setSelectedWeapon] = useState<Equipment | null>(null);
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [attackResult, setAttackResult] = useState<AttackResult | null>(null);
 
   // Handle management panel selection
   const handleManagementSelect = (managementType: string): void => {
@@ -262,33 +127,12 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
     setActionDetails('');
   };
 
-  // Check if action is available for current participant
-  const isActionAvailable = (action: ActionDefinition): boolean => {
-    if (!currentParticipant) return false;
-
-    if (action.actionRequired && currentParticipant.actionTaken) {
-      return false;
+  const handleActionClick = (action: ActionDefinition): void => {
+    if (action.quickAction) {
+      handleQuickAction(action);
+    } else {
+      setSelectedAction(action);
     }
-
-    if (action.bonusAction && currentParticipant.bonusActionTaken) {
-      return false;
-    }
-
-    return true;
-  };
-
-  const getActionStatusText = (action: ActionDefinition): string => {
-    if (!currentParticipant) return '';
-
-    if (action.actionRequired && currentParticipant.actionTaken) {
-      return 'Action Used';
-    }
-
-    if (action.bonusAction && currentParticipant.bonusActionTaken) {
-      return 'Bonus Used';
-    }
-
-    return '';
   };
 
   return (
@@ -330,15 +174,18 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
 
         {/* Management Actions */}
         <div className="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleManagementSelect('manage_conditions')}
-            className="text-purple-600"
-          >
-            <UserX className="w-4 h-4 mr-1" />
-            Conditions
-          </Button>
+          {MANAGEMENT_ACTIONS.map((action) => (
+            <Button
+              key={action.type}
+              variant="outline"
+              size="sm"
+              onClick={() => handleManagementSelect(action.type)}
+              className="text-purple-600"
+            >
+              <action.icon className="w-4 h-4 mr-1" />
+              {action.name.replace('Manage ', '')}
+            </Button>
+          ))}
         </div>
       </CardHeader>
 
@@ -444,42 +291,11 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
           // Integrated SpellSlotPanel for cast_spell actions
           /* Action Selection Grid */
           <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {COMBAT_ACTIONS.map((action) => {
-                const available = isActionAvailable(action);
-                const statusText = getActionStatusText(action);
-                const ActionIcon = action.icon;
-
-                return (
-                  <Button
-                    key={action.type}
-                    variant={available ? 'outline' : 'ghost'}
-                    className={`h-auto flex-col space-y-2 p-4 ${
-                      !available ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-400'
-                    }`}
-                    onClick={() => {
-                      if (!available) return;
-
-                      if (action.quickAction) {
-                        handleQuickAction(action);
-                      } else {
-                        setSelectedAction(action);
-                      }
-                    }}
-                    disabled={!available || isSubmitting}
-                  >
-                    <ActionIcon
-                      className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`}
-                    />
-
-                    <div className="text-center">
-                      <div className="font-medium text-sm">{action.name}</div>
-                      {statusText && <div className="text-xs text-red-500 mt-1">{statusText}</div>}
-                    </div>
-                  </Button>
-                );
-              })}
-            </div>
+            <CombatActionGrid
+              currentParticipant={currentParticipant}
+              onActionClick={handleActionClick}
+              isSubmitting={isSubmitting}
+            />
 
             <Separator />
 

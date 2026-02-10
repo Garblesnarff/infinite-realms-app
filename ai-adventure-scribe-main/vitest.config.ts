@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /// <reference types="vitest" />
 import path from 'path'; // Added path import
 
@@ -6,7 +7,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { // Added resolve configuration
+  resolve: {
+    // Added resolve configuration
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
@@ -36,11 +38,18 @@ export default defineConfig({
       'src/utils/__tests__/memory-importance-normalization.test.ts',
       'src/utils/__tests__/safetyCommands.test.ts',
       'src/utils/__tests__/attackUtils.test.ts',
+      'src/utils/__tests__/environmentalHazards.test.ts',
       'src/utils/__tests__/exhaustionUtils.test.ts',
       'src/utils/__tests__/movementUtils.test.ts',
+      'src/utils/__tests__/grappleUtils.test.ts',
       'src/utils/__tests__/character-calculations.test.ts',
+      'src/utils/__tests__/multiclassing.test.ts',
       'src/utils/__tests__/restMechanics.test.ts',
       'src/utils/__tests__/conditionEffects.test.ts',
+      'src/utils/__tests__/twoWeaponFighting.test.ts',
+      'src/utils/__tests__/fightingStyles.test.ts',
+      'src/utils/__tests__/racialTraits.test.ts',
+      'src/utils/__tests__/racialAbilityBonuses.test.ts',
       'src/services/combat/__tests__/damage-integrator.test.ts',
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/combat/__tests__/npc-auto-roller.test.ts',
@@ -73,11 +82,23 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/message-adapters.test.ts',
       'src/agents/langgraph/__tests__/dm-service-integration.test.ts',
       'src/hooks/__tests__/useSpellSelection.test.ts',
+      'src/hooks/__tests__/use-character-data.test.ts',
+      'src/hooks/__tests__/useEnvironmentalHazards.test.ts',
+      'src/hooks/__tests__/use-character-stats.test.ts',
       'src/__tests__/unit/spell-class-restrictions.test.ts',
       'src/__tests__/unit/response-pipeline.test.ts',
+      'server-bun/src/services/__tests__/rest-service.test.ts',
+      'server-bun/src/services/__tests__/spell-slots-service.test.ts',
+      'server-bun/src/services/__tests__/character-folder-service.test.ts',
+      'server-bun/src/services/__tests__/class-features-service.test.ts',
+      'server-bun/src/services/__tests__/combat-attack-service.test.ts',
+      'server-bun/src/services/__tests__/session-service.test.ts',
+      'server-bun/src/services/__tests__/token-service.test.ts',
+      'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',
       'src/components/spellcasting/__tests__/SpellPreparationPanel.test.tsx',
+      'src/components/character-folders/__tests__/CharacterFolderDialog.test.tsx',
       'src/data/appearance/appearanceOptions.test.ts',
       'src/data/appearance/physicalTraits.test.ts',
       'src/engine/**/*.test.ts',
@@ -88,7 +109,7 @@ export default defineConfig({
       'src/agents/langgraph/__tests__/integration.test.ts',
       'src/agents/langgraph/__tests__/performance.test.ts',
       'tests/services/passive-skills-service.test.ts',
-      'tests/utils/character-converter.test.ts'
+      'tests/utils/character-converter.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -105,7 +126,7 @@ export default defineConfig({
       // Keep components tests excluded by default; curated ones are included explicitly above
       // Temporarily exclude flaky/unit tests pending mock alignment (keep diceRolls enabled)
       // 'src/agents/services/intent/PlayerIntentDetector.test.ts', // now enabled
-      'src/test/**'
+      'src/test/**',
     ],
     coverage: {
       enabled: true,
@@ -118,11 +139,17 @@ export default defineConfig({
         'src/utils/diceRolls.ts',
         'src/utils/character-calculations.ts',
         'src/utils/attackUtils.ts',
+        'src/utils/environmentalHazards.ts',
         'src/utils/exhaustionUtils.ts',
         'src/utils/movementUtils.ts',
+        'src/utils/grappleUtils.ts',
         'src/utils/restMechanics.ts',
         'src/utils/conditionEffects.ts',
+        'src/utils/twoWeaponFighting.ts',
+        'src/utils/fightingStyles.ts',
         'src/utils/character-calculations.ts',
+        'src/utils/multiclassing.ts',
+        'server-bun/src/services/character-folder-service.ts',
         'src/utils/abilityScoreUtils.ts',
         'src/services/combat/damage-integrator.ts',
         'src/services/combat/CombatSequenceValidator.ts',
@@ -152,12 +179,22 @@ export default defineConfig({
         'src/agents/langgraph/nodes/rules-validator.ts',
         'src/agents/langgraph/nodes/response-generator.ts',
         'src/hooks/useSpellSelection.ts',
+        'src/hooks/use-character-data.ts',
+        'src/hooks/use-environmental-hazards.ts',
+        'src/hooks/use-character-stats.ts',
+        'src/utils/racialAbilityBonuses.ts',
+        'src/utils/racialTraits.ts',
         'src/engine/**/*.ts',
         // LangGraph implementation
         'src/agents/langgraph/nodes/*.ts',
         'src/agents/langgraph/dm-graph.ts',
         'src/agents/langgraph/dm-service.ts',
         'src/agents/langgraph/state.ts',
+        'server-bun/src/services/spell-slots-service.ts',
+        'server-bun/src/services/class-features-service.ts',
+        'server-bun/src/services/combat-attack-service.ts',
+        'server-bun/src/services/session-service.ts',
+        'server-bun/src/services/exhaustion-service.ts',
       ],
       exclude: [
         '**/__tests__/**',
@@ -182,6 +219,6 @@ export default defineConfig({
         functions: 80,
         lines: 80,
       },
-    }
+    },
   },
 });

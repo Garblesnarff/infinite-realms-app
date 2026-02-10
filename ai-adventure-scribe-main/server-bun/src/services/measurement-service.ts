@@ -16,7 +16,7 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt, or, sql } from 'drizzle-orm';
+import { eq, and, lt, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -109,44 +109,22 @@ export class MeasurementService {
    * Only the creator or scene owner can delete
    */
   static async deleteTemplate(templateId: string, userId: string): Promise<boolean> {
-    // We check ownership in the initial query to prevent existence leakage
-    const [existing] = await db
-      .select({
-        id: measurementTemplates.id,
-        sceneId: measurementTemplates.sceneId,
-      })
-      .from(measurementTemplates)
-      .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
-      .where(
-        and(
-          eq(measurementTemplates.id, templateId),
-          or(
-            eq(measurementTemplates.createdBy, userId),
-            eq(scenes.userId, userId)
-          )
-        )
-      )
-      .limit(1);
-
-    if (!existing) {
-      return false;
-    }
-
-    // Delete the template
+    // 🛡️ Sentinel: Atomic delete with ownership check (creator OR scene owner)
     const result = await db
       .delete(measurementTemplates)
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          eq(measurementTemplates.sceneId, existing.sceneId),
           or(
             eq(measurementTemplates.createdBy, userId),
-            sql`EXISTS (
-              SELECT 1
-              FROM scenes s
-              WHERE s.id = ${measurementTemplates.sceneId}
-                AND s.user_id = ${userId}
-            )`
+            exists(
+              db.select()
+                .from(scenes)
+                .where(and(
+                  eq(scenes.id, measurementTemplates.sceneId),
+                  eq(scenes.userId, userId)
+                ))
+            )
           )
         )
       )

@@ -11,7 +11,7 @@
  * @module server/services/inventory-service
  */
 
-import { eq, and, desc, or, sql } from 'drizzle-orm';
+import { eq, and, desc, or, sql, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -144,9 +144,7 @@ export class InventoryService {
     userId: string,
     updates: UpdateInventoryItemInput
   ): Promise<InventoryItem | null> {
-    const item = await this.getItemById(itemId, characterId, userId);
-    if (!item) return null;
-
+    // ⚡ Bolt: Optimized to perform ownership check in a single UPDATE query instead of 1 Select + 1 Update.
     const updateData: Partial<NewInventoryItem> = {};
 
     if (updates.name !== undefined) updateData.name = updates.name;
@@ -161,16 +159,21 @@ export class InventoryService {
 
     const [updated] = await db
       .update(inventoryItems)
-      .set(updateData)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
       .where(and(
         eq(inventoryItems.id, itemId),
         eq(inventoryItems.characterId, characterId),
-        sql`EXISTS (
-          SELECT 1
-          FROM characters c
-          WHERE c.id = ${inventoryItems.characterId}
-            AND (c.user_id = ${userId} OR c.owner_id = ${userId})
-        )`
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, inventoryItems.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ))
       .returning();
 
@@ -185,20 +188,20 @@ export class InventoryService {
    * @returns True if deleted, false if not found
    */
   static async removeItem(itemId: string, characterId: string, userId: string): Promise<boolean> {
-    const item = await this.getItemById(itemId, characterId, userId);
-    if (!item) return false;
-
+    // ⚡ Bolt: Optimized to perform ownership check in a single DELETE query instead of 1 Select + 1 Delete.
     const result = await db
       .delete(inventoryItems)
       .where(and(
         eq(inventoryItems.id, itemId),
         eq(inventoryItems.characterId, characterId),
-        sql`EXISTS (
-          SELECT 1
-          FROM characters c
-          WHERE c.id = ${inventoryItems.characterId}
-            AND (c.user_id = ${userId} OR c.owner_id = ${userId})
-        )`
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, inventoryItems.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ))
       .returning({ id: inventoryItems.id });
 
@@ -236,10 +239,16 @@ export class InventoryService {
    * Decrements quantity and logs usage
    * @param input - Usage input data
    * @param userId - User ID (for ownership verification)
+   * @param preFetchedItem - Optional pre-fetched item to avoid redundant DB call
    * @returns Usage result with remaining quantity
    */
-  static async useConsumable(input: UseConsumableInput, userId: string): Promise<UseConsumableResult> {
-    const item = await this.getItemById(input.itemId, input.characterId, userId);
+  static async useConsumable(
+    input: UseConsumableInput,
+    userId: string,
+    preFetchedItem?: InventoryItem
+  ): Promise<UseConsumableResult> {
+    // ⚡ Bolt: Use pre-fetched item if available to avoid redundant database lookup.
+    const item = preFetchedItem || await this.getItemById(input.itemId, input.characterId, userId);
 
     if (!item) {
       throw new NotFoundError('Inventory item', input.itemId);
@@ -274,6 +283,7 @@ export class InventoryService {
     let itemDeleted = false;
 
     // Update or delete item based on remaining quantity
+    // ⚡ Bolt: Calls to optimized removeItem/updateItem now perform atomic ownership checks.
     if (newQuantity <= 0) {
       await this.removeItem(input.itemId, input.characterId, userId);
       itemDeleted = true;
@@ -324,12 +334,13 @@ export class InventoryService {
       throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
     }
 
+    // ⚡ Bolt: Pass pre-fetched ammunition item to useConsumable to avoid redundant DB lookup.
     return this.useConsumable({
       characterId,
       itemId: item.id,
       quantity: count,
       context: 'Ranged attack',
-    }, userId);
+    }, userId, item);
   }
 
   /**

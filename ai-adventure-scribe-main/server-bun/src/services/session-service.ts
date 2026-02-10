@@ -6,16 +6,8 @@
  */
 
 import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
-
 import { db } from '../../../db/client.js';
-import {
-  gameSessions,
-  dialogueHistory,
-  campaigns,
-  characters,
-  type GameSession,
-  type DialogueHistory,
-} from '../../../db/schema/index.js';
+import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index.js';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**
@@ -33,12 +25,12 @@ export interface MessagePage {
  */
 export class SessionService {
   /**
-   * Ownership predicate for game_sessions rows.
+   * Helper to build ownership condition for a session
    */
-  private static buildSessionOwnershipPredicate(userId: string) {
+  private static getOwnershipCondition(userId: string) {
     return or(
       exists(
-        db.select({ id: campaigns.id })
+        db.select()
           .from(campaigns)
           .where(and(
             eq(campaigns.id, gameSessions.campaignId),
@@ -46,124 +38,17 @@ export class SessionService {
           ))
       ),
       exists(
-        db.select({ id: characters.id })
+        db.select()
           .from(characters)
           .where(and(
             eq(characters.id, gameSessions.characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            or(
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId)
+            )
           ))
       )
     );
-  }
-
-  /**
-   * Ownership predicate for dialogue_history rows via session ownership.
-   */
-  private static buildDialogueOwnershipPredicate(userId: string) {
-    return or(
-      exists(
-        db.select({ id: campaigns.id })
-          .from(gameSessions)
-          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-          .where(and(
-            eq(gameSessions.id, dialogueHistory.sessionId),
-            eq(campaigns.userId, userId)
-          ))
-      ),
-      exists(
-        db.select({ id: characters.id })
-          .from(gameSessions)
-          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-          .where(and(
-            eq(gameSessions.id, dialogueHistory.sessionId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      )
-    );
-  }
-
-  /**
-   * Validate campaign visibility for the current user.
-   */
-  private static async assertCampaignAccess(campaignId: string, userId: string): Promise<void> {
-    const [campaign] = await db
-      .select({ id: campaigns.id })
-      .from(campaigns)
-      .where(and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId)))
-      .limit(1);
-
-    if (!campaign) {
-      throw new NotFoundError('Campaign', campaignId);
-    }
-  }
-
-  /**
-   * Validate character visibility for the current user.
-   */
-  private static async assertCharacterAccess(characterId: string, userId: string): Promise<void> {
-    const [character] = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .limit(1);
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-  }
-
-  /**
-   * Validate campaign/character session context for the current user.
-   */
-  private static async assertSessionContextAccess(
-    params: { campaignId?: string | null; characterId?: string | null },
-    userId: string
-  ): Promise<void> {
-    if (params.campaignId) {
-      await this.assertCampaignAccess(params.campaignId, userId);
-    }
-
-    if (params.characterId) {
-      await this.assertCharacterAccess(params.characterId, userId);
-    }
-  }
-
-  /**
-   * Resolve a session only when the user can access it through campaign/character ownership.
-   */
-  private static async getAccessibleSession(
-    sessionId: string,
-    userId: string
-  ): Promise<GameSession | undefined> {
-    const [result] = await db
-      .select({ session: gameSessions })
-      .from(gameSessions)
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(gameSessions.id, sessionId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    return result?.session;
-  }
-
-  /**
-   * Throw NOT_FOUND when a session is missing or inaccessible.
-   */
-  private static async assertSessionAccess(sessionId: string, userId: string): Promise<void> {
-    const session = await this.getAccessibleSession(sessionId, userId);
-    if (!session) {
-      throw new NotFoundError('Session', sessionId);
-    }
   }
 
   /**
@@ -174,12 +59,23 @@ export class SessionService {
     characterId?: string | null;
     sessionNumber?: number;
     status?: string;
-  }, userId?: string): Promise<GameSession> {
-    if (userId) {
-      await this.assertSessionContextAccess(
-        { campaignId: data.campaignId, characterId: data.characterId },
-        userId
-      );
+  }, userId: string): Promise<GameSession> {
+    // SECURITY: Verify ownership of campaign or character before creating session
+    if (data.campaignId) {
+      const campaign = await db.query.campaigns.findFirst({
+        where: and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))
+      });
+      if (!campaign) throw new NotFoundError('Campaign', data.campaignId);
+    }
+
+    if (data.characterId) {
+      const character = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, data.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      });
+      if (!character) throw new NotFoundError('Character', data.characterId);
     }
 
     const [session] = await db
@@ -200,14 +96,16 @@ export class SessionService {
   /**
    * Get session by ID
    */
-  static async getSessionById(sessionId: string, userId?: string): Promise<GameSession | undefined> {
-    if (userId) {
-      return this.getAccessibleSession(sessionId, userId);
-    }
-
-    return await db.query.gameSessions.findFirst({
-      where: eq(gameSessions.id, sessionId),
+  static async getSessionById(sessionId: string, userId: string): Promise<GameSession> {
+    const session = await db.query.gameSessions.findFirst({
+      where: and(
+        eq(gameSessions.id, sessionId),
+        this.getOwnershipCondition(userId)
+      ),
     });
+
+    if (!session) throw new NotFoundError('Session', sessionId);
+    return session;
   }
 
   /**
@@ -215,48 +113,42 @@ export class SessionService {
    */
   static async getSessionWithMessages(
     sessionId: string,
+    userId: string,
     options?: {
       limit?: number;
       offset?: number;
     },
     userId?: string
   ): Promise<{
-    session: GameSession | undefined;
+    session: GameSession;
     messages: DialogueHistory[];
     total: number;
   }> {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
 
-    const session = await this.getSessionById(sessionId, userId);
+    // ⚡ Bolt: Parallelize session fetch, message fetch and count query to reduce total latency.
+    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
+    const [session, messages, countResult] = await Promise.all([
+      db.query.gameSessions.findFirst({
+        where: and(
+          eq(gameSessions.id, sessionId),
+          this.getOwnershipCondition(userId)
+        ),
+      }),
+      db.query.dialogueHistory.findMany({
+        where: eq(dialogueHistory.sessionId, sessionId),
+        orderBy: asc(dialogueHistory.timestamp),
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId)),
+    ]);
 
-    if (!session) {
-      return { session: undefined, messages: [], total: 0 };
-    }
-
-    const messageOwnershipPredicate = userId
-      ? this.buildDialogueOwnershipPredicate(userId)
-      : undefined;
-
-    // Get messages with pagination
-    const messages = await db.query.dialogueHistory.findMany({
-      where: and(
-        eq(dialogueHistory.sessionId, sessionId),
-        messageOwnershipPredicate
-      ),
-      orderBy: asc(dialogueHistory.timestamp),
-      limit,
-      offset,
-    });
-
-    // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(dialogueHistory)
-      .where(and(
-        eq(dialogueHistory.sessionId, sessionId),
-        messageOwnershipPredicate
-      ));
+    if (!session) throw new NotFoundError('Session', sessionId);
 
     return {
       session,
@@ -271,41 +163,7 @@ export class SessionService {
   static async getActiveSession(params: {
     campaignId?: string;
     characterId?: string;
-  }, userId?: string): Promise<GameSession | undefined> {
-    if (userId) {
-      await this.assertSessionContextAccess(
-        { campaignId: params.campaignId, characterId: params.characterId },
-        userId
-      );
-
-      const conditions = [
-        isNull(gameSessions.endTime),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        ),
-      ];
-
-      if (params.campaignId) {
-        conditions.push(eq(gameSessions.campaignId, params.campaignId));
-      }
-
-      if (params.characterId) {
-        conditions.push(eq(gameSessions.characterId, params.characterId));
-      }
-
-      const [result] = await db
-        .select({ session: gameSessions })
-        .from(gameSessions)
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(...conditions))
-        .limit(1);
-
-      return result?.session;
-    }
-
+  }, userId: string): Promise<GameSession | null> {
     const conditions = [isNull(gameSessions.endTime)];
 
     if (params.campaignId) {
@@ -316,9 +174,14 @@ export class SessionService {
       conditions.push(eq(gameSessions.characterId, params.characterId));
     }
 
-    return await db.query.gameSessions.findFirst({
+    // Add ownership check
+    conditions.push(this.getOwnershipCondition(userId));
+
+    const session = await db.query.gameSessions.findFirst({
       where: and(...conditions),
     });
+
+    return session || null;
   }
 
   /**
@@ -326,17 +189,11 @@ export class SessionService {
    */
   static async completeSession(
     sessionId: string,
-    summary?: string,
-    userId?: string
+    userId: string,
+    summary?: string
   ): Promise<GameSession> {
-    if (userId) {
-      await this.assertSessionAccess(sessionId, userId);
-    }
-
-    const ownershipPredicate = userId
-      ? this.buildSessionOwnershipPredicate(userId)
-      : undefined;
-
+    // ⚡ Bolt: Removed redundant getSessionById call.
+    // The update query already enforces ownership via the WHERE clause.
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -347,14 +204,11 @@ export class SessionService {
       })
       .where(and(
         eq(gameSessions.id, sessionId),
-        ownershipPredicate
+        this.getOwnershipCondition(userId)
       ))
       .returning();
 
-    if (!updated && userId) {
-      throw new NotFoundError('Session', sessionId);
-    }
-    if (!updated) throw new InternalServerError('Failed to complete session');
+    if (!updated) throw new NotFoundError('Session', sessionId);
     return updated;
   }
 
@@ -363,17 +217,11 @@ export class SessionService {
    */
   static async updateSessionNotes(
     sessionId: string,
-    notes: string,
-    userId?: string
+    userId: string,
+    notes: string
   ): Promise<GameSession> {
-    if (userId) {
-      await this.assertSessionAccess(sessionId, userId);
-    }
-
-    const ownershipPredicate = userId
-      ? this.buildSessionOwnershipPredicate(userId)
-      : undefined;
-
+    // ⚡ Bolt: Removed redundant getSessionById call.
+    // Ownership is verified atomically within the UPDATE query's WHERE clause.
     const [updated] = await db
       .update(gameSessions)
       .set({
@@ -382,14 +230,11 @@ export class SessionService {
       })
       .where(and(
         eq(gameSessions.id, sessionId),
-        ownershipPredicate
+        this.getOwnershipCondition(userId)
       ))
       .returning();
 
-    if (!updated && userId) {
-      throw new NotFoundError('Session', sessionId);
-    }
-    if (!updated) throw new InternalServerError('Failed to update session notes');
+    if (!updated) throw new NotFoundError('Session', sessionId);
     return updated;
   }
 
@@ -403,38 +248,9 @@ export class SessionService {
     message: string;
     context?: Record<string, unknown>;
     images?: unknown[];
-  }, userId?: string): Promise<DialogueHistory> {
-    if (userId) {
-      await this.assertSessionAccess(data.sessionId, userId);
-
-      const ownershipPredicate = this.buildSessionOwnershipPredicate(userId);
-      const [msg] = await db
-        .insert(dialogueHistory)
-        .select(
-          db.select({
-            sessionId: sql`${data.sessionId}`,
-            speakerType: sql`${data.speakerType}`,
-            speakerId: sql`${data.speakerId || null}`,
-            message: sql`${data.message}`,
-            context: sql`${data.context || null}`,
-            timestamp: sql`NOW()`,
-            createdAt: sql`NOW()`,
-            updatedAt: sql`NOW()`,
-          })
-            .from(gameSessions)
-            .where(and(
-              eq(gameSessions.id, data.sessionId),
-              ownershipPredicate
-            ))
-        )
-        .returning();
-
-      if (!msg) {
-        throw new NotFoundError('Session', data.sessionId);
-      }
-
-      return msg;
-    }
+  }, userId: string): Promise<DialogueHistory> {
+    // Verify ownership first
+    await this.getSessionById(data.sessionId, userId);
 
     const [msg] = await db
       .insert(dialogueHistory)
@@ -457,37 +273,33 @@ export class SessionService {
    */
   static async getRecentMessages(
     sessionId: string,
+    userId: string,
     limit: number = 50,
     offset: number = 0,
     userId?: string
   ): Promise<MessagePage> {
-    if (userId) {
-      await this.assertSessionAccess(sessionId, userId);
-    }
+    // ⚡ Bolt: Parallelize session verification, message fetch and count query to reduce total latency.
+    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
+    const [session, messages, countResult] = await Promise.all([
+      db.query.gameSessions.findFirst({
+        where: and(
+          eq(gameSessions.id, sessionId),
+          this.getOwnershipCondition(userId)
+        ),
+      }),
+      db.query.dialogueHistory.findMany({
+        where: eq(dialogueHistory.sessionId, sessionId),
+        orderBy: desc(dialogueHistory.timestamp),
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId)),
+    ]);
 
-    const messageOwnershipPredicate = userId
-      ? this.buildDialogueOwnershipPredicate(userId)
-      : undefined;
-
-    // Get messages ordered by timestamp (newest first for pagination)
-    const messages = await db.query.dialogueHistory.findMany({
-      where: and(
-        eq(dialogueHistory.sessionId, sessionId),
-        messageOwnershipPredicate
-      ),
-      orderBy: desc(dialogueHistory.timestamp),
-      limit,
-      offset,
-    });
-
-    // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(dialogueHistory)
-      .where(and(
-        eq(dialogueHistory.sessionId, sessionId),
-        messageOwnershipPredicate
-      ));
+    if (!session) throw new NotFoundError('Session', sessionId);
 
     const total = countResult[0]?.count || 0;
     const hasMore = offset + limit < total;
@@ -504,18 +316,13 @@ export class SessionService {
    */
   static async getCampaignSessions(
     campaignId: string,
-    userId?: string
+    userId: string
   ): Promise<GameSession[]> {
-    if (userId) {
-      const rows = await db
-        .select({ session: gameSessions })
-        .from(gameSessions)
-        .innerJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .where(and(eq(gameSessions.campaignId, campaignId), eq(campaigns.userId, userId)))
-        .orderBy(desc(gameSessions.sessionNumber));
-
-      return rows.map((row) => row.session);
-    }
+    // Verify campaign ownership
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId))
+    });
+    if (!campaign) throw new NotFoundError('Campaign', campaignId);
 
     return await db.query.gameSessions.findMany({
       where: eq(gameSessions.campaignId, campaignId),
@@ -528,12 +335,12 @@ export class SessionService {
    */
   static async appendCombatLog(
     sessionId: string,
+    userId: string,
     entry: unknown,
     maxEntries: number = 500,
     userId?: string
   ): Promise<void> {
     const session = await this.getSessionById(sessionId, userId);
-    if (!session) return;
 
     // Parse existing combat log from session notes
     let combatLog: unknown[] = [];
@@ -557,7 +364,7 @@ export class SessionService {
       : merged;
 
     // Store updated log back to session notes
-    await this.updateSessionNotes(sessionId, JSON.stringify({ combatLog: trimmed }), userId);
+    await this.updateSessionNotes(sessionId, userId, JSON.stringify({ combatLog: trimmed }));
   }
 
   /**
@@ -565,10 +372,10 @@ export class SessionService {
    */
   static async appendRollEvent(
     sessionId: string,
-    event: { kind: string; payload: unknown },
-    userId?: string
+    userId: string,
+    event: { kind: string; payload: unknown }
   ): Promise<void> {
-    await this.appendCombatLog(sessionId, {
+    await this.appendCombatLog(sessionId, userId, {
       kind: event.kind,
       payload: event.payload,
     }, 500, userId);

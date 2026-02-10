@@ -8,7 +8,7 @@
  * @module server/services/drawing-service
  */
 
-import { eq, and, asc, or, inArray, sql } from 'drizzle-orm';
+import { eq, and, asc, or, inArray, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -112,47 +112,30 @@ export class DrawingService {
     userId: string,
     updates: Partial<NewSceneDrawing>
   ): Promise<SceneDrawing | null> {
-    // Get the drawing with scene info to check authorization
-    const [existing] = await db
-      .select({
-        drawingId: sceneDrawings.id,
-        createdBy: sceneDrawings.createdBy,
-        sceneId: sceneDrawings.sceneId,
-        sceneOwnerId: scenes.userId,
-      })
-      .from(sceneDrawings)
-      .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(
-        and(
-          eq(sceneDrawings.id, drawingId),
-          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
-        )
-      )
-      .limit(1);
+    // 🛡️ Sentinel: Atomic update with ownership check (creator OR scene owner)
+    // We specifically omit internal/security fields from the update object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { id: _id, sceneId: _sceneId, createdBy: _createdBy, ...safeUpdates } = updates as any;
 
-    if (!existing) {
-      return null;
-    }
-
-    // Update the drawing
     const [updated] = await db
       .update(sceneDrawings)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(sceneDrawings.id, drawingId),
-          eq(sceneDrawings.sceneId, existing.sceneId),
           or(
             eq(sceneDrawings.createdBy, userId),
-            sql`EXISTS (
-              SELECT 1
-              FROM scenes s
-              WHERE s.id = ${sceneDrawings.sceneId}
-                AND s.user_id = ${userId}
-            )`
+            exists(
+              db.select()
+                .from(scenes)
+                .where(and(
+                  eq(scenes.id, sceneDrawings.sceneId),
+                  eq(scenes.userId, userId)
+                ))
+            )
           )
         )
       )
@@ -166,41 +149,22 @@ export class DrawingService {
    * Only the creator or scene owner can delete
    */
   static async deleteDrawing(drawingId: string, userId: string): Promise<boolean> {
-    // We fetch the drawing first to check ownership, then delete
-    // This ensures we only delete if the user has permission
-    const [existing] = await db
-      .select({
-        id: sceneDrawings.id,
-        sceneId: sceneDrawings.sceneId,
-      })
-      .from(sceneDrawings)
-      .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(
-        and(
-          eq(sceneDrawings.id, drawingId),
-          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
-        )
-      )
-      .limit(1);
-
-    if (!existing) {
-      return false;
-    }
-
+    // 🛡️ Sentinel: Atomic delete with ownership check (creator OR scene owner)
     const result = await db
       .delete(sceneDrawings)
       .where(
         and(
           eq(sceneDrawings.id, drawingId),
-          eq(sceneDrawings.sceneId, existing.sceneId),
           or(
             eq(sceneDrawings.createdBy, userId),
-            sql`EXISTS (
-              SELECT 1
-              FROM scenes s
-              WHERE s.id = ${sceneDrawings.sceneId}
-                AND s.user_id = ${userId}
-            )`
+            exists(
+              db.select()
+                .from(scenes)
+                .where(and(
+                  eq(scenes.id, sceneDrawings.sceneId),
+                  eq(scenes.userId, userId)
+                ))
+            )
           )
         )
       )

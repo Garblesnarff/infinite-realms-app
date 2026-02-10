@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
+import { combatLogger } from '../lib/logger.js';
 
 import type {
   Condition,
@@ -154,16 +155,32 @@ export class ConditionsService {
     }
 
     // Check for conflicts
-    const conflicts = await this.checkConditionConflicts(participantId, conditionName, userId);
+    const conflicts = await this.checkConditionConflicts(participantId, conditionName);
+    const supersededIds: string[] = [];
+
     conflicts.forEach(conflict => {
       warnings.push(conflict.message);
-      // Auto-remove superseded conditions
+      // Collect superseded conditions for batch removal
       if (conflict.conflictType === 'superseded') {
-        this.removeCondition(conflict.existingCondition.id, encounterId, userId).catch(err => {
-          console.error('Failed to remove superseded condition:', err);
-        });
+        supersededIds.push(conflict.existingCondition.id);
       }
     });
+
+    // ⚡ Bolt: Batch remove superseded conditions to avoid N+1 update pattern
+    if (supersededIds.length > 0) {
+      try {
+        await db.execute(
+          sql`
+            UPDATE combat_participant_conditions
+            SET is_active = false
+            WHERE id IN (${sql.join(supersededIds.map(id => sql`${id}`), sql`, `)})
+              AND participant_id IN (SELECT id FROM combat_participants WHERE encounter_id = ${encounterId})
+          `
+        );
+      } catch (err) {
+        combatLogger.error({ msg: 'Failed to remove superseded conditions', error: err, supersededIds });
+      }
+    }
 
     // Insert the condition
     const result = await db.execute<Record<string, unknown>>(
@@ -726,7 +743,7 @@ export class ConditionsService {
     try {
       return JSON.parse(effectsJson);
     } catch (error) {
-      console.error('Failed to parse mechanical effects:', error);
+      combatLogger.error({ msg: 'Failed to parse mechanical effects', error });
       return {};
     }
   }

@@ -1,10 +1,12 @@
 import { Elysia } from 'elysia';
-import { authenticateRequest } from '../../../lib/auth.js';
-import { AppError } from '../../../lib/errors.js';
-import { logger } from '../../../lib/logger.js';
-import { CombatAttackService } from '../../../services/combat-attack-service.js';
+
 import { verifyEncounterOwnership } from './helpers.js';
+import { authenticateRequest } from '../../../lib/auth.js';
+import { NotFoundError } from '../../../lib/errors.js';
+import { logger } from '../../../lib/logger.js';
 import { CharacterService } from '../../../services/character-service.js';
+import { CombatAttackService } from '../../../services/combat-attack-service.js';
+
 import type {
   AttackRollInput,
   SpellAttackInput,
@@ -67,7 +69,11 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const result = await attackService.resolveAttack(params.encounterId, attackInput, user.userId);
+      const result = await attackService.resolveAttack(
+        params.encounterId,
+        attackInput,
+        user.userId
+      );
 
       return result;
     } catch (e) {
@@ -107,7 +113,11 @@ export const actionRoutes = new Elysia()
       }
 
       const attackService = new CombatAttackService();
-      const result = await attackService.resolveSpellAttack(params.encounterId, spellInput, user.userId);
+      const result = await attackService.resolveSpellAttack(
+        params.encounterId,
+        spellInput,
+        user.userId
+      );
 
       return result;
     } catch (e) {
@@ -128,14 +138,16 @@ export const actionRoutes = new Elysia()
     }
 
     try {
+      const attackService = new CombatAttackService();
+      const attacks = await attackService.getCharacterWeapons(params.characterId, user.userId);
+
+      // 🛡️ Sentinel: masked existence via empty array if character not found/owned
+      // Or better, explicit check via CharacterService to return 404
       const character = await CharacterService.getById(params.characterId, user.userId);
       if (!character) {
         set.status = 404;
         return { error: 'Character not found' };
       }
-
-      const attackService = new CombatAttackService();
-      const attacks = await attackService.getCharacterWeapons(params.characterId, user.userId);
 
       return { attacks };
     } catch (e) {
@@ -157,12 +169,6 @@ export const actionRoutes = new Elysia()
     }
 
     try {
-      const character = await CharacterService.getById(params.characterId, user.userId);
-      if (!character) {
-        set.status = 404;
-        return { error: 'Character not found' };
-      }
-
       const weaponInput = body as Omit<CreateWeaponAttackInput, 'characterId'>;
 
       if (!weaponInput.name || !weaponInput.damageDice || !weaponInput.damageType) {
@@ -184,6 +190,10 @@ export const actionRoutes = new Elysia()
       set.status = 201;
       return { attack };
     } catch (e) {
+      if (e instanceof NotFoundError) {
+        set.status = 404;
+        return { error: e.message };
+      }
       logger.error({ msg: 'Create weapon attack error', error: e });
       return mapActionError(set, e, 'Failed to create weapon attack', 'Character not found');
     }
