@@ -1,7 +1,8 @@
 import { Heart, Shield, Zap, Sword } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useCharacterStats } from '@/hooks/use-character-stats';
 
 /**
  * StatsBar - Floating quick stats header for game interface
@@ -18,46 +19,25 @@ export const StatsBar: React.FC = React.memo(() => {
   const { state: characterState } = useCharacter();
   const character = characterState.character;
 
+  // ⚡ Bolt: Use memoized character stats to avoid redundant D&D 5e calculations
+  const stats = useCharacterStats(character);
+
+  // ⚡ Bolt: Memoize derived stats to ensure they only update when stats object changes
+  const displayStats = useMemo(() => {
+    if (!stats) return { maxHp: 0, armorClass: 10, proficiency: 2, initiative: 0 };
+    return {
+      maxHp: stats.hitPoints,
+      armorClass: stats.armorClass,
+      proficiency: stats.proficiencyBonus,
+      initiative: stats.initiative,
+    };
+  }, [stats]);
+
+  const { maxHp, armorClass, proficiency, initiative } = displayStats;
+
   if (!character) {
     return null;
   }
-
-  // Calculate stats (same logic as CompactCharacterHeader)
-  const maxHp = Math.max(
-    1,
-    character.level * (character.class?.hitDie || 8) +
-      character.abilityScores.constitution.modifier * character.level,
-  );
-
-  const armorClass = (() => {
-    let ac = 10 + character.abilityScores.dexterity.modifier;
-    const hasUnarmoredDefense =
-      character.class &&
-      (character.class.name.toLowerCase() === 'barbarian' ||
-        character.class.name.toLowerCase() === 'monk');
-    const isWearingArmor = character.equippedArmor !== undefined && character.equippedArmor !== '';
-
-    if (hasUnarmoredDefense && !isWearingArmor) {
-      switch (character.class!.name.toLowerCase()) {
-        case 'barbarian':
-          ac =
-            10 +
-            character.abilityScores.dexterity.modifier +
-            character.abilityScores.constitution.modifier;
-          break;
-        case 'monk':
-          ac =
-            10 +
-            character.abilityScores.dexterity.modifier +
-            character.abilityScores.wisdom.modifier;
-          break;
-      }
-    }
-    return ac;
-  })();
-
-  const proficiency = Math.floor((character.level - 1) / 4) + 2;
-  const initiative = character.abilityScores.dexterity.modifier;
 
   const StatBadge = ({
     icon: Icon,
@@ -69,7 +49,7 @@ export const StatsBar: React.FC = React.memo(() => {
     value: number | string;
     label: string;
     color: string;
-  }) => (
+  }): JSX.Element => (
     <div className="text-center">
       <div className={`flex items-center justify-center gap-1 ${color} mb-1`}>
         <Icon className="w-3 h-3" />

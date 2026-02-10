@@ -1,5 +1,5 @@
 import { Dice6, Heart, Shield, Zap, Plus, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -7,6 +7,7 @@ import { Card } from '../ui/card';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { useCharacterStats } from '@/hooks/use-character-stats';
 import logger from '@/lib/logger';
 
 interface FloatingActionPanelProps {
@@ -19,34 +20,36 @@ interface FloatingActionPanelProps {
  * FloatingActionPanel - Quick access panel for common RPG actions
  * Reduces dependency on sidebar for frequently used features
  */
-export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
-  isVisible,
-  onToggle,
-  combatMode,
-}) => {
-  const { state: characterState } = useCharacter();
-  const { state: _combatState } = useCombat();
-  const character = characterState.character;
+export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.memo(
+  ({ isVisible, onToggle, combatMode }) => {
+    const { state: characterState } = useCharacter();
+    const { state: _combatState } = useCombat();
+    const character = characterState.character;
 
-  const [isExpanded, setIsExpanded] = useState(false);
+    // ⚡ Bolt: Use memoized character stats to avoid redundant D&D 5e calculations
+    const stats = useCharacterStats(character);
 
-  if (!character) return null;
+    const [isExpanded, setIsExpanded] = useState(false);
 
-  // Quick stats for easy reference
-  const maxHp = Math.max(
-    1,
-    character.level * (character.class?.hitDie || 8) +
-      character.abilityScores.constitution.modifier * character.level,
-  );
+    // ⚡ Bolt: Memoize derived stats to ensure they only update when stats object changes
+    const displayStats = useMemo(() => {
+      if (!stats) return { maxHp: 0, armorClass: 10, proficiency: 2 };
+      return {
+        maxHp: stats.hitPoints,
+        armorClass: stats.armorClass,
+        proficiency: stats.proficiencyBonus,
+      };
+    }, [stats]);
 
-  const armorClass = 10 + character.abilityScores.dexterity.modifier;
-  const proficiency = Math.floor((character.level - 1) / 4) + 2;
+    const { maxHp, armorClass, proficiency } = displayStats;
 
-  const handleQuickRoll = (type: string): void => {
-    // This would integrate with your dice rolling system
-    logger.info(`Quick rolling ${type}`);
-    // You could dispatch a dice roll event or call a dice service here
-  };
+    const handleQuickRoll = useCallback((type: string): void => {
+      // This would integrate with your dice rolling system
+      logger.info(`Quick rolling ${type}`);
+      // You could dispatch a dice roll event or call a dice service here
+    }, []);
+
+    if (!character) return null;
 
   if (!isVisible) {
     return (
@@ -208,4 +211,4 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
       </Card>
     </div>
   );
-};
+});
