@@ -6,7 +6,7 @@
  */
 
 import { UserX } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { CONDITION_ICONS, CONDITION_TEMPLATES } from './condition-utils';
 
@@ -41,6 +41,10 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
   onRemoveCondition,
   participants,
 }) => {
+  const conditionSelectId = useId();
+  const targetSelectId = useId();
+  const durationInputId = useId();
+
   const [selectedCondition, setSelectedCondition] = useState<ConditionName | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [conditionDuration, setConditionDuration] = useState<number>(3);
@@ -69,18 +73,22 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
     setConditionDuration(3);
   };
 
+  const hasAnyConditions = participants.some((p) => p.conditions.length > 0);
+
   return (
     <div className="space-y-4">
       <h4 className="font-semibold">Apply Condition</h4>
 
       <div className="space-y-3">
         <div>
-          <label className="text-sm font-medium">Condition:</label>
+          <label htmlFor={conditionSelectId} className="text-sm font-medium">
+            Condition:
+          </label>
           <Select
             value={selectedCondition || ''}
             onValueChange={(value) => setSelectedCondition(value as ConditionName)}
           >
-            <SelectTrigger>
+            <SelectTrigger id={conditionSelectId} aria-label="Select condition">
               <SelectValue placeholder="Select a condition" />
             </SelectTrigger>
             <SelectContent>
@@ -111,9 +119,11 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
         )}
 
         <div>
-          <label className="text-sm font-medium">Target:</label>
+          <label htmlFor={targetSelectId} className="text-sm font-medium">
+            Target:
+          </label>
           <Select value={selectedTarget || ''} onValueChange={setSelectedTarget}>
-            <SelectTrigger>
+            <SelectTrigger id={targetSelectId} aria-label="Select target">
               <SelectValue placeholder="Select target" />
             </SelectTrigger>
             <SelectContent>
@@ -132,8 +142,11 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
         </div>
 
         <div>
-          <label className="text-sm font-medium">Duration (rounds, 0 for save-based):</label>
+          <label htmlFor={durationInputId} className="text-sm font-medium">
+            Duration (rounds, 0 for save-based):
+          </label>
           <Input
+            id={durationInputId}
             type="number"
             min="0"
             value={conditionDuration}
@@ -157,35 +170,43 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
       <div className="space-y-2">
         <label className="text-sm font-medium">Managing Conditions:</label>
         <div className="space-y-1">
-          {participants.map((participant) =>
-            participant.conditions.map((condition: Condition, index: number) => (
-              <div
-                key={`${participant.id}-${condition.name}-${index}`}
-                className="flex items-center justify-between p-2 bg-gray-50 rounded"
-              >
-                <div className="flex items-center space-x-2">
-                  {React.createElement(CONDITION_ICONS[condition.name]?.icon || UserX, {
-                    className: 'w-4 h-4',
-                  })}
-                  <span className="text-sm">
-                    {condition.name} on {participant.name}
-                  </span>
-                  {condition.duration > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {condition.duration} rounds
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemoveCondition(condition.name, participant.id)}
-                  className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
+          {!hasAnyConditions ? (
+            <p className="text-xs text-muted-foreground italic p-2 bg-muted/30 rounded border border-dashed text-center">
+              No active conditions on participants.
+            </p>
+          ) : (
+            participants.map((participant) =>
+              participant.conditions.map((condition: Condition, index: number) => (
+                <div
+                  key={`${participant.id}-${condition.name}-${index}`}
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded"
                 >
-                  ×
-                </Button>
-              </div>
-            )),
+                  <div className="flex items-center space-x-2">
+                    {React.createElement(CONDITION_ICONS[condition.name]?.icon || UserX, {
+                      className: 'w-4 h-4',
+                    })}
+                    <span className="text-sm">
+                      {condition.name} on {participant.name}
+                    </span>
+                    {condition.duration > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {condition.duration} rounds
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemoveCondition(condition.name, participant.id)}
+                    className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
+                    aria-label={`Remove ${condition.name} from ${participant.name}`}
+                    title={`Remove ${condition.name} from ${participant.name}`}
+                  >
+                    ×
+                  </Button>
+                </div>
+              )),
+            )
           )}
         </div>
       </div>

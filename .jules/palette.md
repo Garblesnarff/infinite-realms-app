@@ -51,3 +51,7 @@
 ## 2025-06-01 - Audio Control Accessibility and Live Status
 **Learning:** Audio controls require specific ARIA attributes for a complete UX: `aria-label` and `aria-pressed` for mute/unmute toggles, and `aria-label` for sliders. Crucially, visual-only indicators like "Speaking..." pulses should be accompanied by `role="status"` and `aria-live="polite"` so screen reader users are aware of activity. Redundant component structures (e.g., in `src/components/game` and `src/features/game-session`) must be updated in tandem to ensure a consistent experience.
 **Action:** Implement `aria-pressed` for toggles, `aria-label` for icon-only buttons/sliders, and `aria-live` for status indicators. Always check for duplicate component definitions across feature directories.
+
+## 2026-02-10 - Accessibility & Feedback Enhancements in Combat Panels
+**Learning:** Using React's `useId` is the most robust way to link form labels to inputs in components that might appear multiple times (like in lists or combat trackers), avoiding ID collisions. Additionally, silent empty lists are poor UX; always provide an explicit "No [items] found" message.
+**Action:** Use `useId` for all `htmlFor`/`id` pairings and always implement descriptive empty states for dynamic lists.

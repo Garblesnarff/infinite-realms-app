@@ -20,7 +20,7 @@
  */
 
 // SDK Imports
-import React, { createContext, useContext, useReducer } from 'react'; // Added ReactNode
+import React, { createContext, useContext, useReducer, useMemo } from 'react'; // Added ReactNode
 
 import type { ReactNode } from 'react';
 
