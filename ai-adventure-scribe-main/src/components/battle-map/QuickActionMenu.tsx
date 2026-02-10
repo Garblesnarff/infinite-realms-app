@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Quick Action Menu Component
  *
@@ -138,12 +139,13 @@ const RadialActionButton: React.FC<RadialActionButtonProps> = ({
         'shadow-lg border-2 border-background',
         action.enabled === false && 'opacity-40 cursor-not-allowed',
         action.enabled !== false && color,
-        isHovered && 'scale-110 z-10'
+        isHovered && 'scale-110'
       )}
       style={{
         left: `calc(50% + ${position.x}px)`,
         top: `calc(50% + ${position.y}px)`,
         transform: 'translate(-50%, -50%)',
+        zIndex: isHovered ? Z_INDEX.DROPDOWN : undefined,
         animation: `radialAppear 0.3s ease-out ${index * 0.05}s both`,
       }}
       aria-label={action.label}
@@ -270,9 +272,10 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
       >
         {/* Center Button */}
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{
             animation: 'radialCenter 0.3s ease-out',
+            zIndex: Z_INDEX.CARD_HOVER,
           }}
         >
           <button

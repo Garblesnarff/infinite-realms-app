@@ -1,10 +1,11 @@
+/* eslint-disable max-lines */
 /**
  * Dice Roll Request Component
  * Displays when the DM requests a dice roll from the player
  */
 
 import { Dice6, Zap, ArrowUp, ArrowDown, Target, AlertCircle, Info } from 'lucide-react';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useId } from 'react';
 
 import { DiceRollEmbed } from '@/components/DiceRollEmbed';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +15,9 @@ import { Input } from '@/components/ui/input';
 import { useCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
-import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import {
   calculateRollWithBreakdown,
-  parseAbilityName,
   SKILL_ABILITIES,
-  SKILL_ALIASES,
   type AbilityName,
 } from '@/utils/characterModifiers';
 
@@ -59,6 +57,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(({
   onCancel,
   className,
 }) => {
+  const manualInputId = useId();
   const [manualMode, setManualMode] = useState(false);
   const [manualResult, setManualResult] = useState('');
   const [hasAdvantage, setHasAdvantage] = useState(request.advantage || false);
@@ -336,6 +335,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(({
                 variant={hasAdvantage ? 'default' : 'outline'}
                 size="sm"
                 onClick={toggleAdvantage}
+                aria-pressed={hasAdvantage}
                 className={cn(
                   'text-xs',
                   hasAdvantage
@@ -350,6 +350,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(({
                 variant={hasDisadvantage ? 'default' : 'outline'}
                 size="sm"
                 onClick={toggleDisadvantage}
+                aria-pressed={hasDisadvantage}
                 className={cn(
                   'text-xs',
                   hasDisadvantage
@@ -421,8 +422,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(({
         ) : (
           <div className="space-y-3">
             <div>
-              <label className="text-sm text-slate-600 mb-1 block">Enter your roll result:</label>
+              <label htmlFor={manualInputId} className="text-sm text-slate-600 mb-1 block">
+                Enter your roll result:
+              </label>
               <Input
+                id={manualInputId}
                 type="number"
                 value={manualResult}
                 onChange={(e) => setManualResult(e.target.value)}

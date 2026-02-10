@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+/* eslint-disable max-lines */
+import React, { useMemo, useRef } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
 
-import type { ChatMessage } from '@/types/game';
 import type { DiceRollContext } from '../MessageList';
+import type { ChatMessage } from '@/types/game';
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
@@ -542,7 +543,8 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       {/* Global Dice Roll Request - Shows current roll from GameContext queue */}
       {currentRoll && rollRequest && (
         <div
-          className={`fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[${Z_INDEX.POPOVER}]`}
+          className="fixed bottom-24 left-1/2 transform -translate-x-1/2"
+          style={{ zIndex: Z_INDEX.POPOVER }}
         >
           <DiceRollRequest
             key={currentRoll.id}

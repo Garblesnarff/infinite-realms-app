@@ -5,7 +5,6 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 
 import { Button } from '@/components/ui/button';
 import logger from '@/lib/logger';
-import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 interface ActionOptionsProps {
   options: ActionOption[];
@@ -148,6 +147,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = ({
                   size="sm"
                   onClick={() => handleOptionClick(option)}
                   disabled={isDisabled}
+                  aria-pressed={isSelected}
                   className={`
                     flex items-start gap-3 p-4 h-auto text-left justify-start
                     transition-all duration-200 border-2 rounded-lg
