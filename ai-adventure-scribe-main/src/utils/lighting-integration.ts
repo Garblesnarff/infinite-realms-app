@@ -7,10 +7,12 @@
  * @module utils/lighting-integration
  */
 
+import { lineSegmentsIntersect } from './geometry';
+import { raycastToWalls, isInShadow } from './raycasting';
+
+import type { QuadTree } from './spatial-partitioning';
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
-import { raycastToWalls, isInShadow } from './raycasting';
-import { QuadTree } from './spatial-partitioning';
 
 // ===========================
 // Types
@@ -388,25 +390,6 @@ function subtractPolygons(outer: Point2D[], inner: Point2D[]): Point2D[] {
   return outer.filter((point) => {
     return !inner.some((p) => p.x === point.x && p.y === point.y);
   });
-}
-
-/**
- * Check line segment intersection
- */
-function lineSegmentsIntersect(
-  a1: Point2D,
-  a2: Point2D,
-  b1: Point2D,
-  b2: Point2D
-): boolean {
-  const det = (a2.x - a1.x) * (b2.y - b1.y) - (b2.x - b1.x) * (a2.y - a1.y);
-
-  if (det === 0) return false;
-
-  const lambda = ((b2.y - b1.y) * (b2.x - a1.x) + (b1.x - b2.x) * (b2.y - a1.y)) / det;
-  const gamma = ((a1.y - a2.y) * (b2.x - a1.x) + (a2.x - a1.x) * (b2.y - a1.y)) / det;
-
-  return lambda > 0 && lambda < 1 && gamma > 0 && gamma < 1;
 }
 
 // ===========================

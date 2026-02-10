@@ -259,6 +259,7 @@ export default tseslint.config(
       'src/services/ai/prompts/rules-prompts.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
+      'src/utils/lighting-integration.ts',
       'src/utils/vision-worker-manager.ts',
       'src/workers/vision-worker.ts',
       'src/shaders/light-blend.tsx', // 271 lines - shader with JSX component
