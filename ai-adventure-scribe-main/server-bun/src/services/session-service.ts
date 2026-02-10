@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Session Service
  *
@@ -6,6 +7,7 @@
  */
 
 import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index.js';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
@@ -117,8 +119,7 @@ export class SessionService {
     options?: {
       limit?: number;
       offset?: number;
-    },
-    userId?: string
+    }
   ): Promise<{
     session: GameSession;
     messages: DialogueHistory[];
@@ -127,33 +128,33 @@ export class SessionService {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
 
-    // ⚡ Bolt: Parallelize session fetch, message fetch and count query to reduce total latency.
-    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
-    const [session, messages, countResult] = await Promise.all([
+    // ⚡ Bolt: Parallelize session fetch and combined message/count query to reduce total latency.
+    // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
+    const [session, messagesWithCount] = await Promise.all([
       db.query.gameSessions.findFirst({
         where: and(
           eq(gameSessions.id, sessionId),
           this.getOwnershipCondition(userId)
         ),
       }),
-      db.query.dialogueHistory.findMany({
-        where: eq(dialogueHistory.sessionId, sessionId),
-        orderBy: asc(dialogueHistory.timestamp),
-        limit,
-        offset,
-      }),
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({
+          message: dialogueHistory,
+          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
+        })
         .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId)),
+        .where(eq(dialogueHistory.sessionId, sessionId))
+        .orderBy(asc(dialogueHistory.timestamp))
+        .limit(limit)
+        .offset(offset),
     ]);
 
     if (!session) throw new NotFoundError('Session', sessionId);
 
     return {
       session,
-      messages,
-      total: countResult[0]?.count || 0,
+      messages: messagesWithCount.map((r) => r.message),
+      total: messagesWithCount[0]?.totalCount || 0,
     };
   }
 
@@ -275,37 +276,36 @@ export class SessionService {
     sessionId: string,
     userId: string,
     limit: number = 50,
-    offset: number = 0,
-    userId?: string
+    offset: number = 0
   ): Promise<MessagePage> {
-    // ⚡ Bolt: Parallelize session verification, message fetch and count query to reduce total latency.
-    // Reducing database round-trips from 2 (sequential) to 1 (concurrent).
-    const [session, messages, countResult] = await Promise.all([
+    // ⚡ Bolt: Parallelize session verification and combined message/count query to reduce total latency.
+    // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
+    const [session, messagesWithCount] = await Promise.all([
       db.query.gameSessions.findFirst({
         where: and(
           eq(gameSessions.id, sessionId),
           this.getOwnershipCondition(userId)
         ),
       }),
-      db.query.dialogueHistory.findMany({
-        where: eq(dialogueHistory.sessionId, sessionId),
-        orderBy: desc(dialogueHistory.timestamp),
-        limit,
-        offset,
-      }),
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({
+          message: dialogueHistory,
+          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
+        })
         .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId)),
+        .where(eq(dialogueHistory.sessionId, sessionId))
+        .orderBy(desc(dialogueHistory.timestamp))
+        .limit(limit)
+        .offset(offset),
     ]);
 
     if (!session) throw new NotFoundError('Session', sessionId);
 
-    const total = countResult[0]?.count || 0;
+    const total = messagesWithCount[0]?.totalCount || 0;
     const hasMore = offset + limit < total;
 
     return {
-      messages: messages.reverse(), // Reverse to get oldest to newest for display
+      messages: messagesWithCount.map((r) => r.message).reverse(), // Reverse to get oldest to newest for display
       hasMore,
       total,
     };
@@ -337,8 +337,7 @@ export class SessionService {
     sessionId: string,
     userId: string,
     entry: unknown,
-    maxEntries: number = 500,
-    userId?: string
+    maxEntries: number = 500
   ): Promise<void> {
     const session = await this.getSessionById(sessionId, userId);
 

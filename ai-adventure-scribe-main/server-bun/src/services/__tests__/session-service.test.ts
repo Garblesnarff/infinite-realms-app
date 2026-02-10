@@ -17,7 +17,13 @@ vi.mock('../../../../db/client.js', () => ({
     },
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(),
+        where: vi.fn(() => ({
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(() => ({
+              offset: vi.fn(),
+            })),
+          })),
+        })),
       })),
     })),
     update: vi.fn(() => ({
@@ -39,41 +45,73 @@ describe('SessionService', () => {
   });
 
   describe('getSessionWithMessages', () => {
-    it('should parallelize session, messages and count queries', async () => {
+    it('should parallelize session fetch and combined message/count query', async () => {
       const mockSession = { id: sessionId, userId };
-      const mockMessages = [{ id: 'msg-1', message: 'hello' }];
-      const mockCount = [{ count: 1 }];
+      const mockMessagesWithCount = [
+        { message: { id: 'msg-1', message: 'hello' }, totalCount: 1 },
+      ];
 
-      // Setup mocks for Promise.all
+      // Setup mocks
       vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as any);
-      vi.mocked(db.query.dialogueHistory.findMany).mockResolvedValue(mockMessages as any);
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue(mockCount),
-        }),
-      } as any);
+
+      const mockOffset = vi.fn().mockResolvedValue(mockMessagesWithCount);
+      const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });
+      const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+      vi.mocked(db.select).mockReturnValue({ from: mockFrom } as any);
 
       const result = await SessionService.getSessionWithMessages(sessionId, userId);
 
       expect(result.session).toEqual(mockSession);
-      expect(result.messages).toEqual(mockMessages);
+      expect(result.messages).toEqual([mockMessagesWithCount[0].message]);
       expect(result.total).toBe(1);
 
       expect(db.query.gameSessions.findFirst).toHaveBeenCalled();
-      expect(db.query.dialogueHistory.findMany).toHaveBeenCalled();
+      expect(db.select).toHaveBeenCalled();
     });
 
     it('should throw NotFoundError if session is not found', async () => {
       vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(null);
-      vi.mocked(db.query.dialogueHistory.findMany).mockResolvedValue([]);
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      } as any);
 
-      await expect(SessionService.getSessionWithMessages(sessionId, userId))
-        .rejects.toThrow(NotFoundError);
+      const mockOffset = vi.fn().mockResolvedValue([]);
+      const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });
+      const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+      vi.mocked(db.select).mockReturnValue({ from: mockFrom } as any);
+
+      await expect(SessionService.getSessionWithMessages(sessionId, userId)).rejects.toThrow(
+        NotFoundError
+      );
+    });
+  });
+
+  describe('getRecentMessages', () => {
+    it('should parallelize session verification and combined message/count query', async () => {
+      const mockSession = { id: sessionId, userId };
+      const mockMessagesWithCount = [
+        { message: { id: 'msg-1', message: 'hello', timestamp: new Date() }, totalCount: 1 },
+      ];
+
+      // Setup mocks
+      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as any);
+
+      const mockOffset = vi.fn().mockResolvedValue(mockMessagesWithCount);
+      const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });
+      const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
+      const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
+      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+      vi.mocked(db.select).mockReturnValue({ from: mockFrom } as any);
+
+      const result = await SessionService.getRecentMessages(sessionId, userId);
+
+      expect(result.messages).toEqual([mockMessagesWithCount[0].message]);
+      expect(result.total).toBe(1);
+      expect(result.hasMore).toBe(false);
+
+      expect(db.query.gameSessions.findFirst).toHaveBeenCalled();
+      expect(db.select).toHaveBeenCalled();
     });
   });
 
