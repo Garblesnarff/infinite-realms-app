@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { TRPCError } from '@trpc/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { db } from '../../../../db/client.js';
 import { TokenService } from '../token-service.js';
-import { TRPCError } from '@trpc/server';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
-  db: {
+vi.mock('../../../../db/client.js', () => {
+  const mockDb = {
     query: {
       characters: {
         findFirst: vi.fn(),
@@ -17,36 +18,40 @@ vi.mock('../../../../db/client.js', () => ({
       tokenConfigurations: {
         findFirst: vi.fn(),
       },
+      characterTokens: {
+        findMany: vi.fn(),
+      },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        leftJoin: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn(),
-          })),
-        })),
-        innerJoin: vi.fn(() => ({
-            where: vi.fn()
-        }))
-      })),
-    })),
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        returning: vi.fn(),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(() => ({
-          returning: vi.fn(),
-        })),
-      })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(),
-    })),
-  },
-}));
+    select: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  const createQueryBuilderMock = (): any => {
+    const mock: any = {
+      from: vi.fn(() => mock),
+      innerJoin: vi.fn(() => mock),
+      leftJoin: vi.fn(() => mock),
+      where: vi.fn(() => mock),
+      orderBy: vi.fn(() => mock),
+      limit: vi.fn(() => mock),
+      returning: vi.fn(() => mock),
+      values: vi.fn(() => mock),
+      set: vi.fn(() => mock),
+    };
+    // Make it thenable for easy awaiting if needed, or just mock the final method
+    return mock;
+  };
+
+  mockDb.select.mockImplementation(() => createQueryBuilderMock());
+  mockDb.insert.mockImplementation(() => createQueryBuilderMock());
+  mockDb.update.mockImplementation(() => createQueryBuilderMock());
+  mockDb.delete.mockImplementation(() => createQueryBuilderMock());
+
+  return { db: mockDb };
+});
 
 // Mock drizzle-orm
 vi.mock('drizzle-orm', async () => {
@@ -57,6 +62,7 @@ vi.mock('drizzle-orm', async () => {
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     exists: vi.fn((subquery) => ({ type: 'exists', subquery })),
+    desc: vi.fn((col) => ({ type: 'desc', col })),
   };
 });
 
@@ -72,16 +78,9 @@ describe('TokenService', () => {
 
   describe('getDefaultTokenConfig', () => {
     it('should throw NOT_FOUND if character is not found or not owned', async () => {
-      // Mock the consolidated query returning nothing
-      (db as any).select.mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      });
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
 
       await expect(TokenService.getDefaultTokenConfig(mockCharacterId, mockUserId))
         .rejects.toThrow(TRPCError);
@@ -95,34 +94,21 @@ describe('TokenService', () => {
 
     it('should return config if character is owned', async () => {
       const mockConfig = { id: 'config-123', imageUrl: 'test.png' };
-      (db as any).select.mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ characterId: mockCharacterId, config: mockConfig }]),
-            }),
-          }),
-        }),
-      });
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([{ characterId: mockCharacterId, config: mockConfig }]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
 
       const result = await TokenService.getDefaultTokenConfig(mockCharacterId, mockUserId);
       expect(result).toEqual(mockConfig);
     });
 
     it('should return null if character is owned but has no config', async () => {
-      // Mock Drizzle returning character with all-null config object
-      (db as any).select.mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          leftJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{
-                characterId: mockCharacterId,
-                config: { id: null, imageUrl: null }
-              }]),
-            }),
-          }),
-        }),
-      });
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([{
+        characterId: mockCharacterId,
+        config: { id: null, imageUrl: null }
+      }]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
 
       const result = await TokenService.getDefaultTokenConfig(mockCharacterId, mockUserId);
       expect(result).toBeNull();
@@ -131,15 +117,13 @@ describe('TokenService', () => {
 
   describe('createToken', () => {
     it('should parallelize verifySceneAccess and verifyCharacterOwnership', async () => {
-      // Mock verifySceneAccess and verifyCharacterOwnership (private methods)
-      // Since they are private, we mock the db calls they make
       (db.query.scenes.findFirst as any).mockResolvedValue({ id: mockSceneId });
       (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-      (db.insert as any).mockReturnValue({
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: mockTokenId, sceneId: mockSceneId }])
-        })
-      });
+
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([{ id: mockTokenId, sceneId: mockSceneId }]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
 
       await TokenService.createToken(mockSceneId, mockUserId, {
         sceneId: mockSceneId,
@@ -153,6 +137,69 @@ describe('TokenService', () => {
       expect(db.query.scenes.findFirst).toHaveBeenCalled();
       expect(db.query.characters.findFirst).toHaveBeenCalled();
       expect(db.insert).toHaveBeenCalled();
+    });
+  });
+
+  describe('applyDefaultConfig', () => {
+    it('should correctly consolidate queries and apply config', async () => {
+      const mockConfig = { id: 'config-123', imageUrl: 'test.png' };
+      const mockToken = { id: mockTokenId, actorId: mockCharacterId, sceneId: mockSceneId };
+      const mockCharacter = { id: mockCharacterId, userId: mockUserId };
+
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([{
+        token: mockToken,
+        character: mockCharacter,
+        config: mockConfig
+      }]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
+
+      const mockUpdateBuilder = (db as any).update();
+      mockUpdateBuilder.set.mockReturnValue(mockUpdateBuilder);
+      mockUpdateBuilder.where.mockReturnValue(mockUpdateBuilder);
+      mockUpdateBuilder.returning.mockResolvedValue([mockToken]);
+      (db as any).update.mockReturnValue(mockUpdateBuilder);
+
+      const result = await TokenService.applyDefaultConfig(mockTokenId, mockUserId);
+
+      expect(db.select).toHaveBeenCalled();
+      expect(db.update).toHaveBeenCalled();
+      expect(result).toEqual(mockToken);
+    });
+
+    it('should return null if token is not found or scene not owned', async () => {
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
+
+      const result = await TokenService.applyDefaultConfig(mockTokenId, mockUserId);
+      expect(result).toBeNull();
+    });
+
+    it('should throw BAD_REQUEST if token has no actorId', async () => {
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([{
+        token: { id: mockTokenId, actorId: null },
+        character: null,
+        config: null
+      }]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
+
+      await expect(TokenService.applyDefaultConfig(mockTokenId, mockUserId))
+        .rejects.toThrow(expect.objectContaining({ code: 'BAD_REQUEST' }));
+    });
+
+    it('should throw NOT_FOUND if character is not owned', async () => {
+      const mockQueryBuilder = (db as any).select();
+      mockQueryBuilder.limit.mockResolvedValue([{
+        token: { id: mockTokenId, actorId: mockCharacterId },
+        character: { id: mockCharacterId, userId: 'other-user' },
+        config: null
+      }]);
+      (db as any).select.mockReturnValue(mockQueryBuilder);
+
+      await expect(TokenService.applyDefaultConfig(mockTokenId, mockUserId))
+        .rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
     });
   });
 });
