@@ -12,6 +12,7 @@
 
 import { Elysia } from 'elysia';
 import jwt from 'jsonwebtoken';
+import { logger } from '../../lib/logger';
 import { workos, authConfig } from '../../services/workos';
 import { db } from '../../lib/drizzle';
 import { users } from '../../../../db/schema/index';
@@ -38,7 +39,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
       return redirect(authorizationUrl);
     } catch (error) {
-      console.error('Error generating authorization URL:', error);
+      logger.error({ msg: 'Error generating authorization URL', error });
       set.status = 500;
       return { error: 'Failed to generate authorization URL' };
     }
@@ -97,7 +98,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
       return redirect(redirectUrl);
     } catch (error) {
-      console.error('OAuth callback error:', error);
+      logger.error({ msg: 'OAuth callback error', error });
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
       return redirect(`${frontendUrl}/?error=auth_failed`);
     }
@@ -131,7 +132,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
         refreshToken: newRefreshToken,
       };
     } catch (error) {
-      console.error('Token refresh error:', error);
+      logger.error({ msg: 'Token refresh error', error });
       set.status = 401;
       return { error: 'Failed to refresh token - please log in again' };
     }
@@ -148,7 +149,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       const sessionId = query.session_id as string | undefined;
 
       if (!sessionId) {
-        console.warn('No session ID provided for logout');
+        logger.warn('No session ID provided for logout');
         return redirect(frontendUrl);
       }
 
@@ -160,7 +161,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
       return redirect(logoutUrl);
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error({ msg: 'Logout error', error });
       return redirect(frontendUrl);
     }
   })
@@ -225,10 +226,10 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
       const redirectUrl = `${frontendUrl}/auth/callback#access_token=${accessToken}&refresh_token=${refreshToken}`;
 
-      console.log('[TEST AUTH] Generated tokens for test user:', testUser.email);
+      logger.info({ msg: '[TEST AUTH] Generated tokens for test user', email: testUser.email });
       return redirect(redirectUrl);
     } catch (error) {
-      console.error('Test login error:', error);
+      logger.error({ msg: 'Test login error', error });
       set.status = 500;
       return { error: 'Failed to generate test tokens' };
     }

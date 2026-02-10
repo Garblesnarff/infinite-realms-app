@@ -147,4 +147,43 @@ describe('CombatAttackService', () => {
       );
     });
   });
+
+  describe('resolveAttack', () => {
+    it('should successfully resolve an attack using joined participant data', async () => {
+      const mockEncounterId = 'enc-123';
+      const mockTargetId = 'target-123';
+
+      // Mock getParticipantWithStats (which uses db.select)
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{
+          participant: { id: mockTargetId, armorClass: 15 },
+          stats: { armorClass: 15, resistances: [], vulnerabilities: [], immunities: [] }
+        }])
+      });
+
+      // Mock verifyEncounterAccess
+      (db.select as any).mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ id: mockEncounterId }])
+      });
+
+      const result = await service.resolveAttack(mockEncounterId, {
+        attackerId: 'attacker-123',
+        targetId: mockTargetId,
+        attackRoll: 20, // Natural 20
+        attackType: 'melee'
+      }, mockUserId);
+
+      expect(result.hit).toBe(true);
+      expect(result.isCritical).toBe(true);
+      expect(result.targetAC).toBe(15);
+    });
+  });
 });

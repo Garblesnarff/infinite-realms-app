@@ -460,9 +460,8 @@ export class ClassFeaturesService {
       ),
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Verify subclass is valid for the class
@@ -708,9 +707,8 @@ export class ClassFeaturesService {
       ),
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Get subclass if character has one

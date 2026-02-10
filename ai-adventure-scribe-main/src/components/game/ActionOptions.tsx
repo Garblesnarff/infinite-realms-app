@@ -74,7 +74,7 @@ function getOptionIcon(text: string): React.ComponentType<{ className?: string }
  * ActionOptions component displays clickable option buttons with a configurable delay
  * Encourages player roleplay before showing suggested actions
  */
-export const ActionOptions: React.FC<ActionOptionsProps> = ({
+export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(({
   options,
   onOptionSelect,
   delay = 10000, // 10 seconds default
@@ -190,4 +190,4 @@ export const ActionOptions: React.FC<ActionOptionsProps> = ({
       )}
     </div>
   );
-};
+});

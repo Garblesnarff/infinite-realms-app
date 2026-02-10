@@ -12,7 +12,7 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, or, isNotNull } from 'drizzle-orm';
 
 import { CombatHPService } from './combat-hp-service.js';
 import { db } from '../../../db/client.js';
@@ -25,7 +25,6 @@ import {
   creatureStats,
   characters,
   npcs,
-  campaigns,
 } from '../../../db/schema/index.js';
 import { NotFoundError, ValidationError, InternalServerError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
@@ -279,26 +278,34 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // ⚡ Bolt: Parallelize target stats and weapon fetch to reduce database round-trips
-    // 🛡️ Sentinel: Pass userId for ownership verification
-    const [targetStats, weapon] = await Promise.all([
-      this.getCreatureStats(targetId, userId),
+    // ⚡ Bolt: Parallelize target participant/stats and weapon fetch to reduce database round-trips.
+    // 🛡️ Sentinel: Pass userId for ownership verification.
+    const [targetData, weapon] = await Promise.all([
+      this.getParticipantWithStats(targetId, encounterId, userId),
       weaponId ? this.getWeaponAttack(weaponId, userId) : Promise.resolve(null),
     ]);
 
-    if (!targetStats) {
-      throw new NotFoundError('Target stats', targetId);
+    if (!targetData) {
+      throw new NotFoundError('Target participant', targetId);
     }
+
+    const { participant: targetParticipant, stats: targetStats } = targetData;
 
     if (weaponId && !weapon) {
       throw new NotFoundError('Weapon', weaponId);
     }
 
+    // Determine target AC: Use combat participant AC (allows for temporary modifications)
+    // with fallback to base creature stats if participant AC is the default 10.
+    const targetAC = (targetParticipant.armorClass !== 10)
+      ? targetParticipant.armorClass
+      : (targetStats?.armorClass || 10);
+
     // Check if attack hits
     const hitCheck = this.checkHit({
       attackRoll,
       attackBonus: weapon?.attackBonus || attackBonus,
-      targetAC: targetParticipant.armorClass,
+      targetAC,
       advantage,
       disadvantage,
     });
@@ -307,7 +314,7 @@ export class CombatAttackService {
       // Miss - no damage
       return {
         hit: false,
-        targetAC: targetParticipant.armorClass,
+        targetAC,
         totalAttackRoll: hitCheck.totalAttackRoll,
         effectiveResistance: false,
         effectiveVulnerability: false,
@@ -328,7 +335,7 @@ export class CombatAttackService {
       // No weapon - return hit with no damage calculated
       return {
         hit: true,
-        targetAC: targetParticipant.armorClass,
+        targetAC,
         totalAttackRoll: hitCheck.totalAttackRoll,
         effectiveResistance: false,
         effectiveVulnerability: false,
@@ -340,14 +347,19 @@ export class CombatAttackService {
       };
     }
 
+    // Aggregate resistances: prioritize participant-level modifications but fall back to creature stats
+    const resistances = (targetParticipant.damageResistances?.length ? targetParticipant.damageResistances : targetStats?.resistances || []) as DamageType[];
+    const vulnerabilities = (targetParticipant.damageVulnerabilities?.length ? targetParticipant.damageVulnerabilities : targetStats?.vulnerabilities || []) as DamageType[];
+    const immunities = (targetParticipant.damageImmunities?.length ? targetParticipant.damageImmunities : targetStats?.immunities || []) as DamageType[];
+
     const damageCalc = this.calculateDamage({
       damageDice: weapon.damageDice,
       damageBonus: weapon.damageBonus,
       damageType: weapon.damageType as DamageType,
       isCritical: isCrit,
-      resistances: (targetParticipant.damageResistances || []) as DamageType[],
-      vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
-      immunities: (targetParticipant.damageImmunities || []) as DamageType[],
+      resistances,
+      vulnerabilities,
+      immunities,
       damageRoll,
     });
 
@@ -418,29 +430,42 @@ export class CombatAttackService {
 
     const results: AttackResult[] = [];
 
-    // ⚡ Bolt: Fetch all target statistics in a single batch query to avoid N+1 database round-trips.
-    // 🛡️ Sentinel: Use getCreatureStatsBatch with userId for ownership verification.
-    const allTargetStats = await this.getCreatureStatsBatch(targetIds, userId);
+    // ⚡ Bolt: Fetch all target participants and their base stats in a single batch query to avoid N+1 database round-trips.
+    // 🛡️ Sentinel: Use getParticipantsWithStatsBatch with userId for ownership verification.
+    const allTargetData = await this.getParticipantsWithStatsBatch(targetIds, encounterId, userId);
 
-    // ⚡ Bolt: Parallelize spell resolution for all targets using the pre-fetched stats map.
+    // ⚡ Bolt: Parallelize spell resolution for all targets using the pre-fetched data map.
     const resolutionPromises = targetIds.map(async (targetId) => {
-      const targetStats = allTargetStats.get(targetId);
-      if (!targetStats) {
+      const targetData = allTargetData.get(targetId);
+      if (!targetData) {
         return null;
       }
+
+      const { participant: targetParticipant, stats: targetStats } = targetData;
+
+      // Determine target AC: Use combat participant AC (allows for temporary modifications)
+      // with fallback to base creature stats if participant AC is the default 10.
+      const targetAC = (targetParticipant.armorClass !== 10)
+        ? targetParticipant.armorClass
+        : (targetStats?.armorClass || 10);
+
+      // Aggregate resistances: prioritize participant-level modifications but fall back to creature stats
+      const resistances = (targetParticipant.damageResistances?.length ? targetParticipant.damageResistances : targetStats?.resistances || []) as DamageType[];
+      const vulnerabilities = (targetParticipant.damageVulnerabilities?.length ? targetParticipant.damageVulnerabilities : targetStats?.vulnerabilities || []) as DamageType[];
+      const immunities = (targetParticipant.damageImmunities?.length ? targetParticipant.damageImmunities : targetStats?.immunities || []) as DamageType[];
 
       if (attackRoll !== undefined) {
         // Spell attack roll
         const hitCheck = this.checkHit({
           attackRoll,
           attackBonus: 0, // Spell attack bonus should be included in attackRoll
-          targetAC: targetParticipant.armorClass,
+          targetAC,
         });
 
         if (!hitCheck.hit) {
           return {
             hit: false,
-            targetAC: targetParticipant.armorClass,
+            targetAC,
             totalAttackRoll: hitCheck.totalAttackRoll,
             effectiveResistance: false,
             effectiveVulnerability: false,
@@ -465,9 +490,9 @@ export class CombatAttackService {
             damageBonus: 0,
             damageType,
             isCritical: spellIsCrit,
-            resistances: (targetParticipant.damageResistances || []) as DamageType[],
-            vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
-            immunities: (targetParticipant.damageImmunities || []) as DamageType[],
+            resistances,
+            vulnerabilities,
+            immunities,
             damageRoll,
           });
 
@@ -484,7 +509,7 @@ export class CombatAttackService {
 
             return {
               hit: true,
-              targetAC: targetParticipant.armorClass,
+              targetAC,
               totalAttackRoll: hitCheck.totalAttackRoll,
               damage: damageCalc.baseDamage,
               damageType,
@@ -519,9 +544,9 @@ export class CombatAttackService {
             damageBonus: 0,
             damageType,
             isCritical: false, // Spells with saves don't crit
-            resistances: (targetParticipant.damageResistances || []) as DamageType[],
-            vulnerabilities: (targetParticipant.damageVulnerabilities || []) as DamageType[],
-            immunities: (targetParticipant.damageImmunities || []) as DamageType[],
+            resistances,
+            vulnerabilities,
+            immunities,
             damageRoll,
           });
 
@@ -748,6 +773,115 @@ export class CombatAttackService {
     });
 
     return stats || null;
+  }
+
+  /**
+   * ⚡ Bolt: Fetch participant with their base creature stats in a single joined query.
+   * This is more efficient than fetching the participant and then their stats separately.
+   */
+  async getParticipantWithStats(
+    participantId: string,
+    encounterId: string,
+    userId: string
+  ): Promise<{ participant: any; stats: CreatureStats | null } | null> {
+    const [result] = await db
+      .select({
+        participant: combatParticipants,
+        stats: creatureStats,
+      })
+      .from(combatParticipants)
+      .leftJoin(
+        creatureStats,
+        or(
+          and(
+            isNotNull(combatParticipants.characterId),
+            eq(combatParticipants.characterId, creatureStats.characterId)
+          ),
+          and(
+            isNotNull(combatParticipants.npcId),
+            eq(combatParticipants.npcId, creatureStats.npcId)
+          )
+        )
+      )
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        )
+      )
+      .limit(1);
+
+    if (!result) return null;
+
+    return {
+      participant: result.participant,
+      stats: result.stats as CreatureStats | null,
+    };
+  }
+
+  /**
+   * ⚡ Bolt: Batch fetch multiple participants with their base creature stats.
+   * Eliminates N+1 queries during multi-target resolution (e.g. AoE spells).
+   */
+  async getParticipantsWithStatsBatch(
+    participantIds: string[],
+    encounterId: string,
+    userId: string
+  ): Promise<Map<string, { participant: any; stats: CreatureStats | null }>> {
+    if (participantIds.length === 0) return new Map();
+
+    const results = await db
+      .select({
+        participant: combatParticipants,
+        stats: creatureStats,
+      })
+      .from(combatParticipants)
+      .leftJoin(
+        creatureStats,
+        or(
+          and(
+            isNotNull(combatParticipants.characterId),
+            eq(combatParticipants.characterId, creatureStats.characterId)
+          ),
+          and(
+            isNotNull(combatParticipants.npcId),
+            eq(combatParticipants.npcId, creatureStats.npcId)
+          )
+        )
+      )
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
+          inArray(combatParticipants.id, participantIds),
+          eq(combatParticipants.encounterId, encounterId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId)
+          )
+        )
+      );
+
+    const resultMap = new Map<string, { participant: any; stats: CreatureStats | null }>();
+    results.forEach((r) => {
+      resultMap.set(r.participant.id, {
+        participant: r.participant,
+        stats: r.stats as CreatureStats | null,
+      });
+    });
+    return resultMap;
   }
 
   /**

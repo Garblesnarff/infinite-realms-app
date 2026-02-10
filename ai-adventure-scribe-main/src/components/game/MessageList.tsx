@@ -41,7 +41,7 @@ type LastRollMeta = {
  * Displays a list of chat messages with styling based on sender type
  * Refactored to use sub-components and custom hooks for better maintainability
  */
-export const MessageList: React.FC<MessageListProps> = ({
+export const MessageList: React.FC<MessageListProps> = React.memo(({
   onSendFullMessage,
   sessionId,
   containerRef,
@@ -139,4 +139,4 @@ export const MessageList: React.FC<MessageListProps> = ({
       </div>
     </div>
   );
-};
+});
