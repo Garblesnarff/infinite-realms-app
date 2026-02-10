@@ -195,6 +195,9 @@ export default defineConfig({
         'server-bun/src/services/combat-attack-service.ts',
         'server-bun/src/services/session-service.ts',
         'server-bun/src/services/exhaustion-service.ts',
+        'server-bun/src/services/rest-service.ts',
+        'server-bun/src/services/character-folder-service.ts',
+        'server-bun/src/services/token-service.ts',
       ],
       exclude: [
         '**/__tests__/**',

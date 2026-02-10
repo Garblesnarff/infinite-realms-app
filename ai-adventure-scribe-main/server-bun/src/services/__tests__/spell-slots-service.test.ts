@@ -128,6 +128,7 @@ describe('SpellSlotsService', () => {
     });
 
     it('should succeed and log usage if slot exists and character owned', async () => {
+      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
       (db.query.characterSpellSlots.findFirst as any).mockResolvedValue({
         id: 'slot-123',
         characterId: mockCharacterId,

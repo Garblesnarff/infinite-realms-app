@@ -7,6 +7,7 @@
  * @module server/services/rest-service
  */
 
+/* eslint-disable max-lines */
 import { and, desc, eq, exists, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
@@ -97,12 +98,9 @@ export class RestService {
     characterId: string,
     userId: string,
     className: string,
-    level: number,
-    userId?: string
+    level: number
   ): Promise<CharacterHitDice> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
+    await this.verifyCharacterOwnership(characterId, userId);
 
     const dieType = this.getHitDieType(className);
 
@@ -133,7 +131,15 @@ export class RestService {
         .where(and(
           eq(characterHitDice.id, existing.id),
           eq(characterHitDice.characterId, characterId),
-          eq(characterHitDice.className, className)
+          eq(characterHitDice.className, className),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterHitDice.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
         ))
         .returning();
 
@@ -200,12 +206,9 @@ export class RestService {
     characterId: string,
     userId: string,
     count: number,
-    preRolledValues?: number[],
-    userId?: string
+    preRolledValues?: number[]
   ): Promise<SpendHitDiceResult> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
+    await this.verifyCharacterOwnership(characterId, userId);
 
     if (count < 0) {
       throw new ValidationError('Cannot spend negative hit dice', { count });
@@ -291,7 +294,15 @@ export class RestService {
           })
           .where(and(
             eq(characterHitDice.id, hitDie.id),
-            eq(characterHitDice.characterId, characterId)
+            eq(characterHitDice.characterId, characterId),
+            exists(
+              db.select()
+                .from(characters)
+                .where(and(
+                  eq(characters.id, characterHitDice.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                ))
+            )
           ));
 
         remaining -= toSpend;
@@ -356,7 +367,15 @@ export class RestService {
           })
           .where(and(
             eq(characterHitDice.id, hitDie.id),
-            eq(characterHitDice.characterId, characterId)
+            eq(characterHitDice.characterId, characterId),
+            exists(
+              db.select()
+                .from(characters)
+                .where(and(
+                  eq(characters.id, characterHitDice.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                ))
+            )
           ));
 
         remaining -= canRestore;
@@ -374,9 +393,7 @@ export class RestService {
     userId: string,
     restType: RestType
   ): Promise<RestorableResource[]> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
+    await this.verifyCharacterOwnership(characterId, userId);
 
     const resources: RestorableResource[] = [];
 
@@ -429,8 +446,7 @@ export class RestService {
     userId: string,
     hitDiceToSpend: number = 0,
     sessionId?: string,
-    notes?: string,
-    userId?: string
+    notes?: string
   ): Promise<ShortRestResult> {
     // Get character
     const character = await db.query.characters.findFirst({
@@ -440,9 +456,8 @@ export class RestService {
       ),
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Spend hit dice if requested
@@ -498,8 +513,7 @@ export class RestService {
     characterId: string,
     userId: string,
     sessionId?: string,
-    notes?: string,
-    userId?: string
+    notes?: string
   ): Promise<LongRestResult> {
     // Get character
     const character = await db.query.characters.findFirst({
@@ -512,9 +526,8 @@ export class RestService {
       },
     });
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
     }
 
     // Note: HP restoration would be handled by updating character's current HP
@@ -567,8 +580,7 @@ export class RestService {
     characterId: string,
     userId: string,
     sessionId?: string,
-    limit: number = 50,
-    userId?: string
+    limit: number = 50
   ): Promise<RestEvent[]> {
     const conditions = [
       eq(restEvents.characterId, characterId),

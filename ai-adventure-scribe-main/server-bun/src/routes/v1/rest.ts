@@ -9,15 +9,39 @@
  * Ported from /server/src/routes/v1/rest.ts
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Elysia } from 'elysia';
 
+import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
-// Import service from Bun server
-import { CharacterService } from '../../services/character-service.js';
 import { RestService } from '../../services/rest-service.js';
+
+function mapRestError(
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+): { error: string } {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const restRoutes = new Elysia({ prefix: '/v1/rest' })
   /**
@@ -69,8 +93,7 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         (user as { userId: string }).userId,
         hitDiceToSpend || 0,
         sessionId,
-        notes,
-        user.userId
+        notes
       );
 
       return result;
@@ -173,8 +196,7 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         params.id,
         (user as { userId: string }).userId,
         sessionId,
-        limit ? parseInt(limit) : undefined,
-        user.userId
+        limit ? parseInt(limit) : undefined
       );
 
       return { rests };
