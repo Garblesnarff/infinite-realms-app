@@ -6,7 +6,7 @@
 
 import type { CombatParticipant, CombatEncounter, ReactionOpportunity } from '@/types/combat';
 
-import { checkMovementOpportunityAttacks } from '@/utils/reactionSystem';
+import { checkMovementOpportunityAttacks } from '@/utils/reactionTriggers';
 
 /**
  * Process movement action and check for opportunity attacks

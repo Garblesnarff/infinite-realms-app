@@ -280,6 +280,7 @@ export default tseslint.config(
       'src/utils/__tests__/multiclassing.test.ts',
       'src/hooks/use-combat-actions.ts',
       'src/hooks/use-combat-mechanics.ts',
+      'src/utils/reactionTriggers.ts',
       'src/components/battle-map/LayersPanel.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
     ],
