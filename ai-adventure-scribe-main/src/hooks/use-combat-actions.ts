@@ -5,31 +5,17 @@
  * Manages combat state transitions and validates actions using AI integration.
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+
 import type { ActionType, ReactionOpportunity, CombatParticipant } from '@/types/combat';
-import { useCombat } from '@/contexts/CombatContext';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useCombat } from '@/contexts/CombatContext';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
+import { useCombatMechanics } from '@/hooks/use-combat-mechanics';
 import { useGameSession } from '@/hooks/use-game-session';
 import logger from '@/lib/logger';
-import { rollDice, rollAttack } from '@/utils/diceUtils';
-import { calculateAttackDamage } from '@/utils/attackUtils';
-import { getRageDamageBonus, canUseClassFeature } from '@/utils/classFeatures';
-import { needsDeathSaves, rollDeathSave } from '@/utils/combat/deathSaves';
-import { canUseRacialTrait } from '@/utils/racialTraits';
 import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
-import {
-  canUseTwoWeaponFighting,
-  makeMainHandAttack,
-  canMakeOffHandAttack,
-  makeOffHandAttack,
-} from '@/utils/twoWeaponFighting';
-import {
-  createDefaultLightWeapons,
-  equipMainHandWeapon,
-  equipOffHandWeapon,
-} from '@/utils/equipmentUtils';
 
 export const useCombatActions = (_isDM: boolean = false) => {
   const {
@@ -57,6 +43,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     useState(showInitiativeTracker);
 
   const [selectedEnemy, setSelectedEnemy] = useState<string | null>(null);
+
   const [showCombatMode, setShowCombatMode] = useState(false);
   const [isStartingCombat, setIsStartingCombat] = useState(false);
   const [actionValidation, setActionValidation] = useState<{
@@ -65,14 +52,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     errors: string[];
   } | null>(null);
   const [reactionOpportunities, setReactionOpportunities] = useState<ReactionOpportunity[]>([]);
-  const [showAdvantageModal, setShowAdvantageModal] = useState(false);
-  const [pendingAttack, setPendingAttack] = useState<{
-    participantId: string;
-    targetId?: string;
-    actionType: ActionType;
-    hasAdvantage?: boolean;
-    hasDisadvantage?: boolean;
-  } | null>(null);
 
   // Get player characters and potential enemies
   const playerParticipants =
@@ -140,12 +119,13 @@ export const useCombatActions = (_isDM: boolean = false) => {
   };
 
   // Validate and execute combat action
-  const handleCombatAction = async (
-    actionType: ActionType,
-    participantId: string,
-    targetId?: string,
-    additionalData?: any,
-  ) => {
+  const handleCombatAction = useCallback(
+    async (
+      actionType: ActionType,
+      participantId: string,
+      targetId?: string,
+      additionalData?: any,
+    ) => {
     if (!activeEncounter) return;
 
     const participant = activeEncounter.participants.find((p) => p.id === participantId);
@@ -179,7 +159,9 @@ export const useCombatActions = (_isDM: boolean = false) => {
       // Proceed with action if validation fails
       await takeAction(action);
     }
-  };
+  },
+  [activeEncounter, takeAction, validateCombatAction],
+  );
 
   // Handle enemy attack with AI integration
   const handleEnemyAttack = async (attack: any) => {
@@ -277,174 +259,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     addParticipant(newEnemy);
   };
 
-  // Handle enhanced attack with optional Divine Smite
-  const handleEnhancedAttack = async (
-    participantId: string,
-    targetId?: string,
-    actionType: ActionType = 'attack',
-    hasAdvantage: boolean = false,
-    hasDisadvantage: boolean = false,
-    divineSmiteSlotLevel?: number, // For Paladin's Divine Smite
-  ) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant) return;
-
-    // Roll attack with advantage/disadvantage
-    const attackBonus = 5; // This would come from character stats
-    const attackRoll = rollAttack(attackBonus, {
-      advantage: hasAdvantage,
-      disadvantage: hasDisadvantage,
-      halflingLucky: participant.racialTraits?.some((t: any) => t.name === 'lucky') || false,
-    });
-
-    // Check for critical hit
-    const isCritical = attackRoll.critical || false;
-
-    // Calculate base damage with sneak attack and divine smite
-    const damageResult = calculateAttackDamage(
-      { name: 'Longsword', damage: '1d8+3', damageType: 'slashing', properties: {} },
-      participant as any,
-      false,
-      isCritical,
-      undefined,
-      activeEncounter as any,
-      divineSmiteSlotLevel,
-    );
-
-    let damageRolls = [damageResult.baseDamageRoll];
-    let totalDamage = damageResult.baseDamageRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
-
-    // Add sneak attack damage if applicable
-    if (damageResult.sneakAttackRoll) {
-      damageRolls = [...damageRolls, ...damageResult.sneakAttackRoll];
-      totalDamage += damageResult.sneakAttackRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
-    }
-
-    // Add divine smite damage if applicable
-    if (damageResult.divineSmiteRoll) {
-      damageRolls = [...damageRolls, ...damageResult.divineSmiteRoll];
-      totalDamage += damageResult.divineSmiteRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
-    }
-
-    // Add Rage damage for Barbarian
-    if (participant.isRaging && participant.characterClass === 'barbarian') {
-      const rageDamage = getRageDamageBonus(participant.level || 1);
-      totalDamage += rageDamage;
-    }
-
-    const action = {
-      participantId,
-      targetParticipantId: targetId,
-      actionType,
-      description: `${participant.name} attacks${hasAdvantage ? ' with advantage' : hasDisadvantage ? ' with disadvantage' : ''}${isCritical ? ' - CRITICAL HIT!' : ''}`,
-      attackRoll: {
-        dieType: attackRoll.dieType,
-        count: attackRoll.count,
-        modifier: attackRoll.modifier,
-        results: attackRoll.results,
-        total: attackRoll.total,
-        advantage: attackRoll.advantage,
-        disadvantage: attackRoll.disadvantage,
-        critical: attackRoll.critical,
-        naturalRoll: attackRoll.naturalRoll,
-      },
-      damageRolls: damageRolls.map((roll) => ({
-        dieType: roll.dieType,
-        count: roll.count,
-        modifier: roll.modifier,
-        results: roll.results,
-        total: roll.total,
-      })),
-      hit: attackRoll.total >= 15, // Would check against target AC
-      damageDealt: totalDamage,
-      damageType: 'slashing',
-    };
-
-    await handleCombatAction(actionType, participantId, targetId, action);
-  };
-
-  // Handle racial trait usage
-  const handleRacialTraitUse = async (participantId: string, traitName: string) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant || !participant.racialTraits) return;
-
-    const trait = participant.racialTraits.find((t: any) => t.name === traitName);
-    if (!trait || !canUseRacialTrait(trait)) return;
-
-    let description = '';
-    switch (trait.name) {
-      case 'breath_weapon':
-        description = `${participant.name} uses their breath weapon`;
-        // Would trigger saving throw for targets
-        break;
-      case 'relentless_endurance':
-        description = `${participant.name} drops to 1 hit point instead of 0`;
-        break;
-      default:
-        description = `${participant.name} uses ${trait.name}`;
-    }
-
-    const action = {
-      participantId,
-      actionType: 'use_racial_trait' as ActionType,
-      description,
-      traitUsed: trait.name,
-    };
-
-    await handleCombatAction('bonus_action', participantId, undefined, action);
-  };
-
-  // Handle class features
-  const handleClassFeature = async (participantId: string, featureName: string) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant || !participant.classFeatures || !participant.resources) return;
-
-    const feature = participant.classFeatures.find((f: any) => f.name === featureName);
-    if (!feature || !canUseClassFeature(feature, participant.resources)) return;
-
-    let description = '';
-    let actionType: ActionType = 'use_class_feature' as ActionType;
-
-    switch (feature.name) {
-      case 'rage':
-        // If already raging, deactivate rage
-        if (participant.isRaging) {
-          description = `${participant.name} stops raging`;
-          actionType = 'end_rage' as ActionType;
-        } else {
-          description = `${participant.name} enters a rage`;
-          actionType = 'use_class_feature' as ActionType;
-        }
-        break;
-      case 'action_surge':
-        description = `${participant.name} uses Action Surge for an additional action`;
-        actionType = 'action_surge' as ActionType;
-        break;
-      case 'second_wind': {
-        const healing = rollDice(10, 1, participant.level || 1);
-        description = `${participant.name} uses Second Wind to heal ${healing.total} hit points`;
-        actionType = 'second_wind' as ActionType;
-        break;
-      }
-      default:
-        description = `${participant.name} uses ${feature.name}`;
-    }
-
-    const action = {
-      participantId,
-      actionType,
-      description,
-      featureUsed: feature.name,
-    };
-
-    await handleCombatAction(actionType, participantId, undefined, action);
-  };
 
   // Handle reaction opportunities
   const handleReactionOpportunity = async (
@@ -476,109 +290,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     }
   };
 
-  // Handle death saving throw
-  const handleDeathSave = async (participantId: string) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant || !needsDeathSaves(participant as any)) return;
-
-    const { updatedParticipant, roll } = rollDeathSave(participant as any);
-
-    // Update participant state
-    updateParticipant(participantId, {
-      deathSaves: updatedParticipant.deathSaves,
-      isStable: updatedParticipant.isStable,
-      isDead: updatedParticipant.isDead,
-      currentHitPoints: updatedParticipant.currentHitPoints,
-      isUnconscious: updatedParticipant.isUnconscious,
-    });
-
-    const description = `${participant.name} death save: ${roll.total} ${roll.total >= 10 ? '(Success)' : '(Failure)'} (${updatedParticipant.deathSaves.successes}/3, ${updatedParticipant.deathSaves.failures}/3)`;
-
-    const action = {
-      participantId,
-      actionType: 'death_save' as ActionType,
-      description,
-      deathSaveResult: {
-        roll: roll.total,
-        result: roll.total >= 10 ? 'success' : 'failure',
-        successes: updatedParticipant.deathSaves.successes,
-        failures: updatedParticipant.deathSaves.failures,
-        isStable: updatedParticipant.isStable,
-        isDead: updatedParticipant.isDead,
-        isCritical: roll.critical,
-      },
-    };
-
-    await takeAction(action);
-  };
-
-  // Handle concentration save
-  const handleConcentrationSave = async (participantId: string, dc: number) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant || !(participant as any).activeConcentration) return;
-
-    // Inline concentration save logic
-    const conMod = (participant as any).abilityScores?.constitution?.modifier || 0;
-    const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
-    const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
-    const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;
-    const succeeded = rollResult >= dc;
-    const description = `${participant.name} makes concentration save: ${rollResult} ${succeeded ? '(Success)' : '(Failure)'}`;
-
-    const action = {
-      participantId,
-      actionType: 'concentration_save' as ActionType,
-      description,
-      concentrationResult: {
-        succeeded,
-        roll: rollResult,
-        dc,
-        spellLost: !succeeded,
-      },
-    };
-
-    if (!succeeded) {
-      // Drop concentration
-      updateParticipant(participantId, { activeConcentration: null });
-    }
-
-    await takeAction(action);
-  };
-
-  // Handle two-weapon fighting attacks
-  const handleTwoWeaponAttack = async (participantId: string, targetId?: string) => {
-    if (!activeEncounter) return;
-
-    const participant = activeEncounter.participants.find((p) => p.id === participantId);
-    if (!participant) return;
-
-    // Equip default weapons if none equipped (for testing)
-    let updatedParticipant = participant;
-    if (!participant.mainHandWeapon || !participant.offHandWeapon) {
-      const weapons = createDefaultLightWeapons();
-      updatedParticipant = equipMainHandWeapon(participant as any, weapons.scimitar) as any;
-      updatedParticipant = equipOffHandWeapon(updatedParticipant as any, weapons.shortsword) as any;
-    }
-
-    if (!canUseTwoWeaponFighting(updatedParticipant as any)) {
-      logger.warn('Cannot use two-weapon fighting');
-      return;
-    }
-
-    // Main hand attack (action)
-    const mainHandAttack = makeMainHandAttack(updatedParticipant as any, targetId || selectedEnemy || '');
-    await takeAction(mainHandAttack);
-
-    // Off-hand attack (bonus action) - if bonus action available
-    if (canMakeOffHandAttack(updatedParticipant as any)) {
-      const offHandAttack = makeOffHandAttack(updatedParticipant as any, targetId || selectedEnemy || '');
-      await takeAction(offHandAttack);
-    }
-  };
 
   // Handle applying direct damage
   const handleApplyDamage = async (
@@ -663,6 +374,25 @@ export const useCombatActions = (_isDM: boolean = false) => {
 
     await takeAction(action);
   };
+
+  const {
+    showAdvantageModal,
+    setShowAdvantageModal,
+    pendingAttack,
+    setPendingAttack,
+    handleEnhancedAttack,
+    handleRacialTraitUse,
+    handleClassFeature,
+    handleDeathSave,
+    handleConcentrationSave,
+    handleTwoWeaponAttack,
+  } = useCombatMechanics({
+    activeEncounter,
+    handleCombatAction: (...args) => handleCombatAction(...args),
+    takeAction,
+    updateParticipant,
+    selectedEnemy,
+  });
 
   return {
     state,
