@@ -5,6 +5,8 @@
 import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant } from '@/types/combat';
 
+import { calculateProficiencyBonus } from './character-calculations';
+
 type WeaponLike = {
   name: string;
   damage?: string;
@@ -116,7 +118,7 @@ export function canDualWield(participant: CombatParticipant) {
   const mainIsLight = mainWeapon.weaponProperties?.light;
   const offIsLight = offWeapon.weaponProperties?.light;
 
-  return mainIsLight && offIsLight;
+  return !!(mainIsLight && offIsLight);
 }
 
 /**
@@ -137,7 +139,7 @@ export function getEquippedWeapons(participant: CombatParticipant) {
  * Calculates weapon proficiency bonus
  */
 export function getWeaponProficiencyBonus(participant: CombatParticipant, weapon: Equipment) {
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const cls = (participant.characterClass || '').toLowerCase();
   const martialByClass = ['fighter', 'paladin', 'ranger', 'barbarian'];
   const martialProficient = martialByClass.includes(cls);

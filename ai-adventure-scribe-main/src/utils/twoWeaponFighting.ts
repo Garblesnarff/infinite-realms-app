@@ -6,6 +6,7 @@ import { getEquippedWeapons } from './equipmentUtils';
 
 import type { CombatParticipant, CombatAction, DamageType } from '@/types/combat';
 
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollAttack, rollDamage } from '@/utils/diceUtils';
 
 /**
@@ -78,7 +79,7 @@ export function makeMainHandAttack(
   const dexMod = getAbilityMod(participant, 'dexterity');
   const usesDex = !!mainWeapon.weaponProperties?.finesse || !!mainWeapon.range;
   const abilityModifier = usesDex ? dexMod : strMod;
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const attackBonus = abilityModifier + proficiencyBonus + (mainWeapon.attackBonus || 0);
 
   // Roll attack
@@ -145,7 +146,7 @@ export function makeOffHandAttack(
   const dexMod = getAbilityMod(participant, 'dexterity');
   const usesDex = !!offHandWeapon.weaponProperties?.finesse || !!offHandWeapon.range;
   const abilityModifier = usesDex ? dexMod : strMod;
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const attackBonus = abilityModifier + proficiencyBonus + (offHandWeapon.attackBonus || 0);
 
   // Roll attack

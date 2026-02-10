@@ -11,6 +11,7 @@ import {
   equipMainHandWeapon,
   equipOffHandWeapon,
 } from '@/utils/equipmentUtils';
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { canUseRacialTrait } from '@/utils/racialTraits';
 import {
   canUseTwoWeaponFighting,
@@ -264,7 +265,7 @@ export const useCombatMechanics = ({
 
     // Inline concentration save logic
     const conMod = (participant as any).abilityScores?.constitution?.modifier || 0;
-    const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+    const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
     const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
     const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;
     const succeeded = rollResult >= dc;

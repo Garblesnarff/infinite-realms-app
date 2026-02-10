@@ -6,7 +6,7 @@
 
 import type { CombatParticipant, DiceRoll } from '@/types/combat';
 
-import { Condition } from '@/types/combat';
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollDice } from '@/utils/diceUtils';
 
 /**
@@ -14,7 +14,7 @@ import { rollDice } from '@/utils/diceUtils';
  */
 export function calculateStealthBonus(participant: CombatParticipant): number {
   // Base proficiency bonus (simplified - would normally calculate from level)
-  const proficiencyBonus = Math.floor((participant.level || 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
 
   // Dexterity modifier (simplified - would normally calculate from ability score)
   const dexModifier = 2;
