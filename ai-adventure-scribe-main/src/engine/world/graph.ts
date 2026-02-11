@@ -1,4 +1,16 @@
-import { logger } from '../../lib/logger';
+import { logger } from '@/lib/logger';
+import {
+  calculateSimilarity,
+  validateBasicConsistency,
+  checkRuleConditions,
+  resolveConflictsByRecency,
+  resolveConflictsByConfidence,
+  getSeverityWeight,
+  generateRecommendations,
+  getConflictingTypes,
+  isFactConflict,
+  isRelationshipConflict,
+} from '@/engine/world/graph-logic';
 import {
   WorldEntity,
   WorldRelationship,
@@ -16,12 +28,9 @@ import {
   Result,
   EntityType,
   RelationshipType,
-  SourceType,
-  VerificationMethod,
-  ConflictType,
-  ConflictStatus,
-  ResolutionMethod
-} from './types';
+  ResolutionMethod,
+  ValidationMessage,
+} from '@/engine/world/types';
 
 /**
  * Core world graph engine for maintaining consistent world state
@@ -54,7 +63,8 @@ export class WorldGraph {
       description: request.description,
       metadata: request.metadata || {},
       status: 'unknown',
-      lifespanStart: request.entityType === 'person' || request.entityType === 'creature' ? now : undefined,
+      lifespanStart:
+        request.entityType === 'person' || request.entityType === 'creature' ? now : undefined,
       locationHistory: [],
       tags: request.tags || [],
       category: request.category,
@@ -62,7 +72,7 @@ export class WorldGraph {
       sourceType: request.sourceType || 'manual',
       sourceSessionId: this.sessionId,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     // Check for existing entities with similar names
@@ -82,12 +92,12 @@ export class WorldGraph {
     // Validate that entities exist
     const subject = this.entities.get(request.subjectId);
     const object = this.entities.get(request.objectId);
-    
+
     if (!subject || !object) {
       return {
         success: false,
         error: 'One or both entities not found',
-        code: 'ENTITY_NOT_FOUND'
+        code: 'ENTITY_NOT_FOUND',
       };
     }
 
@@ -96,7 +106,7 @@ export class WorldGraph {
       return {
         success: false,
         error: `Invalid relationship type: ${request.relationshipType} between ${subject.entityType} and ${object.entityType}`,
-        code: 'INVALID_RELATIONSHIP'
+        code: 'INVALID_RELATIONSHIP',
       };
     }
 
@@ -114,7 +124,7 @@ export class WorldGraph {
       sourceType: request.sourceType || 'manual',
       sourceSessionId: this.sessionId,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     // Check for conflicting relationships
@@ -127,7 +137,7 @@ export class WorldGraph {
         id: this.generateId(),
         subjectId: request.objectId,
         objectId: request.subjectId,
-        description: request.description ? `Mutual: ${request.description}` : undefined
+        description: request.description ? `Mutual: ${request.description}` : undefined,
       };
       this.relationships.set(mutualRelationship.id, mutualRelationship);
     }
@@ -145,7 +155,7 @@ export class WorldGraph {
       return {
         success: false,
         error: 'Entity not found',
-        code: 'ENTITY_NOT_FOUND'
+        code: 'ENTITY_NOT_FOUND',
       };
     }
 
@@ -169,15 +179,17 @@ export class WorldGraph {
       sourceSessionId: this.sessionId,
       contradictions: [],
       supportingFacts: [],
-      confidenceHistory: [{
-        score: request.confidenceScore || 0.5,
-        changedAt: now,
-        reason: 'Initial fact creation',
-        changedBy: request.sourceType || 'manual',
-        previousScore: 0
-      }],
+      confidenceHistory: [
+        {
+          score: request.confidenceScore || 0.5,
+          changedAt: now,
+          reason: 'Initial fact creation',
+          changedBy: request.sourceType || 'manual',
+          previousScore: 0,
+        },
+      ],
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     // Update entity metadata
@@ -200,19 +212,19 @@ export class WorldGraph {
       return {
         success: false,
         error: 'Entity not found',
-        code: 'ENTITY_NOT_FOUND'
+        code: 'ENTITY_NOT_FOUND',
       };
     }
 
     const now = new Date();
     const previousLocationId = entity.currentLocationId;
-    
+
     // Create location history entry
     const locationEntry = {
       locationId: newLocationId,
       locationName: this.getEntityName(newLocationId),
       movedAt: now,
-      reason
+      reason,
     };
 
     entity.locationHistory.push(locationEntry);
@@ -236,15 +248,17 @@ export class WorldGraph {
       sourceSessionId: this.sessionId,
       contradictions: [],
       supportingFacts: [],
-      confidenceHistory: [{
-        score: 0.8,
-        changedAt: now,
-        reason: 'Entity location change',
-        changedBy: 'manual',
-        previousScore: 0
-      }],
+      confidenceHistory: [
+        {
+          score: 0.8,
+          changedAt: now,
+          reason: 'Entity location change',
+          changedBy: 'manual',
+          previousScore: 0,
+        },
+      ],
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     this.facts.set(fact.id, fact);
@@ -259,49 +273,47 @@ export class WorldGraph {
 
     // Apply filters
     if (query.entityTypes?.length) {
-      results = results.filter(e => query.entityTypes!.includes(e.entityType));
+      results = results.filter((e) => query.entityTypes!.includes(e.entityType));
     }
 
     if (query.status) {
-      results = results.filter(e => e.status === query.status);
+      results = results.filter((e) => e.status === query.status);
     }
 
     if (query.tags?.length) {
-      results = results.filter(e => 
-        query.tags!.some(tag => e.tags.includes(tag))
-      );
+      results = results.filter((e) => query.tags!.some((tag) => e.tags.includes(tag)));
     }
 
     if (query.category) {
-      results = results.filter(e => e.category === query.category);
+      results = results.filter((e) => e.category === query.category);
     }
 
     if (query.locationId) {
-      results = results.filter(e => e.currentLocationId === query.locationId);
+      results = results.filter((e) => e.currentLocationId === query.locationId);
     }
 
     if (query.searchText) {
       const searchTerm = query.searchText.toLowerCase();
-      results = results.filter(e => 
-        e.name.toLowerCase().includes(searchTerm) ||
-        e.description?.toLowerCase().includes(searchTerm) ||
-        e.aliases.some(alias => alias.toLowerCase().includes(searchTerm))
+      results = results.filter(
+        (e) =>
+          e.name.toLowerCase().includes(searchTerm) ||
+          e.description?.toLowerCase().includes(searchTerm) ||
+          e.aliases.some((alias) => alias.toLowerCase().includes(searchTerm))
       );
     }
 
     if (query.minConfidence) {
-      results = results.filter(e => e.confidenceScore >= query.minConfidence);
+      results = results.filter((e) => e.confidenceScore >= query.minConfidence);
     }
 
     if (query.sourceTypes?.length) {
-      results = results.filter(e => query.sourceTypes!.includes(e.sourceType));
+      results = results.filter((e) => query.sourceTypes!.includes(e.sourceType));
     }
 
     // Filter by temporal validity
     const validAt = query.validAt || new Date();
-    results = results.filter(e => 
-      (!e.lifespanStart || e.lifespanStart <= validAt) &&
-      (!e.lifespanEnd || e.lifespanEnd >= validAt)
+    results = results.filter(
+      (e) => (!e.lifespanStart || e.lifespanStart <= validAt) && (!e.lifespanEnd || e.lifespanEnd >= validAt)
     );
 
     return results;
@@ -315,35 +327,34 @@ export class WorldGraph {
 
     // Apply filters
     if (query.subjectId) {
-      results = results.filter(r => r.subjectId === query.subjectId);
+      results = results.filter((r) => r.subjectId === query.subjectId);
     }
 
     if (query.objectId) {
-      results = results.filter(r => r.objectId === query.objectId);
+      results = results.filter((r) => r.objectId === query.objectId);
     }
 
     if (query.relationshipTypes?.length) {
-      results = results.filter(r => query.relationshipTypes!.includes(r.relationshipType));
+      results = results.filter((r) => query.relationshipTypes!.includes(r.relationshipType));
     }
 
     if (query.strengthRange) {
       const [min, max] = query.strengthRange;
-      results = results.filter(r => r.strength >= min && r.strength <= max);
+      results = results.filter((r) => r.strength >= min && r.strength <= max);
     }
 
     if (query.mutual !== undefined) {
-      results = results.filter(r => r.mutual === query.mutual);
+      results = results.filter((r) => r.mutual === query.mutual);
     }
 
     if (query.minConfidence) {
-      results = results.filter(r => r.confidenceScore >= query.minConfidence);
+      results = results.filter((r) => r.confidenceScore >= query.minConfidence);
     }
 
     // Filter by temporal validity
     const validAt = query.validAt || new Date();
-    results = results.filter(r => 
-      r.validFrom <= validAt &&
-      (!r.validUntil || r.validUntil >= validAt)
+    results = results.filter(
+      (r) => r.validFrom <= validAt && (!r.validUntil || r.validUntil >= validAt)
     );
 
     return results;
@@ -357,38 +368,37 @@ export class WorldGraph {
 
     // Apply filters
     if (query.factTypes?.length) {
-      results = results.filter(f => query.factTypes!.includes(f.factType));
+      results = results.filter((f) => query.factTypes!.includes(f.factType));
     }
 
     if (query.subjectId) {
-      results = results.filter(f => f.subjectId === query.subjectId);
+      results = results.filter((f) => f.subjectId === query.subjectId);
     }
 
     if (query.objectId) {
-      results = results.filter(f => f.objectId === query.objectId);
+      results = results.filter((f) => f.objectId === query.objectId);
     }
 
     if (query.propertyKey) {
-      results = results.filter(f => f.propertyKey === query.propertyKey);
+      results = results.filter((f) => f.propertyKey === query.propertyKey);
     }
 
     if (query.minConfidence) {
-      results = results.filter(f => f.confidenceScore >= query.minConfidence);
+      results = results.filter((f) => f.confidenceScore >= query.minConfidence);
     }
 
     if (query.hasContradictions) {
-      results = results.filter(f => f.contradictions.length > 0);
+      results = results.filter((f) => f.contradictions.length > 0);
     }
 
     if (query.sourceTypes?.length) {
-      results = results.filter(f => query.sourceTypes!.includes(f.sourceType));
+      results = results.filter((f) => query.sourceTypes!.includes(f.sourceType));
     }
 
     // Filter by temporal validity
     const validAt = query.validAt || new Date();
-    results = results.filter(f => 
-      f.validFrom <= validAt &&
-      (!f.validUntil || f.validUntil >= validAt)
+    results = results.filter(
+      (f) => f.validFrom <= validAt && (!f.validUntil || f.validUntil >= validAt)
     );
 
     return results;
@@ -398,35 +408,35 @@ export class WorldGraph {
    * Validate world state for consistency
    */
   validateWorld(): ValidationResult {
-    const warnings: ValidationResult['warnings'] = [];
-    const errors: ValidationResult['errors'] = [];
+    const warnings: ValidationMessage[] = [];
+    const errors: ValidationMessage[] = [];
     const conflicts = Array.from(this.conflicts.values());
-    
+
     // Apply world rules
     for (const rule of this.rules) {
       if (!rule.enabled) continue;
-      
+
       const ruleResults = this.applyRule(rule);
       errors.push(...ruleResults.errors);
       warnings.push(...ruleResults.warnings);
-      
+
       // Trigger rule consequences
       this.applyRuleConsequences(rule, ruleResults);
     }
 
     // Basic consistency checks
-    this.validateBasicConsistency(warnings, errors);
+    validateBasicConsistency(this.entities, Array.from(this.relationships.values()), warnings, errors);
 
     // Sort by severity
-    warnings.sort((a, b) => this.getSeverityWeight(b.severity) - this.getSeverityWeight(a.severity));
-    errors.sort((a, b) => this.getSeverityWeight(b.severity) - this.getSeverityWeight(a.severity));
+    warnings.sort((a, b) => getSeverityWeight(b.severity) - getSeverityWeight(a.severity));
+    errors.sort((a, b) => getSeverityWeight(b.severity) - getSeverityWeight(a.severity));
 
     return {
       valid: errors.length === 0,
       warnings,
       errors,
       conflicts,
-      recommendations: this.generateRecommendations(warnings, errors, conflicts)
+      recommendations: generateRecommendations(warnings, errors, conflicts),
     };
   }
 
@@ -452,8 +462,8 @@ export class WorldGraph {
         relationshipCount: relationships.length,
         factCount: facts.length,
         conflictCount: conflicts.length,
-        averageConfidence: this.calculateAverageConfidence()
-      }
+        averageConfidence: this.calculateAverageConfidence(),
+      },
     };
   }
 
@@ -467,16 +477,47 @@ export class WorldGraph {
     return entity?.name || 'Unknown Location';
   }
 
-  private isValidRelationship(subjectType: EntityType, objectType: EntityType, relationshipType: RelationshipType): boolean {
+  private isValidRelationship(
+    subjectType: EntityType,
+    objectType: EntityType,
+    relationshipType: RelationshipType
+  ): boolean {
     // Define valid relationship patterns
     const validPatterns: Record<EntityType, Set<RelationshipType>> = {
-      person: new Set(['owns', 'located_in', 'member_of', 'knows', 'allied_with', 'enemy_of', 'works_for', 'leads', 'parent_of', 'child_of', 'married_to', 'friend_of', 'uses', 'carries', 'guards', 'serves', 'follows', 'trades_with', 'lives_in', 'controls', 'protects', 'hunts', 'fears', 'hates', 'respects', 'trusts']),
+      person: new Set([
+        'owns',
+        'located_in',
+        'member_of',
+        'knows',
+        'allied_with',
+        'enemy_of',
+        'works_for',
+        'leads',
+        'parent_of',
+        'child_of',
+        'married_to',
+        'friend_of',
+        'uses',
+        'carries',
+        'guards',
+        'serves',
+        'follows',
+        'trades_with',
+        'lives_in',
+        'controls',
+        'protects',
+        'hunts',
+        'fears',
+        'hates',
+        'respects',
+        'trusts',
+      ]),
       place: new Set(['located_in', 'contains', 'knows']),
       item: new Set(['owns', 'located_in', 'used_by', 'carried_by']),
       organization: new Set(['member_of', 'leads', 'owns', 'located_in', 'knows']),
       creature: new Set(['located_in', 'knows', 'hunts', 'fears', 'hates']),
       event: new Set(['occurs_in', 'involves']),
-      concept: new Set(['known_by', 'understood_by'])
+      concept: new Set(['known_by', 'understood_by']),
     };
 
     return validPatterns[subjectType]?.has(relationshipType) ?? false;
@@ -486,79 +527,23 @@ export class WorldGraph {
     const similar = this.queryEntities({
       entityType: newEntity.entityType,
       searchText: newEntity.name,
-      minConfidence: 0.3
+      minConfidence: 0.3,
     });
 
     if (similar.length > 0) {
       // Create conflict for duplicate entities
-      similar.forEach(existing => {
-        if (existing.id !== newEntity.id && this.calculateSimilarity(newEntity, existing) > 0.7) {
+      similar.forEach((existing) => {
+        if (existing.id !== newEntity.id && calculateSimilarity(newEntity, existing) > 0.7) {
           this.createConflict({
             type: 'entity_conflict',
             description: `Potential duplicate entity: ${newEntity.name} similar to ${existing.name}`,
             severity: 'medium',
             factA: newEntity.id,
-            factB: existing.id
+            factB: existing.id,
           });
         }
       });
     }
-  }
-
-  private calculateSimilarity(entity1: WorldEntity, entity2: WorldEntity): number {
-    // Simple similarity calculation - can be enhanced
-    const nameSimilarity = this.stringSimilarity(entity1.name, entity2.name);
-    const typeMatch = entity1.entityType === entity2.entityType ? 1 : 0;
-    const tagOverlap = this.calculateTagOverlap(entity1.tags, entity2.tags);
-    
-    return (nameSimilarity * 0.5 + typeMatch * 0.3 + tagOverlap * 0.2);
-  }
-
-  private stringSimilarity(s1: string, s2: string): number {
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
-    
-    if (longer.length === 0) return 1;
-    
-    const editDistance = this.levenshteinDistance(longer, shorter);
-    return (longer.length - editDistance) / longer.length;
-  }
-
-  private levenshteinDistance(s1: string, s2: string): number {
-    const matrix: number[][] = [];
-    
-    for (let i = 0; i <= s1.length; i++) {
-      matrix[i] = [i];
-    }
-    
-    for (let j = 0; j <= s2.length; j++) {
-      matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= s1.length; i++) {
-      for (let j = 1; j <= s2.length; j++) {
-        if (s1[i - 1] === s2[j - 1]) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j - 1] + 1
-          );
-        }
-      }
-    }
-    
-    return matrix[s1.length][s2.length];
-  }
-
-  private calculateTagOverlap(tags1: string[], tags2: string[]): number {
-    const set1 = new Set(tags1);
-    const set2 = new Set(tags2);
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-    
-    return union.size === 0 ? 0 : intersection.size / union.size;
   }
 
   private detectRelationshipConflicts(relationship: WorldRelationship): void {
@@ -566,46 +551,20 @@ export class WorldGraph {
     const conflicting = this.queryRelationships({
       subjectId: relationship.subjectId,
       objectId: relationship.objectId,
-      relationshipTypes: this.getConflictingTypes(relationship.relationshipType)
+      relationshipTypes: getConflictingTypes(relationship.relationshipType),
     });
 
-    conflicting.forEach(existing => {
-      if (this.isRelationshipConflict(relationship, existing)) {
+    conflicting.forEach((existing) => {
+      if (isRelationshipConflict(relationship, existing)) {
         this.createConflict({
           type: 'relationship_conflict',
           description: `Conflicting relationship: ${relationship.relationshipType} vs ${existing.relationshipType}`,
           severity: 'high',
           factA: relationship.id,
-          factB: existing.id
+          factB: existing.id,
         });
       }
     });
-  }
-
-  private getConflictingTypes(type: RelationshipType): RelationshipType[] {
-    // Define conflicting relationship types
-    const conflicts: Record<RelationshipType, RelationshipType[]> = {
-      enemy_of: ['allied_with', 'friend_of', 'married_to'],
-      allied_with: ['enemy_of'],
-      hates: ['loves', 'married_to', 'friend_of'],
-      owns: ['owns'] // Self-ownership should be flagged
-    };
-
-    return conflicts[type] || [];
-  }
-
-  private isRelationshipConflict(rel1: WorldRelationship, rel2: WorldRelationship): boolean {
-    // Check if relationships are temporally valid simultaneously
-    const now = new Date();
-    const rel1Valid = this.isRelationshipValid(rel1, now);
-    const rel2Valid = this.isRelationshipValid(rel2, now);
-
-    return rel1Valid && rel2Valid;
-  }
-
-  private isRelationshipValid(relationship: WorldRelationship, at: Date): boolean {
-    return relationship.validFrom <= at && 
-           (!relationship.validUntil || relationship.validUntil >= at);
   }
 
   private detectFactContradictions(fact: WorldFact): void {
@@ -613,28 +572,23 @@ export class WorldGraph {
     const conflicting = this.queryFacts({
       subjectId: fact.subjectId,
       propertyKey: fact.propertyKey,
-      validAt: fact.validFrom
+      validAt: fact.validFrom,
     });
 
-    conflicting.forEach(existing => {
-      if (existing.id !== fact.id && this.isFactConflict(fact, existing)) {
+    conflicting.forEach((existing) => {
+      if (existing.id !== fact.id && isFactConflict(fact, existing)) {
         fact.contradictions.push(existing.id);
         existing.contradictions.push(fact.id);
-        
+
         this.createConflict({
           type: 'property_conflict',
           description: `Conflicting values for ${fact.propertyKey}: ${fact.propertyValue} vs ${existing.propertyValue}`,
           severity: 'medium',
           factA: fact.id,
-          factB: existing.id
+          factB: existing.id,
         });
       }
     });
-  }
-
-  private isFactConflict(fact1: WorldFact, fact2: WorldFact): boolean {
-    return fact1.propertyValue !== fact2.propertyValue &&
-           Math.abs(fact1.confidenceScore - fact2.confidenceScore) < 0.3;
   }
 
   private createConflict(conflict: Omit<WorldConflict, 'id' | 'createdAt' | 'sessionId'>): void {
@@ -643,62 +597,19 @@ export class WorldGraph {
       sessionId: this.sessionId,
       createdAt: new Date(),
       status: 'open',
-      ...conflict
+      ...conflict,
     };
 
     this.conflicts.set(fullConflict.id, fullConflict);
   }
 
-  private validateBasicConsistency(warnings: any[], errors: any[]): void {
-    // Check for orphaned relationships
-    const relationships = Array.from(this.relationships.values());
-    const entityIds = new Set(this.entities.keys());
-
-    relationships.forEach(rel => {
-      if (!entityIds.has(rel.subjectId)) {
-        errors.push({
-          type: 'error',
-          message: `Relationship references non-existent subject: ${rel.subjectId}`,
-          entityId: rel.subjectId,
-          relationshipId: rel.id,
-          severity: 'high',
-          autoFixable: false
-        });
-      }
-
-      if (!entityIds.has(rel.objectId)) {
-        errors.push({
-          type: 'error',
-          message: `Relationship references non-existent object: ${rel.objectId}`,
-          entityId: rel.objectId,
-          relationshipId: rel.id,
-          severity: 'high',
-          autoFixable: false
-        });
-      }
-    });
-
-    // Check for low confidence entities
-    this.entities.forEach(entity => {
-      if (entity.confidenceScore < 0.3) {
-        warnings.push({
-          type: 'warning',
-          message: `Entity has very low confidence: ${entity.name}`,
-          entityId: entity.id,
-          severity: 'medium',
-          autoFixable: false
-        });
-      }
-    });
-  }
-
-  private applyRule(rule: WorldRule): { errors: any[], warnings: any[] } {
+  private applyRule(rule: WorldRule): { errors: any[]; warnings: any[] } {
     const errors: any[] = [];
     const warnings: any[] = [];
 
     // Check rule conditions against world state
-    const matches = this.checkRuleConditions(rule);
-    
+    const matches = checkRuleConditions(rule, (query) => this.queryEntities(query));
+
     if (matches.length > 0) {
       if (rule.severity === 'error') {
         errors.push({
@@ -706,7 +617,7 @@ export class WorldGraph {
           message: `Rule violation: ${rule.name}`,
           ruleId: rule.id,
           severity: rule.severity,
-          autoFixable: rule.autoResolve
+          autoFixable: rule.autoResolve,
         });
       } else {
         warnings.push({
@@ -714,7 +625,7 @@ export class WorldGraph {
           message: `Rule warning: ${rule.name}`,
           ruleId: rule.id,
           severity: rule.severity,
-          autoFixable: rule.autoResolve
+          autoFixable: rule.autoResolve,
         });
       }
     }
@@ -722,24 +633,7 @@ export class WorldGraph {
     return { errors, warnings };
   }
 
-  private checkRuleConditions(rule: WorldRule): string[] {
-    // Simple condition checking - can be enhanced with proper rule engine
-    const matches: string[] = [];
-
-    // Check entity type conditions
-    if (rule.conditions.entityTypes) {
-      rule.conditions.entityTypes.forEach(type => {
-        const entities = this.queryEntities({ entityTypes: [type] });
-        if (entities.length > 0) {
-          matches.push(entities[0].id);
-        }
-      });
-    }
-
-    return matches;
-  }
-
-  private applyRuleConsequences(rule: WorldRule, results: { errors: any[], warnings: any[] }): void {
+  private applyRuleConsequences(rule: WorldRule, results: { errors: any[]; warnings: any[] }): void {
     rule.triggeredCount++;
     rule.lastTriggered = new Date();
 
@@ -749,83 +643,21 @@ export class WorldGraph {
     }
 
     // Log rule violation
-    logger.info(`Rule ${rule.name} triggered with ${results.errors.length} errors and ${results.warnings.length} warnings`);
+    logger.info(
+      `Rule ${rule.name} triggered with ${results.errors.length} errors and ${results.warnings.length} warnings`
+    );
   }
 
   private resolveConflicts(method: ResolutionMethod): void {
     switch (method) {
       case 'most_recent':
-        this.resolveConflictsByRecency();
+        resolveConflictsByRecency(this.conflicts);
         break;
       case 'weighted':
-        this.resolveConflictsByConfidence();
+        resolveConflictsByConfidence(this.facts, this.conflicts);
         break;
       // Add more resolution methods as needed
     }
-  }
-
-  private resolveConflictsByRecency(): void {
-    const conflicts = Array.from(this.conflicts.values())
-      .filter(c => c.status === 'open')
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    conflicts.slice(10).forEach(conflict => {
-      conflict.status = 'resolved';
-      conflict.resolvedAt = new Date();
-      conflict.resolutionMethod = 'most_recent';
-      conflict.resolvedBy = 'system';
-    });
-  }
-
-  private resolveConflictsByConfidence(): void {
-    const conflicts = Array.from(this.conflicts.values())
-      .filter(c => c.status === 'open');
-
-    conflicts.forEach(conflict => {
-      const factA = this.facts.get(conflict.factA);
-      const factB = this.facts.get(conflict.factB);
-
-      if (factA && factB) {
-        const winner = factA.confidenceScore > factB.confidenceScore ? factA : factB;
-        const loser = factA.confidenceScore > factB.confidenceScore ? factB : factA;
-
-        // Invalidate the losing fact
-        loser.validUntil = new Date();
-        this.facts.set(loser.id, loser);
-
-        conflict.status = 'resolved';
-        conflict.resolvedAt = new Date();
-        conflict.resolutionMethod = 'weighted';
-        conflict.resolvedBy = 'system';
-      }
-    });
-  }
-
-  private getSeverityWeight(severity: string): number {
-    switch (severity) {
-      case 'critical': return 3;
-      case 'error': return 2;
-      case 'warning': return 1;
-      default: return 0;
-    }
-  }
-
-  private generateRecommendations(warnings: any[], errors: any[], conflicts: any[]): string[] {
-    const recommendations: string[] = [];
-
-    if (errors.length > 0) {
-      recommendations.push('Resolve critical errors before proceeding');
-    }
-
-    if (conflicts.filter(c => c.severity === 'high').length > 0) {
-      recommendations.push('Review and resolve high-priority conflicts');
-    }
-
-    if (warnings.length > 10) {
-      recommendations.push('Consider reviewing and updating confidence scores');
-    }
-
-    return recommendations;
   }
 
   private calculateAverageConfidence(): number {

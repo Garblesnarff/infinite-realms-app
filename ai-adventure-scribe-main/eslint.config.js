@@ -240,6 +240,7 @@ export default tseslint.config(
       // Engine files needing modularization (800+ lines)
       'src/engine/world/orchestrator.ts', // 884 lines
       'src/engine/world/graph.ts', // 838 lines
+      'src/engine/world/graph-logic.ts',
       'src/engine/multiplayer/SessionManager.ts', // 833 lines
 
       // Test files (acceptable to be longer)
