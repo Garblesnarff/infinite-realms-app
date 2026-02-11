@@ -66,7 +66,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
   );
 
   // Handle starting combat
-  const handleStartCombat = async () => {
+  const handleStartCombat = useCallback(async () => {
     if (!isStartingCombat && playerParticipants.length > 0) {
       setIsStartingCombat(true);
 
@@ -109,14 +109,14 @@ export const useCombatActions = (_isDM: boolean = false) => {
       setShowCombatMode(true);
       setIsStartingCombat(false);
     }
-  };
+  }, [isStartingCombat, playerParticipants, enemyParticipants, startCombat]);
 
   // Handle ending combat
-  const handleEndCombat = async () => {
+  const handleEndCombat = useCallback(async () => {
     await endCombat();
     setShowCombatMode(false);
     setSelectedEnemy(null);
-  };
+  }, [endCombat]);
 
   // Validate and execute combat action
   const handleCombatAction = useCallback(
@@ -164,7 +164,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
   );
 
   // Handle enemy attack with AI integration
-  const handleEnemyAttack = async (attack: any) => {
+  const handleEnemyAttack = useCallback(async (attack: any) => {
     if (!selectedEnemy || !activeEncounter) return;
 
     const enemy = activeEncounter.participants.find((p) => p.id === selectedEnemy);
@@ -198,10 +198,10 @@ export const useCombatActions = (_isDM: boolean = false) => {
     setTimeout(() => {
       nextTurn();
     }, 1500);
-  };
+  }, [selectedEnemy, activeEncounter, handleCombatAction, nextTurn]);
 
   // Add a new enemy
-  const addEnemy = () => {
+  const addEnemy = useCallback(() => {
     // For now, add a generic goblin as example
     const newEnemy = {
       id: `enemy-${Date.now()}`,
@@ -257,11 +257,11 @@ export const useCombatActions = (_isDM: boolean = false) => {
     } as any;
 
     addParticipant(newEnemy);
-  };
+  }, [addParticipant]);
 
 
   // Handle reaction opportunities
-  const handleReactionOpportunity = async (
+  const handleReactionOpportunity = useCallback(async (
     opportunity: ReactionOpportunity,
     selectedReaction: ActionType,
   ) => {
@@ -288,11 +288,11 @@ export const useCombatActions = (_isDM: boolean = false) => {
     } catch (error) {
       logger.error('Error processing reaction:', error);
     }
-  };
+  }, [activeEncounter, takeAction, updateParticipant]);
 
 
   // Handle applying direct damage
-  const handleApplyDamage = async (
+  const handleApplyDamage = useCallback(async (
     participantId: string,
     damageAmount: number,
     damageType: string,
@@ -338,10 +338,10 @@ export const useCombatActions = (_isDM: boolean = false) => {
       },
     };
     await takeAction(action);
-  };
+  }, [activeEncounter, updateParticipant, takeAction]);
 
   // Handle healing
-  const handleHealing = async (participantId: string, healingAmount: number) => {
+  const handleHealing = useCallback(async (participantId: string, healingAmount: number) => {
     if (!activeEncounter) return;
 
     const participant = activeEncounter.participants.find((p) => p.id === participantId);
@@ -373,7 +373,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     };
 
     await takeAction(action);
-  };
+  }, [activeEncounter, updateParticipant, takeAction]);
 
   const {
     showAdvantageModal,
@@ -388,7 +388,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     handleTwoWeaponAttack,
   } = useCombatMechanics({
     activeEncounter,
-    handleCombatAction: (...args) => handleCombatAction(...args),
+    handleCombatAction,
     takeAction,
     updateParticipant,
     selectedEnemy,
