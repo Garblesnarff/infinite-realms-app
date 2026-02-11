@@ -15,11 +15,12 @@
 
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { TRPCError } from '@trpc/server';
 import { Elysia, t } from 'elysia';
 
 import { authenticateRequest } from '../../lib/auth.js';
+import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
-import { supabaseService } from '../../lib/supabase.js';
 import { CharacterService } from '../../services/character-service.js';
 
 /**
@@ -223,101 +224,49 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
   /**
    * POST /v1/characters/:id/spells
-   * Validate and save character spells
+   * Validate and save character spells.
+   * Refactored to use security-hardened service method and Drizzle ORM.
    */
-  .post('/:id/spells', async ({ params, body }) => {
-    try {
-      const { spells, className } = body as { spells: string[]; className: string };
+  .post(
+    '/:id/spells',
+    async ({ params, body, user, set }) => {
+      try {
+        const { spells, className } = body;
 
-      if (!spells || !className) {
-        throw new Error('Missing required fields: spells and className');
-      }
-
-      // 🛡️ Sentinel: Already verified by onBeforeHandle (checks dual-ownership)
-
-      // Get class ID
-      const { data: classData, error: classError } = await supabaseService
-        .from('classes')
-        .select('id')
-        .eq('name', className)
-        .single();
-
-      if (classError || !classData) {
-        throw new Error('Invalid class name');
-      }
-
-      // Validate all spells in a single batch query
-      const { data: validClassSpells, error: validationError } = await supabaseService
-        .from('class_spells')
-        .select('spell_id, spells(id, name)')
-        .eq('class_id', classData.id)
-        .in('spell_id', spells);
-
-      if (validationError) {
-        logger.error({ msg: 'CHARACTER_SPELLS_VALIDATE error', error: validationError });
-        throw new Error('Failed to validate spells');
-      }
-
-      // Create a Set of valid spell IDs for O(1) lookup
-      const validSpellIds = new Set(validClassSpells?.map((cs: any) => cs.spell_id) || []);
-
-      // Find any invalid spells
-      const invalidSpells = spells.filter((spellId: string) => !validSpellIds.has(spellId));
-
-      if (invalidSpells.length > 0) {
-        // Get spell names for invalid spells to provide helpful error messages
-        const { data: invalidSpellData } = await supabaseService
-          .from('spells')
-          .select('id, name')
-          .in('id', invalidSpells);
-
-        const spellNameMap = new Map(
-          invalidSpellData?.map((spell: any) => [spell.id, spell.name]) || []
+        // 🛡️ Sentinel: Call the security-hardened service method which incorporates
+        // ownership checks and masks existence.
+        const result = await CharacterService.saveCharacterSpells(
+          params.id,
+          user!.userId,
+          spells,
+          className
         );
 
-        const validationErrors = invalidSpells.map(
-          (spellId: string) => `${className} cannot learn ${spellNameMap.get(spellId) || spellId}`
-        );
-
-        return {
-          error: 'Invalid spell selection',
-          details: validationErrors,
-        };
-      }
-
-      // Clear existing spells for this character and class
-      await supabaseService
-        .from('character_spells')
-        .delete()
-        .eq('character_id', params.id)
-        .eq('source_class_id', classData.id);
-
-      // Insert validated spells
-      if (spells.length > 0) {
-        const spellInserts = spells.map((spellId: string) => ({
-          character_id: params.id,
-          spell_id: spellId,
-          source_class_id: classData.id,
-          is_prepared: true,
-          source_feature: 'base',
-        }));
-
-        const { error: insertError } = await supabaseService
-          .from('character_spells')
-          .insert(spellInserts);
-
-        if (insertError) {
-          logger.error({ msg: 'CHARACTER_SPELLS_INSERT error', error: insertError });
-          throw new Error('Failed to save character spells');
+        return result;
+      } catch (error: any) {
+        if (error instanceof TRPCError) {
+          set.status = 400; // Map TRPC errors to appropriate HTTP status
+          return { error: error.message };
         }
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: 'Character not found' };
+        }
+        logger.error({ msg: 'CHARACTER_SPELLS_SAVE error', error });
+        set.status = 500;
+        return { error: 'Failed to save character spells' };
       }
-
-      return { success: true, message: 'Character spells saved successfully' };
-    } catch (error: any) {
-      logger.error({ msg: 'CHARACTER_SPELLS_SAVE error', error });
-      return { error: error.message || 'Failed to validate character spells' };
+    },
+    {
+      params: t.Object({
+        id: t.String(),
+      }),
+      body: t.Object({
+        spells: t.Array(t.String()),
+        className: t.String(),
+      }),
     }
-  })
+  )
 
   /**
    * Get character spells with full spell data
