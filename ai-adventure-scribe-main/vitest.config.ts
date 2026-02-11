@@ -113,6 +113,7 @@ export default defineConfig({
       'tests/services/passive-skills-service.test.ts',
       'tests/utils/character-converter.test.ts',
       'src/utils/__tests__/reactionSystem.test.ts',
+      'src/utils/__tests__/deathSaves.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -204,6 +205,7 @@ export default defineConfig({
         'server-bun/src/services/character-folder-service.ts',
         'server-bun/src/services/token-service.ts',
         'src/utils/reactionSystem.ts',
+        'src/utils/combat/deathSaves.ts',
       ],
       exclude: [
         '**/__tests__/**',

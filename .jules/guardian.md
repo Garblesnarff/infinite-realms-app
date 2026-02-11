@@ -55,3 +55,7 @@
 ## 2026-02-10 - [Local Storage Hooks Coverage]
 **Learning:** `useLocalStorage` handles booleans by storing them as "1" or "0" strings, which needs specific test cases. Cross-tab synchronization via `StorageEvent` and SSR safety are critical logic paths for these hooks.
 **Action:** When testing storage hooks, mock `Storage.prototype.setItem` and `getItem` to simulate errors (like quota exceeded) and verify that the hook state remains consistent even if persistence fails. Always add new hooks to both `include` and `coverage.include` in `vitest.config.ts`.
+
+## 2024-05-24 - [Death Saves Coverage]
+**Learning:** Found that `deathSaves.ts` was completely untested despite containing critical combat state machine logic. Discovered strict `import/order` lint rules in tests that require local modules to be imported before aliased type definitions.
+**Action:** When adding new combat utility tests, ensure the source file is registered in both `include` and `coverage.include` in `vitest.config.ts`. Use `npx eslint --fix` to resolve complex import ordering issues automatically.
