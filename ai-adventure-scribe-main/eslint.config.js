@@ -250,6 +250,8 @@ export default tseslint.config(
 
       // Additional large production files
       'src/hooks/use-game-session.ts', // 797 lines
+      'src/hooks/use-progressive-voice.ts',
+      'src/hooks/use-voice-audio-control.ts',
       'src/services/voice-director.ts',
       'src/services/voice-routing.ts',
       'src/components/combat/CombatActionPanel.tsx', // 773 lines
