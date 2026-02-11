@@ -37,15 +37,20 @@ export {
   getVisionColor,
   getVisionOpacity,
 
-  // Geometric utilities
+  // Types
+  type LightLevel,
+} from './vision-calculations';
+
+// ===========================
+// Geometric Utilities
+// ===========================
+
+export {
   calculateDistance,
   isPointInVisionCone,
   isLineBlocked,
   lineSegmentsIntersect,
-
-  // Types
-  type LightLevel,
-} from './vision-calculations';
+} from './geometry';
 
 // ===========================
 // Raycasting Engine
