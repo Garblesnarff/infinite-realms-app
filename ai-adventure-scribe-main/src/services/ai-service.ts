@@ -278,7 +278,7 @@ export class AIService {
                   const genAIResult = await llmApiClient.generateText({
                     prompt,
                     temperature: 0.9,
-                    maxTokens: 2048,
+                    maxTokens: 8192,
                   });
                   finalText = genAIResult || finalText;
                 } catch (e) {
@@ -338,7 +338,7 @@ export class AIService {
         const rawResponse = await llmApiClient.generateText({
           prompt: fullPrompt,
           temperature: 0.9,
-          maxTokens: 2048,
+          maxTokens: 8192,
         });
 
         return processDMResponse({
