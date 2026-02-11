@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Progressive Voice Hook
  *
@@ -193,6 +194,102 @@ export const useProgressiveVoice = () => {
   }, [toast]);
 
   /**
+   * Progressive generation and playback
+   * NOTE: Must be declared before speakAISegments to avoid TDZ errors
+   */
+  const processSegmentsProgressively = React.useCallback(
+    async (segments: VoiceSegment[], startIndex: number = 0): Promise<void> => {
+      logger.info(
+        '🎪 Starting progressive processing of',
+        segments.length,
+        'segments',
+        startIndex > 0 ? `from index ${startIndex}` : '',
+      );
+
+      setState((prev) => ({ ...prev, isPlaying: true }));
+
+      for (let i = 0; i < segments.length; i++) {
+        const actualIndex = startIndex + i;
+        // Check if we should abort
+        if (abortController.current?.signal.aborted) {
+          logger.info('🛑 Processing aborted at segment', actualIndex + 1, 'due to abort signal');
+          break;
+        }
+
+        const segment = segments[i];
+
+        try {
+          logger.info(`🎵 Processing segment ${actualIndex + 1}: ${segment.character}`);
+
+          // Update current segment index
+          setState((prev) => ({
+            ...prev,
+            currentSegmentIndex: actualIndex,
+            segments: prev.segments.map((s, idx) =>
+              idx === actualIndex ? { ...s, isGenerating: true } : s,
+            ),
+          }));
+
+          // Generate audio for this segment (if not already generated)
+          let segmentWithAudio = segment;
+          if (!segment.audioUrl) {
+            segmentWithAudio = await VoiceDirector.generateAudio(segment, apiKeyRef.current!);
+
+            // Update segment with audio
+            setState((prev) => ({
+              ...prev,
+              segments: prev.segments.map((s, idx) => (idx === actualIndex ? segmentWithAudio : s)),
+            }));
+          }
+
+          // If generation failed, log and continue
+          if (segmentWithAudio.error) {
+            logger.warn(
+              `⚠️ Audio generation failed for segment ${actualIndex + 1}:`,
+              segmentWithAudio.error,
+            );
+            continue;
+          }
+
+          // Play the audio
+          if (segmentWithAudio.audioUrl) {
+            await playAudioSegment(segmentWithAudio, actualIndex);
+          }
+        } catch (error) {
+          logger.error(`❌ Error processing segment ${actualIndex + 1}:`, error);
+          // Continue with next segment
+          continue;
+        }
+      }
+
+      // Playback complete
+      setState((prev) => ({
+        ...prev,
+        isPlaying: false,
+        isPaused: false,
+        isProcessing: false,
+        currentSegmentIndex: -1,
+      }));
+
+      logger.info('🏁 Progressive processing complete');
+    },
+    [playAudioSegment],
+  );
+
+  /**
+   * Stop current playback completely
+   * NOTE: Must be declared before speakAISegments to avoid TDZ errors
+   */
+  const stopPlayback = React.useCallback(() => {
+    baseStopPlayback(state.segments);
+
+    // Abort any ongoing processing
+    if (abortController.current) {
+      abortController.current.abort();
+    }
+  }, [state.segments, baseStopPlayback]);
+
+  /**
    * Main function: Process and play AI segments
    */
   const speakAISegments = React.useCallback(
@@ -347,88 +444,6 @@ export const useProgressiveVoice = () => {
   );
 
   /**
-   * Progressive generation and playback
-   */
-  const processSegmentsProgressively = React.useCallback(async (
-    segments: VoiceSegment[],
-    startIndex: number = 0,
-  ): Promise<void> => {
-    logger.info(
-      '🎪 Starting progressive processing of',
-      segments.length,
-      'segments',
-      startIndex > 0 ? `from index ${startIndex}` : '',
-    );
-
-    setState((prev) => ({ ...prev, isPlaying: true }));
-
-    for (let i = 0; i < segments.length; i++) {
-      const actualIndex = startIndex + i;
-      // Check if we should abort
-      if (abortController.current?.signal.aborted) {
-        logger.info('🛑 Processing aborted at segment', actualIndex + 1, 'due to abort signal');
-        break;
-      }
-
-      const segment = segments[i];
-
-      try {
-        logger.info(`🎵 Processing segment ${actualIndex + 1}: ${segment.character}`);
-
-        // Update current segment index
-        setState((prev) => ({
-          ...prev,
-          currentSegmentIndex: actualIndex,
-          segments: prev.segments.map((s, idx) =>
-            idx === actualIndex ? { ...s, isGenerating: true } : s,
-          ),
-        }));
-
-        // Generate audio for this segment (if not already generated)
-        let segmentWithAudio = segment;
-        if (!segment.audioUrl) {
-          segmentWithAudio = await VoiceDirector.generateAudio(segment, apiKeyRef.current!);
-
-          // Update segment with audio
-          setState((prev) => ({
-            ...prev,
-            segments: prev.segments.map((s, idx) => (idx === actualIndex ? segmentWithAudio : s)),
-          }));
-        }
-
-        // If generation failed, log and continue
-        if (segmentWithAudio.error) {
-          logger.warn(
-            `⚠️ Audio generation failed for segment ${actualIndex + 1}:`,
-            segmentWithAudio.error,
-          );
-          continue;
-        }
-
-        // Play the audio
-        if (segmentWithAudio.audioUrl) {
-          await playAudioSegment(segmentWithAudio, actualIndex);
-        }
-      } catch (error) {
-        logger.error(`❌ Error processing segment ${actualIndex + 1}:`, error);
-        // Continue with next segment
-        continue;
-      }
-    }
-
-    // Playback complete
-    setState((prev) => ({
-      ...prev,
-      isPlaying: false,
-      isPaused: false,
-      isProcessing: false,
-      currentSegmentIndex: -1,
-    }));
-
-    logger.info('🏁 Progressive processing complete');
-  }, [playAudioSegment]);
-
-  /**
    * Resume paused playback from current position
    */
   const resumePlayback = React.useCallback(async () => {
@@ -454,18 +469,6 @@ export const useProgressiveVoice = () => {
       await processSegmentsProgressively(remainingSegments, state.currentSegmentIndex);
     }
   }, [state.segments, state.currentSegmentIndex, baseResumePlayback]);
-
-  /**
-   * Stop current playback completely
-   */
-  const stopPlayback = React.useCallback(() => {
-    baseStopPlayback(state.segments);
-
-    // Abort any ongoing processing
-    if (abortController.current) {
-      abortController.current.abort();
-    }
-  }, [state.segments, baseStopPlayback]);
 
   /**
    * Pause current playback without losing state

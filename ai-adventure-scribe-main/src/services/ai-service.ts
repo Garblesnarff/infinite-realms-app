@@ -1,4 +1,4 @@
-
+/* eslint-disable max-lines */
 
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { ChatPersistence } from './ai/chat-persistence';
@@ -9,12 +9,7 @@ import { MemoryManager } from './memory-manager';
 import migrationMonitoringService from './migration-monitoring';
 import { SessionStateService } from './session-state-service';
 
-
-import type {
-  ChatMessage,
-  NarrationSegment,
-  GameContext
-} from './ai/shared/types';
+import type { ChatMessage, NarrationSegment, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
 import type { SessionVoiceContext } from './voice-consistency-service';
 import type { RollRequest } from '@/components/game/DiceRollRequest';
@@ -45,7 +40,9 @@ export class AIService {
   /** Feature flag to enable CrewAI orchestrator integration. */
   private static useCrewAI(): boolean {
     try {
-      const raw = String((import.meta as unknown as { env: Record<string, string> }).env?.VITE_USE_CREWAI_DM ?? '')
+      const raw = String(
+        (import.meta as unknown as { env: Record<string, string> }).env?.VITE_USE_CREWAI_DM ?? '',
+      )
         .toLowerCase()
         .trim();
       return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
@@ -60,7 +57,10 @@ export class AIService {
    */
   private static useLangGraph(): boolean {
     try {
-      const raw = String((import.meta as unknown as { env: Record<string, string> }).env?.VITE_FEATURE_USE_LANGGRAPH ?? '')
+      const raw = String(
+        (import.meta as unknown as { env: Record<string, string> }).env
+          ?.VITE_FEATURE_USE_LANGGRAPH ?? '',
+      )
         .toLowerCase()
         .trim();
       return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
@@ -143,9 +143,8 @@ export class AIService {
             );
 
             // Dynamic import to avoid loading LangGraph when feature is disabled
-            const { getLegacyCompatibilityAdapter } = await import(
-              '@/agents/langgraph/adapters/legacy-compatibility'
-            );
+            const { getLegacyCompatibilityAdapter } =
+              await import('@/agents/langgraph/adapters/legacy-compatibility');
             const adapter = getLegacyCompatibilityAdapter();
 
             // Convert ChatMessage[] to LegacyChatMessage[]
@@ -273,9 +272,7 @@ export class AIService {
                     : '';
                 finalText = `Please roll ${purpose}${target}${advantage}.`;
               } else {
-                logger.info(
-                  'CrewAI returned placeholder text; generating narration via LLM.',
-                );
+                logger.info('CrewAI returned placeholder text; generating narration via LLM.');
                 try {
                   const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${params.message}"`;
                   const genAIResult = await llmApiClient.generateText({
@@ -303,37 +300,37 @@ export class AIService {
               isFirstMessage: false,
               combatDetection,
               roll_requests: crewResult.roll_requests,
-              dice_rolls: (crewResult as unknown as { dice_rolls: unknown[] }).dice_rolls
+              dice_rolls: (crewResult as unknown as { dice_rolls: unknown[] }).dice_rolls,
             });
           } catch (crewError) {
-            logger.warn('CrewAI orchestrator failed, falling back to Gemini:', crewError);
+            logger.warn('CrewAI orchestrator failed, falling back to OpenRouter:', crewError);
             // Continue to legacy path below
           }
         }
 
         // Use local Gemini API
-        logger.info(`Using local Gemini API for chat`);
+        logger.info(`Using OpenRouter API for chat`);
 
         const isFirstMessage =
-            (!params.conversationHistory || params.conversationHistory.length === 0) &&
-            (!params.message || params.message.trim() === '');
+          (!params.conversationHistory || params.conversationHistory.length === 0) &&
+          (!params.message || params.message.trim() === '');
 
         // Build context prompt
         const contextPrompt = await ContextBuilder.build({
-            context: params.context,
-            message: params.message,
-            conversationHistory: params.conversationHistory,
-            relevantMemories,
-            combatDetection,
-            voiceContext,
-            isFirstMessage
+          context: params.context,
+          message: params.message,
+          conversationHistory: params.conversationHistory,
+          relevantMemories,
+          combatDetection,
+          voiceContext,
+          isFirstMessage,
         });
 
         // Execute chat via llmApiClient
         // Build combined prompt from context, history, and message
         const historyContext = (params.conversationHistory || [])
           .slice(-10) // Keep last 10 messages for context
-          .map(msg => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
+          .map((msg) => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
           .join('\n\n');
 
         const fullPrompt = `${contextPrompt}\n\n${historyContext ? `<conversation_history>\n${historyContext}\n</conversation_history>\n\n` : ''}${params.message ? `Player: ${params.message}` : 'Begin the adventure. Generate the opening scene for this campaign.'}`;
@@ -353,7 +350,7 @@ export class AIService {
           turnCount: params.turnCount,
           voiceContext,
           isFirstMessage,
-          combatDetection
+          combatDetection,
         });
       } catch (geminiError) {
         logger.error('Local Gemini API failed:', geminiError);

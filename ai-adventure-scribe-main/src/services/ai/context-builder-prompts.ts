@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
 import { fetchCampaignAssetsForPrompt } from './asset-processor';
 import { getClassEquipment } from './class-equipment';
 import { getCharacterPassiveScores } from '../passive-skills-service';
@@ -19,7 +19,7 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
 
   static async buildGameContextSection(
     context: GameContext,
-    relevantMemories: Memory[]
+    relevantMemories: Memory[],
   ): Promise<string> {
     let section = `<game_context>`;
 
@@ -45,19 +45,22 @@ DESCRIPTION: ${context.campaignDetails.description}
       };
       starterCampaignId = nameToSlug[campaignName];
       if (starterCampaignId) {
-        logger.info(`[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`);
+        logger.info(
+          `[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`,
+        );
       }
     }
 
     if (starterCampaignId) {
       try {
         const loreKeeper = getLoreKeeperService();
-        const [campaignOverview, campaignRules, campaignAssets, campaignEntities] = await Promise.all([
-          loreKeeper.getCampaignOverview(starterCampaignId),
-          loreKeeper.getRules(starterCampaignId),
-          fetchCampaignAssetsForPrompt(starterCampaignId),
-          loreKeeper.getEntities(starterCampaignId),
-        ]);
+        const [campaignOverview, campaignRules, campaignAssets, campaignEntities] =
+          await Promise.all([
+            loreKeeper.getCampaignOverview(starterCampaignId),
+            loreKeeper.getRules(starterCampaignId),
+            fetchCampaignAssetsForPrompt(starterCampaignId),
+            loreKeeper.getEntities(starterCampaignId),
+          ]);
 
         if (campaignOverview) {
           section += `
@@ -93,14 +96,16 @@ ${campaignRules.map((rule: any) => `- ${rule.condition} → ${rule.effect}${rule
               section += `
 
 <npcs count="${npcs.length}">
-${npcs.map((npc: any) => {
-  const hasImage = !!npc.metadata?.image_url;
-  const assetKey = npc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-  const assetTag = hasImage ? `[ASSET:npc:${assetKey}]` : '';
-  return `<npc name="${npc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${npcs
+  .map((npc: any) => {
+    const hasImage = !!npc.metadata?.image_url;
+    const assetKey = npc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+    const assetTag = hasImage ? `[ASSET:npc:${assetKey}]` : '';
+    return `<npc name="${npc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
 ${npc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when introducing this character**` : ''}
 </npc>`;
-}).join('\n')}
+  })
+  .join('\n')}
 </npcs>`;
             }
 
@@ -108,14 +113,16 @@ ${npc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when introducing this ch
               section += `
 
 <locations count="${locations.length}">
-${locations.map((loc: any) => {
-  const hasImage = !!loc.metadata?.image_url;
-  const assetKey = loc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-  const assetTag = hasImage ? `[ASSET:location:${assetKey}]` : '';
-  return `<location name="${loc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${locations
+  .map((loc: any) => {
+    const hasImage = !!loc.metadata?.image_url;
+    const assetKey = loc.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+    const assetTag = hasImage ? `[ASSET:location:${assetKey}]` : '';
+    return `<location name="${loc.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
 ${loc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when the party enters or views this location**` : ''}
 </location>`;
-}).join('\n')}
+  })
+  .join('\n')}
 </locations>`;
             }
 
@@ -123,9 +130,13 @@ ${loc.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when the party enters or
               section += `
 
 <factions count="${factions.length}">
-${factions.map((f: any) => `<faction name="${f.entityName}">
+${factions
+  .map(
+    (f: any) => `<faction name="${f.entityName}">
 ${f.content}
-</faction>`).join('\n')}
+</faction>`,
+  )
+  .join('\n')}
 </factions>`;
             }
 
@@ -133,14 +144,16 @@ ${f.content}
               section += `
 
 <monsters count="${monsters.length}">
-${monsters.map((m: any) => {
-  const hasImage = !!m.metadata?.image_url;
-  const assetKey = m.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
-  const assetTag = hasImage ? `[ASSET:monster:${assetKey}]` : '';
-  return `<monster name="${m.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
+${monsters
+  .map((m: any) => {
+    const hasImage = !!m.metadata?.image_url;
+    const assetKey = m.entityName?.toLowerCase().replace(/\s+/g, '-') || '';
+    const assetTag = hasImage ? `[ASSET:monster:${assetKey}]` : '';
+    return `<monster name="${m.entityName}"${hasImage ? ` asset_tag="${assetTag}"` : ''}>
 ${m.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when this creature appears or attacks**` : ''}
 </monster>`;
-}).join('\n')}
+  })
+  .join('\n')}
 </monsters>`;
             }
 
@@ -210,7 +223,8 @@ PLAYER CHARACTER: ${char.name}, a level ${char.level} ${char.race || 'Unknown Ra
 STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calcMod(stats.dexterity)}), CON ${stats.constitution}(${calcMod(stats.constitution)}), INT ${stats.intelligence}(${calcMod(stats.intelligence)}), WIS ${stats.wisdom}(${calcMod(stats.wisdom)}), CHA ${stats.charisma}(${calcMod(stats.charisma)})
 </ability_scores>`;
 
-      const profBonus = char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
+      const profBonus =
+        char.level >= 17 ? 6 : char.level >= 13 ? 5 : char.level >= 9 ? 4 : char.level >= 5 ? 3 : 2;
       section += `
 <proficiency_bonus>+${profBonus}</proficiency_bonus>`;
     }
@@ -240,7 +254,10 @@ Passive Investigation: ${passiveScores.investigation} (spots clues, patterns, lo
 - Reserve active checks (d20 rolls) for deliberate investigation or difficult perception tasks
 </passive_skills>`;
     } catch (passiveSkillError) {
-      logger.warn(`[ContextBuilder] Failed to calculate passive skills for character ${char.name} (non-fatal):`, passiveSkillError);
+      logger.warn(
+        `[ContextBuilder] Failed to calculate passive skills for character ${char.name} (non-fatal):`,
+        passiveSkillError,
+      );
     }
 
     section += `
@@ -371,6 +388,25 @@ Examples:
 - VISUAL PROMPT: Crumbling obsidian keep under stormy skies with lightning forks
 Keep this to a single line; do not include quotes or extra commentary.
 </visual_prompt_rule>
+
+<memory_extraction>
+**REQUIRED: After your narrative response (and before action options), include these XML tags to track story state:**
+
+<memories>
+- Key facts, events, or decisions from this scene
+- Important NPC relationships or revelations
+- Player character actions and their consequences
+</memories>
+
+<world_updates>
+- npc: NPC Name | Brief description or status change | Current location
+- location: Location Name | Description or change | Status (e.g., discovered, changed, destroyed)
+- quest: Quest Name | Status update or new development
+</world_updates>
+
+Only include tags that have content. If no world updates occurred, omit the <world_updates> tag entirely.
+These tags are parsed by the game engine and will NOT be shown to the player.
+</memory_extraction>
 
 <player_choice_generation>
 <title>CRITICAL: ACTION OPTIONS FORMATTING</title>

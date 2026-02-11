@@ -11,7 +11,7 @@
 ### Production Environment
 - **This is a PRODUCTION codebase on a Hetzner VPS**
 - Changes go live immediately - be careful!
-- **Always test before pushing** (`npm run build`, verify changes)
+- **Always test before pushing** (`bun run build`, verify changes)
 - **Commit and push after EVERY change** - user doesn't have easy local access to code
 - User may not be technical - explain clearly, double-check your assumptions
 
@@ -136,7 +136,7 @@ cd server-bun && bun run src/index.ts
 
 ### Workflow
 1. Make changes
-2. Test: `npm run build` (catch TS errors)
+2. Test: `bun run build` (catch TS errors)
 3. Commit: `git commit -m "..."`
 4. Push: `git push origin main` (deploys to production!)
 5. Repeat for each logical change
@@ -147,7 +147,7 @@ cd server-bun && bun run src/index.ts
 
 Solo fantasy RPG with AI-powered Dungeon Master. Players create campaigns with persistent worlds and long-term memory.
 
-**Tech Stack**: React + TypeScript + Vite (frontend), **Bun + Elysia** (API server), Supabase Edge Functions (Deno), PostgreSQL, Gemini AI
+**Tech Stack**: React + TypeScript + Vite (frontend), **Bun + Elysia** (API server), Supabase Edge Functions (Deno), PostgreSQL, **Mistral Small Creative via OpenRouter** (AI DM)
 
 ---
 
@@ -212,7 +212,7 @@ bd close bead-id --reason "Fixed: description"
 ### 1. Production Environment (Hetzner VPS)
 - **This is LIVE production** - not a dev environment
 - Changes to `main` branch go live immediately
-- **Test everything**: `npm run build` before pushing
+- **Test everything**: `bun run build` before pushing
 - **Commit frequently**: User doesn't have easy local access to code
 - **Be cautious**: Real users are affected by bugs
 - **Supabase is local**: Running in Docker, not Supabase Cloud
@@ -300,7 +300,7 @@ cp public/images/path/new-image.png dist/images/path/
 # GOOD: /images/path/new-image.png?v=1  (bypasses cached 404)
 ```
 
-**Why this happens**: Vite copies `public/` → `dist/` during `npm run build`, but if you add files to `public/` without rebuilding, they only exist in `public/`.
+**Why this happens**: Vite copies `public/` → `dist/` during `bun run build`, but if you add files to `public/` without rebuilding, they only exist in `public/`.
 
 **Quick verification**:
 ```bash
@@ -311,7 +311,44 @@ curl -I -k -H "Host: infiniterealms.app" https://127.0.0.1/images/path/file.png
 # Add ?v=1 to URL to bypass
 ```
 
-### 6. AI Education Pattern
+### 6. Live vs Dead Code Paths (AI Service)
+**Many files are duplicated between `src/components/` and `src/features/`**. The live paths are:
+
+| Component | LIVE path | DEAD path |
+|-----------|-----------|-----------|
+| GameContent | `src/features/game-session/components/game/GameContent.tsx` | `src/components/game/` (orphaned) |
+| DiceRollEmbed | `src/features/game-session/components/dice/DiceRollEmbed.tsx` | `src/components/DiceRollEmbed.tsx` (imported but legacy) |
+| Prompt builder | `src/services/ai/context-builder-prompts.ts` | `src/services/ai/shared/prompts.ts` (dead for DM chat) |
+| NarrationService | NOT used (dead) | `src/services/ai/narration-service-impl.ts` |
+
+**AI service call chain** (DM chat):
+```
+AIService.chatWithDM() [ai-service.ts]
+  → ContextBuilder.build() [context-builder.ts]
+    → ContextBuilderPrompts.buildResponseStructureSection() [context-builder-prompts.ts]
+  → llmApiClient.generateText() → OpenRouter (Mistral Small Creative)
+  → processDMResponse() [dm-response-processor.ts]
+    → parseXMLTagsFromResponse() [xml-parser.ts]
+```
+
+**AI Model**: Mistral Small Creative via OpenRouter (`OPENROUTER_TEXT_MODEL` in `server-bun/.env`). Log messages may still reference "Gemini" in some places — these are outdated.
+
+### 7. useCallback Declaration Order (TDZ Bug Pattern)
+When `useCallback` hooks reference other `useCallback` variables in their dependency arrays, **the referenced callbacks MUST be declared before the consumer**. `const`/`let` are in the Temporal Dead Zone until their declaration line runs.
+
+```typescript
+// WRONG - will crash when Vite splits chunks
+const speakFn = React.useCallback(() => { stopFn(); }, [stopFn]); // stopFn not declared yet!
+const stopFn = React.useCallback(() => { ... }, []);
+
+// CORRECT - declare dependencies first
+const stopFn = React.useCallback(() => { ... }, []);
+const speakFn = React.useCallback(() => { stopFn(); }, [stopFn]);
+```
+
+This bug can be latent and only appear when Vite changes chunk splitting (e.g., after editing a seemingly unrelated file).
+
+### 8. AI Education Pattern
 When AI does something wrong, **educate via prompts** (fastest fix):
 
 1. Add section to `promptBuilder.ts` with XML tags: `<rule_name>`
@@ -368,7 +405,7 @@ git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 4. Add education to `promptBuilder.ts` (forbidden + correct examples)
 5. Add to `systemInstruction` if critical ("NEVER do X")
 6. Calculate/provide data AI needs (passive scores, AC, etc.)
-7. **Test**: `npm run build` (no TS errors)
+7. **Test**: `bun run build` (no TS errors)
 8. **Commit & push** (this is production!)
 9. Create bead, update status, close when done
 
@@ -426,10 +463,14 @@ curl -X POST http://localhost:8888/internal/generate-commit-post \
 - Spells: `src/data/spellOptions.ts`
 - Feats: `src/data/featOptions.ts`
 
-**AI System**:
-- DM agent entry: `supabase/functions/dm-agent-execute/index.ts`
-- Prompt builder: `supabase/functions/dm-agent-execute/promptBuilder.ts`
-- Types: `supabase/functions/dm-agent-execute/types.ts`
+**AI System** (frontend DM chat - the live path):
+- AI service entry: `src/services/ai-service.ts` (AIService.chatWithDM)
+- Prompt builder (LIVE): `src/services/ai/context-builder-prompts.ts`
+- Context orchestrator: `src/services/ai/context-builder.ts`
+- Response processor: `src/services/ai/dm-response-processor.ts`
+- XML parser: `src/services/ai/xml-parser.ts`
+- DM agent (Deno edge fn): `supabase/functions/dm-agent-execute/index.ts`
+- Deno prompt builder: `supabase/functions/dm-agent-execute/promptBuilder.ts`
 
 **Services**:
 - Combat: `src/services/combat/`
@@ -477,7 +518,7 @@ Based on [developer onboarding research](https://www.cortex.io/post/developer-on
 ## Debugging Checklist
 
 **TypeScript errors**:
-- [ ] Run `npm run build`
+- [ ] Run `bun run build`
 - [ ] Check types in `types.ts`
 - [ ] Make new fields optional with `?`
 
@@ -627,7 +668,7 @@ for (let i = 0; i < 30; i++) {
 
 ---
 
-**Last Updated**: 2026-02-10
+**Last Updated**: 2026-02-11
 **What to add**: Gotchas you discover, non-obvious patterns, time-saving tips
 **Environment**: Hetzner VPS, Production, Docker-based Supabase, **Bun 1.3.4 + Elysia**
 **Blog**: https://blog.infiniterealms.app (SSR via Bun/Elysia, Cloudflare-proxied, Let's Encrypt SSL)

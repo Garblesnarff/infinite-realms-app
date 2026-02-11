@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
@@ -10,14 +11,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CampaignAssetsProvider } from '@/contexts/CampaignAssetsContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { SceneBackgroundProvider } from '@/contexts/SceneBackgroundContext';
-import { VoiceProvider } from '@/contexts/VoiceContext';
-import { useGameSession } from '@/hooks/use-game-session';
 import { CombatProvider, useCombat } from '@/contexts/CombatContext';
 import { GameProvider } from '@/contexts/GameContext';
 import { MemoryProvider, useMemoryContext } from '@/contexts/MemoryContext';
 import { MessageProvider, useMessageContext } from '@/contexts/MessageContext';
+import { SceneBackgroundProvider } from '@/contexts/SceneBackgroundContext';
+import { VoiceProvider } from '@/contexts/VoiceContext';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
+import { useGameSession } from '@/hooks/use-game-session';
 import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { supabase } from '@/integrations/supabase/client';
@@ -80,8 +81,10 @@ const GameContent: React.FC = () => {
         // Load character with all spell data populated
         logger.info(`🔄 [GameContent] Loading character ${characterIdFromParams} with spells`);
 
-        const loadedCharacter =
-          await characterLoaderService.loadCharacterWithSpells(characterIdFromParams);
+        const loadedCharacter = await characterLoaderService.loadCharacterWithSpells(
+          characterIdFromParams,
+          user?.id,
+        );
 
         if (!loadedCharacter) {
           throw new Error('Character not found or failed to load.');
@@ -124,7 +127,7 @@ const GameContent: React.FC = () => {
           const forceDM = ['true', '1', 'yes', 'on'].includes(envVal.toLowerCase());
           const ownerId = (campaignData as any)?.user_id;
           setIsDM(Boolean(forceDM || (user?.id && ownerId && user.id === ownerId)));
-        } catch (e) {
+        } catch {
           setIsDM(false);
         }
       } catch (err: any) {
@@ -207,11 +210,18 @@ const GameContent: React.FC = () => {
   const inferredStarterCampaignId = campaignState?.campaign?.name
     ? campaignNameToSlug[campaignState.campaign.name]
     : undefined;
-  const effectiveStarterCampaignId = starterCampaignIdFromParams || sessionData?.starter_campaign_id || inferredStarterCampaignId || null;
+  const effectiveStarterCampaignId =
+    starterCampaignIdFromParams ||
+    sessionData?.starter_campaign_id ||
+    inferredStarterCampaignId ||
+    null;
 
   return (
     <ErrorBoundary level="feature">
-      <CampaignAssetsProvider key={effectiveStarterCampaignId || 'no-starter-campaign'} starterCampaignId={effectiveStarterCampaignId}>
+      <CampaignAssetsProvider
+        key={effectiveStarterCampaignId || 'no-starter-campaign'}
+        starterCampaignId={effectiveStarterCampaignId}
+      >
         <SceneBackgroundProvider>
           <CombatProvider sessionId={sessionId}>
             <GameProvider>
@@ -219,20 +229,20 @@ const GameContent: React.FC = () => {
                 <MemoryProvider sessionId={sessionId}>
                   <VoiceProvider>
                     <GameContentInner
-                  sessionId={sessionId}
-                  campaignIdForHandler={campaignIdFromParams ?? null}
-                  characterIdForHandler={characterIdFromParams ?? null}
-                  sessionData={sessionData}
-                  updateGameSessionState={updateGameSessionState}
-                  characterState={characterState}
-                  combatMode={combatMode}
-                  setCombatMode={setCombatMode}
-                  handleCombatToggle={handleCombatToggle}
-                  handleAIResponse={handleAIResponse}
-                  isDM={isDM}
-                  showSceneBlurb={showSceneBlurb}
-                  setShowSceneBlurb={setShowSceneBlurb}
-                />
+                      sessionId={sessionId}
+                      campaignIdForHandler={campaignIdFromParams ?? null}
+                      characterIdForHandler={characterIdFromParams ?? null}
+                      sessionData={sessionData}
+                      updateGameSessionState={updateGameSessionState}
+                      characterState={characterState}
+                      combatMode={combatMode}
+                      setCombatMode={setCombatMode}
+                      handleCombatToggle={handleCombatToggle}
+                      handleAIResponse={handleAIResponse}
+                      isDM={isDM}
+                      showSceneBlurb={showSceneBlurb}
+                      setShowSceneBlurb={setShowSceneBlurb}
+                    />
                   </VoiceProvider>
                 </MemoryProvider>
               </MessageProvider>
