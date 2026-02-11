@@ -555,11 +555,26 @@ export class TokenService {
    * Apply default configuration to a token
    */
   static async applyDefaultConfig(tokenId: string, userId: string): Promise<Token | null> {
-    // Get token
-    const token = await this.getTokenById(tokenId, userId);
-    if (!token) return null;
+    // ⚡ Bolt: Consolidate token retrieval, character ownership verification, and default configuration lookup into a single query.
+    // This reduces database round-trips from 3 to 2 (consolidated fetch + update).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [result] = await (db as any)
+      .select({
+        token: tokens,
+        character: characters,
+        config: tokenConfigurations,
+      })
+      .from(tokens)
+      .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .leftJoin(characters, eq(tokens.actorId, characters.id))
+      .leftJoin(tokenConfigurations, eq(characters.id, tokenConfigurations.characterId))
+      .where(and(eq(tokens.id, tokenId), eq(scenes.userId, userId)))
+      .limit(1);
 
-    // Get linked character
+    if (!result) return null;
+
+    const { token, character, config } = result;
+
     if (!token.actorId) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -567,9 +582,15 @@ export class TokenService {
       });
     }
 
-    // Get default config
-    const config = await this.getDefaultTokenConfig(token.actorId, userId);
-    if (!config) {
+    // Verify character ownership (matches verifyCharacterOwnership behavior)
+    if (!character || (character.userId !== userId && character.ownerId !== userId)) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Character not found',
+      });
+    }
+
+    if (!config?.id) {
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'No default token configuration found for this character',

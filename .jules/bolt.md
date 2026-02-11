@@ -39,3 +39,7 @@
 ## 2026-02-09 - Combat Creature Stats Batching
 **Learning:** Multiple targets in spell attacks (e.g. Area of Effect) were causing N+1 database queries because creature statistics were fetched individually for each target.
 **Action:** Implemented `getCreatureStatsBatch` using Drizzle's `inArray` to fetch all target statistics in a single query. Updated `resolveSpellAttack` to use this batch fetch, reducing database round-trips from O(N) to O(1) for statistics retrieval.
+
+## 2026-02-10 - [Token Config Round-trips]
+**Learning:** Consolidated multiple sequential database fetches into a single joined query in `TokenService.applyDefaultConfig`. This pattern is useful when multiple authorization checks and related configuration lookups are performed before a state-changing operation.
+**Action:** Identify sequences of `findFirst` or `select` calls that depend on each other and combine them using `innerJoin` or `leftJoin` to reduce database round-trips while maintaining existing authorization and error handling semantics.
