@@ -1,8 +1,10 @@
+/* eslint-disable max-lines */
 import { Heart, Shield, Zap } from 'lucide-react';
 import React, { useEffect, useMemo, useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
@@ -142,13 +144,19 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
       <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80" />
 
       {/* Glow effect on hover */}
-      <div className="absolute inset-0 z-[1] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+      <div
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+      >
         <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(168,85,247,0.3)]" />
       </div>
 
       {/* Avatar */}
       {character.avatar_url && (
-        <div className="relative z-10 flex justify-center pt-4">
+        <div
+          className="relative flex justify-center pt-4"
+          style={{ zIndex: Z_INDEX.SIDEBAR }}
+        >
           <img
             src={character.avatar_url}
             alt={`${character.name} avatar`}
@@ -158,7 +166,10 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
       )}
 
       {/* Content */}
-      <div className="p-4 pt-3 space-y-3 relative z-10">
+      <div
+        className="p-4 pt-3 space-y-3 relative"
+        style={{ zIndex: Z_INDEX.SIDEBAR }}
+      >
         <div className="text-center">
           <h3 className="font-semibold text-lg text-white">{character.name}</h3>
           <p className="text-sm text-gray-300">
@@ -168,63 +179,63 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
         {/* HP and AC */}
         <div className="flex gap-4 text-sm justify-center text-white">
-          <div className="flex items-center gap-1">
-            <Heart className={`w-4 h-4 ${isInjured ? 'text-red-500 animate-pulse' : 'text-red-400'}`} />
-            <span className="font-semibold">HP:</span>
-            <span className={isInjured ? 'text-red-400 font-bold' : ''}>
+          <div
+            className="flex items-center gap-1"
+            aria-label={`Hit Points: ${currentHp} out of ${maxHp}`}
+          >
+            <Heart
+              className={`w-4 h-4 ${isInjured ? 'text-red-500 animate-pulse' : 'text-red-400'}`}
+              aria-hidden="true"
+            />
+            <span className="font-semibold" aria-hidden="true">
+              HP:
+            </span>
+            <span className={isInjured ? 'text-red-400 font-bold' : ''} aria-hidden="true">
               {currentHp}/{maxHp}
             </span>
           </div>
-          <div className="flex items-center gap-1">
-            <Shield className="w-4 h-4 text-blue-400" />
-            <span className="font-semibold">AC:</span>
-            <span>{armorClass}</span>
+          <div className="flex items-center gap-1" aria-label={`Armor Class: ${armorClass}`}>
+            <Shield className="w-4 h-4 text-blue-400" aria-hidden="true" />
+            <span className="font-semibold" aria-hidden="true">
+              AC:
+            </span>
+            <span aria-hidden="true">{armorClass}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Zap className="w-4 h-4 text-green-400" />
-            <span className="font-semibold">PROF:</span>
-            <span>+{proficiency}</span>
+          <div className="flex items-center gap-1" aria-label={`Proficiency Bonus: +${proficiency}`}>
+            <Zap className="w-4 h-4 text-green-400" aria-hidden="true" />
+            <span className="font-semibold" aria-hidden="true">
+              PROF:
+            </span>
+            <span aria-hidden="true">+{proficiency}</span>
           </div>
         </div>
 
         {/* Ability Scores Grid */}
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">STR</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.strength?.score)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">DEX</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.dexterity?.score)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">CON</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.constitution?.score)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">INT</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.intelligence?.score)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">WIS</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.wisdom?.score)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10">
-            <span className="font-semibold text-gray-400">CHA</span>
-            <span className="text-lg font-bold text-white">
-              {getModifier(character.abilityScores?.charisma?.score)}
-            </span>
-          </div>
+        <div className="grid grid-cols-3 gap-2 text-xs" role="group" aria-label="Ability Scores">
+          {[
+            { label: 'STR', key: 'strength' },
+            { label: 'DEX', key: 'dexterity' },
+            { label: 'CON', key: 'constitution' },
+            { label: 'INT', key: 'intelligence' },
+            { label: 'WIS', key: 'wisdom' },
+            { label: 'CHA', key: 'charisma' },
+          ].map((score) => {
+            const modifier = getModifier(character.abilityScores?.[score.key as keyof typeof character.abilityScores]?.score);
+            return (
+              <div
+                key={score.key}
+                className="flex flex-col items-center p-2 bg-black/30 backdrop-blur-sm rounded border border-white/10"
+                aria-label={`${score.label}: ${modifier}`}
+              >
+                <span className="font-semibold text-gray-400" aria-hidden="true">
+                  {score.label}
+                </span>
+                <span className="text-lg font-bold text-white" aria-hidden="true">
+                  {modifier}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Quick Actions */}
