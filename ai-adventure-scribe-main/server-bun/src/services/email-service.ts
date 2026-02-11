@@ -7,6 +7,8 @@
 
 import { Resend } from 'resend';
 
+import { logger } from '../lib/logger.js';
+
 // Initialize Resend with API key from environment
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -31,9 +33,9 @@ export async function sendWaitlistConfirmation(params: WaitlistEmailParams): Pro
       text: getWaitlistEmailText(firstName),
     });
 
-    console.log(`Waitlist confirmation email sent to: ${email}`);
+    logger.info({ email }, 'Waitlist confirmation email sent');
   } catch (error) {
-    console.error('Failed to send waitlist email:', error);
+    logger.error({ error, email }, 'Failed to send waitlist email');
     throw new Error('Failed to send confirmation email');
   }
 }

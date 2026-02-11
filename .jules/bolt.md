@@ -43,3 +43,7 @@
 ## 2026-02-10 - [Token Config Round-trips]
 **Learning:** Consolidated multiple sequential database fetches into a single joined query in `TokenService.applyDefaultConfig`. This pattern is useful when multiple authorization checks and related configuration lookups are performed before a state-changing operation.
 **Action:** Identify sequences of `findFirst` or `select` calls that depend on each other and combine them using `innerJoin` or `leftJoin` to reduce database round-trips while maintaining existing authorization and error handling semantics.
+
+## 2026-02-15 - Atomic Ownership & Multi-row Toggles
+**Learning:** Sequential SELECTs for ownership verification and sequential UPDATEs for toggling states (like `isActive`) can be consolidated into 1 SELECT + 1 UPDATE. Using `sql` with `CASE WHEN id = :id THEN true ELSE false END` allows toggling a single active row while deactivating others in one round-trip.
+**Action:** Look for "verify then update" patterns and replace them with atomic updates that include the ownership check in the `WHERE` clause. For "set one active" operations, use the `CASE` pattern to reduce round-trips from 4 to 2.

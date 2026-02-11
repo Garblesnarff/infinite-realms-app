@@ -1,8 +1,8 @@
-import { Users, Sword, Heart, Zap, Clock } from 'lucide-react';
+import { Users, Sword, Zap, Clock } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
+import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { ScrollArea } from '../ui/scroll-area';
 
@@ -18,7 +18,7 @@ import { useCombat } from '@/contexts/CombatContext';
  *
  * Usage: Render in combat tab; updates live during combat
  */
-export const CombatSummary: React.FC = () => {
+export const CombatSummary: React.FC = React.memo(() => {
   const { state, nextTurn, endCombat } = useCombat();
   const { activeEncounter, isInCombat } = state;
 
@@ -57,7 +57,7 @@ export const CombatSummary: React.FC = () => {
       {/* Initiative Order */}
       <ScrollArea className="flex-1 max-h-48">
         <div className="space-y-2">
-          {activeEncounter.participants.map((participant, index) => {
+          {activeEncounter.participants.map((participant) => {
             const isCurrentTurn = participant.id === activeEncounter.currentTurnParticipantId;
             const hpPercent = (participant.currentHitPoints / participant.maxHitPoints) * 100;
             const isPlayer = participant.participantType === 'player';
@@ -149,4 +149,4 @@ export const CombatSummary: React.FC = () => {
       )}
     </Card>
   );
-};
+});
