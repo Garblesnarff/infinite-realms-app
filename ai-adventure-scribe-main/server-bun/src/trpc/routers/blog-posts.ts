@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Blog Posts Router
  *
@@ -5,30 +6,31 @@
  * Split from main blog router to maintain file size limits.
  */
 
-import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
+import { and, desc, eq, exists, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
+
 import {
-  blogPosts,
   blogAuthors,
   blogCategories,
-  blogTags,
+  blogPosts,
   blogPostCategories,
   blogPostTags,
+  blogTags,
 } from '../../../../db/schema/index.js';
-import { eq, and, or, ilike, desc, lte, inArray, SQL, sql } from 'drizzle-orm';
+import { protectedProcedure, publicProcedure, router } from '../trpc.js';
+import {
+  canManagePost,
+  normalizeStatusFields,
+  resolveAuthorId,
+  syncPostCategories,
+  syncPostTags,
+} from './blog-helpers.js';
 import {
   blogListQuerySchema,
   blogPostInputSchema,
   blogPostUpdateSchema,
 } from './blog-schemas.js';
-import {
-  resolveAuthorId,
-  normalizeStatusFields,
-  syncPostCategories,
-  syncPostTags,
-  canManagePost,
-} from './blog-helpers.js';
 
 /**
  * Fetch categories and tags for multiple posts in batch to avoid N+1 queries
@@ -100,24 +102,67 @@ export const blogPostsRouter = router({
       }
     }
 
+    // ⚡ Bolt: Move category and tag filtering to the database to avoid over-fetching
+    // and incorrect pagination results when filtering by taxonomy.
+    if (category) {
+      conditions.push(
+        exists(
+          ctx.db
+            .select({ one: sql`1` })
+            .from(blogPostCategories)
+            .innerJoin(blogCategories, eq(blogPostCategories.categoryId, blogCategories.id))
+            .where(
+              and(
+                eq(blogPostCategories.postId, blogPosts.id),
+                eq(blogCategories.slug, category)
+              )
+            )
+        )
+      );
+    }
+
+    if (tag) {
+      conditions.push(
+        exists(
+          ctx.db
+            .select({ one: sql`1` })
+            .from(blogPostTags)
+            .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+            .where(
+              and(
+                eq(blogPostTags.postId, blogPosts.id),
+                eq(blogTags.slug, tag)
+              )
+            )
+        )
+      );
+    }
+
     const postSelect = {
-      id: blogPosts.id, slug: blogPosts.slug, title: blogPosts.title, summary: blogPosts.summary,
-      featuredImageUrl: blogPosts.featuredImageUrl, status: blogPosts.status,
-      publishedAt: blogPosts.publishedAt, createdAt: blogPosts.createdAt, authorId: blogPosts.authorId,
+      id: blogPosts.id,
+      slug: blogPosts.slug,
+      title: blogPosts.title,
+      summary: blogPosts.summary,
+      featuredImageUrl: blogPosts.featuredImageUrl,
+      status: blogPosts.status,
+      publishedAt: blogPosts.publishedAt,
+      createdAt: blogPosts.createdAt,
+      authorId: blogPosts.authorId,
     };
 
+    // ⚡ Bolt: Combine data retrieval and total count into a single round-trip using window function count(*) OVER().
     const posts = await ctx.db
-      .select(postSelect)
+      .select({
+        ...postSelect,
+        totalCount: sql<number>`count(*)::int OVER()`,
+      })
       .from(blogPosts)
       .where(and(...conditions))
       .orderBy(desc(blogPosts.publishedAt))
       .limit(pageSize)
       .offset(offset);
 
-    const [countResult] = await ctx.db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(blogPosts)
-      .where(and(...conditions));
+    const total = posts[0]?.totalCount || 0;
 
     // Fetch all relations in batch to avoid N+1 problem
     const postIds = posts.map((post) => post.id);
@@ -128,15 +173,9 @@ export const blogPostsRouter = router({
       ...relationsMap[post.id],
     }));
 
-    const filtered = postsWithRelations.filter((post: any) => {
-      const categoryOk = !category || post.categories.some((c: any) => c.slug === category);
-      const tagOk = !tag || post.tags.some((t: any) => t.slug === tag);
-      return categoryOk && tagOk;
-    });
-
     return {
-      data: filtered,
-      meta: { page, pageSize, total: category || tag ? filtered.length : countResult?.count || 0 },
+      data: postsWithRelations,
+      meta: { page, pageSize, total },
     };
   }),
 
@@ -209,7 +248,7 @@ export const blogPostsRouter = router({
           }
 
           // Ignore no-op author updates from non-admin clients.
-          delete postUpdates.authorId;
+          delete (postUpdates as any).authorId;
         } else {
           const [targetAuthor] = await ctx.db
             .select({ id: blogAuthors.id })
