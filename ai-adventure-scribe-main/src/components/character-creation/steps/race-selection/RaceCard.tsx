@@ -4,13 +4,16 @@
  * Supports list, compact, and grid view modes
  */
 
-import React from 'react';
 import { Check, Heart, Star, Users } from 'lucide-react';
+import React from 'react';
+
+
+import type { CharacterRace } from '@/types/character';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
-import type { CharacterRace } from '@/types/character';
 
 export interface RaceCardProps {
   race: CharacterRace;
@@ -60,7 +63,8 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
   >
     {race.backgroundImage && <div className="absolute inset-0 bg-black/60 z-0" />}
     <CardContent
-      className={`p-4 relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${race.backgroundImage ? 'text-white' : ''}`}
+      className={`p-4 relative ${race.backgroundImage ? 'text-white' : ''}`}
+      style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1">
@@ -91,6 +95,8 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
               onToggleFavorite(race.id);
             }}
             className="p-1"
+            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={isFavorite}
           >
             <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
           </Button>
@@ -103,6 +109,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
             }}
             className="p-1"
             disabled={!canAddToComparison}
+            aria-label="Add to comparison"
           >
             <Star className="w-4 h-4" />
           </Button>
@@ -164,7 +171,8 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
     {race.backgroundImage && <div className="absolute inset-0 bg-black/60 z-0" />}
     <div className="p-4">
       <div
-        className={`flex items-center justify-between mb-3 relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${race.backgroundImage ? 'text-white' : ''}`}
+        className={`flex items-center justify-between mb-3 relative ${race.backgroundImage ? 'text-white' : ''}`}
+        style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
         <div className="flex items-center gap-2">
           <Users className={`w-5 h-5 ${race.backgroundImage ? 'text-yellow-400' : 'text-primary'}`} />
@@ -176,7 +184,10 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
           </div>
         )}
       </div>
-      <div className={`flex flex-wrap gap-1.5 mb-3 relative z-[${Z_INDEX.OVERLAY_EFFECT}]`}>
+      <div
+        className="flex flex-wrap gap-1.5 mb-3 relative"
+        style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+      >
         {Object.entries(race.abilityScoreIncrease).map(([ability, bonus]) => (
           <Badge
             key={ability}
@@ -188,13 +199,15 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
         ))}
       </div>
       <p
-        className={`text-sm line-clamp-2 relative z-[${Z_INDEX.OVERLAY_EFFECT}] leading-relaxed ${race.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
+        className={`text-sm line-clamp-2 relative leading-relaxed ${race.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
+        style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
         {race.description}
       </p>
       {race.subraces && race.subraces.length > 0 && (
         <div
-          className={`text-xs text-center mt-3 pt-2 border-t relative z-[${Z_INDEX.OVERLAY_EFFECT}] ${race.backgroundImage ? 'text-gray-300 border-gray-400' : 'text-muted-foreground border-border'}`}
+          className={`text-xs text-center mt-3 pt-2 border-t relative ${race.backgroundImage ? 'text-gray-300 border-gray-400' : 'text-muted-foreground border-border'}`}
+          style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
         >
           {race.subraces.length} subrace{race.subraces.length > 1 ? 's' : ''} available
         </div>
@@ -248,7 +261,10 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
     />
 
     {/* Top-right indicators */}
-    <div className={`absolute top-3 right-3 z-[${Z_INDEX.CARD_HOVER}] flex items-center gap-2`}>
+    <div
+      className="absolute top-3 right-3 flex items-center gap-2"
+      style={{ zIndex: Z_INDEX.CARD_HOVER }}
+    >
       <Button
         variant="ghost"
         size="sm"
@@ -257,6 +273,8 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
           onToggleFavorite(race.id);
         }}
         className="p-1 bg-white/10 hover:bg-white/20"
+        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        aria-pressed={isFavorite}
       >
         <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`} />
       </Button>
@@ -269,6 +287,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
         }}
         className="p-1 bg-white/10 hover:bg-white/20"
         disabled={!canAddToComparison}
+        aria-label="Add to comparison"
       >
         <Star className="w-4 h-4 text-white" />
       </Button>
@@ -281,7 +300,8 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
 
     {/* Bottom content overlay */}
     <div
-      className={`absolute bottom-0 left-0 right-0 z-[${Z_INDEX.OVERLAY_EFFECT}] p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent`}
+      className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent"
+      style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
     >
       <div className="flex items-center gap-2 mb-2">
         <Users className="w-5 h-5 text-yellow-400" />

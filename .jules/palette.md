@@ -55,3 +55,7 @@
 ## 2026-02-10 - Accessibility & Feedback Enhancements in Combat Panels
 **Learning:** Using React's `useId` is the most robust way to link form labels to inputs in components that might appear multiple times (like in lists or combat trackers), avoiding ID collisions. Additionally, silent empty lists are poor UX; always provide an explicit "No [items] found" message.
 **Action:** Use `useId` for all `htmlFor`/`id` pairings and always implement descriptive empty states for dynamic lists.
+
+## 2026-03-05 - Card Interaction Accessibility and Z-Index
+**Learning:** Complex cards (like `RaceCard`) often use multiple `z-index` layers for overlays and hover effects. Migrating these to inline styles ensures reliable layering in all environments. Additionally, secondary actions on cards (like "Favorite" or "Compare") must be explicitly labeled and indicate their state via `aria-pressed` to be fully accessible.
+**Action:** Standardize card layering using inline `zIndex` styles and ensure all secondary icon-only actions have `aria-label` and `aria-pressed` (if togglable).

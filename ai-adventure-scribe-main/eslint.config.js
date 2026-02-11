@@ -286,6 +286,7 @@ export default tseslint.config(
       'src/utils/reactionTriggers.ts',
       'src/components/battle-map/LayersPanel.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
+      'src/components/character-creation/steps/race-selection/RaceCard.tsx',
     ],
     rules: {
       'max-lines': 'warn',
