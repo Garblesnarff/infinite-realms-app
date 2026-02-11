@@ -17,6 +17,7 @@ import React from 'react';
 
 import { useLocalStorage } from './use-local-storage';
 import { useToast } from './use-toast';
+import { useVoiceAudioControl } from './use-voice-audio-control';
 import { logger } from '../lib/logger';
 
 import type { VoiceSegment, AISegment } from '@/services/voice-routing';
@@ -40,12 +41,67 @@ export const useProgressiveVoice = () => {
   const { toast } = useToast();
 
   // Persistent settings with type-safe localStorage hooks
-  const [volume, setVolume] = useLocalStorage<number>('progressive-voice-volume', 1);
-  const [isMuted, setIsMuted] = useLocalStorage<boolean>('progressive-voice-muted', false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useLocalStorage<boolean>(
     'progressive-voice-enabled',
     true,
   );
+
+  /**
+   * Initialize Audio Control Hook
+   */
+  const {
+    volume,
+    isMuted,
+    currentAudio,
+    initializeAudioContext,
+    playAudioSegment,
+    pausePlayback: basePausePlayback,
+    resumePlayback: baseResumePlayback,
+    stopPlayback: baseStopPlayback,
+    handleSetVolume,
+    toggleMute: baseToggleMute,
+  } = useVoiceAudioControl({
+    onSegmentStart: (index) => {
+      setState((prev) => ({
+        ...prev,
+        currentSegmentIndex: index,
+        segments: prev.segments.map((s, idx) => ({
+          ...s,
+          isPlaying: idx === index,
+        })),
+      }));
+    },
+    onSegmentEnd: (_index) => {
+      setState((prev) => ({
+        ...prev,
+        segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
+      }));
+    },
+    onPlaybackPause: () => {
+      setState((prev) => ({
+        ...prev,
+        isPlaying: false,
+        isPaused: true,
+      }));
+    },
+    onPlaybackResume: () => {
+      setState((prev) => ({
+        ...prev,
+        isPlaying: true,
+        isPaused: false,
+      }));
+    },
+    onPlaybackStop: () => {
+      setState((prev) => ({
+        ...prev,
+        isPlaying: false,
+        isPaused: false,
+        isProcessing: false,
+        currentSegmentIndex: -1,
+        segments: [],
+      }));
+    },
+  });
 
   // State
   const [state, setState] = React.useState<ProgressiveVoiceState>({
@@ -59,6 +115,11 @@ export const useProgressiveVoice = () => {
     isVoiceEnabled,
   });
 
+  // Keep state in sync with audio control hook
+  React.useEffect(() => {
+    setState((prev) => ({ ...prev, volume, isMuted }));
+  }, [volume, isMuted]);
+
   // API key state
   const [apiKey, setApiKey] = React.useState<string | null>(null);
   const apiKeyRef = React.useRef<string | null>(null);
@@ -69,26 +130,7 @@ export const useProgressiveVoice = () => {
   }, [apiKey]);
 
   // Audio management
-  const currentAudio = React.useRef<HTMLAudioElement | null>(null);
-  const preCreatedAudio = React.useRef<HTMLAudioElement | null>(null);
-  const processQueue = React.useRef<VoiceSegment[]>([]);
-  const isProcessingQueue = React.useRef<boolean>(false);
   const abortController = React.useRef<AbortController | null>(null);
-
-  /**
-   * Initialize audio context during user interaction for browser autoplay compliance
-   */
-  const initializeAudioContext = React.useCallback(() => {
-    logger.info('🎵 Initializing audio context during user interaction');
-
-    if (!preCreatedAudio.current) {
-      preCreatedAudio.current = new Audio();
-      preCreatedAudio.current.volume = state.isMuted ? 0 : state.volume;
-      logger.info('✅ Pre-created audio element during user interaction');
-    }
-
-    return preCreatedAudio.current;
-  }, [state.isMuted, state.volume]);
 
   // Fetch API key from Supabase secrets or environment
   React.useEffect(() => {
@@ -264,8 +306,16 @@ export const useProgressiveVoice = () => {
         });
       }
     },
-    [state.isVoiceEnabled, state.isProcessing, toast],
-  ); // Removed apiKey from dependency array
+    [
+      state.isVoiceEnabled,
+      state.isProcessing,
+      toast,
+      initializeAudioContext,
+      stopPlayback,
+      processSegmentsProgressively,
+      currentAudio,
+    ],
+  );
 
   /**
    * Fallback: Process plain text when AI segments aren't available
@@ -299,7 +349,7 @@ export const useProgressiveVoice = () => {
   /**
    * Progressive generation and playback
    */
-  const processSegmentsProgressively = async (
+  const processSegmentsProgressively = React.useCallback(async (
     segments: VoiceSegment[],
     startIndex: number = 0,
   ): Promise<void> => {
@@ -376,156 +426,16 @@ export const useProgressiveVoice = () => {
     }));
 
     logger.info('🏁 Progressive processing complete');
-  };
-
-  /**
-   * Play a single audio segment with proper browser policy compliance
-   */
-  const playAudioSegment = (segment: VoiceSegment, index: number): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!segment.audioUrl) {
-        logger.warn(`⚠️ No audio URL for segment ${index + 1}`);
-        resolve();
-        return;
-      }
-
-      logger.info(
-        `▶️ Playing segment ${index + 1}: ${segment.character} - "${segment.text.substring(0, 50)}..."`,
-      );
-
-      // Use pre-created audio element if available, otherwise create new one
-      const audio = preCreatedAudio.current || new Audio();
-      preCreatedAudio.current = null; // Reset for next use
-
-      // Set up all event handlers before setting src to avoid race conditions
-      const onLoadedData = () => {
-        logger.info(`📦 Audio loaded for segment ${index + 1}`);
-        audio.volume = state.isMuted ? 0 : state.volume;
-        currentAudio.current = audio;
-
-        // Start playing immediately after load
-        audio
-          .play()
-          .then(() => {
-            logger.info(`🎵 Successfully started playing segment ${index + 1}`);
-          })
-          .catch((playError) => {
-            logger.error(`❌ Failed to start playing segment ${index + 1}:`, playError);
-            logger.error('Audio play error details:', {
-              audioUrl: segment.audioUrl,
-              userVolume: state.volume,
-              isMuted: state.isMuted,
-              finalVolume: state.isMuted ? 0 : state.volume,
-              audioReadyState: audio.readyState,
-              audioNetworkState: audio.networkState,
-              audioError: audio.error,
-            });
-            resolve(); // Continue with next segment
-          });
-      };
-
-      const onEnded = () => {
-        logger.info(`✅ Segment ${index + 1} finished playing`);
-
-        // Clean up event listeners
-        audio.removeEventListener('loadeddata', onLoadedData);
-        audio.removeEventListener('ended', onEnded);
-        audio.removeEventListener('error', onError);
-        audio.removeEventListener('abort', onAbort);
-
-        // Clean up
-        URL.revokeObjectURL(segment.audioUrl!);
-        currentAudio.current = null;
-
-        // Clear playing state
-        setState((prev) => ({
-          ...prev,
-          segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
-        }));
-
-        resolve();
-      };
-
-      const onError = (error: Event) => {
-        logger.error(`❌ Audio error for segment ${index + 1}:`, error);
-        // Clean up event listeners
-        audio.removeEventListener('loadeddata', onLoadedData);
-        audio.removeEventListener('ended', onEnded);
-        audio.removeEventListener('error', onError);
-        audio.removeEventListener('abort', onAbort);
-        resolve(); // Continue with next segment
-      };
-
-      const onAbort = () => {
-        logger.info(`🛑 Audio aborted for segment ${index + 1}`);
-        // Clean up event listeners
-        audio.removeEventListener('loadeddata', onLoadedData);
-        audio.removeEventListener('ended', onEnded);
-        audio.removeEventListener('error', onError);
-        audio.removeEventListener('abort', onAbort);
-        resolve();
-      };
-
-      // Attach event listeners
-      audio.addEventListener('loadeddata', onLoadedData);
-      audio.addEventListener('ended', onEnded);
-      audio.addEventListener('error', onError);
-      audio.addEventListener('abort', onAbort);
-
-      // Update segment playing state
-      setState((prev) => ({
-        ...prev,
-        segments: prev.segments.map((s, idx) => ({
-          ...s,
-          isPlaying: idx === index,
-        })),
-      }));
-
-      // Set the audio source last to trigger loading
-      audio.src = segment.audioUrl;
-      audio.load(); // Explicitly load the audio
-    });
-  };
-
-  /**
-   * Pause current playback without losing state
-   */
-  const pausePlayback = React.useCallback(() => {
-    logger.info('⏸️ Pausing progressive voice playback');
-
-    // Pause current audio but keep the element and position
-    if (currentAudio.current) {
-      currentAudio.current.pause();
-    }
-
-    // Update state to paused
-    setState((prev) => ({
-      ...prev,
-      isPlaying: false,
-      isPaused: true,
-    }));
-  }, []);
+  }, [playAudioSegment]);
 
   /**
    * Resume paused playback from current position
    */
   const resumePlayback = React.useCallback(async () => {
-    logger.info('▶️ Resuming progressive voice playback');
-
-    // If we have a current audio element, resume it
-    if (currentAudio.current && state.isPaused) {
-      try {
-        await currentAudio.current.play();
-        setState((prev) => ({
-          ...prev,
-          isPlaying: true,
-          isPaused: false,
-        }));
-        logger.info('✅ Resumed audio from paused position');
-        return;
-      } catch (error) {
-        logger.error('❌ Failed to resume audio:', error);
-      }
+    // Attempt to resume the current audio element first
+    const resumed = await baseResumePlayback();
+    if (resumed) {
+      return;
     }
 
     // If no current audio or not paused, continue with remaining segments
@@ -543,77 +453,33 @@ export const useProgressiveVoice = () => {
       const remainingSegments = state.segments.slice(state.currentSegmentIndex);
       await processSegmentsProgressively(remainingSegments, state.currentSegmentIndex);
     }
-  }, [state.isPaused, state.segments, state.currentSegmentIndex]);
+  }, [state.segments, state.currentSegmentIndex, baseResumePlayback]);
 
   /**
    * Stop current playback completely
    */
   const stopPlayback = React.useCallback(() => {
-    logger.info('🛑 Stopping progressive voice playback');
-    logger.debug('🔍 stopPlayback called from:', new Error().stack); // Add stack trace
-
-    // Stop current audio
-    if (currentAudio.current) {
-      currentAudio.current.pause();
-      currentAudio.current.currentTime = 0;
-      currentAudio.current = null;
-    }
+    baseStopPlayback(state.segments);
 
     // Abort any ongoing processing
     if (abortController.current) {
       abortController.current.abort();
     }
-
-    // Clean up audio URLs
-    state.segments.forEach((segment) => {
-      if (segment.audioUrl) {
-        URL.revokeObjectURL(segment.audioUrl);
-      }
-    });
-
-    // Reset state completely
-    setState((prev) => ({
-      ...prev,
-      isPlaying: false,
-      isPaused: false,
-      isProcessing: false,
-      currentSegmentIndex: -1,
-      segments: [],
-    }));
-  }, [state.segments]);
+  }, [state.segments, baseStopPlayback]);
 
   /**
-   * Volume control
+   * Pause current playback without losing state
    */
-  const handleSetVolume = React.useCallback(
-    (newVolume: number) => {
-      const clampedVolume = Math.max(0, Math.min(1, newVolume));
-
-      setState((prev) => ({ ...prev, volume: clampedVolume }));
-      setVolume(clampedVolume);
-
-      // Update current audio volume
-      if (currentAudio.current) {
-        currentAudio.current.volume = state.isMuted ? 0 : clampedVolume;
-      }
-    },
-    [state.isMuted, setVolume],
-  );
+  const pausePlayback = React.useCallback(() => {
+    basePausePlayback();
+  }, [basePausePlayback]);
 
   /**
    * Mute toggle
    */
   const toggleMute = React.useCallback(() => {
-    const newMutedState = !state.isMuted;
-
-    setState((prev) => ({ ...prev, isMuted: newMutedState }));
-    setIsMuted(newMutedState);
-
-    // Update current audio volume
-    if (currentAudio.current) {
-      currentAudio.current.volume = newMutedState ? 0 : state.volume;
-    }
-  }, [state.isMuted, state.volume, setIsMuted]);
+    baseToggleMute();
+  }, [baseToggleMute]);
 
   /**
    * Voice mode toggle
