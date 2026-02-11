@@ -188,9 +188,10 @@ export const statusRoutes = new Elysia()
       }
 
       // ⚡ Bolt: Parallelize data fetching to reduce request latency
+      // 🛡️ Sentinel: Propagate userId to services for defense-in-depth ownership verification.
       const [combatState, encounterConditions] = await Promise.all([
-        CombatInitiativeService.getCombatState(params.encounterId),
-        ConditionsService.getEncounterConditions(params.encounterId),
+        CombatInitiativeService.getCombatState(params.encounterId, user.userId),
+        ConditionsService.getEncounterConditions(params.encounterId, user.userId),
       ]);
       const participantConditions: Record<string, any> = {};
 

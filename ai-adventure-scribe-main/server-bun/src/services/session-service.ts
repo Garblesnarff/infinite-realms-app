@@ -377,6 +377,6 @@ export class SessionService {
     await this.appendCombatLog(sessionId, userId, {
       kind: event.kind,
       payload: event.payload,
-    }, 500, userId);
+    }, 500);
   }
 }

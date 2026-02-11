@@ -13,11 +13,14 @@
  * Ported from /server/src/routes/v1/characters.ts
  */
 
+/* eslint-disable max-lines */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Elysia, t } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
-import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
+import { CharacterService } from '../../services/character-service.js';
 
 /**
  * Parse spell strings stored in the database
@@ -37,42 +40,102 @@ function parseSpellString(value: string | string[] | null): string[] {
   return [];
 }
 
-export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
+/**
+ * Map character object from database/service (camelCase) to API (snake_case)
+ * for backward compatibility with frontend.
+ */
+function mapCharacterToApi(character: any): any {
+  if (!character) return null;
 
+  return {
+    id: character.id,
+    name: character.name,
+    description: character.description,
+    race: character.race,
+    class: character.class,
+    level: character.level,
+    alignment: character.alignment,
+    experience_points: character.experiencePoints,
+    background: character.background,
+    image_url: character.imageUrl,
+    avatar_url: character.avatarUrl,
+    background_image: character.backgroundImage,
+    appearance: character.appearance,
+    personality_traits: character.personalityTraits,
+    personality_notes: character.personalityNotes,
+    backstory_elements: character.backstoryElements,
+    cantrips: character.cantrips,
+    known_spells: character.knownSpells,
+    prepared_spells: character.preparedSpells,
+    ritual_spells: character.ritualSpells,
+    vision_types: character.visionTypes,
+    obscurement: character.obscurement,
+    is_hidden: character.isHidden,
+    campaign_id: character.campaignId,
+    user_id: character.userId,
+    owner_id: character.ownerId,
+    is_public: character.isPublic,
+    sharing_mode: character.sharingMode,
+    folder_id: character.folderId,
+    created_at: character.createdAt,
+    updated_at: character.updatedAt,
+    stats: character.stats ? {
+      id: character.stats.id,
+      character_id: character.stats.characterId,
+      strength: character.stats.strength,
+      dexterity: character.stats.dexterity,
+      constitution: character.stats.constitution,
+      intelligence: character.stats.intelligence,
+      wisdom: character.stats.wisdom,
+      charisma: character.stats.charisma,
+      created_at: character.stats.createdAt,
+      updated_at: character.stats.updatedAt,
+    } : undefined,
+  };
+}
+
+export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   /**
-   * GET /v1/characters
-   * List all characters for the authenticated user
+   * Centralized authentication and character ownership verification
    */
-  .get('/', async ({ request, set }) => {
+  .derive(async ({ request, params }) => {
     const { user, error: authError } = await authenticateRequest(request);
+
+    let character = null;
+    if (user && params?.id) {
+      // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
+      // CharacterService.getById verifies dual-ownership (userId OR ownerId).
+      character = await CharacterService.getById(params.id, user.userId);
+    }
+
+    return { user, authError, character };
+  })
+  .onBeforeHandle(async ({ user, authError, params, character, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
     }
 
+    if (params?.id && !character) {
+      // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
+      set.status = 404;
+      return { error: 'Character not found' };
+    }
+  })
+
+  /**
+   * GET /v1/characters
+   * List all characters for the authenticated user
+   */
+  .get('/', async ({ user }) => {
     try {
-      const { data: characters, error } = await supabaseService
-        .from('characters')
-        .select(`
-          id, name, race, class, level,
-          image_url, avatar_url,
-          campaign_id,
-          created_at, updated_at
-        `)
-        .eq('user_id', user.userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        logger.error({ msg: 'CHARACTERS_LIST error', error });
-        set.status = 500;
-        return { error: 'Failed to fetch characters' };
-      }
-
-      return characters || [];
+      // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
+      // both userId AND ownerId for comprehensive character access.
+      const characters = await CharacterService.listForUser(user!.userId);
+      return (characters || []).map(mapCharacterToApi);
     } catch (error) {
       logger.error({ msg: 'CHARACTERS_LIST error', error });
-      set.status = 500;
-      return { error: 'Failed to fetch characters' };
+      throw error;
     }
   })
 
@@ -80,61 +143,29 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters
    * Create a new character
    */
-  .post('/', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/', async ({ body, set, user }) => {
     try {
-      const {
-        name,
-        description,
-        race,
-        class: charClass,
-        level,
-        alignment,
-        experience_points,
-        image_url,
-        appearance,
-        personality_traits,
-        backstory_elements,
-        background,
-      } = body as any;
-
-      const { data: character, error } = await supabaseService
-        .from('characters')
-        .insert({
-          user_id: user.userId,
-          name,
-          description: description || null,
-          race,
-          class: charClass,
-          level: level || 1,
-          alignment: alignment || null,
-          experience_points: experience_points || 0,
-          image_url: image_url || null,
-          appearance: appearance || null,
-          personality_traits: personality_traits || null,
-          backstory_elements: backstory_elements || null,
-          background: background || null,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        logger.error({ msg: 'CHARACTER_CREATE error', error });
-        set.status = 500;
-        return { error: 'Failed to create character' };
-      }
+      const charData = body as any;
+      const character = await CharacterService.create(user!.userId, {
+        name: charData.name,
+        description: charData.description,
+        race: charData.race,
+        class: charData.class,
+        level: charData.level,
+        alignment: charData.alignment,
+        experiencePoints: charData.experience_points,
+        imageUrl: charData.image_url,
+        appearance: charData.appearance,
+        personalityTraits: charData.personality_traits,
+        backstoryElements: charData.backstory_elements,
+        background: charData.background,
+      });
 
       set.status = 201;
-      return character;
+      return mapCharacterToApi(character);
     } catch (error) {
       logger.error({ msg: 'CHARACTER_CREATE error', error });
-      set.status = 500;
-      return { error: 'Failed to create character' };
+      throw error;
     }
   })
 
@@ -142,110 +173,37 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id
    * Get a single character by ID
    */
-  .get('/:id', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    try {
-      const { data: character, error } = await supabaseService
-        .from('characters')
-        .select(`
-          id, name, description, race, class, level, alignment, experience_points,
-          image_url, avatar_url, background_image,
-          appearance, personality_traits, backstory_elements, background,
-          personality_notes, vision_types, obscurement, is_hidden,
-          campaign_id, user_id,
-          created_at, updated_at
-        `)
-        .eq('id', params.id)
-        .eq('user_id', user.userId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          set.status = 404;
-          return { error: 'Character not found' };
-        }
-        logger.error({ msg: 'CHARACTER_GET error', error });
-        set.status = 500;
-        return { error: 'Failed to fetch character' };
-      }
-
-      return character;
-    } catch (error) {
-      logger.error({ msg: 'CHARACTER_GET error', error });
-      set.status = 500;
-      return { error: 'Failed to fetch character' };
-    }
+  .get('/:id', async ({ character }) => {
+    // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
+    return mapCharacterToApi(character);
   })
 
   /**
    * PUT /v1/characters/:id
    * Update a character
    */
-  .put('/:id', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .put('/:id', async ({ params, body, user }) => {
     try {
-      const {
-        name,
-        description,
-        race,
-        class: charClass,
-        level,
-        alignment,
-        experience_points,
-        image_url,
-        appearance,
-        personality_traits,
-        backstory_elements,
-        background,
-      } = body as any;
+      const charData = body as any;
+      const updated = await CharacterService.update(params.id, user!.userId, {
+        name: charData.name,
+        description: charData.description,
+        race: charData.race,
+        class: charData.class,
+        level: charData.level,
+        alignment: charData.alignment,
+        experiencePoints: charData.experience_points,
+        imageUrl: charData.image_url,
+        appearance: charData.appearance,
+        personalityTraits: charData.personality_traits,
+        backstoryElements: charData.backstory_elements,
+        background: charData.background,
+      });
 
-      const { data: character, error } = await supabaseService
-        .from('characters')
-        .update({
-          name,
-          description: description || null,
-          race,
-          class: charClass,
-          level: level || 1,
-          alignment: alignment || null,
-          experience_points: experience_points || 0,
-          image_url: image_url || null,
-          appearance: appearance || null,
-          personality_traits: personality_traits || null,
-          backstory_elements: backstory_elements || null,
-          background: background || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.id)
-        .eq('user_id', user.userId)
-        .select()
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          set.status = 404;
-          return { error: 'Character not found' };
-        }
-        logger.error({ msg: 'CHARACTER_UPDATE error', error });
-        set.status = 500;
-        return { error: 'Failed to update character' };
-      }
-
-      return character;
+      return mapCharacterToApi(updated);
     } catch (error) {
       logger.error({ msg: 'CHARACTER_UPDATE error', error });
-      set.status = 500;
-      return { error: 'Failed to update character' };
+      throw error;
     }
   })
 
@@ -253,37 +211,13 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * DELETE /v1/characters/:id
    * Delete a character
    */
-  .delete('/:id', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .delete('/:id', async ({ params, user }) => {
     try {
-      const { data: character, error } = await supabaseService
-        .from('characters')
-        .delete()
-        .eq('id', params.id)
-        .eq('user_id', user.userId)
-        .select('id')
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          set.status = 404;
-          return { error: 'Character not found' };
-        }
-        logger.error({ msg: 'CHARACTER_DELETE error', error });
-        set.status = 500;
-        return { error: 'Failed to delete character' };
-      }
-
+      await CharacterService.delete(params.id, user!.userId);
       return { ok: true };
     } catch (error) {
       logger.error({ msg: 'CHARACTER_DELETE error', error });
-      set.status = 500;
-      return { error: 'Failed to delete character' };
+      throw error;
     }
   })
 
@@ -291,33 +225,15 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/spells
    * Validate and save character spells
    */
-  .post('/:id/spells', async ({ request, params, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .post('/:id/spells', async ({ params, body }) => {
     try {
       const { spells, className } = body as { spells: string[]; className: string };
 
       if (!spells || !className) {
-        set.status = 400;
-        return { error: 'Missing required fields: spells and className' };
+        throw new Error('Missing required fields: spells and className');
       }
 
-      // Verify character ownership
-      const { data: character, error: charError } = await supabaseService
-        .from('characters')
-        .select('id, class')
-        .eq('id', params.id)
-        .eq('user_id', user.userId)
-        .single();
-
-      if (charError || !character) {
-        set.status = 404;
-        return { error: 'Character not found' };
-      }
+      // 🛡️ Sentinel: Already verified by onBeforeHandle (checks dual-ownership)
 
       // Get class ID
       const { data: classData, error: classError } = await supabaseService
@@ -327,8 +243,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         .single();
 
       if (classError || !classData) {
-        set.status = 400;
-        return { error: 'Invalid class name' };
+        throw new Error('Invalid class name');
       }
 
       // Validate all spells in a single batch query
@@ -340,8 +255,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
       if (validationError) {
         logger.error({ msg: 'CHARACTER_SPELLS_VALIDATE error', error: validationError });
-        set.status = 500;
-        return { error: 'Failed to validate spells' };
+        throw new Error('Failed to validate spells');
       }
 
       // Create a Set of valid spell IDs for O(1) lookup
@@ -365,7 +279,6 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           (spellId: string) => `${className} cannot learn ${spellNameMap.get(spellId) || spellId}`
         );
 
-        set.status = 400;
         return {
           error: 'Invalid spell selection',
           details: validationErrors,
@@ -395,16 +308,14 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
         if (insertError) {
           logger.error({ msg: 'CHARACTER_SPELLS_INSERT error', error: insertError });
-          set.status = 500;
-          return { error: 'Failed to save character spells' };
+          throw new Error('Failed to save character spells');
         }
       }
 
       return { success: true, message: 'Character spells saved successfully' };
-    } catch (error) {
+    } catch (error: any) {
       logger.error({ msg: 'CHARACTER_SPELLS_SAVE error', error });
-      set.status = 500;
-      return { error: 'Failed to validate character spells' };
+      return { error: error.message || 'Failed to validate character spells' };
     }
   })
 
@@ -414,16 +325,9 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get(
     '/:id/spells',
-    async ({ request, params, set }) => {
-      // Direct auth check - bypasses Elysia plugin context issues
-      const { user, error } = await authenticateRequest(request);
-      if (error || !user) {
-        set.status = 401;
-        return { error: error || 'Unauthorized' };
-      }
-
+    async ({ params, character, user }) => {
       const characterId = params.id;
-      const userId = user.userId;
+      const userId = user!.userId;
 
       logger.info({
         msg: 'CHARACTER_SPELLS',
@@ -432,83 +336,51 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         timestamp: new Date().toISOString(),
       });
 
-      try {
-        // Query character data including spell columns from characters table
-        const rows = await sql`
-          SELECT
-            id,
-            class,
-            level,
-            user_id,
-            cantrips,
-            known_spells,
-            prepared_spells
-          FROM characters
-          WHERE id = ${characterId}
-            AND user_id = ${userId}
-          LIMIT 1
-        `;
+      // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
 
-        const character = rows?.[0];
+      logger.info({
+        msg: 'CHARACTER_SPELLS_FOUND',
+        characterId: character.id,
+        class: character.class,
+        level: character.level,
+        ownerId: character.userId,
+      });
 
-        if (!character) {
-          logger.info({
-            msg: 'CHARACTER_SPELLS_NOT_FOUND',
-            characterId,
-            userId,
-          });
-          set.status = 404;
-          return { error: 'Character not found' };
-        }
+      // Parse spell strings
+      const cantrips = parseSpellString(character.cantrips);
+      const knownSpells = parseSpellString(character.knownSpells);
+      const preparedSpells = parseSpellString(character.preparedSpells);
 
-        logger.info({
-          msg: 'CHARACTER_SPELLS_FOUND',
-          characterId: character.id,
+      logger.info({
+        msg: 'CHARACTER_SPELLS_PARSED',
+        cantripCount: cantrips.length,
+        knownSpellCount: knownSpells.length,
+        preparedSpellCount: preparedSpells.length,
+      });
+
+      const response = {
+        character: {
+          id: character.id,
           class: character.class,
           level: character.level,
-          ownerId: character.user_id,
-        });
+        },
+        cantrips: cantrips.map(name => ({ name, level: 0 })),
+        spells: knownSpells.map(name => ({
+          name,
+          is_prepared: preparedSpells.includes(name),
+        })),
+        total_spells: cantrips.length + knownSpells.length,
+      };
 
-        // Parse spell strings
-        const cantrips = parseSpellString(character.cantrips);
-        const knownSpells = parseSpellString(character.known_spells);
-        const preparedSpells = parseSpellString(character.prepared_spells);
+      logger.info({
+        msg: 'CHARACTER_SPELLS_RESPONSE',
+        characterId: response.character.id,
+        cantripCount: response.cantrips.length,
+        spellCount: response.spells.length,
+        totalSpells: response.total_spells,
+      });
 
-        logger.info({
-          msg: 'CHARACTER_SPELLS_PARSED',
-          cantripCount: cantrips.length,
-          knownSpellCount: knownSpells.length,
-          preparedSpellCount: preparedSpells.length,
-        });
-
-        const response = {
-          character: {
-            id: character.id,
-            class: character.class,
-            level: character.level,
-          },
-          cantrips: cantrips.map(name => ({ name, level: 0 })),
-          spells: knownSpells.map(name => ({
-            name,
-            is_prepared: preparedSpells.includes(name),
-          })),
-          total_spells: cantrips.length + knownSpells.length,
-        };
-
-        logger.info({
-          msg: 'CHARACTER_SPELLS_RESPONSE',
-          characterId: response.character.id,
-          cantripCount: response.cantrips.length,
-          spellCount: response.spells.length,
-          totalSpells: response.total_spells,
-        });
-
-        return response;
-      } catch (error) {
-        logger.error({ msg: 'CHARACTER_SPELLS_ERROR', error });
-        set.status = 500;
-        return { error: 'Failed to fetch character spells' };
-      }
+      return response;
     },
     {
       params: t.Object({
