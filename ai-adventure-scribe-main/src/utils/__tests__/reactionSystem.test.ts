@@ -3,6 +3,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
+  processReactionResponse,
+  clearExpiredReactions,
+  hasAvailableReactions
+} from '../reactionSystem';
+import {
   createReactionOpportunity,
   checkOpportunityAttacks,
   checkCounterspellOpportunities,
@@ -11,11 +16,8 @@ import {
   checkShieldSpellOpportunities,
   checkAbsorbElementsOpportunities,
   checkHellishRebukeOpportunities,
-  processReactionResponse,
-  clearExpiredReactions,
-  checkReactionTriggers,
-  hasAvailableReactions
-} from '../reactionSystem';
+  checkReactionTriggers
+} from '../reactionTriggers';
 
 // Mock diceUtils
 vi.mock('@/utils/diceUtils', () => ({

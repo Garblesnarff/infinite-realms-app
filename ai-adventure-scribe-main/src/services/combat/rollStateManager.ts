@@ -3,6 +3,10 @@
  * Tracks combat roll states and manages the sequence of attack → damage rolls
  */
 
+import type { Character } from '@/types/character';
+
+import { DiceEngine } from '@/services/dice/DiceEngine';
+
 export interface PendingRoll {
   id: string;
   type: 'attack' | 'damage' | 'save' | 'skill_check' | 'initiative';
@@ -14,7 +18,7 @@ export interface PendingRoll {
   context: string;
   actorId: string;
   waitingFor?: 'damage' | 'confirmation';
-  character?: import('@/types/character').Character;
+  character?: Character;
   preferredAbility?: 'str' | 'dex';
 }
 
@@ -28,6 +32,9 @@ export interface RollResult {
   timestamp: number;
   context: string;
   actorId: string;
+  weaponName?: string;
+  character?: Character;
+  preferredAbility?: 'str' | 'dex';
 }
 
 export interface CombatRollState {
@@ -97,6 +104,9 @@ export class RollStateManager {
       timestamp: Date.now(),
       context: roll.context,
       actorId: roll.actorId,
+      weaponName: roll.weaponName,
+      character: roll.character,
+      preferredAbility: roll.preferredAbility,
     };
 
     this.state.completedRolls.push(completedRoll);
@@ -169,24 +179,18 @@ export class RollStateManager {
     const attackRoll = this.state.completedRolls.find((r) => r.id === attackRollId);
     if (!attackRoll) return null;
 
-    // Find the original pending roll to get weapon and character data
-    const originalPending = this.state.pendingRolls.find(
-      (p) => p.weaponName && p.actorId === attackRoll.actorId,
-    );
-
-    if (!originalPending?.weaponName) {
+    if (!attackRoll.weaponName) {
       return { formula: '1d6+3', purpose: 'Damage roll' };
     }
 
     const isCritical = this.state.criticalHit === attackRollId;
 
     // Use DiceEngine for proper damage formula calculation
-    const { DiceEngine } = require('../dice/DiceEngine');
     return DiceEngine.createDamageRollRequest(
-      originalPending.weaponName,
+      attackRoll.weaponName,
       isCritical,
-      originalPending.character,
-      originalPending.preferredAbility,
+      attackRoll.character,
+      attackRoll.preferredAbility,
     );
   }
 
@@ -195,9 +199,8 @@ export class RollStateManager {
    */
   getAttackRollSuggestion(
     weaponName: string,
-    character?: import('@/types/character').Character,
+    character?: Character,
   ): { formula: string; purpose: string } {
-    const { DiceEngine } = require('../dice/DiceEngine');
     return DiceEngine.createAttackRollRequest(weaponName, character);
   }
 
