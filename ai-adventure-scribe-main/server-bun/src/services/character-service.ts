@@ -11,15 +11,19 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, isNotNull, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, or } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
   characterPermissions,
+  characterSpells,
   characterStats,
   characters,
+  classes,
+  classSpells,
+  spells,
 } from '../../../db/schema/index.js';
-import { InternalServerError } from '../lib/errors.js';
+import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 import type {
   Character,
@@ -612,5 +616,117 @@ export class CharacterService {
     }
 
     return character;
+  }
+
+  /**
+   * Save character spells (junction table and character columns) with ownership verification.
+   * This is a security-hardened method that replaces direct Supabase calls.
+   */
+  static async saveCharacterSpells(
+    characterId: string,
+    userId: string,
+    spellIds: string[],
+    className: string
+  ): Promise<{ success: boolean; message: string }> {
+    // 🛡️ Sentinel: Verify ownership first to mask existence
+    const character = await this.getById(characterId, userId);
+    if (!character) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    // Get class ID
+    const [classData] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.name, className))
+      .limit(1);
+
+    if (!classData) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid class name' });
+    }
+
+    // Validate spells in batch if any were provided
+    if (spellIds.length > 0) {
+      const validClassSpells = await db
+        .select({
+          spellId: classSpells.spellId,
+          spellName: spells.name,
+        })
+        .from(classSpells)
+        .innerJoin(spells, eq(classSpells.spellId, spells.id))
+        .where(and(
+          eq(classSpells.classId, classData.id),
+          inArray(classSpells.spellId, spellIds)
+        ));
+
+      const validSpellIds = new Set(validClassSpells.map((s: any) => s.spellId));
+      const invalidSpellIds = spellIds.filter(id => !validSpellIds.has(id));
+
+      if (invalidSpellIds.length > 0) {
+        // Get names for invalid spells for better error reporting
+        const invalidSpellData = await db
+          .select({ name: spells.name })
+          .from(spells)
+          .where(inArray(spells.id, invalidSpellIds));
+
+        const invalidNames = invalidSpellData.map((s: any) => s.name);
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Invalid spells for ${className}: ${invalidNames.join(', ')}`,
+        });
+      }
+    }
+
+    // Clear existing spells with ownership check in WHERE clause for defense-in-depth
+    await db.delete(characterSpells).where(
+      and(
+        eq(characterSpells.characterId, characterId),
+        eq(characterSpells.sourceClassId, classData.id),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      )
+    );
+
+    // Insert new spells
+    if (spellIds.length > 0) {
+      const spellInserts = spellIds.map(spellId => ({
+        characterId,
+        spellId,
+        sourceClassId: classData.id,
+        isPrepared: true,
+        sourceFeature: 'base',
+      }));
+
+      await db.insert(characterSpells).values(spellInserts);
+    }
+
+    // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
+    // Fetch all current spells for the character across all classes
+    const allCharacterSpells = await db
+      .select({
+        name: spells.name,
+        level: spells.level,
+      })
+      .from(characterSpells)
+      .innerJoin(spells, eq(characterSpells.spellId, spells.id))
+      .where(eq(characterSpells.characterId, characterId));
+
+    const cantrips = allCharacterSpells.filter((s: any) => s.level === 0).map((s: any) => s.name);
+    const leveledSpells = allCharacterSpells.filter((s: any) => s.level > 0).map((s: any) => s.name);
+
+    // Update the character table columns
+    await this.updateSpells(characterId, userId, {
+      cantrips,
+      knownSpells: leveledSpells,
+      preparedSpells: leveledSpells, // Default all as prepared for now to match current behavior
+    });
+
+    return { success: true, message: 'Character spells saved successfully' };
   }
 }
