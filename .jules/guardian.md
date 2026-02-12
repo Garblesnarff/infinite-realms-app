@@ -59,3 +59,7 @@
 ## 2024-05-24 - [Death Saves Coverage]
 **Learning:** Found that `deathSaves.ts` was completely untested despite containing critical combat state machine logic. Discovered strict `import/order` lint rules in tests that require local modules to be imported before aliased type definitions.
 **Action:** When adding new combat utility tests, ensure the source file is registered in both `include` and `coverage.include` in `vitest.config.ts`. Use `npx eslint --fix` to resolve complex import ordering issues automatically.
+
+## 2025-06-15 - [Magic Item Effects Coverage & Bug Fixes]
+**Learning:** Found that `magicItemEffects.ts` was completely untested. Discovered several bugs: 1) `getMagicAttackBonus` and others would ignore items with `magicBonus: 0` even if specific effects were present. 2) Attunement logic allowed characters with missing fields (e.g. no class) to bypass restrictions. 3) Generic `magicBonus` fallback was too aggressive, applying to all bonus types regardless of item type.
+**Action:** When testing magic items, ensure coverage for multiple simultaneous requirements (race + class). Implement smarter fallback logic for generic `magicBonus` based on `magicItemType`. Always verify that new tests and modules are added to `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Use `/* eslint-disable max-lines */` for test files that exceed the 200-line project limit.
