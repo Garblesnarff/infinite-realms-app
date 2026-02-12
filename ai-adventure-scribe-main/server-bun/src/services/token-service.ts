@@ -378,21 +378,32 @@ export class TokenService {
    * Get all tokens for a character
    */
   static async getTokensForCharacter(characterId: string, userId: string): Promise<Token[]> {
-    // Verify character ownership
-    await this.verifyCharacterOwnership(characterId, userId);
+    // ⚡ Bolt: Consolidate ownership verification and token retrieval into a single joined query.
+    // This reduces database round-trips from 2 to 1 and improves performance.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = await (db as any)
+      .select({
+        token: tokens,
+      })
+      .from(characters)
+      .leftJoin(characterTokens, eq(characters.id, characterTokens.characterId))
+      .leftJoin(tokens, eq(characterTokens.tokenId, tokens.id))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      );
 
-    // Get all tokens linked to this character using relation (single query instead of 2)
-    const links = await db.query.characterTokens.findMany({
-      where: eq(characterTokens.characterId, characterId),
-      with: {
-        token: true,
-      },
-    });
+    if (results.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND if character doesn't exist or user doesn't own it
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
+    }
 
-    // Extract tokens from the links, filtering out any null tokens
-    return links
-      .map((link: { token: Token | null }) => link.token)
-      .filter((token): token is Token => token !== null);
+    // Filter out null tokens (case where character exists but has no tokens)
+    return results
+      .map((r: { token: Token | null }) => r.token)
+      .filter((token: Token | null): token is Token => token !== null);
   }
 
   /**
