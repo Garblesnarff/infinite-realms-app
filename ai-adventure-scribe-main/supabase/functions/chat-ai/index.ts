@@ -1,23 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { ChatMessage } from './types.ts';
-import { 
-  fetchRelevantMemories, 
-  calculateMemoryRelevance, 
+import {
+  fetchRelevantMemories,
+  calculateMemoryRelevance,
   updateMemoryImportance,
-  formatMemoryContext 
+  formatMemoryContext
 } from './memory-utils.ts';
 import { generateAIResponse } from './ai-handler.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://infiniterealms.app',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
-};
+import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   const requestId = req.headers.get('x-request-id') || (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
