@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
 import React from 'react';
@@ -9,7 +10,6 @@ import CampaignSessions from './CampaignSessions';
 import CampaignSettings from './CampaignSettings';
 import CampaignWorld from './CampaignWorld';
 
-import CharacterSelectionModal from '@/components/campaign-list/character-selection-modal';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { CharacterSelectionModal } from '@/features/campaign/components';
 import { supabase } from '@/integrations/supabase/client';
 
 const CampaignHub: React.FC = () => {

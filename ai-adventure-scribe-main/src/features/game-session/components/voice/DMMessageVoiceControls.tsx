@@ -3,10 +3,10 @@ import React, { useState, useCallback } from 'react';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { useVoiceContext } from '@/contexts/VoiceContext';
 import { cn } from '@/lib/utils';
-import { Button } from '@/shared/components/ui/button';
-import { Slider } from '@/shared/components/ui/slider';
 import { extractNarrativeContent } from '@/utils/parseMessageOptions';
 
 interface DMMessageVoiceControlsProps {
@@ -34,7 +34,7 @@ export function DMMessageVoiceControls({
   } = useVoiceContext();
 
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
-  const [isTouchDevice, setIsTouchDevice] = useState(() => {
+  const [isTouchDevice, _setIsTouchDevice] = useState(() => {
     if (typeof window !== 'undefined') {
       return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     }

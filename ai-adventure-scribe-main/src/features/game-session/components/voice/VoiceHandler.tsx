@@ -15,7 +15,7 @@
 
 import React from 'react';
 
-import { ProgressiveVoicePlayer } from './audio/ProgressiveVoicePlayer';
+import { ProgressiveVoicePlayer } from '../audio/ProgressiveVoicePlayer';
 
 import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';

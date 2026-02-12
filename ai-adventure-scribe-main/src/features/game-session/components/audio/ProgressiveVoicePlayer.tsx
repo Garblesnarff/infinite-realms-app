@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import {
   Play,
   Pause,
@@ -16,28 +17,19 @@ import React from 'react';
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 import type { AISegment } from '@/services/voice-routing';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
-import { Alert, AlertDescription } from '@/shared/components/ui/alert';
-import { Badge } from '@/shared/components/ui/badge';
-import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/shared/components/ui/collapsible';
-import { Label } from '@/shared/components/ui/label';
-import { Progress } from '@/shared/components/ui/progress';
-import { Slider } from '@/shared/components/ui/slider';
-import { Switch } from '@/shared/components/ui/switch';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/shared/components/ui/tooltip';
 
 interface ProgressiveVoicePlayerProps {
   text: string;
@@ -161,7 +153,7 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     setHasUserInteracted,
   ]);
 
-  const handleAutoPlayToggle = React.useCallback(() => {
+  const _handleAutoPlayToggle = React.useCallback(() => {
     setAutoPlayEnabled(!autoPlayEnabled);
   }, [autoPlayEnabled, setAutoPlayEnabled]);
 

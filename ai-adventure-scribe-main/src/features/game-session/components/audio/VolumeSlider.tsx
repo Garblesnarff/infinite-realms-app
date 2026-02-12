@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { Slider } from '@/components/ui/slider';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 interface VolumeSliderProps {
   volume: number;

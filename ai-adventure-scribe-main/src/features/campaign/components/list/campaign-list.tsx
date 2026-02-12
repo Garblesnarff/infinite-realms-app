@@ -33,9 +33,9 @@ import React, { useMemo } from 'react';
 // Feature components
 // ============================
 import { MemoizedCampaignCard } from './campaign-card';
-import CampaignSkeleton from './campaign-skeleton';
 import EmptyState from './empty-state';
 
+import { FantasyLoader } from '@/components/ui/fantasy-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -130,13 +130,16 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
     },
   });
 
-  // Show loading state with skeletons
+  // Show loading state with FantasyLoader
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(3)].map((_, i) => (
-          <CampaignSkeleton key={i} />
-        ))}
+      <div className="flex items-center justify-center py-12">
+        <FantasyLoader
+          type="parchment"
+          size="lg"
+          label="Loading campaigns..."
+          tip="Your epic adventures await!"
+        />
       </div>
     );
   }

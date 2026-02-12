@@ -1,11 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { useParams } from 'react-router-dom';
 
 import type { Character } from '@/types/character';
 
-import { MemoizedCharacterCard } from '@/components/character-list/character-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MemoizedCharacterCard } from '@/features/character/components/list/character-card';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { subscriptionManager } from '@/services/supabase-subscription-manager';

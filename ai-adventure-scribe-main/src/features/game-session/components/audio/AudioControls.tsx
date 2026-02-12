@@ -1,9 +1,9 @@
 import { Mic, MicOff } from 'lucide-react';
 import React from 'react';
 
-import { SpeakingIndicator } from './audio/SpeakingIndicator';
-import { VolumeButton } from './audio/VolumeButton';
-import { VolumeSlider } from './audio/VolumeSlider';
+import { SpeakingIndicator } from './SpeakingIndicator';
+import { VolumeButton } from './VolumeButton';
+import { VolumeSlider } from './VolumeSlider';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';

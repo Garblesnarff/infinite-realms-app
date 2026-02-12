@@ -2,10 +2,10 @@ import { Plus, Users } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import CampaignList from '@/components/campaign-list/campaign-list';
 import { ErrorBoundary, CampaignErrorFallback } from '@/components/error';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
 import { Button } from '@/components/ui/button';
+import { CampaignList } from '@/features/campaign/components';
 
 /**
  * Index page component serving as the landing page
