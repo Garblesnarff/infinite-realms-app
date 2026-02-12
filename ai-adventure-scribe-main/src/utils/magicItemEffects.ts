@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Magic Item Effects System for D&D 5e
  *
@@ -27,8 +28,17 @@ export function getMagicAttackBonus(character: Character): number {
   if (!character.inventory) return 0;
 
   return character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicBonus)
-    .reduce((total, item) => total + (item.magicEffects?.attackBonus || 0), 0);
+    .filter((item) => item.equipped && item.isMagic)
+    .reduce((total, item) => {
+      if (item.magicEffects?.attackBonus !== undefined) {
+        return total + item.magicEffects.attackBonus;
+      }
+      // Fallback to magicBonus for appropriate item types
+      if (['weapon', 'rod', 'staff', 'wand'].includes(item.magicItemType || '')) {
+        return total + (item.magicBonus || 0);
+      }
+      return total;
+    }, 0);
 }
 
 /**
@@ -38,8 +48,17 @@ export function getMagicDamageBonus(character: Character): number {
   if (!character.inventory) return 0;
 
   return character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicBonus)
-    .reduce((total, item) => total + (item.magicEffects?.damageBonus || 0), 0);
+    .filter((item) => item.equipped && item.isMagic)
+    .reduce((total, item) => {
+      if (item.magicEffects?.damageBonus !== undefined) {
+        return total + item.magicEffects.damageBonus;
+      }
+      // Fallback to magicBonus for weapons
+      if (item.magicItemType === 'weapon') {
+        return total + (item.magicBonus || 0);
+      }
+      return total;
+    }, 0);
 }
 
 /**
@@ -49,8 +68,17 @@ export function getMagicACBonus(character: Character): number {
   if (!character.inventory) return 0;
 
   return character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicBonus)
-    .reduce((total, item) => total + (item.magicEffects?.acBonus || 0), 0);
+    .filter((item) => item.equipped && item.isMagic)
+    .reduce((total, item) => {
+      if (item.magicEffects?.acBonus !== undefined) {
+        return total + item.magicEffects.acBonus;
+      }
+      // Fallback to magicBonus for armor/shields
+      if (['armor', 'shield'].includes(item.magicItemType || '')) {
+        return total + (item.magicBonus || 0);
+      }
+      return total;
+    }, 0);
 }
 
 /**
@@ -60,8 +88,22 @@ export function getMagicSaveBonus(character: Character): number {
   if (!character.inventory) return 0;
 
   return character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicBonus)
-    .reduce((total, item) => total + (item.magicEffects?.saveBonus || 0), 0);
+    .filter((item) => item.equipped && item.isMagic)
+    .reduce((total, item) => {
+      if (item.magicEffects?.saveBonus !== undefined) {
+        return total + item.magicEffects.saveBonus;
+      }
+      // Some items like Ring of Protection might just have magicBonus
+      // but usually they should have specific effects.
+      // We'll only fallback if it's not a weapon/armor
+      if (
+        !['weapon', 'armor', 'shield'].includes(item.magicItemType || '') &&
+        item.magicBonus !== undefined
+      ) {
+        return total + item.magicBonus;
+      }
+      return total;
+    }, 0);
 }
 
 /**
@@ -145,7 +187,8 @@ export function canAttuneToItem(character: Character, item: MagicItemRequirement
   if (!item.attunementRequirements) return true;
 
   // Check class requirements
-  if (item.attunementRequirements.includes('class:') && character.class) {
+  if (item.attunementRequirements.includes('class:')) {
+    if (!character.class) return false;
     const requiredClasses = item.attunementRequirements
       .split('class:')[1]
       .split(',')[0]
@@ -158,7 +201,8 @@ export function canAttuneToItem(character: Character, item: MagicItemRequirement
   }
 
   // Check race requirements
-  if (item.attunementRequirements.includes('race:') && character.race) {
+  if (item.attunementRequirements.includes('race:')) {
+    if (!character.race) return false;
     const requiredRaces = item.attunementRequirements
       .split('race:')[1]
       .split(',')[0]
@@ -171,7 +215,8 @@ export function canAttuneToItem(character: Character, item: MagicItemRequirement
   }
 
   // Check alignment requirements
-  if (item.attunementRequirements.includes('alignment:') && character.alignment) {
+  if (item.attunementRequirements.includes('alignment:')) {
+    if (!character.alignment) return false;
     const requiredAlignments = item.attunementRequirements
       .split('alignment:')[1]
       .split(',')[0]
@@ -218,11 +263,11 @@ export function applyMagicItemEffectsToParticipant(
   }
 
   // Apply ability score bonuses
-  const abilityBonuses = getMagicAbilityBonuses(character);
+  const _abilityBonuses = getMagicAbilityBonuses(character);
   // These would be applied to relevant calculations
 
   // Apply special properties
-  const specialProperties = getMagicSpecialProperties(character);
+  const _specialProperties = getMagicSpecialProperties(character);
   // These would be applied as needed
 
   return participant;
@@ -247,7 +292,7 @@ export function canAttuneToMoreItems(character: Character): boolean {
 /**
  * Get attuned items for a character
  */
-export function getAttunedItems(character: Character) {
+export function getAttunedItems(character: Character): NonNullable<Character['inventory']> {
   if (!character.inventory) return [];
 
   return character.inventory.filter((item) => item.isAttuned);
@@ -271,11 +316,10 @@ export function validateAttunementRequirements(
   }
 
   // Check class requirements
-  if (
-    item.attunementRequirements &&
-    item.attunementRequirements.includes('class:') &&
-    character.class
-  ) {
+  if (item.attunementRequirements && item.attunementRequirements.includes('class:')) {
+    if (!character.class) {
+      return { canAttune: false, reason: 'Requires a class for attunement' };
+    }
     const requiredClasses = item.attunementRequirements
       .split('class:')[1]
       .split(',')[0]
@@ -291,11 +335,10 @@ export function validateAttunementRequirements(
   }
 
   // Check race requirements
-  if (
-    item.attunementRequirements &&
-    item.attunementRequirements.includes('race:') &&
-    character.race
-  ) {
+  if (item.attunementRequirements && item.attunementRequirements.includes('race:')) {
+    if (!character.race) {
+      return { canAttune: false, reason: 'Requires a race for attunement' };
+    }
     const requiredRaces = item.attunementRequirements
       .split('race:')[1]
       .split(',')[0]
@@ -311,11 +354,10 @@ export function validateAttunementRequirements(
   }
 
   // Check alignment requirements
-  if (
-    item.attunementRequirements &&
-    item.attunementRequirements.includes('alignment:') &&
-    character.alignment
-  ) {
+  if (item.attunementRequirements && item.attunementRequirements.includes('alignment:')) {
+    if (!character.alignment) {
+      return { canAttune: false, reason: 'Requires an alignment for attunement' };
+    }
     const requiredAlignments = item.attunementRequirements
       .split('alignment:')[1]
       .split(',')[0]
@@ -336,7 +378,10 @@ export function validateAttunementRequirements(
 /**
  * Get magic item by ID
  */
-export function getMagicItemById(character: Character, itemId: string) {
+export function getMagicItemById(
+  character: Character,
+  itemId: string,
+): NonNullable<Character['inventory']>[number] | null {
   if (!character.inventory) return null;
 
   return character.inventory.find((item) => item.itemId === itemId) || null;

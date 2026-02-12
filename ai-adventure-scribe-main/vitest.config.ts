@@ -118,6 +118,7 @@ export default defineConfig({
       'tests/utils/character-converter.test.ts',
       'src/utils/__tests__/reactionSystem.test.ts',
       'src/utils/__tests__/deathSaves.test.ts',
+      'src/utils/__tests__/magicItemEffects.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -214,6 +215,7 @@ export default defineConfig({
         'server-bun/src/services/combat-initiative-service.ts',
         'src/utils/reactionSystem.ts',
         'src/utils/combat/deathSaves.ts',
+        'src/utils/magicItemEffects.ts',
       ],
       exclude: [
         '**/__tests__/**',
