@@ -11,7 +11,7 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -693,20 +693,38 @@ export class CharacterService {
       )
     );
 
-    // Insert new spells
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
     if (spellIds.length > 0) {
       const spellInserts = spellIds.map(spellId => ({
-        characterId,
-        spellId,
-        sourceClassId: classData.id,
-        isPrepared: true,
-        sourceFeature: 'base',
+        characterId: sql`${characterId}`,
+        spellId: sql`${spellId}`,
+        sourceClassId: sql`${classData.id}`,
+        isPrepared: sql`true`,
+        sourceFeature: sql`'base'`,
       }));
 
-      await db.insert(characterSpells).values(spellInserts);
+      // Use a single query with multiple SELECT ... WHERE EXISTS combined via UNION ALL
+      // to ensure atomicity and ownership verification for each inserted row.
+      const selectQueries = spellInserts.map(insert =>
+        db.select(insert)
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      );
+
+      // Join all select queries with unionAll
+      let finalSelect: any = selectQueries[0];
+      for (let i = 1; i < selectQueries.length; i++) {
+        finalSelect = finalSelect.unionAll(selectQueries[i]);
+      }
+
+      await db.insert(characterSpells).select(finalSelect);
     }
 
     // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
+    // 🛡️ Sentinel: Incorporate ownership check into the SELECT query for defense-in-depth
     // Fetch all current spells for the character across all classes
     const allCharacterSpells = await db
       .select({
@@ -715,7 +733,11 @@ export class CharacterService {
       })
       .from(characterSpells)
       .innerJoin(spells, eq(characterSpells.spellId, spells.id))
-      .where(eq(characterSpells.characterId, characterId));
+      .innerJoin(characters, eq(characterSpells.characterId, characters.id))
+      .where(and(
+        eq(characterSpells.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ));
 
     const cantrips = allCharacterSpells.filter((s: any) => s.level === 0).map((s: any) => s.name);
     const leveledSpells = allCharacterSpells.filter((s: any) => s.level > 0).map((s: any) => s.name);

@@ -29,6 +29,9 @@ vi.mock('../../../../db/client.js', () => ({
       values: vi.fn(() => ({
         returning: vi.fn(),
       })),
+      select: vi.fn(() => ({
+        returning: vi.fn(),
+      })),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
@@ -152,9 +155,9 @@ describe('SpellSlotsService', () => {
       });
 
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'log-123', timestamp: new Date() }])
-        })
+        values: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'log-123', timestamp: new Date() }])
       });
 
       const result = await SpellSlotsService.useSpellSlot({
@@ -224,7 +227,9 @@ describe('SpellSlotsService', () => {
         where: vi.fn().mockResolvedValue({})
       });
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockResolvedValue({})
+        values: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([])
       });
       // Mock the final call to getCharacterSpellSlots
       (db.query.characterSpellSlots.findMany as any).mockResolvedValue([]);

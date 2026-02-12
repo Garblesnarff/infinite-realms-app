@@ -406,30 +406,50 @@ export class SpellSlotsService {
       });
     }
 
-    // Use the slot
+    // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth
     const [updatedSlot] = await db
       .update(characterSpellSlots)
       .set({
         usedSlots: slotData.usedSlots + 1,
         updatedAt: new Date(),
       })
-      .where(eq(characterSpellSlots.id, slotData.id))
+      .where(
+        and(
+          eq(characterSpellSlots.id, slotData.id),
+          eq(characterSpellSlots.characterId, characterId),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
+        )
+      )
       .returning();
 
     if (!updatedSlot) {
       throw new InternalServerError('Failed to use spell slot');
     }
 
-    // Log the usage
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT
     const [logEntry] = await db
       .insert(spellSlotUsageLog)
-      .values({
-        characterId: characterId,
-        sessionId: sessionId || null,
-        spellName: spellName,
-        spellLevel: spellLevel,
-        slotLevelUsed: slotLevelUsed,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          sessionId: sql`${sessionId || null}`,
+          spellName: sql`${spellName}`,
+          spellLevel: sql`${spellLevel}`,
+          slotLevelUsed: sql`${slotLevelUsed}`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!logEntry) {
@@ -536,7 +556,17 @@ export class SpellSlotsService {
       throw new NotFoundError('Character', characterId);
     }
 
-    const whereClauses = [eq(characterSpellSlots.characterId, characterId)];
+    const whereClauses = [
+      eq(characterSpellSlots.characterId, characterId),
+      exists(
+        db.select()
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    ];
 
     // Filter by specific level if provided
     if (level !== undefined) {
@@ -583,6 +613,7 @@ export class SpellSlotsService {
 
     // ⚡ Bolt: Optimized N+1 update loop into a single batch update query.
     // This reduces database round-trips from N (number of slot levels) to 1.
+    // 🛡️ Sentinel: Incorporate ownership check into the batch UPDATE query for defense-in-depth
     await db
       .update(characterSpellSlots)
       .set({
@@ -591,7 +622,20 @@ export class SpellSlotsService {
           : 0,
         updatedAt: new Date(),
       })
-      .where(inArray(characterSpellSlots.id, slotsToUpdate.map(s => s.id)));
+      .where(
+        and(
+          inArray(characterSpellSlots.id, slotsToUpdate.map(s => s.id)),
+          eq(characterSpellSlots.characterId, characterId),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
+        )
+      );
 
     return {
       characterId,
@@ -621,7 +665,17 @@ export class SpellSlotsService {
       throw new NotFoundError('Character', characterId);
     }
 
-    const whereClauses = [eq(spellSlotUsageLog.characterId, characterId)];
+    const whereClauses = [
+      eq(spellSlotUsageLog.characterId, characterId),
+      exists(
+        db.select()
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      )
+    ];
     if (sessionId) {
       whereClauses.push(eq(spellSlotUsageLog.sessionId, sessionId));
     }
@@ -691,19 +745,48 @@ export class SpellSlotsService {
 
     const slots = 'slots' in calculation ? calculation.slots : {};
 
-    // Delete existing slots
-    await db.delete(characterSpellSlots).where(eq(characterSpellSlots.characterId, characterId));
+    // 🛡️ Sentinel: Incorporate ownership check into the DELETE query for defense-in-depth
+    await db.delete(characterSpellSlots).where(
+      and(
+        eq(characterSpellSlots.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      )
+    );
 
-    // Insert new slots
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
     const insertData = Object.entries(slots).map(([level, total]) => ({
-      characterId: characterId,
-      spellLevel: parseInt(level),
-      totalSlots: total,
-      usedSlots: 0,
+      characterId: sql`${characterId}`,
+      spellLevel: sql`${parseInt(level)}`,
+      totalSlots: sql`${total}`,
+      usedSlots: sql`0`,
     }));
 
     if (insertData.length > 0) {
-      await db.insert(characterSpellSlots).values(insertData);
+      // Use a single query with multiple SELECT ... WHERE EXISTS combined via UNION ALL
+      // to ensure atomicity and ownership verification for each inserted row.
+      const selectQueries = insertData.map(insert =>
+        db.select(insert)
+          .from(characters)
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      );
+
+      // Join all select queries with unionAll
+      let finalSelect: any = selectQueries[0];
+      for (let i = 1; i < selectQueries.length; i++) {
+        finalSelect = finalSelect.unionAll(selectQueries[i]);
+      }
+
+      await db.insert(characterSpellSlots).select(finalSelect);
     }
 
     // Return the initialized slots

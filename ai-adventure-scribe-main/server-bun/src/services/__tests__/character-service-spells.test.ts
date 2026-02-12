@@ -14,7 +14,11 @@ vi.mock('../../../../db/client.js', () => ({
       },
     },
     select: vi.fn(),
-    insert: vi.fn(),
+    insert: vi.fn(() => ({
+      values: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      returning: vi.fn(),
+    })),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -32,6 +36,7 @@ vi.mock('drizzle-orm', async () => {
     inArray: vi.fn(),
     desc: vi.fn(),
     isNotNull: vi.fn(),
+    sql: vi.fn((strings, ...values) => ({ strings, values })),
   };
 });
 
@@ -43,16 +48,19 @@ describe('CharacterService.saveCharacterSpells', () => {
     vi.clearAllMocks();
 
     // Default mock for select builder
-    (db.select as any).mockImplementation(() => ({
+    const createMockSelect = () => ({
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
       leftJoin: vi.fn().mockReturnThis(),
+      unionAll: vi.fn().mockImplementation(() => createMockSelect()),
       then: vi.fn((cb) => Promise.resolve(cb([]))),
       // Add support for async/await
       [Symbol.iterator]: function* () { yield Promise.resolve([]); },
-    }));
+    });
+
+    (db.select as any).mockImplementation(createMockSelect);
 
     // Make db.select also a thenable for direct await
     const mockSelect = (db.select as any);
@@ -62,6 +70,7 @@ describe('CharacterService.saveCharacterSpells', () => {
       limit: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
       leftJoin: vi.fn().mockReturnThis(),
+      unionAll: vi.fn().mockReturnThis(),
       then: (onFullfilled: any) => Promise.resolve([]).then(onFullfilled),
     });
   });
@@ -116,7 +125,9 @@ describe('CharacterService.saveCharacterSpells', () => {
 
     // 5. Insert mock
     (db.insert as any).mockReturnValue({
-      values: vi.fn().mockResolvedValue({})
+      values: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([{ id: 'log-123' }])
     });
 
     // 6. Update mock (called by updateSpells)

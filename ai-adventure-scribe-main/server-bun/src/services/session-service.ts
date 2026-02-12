@@ -250,19 +250,25 @@ export class SessionService {
     context?: Record<string, unknown>;
     images?: unknown[];
   }, userId: string): Promise<DialogueHistory> {
-    // Verify ownership first
-    await this.getSessionById(data.sessionId, userId);
-
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that messages can only be added to sessions the user is authorized to access.
     const [msg] = await db
       .insert(dialogueHistory)
-      .values({
-        sessionId: data.sessionId,
-        speakerType: data.speakerType,
-        speakerId: data.speakerId || null,
-        message: data.message,
-        context: data.context || null,
-        timestamp: new Date(),
-      })
+      .select(
+        db.select({
+          sessionId: sql`${data.sessionId}`,
+          speakerType: sql`${data.speakerType}`,
+          speakerId: sql`${data.speakerId || null}`,
+          message: sql`${data.message}`,
+          context: sql`${data.context || null}`,
+          timestamp: sql`NOW()`,
+        })
+        .from(gameSessions)
+        .where(and(
+          eq(gameSessions.id, data.sessionId),
+          this.getOwnershipCondition(userId)
+        ))
+      )
       .returning();
 
     if (!msg) throw new InternalServerError('Failed to add message');
