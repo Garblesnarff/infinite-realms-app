@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, max-lines */
 /**
  * Blog Routes for Elysia
  *
@@ -6,12 +7,24 @@
  */
 
 import { Elysia } from 'elysia';
-import { supabaseService } from '../../lib/supabase.js';
-import { authenticateRequest } from '../../lib/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { getBlogRole, canManagePost, type BlogRole } from '../../middleware/blog-author.js';
+
+import {
+  handleValidationError,
+  syncPostRelations,
+  deletePostRelations,
+  slugNotFoundError,
+  ensureAuthorExists,
+  fetchAuthorIdForUser,
+  resolveAuthorIdForRequest,
+  normalizeSeoKeywords,
+  normalizeMetadata,
+  normalizeStatusPayload,
+  requireBlogAuth,
+  requireBlogAdminAuth,
+  BLOG_POST_SELECT,
+  BLOG_POST_SUMMARY_SELECT,
+} from './blog/helpers.js';
 import { mapBlogCategory, mapBlogPost, mapBlogTag } from './blog/mappers.js';
-import type { BlogPostRow, BlogCategoryRow, BlogTagRow, BlogCategory, BlogTag } from './blog/types.js';
 import {
   blogCategorySchema,
   blogCategoryUpdateSchema,
@@ -25,24 +38,21 @@ import {
   blogTagSchema,
   blogTagUpdateSchema,
 } from './blog/schemas.js';
-import {
-  handleValidationError,
-  syncPostRelations,
-  deletePostRelations,
-  slugNotFoundError,
-  ensureAuthorExists,
-  fetchAuthorIdForUser,
-  resolveAuthorIdForRequest,
-  normalizeSeoKeywords,
-  normalizeMetadata,
-  normalizeStatusPayload,
-  BLOG_POST_SELECT,
-  BLOG_POST_SUMMARY_SELECT,
-} from './blog/helpers.js';
+import { supabaseService } from '../../lib/supabase.js';
+import { canManagePost, type BlogRole } from '../../middleware/blog-author.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
+
+import type {
+  BlogPostRow,
+  BlogCategoryRow,
+  BlogTagRow,
+  BlogCategory,
+  BlogTag,
+} from './blog/types.js';
 
 async function getAuthorScopeIdForMutation(
   blogRole: BlogRole,
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   if (blogRole === 'admin') {
     return null;
@@ -90,9 +100,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
       if (error) throw error;
 
-      const mapped = (data ?? []).map((row) => mapBlogPost(row as unknown as BlogPostRow, { includeContent: false }));
+      const mapped = (data ?? []).map((row) =>
+        mapBlogPost(row as unknown as BlogPostRow, { includeContent: false }),
+      );
       const filtered = mapped.filter((post) => {
-        const categoryOk = !category || post.categories.some((c) => c.slug === category || c.id === category);
+        const categoryOk =
+          !category || post.categories.some((c) => c.slug === category || c.id === category);
         const tagOk = !tag || post.tags.some((t) => t.slug === tag || t.id === tag);
         return categoryOk && tagOk;
       });
@@ -102,7 +115,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         meta: {
           page,
           pageSize,
-          total: category || tag ? filtered.length : count ?? filtered.length,
+          total: category || tag ? filtered.length : (count ?? filtered.length),
         },
       };
     } catch (error) {
@@ -123,7 +136,8 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
     try {
       // Check if postId is a UUID (id) or a slug
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(postId);
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(postId);
 
       let query = supabaseService
         .from('blog_posts')
@@ -199,17 +213,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/posts - Create a new blog post
    */
   .post('/posts', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const parsed = blogPostInputSchema.safeParse(body ?? {});
     if (!parsed.success) {
@@ -221,8 +230,16 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     const status = payload.status ?? 'draft';
 
     try {
-      const authorId = await resolveAuthorIdForRequest(user.userId, blogRole, payload.authorId ?? null);
-      const statusFields = normalizeStatusPayload(status, payload.scheduledFor, payload.publishedAt);
+      const authorId = await resolveAuthorIdForRequest(
+        user.userId,
+        blogRole,
+        payload.authorId ?? null,
+      );
+      const statusFields = normalizeStatusPayload(
+        status,
+        payload.scheduledFor,
+        payload.publishedAt,
+      );
 
       const { data: inserted, error: insertError } = await supabaseService
         .from('blog_posts')
@@ -289,17 +306,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * PUT /v1/blog/posts/:postId - Update a blog post
    */
   .put('/posts/:postId', async ({ request, body, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const parsed = blogPostUpdateSchema.safeParse(body ?? {});
     if (!parsed.success) {
@@ -329,13 +341,19 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
       if (payload.slug !== undefined) updatePayload.slug = payload.slug;
       if (payload.summary !== undefined) updatePayload.summary = payload.summary ?? null;
       if (payload.content !== undefined) updatePayload.content = payload.content ?? null;
-      if (payload.featuredImageUrl !== undefined) updatePayload.featured_image_url = payload.featuredImageUrl ?? null;
-      if (payload.heroImageAlt !== undefined) updatePayload.hero_image_alt = payload.heroImageAlt ?? null;
+      if (payload.featuredImageUrl !== undefined)
+        updatePayload.featured_image_url = payload.featuredImageUrl ?? null;
+      if (payload.heroImageAlt !== undefined)
+        updatePayload.hero_image_alt = payload.heroImageAlt ?? null;
       if (payload.seoTitle !== undefined) updatePayload.seo_title = payload.seoTitle ?? null;
-      if (payload.seoDescription !== undefined) updatePayload.seo_description = payload.seoDescription ?? null;
-      if (payload.seoKeywords !== undefined) updatePayload.seo_keywords = normalizeSeoKeywords(payload.seoKeywords);
-      if (payload.canonicalUrl !== undefined) updatePayload.canonical_url = payload.canonicalUrl ?? null;
-      if (payload.metadata !== undefined) updatePayload.metadata = normalizeMetadata(payload.metadata);
+      if (payload.seoDescription !== undefined)
+        updatePayload.seo_description = payload.seoDescription ?? null;
+      if (payload.seoKeywords !== undefined)
+        updatePayload.seo_keywords = normalizeSeoKeywords(payload.seoKeywords);
+      if (payload.canonicalUrl !== undefined)
+        updatePayload.canonical_url = payload.canonicalUrl ?? null;
+      if (payload.metadata !== undefined)
+        updatePayload.metadata = normalizeMetadata(payload.metadata);
 
       if (payload.authorId !== undefined && blogRole === 'admin') {
         if (payload.authorId === null) {
@@ -355,7 +373,11 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
           set.status = 400;
           return { error: 'scheduledFor is required when scheduling a post' };
         }
-        const statusFields = normalizeStatusPayload(payload.status, payload.scheduledFor, payload.publishedAt);
+        const statusFields = normalizeStatusPayload(
+          payload.status,
+          payload.scheduledFor,
+          payload.publishedAt,
+        );
         Object.assign(updatePayload, statusFields);
       } else {
         if (payload.scheduledFor !== undefined) {
@@ -370,10 +392,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
       if (hasUpdates) {
         updatePayload.updated_at = new Date().toISOString();
-        let updateQuery = supabaseService
-          .from('blog_posts')
-          .update(updatePayload)
-          .eq('id', id);
+        let updateQuery = supabaseService.from('blog_posts').update(updatePayload).eq('id', id);
         if (authorScopeId) {
           updateQuery = updateQuery.eq('author_id', authorScopeId);
         }
@@ -396,10 +415,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         await syncPostRelations(id || '', payload.categoryIds, payload.tagIds, authorScopeId);
       }
 
-      let fetchQuery = supabaseService
-        .from('blog_posts')
-        .select(BLOG_POST_SELECT)
-        .eq('id', id);
+      let fetchQuery = supabaseService.from('blog_posts').select(BLOG_POST_SELECT).eq('id', id);
       if (authorScopeId) {
         fetchQuery = fetchQuery.eq('author_id', authorScopeId);
       }
@@ -432,17 +448,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/posts/:postId/publish - Publish a blog post
    */
   .post('/posts/:postId/publish', async ({ request, body, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const parsed = blogPostPublishSchema.safeParse(body ?? {});
     if (!parsed.success) {
@@ -499,17 +510,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * DELETE /v1/blog/posts/:postId - Delete a blog post
    */
   .delete('/posts/:postId', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const { postId: id } = params;
 
@@ -528,10 +534,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
       await deletePostRelations(id || '', authorScopeId);
 
-      let deleteQuery = supabaseService
-        .from('blog_posts')
-        .delete()
-        .eq('id', id);
+      let deleteQuery = supabaseService.from('blog_posts').delete().eq('id', id);
       if (authorScopeId) {
         deleteQuery = deleteQuery.eq('author_id', authorScopeId);
       }
@@ -563,16 +566,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/categories - Create a category (admin only)
    */
   .post('/categories', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogCategorySchema.safeParse(body ?? {});
@@ -614,16 +611,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * PUT /v1/blog/categories/:id - Update a category (admin only)
    */
   .put('/categories/:id', async ({ request, body, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogCategoryUpdateSchema.safeParse(body ?? {});
@@ -676,16 +667,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * DELETE /v1/blog/categories/:id - Delete a category (admin only)
    */
   .delete('/categories/:id', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const { id } = params;
@@ -724,16 +709,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/tags - Create a tag (admin only)
    */
   .post('/tags', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogTagSchema.safeParse(body ?? {});
@@ -775,16 +754,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * PUT /v1/blog/tags/:id - Update a tag (admin only)
    */
   .put('/tags/:id', async ({ request, body, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogTagUpdateSchema.safeParse(body ?? {});
@@ -837,16 +810,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * DELETE /v1/blog/tags/:id - Delete a tag (admin only)
    */
   .delete('/tags/:id', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const { id } = params;
@@ -885,16 +852,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/media/sign-upload - Get a signed upload URL (admin only)
    */
   .post('/media/sign-upload', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole !== 'admin') {
-      set.status = 403;
-      return { error: 'Blog admin access required' };
+    const auth = await requireBlogAdminAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogMediaRequestSchema.safeParse(body ?? {});
@@ -934,17 +895,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * GET /v1/blog/posts/:postId/preview - Preview a post (author/admin)
    */
   .get('/posts/:postId/preview', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const { postId: id } = params;
 
@@ -961,10 +917,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         return { error: 'Blog post not found' };
       }
 
-      let previewQuery = supabaseService
-        .from('blog_posts')
-        .select(BLOG_POST_SELECT)
-        .eq('id', id);
+      let previewQuery = supabaseService.from('blog_posts').select(BLOG_POST_SELECT).eq('id', id);
       if (authorScopeId) {
         previewQuery = previewQuery.eq('author_id', authorScopeId);
       }
@@ -989,17 +942,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * GET /v1/blog/admin/posts - List all posts for admin (author/admin)
    */
   .get('/admin/posts', async ({ request, query, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const parsed = blogListQuerySchema.safeParse(query);
     if (!parsed.success) {
@@ -1050,9 +998,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
 
       if (error) throw error;
 
-      const mapped = (data ?? []).map((row) => mapBlogPost(row as unknown as BlogPostRow, { includeContent: false }));
+      const mapped = (data ?? []).map((row) =>
+        mapBlogPost(row as unknown as BlogPostRow, { includeContent: false }),
+      );
       const filtered = mapped.filter((post) => {
-        const categoryOk = !category || post.categories.some((c) => c.slug === category || c.id === category);
+        const categoryOk =
+          !category || post.categories.some((c) => c.slug === category || c.id === category);
         const tagOk = !tag || post.tags.some((t) => t.slug === tag || t.id === tag);
         return categoryOk && tagOk;
       });
@@ -1062,7 +1013,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
         meta: {
           page,
           pageSize,
-          total: category || tag ? filtered.length : count ?? filtered.length,
+          total: category || tag ? filtered.length : (count ?? filtered.length),
         },
       };
     } catch (error) {
@@ -1075,17 +1026,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/posts/:postId/request-review - Request review (author/admin)
    */
   .post('/posts/:postId/request-review', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const { postId: id } = params;
 
@@ -1133,17 +1079,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/posts/:postId/schedule - Schedule a post (author/admin)
    */
   .post('/posts/:postId/schedule', async ({ request, body, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const parsed = blogPostScheduleSchema.safeParse(body ?? {});
     if (!parsed.success) {
@@ -1199,17 +1140,12 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/posts/:postId/archive - Archive a post (author/admin)
    */
   .post('/posts/:postId/archive', async ({ request, params, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
-    }
+    const { user, blogRole } = auth;
 
     const { postId: id } = params;
 
@@ -1257,16 +1193,10 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
    * POST /v1/blog/slug/check - Check if a slug is available (author/admin)
    */
   .post('/slug/check', async ({ request, body, set }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
-    const blogRole = await getBlogRole(user.userId);
-    if (blogRole === 'viewer') {
-      set.status = 403;
-      return { error: 'Blog author or admin access required' };
+    const auth = await requireBlogAuth(request);
+    if (!auth.authorized) {
+      set.status = auth.status;
+      return auth.body;
     }
 
     const parsed = blogSlugCheckSchema.safeParse(body ?? {});
@@ -1278,10 +1208,7 @@ export const blogApiRoutes = new Elysia({ prefix: '/v1/blog' })
     const { slug, excludeId } = parsed.data;
 
     try {
-      let dbQuery = supabaseService
-        .from('blog_posts')
-        .select('id')
-        .eq('slug', slug);
+      let dbQuery = supabaseService.from('blog_posts').select('id').eq('slug', slug);
 
       if (excludeId) {
         dbQuery = dbQuery.neq('id', excludeId);

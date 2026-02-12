@@ -1,13 +1,89 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
 /**
  * Blog Route Helpers
  * Shared utilities for blog route handlers
  * Extracted from blog.ts for modularity
  */
 
+import { authenticateRequest, type AuthUser } from '../../../lib/auth.js';
 import { sql } from '../../../lib/db.js';
 import { supabaseService } from '../../../lib/supabase.js';
+import { getBlogRole } from '../../../middleware/blog-author.js';
 
 export type BlogRole = 'viewer' | 'author' | 'admin';
+
+// ===== Auth Guard Helpers =====
+// These replace the repeated 6-line auth+role pattern in route handlers.
+// We use imperative helpers (not Elysia derive/guard) because this codebase
+// avoids Elysia's plugin context propagation for REST routes (see lib/auth.ts).
+
+interface BlogAuthSuccess {
+  authorized: true;
+  user: AuthUser;
+  blogRole: BlogRole;
+}
+
+interface BlogAuthFailure {
+  authorized: false;
+  status: number;
+  body: { error: string };
+}
+
+export type BlogAuthResult = BlogAuthSuccess | BlogAuthFailure;
+
+/**
+ * Authenticate request and require blog author or admin role.
+ *
+ * Replaces the repeated pattern:
+ * ```
+ * const { user, error: authError } = await authenticateRequest(request);
+ * if (authError || !user) { set.status = 401; return { error: ... }; }
+ * const blogRole = await getBlogRole(user.userId);
+ * if (blogRole === 'viewer') { set.status = 403; return { error: ... }; }
+ * ```
+ */
+export async function requireBlogAuth(request: Request): Promise<BlogAuthResult> {
+  const { user, error: authError } = await authenticateRequest(request);
+  if (authError || !user) {
+    return { authorized: false, status: 401, body: { error: authError || 'Unauthorized' } };
+  }
+
+  const blogRole = await getBlogRole(user.userId);
+  if (blogRole === 'viewer') {
+    return {
+      authorized: false,
+      status: 403,
+      body: { error: 'Blog author or admin access required' },
+    };
+  }
+
+  return { authorized: true, user, blogRole };
+}
+
+/**
+ * Authenticate request and require blog admin role.
+ *
+ * Replaces the repeated pattern:
+ * ```
+ * const { user, error: authError } = await authenticateRequest(request);
+ * if (authError || !user) { set.status = 401; return { error: ... }; }
+ * const blogRole = await getBlogRole(user.userId);
+ * if (blogRole !== 'admin') { set.status = 403; return { error: ... }; }
+ * ```
+ */
+export async function requireBlogAdminAuth(request: Request): Promise<BlogAuthResult> {
+  const { user, error: authError } = await authenticateRequest(request);
+  if (authError || !user) {
+    return { authorized: false, status: 401, body: { error: authError || 'Unauthorized' } };
+  }
+
+  const blogRole = await getBlogRole(user.userId);
+  if (blogRole !== 'admin') {
+    return { authorized: false, status: 403, body: { error: 'Blog admin access required' } };
+  }
+
+  return { authorized: true, user, blogRole };
+}
 
 /**
  * Handle Zod validation errors
@@ -26,7 +102,7 @@ export async function syncPostRelations(
   postId: string,
   categoryIds?: string[],
   tagIds?: string[],
-  authorScopeId?: string | null
+  authorScopeId?: string | null,
 ) {
   if (authorScopeId) {
     const { data: scopedPost, error: scopedError } = await supabaseService
@@ -136,10 +212,7 @@ export async function syncPostRelations(
 /**
  * Delete all category/tag relations for a post, optionally scoped to an author.
  */
-export async function deletePostRelations(
-  postId: string,
-  authorScopeId?: string | null
-) {
+export async function deletePostRelations(postId: string, authorScopeId?: string | null) {
   if (authorScopeId) {
     const { data: scopedPost, error: scopedError } = await supabaseService
       .from('blog_posts')
@@ -246,7 +319,7 @@ export async function ensureAuthorExists(authorId: string): Promise<boolean> {
 export async function resolveAuthorIdForRequest(
   userId: string,
   blogRole: BlogRole,
-  explicitAuthorId?: string | null
+  explicitAuthorId?: string | null,
 ): Promise<string> {
   if (blogRole === 'admin' && explicitAuthorId) {
     const exists = await ensureAuthorExists(explicitAuthorId);
@@ -275,7 +348,9 @@ export function normalizeSeoKeywords(keywords?: string[] | null): string[] {
 /**
  * Normalize metadata object
  */
-export function normalizeMetadata(metadata?: Record<string, unknown> | null): Record<string, unknown> {
+export function normalizeMetadata(
+  metadata?: Record<string, unknown> | null,
+): Record<string, unknown> {
   if (metadata && typeof metadata === 'object') {
     return metadata;
   }
@@ -288,7 +363,7 @@ export function normalizeMetadata(metadata?: Record<string, unknown> | null): Re
 export function normalizeStatusPayload(
   status: string,
   scheduledFor?: string | null,
-  publishedAt?: string | null
+  publishedAt?: string | null,
 ) {
   const payload: Record<string, unknown> = { status };
 
