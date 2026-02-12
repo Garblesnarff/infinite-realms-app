@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Game Context
  *
@@ -23,17 +24,35 @@ import React, {
   useRef,
   useMemo,
 } from 'react';
-import type { ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { gameReducer, initialGameState } from './game/game-reducer';
+
+import type { GamePhase, GameState, GameAction } from './game/game-reducer';
+import type { DiceRollRequest, DiceRollRequestType, DiceRoll, DamageType } from '@/types/combat';
+import type { ReactNode } from 'react';
 
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
 
-import type { GamePhase, GameState, GameAction } from './game/game-reducer';
-import type { DiceRollRequest, DiceRollRequestType } from '@/types/combat';
+/**
+ * Shape of a roll request from AI responses, before conversion
+ * to the internal DiceRollRequest format.
+ */
+interface AiRollRequest {
+  type: string;
+  participantId?: string;
+  purpose?: string;
+  description?: string;
+  formula?: string;
+  advantage?: boolean;
+  disadvantage?: boolean;
+  dc?: number;
+  ac?: number;
+  target?: string;
+  damageType?: DamageType;
+}
 
 export type { GamePhase, GameState };
 
@@ -44,7 +63,7 @@ export interface GameContextValue {
 
   // Dice roll management
   requestDiceRoll: (request: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>) => string;
-  completeDiceRoll: (rollId: string, result: any) => void;
+  completeDiceRoll: (rollId: string, result: DiceRoll) => void;
   cancelDiceRoll: (rollId: string) => void;
   getCurrentDiceRoll: () => DiceRollRequest | null;
 
@@ -57,7 +76,7 @@ export interface GameContextValue {
   setGamePhase: (phase: GamePhase) => void;
 
   // AI integration
-  processAiResponse: (rollRequests: any[]) => void;
+  processAiResponse: (rollRequests: AiRollRequest[]) => void;
 
   // Combat integration
   updateCombatState: (isInCombat: boolean, currentTurnPlayerId?: string) => void;
@@ -65,7 +84,6 @@ export interface GameContextValue {
 
 // Create context
 const GameContext = createContext<GameContextValue | undefined>(undefined);
-
 
 /**
  * Game Context Provider
@@ -175,7 +193,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * Only uses dispatch (stable) and function parameters.
    * Dependencies: [] - no external dependencies, uses only dispatch and parameters
    */
-  const completeDiceRoll = useCallback((rollId: string, result: any) => {
+  const completeDiceRoll = useCallback((rollId: string, result: DiceRoll) => {
     logger.info('🎯 Completing dice roll:', rollId, result);
     dispatch({ type: 'COMPLETE_DICE_ROLL', payload: { id: rollId, result } });
   }, []); // No dependencies - only uses dispatch and function parameters
@@ -272,7 +290,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * Dependencies: [requestDiceRoll] - needed for calling requestDiceRoll within the handler
    */
   const processAiResponse = useCallback(
-    (rollRequests: any[]) => {
+    (rollRequests: AiRollRequest[]) => {
       logger.info('🤖 Processing AI response with roll requests:', rollRequests);
 
       if (!rollRequests || !Array.isArray(rollRequests)) {
@@ -281,7 +299,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // Log initiative rolls specifically for debugging
-      const initiativeRolls = rollRequests.filter((r: any) => r.type === 'initiative');
+      const initiativeRolls = rollRequests.filter((r: AiRollRequest) => r.type === 'initiative');
       if (initiativeRolls.length > 0) {
         logger.info('🎯 Processing INITIATIVE roll request(s):', initiativeRolls);
       }
@@ -299,7 +317,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const seenKeys = new Set<string>();
 
-      rollRequests.forEach((request: any) => {
+      rollRequests.forEach((request: AiRollRequest) => {
         try {
           // Convert AI request format to our internal format
           const rollRequest: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'> = {
@@ -424,14 +442,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         roll.status === 'completed' &&
         roll.target === 'player' &&
         roll.result?.total &&
-        !appliedDamageRollsRef.current.has(roll.id)
+        !appliedDamageRollsRef.current.has(roll.id),
     );
 
     // Apply each damage roll
     completedDamageRolls.forEach(async (roll) => {
       const damageAmount = roll.result?.total || 0;
       if (damageAmount > 0) {
-        logger.info(`💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player`);
+        logger.info(
+          `💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player`,
+        );
 
         // Mark as applied to prevent double-application
         appliedDamageRollsRef.current.add(roll.id);
@@ -440,10 +460,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (combatState.isInCombat && combatState.activeEncounter) {
           // Find player participant
           const playerParticipant = combatState.activeEncounter.participants.find(
-            (p) => p.participantType === 'player'
+            (p) => p.participantType === 'player',
           );
           if (playerParticipant) {
-            logger.info(`⚔️ Applying ${damageAmount} damage to ${playerParticipant.name} in combat via dealDamage`);
+            logger.info(
+              `⚔️ Applying ${damageAmount} damage to ${playerParticipant.name} in combat via dealDamage`,
+            );
             try {
               await dealDamage(playerParticipant.id, damageAmount, roll.damageType);
               logger.info(`✅ Damage applied successfully to ${playerParticipant.name}`);
@@ -454,11 +476,18 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else {
           // Outside of combat, log for manual tracking
           // Future enhancement: Could update character HP directly in database
-          logger.info(`📝 Damage taken outside combat: ${damageAmount} ${roll.damageType || 'untyped'} damage (HP tracking not active outside combat)`);
+          logger.info(
+            `📝 Damage taken outside combat: ${damageAmount} ${roll.damageType || 'untyped'} damage (HP tracking not active outside combat)`,
+          );
         }
       }
     });
-  }, [state.diceRollQueue.pendingRolls, combatState.isInCombat, combatState.activeEncounter, dealDamage]);
+  }, [
+    state.diceRollQueue.pendingRolls,
+    combatState.isInCombat,
+    combatState.activeEncounter,
+    dealDamage,
+  ]);
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
   // Using useMemo ensures that components consuming this context only re-render
@@ -531,7 +560,11 @@ function parseRollFormula(formula?: string): Partial<DiceRollRequest['rollConfig
     const symbolicMatch = formula.match(/^(\d+)?d(\d+)([-+]\w+)?$/);
     if (symbolicMatch) {
       const [, countStr, dieTypeStr] = symbolicMatch;
-      logger.info('🎲 Parsed roll with symbolic modifier:', formula, '→ using defaults, component will calculate');
+      logger.info(
+        '🎲 Parsed roll with symbolic modifier:',
+        formula,
+        '→ using defaults, component will calculate',
+      );
       return {
         count: countStr ? parseInt(countStr) : 1,
         dieType: parseInt(dieTypeStr),

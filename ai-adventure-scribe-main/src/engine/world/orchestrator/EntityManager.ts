@@ -11,6 +11,7 @@
 import {
   WorldGraph,
   WorldEntity,
+  WorldFact,
   EntityCreateRequest,
   FactUpdateRequest
 } from '../types';
@@ -104,7 +105,7 @@ export class EntityManager {
   /**
    * Update entity state (health, status, etc.)
    */
-  updateEntityState(entityId: string, propertyKey: string, value: any, confidence = 0.8): Result<any> {
+  updateEntityState(entityId: string, propertyKey: string, value: unknown, confidence = 0.8): Result<WorldFact> {
     return this.worldGraph.updateEntityFact({
       entityId,
       propertyKey,
@@ -137,7 +138,7 @@ export class EntityManager {
           entity: result.data,
           confidence: result.data.confidenceScore
         }
-      } as any);
+      });
 
       sceneState.metadata = sceneState.metadata || {};
       sceneState.metadata.worldEntities = (sceneState.metadata.worldEntities as string[] || []).concat(result.data.id);
@@ -173,7 +174,7 @@ export class EntityManager {
           fact: result.data,
           confidence: result.data.confidenceScore
         }
-      } as any);
+      });
 
       sceneState.metadata = sceneState.metadata || {};
       sceneState.metadata.lastEntityAction = {
@@ -217,7 +218,7 @@ export class EntityManager {
           location: result.data,
           confidence: result.data.confidenceScore
         }
-      } as any);
+      });
 
       return result.data;
     }

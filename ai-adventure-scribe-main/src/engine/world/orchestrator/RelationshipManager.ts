@@ -10,7 +10,9 @@
 import {
   WorldGraph,
   WorldEntity,
-  RelationshipCreateRequest
+  EntityType,
+  RelationshipCreateRequest,
+  RelationshipType
 } from '../types';
 import { SceneState, DMAction } from '../../scene/types';
 import { IntentProcessor } from './IntentProcessor';
@@ -68,7 +70,7 @@ export class RelationshipManager {
   createRelationship(
     subject: WorldEntity,
     object: WorldEntity,
-    relationshipType: string,
+    relationshipType: RelationshipType,
     description: string,
     sceneState: SceneState,
     actions: DMAction[]
@@ -76,7 +78,7 @@ export class RelationshipManager {
     const request: RelationshipCreateRequest = {
       subjectId: subject.id,
       objectId: object.id,
-      relationshipType: relationshipType as any,
+      relationshipType,
       description,
       confidenceScore: 0.7,
       sourceType: 'player_action'
@@ -93,7 +95,7 @@ export class RelationshipManager {
           object,
           confidence: result.data.confidenceScore
         }
-      } as any);
+      });
 
       sceneState.metadata = sceneState.metadata || {};
       sceneState.metadata.lastRelationshipAction = {
@@ -109,7 +111,7 @@ export class RelationshipManager {
    */
   private getOrCreateEntity(
     name: string,
-    entityType: string,
+    entityType: EntityType,
     sceneState: SceneState
   ): WorldEntity | null {
     const existing = this.worldGraph.queryEntities({ name });
@@ -120,7 +122,7 @@ export class RelationshipManager {
 
     // Create missing entity with low confidence
     const result = this.worldGraph.createEntity({
-      entityType: entityType as any,
+      entityType,
       name,
       description: 'Entity mentioned in relationship establishment',
       confidenceScore: 0.3,

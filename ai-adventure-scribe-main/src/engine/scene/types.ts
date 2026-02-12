@@ -24,7 +24,14 @@ export type DMAction =
   | { type: 'narrate'; text: string }
   | { type: 'pause_scene'; reason?: string }
   | { type: 'resume_scene' }
-  | { type: 'veil_content'; topic: string; reason?: string };
+  | { type: 'veil_content'; topic: string; reason?: string }
+  | { type: 'world_entity_created'; data: Record<string, unknown> }
+  | { type: 'world_entity_updated'; data: Record<string, unknown> }
+  | { type: 'world_location_created'; data: Record<string, unknown> }
+  | { type: 'world_relationship_created'; data: Record<string, unknown> }
+  | { type: 'world_event_created'; data: Record<string, unknown> }
+  | { type: 'world_fact_updated'; data: Record<string, unknown> }
+  | { type: 'world_relationship_updated'; data: Record<string, unknown> };
 
 export type RulesEvent =
   | { type: 'roll'; actorId: UUID; rollType: 'check' | 'save' | 'attack' | 'damage'; d: number; mod: number; result: number; rationale?: string }

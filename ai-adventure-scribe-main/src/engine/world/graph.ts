@@ -603,9 +603,9 @@ export class WorldGraph {
     this.conflicts.set(fullConflict.id, fullConflict);
   }
 
-  private applyRule(rule: WorldRule): { errors: any[]; warnings: any[] } {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+  private applyRule(rule: WorldRule): { errors: ValidationMessage[]; warnings: ValidationMessage[] } {
+    const errors: ValidationMessage[] = [];
+    const warnings: ValidationMessage[] = [];
 
     // Check rule conditions against world state
     const matches = checkRuleConditions(rule, (query) => this.queryEntities(query));
@@ -633,7 +633,7 @@ export class WorldGraph {
     return { errors, warnings };
   }
 
-  private applyRuleConsequences(rule: WorldRule, results: { errors: any[]; warnings: any[] }): void {
+  private applyRuleConsequences(rule: WorldRule, results: { errors: ValidationMessage[]; warnings: ValidationMessage[] }): void {
     rule.triggeredCount++;
     rule.lastTriggered = new Date();
 

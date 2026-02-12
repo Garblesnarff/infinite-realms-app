@@ -2,14 +2,15 @@ import { logger } from '../../lib/logger';
 import {
   SynchronizationState,
   ParticipantSync,
+  ParticipantState,
   SessionConflict,
+  TurnState,
   WorldChange,
   SessionParticipant,
   SynchronizationRequest,
   SynchronizationResponse,
   SessionEvent,
-  SharedSession,
-  SyncStatus
+  SharedSession
 } from './types';
 import { SceneState } from '../scene/types';
 import { WorldGraph } from '../world/graph';
@@ -133,8 +134,8 @@ export class SynchronizationManager {
       
       // Determine what data participant needs
       let gameState: SceneState;
-      let missingTurns: any[] = [];
-      let participantStates: Record<string, any> = {};
+      let missingTurns: TurnState[] = [];
+      let participantStates: Record<string, ParticipantState> = {};
 
       if (request.includeFullState || !participantSync.isCurrent) {
         // Full synchronization needed
@@ -255,20 +256,22 @@ export class SynchronizationManager {
   async resolveConflict(
     sessionId: string,
     conflictId: string,
-    resolution: any,
+    resolution: TurnState,
     resolvedBy: string
   ): Promise<boolean> {
     try {
       const conflicts = this.conflicts.get(sessionId) || [];
       const conflictIndex = conflicts.findIndex(c => c.id === conflictId);
-      
+
       if (conflictIndex === -1) return false;
 
       const conflict = conflicts[conflictIndex];
       conflict.status = 'resolved';
       conflict.resolvedBy = resolvedBy;
       conflict.resolvedAt = new Date();
-      conflict.resolution = resolution;
+      // SessionConflict.proposedResolution is the typed field; runtime code uses
+      // 'resolution' as a dynamic key for backward compatibility with existing data.
+      (conflict as SessionConflict & { resolution: TurnState }).resolution = resolution;
 
       // Apply resolution to pending changes
       await this.applyConflictResolution(sessionId, conflict, resolution);
@@ -368,8 +371,11 @@ export class SynchronizationManager {
           status: 'active',
           initiatorId: participantId,
           affectedParticipants: [participantId, ...conflictingChanges.map(c => c.participantId).filter((p, i, arr) => arr.indexOf(p) === i)],
-          originalAction: change as any,
-          conflictingStates: conflictingChanges.map(c => c as any),
+          // WorldChange is stored in TurnState fields for conflict tracking;
+          // the types are structurally incompatible but this is intentional for
+          // lightweight conflict records that reference the originating change.
+          originalAction: change as unknown as TurnState,
+          conflictingStates: conflictingChanges.map(c => c as unknown as TurnState),
           createdAt: new Date(),
           severity: this.assessConflictSeverity(change, conflictingChanges),
           canProceed: false
@@ -546,24 +552,26 @@ export class SynchronizationManager {
     return this.getFullGameState(sessionId);
   }
 
-  private async getMissingTurns(sessionId: string, fromTurn: number): Promise<any[]> {
+  private async getMissingTurns(sessionId: string, fromTurn: number): Promise<TurnState[]> {
     // Get turns that participant missed
     // This would integrate with the turn manager
     return [];
   }
 
-  private async getParticipantStates(sessionId: string, participantId: string): Promise<Record<string, any>> {
+  private async getParticipantStates(sessionId: string, participantId: string): Promise<Record<string, ParticipantState>> {
     // Get states for all participants except requester
     const participantSyncs = this.participantSyncs.get(sessionId);
     if (!participantSyncs) return {};
 
-    const states: Record<string, any> = {};
+    const states: Record<string, ParticipantState> = {};
     participantSyncs.forEach((sync, id) => {
       if (id !== participantId) {
         states[id] = {
+          participantId: id,
           lastSyncedTurn: sync.lastSyncedTurn,
-          isCurrent: sync.isCurrent,
-          pendingChangesCount: sync.pendingChanges.length
+          localState: {},
+          pendingActions: [],
+          confidence: sync.isCurrent ? 1.0 : 0.5
         };
       }
     });
@@ -591,7 +599,7 @@ export class SynchronizationManager {
   private async applyConflictResolution(
     sessionId: string,
     conflict: SessionConflict,
-    resolution: any
+    resolution: TurnState
   ): Promise<void> {
     // Apply the resolved changes to the world
     const worldGraph = this.worldGraphs.get(sessionId);

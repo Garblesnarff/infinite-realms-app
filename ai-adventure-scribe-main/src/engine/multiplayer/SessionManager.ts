@@ -11,6 +11,8 @@ import {
   JoinSessionRequest,
   SessionResult,
   ValidationResult,
+  ValidationError,
+  ValidationWarning,
   SessionStats,
   TurnOrder,
   SynchronizationState,
@@ -543,8 +545,8 @@ export class SessionManager {
   }
 
   private validateSessionRequest(request: CreateSessionRequest): ValidationResult {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
 
     if (!request.name || request.name.trim().length < 3) {
       errors.push({
@@ -581,8 +583,8 @@ export class SessionManager {
   }
 
   private validateJoinRequest(session: SharedSession, request: JoinSessionRequest, userId: string): ValidationResult {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
 
     if (!request.displayName || request.displayName.trim().length < 2) {
       errors.push({
@@ -618,10 +620,12 @@ export class SessionManager {
     };
   }
 
+  // The `Record<string, any>` for data matches SessionEvent.data from types.ts;
+  // narrowing it here would require changing the shared type definition.
   private async logSessionEvent(sessionId: string, eventData: {
     eventType: SessionEventType;
     participantId?: string;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
     message: string;
     isBroadcast?: boolean;
     isSystem?: boolean;
@@ -698,7 +702,7 @@ export class SessionManager {
     this.participantsByUser.get(userId)!.push(participant);
   }
 
-  private async initializeWorldGraph(sessionId: string, initialState?: any): Promise<void> {
+  private async initializeWorldGraph(sessionId: string, initialState?: Partial<SceneState>): Promise<void> {
     const worldGraph = this.worldGraphs.get(sessionId);
     if (!worldGraph) return;
 
