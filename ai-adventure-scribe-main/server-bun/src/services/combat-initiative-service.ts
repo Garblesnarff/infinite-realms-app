@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Combat Initiative Service
  *
@@ -5,7 +6,7 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql, or } from 'drizzle-orm';
+import { eq, and, sql, or, inArray } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -113,6 +114,34 @@ export class CombatInitiativeService {
   }
 
   /**
+   * ⚡ Bolt: Verify multiple characters' ownership in a single batch query.
+   * Prevents N+1 database round-trips during combat initialization.
+   */
+  private static async verifyCharactersAccessBatch(characterIds: string[], userId: string): Promise<void> {
+    if (characterIds.length === 0) return;
+
+    const results = await db
+      .select({ id: characters.id })
+      .from(characters)
+      .where(and(
+        inArray(characters.id, characterIds),
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId)
+        )
+      ));
+
+    if (results.length !== characterIds.length) {
+      const foundIds = new Set(results.map(r => r.id));
+      for (const id of characterIds) {
+        if (!foundIds.has(id)) {
+          throw new NotFoundError('Character', id);
+        }
+      }
+    }
+  }
+
+  /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
    * @param participantInputs - Array of participants to add
@@ -128,7 +157,7 @@ export class CombatInitiativeService {
     if (userId) {
       await this.verifySessionAccess(sessionId, userId);
 
-      // Prevent cross-tenant references by validating all character-linked participants.
+      // ⚡ Bolt: Prevent cross-tenant references by validating all character-linked participants in batch.
       const characterIds = [
         ...new Set(
           participantInputs
@@ -136,7 +165,7 @@ export class CombatInitiativeService {
             .filter((id): id is string => Boolean(id))
         ),
       ];
-      await Promise.all(characterIds.map((characterId) => this.verifyCharacterAccess(characterId, userId)));
+      await this.verifyCharactersAccessBatch(characterIds, userId);
     }
 
     // Create the encounter
@@ -645,8 +674,8 @@ export class CombatInitiativeService {
    * Note: HP is now tracked in combatParticipantStatus table
    */
   static async updateParticipantHP(
-    participantId: string,
-    hpCurrent: number
+    _participantId: string,
+    _hpCurrent: number
   ): Promise<void> {
     // This method needs to be updated to use combatParticipantStatus table
     // For now, this is a placeholder to maintain API compatibility
