@@ -15,7 +15,7 @@
  * @module server/services/exhaustion-service
  */
 
-import { and, eq, exists, or } from 'drizzle-orm';
+import { and, eq, exists, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
