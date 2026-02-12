@@ -307,6 +307,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         preparedSpellCount: preparedSpells.length,
       });
 
+      // ⚡ Bolt: Use a Set for O(1) lookup complexity instead of O(N) array includes.
+      // This reduces overall mapping complexity from O(M*N) to O(M+N).
+      const preparedSet = new Set(preparedSpells);
+
       const response = {
         character: {
           id: character.id,
@@ -316,7 +320,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         cantrips: cantrips.map(name => ({ name, level: 0 })),
         spells: knownSpells.map(name => ({
           name,
-          is_prepared: preparedSpells.includes(name),
+          is_prepared: preparedSet.has(name),
         })),
         total_spells: cantrips.length + knownSpells.length,
       };
