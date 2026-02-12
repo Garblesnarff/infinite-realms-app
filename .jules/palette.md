@@ -59,3 +59,7 @@
 ## 2026-03-05 - Card Interaction Accessibility and Z-Index
 **Learning:** Complex cards (like `RaceCard`) often use multiple `z-index` layers for overlays and hover effects. Migrating these to inline styles ensures reliable layering in all environments. Additionally, secondary actions on cards (like "Favorite" or "Compare") must be explicitly labeled and indicate their state via `aria-pressed` to be fully accessible.
 **Action:** Standardize card layering using inline `zIndex` styles and ensure all secondary icon-only actions have `aria-label` and `aria-pressed` (if togglable).
+
+## 2026-03-20 - View Mode Toggle Accessibility and Z-Index Standardization
+**Learning:** View mode toggles (Grid/List/Compact) require a specific ARIA structure for optimal accessibility: a container with `role="group"` and `aria-label`, and buttons with `aria-label`, `aria-pressed`, and `title`. Furthermore, standardizing z-index application using inline styles and centralized constants (e.g., `Z_INDEX.BACKGROUND_LAYER` for card overlays) ensures consistent layering and avoids Tailwind JIT generation issues.
+**Action:** Implement view toggles as ARIA button groups and always prefer inline `style={{ zIndex: Z_INDEX.CONSTANT }}` for layering.

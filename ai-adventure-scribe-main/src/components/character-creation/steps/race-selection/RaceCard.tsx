@@ -61,7 +61,12 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
         : undefined
     }
   >
-    {race.backgroundImage && <div className="absolute inset-0 bg-black/60 z-0" />}
+    {race.backgroundImage && (
+      <div
+        className="absolute inset-0 bg-black/60"
+        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+      />
+    )}
     <CardContent
       className={`p-4 relative ${race.backgroundImage ? 'text-white' : ''}`}
       style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
@@ -168,7 +173,12 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
         : undefined
     }
   >
-    {race.backgroundImage && <div className="absolute inset-0 bg-black/60 z-0" />}
+    {race.backgroundImage && (
+      <div
+        className="absolute inset-0 bg-black/60"
+        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+      />
+    )}
     <div className="p-4">
       <div
         className={`flex items-center justify-between mb-3 relative ${race.backgroundImage ? 'text-white' : ''}`}

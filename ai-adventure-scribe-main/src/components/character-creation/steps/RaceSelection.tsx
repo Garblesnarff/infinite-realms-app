@@ -1,9 +1,18 @@
-import { Search, Grid, List, Eye, Check, Users, Zap, Globe } from 'lucide-react';
+import { Search, Grid, List, Eye, Check, Users, Zap } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
+
+import {
+  RaceCardListView,
+  RaceCardCompactView,
+  RaceCardGridView,
+} from './race-selection/RaceCard';
+import { buildRaceCategories, filterRaces } from './race-selection/raceFilters';
 import { HalfElfAbilityChoice } from '../modals/HalfElfAbilityChoice';
 import { VariantHumanChoice } from '../modals/VariantHumanChoice';
 
+import type { CharacterRace, Subrace } from '@/types/character';
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -12,15 +21,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { baseRaces } from '@/data/raceOptions';
-import logger from '@/lib/logger';
-import type { CharacterRace, Subrace } from '@/types/character';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-import {
-  RaceCardListView,
-  RaceCardCompactView,
-  RaceCardGridView,
-} from './race-selection/RaceCard';
-import { buildRaceCategories, filterRaces } from './race-selection/raceFilters';
+import logger from '@/lib/logger';
 
 const RaceSelection: React.FC = () => {
   const { state, dispatch } = useCharacter();
@@ -34,9 +36,7 @@ const RaceSelection: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('compact');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [showComparison, setShowComparison] = useState(false);
   const [comparisonRaces, setComparisonRaces] = useState<CharacterRace[]>([]);
-  const [hoveredRaceId, setHoveredRaceId] = useState<string | null>(null);
 
   // Half-Elf ability choice modal state
   const [showHalfElfModal, setShowHalfElfModal] = useState(false);
@@ -225,12 +225,19 @@ const RaceSelection: React.FC = () => {
             {/* View Mode Toggles */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">View:</span>
-              <div className="flex border rounded-md">
+              <div
+                className="flex border rounded-md"
+                role="group"
+                aria-label="View mode"
+              >
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('grid')}
                   className="rounded-r-none"
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
+                  title="Grid view"
                 >
                   <Grid className="w-4 h-4" />
                 </Button>
@@ -239,6 +246,9 @@ const RaceSelection: React.FC = () => {
                   size="sm"
                   onClick={() => setViewMode('list')}
                   className="rounded-none border-x"
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
+                  title="List view"
                 >
                   <List className="w-4 h-4" />
                 </Button>
@@ -247,6 +257,9 @@ const RaceSelection: React.FC = () => {
                   size="sm"
                   onClick={() => setViewMode('compact')}
                   className="rounded-l-none"
+                  aria-label="Compact view"
+                  aria-pressed={viewMode === 'compact'}
+                  title="Compact view"
                 >
                   <Eye className="w-4 h-4" />
                 </Button>
@@ -286,7 +299,6 @@ const RaceSelection: React.FC = () => {
                 onToggleFavorite: toggleFavorite,
                 onAddToComparison: addToComparison,
                 canAddToComparison,
-                onHover: setHoveredRaceId,
               };
 
               if (viewMode === 'list') {
@@ -351,17 +363,26 @@ const RaceSelection: React.FC = () => {
                     }
                   >
                     {subrace.backgroundImage && (
-                      <div className="absolute inset-0 bg-black/50 z-0" />
+                      <div
+                        className="absolute inset-0 bg-black/50"
+                        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+                      />
                     )}
                     {isSelected && (
-                      <div className="absolute top-3 right-3">
+                      <div
+                        className="absolute top-3 right-3"
+                        style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                      >
                         <div className="bg-primary text-primary-foreground rounded-full p-1">
                           <Check className="w-4 h-4" />
                         </div>
                       </div>
                     )}
 
-                    <CardHeader className={`relative z-[${Z_INDEX.OVERLAY_EFFECT}]`}>
+                    <CardHeader
+                      className="relative"
+                      style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+                    >
                       <div className="flex items-center gap-2">
                         <Users
                           className={`w-5 h-5 ${subrace.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
@@ -374,7 +395,10 @@ const RaceSelection: React.FC = () => {
                       </div>
                     </CardHeader>
 
-                    <CardContent className={`space-y-4 relative z-[${Z_INDEX.OVERLAY_EFFECT}]`}>
+                    <CardContent
+                      className="space-y-4 relative"
+                      style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+                    >
                       <p
                         className={`${subrace.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
                       >

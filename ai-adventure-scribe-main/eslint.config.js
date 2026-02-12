@@ -288,6 +288,7 @@ export default tseslint.config(
       'src/components/battle-map/LayersPanel.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
+      'src/components/character-creation/steps/ClassSelection.tsx',
       'server-bun/src/services/scene-service.ts',
     ],
     rules: {
