@@ -9,8 +9,8 @@ export function hashState(s: SceneState): string {
 
 export function applyIntent(state: SceneState, intent: PlayerIntent): SceneState {
   // Create deep copy to ensure immutability
-  const next = JSON.parse(JSON.stringify(state));
-  
+  const next = structuredClone(state);
+
   switch (intent.type) {
     case 'move':
       // For now, we'll mark that a move happened by updating a counter
@@ -58,8 +58,8 @@ export function applyIntent(state: SceneState, intent: PlayerIntent): SceneState
 
 export function applyDMAction(state: SceneState, action: DMAction): SceneState {
   // Create deep copy to ensure immutability
-  const next = JSON.parse(JSON.stringify(state));
-  
+  const next = structuredClone(state);
+
   switch (action.type) {
     case 'call_for_check':
       logger.info(`DM calls for check: ${action.actorId} -> ${action.skill} DC ${action.dc} (${action.reason})`);
@@ -120,8 +120,8 @@ export function applyDMAction(state: SceneState, action: DMAction): SceneState {
 
 export function applyRulesEvent(state: SceneState, evt: RulesEvent): SceneState {
   // Create deep copy to ensure immutability
-  const next = JSON.parse(JSON.stringify(state));
-  
+  const next = structuredClone(state);
+
   switch (evt.type) {
     case 'roll':
       logger.info(`Roll event: ${evt.actorId} -> ${evt.rollType} ${evt.result} (${evt.d}d${evt.mod >= 0 ? '+' : ''}${evt.mod})${evt.rationale ? ` - ${evt.rationale}` : ''}`);
@@ -199,7 +199,7 @@ export function createSceneState(overrides: Partial<SceneState> = {}): SceneStat
 }
 
 export function addClock(state: SceneState, clock: Omit<Clock, 'id'>): SceneState {
-  const next = JSON.parse(JSON.stringify(state));
+  const next = structuredClone(state);
   next.clocks.push({
     id: `clock-${Date.now()}-${Math.random()}`,
     ...clock
@@ -208,7 +208,7 @@ export function addClock(state: SceneState, clock: Omit<Clock, 'id'>): SceneStat
 }
 
 export function addHazard(state: SceneState, hazard: Omit<Hazard, 'id'>): SceneState {
-  const next = JSON.parse(JSON.stringify(state));
+  const next = structuredClone(state);
   next.hazards.push({
     id: `hazard-${Date.now()}-${Math.random()}`,
     ...hazard
