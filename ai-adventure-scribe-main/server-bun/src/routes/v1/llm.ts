@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * LLM Routes for Elysia
  *
@@ -9,11 +10,13 @@
  */
 
 import { Elysia, t } from 'elysia';
+
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
+import { logger } from '../../lib/logger.js';
+import { isAdmin } from '../../middleware/admin.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
-import { logger } from '../../lib/logger.js';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -114,6 +117,7 @@ const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
 };
 
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
+  .use(planRateLimit('llm'))
 
   /**
    * Get current quota status
@@ -162,13 +166,17 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         temperature = 0.8,
         history,
         provider = 'openrouter',
-        requestType = 'user',
+        requestType: rawRequestType = 'user',
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
         return { error: 'Missing prompt' };
       }
+
+      // 🛡️ Sentinel: Restrict 'system' requests to admins to prevent quota bypass.
+      const isAdminUser = isAdmin(user as AuthUser);
+      const requestType = (rawRequestType === 'system' && isAdminUser) ? 'system' : 'user';
 
       const userId = user.userId;
       const plan = user.plan;
