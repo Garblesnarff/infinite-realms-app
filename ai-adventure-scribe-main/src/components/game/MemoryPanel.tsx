@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { List, ChevronDown, ChevronUp, User, Sword, Menu, ChevronLeft } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
@@ -172,13 +173,14 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   if (isCollapsed) {
     if (isMobile) {
       return (
-        <div className={`fixed bottom-4 right-4 z-[${Z_INDEX.STICKY}] md:hidden`}>
+        <div className="fixed bottom-4 right-4 md:hidden" style={{ zIndex: Z_INDEX.STICKY }}>
           <Sheet open={isMobileDrawerOpen} onOpenChange={setIsMobileDrawerOpen}>
             <SheetTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleMobileDrawer}
+                aria-label="Open game panel"
                 className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow ${
                   isInCombat
                     ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
@@ -230,7 +232,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
     }
 
     return (
-      <div className={`hidden md:block fixed right-4 top-1/2 z-[${Z_INDEX.STICKY}]`}>
+      <div className="hidden md:block fixed right-4 top-1/2" style={{ zIndex: Z_INDEX.STICKY }}>
         <Button
           variant="outline"
           size="sm"
@@ -350,6 +352,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
               }}
               className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
               title={isExpanded ? 'Minimize' : 'Expand'}
+              aria-label={isExpanded ? 'Minimize panel' : 'Expand panel'}
             >
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
             </Button>
@@ -359,6 +362,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
               onClick={() => onToggle()}
               className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
               title="Close Panel"
+              aria-label="Close panel"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
