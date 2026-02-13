@@ -120,6 +120,7 @@ export default defineConfig({
       'src/utils/__tests__/reactionSystem.test.ts',
       'src/utils/__tests__/deathSaves.test.ts',
       'src/utils/__tests__/magicItemEffects.test.ts',
+      'src/utils/__tests__/massCombat.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -217,6 +218,7 @@ export default defineConfig({
         'src/utils/reactionSystem.ts',
         'src/utils/combat/deathSaves.ts',
         'src/utils/magicItemEffects.ts',
+        'src/utils/massCombat.ts',
       ],
       exclude: [
         '**/__tests__/**',
