@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-function-return-type, no-console */
 /**
  * Fog of War WebSocket Hook
  *
@@ -8,6 +9,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+
 import type { RevealedArea } from '@/types/fog-of-war';
 
 /**
@@ -75,17 +77,14 @@ export interface WebSocketOptions {
  * );
  * ```
  */
-export function useFogWebSocket(
-  options: WebSocketOptions,
-  callbacks: FogWebSocketCallbacks
-) {
+export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSocketCallbacks) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
   const messageQueueRef = useRef<any[]>([]);
 
   const {
-    url = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8888/ws',
+    url = import.meta.env.VITE_WS_URL || 'ws://localhost:8888/ws',
     token,
     sceneId,
     autoConnect = true,
@@ -163,7 +162,7 @@ export function useFogWebSocket(
         console.error('Error parsing WebSocket message:', error);
       }
     },
-    [sceneId, callbacks, sendMessage, flushMessageQueue]
+    [sceneId, callbacks, sendMessage, flushMessageQueue],
   );
 
   /**
@@ -259,7 +258,7 @@ export function useFogWebSocket(
         },
       });
     },
-    [sceneId, sendMessage]
+    [sceneId, sendMessage],
   );
 
   /**
@@ -278,7 +277,7 @@ export function useFogWebSocket(
         },
       });
     },
-    [sceneId, sendMessage]
+    [sceneId, sendMessage],
   );
 
   // Connect on mount if autoConnect is true

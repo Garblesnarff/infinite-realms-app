@@ -1,7 +1,8 @@
+/* eslint-disable max-lines */
+import { BlogImageGenerator } from './blog-image-generator.js';
+import { BlogScreenshotService } from './blog-screenshot-service.js';
 import { supabase } from '../../../src/infrastructure/database/index.js';
 import { logger } from '../utils/logger.js';
-import { BlogScreenshotService } from './blog-screenshot-service.js';
-import { BlogImageGenerator } from './blog-image-generator.js';
 
 /**
  * Blog Digest Service
@@ -56,7 +57,8 @@ interface DigestResult {
 export class BlogDigestService {
   private static readonly SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID;
   private static readonly OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  private static readonly TEXT_MODEL = process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-flash-1.5';
+  private static readonly TEXT_MODEL =
+    process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-flash-1.5';
 
   /**
    * Queue a commit for digest processing
@@ -70,9 +72,8 @@ export class BlogDigestService {
     prTitle?: string;
     committedAt: Date;
   }): Promise<void> {
-    const { error } = await supabase
-      .from('blog_digest_queue')
-      .upsert({
+    const { error } = await supabase.from('blog_digest_queue').upsert(
+      {
         commit_hash: data.commitHash,
         commit_message: data.commitMessage,
         author: data.author,
@@ -81,9 +82,11 @@ export class BlogDigestService {
         pr_title: data.prTitle,
         committed_at: data.committedAt.toISOString(),
         processed: false,
-      }, {
+      },
+      {
         onConflict: 'commit_hash',
-      });
+      },
+    );
 
     if (error) {
       logger.error({ error, commitHash: data.commitHash }, 'Failed to queue commit');
@@ -123,7 +126,7 @@ export class BlogDigestService {
       return this.simpleAnalysis(commits);
     }
 
-    const commitSummary = commits.map(c => ({
+    const commitSummary = commits.map((c) => ({
       message: c.commit_message,
       pr: c.pr_title,
       files: c.files_changed?.slice(0, 10),
@@ -150,9 +153,9 @@ Return ONLY valid JSON, no markdown.`;
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${this.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://infiniterealms.app',
+          'HTTP-Referer': process.env.APP_ORIGIN || 'https://infiniterealms.app',
           'X-Title': 'Infinite Realms Blog',
         },
         body: JSON.stringify({
@@ -168,7 +171,7 @@ Return ONLY valid JSON, no markdown.`;
         return this.simpleAnalysis(commits);
       }
 
-      const result = await response.json() as {
+      const result = (await response.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
       };
 
@@ -326,7 +329,10 @@ Return ONLY valid JSON, no markdown.`;
 
     // Analyze commits
     const analysis = await this.analyzeCommits(commits);
-    logger.info({ analysis: { title: analysis.title, majorFeature: !!analysis.majorFeature } }, 'Commits analyzed');
+    logger.info(
+      { analysis: { title: analysis.title, majorFeature: !!analysis.majorFeature } },
+      'Commits analyzed',
+    );
 
     // Get latest commit hash for screenshots
     const latestCommit = commits[commits.length - 1].commit_hash;
@@ -345,9 +351,9 @@ Return ONLY valid JSON, no markdown.`;
     let heroImageUrl: string | undefined;
     if (!dryRun) {
       const imageResult = await BlogImageGenerator.generateDigestHeroImage({
-        features: analysis.features.map(f => f.title),
-        fixes: analysis.fixes.map(f => f.title),
-        improvements: analysis.improvements.map(f => f.title),
+        features: analysis.features.map((f) => f.title),
+        fixes: analysis.fixes.map((f) => f.title),
+        improvements: analysis.improvements.map((f) => f.title),
       });
 
       if (imageResult.success && imageResult.publicUrl) {
@@ -363,14 +369,17 @@ Return ONLY valid JSON, no markdown.`;
     const slug = `daily-update-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     if (dryRun) {
-      logger.info({
-        title: analysis.title,
-        slug,
-        commitCount: commits.length,
-        hasScreenshots: screenshots.length > 0,
-        hasHeroImage: !!heroImageUrl,
-        hasMajorFeature: !!analysis.majorFeature,
-      }, 'Dry run complete');
+      logger.info(
+        {
+          title: analysis.title,
+          slug,
+          commitCount: commits.length,
+          hasScreenshots: screenshots.length > 0,
+          hasHeroImage: !!heroImageUrl,
+          hasMajorFeature: !!analysis.majorFeature,
+        },
+        'Dry run complete',
+      );
 
       return {
         success: true,
@@ -392,7 +401,7 @@ Return ONLY valid JSON, no markdown.`;
     }
 
     // Mark commits as processed
-    const commitIds = commits.map(c => c.id);
+    const commitIds = commits.map((c) => c.id);
     await supabase.rpc('mark_digest_commits_processed', {
       p_commit_ids: commitIds,
       p_digest_post_id: postId,
@@ -419,24 +428,28 @@ Return ONLY valid JSON, no markdown.`;
       // Generate feature-specific hero image
       const featureImageResult = await BlogImageGenerator.generateFeatureHeroImage(
         analysis.majorFeature.title,
-        analysis.majorFeature.description
+        analysis.majorFeature.description,
       );
 
-      standalonePostId = await this.createBlogPost({
-        title: analysis.majorFeature.title,
-        slug: featureSlug,
-        summary: analysis.majorFeature.description,
-        content: `# ${analysis.majorFeature.title}\n\n${analysis.majorFeature.description}`,
-        featuredImageUrl: featureImageResult.publicUrl,
-      }) || undefined;
+      standalonePostId =
+        (await this.createBlogPost({
+          title: analysis.majorFeature.title,
+          slug: featureSlug,
+          summary: analysis.majorFeature.description,
+          content: `# ${analysis.majorFeature.title}\n\n${analysis.majorFeature.description}`,
+          featuredImageUrl: featureImageResult.publicUrl,
+        })) || undefined;
     }
 
-    logger.info({
-      postId,
-      slug,
-      commitCount: commits.length,
-      standalonePostId,
-    }, 'Daily digest generated successfully');
+    logger.info(
+      {
+        postId,
+        slug,
+        commitCount: commits.length,
+        standalonePostId,
+      },
+      'Daily digest generated successfully',
+    );
 
     return {
       success: true,

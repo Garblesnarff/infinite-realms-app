@@ -82,9 +82,9 @@ export class BlogImageGenerator {
       const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${this.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://infiniterealms.app',
+          'HTTP-Referer': process.env.APP_ORIGIN || 'https://infiniterealms.app',
           'X-Title': 'Infinite Realms Blog',
         },
         body: JSON.stringify({
@@ -106,7 +106,7 @@ export class BlogImageGenerator {
         };
       }
 
-      const result = await response.json() as OpenRouterImageResponse;
+      const result = (await response.json()) as OpenRouterImageResponse;
 
       if (result.error) {
         return {
@@ -146,9 +146,7 @@ export class BlogImageGenerator {
         };
       }
 
-      const { data: urlData } = supabase.storage
-        .from(this.STORAGE_BUCKET)
-        .getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from(this.STORAGE_BUCKET).getPublicUrl(path);
 
       logger.info({ path, prompt: prompt.slice(0, 50) }, 'Blog image generated and uploaded');
 
@@ -186,7 +184,7 @@ export class BlogImageGenerator {
    */
   static async generateFeatureHeroImage(
     featureTitle: string,
-    featureDescription: string
+    featureDescription: string,
   ): Promise<ImageGenerationResult> {
     const prompt = this.generateFeaturePrompt(featureTitle, featureDescription);
     return this.generateImage(prompt);
@@ -196,6 +194,6 @@ export class BlogImageGenerator {
    * Get a fallback placeholder image URL
    */
   static getFallbackImageUrl(): string {
-    return 'https://infiniterealms.app/placeholder-blog-hero.png';
+    return `${process.env.APP_ORIGIN || 'https://infiniterealms.app'}/placeholder-blog-hero.png`;
   }
 }

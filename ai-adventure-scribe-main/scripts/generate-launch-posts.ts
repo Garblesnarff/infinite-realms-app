@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/* eslint-disable no-console, max-lines */
 /**
  * Generate Launch Blog Posts for InfiniteRealms
  *
@@ -11,11 +12,21 @@ import postgres from 'postgres';
 
 // Load environment variables (Bun loads .env automatically)
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:***REMOVED***@localhost:54321/postgres';
-const BLOG_SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID || '79c3ff02-9088-495b-aad3-60dfb09c943b';
+const DATABASE_URL = process.env.DATABASE_URL;
+const BLOG_SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID;
 
 if (!OPENROUTER_API_KEY) {
   console.error('❌ OPENROUTER_API_KEY not set');
+  process.exit(1);
+}
+
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL not set');
+  process.exit(1);
+}
+
+if (!BLOG_SYSTEM_AUTHOR_ID) {
+  console.error('❌ BLOG_SYSTEM_AUTHOR_ID not set');
   process.exit(1);
 }
 
@@ -73,7 +84,10 @@ function parseJsonResponse(text: string, fallbackTitle: string): GeneratedConten
   }
 }
 
-async function generatePost(topic: string, type: 'launch' | 'feature' | 'guide'): Promise<GeneratedContent> {
+async function generatePost(
+  topic: string,
+  type: 'launch' | 'feature' | 'guide',
+): Promise<GeneratedContent> {
   const prompts = {
     launch: `You are writing a launch announcement blog post for Infinite Realms, an AI-powered solo fantasy RPG platform.
 
@@ -166,7 +180,10 @@ Format your response as JSON:
   return parseJsonResponse(text, topic);
 }
 
-async function savePost(content: GeneratedContent, status: 'draft' | 'review' | 'published' = 'review'): Promise<string> {
+async function savePost(
+  content: GeneratedContent,
+  status: 'draft' | 'review' | 'published' = 'review',
+): Promise<string> {
   const slug = createSlug(content.title);
 
   // Check if slug already exists
@@ -177,8 +194,9 @@ async function savePost(content: GeneratedContent, status: 'draft' | 'review' | 
   }
 
   // Build the insert query dynamically based on status
-  const [post] = status === 'published'
-    ? await sql`
+  const [post] =
+    status === 'published'
+      ? await sql`
         INSERT INTO blog_posts (
           title, slug, content, summary,
           seo_title, seo_description,
@@ -192,7 +210,7 @@ async function savePost(content: GeneratedContent, status: 'draft' | 'review' | 
         )
         RETURNING id, slug
       `
-    : await sql`
+      : await sql`
         INSERT INTO blog_posts (
           title, slug, content, summary,
           seo_title, seo_description,
@@ -213,14 +231,23 @@ async function savePost(content: GeneratedContent, status: 'draft' | 'review' | 
   return post.id;
 }
 
-async function main() {
+async function main(): Promise<void> {
   console.log('🚀 Generating Launch Blog Posts for InfiniteRealms\n');
   console.log('Using Kimi K2 via OpenRouter...\n');
 
   const posts = [
-    { topic: 'Introducing Infinite Realms: Your AI Dungeon Master Awaits', type: 'launch' as const },
-    { topic: 'How Our AI Dungeon Master Creates Immersive Solo Adventures', type: 'feature' as const },
-    { topic: 'Getting Started with Infinite Realms: Your First Solo Adventure', type: 'guide' as const },
+    {
+      topic: 'Introducing Infinite Realms: Your AI Dungeon Master Awaits',
+      type: 'launch' as const,
+    },
+    {
+      topic: 'How Our AI Dungeon Master Creates Immersive Solo Adventures',
+      type: 'feature' as const,
+    },
+    {
+      topic: 'Getting Started with Infinite Realms: Your First Solo Adventure',
+      type: 'guide' as const,
+    },
   ];
 
   const results: { title: string; slug: string; status: string }[] = [];
@@ -228,11 +255,11 @@ async function main() {
   for (const { topic, type } of posts) {
     try {
       const content = await generatePost(topic, type);
-      const postId = await savePost(content, 'review');
+      await savePost(content, 'review');
       results.push({
         title: content.title,
         slug: createSlug(content.title),
-        status: 'review'
+        status: 'review',
       });
       console.log('');
     } catch (error) {
@@ -241,7 +268,7 @@ async function main() {
   }
 
   console.log('\n📊 Summary:');
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
   for (const { title, slug, status } of results) {
     console.log(`- ${title}`);
     console.log(`  Status: ${status} | URL: https://blog.infiniterealms.app/${slug}`);
