@@ -105,27 +105,11 @@ describe('CombatInitiativeService', () => {
 
       // Mock participants insertion
       (db.insert as any).mockReturnValueOnce({
-        values: vi.fn().mockResolvedValue([])
-      });
-
-      // Mock calculateTurnOrder (which uses db.query and db.execute)
-      (db.query.combatParticipants.findMany as any).mockResolvedValue([]);
-
-      // Mock getCombatState
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ id: 'enc-123' }]) // For verifyEncounterAccess
-      });
-
-      (db.query.combatEncounters.findFirst as any).mockResolvedValue({
-        id: 'enc-123',
-        status: 'active',
-        currentRound: 1,
-        currentTurnOrder: 0,
-        participants: []
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([
+          { id: 'p1', name: 'Player 1', characterId: 'char-1', initiative: 15, initiativeModifier: 2, turnOrder: 0, isActive: true },
+          { id: 'p2', name: 'Player 2', characterId: 'char-2', initiative: 10, initiativeModifier: 1, turnOrder: 1, isActive: true }
+        ])
       });
 
       await CombatInitiativeService.startCombat(
