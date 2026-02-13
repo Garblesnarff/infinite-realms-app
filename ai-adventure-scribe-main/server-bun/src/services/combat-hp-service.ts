@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, @typescript-eslint/no-explicit-any */
 /**
  * Combat HP Service
  *
@@ -216,11 +217,17 @@ export class CombatHPService {
    * - Immunity = 0 damage
    * - Massive damage (damage >= max HP while at 0 HP) = instant death
    */
+  /**
+   * Apply damage to a participant with D&D 5E rules.
+   * ⚡ Bolt: Supports optional pre-fetched participant data (including status and encounter)
+   * to eliminate redundant database SELECT queries during batch processing (e.g. AoE spells).
+   */
   static async applyDamage(
     participantId: string,
     encounterId: string,
     options: ApplyDamageOptions,
-    userId?: string
+    userId?: string,
+    preFetchedParticipant?: any
   ): Promise<DamageResult> {
     if (userId) {
       await this.verifyEncounterAccess(encounterId, userId);
@@ -236,8 +243,8 @@ export class CombatHPService {
       isCriticalHit = false,
     } = options;
 
-    // Get participant, status, and encounter in a single query
-    const participant = await db.query.combatParticipants.findFirst({
+    // Get participant, status, and encounter in a single query if not pre-fetched
+    const participant = preFetchedParticipant || await db.query.combatParticipants.findFirst({
       where: and(
         eq(combatParticipants.id, participantId),
         eq(combatParticipants.encounterId, encounterId)

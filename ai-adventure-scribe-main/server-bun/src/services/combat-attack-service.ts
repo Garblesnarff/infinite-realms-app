@@ -11,7 +11,7 @@
  * @module server/services/combat-attack-service
  */
 
-/* eslint-disable max-lines */
+/* eslint-disable max-lines, @typescript-eslint/no-explicit-any */
 import { and, desc, eq, exists, inArray, or, isNotNull } from 'drizzle-orm';
 
 import { CombatHPService } from './combat-hp-service.js';
@@ -19,6 +19,7 @@ import { db } from '../../../db/client.js';
 import {
   combatEncounters,
   combatParticipants,
+  combatParticipantStatus,
   gameSessions,
   campaigns,
   weaponAttacks,
@@ -365,6 +366,8 @@ export class CombatAttackService {
 
     // Apply damage to target HP
     try {
+      // ⚡ Bolt: Pass pre-fetched target data (including status and encounter) to applyDamage
+      // to eliminate redundant database round-trips.
       const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
         damageAmount: damageCalc.finalDamage,
         damageType: weapon.damageType as DamageType,
@@ -372,7 +375,7 @@ export class CombatAttackService {
         sourceDescription: weapon.name || 'attack',
         ignoreResistances: true, // Already applied in damage calculation
         ignoreImmunities: true,  // Already applied in damage calculation
-      }, userId);
+      }, userId, targetParticipant);
 
       return {
         hit: true,
@@ -498,6 +501,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
+            // ⚡ Bolt: Pass pre-fetched target data to applyDamage to avoid N+1 database queries.
             const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
               damageAmount: damageCalc.finalDamage,
               damageType,
@@ -505,7 +509,7 @@ export class CombatAttackService {
               sourceDescription: spellName,
               ignoreResistances: true, // Already applied in damage calculation
               ignoreImmunities: true,  // Already applied in damage calculation
-            }, userId);
+            }, userId, targetParticipant);
 
             return {
               hit: true,
@@ -557,6 +561,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
+            // ⚡ Bolt: Pass pre-fetched target data to applyDamage to avoid N+1 database queries.
             const hpResult = await CombatHPService.applyDamage(targetId, encounterId, {
               damageAmount: finalDamage,
               damageType,
@@ -564,7 +569,7 @@ export class CombatAttackService {
               sourceDescription: spellName,
               ignoreResistances: true, // Already applied in damage calculation
               ignoreImmunities: true,  // Already applied in damage calculation
-            }, userId);
+            }, userId, targetParticipant);
 
             return {
               hit: !savedSuccessfully,
@@ -779,6 +784,11 @@ export class CombatAttackService {
    * ⚡ Bolt: Fetch participant with their base creature stats in a single joined query.
    * This is more efficient than fetching the participant and then their stats separately.
    */
+  /**
+   * ⚡ Bolt: Fetch participant with their base creature stats, status, and encounter
+   * in a single joined query. This eliminates redundant database round-trips when
+   * resolving attacks and applying damage.
+   */
   async getParticipantWithStats(
     participantId: string,
     encounterId: string,
@@ -788,6 +798,8 @@ export class CombatAttackService {
       .select({
         participant: combatParticipants,
         stats: creatureStats,
+        status: combatParticipantStatus,
+        encounter: combatEncounters,
       })
       .from(combatParticipants)
       .leftJoin(
@@ -803,6 +815,7 @@ export class CombatAttackService {
           )
         )
       )
+      .leftJoin(combatParticipantStatus, eq(combatParticipants.id, combatParticipantStatus.participantId))
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
       .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
@@ -823,14 +836,19 @@ export class CombatAttackService {
     if (!result) return null;
 
     return {
-      participant: result.participant,
+      participant: {
+        ...result.participant,
+        status: result.status,
+        encounter: result.encounter,
+      },
       stats: result.stats as CreatureStats | null,
     };
   }
 
   /**
-   * ⚡ Bolt: Batch fetch multiple participants with their base creature stats.
-   * Eliminates N+1 queries during multi-target resolution (e.g. AoE spells).
+   * ⚡ Bolt: Batch fetch multiple participants with their base creature stats, status, and encounter.
+   * Eliminates N+1 database round-trips during multi-target resolution (e.g. AoE spells)
+   * by combining participant data with their active combat status in a single query.
    */
   async getParticipantsWithStatsBatch(
     participantIds: string[],
@@ -843,6 +861,8 @@ export class CombatAttackService {
       .select({
         participant: combatParticipants,
         stats: creatureStats,
+        status: combatParticipantStatus,
+        encounter: combatEncounters,
       })
       .from(combatParticipants)
       .leftJoin(
@@ -858,6 +878,7 @@ export class CombatAttackService {
           )
         )
       )
+      .leftJoin(combatParticipantStatus, eq(combatParticipants.id, combatParticipantStatus.participantId))
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
       .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
@@ -877,7 +898,11 @@ export class CombatAttackService {
     const resultMap = new Map<string, { participant: any; stats: CreatureStats | null }>();
     results.forEach((r) => {
       resultMap.set(r.participant.id, {
-        participant: r.participant,
+        participant: {
+          ...r.participant,
+          status: r.status,
+          encounter: r.encounter,
+        },
         stats: r.stats as CreatureStats | null,
       });
     });
