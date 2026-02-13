@@ -52,6 +52,10 @@
 **Learning:** Found that `reactionSystem.ts` was completely untested despite containing critical D&D 5e mechanics. Also discovered a flaky test in `fightingStyles.test.ts` where `applyGreatWeaponFighting` relied on `Math.random()` without mocking, causing intermittent failures if the reroll result was the same as the original.
 **Action:** When testing features that involve randomness (like damage rerolls), always mock `Math.random()` or the underlying dice engine to ensure deterministic results. Comprehensive testing of reaction triggers requires careful mocking of the `CombatEncounter` state, especially participant conditions and resources.
 
+## 2024-05-24 - [Downtime Utilities & Truthy Bugs]
+**Learning:** Found that `downtimeActivities.ts` was completely untested and contained several truthy bugs where `0` gold or `0` experience would cause logic skips. Also discovered a bug in the `use-downtime-activities.ts` hook where materials were being added to gold instead of subtracted.
+**Action:** Always use explicit nullish checks (`!== undefined`) for numeric fields in D&D logic. Ensure that resource deduction in hooks accurately reflects whether a value is a cost or a gain. Use `eslint --fix` to resolve complex `import/order` issues and add large utility files to the `max-lines` override section in `eslint.config.js`.
+
 ## 2026-02-10 - [Local Storage Hooks Coverage]
 **Learning:** `useLocalStorage` handles booleans by storing them as "1" or "0" strings, which needs specific test cases. Cross-tab synchronization via `StorageEvent` and SSR safety are critical logic paths for these hooks.
 **Action:** When testing storage hooks, mock `Storage.prototype.setItem` and `getItem` to simulate errors (like quota exceeded) and verify that the hook state remains consistent even if persistence fails. Always add new hooks to both `include` and `coverage.include` in `vitest.config.ts`.
