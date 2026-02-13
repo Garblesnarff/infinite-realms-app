@@ -48,7 +48,7 @@ export const useDowntimeActivities = ({
           // Apply gold changes
           if (updatedCharacter.gold !== undefined) {
             updatedCharacter.gold -= result.goldSpent || 0;
-            updatedCharacter.gold += result.materialsUsed || 0;
+            updatedCharacter.gold -= result.materialsUsed || 0;
             if (result.outcome?.goldRecovery) {
               updatedCharacter.gold += result.outcome.goldRecovery;
             }
