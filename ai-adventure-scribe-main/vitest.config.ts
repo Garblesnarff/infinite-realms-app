@@ -100,6 +100,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'server-bun/src/services/__tests__/scene-service.test.ts',
       'server-bun/src/services/__tests__/character-service-spells.test.ts',
+      'server-bun/src/services/__tests__/character-service-permissions.test.ts',
       'server-bun/src/services/__tests__/combat-initiative-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
       'src/components/spells/__tests__/SpellCard.test.tsx',

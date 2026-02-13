@@ -279,41 +279,65 @@ export class CharacterService {
     targetUserId: string,
     permission: PermissionLevel
   ): Promise<CharacterPermission> {
-    // Verify ownership
-    const { isOwner } = await this.checkPermission(characterId, userId);
-    if (!isOwner) {
+    // 🛡️ Sentinel: Combined ownership and existence check to prevent IDOR and race conditions.
+    // Use an atomic query to verify the requester owns the character and check for existing permissions.
+    const [result] = await db
+      .select({
+        characterId: characters.id,
+        existingPermissionId: characterPermissions.id,
+      })
+      .from(characters)
+      .leftJoin(
+        characterPermissions,
+        and(
+          eq(characterPermissions.characterId, characters.id),
+          eq(characterPermissions.userId, targetUserId)
+        )
+      )
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      )
+      .limit(1);
+
+    if (!result) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Character not found',
       });
     }
 
-    // Check if permission already exists
-    const existing = await db.query.characterPermissions.findFirst({
-      where: and(
-        eq(characterPermissions.characterId, characterId),
-        eq(characterPermissions.userId, targetUserId)
-      ),
-    });
-
-    if (existing) {
+    if (result.existingPermissionId) {
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'Permission already exists for this user',
       });
     }
 
-    // Create permission
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [newPermission] = await db
       .insert(characterPermissions)
-      .values({
-        characterId,
-        userId: targetUserId,
-        permissionLevel: permission,
-        canControlToken: permission === 'editor' || permission === 'owner',
-        canEditSheet: permission === 'editor' || permission === 'owner',
-        grantedBy: userId,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            userId: sql`${targetUserId}`,
+            permissionLevel: sql`${permission}`,
+            canControlToken: sql`${permission === 'editor' || permission === 'owner'}`,
+            canEditSheet: sql`${permission === 'editor' || permission === 'owner'}`,
+            grantedBy: sql`${userId}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
       .returning();
 
     if (!newPermission) {
@@ -332,15 +356,7 @@ export class CharacterService {
     targetUserId: string,
     permission: PermissionLevel
   ): Promise<CharacterPermission> {
-    // Verify ownership
-    const { isOwner } = await this.checkPermission(characterId, userId);
-    if (!isOwner) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Character not found',
-      });
-    }
-
+    // 🛡️ Sentinel: Atomic update with inline ownership check (must be owner to modify permissions).
     const [updated] = await db
       .update(characterPermissions)
       .set({
@@ -351,12 +367,24 @@ export class CharacterService {
       .where(
         and(
           eq(characterPermissions.characterId, characterId),
-          eq(characterPermissions.userId, targetUserId)
+          eq(characterPermissions.userId, targetUserId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                )
+              )
+          )
         )
       )
       .returning();
 
     if (!updated) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing permission to mask existence.
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Permission not found',
@@ -374,21 +402,24 @@ export class CharacterService {
     userId: string,
     targetUserId: string
   ): Promise<boolean> {
-    // Verify ownership
-    const { isOwner } = await this.checkPermission(characterId, userId);
-    if (!isOwner) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Character not found',
-      });
-    }
-
+    // 🛡️ Sentinel: Atomic delete with inline ownership check (must be owner to revoke permissions).
     const result = await db
       .delete(characterPermissions)
       .where(
         and(
           eq(characterPermissions.characterId, characterId),
-          eq(characterPermissions.userId, targetUserId)
+          eq(characterPermissions.userId, targetUserId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                )
+              )
+          )
         )
       )
       .returning({ id: characterPermissions.id });
@@ -442,18 +473,35 @@ export class CharacterService {
     characterId: string,
     userId: string
   ): Promise<CharacterPermission[]> {
-    // Verify ownership
-    const { isOwner } = await this.checkPermission(characterId, userId);
-    if (!isOwner) {
+    // 🛡️ Sentinel: Incorporate ownership check directly into the query for defense-in-depth.
+    // We use a join to verify ownership while fetching permissions in a single round-trip.
+    const results = await db
+      .select({
+        permission: characterPermissions,
+        ownerId: characters.ownerId,
+        charUserId: characters.userId,
+      })
+      .from(characters)
+      .leftJoin(characterPermissions, eq(characterPermissions.characterId, characters.id))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      );
+
+    if (results.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Character not found',
       });
     }
 
-    return await db.query.characterPermissions.findMany({
-      where: eq(characterPermissions.characterId, characterId),
-    });
+    // Filter out null permissions (caused by leftJoin when character has no permissions)
+    return results
+      .map((r) => r.permission)
+      .filter((p): p is CharacterPermission => p !== null);
   }
 
   /**
