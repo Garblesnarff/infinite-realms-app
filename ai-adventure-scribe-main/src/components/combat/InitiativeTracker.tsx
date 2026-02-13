@@ -100,8 +100,22 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
     isDead && 'opacity-60 grayscale',
   );
 
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelectParticipant?.(participant.id);
+    }
+  };
+
   return (
-    <div className={rowClasses} onClick={() => onSelectParticipant?.(participant.id)}>
+    <div
+      className={rowClasses}
+      onClick={() => onSelectParticipant?.(participant.id)}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`Select ${participant.name}`}
+    >
       {/* Turn Indicator & Initiative */}
       <div className="flex items-center space-x-3">
         {isCurrentTurn && <ChevronRight className="w-5 h-5 text-amber-600 animate-pulse" />}
@@ -164,7 +178,11 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         {/* HP Bar */}
         <div className="mt-2 flex items-center gap-2">
-          <Progress value={hpPercent} className="h-2 flex-1" />
+          <Progress
+            value={hpPercent}
+            className="h-2 flex-1"
+            aria-label={`${participant.name} Health`}
+          />
           <span className="min-w-[4rem] text-right text-sm font-medium">
             {participant.currentHitPoints}/{participant.maxHitPoints}
             {participant.temporaryHitPoints > 0 && (
@@ -175,9 +193,14 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         {/* Death Saves */}
         {needsDeathSave && (
-          <div className="flex items-center space-x-1 mt-1">
-            <span className="text-xs text-red-600 font-medium">Death Saves:</span>
-            <div className="flex space-x-1">
+          <div
+            className="flex items-center space-x-1 mt-1"
+            aria-label={`Death saves: ${participant.deathSaves.successes} successes, ${participant.deathSaves.failures} failures`}
+          >
+            <span className="text-xs text-red-600 font-medium" aria-hidden="true">
+              Death Saves:
+            </span>
+            <div className="flex space-x-1" aria-hidden="true">
               {[1, 2, 3].map((i) => (
                 <div
                   key={`success-${i}`}
@@ -187,8 +210,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 />
               ))}
             </div>
-            <span className="text-xs mx-1">/</span>
-            <div className="flex space-x-1">
+            <span className="text-xs mx-1" aria-hidden="true">
+              /
+            </span>
+            <div className="flex space-x-1" aria-hidden="true">
               {[1, 2, 3].map((i) => (
                 <div
                   key={`failure-${i}`}
@@ -216,11 +241,14 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
               const ConditionIcon = CONDITION_ICONS[condition.name]?.icon || UserX;
               const colorClass = CONDITION_ICONS[condition.name]?.color || 'bg-gray-500';
 
+              const conditionLabel = `${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`;
               return (
                 <div
                   key={index}
                   className={`rounded-full p-1 text-white ${colorClass}`}
-                  title={`${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`}
+                  title={conditionLabel}
+                  aria-label={conditionLabel}
+                  role="img"
                 >
                   <ConditionIcon className="h-3 w-3" />
                 </div>
