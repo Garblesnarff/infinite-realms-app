@@ -183,9 +183,12 @@ export class CombatInitiativeService {
       throw new InternalServerError('Failed to create combat encounter');
     }
 
+    let participants: CombatParticipant[] = [];
+
     // Batch insert all participants (single query instead of N queries)
     if (participantInputs.length > 0) {
-      const participantValues = participantInputs.map(input => {
+      // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
+      const participantsWithInitiative = participantInputs.map(input => {
         const roll = rollD20();
         const initiative = roll + input.initiativeModifier;
         return {
@@ -195,19 +198,46 @@ export class CombatInitiativeService {
           name: input.name,
           initiative,
           initiativeModifier: input.initiativeModifier,
-          turnOrder: 0, // Will be recalculated
           participantType: input.characterId ? 'player' as const : input.npcId ? 'npc' as const : 'other' as const,
         };
       });
 
-      await db.insert(combatParticipants).values(participantValues);
+      // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
+      const sortedValues = [...participantsWithInitiative].sort((a, b) => {
+        if (b.initiative !== a.initiative) {
+          return b.initiative - a.initiative;
+        }
+        return b.initiativeModifier - a.initiativeModifier;
+      });
+
+      const participantValues = sortedValues.map((p, index) => ({
+        ...p,
+        turnOrder: index,
+        isActive: true,
+      }));
+
+      const insertedParticipants = await db.insert(combatParticipants).values(participantValues).returning();
+      // Ensure participants are sorted by turnOrder to match getCombatState behavior
+      participants = insertedParticipants.sort((a, b) => a.turnOrder - b.turnOrder);
     }
 
-    // Calculate initial turn order
-    await this.calculateTurnOrder(encounter.id);
+    // ⚡ Bolt: Construct CombatState in-memory to avoid redundant fetch of just-inserted data.
+    // This reduces database round-trips from 6 down to 3.
+    const activeParticipants = participants.filter(p => p.isActive);
+    const currentParticipant = activeParticipants[0] || null;
 
-    // Get the updated state
-    return await this.getCombatState(encounter.id, userId);
+    const turnOrder: TurnOrderEntry[] = activeParticipants.map((participant, index) => ({
+      participant,
+      isCurrent: index === 0,
+      hasGone: false,
+    }));
+
+    return {
+      encounter: encounter as CombatEncounter,
+      participants,
+      turnOrder,
+      currentParticipant,
+    };
   }
 
   /**
