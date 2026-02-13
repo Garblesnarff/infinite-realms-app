@@ -122,6 +122,7 @@ export default defineConfig({
       'src/utils/__tests__/magicItemEffects.test.ts',
       'src/utils/__tests__/massCombat.test.ts',
       'src/utils/__tests__/downtimeActivities.test.ts',
+      'src/utils/__tests__/character-level-utils.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -221,6 +222,7 @@ export default defineConfig({
         'src/utils/magicItemEffects.ts',
         'src/utils/massCombat.ts',
         'src/utils/downtimeActivities.ts',
+        'src/utils/character-level-utils.ts',
       ],
       exclude: [
         '**/__tests__/**',
