@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Inventory Service
  *
@@ -96,35 +97,36 @@ export class InventoryService {
    * @returns Created inventory item
    */
   static async addItem(input: CreateInventoryItemInput, userId: string): Promise<InventoryItem> {
-    // Verify character ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, input.characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', input.characterId);
-    }
-
-    const itemData: NewInventoryItem = {
-      characterId: input.characterId,
-      name: input.name,
-      itemType: input.itemType,
-      quantity: input.quantity ?? 1,
-      weight: input.weight?.toString() ?? '0',
-      description: input.description ?? null,
-      properties: input.properties ? JSON.stringify(input.properties) : null,
-      isEquipped: input.isEquipped ?? false,
-      isAttuned: input.isAttuned ?? false,
-      requiresAttunement: input.requiresAttunement ?? false,
-    };
-
-    const [item] = await db.insert(inventoryItems).values(itemData).returning();
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that items can only be added to characters the user is authorized to access.
+    const [item] = await db
+      .insert(inventoryItems)
+      .select(
+        db
+          .select({
+            characterId: sql`${input.characterId}`,
+            name: sql`${input.name}`,
+            itemType: sql`${input.itemType}`,
+            quantity: sql`${input.quantity ?? 1}`,
+            weight: sql`${input.weight?.toString() ?? '0'}`,
+            description: sql`${input.description ?? null}`,
+            properties: sql`${input.properties ? JSON.stringify(input.properties) : null}`,
+            isEquipped: sql`${input.isEquipped ?? false}`,
+            isAttuned: sql`${input.isAttuned ?? false}`,
+            requiresAttunement: sql`${input.requiresAttunement ?? false}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, input.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
+      .returning();
 
     if (!item) {
-      throw new InternalServerError('Failed to create inventory item');
+      throw new NotFoundError('Character', input.characterId);
     }
 
     return item;
@@ -263,16 +265,29 @@ export class InventoryService {
       );
     }
 
-    // Log the usage
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that usage logs can only be created for items and characters the user is authorized to access.
     const [usageLog] = await db
       .insert(consumableUsageLog)
-      .values({
-        characterId: input.characterId,
-        itemId: input.itemId,
-        quantityUsed: quantityToUse,
-        sessionId: input.sessionId ?? null,
-        context: input.context ?? null,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${input.characterId}`,
+            itemId: sql`${input.itemId}`,
+            quantityUsed: sql`${quantityToUse}`,
+            sessionId: sql`${input.sessionId ?? null}`,
+            context: sql`${input.context ?? null}`,
+          })
+          .from(inventoryItems)
+          .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
+          .where(
+            and(
+              eq(inventoryItems.id, input.itemId),
+              eq(inventoryItems.characterId, input.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
       .returning();
 
     if (!usageLog) {
