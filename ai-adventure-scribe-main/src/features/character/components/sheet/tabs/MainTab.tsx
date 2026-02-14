@@ -191,9 +191,16 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
             </div>
 
             {/* HP Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="w-full bg-gray-200 rounded-full h-3 overflow-hidden"
+              role="progressbar"
+              aria-valuenow={combatState.currentHp}
+              aria-valuemin={0}
+              aria-valuemax={maxHp}
+              aria-label="Hit points"
+            >
               <div
-                className="bg-red-500 h-33 rounded-full transition-all"
+                className="bg-red-500 h-full rounded-full transition-all"
                 style={{
                   width: `${Math.max(0, (combatState.currentHp / maxHp) * 100)}%`,
                 }}
@@ -397,6 +404,8 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
                         onClick={() =>
                           updateDeathSave('success', i > combatState.deathSaves.successes)
                         }
+                        aria-label={`Death save success ${i}`}
+                        aria-pressed={i <= combatState.deathSaves.successes}
                       />
                     ))}
                   </div>
@@ -416,6 +425,8 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
                         onClick={() =>
                           updateDeathSave('failure', i > combatState.deathSaves.failures)
                         }
+                        aria-label={`Death save failure ${i}`}
+                        aria-pressed={i <= combatState.deathSaves.failures}
                       />
                     ))}
                   </div>

@@ -205,9 +205,16 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                   <span>Heavy: {heavilyEncumbered}</span>
                   <span>Max: {carryingCapacity}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={totalWeight}
+                  aria-valuemin={0}
+                  aria-valuemax={carryingCapacity}
+                  aria-label="Carrying capacity"
+                >
                   <div
-                    className={`h-2 rounded-full transition-all ${
+                    className={`h-full rounded-full transition-all ${
                       encumbranceStatus === 'overloaded'
                         ? 'bg-red-500'
                         : encumbranceStatus === 'heavily-encumbered'
@@ -365,7 +372,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
         <CardContent>
           <div className="flex items-center gap-4">
             <span className="text-sm">Attuned Items:</span>
-            <div className="flex gap-2">
+            <div className="flex gap-2" role="group" aria-label="Attunement slots">
               {[1, 2, 3].map((slot) => {
                 const attunedItems = character.inventory?.filter((item) => item.isAttuned) || [];
                 const isOccupied = slot <= attunedItems.length;
@@ -376,6 +383,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                     className={`w-8 h-8 rounded border-2 flex items-center justify-center ${
                       isOccupied ? 'bg-purple-500 border-purple-600 text-white' : 'border-gray-300'
                     }`}
+                    aria-label={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
                   >
                     {isOccupied && <Star className="w-4 h-4" />}
                   </div>
