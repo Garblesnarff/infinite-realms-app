@@ -126,6 +126,7 @@ export default defineConfig({
       'src/utils/__tests__/character-level-utils.test.ts',
       'src/utils/__tests__/diceCommandParser.test.ts',
       'src/utils/__tests__/classFeatures.test.ts',
+      'src/utils/__tests__/characterModifiers.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -152,6 +153,7 @@ export default defineConfig({
       all: false,
       include: [
         'src/lib/logger.ts',
+        'src/utils/characterModifiers.ts',
         'src/utils/diceRolls.ts',
         'src/utils/character-calculations.ts',
         'src/utils/attackUtils.ts',

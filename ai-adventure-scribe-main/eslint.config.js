@@ -280,6 +280,7 @@ export default tseslint.config(
       'src/utils/downtimeActivities.ts',
       'src/utils/restMechanics.ts',
       'src/utils/__tests__/restMechanics.test.ts',
+      'src/utils/characterModifiers.ts',
       'src/utils/conditionEffects.ts',
       'src/utils/condition-definitions.ts',
       'src/utils/multiclassing.ts',
