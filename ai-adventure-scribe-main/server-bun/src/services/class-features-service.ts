@@ -220,19 +220,30 @@ export class ClassFeaturesService {
     }
 
     // Grant the feature
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [granted] = await db
       .insert(characterFeatures)
-      .values({
-        characterId,
-        featureId,
-        usesRemaining: feature.usesCount || null,
-        isActive: true,
-        acquiredAtLevel,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: sql`${featureId}`,
+            usesRemaining: sql`${feature.usesCount || null}`,
+            isActive: sql`true`,
+            acquiredAtLevel: sql`${acquiredAtLevel}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
       .returning();
 
     if (!granted) {
-      throw new InternalServerError('Failed to grant feature');
+      throw new NotFoundError('Character', characterId);
     }
 
     return granted;
@@ -358,13 +369,22 @@ export class ClassFeaturesService {
 
     // Decrement uses
     const newUsesRemaining = characterFeature.usesRemaining - 1;
+    // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth.
     await db
       .update(characterFeatures)
       .set({ usesRemaining: newUsesRemaining })
       .where(and(
         eq(characterFeatures.id, characterFeature.id),
         eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId)
+        eq(characterFeatures.featureId, featureId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ));
 
     // Log the usage
@@ -424,12 +444,21 @@ export class ClassFeaturesService {
 
       if (shouldRestore && feature.usesCount !== null) {
         // Restore uses to maximum
+        // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth.
         await db
           .update(characterFeatures)
           .set({ usesRemaining: feature.usesCount })
           .where(and(
             eq(characterFeatures.id, charFeature.id),
-            eq(characterFeatures.characterId, characterId)
+            eq(characterFeatures.characterId, characterId),
+            exists(
+              db.select()
+                .from(characters)
+                .where(and(
+                  eq(characters.id, characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                ))
+            )
           ));
 
         featuresRestored.push(feature.featureName);
@@ -499,12 +528,25 @@ export class ClassFeaturesService {
     }
 
     // Set the subclass
-    await db.insert(characterSubclasses).values({
-      characterId,
-      className,
-      subclassName,
-      chosenAtLevel: level,
-    });
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    await db
+      .insert(characterSubclasses)
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            className: sql`${className}`,
+            subclassName: sql`${subclassName}`,
+            chosenAtLevel: sql`${level}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      );
 
     // Get subclass features acquired at the choice level
     const subclassFeatures = await db.query.classFeaturesLibrary.findMany({
@@ -609,18 +651,29 @@ export class ClassFeaturesService {
       throw new NotFoundError('Character', characterId);
     }
 
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [log] = await db
       .insert(featureUsageLog)
-      .values({
-        characterId,
-        featureId,
-        sessionId: sessionId || null,
-        context: context || null,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: sql`${featureId}`,
+            sessionId: sql`${sessionId || null}`,
+            context: sql`${context || null}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
       .returning();
 
     if (!log) {
-      throw new InternalServerError('Failed to log feature usage');
+      throw new NotFoundError('Character', characterId);
     }
 
     return log;
