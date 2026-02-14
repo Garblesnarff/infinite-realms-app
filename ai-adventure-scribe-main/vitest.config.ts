@@ -125,6 +125,7 @@ export default defineConfig({
       'src/utils/__tests__/downtimeActivities.test.ts',
       'src/utils/__tests__/character-level-utils.test.ts',
       'src/utils/__tests__/diceCommandParser.test.ts',
+      'src/utils/__tests__/classFeatures.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -227,6 +228,7 @@ export default defineConfig({
         'src/utils/downtimeActivities.ts',
         'src/utils/character-level-utils.ts',
         'src/utils/diceCommandParser.ts',
+        'src/utils/classFeatures.ts',
       ],
       exclude: [
         '**/__tests__/**',

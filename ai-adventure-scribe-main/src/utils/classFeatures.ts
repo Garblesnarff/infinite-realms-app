@@ -6,8 +6,6 @@
 
 import type { ClassFeature, CharacterResources } from '@/types/combat';
 
-import { DamageType } from '@/types/combat';
-
 /**
  * Get class features for a given class and level
  */
