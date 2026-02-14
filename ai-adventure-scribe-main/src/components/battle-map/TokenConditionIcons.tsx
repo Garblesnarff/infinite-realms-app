@@ -11,7 +11,7 @@ import { Html } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import React, { useMemo } from 'react';
 
-import type { Condition, ConditionName } from '@/types/combat';
+import type { Condition } from '@/types/combat';
 
 import { Z_INDEX } from '@/constants/z-index';
 import {
@@ -19,7 +19,6 @@ import {
   getSortedConditions,
   shouldConditionPulse,
   formatExhaustionDescription,
-  getExhaustionLevel,
 } from '@/utils/condition-icons';
 
 /**
@@ -51,7 +50,7 @@ interface ConditionIconProps {
   index: number;
 }
 
-function ConditionIcon({ condition, position, size, showTooltip, index }: ConditionIconProps) {
+const ConditionIcon = React.memo(({ condition, position, size, showTooltip, index }: ConditionIconProps) => {
   const [isHovered, setIsHovered] = React.useState(false);
   const config = CONDITION_ICONS[condition.name];
 
@@ -187,7 +186,9 @@ function ConditionIcon({ condition, position, size, showTooltip, index }: Condit
       )}
     </motion.div>
   );
-}
+});
+
+ConditionIcon.displayName = 'ConditionIcon';
 
 /**
  * TokenConditionIcons Component
@@ -260,8 +261,6 @@ export function TokenConditionIcons({
 
   const displayConditions = sortedConditions.slice(0, maxVisible);
   const hiddenCount = Math.max(0, sortedConditions.length - maxVisible);
-
-  if (!config || !IconComponent) return null;
 
   return (
     <Html

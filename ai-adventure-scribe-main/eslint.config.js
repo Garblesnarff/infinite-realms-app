@@ -290,6 +290,7 @@ export default tseslint.config(
       'src/hooks/use-combat-mechanics.ts',
       'src/utils/reactionTriggers.ts',
       'src/components/battle-map/LayersPanel.tsx',
+      'src/components/battle-map/TokenConditionIcons.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',

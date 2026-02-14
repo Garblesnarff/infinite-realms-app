@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-function-return-type, no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-function-return-type */
 /**
  * Fog of War WebSocket Hook
  *
@@ -11,6 +11,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 
 import type { RevealedArea } from '@/types/fog-of-war';
+
+import logger from '@/lib/logger';
 
 /**
  * Fog WebSocket message types
@@ -124,7 +126,7 @@ export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSock
 
         // Handle welcome message
         if (message.type === 'welcome') {
-          console.log('WebSocket connected:', message);
+          logger.info('WebSocket connected', { message });
           isConnectedRef.current = true;
 
           // Join scene room if sceneId provided
@@ -159,7 +161,7 @@ export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSock
           return;
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        logger.error('Error parsing WebSocket message', { error });
       }
     },
     [sceneId, callbacks, sendMessage, flushMessageQueue],
@@ -170,7 +172,7 @@ export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSock
    */
   const connect = useCallback(() => {
     if (!token) {
-      console.warn('Cannot connect to WebSocket: no token provided');
+      logger.warn('Cannot connect to WebSocket: no token provided');
       return;
     }
 
@@ -185,24 +187,24 @@ export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSock
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('WebSocket opened');
+        logger.debug('WebSocket opened');
       };
 
       ws.onmessage = handleMessage;
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        logger.error('WebSocket error', { error });
       };
 
       ws.onclose = () => {
-        console.log('WebSocket closed');
+        logger.debug('WebSocket closed');
         isConnectedRef.current = false;
         wsRef.current = null;
 
         // Attempt to reconnect after 3 seconds
         if (autoConnect) {
           reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('Attempting to reconnect WebSocket...');
+            logger.info('Attempting to reconnect WebSocket...');
             connect();
           }, 3000);
         }
@@ -210,7 +212,7 @@ export function useFogWebSocket(options: WebSocketOptions, callbacks: FogWebSock
 
       wsRef.current = ws;
     } catch (error) {
-      console.error('Error creating WebSocket:', error);
+      logger.error('Error creating WebSocket', { error });
     }
   }, [url, token, autoConnect, handleMessage]);
 
