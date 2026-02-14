@@ -77,30 +77,34 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
   const assets: AssetInfo[] = [];
 
   try {
-    // Fetch character templates with portraits
-    const { data: characters } = await supabase
-      .from('starter_character_templates')
-      .select('template_key, name, portrait_url')
-      .eq('starter_campaign_id', starterCampaignId);
+    // ⚡ Bolt: Parallelize fetching of character templates and campaign chunks
+    // to reduce total latency in the AI prompt generation pipeline.
+    const [charactersResult, chunksResult] = await Promise.all([
+      supabase
+        .from('starter_character_templates')
+        .select('template_key, name, portrait_url')
+        .eq('starter_campaign_id', starterCampaignId),
+      supabase
+        .from('campaign_chunks')
+        .select('entity_name, chunk_type, metadata')
+        .eq('campaign_id', starterCampaignId)
+        .not('entity_name', 'is', null),
+    ]);
+
+    const characters = charactersResult.data;
+    const chunks = chunksResult.data;
 
     if (characters) {
       for (const char of characters) {
         if (char.portrait_url) {
           assets.push({
             type: 'character',
-            key: char.template_key || char.name.toLowerCase().replace(/\s+/g, '-') ,
+            key: char.template_key || char.name.toLowerCase().replace(/\s+/g, '-'),
             name: char.name,
           });
         }
       }
     }
-
-    // Fetch campaign chunks with images in metadata
-    const { data: chunks } = await supabase
-      .from('campaign_chunks')
-      .select('entity_name, chunk_type, metadata')
-      .eq('campaign_id', starterCampaignId)
-      .not('entity_name', 'is', null);
 
     if (chunks) {
       for (const chunk of chunks) {
@@ -144,7 +148,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
   cachedAssets = { campaignId: starterCampaignId, assets };
 
   // Format for AI prompt with strong instructions
-  let prompt = `
+  const prompt = `
 <available_visual_assets>
 <MANDATORY_REQUIREMENT>
 You MUST include [ASSET:type:key] tags when introducing ANY entity from this list.
