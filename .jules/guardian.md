@@ -71,3 +71,7 @@
 ## 2025-06-20 - [Mass Combat Utilities Coverage]
 **Learning:** `src/utils/massCombat.ts` contains critical army management and battle resolution logic but had zero test coverage. The logic includes complex dice parsing and morale calculations that benefit from deterministic mocking.
 **Action:** Mock `rollDice` to test hit/miss and damage scenarios. Ensure edge cases like out-of-bounds movement and zero-unit armies are covered.
+
+## 2024-05-24 - [Class Features Coverage & Scaling Logic]
+**Learning:** `src/utils/classFeatures.ts` contains complex ternary-based scaling logic for class features (e.g., Barbarian Rage uses, Bardic Inspiration dice) that can be easily misread. Testing revealed that coverage tools are sensitive to branch coverage even when all lines are executed, requiring specific tests for each threshold.
+**Action:** When testing level-based scaling, always include test cases for the exact threshold levels (e.g., if logic is `level < 3 ? 2 : 3`, test levels 2 and 3). Ensure that large utility files and their tests are added to the `max-lines` override list in `eslint.config.js` to maintain lint compliance while allowing comprehensive suites.
