@@ -77,34 +77,32 @@ export const useCombatMechanics = ({
 
       // Calculate base damage with sneak attack and divine smite
       const damageResult = calculateAttackDamage(
-        { name: 'Longsword', damage: '1d8+3', damageType: 'slashing', properties: {} },
+        {
+          name: 'Longsword',
+          damage: { dice: '1d8+3', type: 'slashing' },
+          properties: {}
+        } as any,
         participant as any,
-        false,
         isCritical,
-        undefined,
-        activeEncounter as any,
-        divineSmiteSlotLevel,
+        {
+          divineSmiteLevel: divineSmiteSlotLevel,
+          sneakAttack: false, // Logic for determining this could be added later
+        },
       );
 
-      let damageRolls = [damageResult.baseDamageRoll];
-      let totalDamage = damageResult.baseDamageRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
+      const damageRolls = damageResult.rolls;
+      let totalDamage = damageResult.totalBeforeResistance;
 
-      // Add sneak attack damage if applicable
-      if (damageResult.sneakAttackRoll) {
-        damageRolls = [...damageRolls, ...damageResult.sneakAttackRoll];
-        totalDamage += damageResult.sneakAttackRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
-      }
-
-      // Add divine smite damage if applicable
-      if (damageResult.divineSmiteRoll) {
-        damageRolls = [...damageRolls, ...damageResult.divineSmiteRoll];
-        totalDamage += damageResult.divineSmiteRoll.reduce((sum, roll) => sum + (roll.total || 0), 0);
-      }
-
-      // Add Rage damage for Barbarian
+      // Ensure Rage damage is applied for Barbarians if not already included by calculateAttackDamage
+      // The utility calculateAttackDamage normally handles this, but we keep this as a safety check
       if (participant.isRaging && (participant as any).characterClass === 'barbarian') {
-        const rageDamage = getRageDamageBonus(participant.level || 1);
-        totalDamage += rageDamage;
+        const hasRageBonus = damageResult.rolls.some((r: any) => r.isRageBonus);
+        if (!hasRageBonus) {
+          // If utility didn't add it (e.g. if it's an older version or different implementation),
+          // we add it here using our class features utility.
+          const rageBonus = getRageDamageBonus(participant.level || 1);
+          totalDamage += rageBonus;
+        }
       }
 
       const action = {
