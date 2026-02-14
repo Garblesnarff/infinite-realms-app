@@ -177,6 +177,7 @@ const SharedCharacterCard: React.FC<{
             size="sm"
             onClick={() => onRemoveSelf(character.id, character.name)}
             className="text-muted-foreground hover:text-destructive"
+            aria-label="Remove access"
           >
             <UserMinus className="h-4 w-4" />
           </Button>
@@ -298,6 +299,7 @@ export const SharedCharactersList: React.FC = () => {
               size="icon"
               onClick={() => setFilterPermission('all')}
               className="h-8 w-8"
+              aria-label="Clear filter"
             >
               <X className="h-4 w-4" />
             </Button>

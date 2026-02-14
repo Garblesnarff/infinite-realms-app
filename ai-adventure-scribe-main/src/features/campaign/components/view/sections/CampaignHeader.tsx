@@ -22,7 +22,13 @@ export const CampaignHeader: React.FC<CampaignHeaderProps> = ({
   return (
     <div className="flex justify-between items-start mb-8">
       <h1 className="text-3xl font-bold">{campaign.name}</h1>
-      <Button variant="destructive" size="icon" onClick={onDelete} disabled={isDeleting}>
+      <Button
+        variant="destructive"
+        size="icon"
+        onClick={onDelete}
+        disabled={isDeleting}
+        aria-label="Delete campaign"
+      >
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>

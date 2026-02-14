@@ -63,3 +63,7 @@
 ## 2026-03-20 - View Mode Toggle Accessibility and Z-Index Standardization
 **Learning:** View mode toggles (Grid/List/Compact) require a specific ARIA structure for optimal accessibility: a container with `role="group"` and `aria-label`, and buttons with `aria-label`, `aria-pressed`, and `title`. Furthermore, standardizing z-index application using inline styles and centralized constants (e.g., `Z_INDEX.BACKGROUND_LAYER` for card overlays) ensures consistent layering and avoids Tailwind JIT generation issues.
 **Action:** Implement view toggles as ARIA button groups and always prefer inline `style={{ zIndex: Z_INDEX.CONSTANT }}` for layering.
+
+## 2026-06-01 - Icon-Only Button Accessibility and Z-Index Card Patterns
+**Learning:** Icon-only buttons (size="icon" or similar) are invisible to screen readers without `aria-label`. For toggle buttons (like Mute), adding `aria-pressed` provides essential state feedback. When overlaying content on cards, using `Z_INDEX` constants (like `Z_INDEX.DROPDOWN` for value 10) with inline styles ensures reliable layering and maintains design system consistency.
+**Action:** Always add `aria-label` to icon-only buttons and `aria-pressed` for toggles. Migrate hardcoded `z-` classes to `style={{ zIndex: Z_INDEX.CONSTANT }}`.
