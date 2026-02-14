@@ -1,5 +1,18 @@
-import { logger } from '../../lib/logger';
 import {
+  generateId,
+  generateSessionCode,
+  validateSessionRequest,
+  validateJoinRequest,
+  extractDisplayNameFromUser,
+  getDefaultPermissions,
+  inferTurnType,
+} from './session-utils';
+import { logger } from '../../lib/logger';
+import { append, markProcessed } from '../scene/event-log';
+import { WorldGraph } from '../world/graph';
+
+
+import type {
   SharedSession,
   SessionParticipant,
   TurnState,
@@ -11,21 +24,12 @@ import {
   JoinSessionRequest,
   SessionResult,
   ValidationResult,
-  ValidationError,
-  ValidationWarning,
   SessionStats,
-  TurnOrder,
   SynchronizationState,
-  ConnectionState,
   ParticipantSync,
-  ConflictType,
-  ConflictStatus,
-  TurnStatus,
-  SessionEventType
+  SessionEventType,
 } from './types';
-import { SceneState, PlayerIntent, DMAction } from '../scene/types';
-import { WorldGraph } from '../world/graph';
-import { append, markProcessed } from '../scene/event-log';
+import type { SceneState, PlayerIntent, DMAction } from '../scene/types';
 
 /**
  * Core multiplayer session management system
@@ -45,27 +49,30 @@ export class SessionManager {
       id: 'multiplayer-init',
       eventType: 'system',
       timestamp: new Date(),
-      data: { message: 'Multiplayer session manager initialized' }
+      data: { message: 'Multiplayer session manager initialized' },
     });
   }
 
   /**
    * Create a new shared session
    */
-  async createSession(request: CreateSessionRequest, creatorId: string): Promise<SessionResult<SharedSession>> {
+  async createSession(
+    request: CreateSessionRequest,
+    creatorId: string,
+  ): Promise<SessionResult<SharedSession>> {
     try {
       // Validate request
-      const validation = this.validateSessionRequest(request);
+      const validation = validateSessionRequest(request);
       if (!validation.valid) {
         return {
           success: false,
-          error: `Validation failed: ${validation.errors.map(e => e.message).join(', ')}`
+          error: `Validation failed: ${validation.errors.map((e) => e.message).join(', ')}`,
         };
       }
 
       // Generate unique session code
-      const sessionCode = this.generateSessionCode();
-      const sessionId = this.generateId();
+      const sessionCode = generateSessionCode();
+      const sessionId = generateId();
 
       // Create session settings
       const settings: SessionSettings = {
@@ -76,7 +83,7 @@ export class SessionManager {
         synchronizationMode: 'turn_based',
         conflictResolution: 'vote',
         spectatorDelay: 30, // 30 seconds
-        ...request.settings
+        ...request.settings,
       };
 
       // Create initial game state
@@ -92,14 +99,14 @@ export class SessionManager {
         metadata: {
           startTime: new Date(),
           creatorId,
-          sessionName: request.name
+          sessionName: request.name,
         },
         gameState: {
           scene: 'preparation',
           location: 'session_lobby',
           weather: 'clear',
-          timeOfDay: 'day'
-        }
+          timeOfDay: 'day',
+        },
       };
 
       // Create world graph for session
@@ -114,24 +121,24 @@ export class SessionManager {
           entityCount: 0,
           relationshipCount: 0,
           factCount: 0,
-          averageConfidence: 0
+          averageConfidence: 0,
         },
         timestamps: {
           snapshotTime: new Date(),
           lastEntityUpdate: new Date(),
           lastRelationshipUpdate: new Date(),
-          lastFactUpdate: new Date()
-        }
+          lastFactUpdate: new Date(),
+        },
       };
 
       // Create creator participant
       const creatorParticipant: SessionParticipant = {
-        id: this.generateId(),
+        id: generateId(),
         sessionId,
         userId: creatorId,
         role: 'dm',
         status: 'active',
-        displayName: this.extractDisplayNameFromUser(creatorId),
+        displayName: extractDisplayNameFromUser(creatorId),
         permissions: {
           canControlEntities: true,
           canWorldBuild: true,
@@ -139,18 +146,18 @@ export class SessionManager {
           canModerateChat: true,
           canPauseGame: true,
           canEndSession: true,
-          canResolveConflicts: true
+          canResolveConflicts: true,
         },
         connectionState: {
           isOnline: true,
           lastPing: new Date(),
           latency: 0,
-          lostPackets: 0
+          lostPackets: 0,
         },
         isTurnReady: false,
         isSynchronized: true,
         joinedAt: new Date(),
-        lastSeen: new Date()
+        lastSeen: new Date(),
       };
 
       // Create session
@@ -168,10 +175,10 @@ export class SessionManager {
         worldSnapshot: initialWorldSnapshot,
         settings,
         participants: [creatorParticipant],
-        
+
         createdAt: new Date(),
         updatedAt: new Date(),
-        lastActivity: new Date()
+        lastActivity: new Date(),
       };
 
       // Store session
@@ -184,11 +191,11 @@ export class SessionManager {
         data: {
           action: 'session_created',
           creatorId,
-          sessionCode
+          sessionCode,
         },
         message: `Session "${request.name}" created by ${creatorParticipant.displayName}`,
         isSystem: true,
-        isBroadcast: true
+        isBroadcast: true,
       });
 
       // Initialize world graph state
@@ -196,12 +203,12 @@ export class SessionManager {
 
       return {
         success: true,
-        data: session
+        data: session,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error creating session'
+        error: error instanceof Error ? error.message : 'Unknown error creating session',
       };
     }
   }
@@ -209,54 +216,58 @@ export class SessionManager {
   /**
    * Join an existing session
    */
-  async joinSession(request: JoinSessionRequest, userId: string): Promise<SessionResult<SessionParticipant>> {
+  async joinSession(
+    request: JoinSessionRequest,
+    userId: string,
+  ): Promise<SessionResult<SessionParticipant>> {
     try {
       // Find session by code
-      const session = Array.from(this.sessions.values())
-        .find(s => s.sessionCode === request.sessionCode);
+      const session = Array.from(this.sessions.values()).find(
+        (s) => s.sessionCode === request.sessionCode,
+      );
 
       if (!session) {
         return {
           success: false,
-          error: 'Invalid session code'
+          error: 'Invalid session code',
         };
       }
 
       // Check if user can join
-      const validation = this.validateJoinRequest(session, request, userId);
+      const validation = validateJoinRequest(session, request, userId);
       if (!validation.valid) {
         return {
           success: false,
-          error: validation.errors.map(e => e.message).join(', ')
+          error: validation.errors.map((e) => e.message).join(', '),
         };
       }
 
       // Create participant
       const participant: SessionParticipant = {
-        id: this.generateId(),
+        id: generateId(),
         sessionId: session.id,
         userId,
         role: request.role || 'player',
         status: session.settings.requireApproval ? 'invited' : 'joined',
         displayName: request.displayName,
         characterId: request.characterId,
-        permissions: this.getDefaultPermissions(request.role || 'player'),
+        permissions: getDefaultPermissions(request.role || 'player'),
         connectionState: {
           isOnline: true,
           lastPing: new Date(),
           latency: 0,
-          lostPackets: 0
+          lostPackets: 0,
         },
         isTurnReady: false,
         isSynchronized: false,
         joinedAt: new Date(),
-        lastSeen: new Date()
+        lastSeen: new Date(),
       };
 
       // Add participant to session
       session.participants.push(participant);
-      session.currentPlayers = session.participants.filter(p => 
-        ['active', 'joined'].includes(p.status)
+      session.currentPlayers = session.participants.filter((p) =>
+        ['active', 'joined'].includes(p.status),
       ).length;
       session.lastActivity = new Date();
       session.updatedAt = new Date();
@@ -271,10 +282,10 @@ export class SessionManager {
         data: {
           userId,
           displayName: request.displayName,
-          role: participant.role
+          role: participant.role,
         },
         message: `${participant.displayName} joined the session`,
-        isBroadcast: true
+        isBroadcast: true,
       });
 
       // If session is waiting and has minimum players, activate it
@@ -284,12 +295,12 @@ export class SessionManager {
 
       return {
         success: true,
-        data: participant
+        data: participant,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error joining session'
+        error: error instanceof Error ? error.message : 'Unknown error joining session',
       };
     }
   }
@@ -297,39 +308,43 @@ export class SessionManager {
   /**
    * Submit a turn action
    */
-  async submitTurn(sessionId: string, participantId: string, action: PlayerIntent): Promise<SessionResult<TurnState>> {
+  async submitTurn(
+    sessionId: string,
+    participantId: string,
+    action: PlayerIntent,
+  ): Promise<SessionResult<TurnState>> {
     try {
       const session = this.sessions.get(sessionId);
       if (!session) {
         return {
           success: false,
-          error: 'Session not found'
+          error: 'Session not found',
         };
       }
 
-      const participant = session.participants.find(p => p.id === participantId);
+      const participant = session.participants.find((p) => p.id === participantId);
       if (!participant) {
         return {
           success: false,
-          error: 'Participant not found'
+          error: 'Participant not found',
         };
       }
 
       if (!this.canAct(sessionId, participantId)) {
         return {
           success: false,
-          error: 'Participant cannot act at this time'
+          error: 'Participant cannot act at this time',
         };
       }
 
       // Create turn state
       const turnState: TurnState = {
-        id: this.generateId(),
+        id: generateId(),
         sessionId,
         turnNumber: session.gameState.turnCount + 1,
         participantId,
         characterId: participant.characterId,
-        turnType: this.inferTurnType(action),
+        turnType: inferTurnType(action),
         action,
         worldChanges: [],
         startedAt: new Date(),
@@ -340,8 +355,8 @@ export class SessionManager {
         isSkipped: false,
         synchronizedParticipants: [], // Will be populated during processing
         pendingParticipants: session.participants
-          .filter(p => p.status === 'active' && p.id !== participantId)
-          .map(p => p.id)
+          .filter((p) => p.status === 'active' && p.id !== participantId)
+          .map((p) => p.id),
       };
 
       // Process turn through world graph
@@ -364,10 +379,10 @@ export class SessionManager {
         data: {
           turnNumber: turnState.turnNumber,
           action,
-          timeLimit: session.settings.turnTimeLimit
+          timeLimit: session.settings.turnTimeLimit,
         },
         message: `${participant.displayName} started turn ${turnState.turnNumber}`,
-        isBroadcast: true
+        isBroadcast: true,
       });
 
       // Start turn timeout if configured
@@ -375,12 +390,12 @@ export class SessionManager {
 
       return {
         success: true,
-        data: turnState
+        data: turnState,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error submitting turn'
+        error: error instanceof Error ? error.message : 'Unknown error submitting turn',
       };
     }
   }
@@ -388,13 +403,17 @@ export class SessionManager {
   /**
    * Complete current turn
    */
-  async completeTurn(sessionId: string, participantId: string, response?: DMAction): Promise<SessionResult<TurnState>> {
+  async completeTurn(
+    sessionId: string,
+    participantId: string,
+    response?: DMAction,
+  ): Promise<SessionResult<TurnState>> {
     try {
       const session = this.sessions.get(sessionId);
       if (!session || !session.currentTurn) {
         return {
           success: false,
-          error: 'No active turn found'
+          error: 'No active turn found',
         };
       }
 
@@ -402,7 +421,7 @@ export class SessionManager {
       if (turn.participantId !== participantId) {
         return {
           success: false,
-          error: 'Cannot complete another participant\'s turn'
+          error: "Cannot complete another participant's turn",
         };
       }
 
@@ -429,10 +448,10 @@ export class SessionManager {
         data: {
           turnNumber: turn.turnNumber,
           duration: turn.duration,
-          response
+          response,
         },
-        message: `${session.participants.find(p => p.id === participantId)?.displayName} completed turn ${turn.turnNumber}`,
-        isBroadcast: true
+        message: `${session.participants.find((p) => p.id === participantId)?.displayName} completed turn ${turn.turnNumber}`,
+        isBroadcast: true,
       });
 
       // Update world snapshot
@@ -443,12 +462,12 @@ export class SessionManager {
 
       return {
         success: true,
-        data: turn
+        data: turn,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error completing turn'
+        error: error instanceof Error ? error.message : 'Unknown error completing turn',
       };
     }
   }
@@ -462,27 +481,30 @@ export class SessionManager {
       throw new Error('Session not found');
     }
 
-    const participantSyncs: ParticipantSync[] = session.participants.map(participant => ({
+    const participantSyncs: ParticipantSync[] = session.participants.map((participant) => ({
       participantId: participant.id,
       lastSyncedTurn: session.gameState.turnCount,
       isCurrent: participant.isSynchronized,
       pendingChanges: [], // Would be populated from actual change tracking
       conflicts: this.conflicts
-        .filter(c => c.sessionId === sessionId && c.affectedParticipants.includes(participant.id))
-        .map(c => c.id)
+        .filter(
+          (c) => c.sessionId === sessionId && c.affectedParticipants.includes(participant.id),
+        )
+        .map((c) => c.id),
     }));
 
-    const pendingConflicts = this.conflicts.filter(c => 
-      c.sessionId === sessionId && c.status === 'active'
+    const pendingConflicts = this.conflicts.filter(
+      (c) => c.sessionId === sessionId && c.status === 'active',
     );
 
-    const resolvedConflicts = this.conflicts.filter(c => 
-      c.sessionId === sessionId && c.status === 'resolved'
+    const resolvedConflicts = this.conflicts.filter(
+      (c) => c.sessionId === sessionId && c.status === 'resolved',
     );
 
     const totalParticipants = participantSyncs.length;
-    const synchronizedParticipants = participantSyncs.filter(p => p.isCurrent).length;
-    const synchronizationProgress = totalParticipants > 0 ? synchronizedParticipants / totalParticipants : 1;
+    const synchronizedParticipants = participantSyncs.filter((p) => p.isCurrent).length;
+    const synchronizationProgress =
+      totalParticipants > 0 ? synchronizedParticipants / totalParticipants : 1;
 
     return {
       sessionId,
@@ -492,7 +514,7 @@ export class SessionManager {
       pendingConflicts,
       resolvedConflicts,
       isSynchronized: synchronizationProgress >= 0.9,
-      synchronizationProgress
+      synchronizationProgress,
     };
   }
 
@@ -505,16 +527,21 @@ export class SessionManager {
       throw new Error('Session not found');
     }
 
-    const onlineParticipants = session.participants.filter(p => p.connectionState.isOnline).length;
+    const onlineParticipants = session.participants.filter(
+      (p) => p.connectionState.isOnline,
+    ).length;
     const totalTurns = session.gameState.turnCount;
-    const conflictsCount = this.conflicts.filter(c => c.sessionId === sessionId && c.status === 'active').length;
-    
-    const uptime = session.endedAt ? 
-      session.endedAt.getTime() - session.createdAt.getTime() :
-      Date.now() - session.createdAt.getTime();
+    const conflictsCount = this.conflicts.filter(
+      (c) => c.sessionId === sessionId && c.status === 'active',
+    ).length;
 
-    const messageCount = this.events.filter(e => 
-      e.sessionId === sessionId && (e.eventType === 'chat_message' || e.eventType === 'action')
+    const uptime = session.endedAt
+      ? session.endedAt.getTime() - session.createdAt.getTime()
+      : Date.now() - session.createdAt.getTime();
+
+    const messageCount = this.events.filter(
+      (e) =>
+        e.sessionId === sessionId && (e.eventType === 'chat_message' || e.eventType === 'action'),
     ).length;
 
     return {
@@ -525,113 +552,27 @@ export class SessionManager {
       conflictsCount,
       lastActivity: session.lastActivity,
       uptime,
-      messageCount
+      messageCount,
     };
   }
 
   // Private helper methods
 
-  private generateId(): string {
-    return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private generateSessionCode(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  private validateSessionRequest(request: CreateSessionRequest): ValidationResult {
-    const errors: ValidationError[] = [];
-    const warnings: ValidationWarning[] = [];
-
-    if (!request.name || request.name.trim().length < 3) {
-      errors.push({
-        field: 'name',
-        message: 'Session name must be at least 3 characters long',
-        severity: 'error',
-        code: 'NAME_TOO_SHORT'
-      });
-    }
-
-    if (request.name && request.name.length > 100) {
-      errors.push({
-        field: 'name',
-        message: 'Session name cannot exceed 100 characters',
-        severity: 'error',
-        code: 'NAME_TOO_LONG'
-      });
-    }
-
-    if (request.description && request.description.length > 500) {
-      warnings.push({
-        field: 'description',
-        message: 'Description is quite long, consider shortening it',
-        suggestion: 'Keep description under 300 characters for better readability'
-      });
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings,
-      recommendations: []
-    };
-  }
-
-  private validateJoinRequest(session: SharedSession, request: JoinSessionRequest, userId: string): ValidationResult {
-    const errors: ValidationError[] = [];
-    const warnings: ValidationWarning[] = [];
-
-    if (!request.displayName || request.displayName.trim().length < 2) {
-      errors.push({
-        field: 'displayName',
-        message: 'Display name must be at least 2 characters long',
-        severity: 'error'
-      });
-    }
-
-    if (session.currentPlayers >= session.maxPlayers) {
-      errors.push({
-        field: 'session',
-        message: 'Session is full',
-        severity: 'error'
-      });
-    }
-
-    // Check if user already in session
-    const existingParticipant = session.participants.find(p => p.userId === userId);
-    if (existingParticipant) {
-      errors.push({
-        field: 'user',
-        message: 'User already joined this session',
-        severity: 'error'
-      });
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings,
-      recommendations: []
-    };
-  }
-
   // The `Record<string, any>` for data matches SessionEvent.data from types.ts;
   // narrowing it here would require changing the shared type definition.
-  private async logSessionEvent(sessionId: string, eventData: {
-    eventType: SessionEventType;
-    participantId?: string;
-    data: Record<string, unknown>;
-    message: string;
-    isBroadcast?: boolean;
-    isSystem?: boolean;
-  }): Promise<void> {
+  private async logSessionEvent(
+    sessionId: string,
+    eventData: {
+      eventType: SessionEventType;
+      participantId?: string;
+      data: Record<string, unknown>;
+      message: string;
+      isBroadcast?: boolean;
+      isSystem?: boolean;
+    },
+  ): Promise<void> {
     const event: SessionEvent = {
-      id: this.generateId(),
+      id: generateId(),
       sessionId,
       participantId: eventData.participantId,
       eventType: eventData.eventType,
@@ -642,7 +583,7 @@ export class SessionManager {
       isSystem: eventData.isSystem || false,
       priority: 0,
       processed: false,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
     this.events.push(event);
@@ -650,48 +591,8 @@ export class SessionManager {
       id: event.id,
       eventType: event.eventType,
       timestamp: event.createdAt,
-      data: { sessionId, event }
+      data: { sessionId, event },
     });
-  }
-
-  private extractDisplayNameFromUser(userId: string): string {
-    // In a real implementation, this would query the user's profile
-    return `User-${userId.substr(0, 8)}`;
-  }
-
-  private getDefaultPermissions(role: 'player' | 'dm' | 'spectator') {
-    const basePermissions = {
-      canControlEntities: false,
-      canWorldBuild: false,
-      canInvitePlayers: false,
-      canModerateChat: false,
-      canPauseGame: false,
-      canEndSession: false,
-      canResolveConflicts: false
-    };
-
-    if (role === 'player') {
-      return {
-        ...basePermissions,
-        canControlEntities: true,
-        canInvitePlayers: true
-      };
-    }
-
-    if (role === 'dm') {
-      return {
-        ...basePermissions,
-        canControlEntities: true,
-        canWorldBuild: true,
-        canInvitePlayers: true,
-        canModerateChat: true,
-        canPauseGame: true,
-        canEndSession: true,
-        canResolveConflicts: true
-      };
-    }
-
-    return basePermissions; // spectator
   }
 
   private trackParticipant(participant: SessionParticipant): void {
@@ -702,7 +603,10 @@ export class SessionManager {
     this.participantsByUser.get(userId)!.push(participant);
   }
 
-  private async initializeWorldGraph(sessionId: string, initialState?: Partial<SceneState>): Promise<void> {
+  private async initializeWorldGraph(
+    sessionId: string,
+    initialState?: Partial<SceneState>,
+  ): Promise<void> {
     const worldGraph = this.worldGraphs.get(sessionId);
     if (!worldGraph) return;
 
@@ -726,7 +630,7 @@ export class SessionManager {
       data: { action: 'session_activated' },
       message: 'Session activated',
       isSystem: true,
-      isBroadcast: true
+      isBroadcast: true,
     });
   }
 
@@ -734,34 +638,18 @@ export class SessionManager {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== 'active') return false;
 
-    const participant = session.participants.find(p => p.id === participantId);
+    const participant = session.participants.find((p) => p.id === participantId);
     if (!participant || !participant.permissions.canControlEntities) return false;
 
     // Check if it's this participant's turn
     return session.currentTurn?.participantId === participantId;
   }
 
-  private inferTurnType(action: PlayerIntent): TurnState['turnType'] {
-    // Simple inference based on action content
-    const content = action.content?.toLowerCase() || '';
-    
-    if (content.includes('attack') || content.includes('fight') || content.includes('cast')) {
-      return 'combat';
-    }
-    if (content.includes('move') || content.includes('go') || content.includes('walk')) {
-      return 'movement';
-    }
-    if (content.includes('talk') || content.includes('say') || content.includes('ask')) {
-      return 'dialogue';
-    }
-    if (content.includes('rest') || content.includes('sleep') || content.includes('camp')) {
-      return 'rest';
-    }
-    
-    return 'action';
-  }
-
-  private async processTurnThroughWorld(worldGraph: WorldGraph, action: PlayerIntent, participantId: string): Promise<void> {
+  private async processTurnThroughWorld(
+    worldGraph: WorldGraph,
+    action: PlayerIntent,
+    participantId: string,
+  ): Promise<void> {
     // Process action through world graph
     // This would integrate with the world orchestrator
   }
@@ -803,7 +691,7 @@ export class SessionManager {
       participantId: turn.participantId,
       data: { turnNumber: turn.turnNumber },
       message: `Turn ${turn.turnNumber} timed out and was skipped`,
-      isBroadcast: true
+      isBroadcast: true,
     });
 
     await this.completeTurn(sessionId, turn.participantId);
@@ -819,15 +707,16 @@ export class SessionManager {
     if (!session) return;
 
     // Simple round-robin turn order
-    const activeParticipants = session.participants.filter(p => 
-      p.status === 'active' && p.permissions.canControlEntities
+    const activeParticipants = session.participants.filter(
+      (p) => p.status === 'active' && p.permissions.canControlEntities,
     );
 
     if (activeParticipants.length === 0) return;
 
-    const currentIndex = session.currentTurn ? 
-      activeParticipants.findIndex(p => p.id === session.currentTurn!.participantId) : -1;
-    
+    const currentIndex = session.currentTurn
+      ? activeParticipants.findIndex((p) => p.id === session.currentTurn!.participantId)
+      : -1;
+
     const nextIndex = (currentIndex + 1) % activeParticipants.length;
     const nextParticipant = activeParticipants[nextIndex];
 
