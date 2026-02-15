@@ -322,7 +322,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 value={settings.canvasQuality}
                 onValueChange={(value: any) => applyQualityPreset(value)}
               >
-                <SelectTrigger id="canvas-quality" className="w-32">
+                <SelectTrigger id="canvas-quality" className="w-32" aria-label="Canvas Quality">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

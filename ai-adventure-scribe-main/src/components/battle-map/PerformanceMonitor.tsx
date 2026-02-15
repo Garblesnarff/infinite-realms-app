@@ -17,6 +17,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -177,10 +178,11 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
   return (
     <div
       className={cn(
-        'fixed z-50 pointer-events-auto',
+        'fixed pointer-events-auto',
         positionClasses[position],
         className
       )}
+      style={{ zIndex: Z_INDEX.TOAST }}
     >
       <Card className="w-64 shadow-lg">
         <CardHeader className="pb-2">
@@ -291,11 +293,12 @@ export const FPSCounter: React.FC<{
   return (
     <div
       className={cn(
-        'fixed z-50 pointer-events-none font-mono text-sm font-bold',
+        'fixed pointer-events-none font-mono text-sm font-bold',
         positionClasses[position],
         getFPSColor(metrics.fps),
         className
       )}
+      style={{ zIndex: Z_INDEX.TOAST }}
     >
       {metrics.fps} FPS
     </div>

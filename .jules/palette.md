@@ -45,3 +45,7 @@
 ### 2025-06-01 - Audio Control Accessibility
 **Learning:** Audio controls need `aria-label` and `aria-pressed` for mute/unmute, `aria-label` for sliders. Redundant component structures (`src/components/game` and `src/features/game-session`) must be updated in tandem.
 **Action:** Always check for duplicate component definitions across feature directories when making accessibility fixes.
+
+## 2025-06-03 - Z-Index Migration and Select Accessibility
+**Learning:** Performance overlays and debug monitors should use high-level z-index constants (like `Z_INDEX.TOAST`) to remain visible above other UI layers. `SelectTrigger` components often lack accessible names when their labels are not correctly associated or are implicit.
+**Action:** Migrate hardcoded z-indices to `Z_INDEX` constants using inline styles. Always provide `aria-label` to `SelectTrigger` components in forms and filters.
