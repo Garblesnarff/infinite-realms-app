@@ -15,6 +15,7 @@ import {
   gameSessions,
   campaigns,
   characters,
+  npcs,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../db/schema/index.js';
@@ -142,6 +143,52 @@ export class CombatInitiativeService {
   }
 
   /**
+   * 🛡️ Sentinel: Verify NPC ownership through its campaign's user_id.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifyNPCAccess(npcId: string, userId: string): Promise<void> {
+    const [result] = await db
+      .select({ id: npcs.id })
+      .from(npcs)
+      .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+      .where(and(
+        eq(npcs.id, npcId),
+        eq(campaigns.userId, userId)
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('NPC', npcId);
+    }
+  }
+
+  /**
+   * 🛡️ Sentinel: Verify multiple NPCs' ownership in a single batch query.
+   * Prevents N+1 database round-trips during combat initialization.
+   */
+  private static async verifyNPCsAccessBatch(npcIds: string[], userId: string): Promise<void> {
+    if (npcIds.length === 0) return;
+
+    const results = await db
+      .select({ id: npcs.id })
+      .from(npcs)
+      .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
+      .where(and(
+        inArray(npcs.id, npcIds),
+        eq(campaigns.userId, userId)
+      ));
+
+    if (results.length !== npcIds.length) {
+      const foundIds = new Set(results.map(r => r.id));
+      for (const id of npcIds) {
+        if (!foundIds.has(id)) {
+          throw new NotFoundError('NPC', id);
+        }
+      }
+    }
+  }
+
+  /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
    * @param participantInputs - Array of participants to add
@@ -166,6 +213,15 @@ export class CombatInitiativeService {
         ),
       ];
       await this.verifyCharactersAccessBatch(characterIds, userId);
+
+      const npcIds = [
+        ...new Set(
+          participantInputs
+            .map((input) => input.npcId)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+      await this.verifyNPCsAccessBatch(npcIds, userId);
     }
 
     // Create the encounter
@@ -252,6 +308,9 @@ export class CombatInitiativeService {
       await this.verifyEncounterAccess(encounterId, userId);
       if (input.characterId) {
         await this.verifyCharacterAccess(input.characterId, userId);
+      }
+      if (input.npcId) {
+        await this.verifyNPCAccess(input.npcId, userId);
       }
     }
 

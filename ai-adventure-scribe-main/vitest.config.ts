@@ -104,6 +104,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/character-service-spells.test.ts',
       'server-bun/src/services/__tests__/character-service-permissions.test.ts',
       'server-bun/src/services/__tests__/combat-initiative-service.test.ts',
+      'server-bun/src/services/__tests__/combat-initiative-security.test.ts',
       'server-bun/src/services/__tests__/inventory-service-security.test.ts',
       'server-bun/src/services/__tests__/campaign-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
