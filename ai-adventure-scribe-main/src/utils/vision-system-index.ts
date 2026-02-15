@@ -16,30 +16,31 @@ export {
   calculateVisionPolygon,
   hasLineOfSight,
   mergeVisionPolygons,
-
-  // Types
-  type VisionPolygon,
 } from './vision-polygon';
+
+export type { VisionPolygon as VisionPolygonType } from './vision-polygon';
 
 export {
   // Main functions
   canSeeToken,
-
-  // Light calculations
-  getEffectiveLightLevel,
-  calculateLightReach,
-  getLightSourcesAtPosition,
-  stackLightLevels,
 
   // Vision utilities
   calculateVisionRadius,
   getActiveVisionType,
   getVisionColor,
   getVisionOpacity,
+} from './vision-calculations';
+
+export {
+  // Light calculations
+  getEffectiveLightLevel,
+  calculateLightReach,
+  getLightSourcesAtPosition,
+  stackLightLevels,
 
   // Types
   type LightLevel,
-} from './vision-calculations';
+} from './lighting-utils';
 
 // ===========================
 // Geometric Utilities

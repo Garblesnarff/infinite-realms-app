@@ -7,9 +7,10 @@
  * @module utils/fog-calculations
  */
 
+import { calculateDistance } from './geometry';
+
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
-import { isLineBlocked, calculateDistance } from './vision-calculations';
 
 // ===========================
 // Types

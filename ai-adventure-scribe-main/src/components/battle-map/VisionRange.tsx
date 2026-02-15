@@ -7,16 +7,19 @@
  * @module components/battle-map/VisionRange
  */
 
-import React, { useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import type { Token } from '@/types/token';
+
+import type { Token, TokenVisionConfig } from '@/types/token';
+
+import { type LightLevel } from '@/utils/lighting-utils';
 import {
   calculateVisionRadius,
   getVisionColor,
   getVisionOpacity,
   getActiveVisionType,
 } from '@/utils/vision-calculations';
-import type { LightLevel } from '@/utils/vision-calculations';
+
 
 /**
  * Props for VisionRange component
@@ -300,7 +303,7 @@ export function MultiVisionRange({
           vision: {
             ...token.vision,
             range: range.range,
-            visionMode: range.type as any,
+            visionMode: range.type as TokenVisionConfig['visionMode'],
           },
         };
 

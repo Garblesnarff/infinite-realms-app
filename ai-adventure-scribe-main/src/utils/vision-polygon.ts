@@ -10,14 +10,16 @@
  */
 
 import {
+  isLineBlocked,
+  isPointInVisionCone,
+} from './geometry';
+import {
   getAllRayIntersections,
   removeDuplicatePoints,
   sortEndpointsByAngle,
 } from './raycasting';
 import {
   calculateVisionRadius,
-  isLineBlocked,
-  isPointInVisionCone,
 } from './vision-calculations';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';

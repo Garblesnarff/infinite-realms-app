@@ -259,6 +259,7 @@ export default tseslint.config(
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
       'src/utils/lighting-integration.ts',
+      'src/utils/fog-calculations.ts',
       'src/utils/vision-worker-manager.ts',
       'src/workers/vision-worker.ts',
       'src/shaders/light-blend.tsx', // 271 lines - shader with JSX component
@@ -287,6 +288,7 @@ export default tseslint.config(
       'src/utils/reactionTriggers.ts',
       'src/components/battle-map/LayersPanel.tsx',
       'src/components/battle-map/TokenConditionIcons.tsx',
+      'src/components/battle-map/VisionRange.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',
