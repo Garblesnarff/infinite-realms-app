@@ -63,20 +63,40 @@ export class InventoryService {
     userId: string,
     options: GetInventoryOptions = {}
   ): Promise<InventorySummary> {
+    // ⚡ Bolt: Consolidated character existence/ownership check and item retrieval into a single query.
+    // Using a LEFT JOIN from characters ensures we can distinguish between "Character not found" (0 rows)
+    // and "Character found but no items" (1 row with null item).
     const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        options.itemType ? eq(inventoryItems.itemType, options.itemType) : undefined,
-        options.equipped !== undefined ? eq(inventoryItems.isEquipped, options.equipped) : undefined,
-        options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined
-      ))
+      .select({
+        item: inventoryItems,
+        characterId: characters.id,
+      })
+      .from(characters)
+      .leftJoin(
+        inventoryItems,
+        and(
+          eq(inventoryItems.characterId, characters.id),
+          options.itemType ? eq(inventoryItems.itemType, options.itemType) : undefined,
+          options.equipped !== undefined ? eq(inventoryItems.isEquipped, options.equipped) : undefined,
+          options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined
+        )
+      )
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      )
       .orderBy(desc(inventoryItems.createdAt));
 
-    const items = results.map(r => r.item);
+    if (results.length === 0) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    // Filter out null items (from characters with no matching inventory items)
+    const items = results
+      .map((r) => r.item)
+      .filter((item): item is InventoryItem => item !== null);
 
     const totalWeight = items.reduce((sum, item) => {
       const weight = parseFloat(item.weight || '0');

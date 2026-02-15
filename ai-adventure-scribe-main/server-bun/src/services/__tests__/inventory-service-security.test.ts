@@ -195,7 +195,7 @@ describe('InventoryService Security', () => {
     it('should fetch items with ownership join', async () => {
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
               orderBy: vi.fn().mockResolvedValue([{ item: { id: '1', weight: '1', quantity: 1 } }])
             })
@@ -211,7 +211,27 @@ describe('InventoryService Security', () => {
     it('should handle optional filters', async () => {
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue([{ characterId: mockCharacterId, item: null }])
+            })
+          })
+        })
+      });
+
+      const result = await InventoryService.getInventory(mockCharacterId, mockUserId, {
+        itemType: 'weapon',
+        equipped: true,
+        attuned: false
+      });
+      expect(result.items).toHaveLength(0);
+      expect(db.select).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundError if character not found', async () => {
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
               orderBy: vi.fn().mockResolvedValue([])
             })
@@ -219,12 +239,8 @@ describe('InventoryService Security', () => {
         })
       });
 
-      await InventoryService.getInventory(mockCharacterId, mockUserId, {
-        itemType: 'weapon',
-        equipped: true,
-        attuned: false
-      });
-      expect(db.select).toHaveBeenCalled();
+      await expect(InventoryService.getInventory(mockCharacterId, mockUserId))
+        .rejects.toThrow(NotFoundError);
     });
   });
 
