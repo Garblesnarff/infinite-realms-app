@@ -8,6 +8,8 @@
  * @module server/services/class-features-service
  */
 
+import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
+
 import { db } from '../../../db/client.js';
 import {
   classFeaturesLibrary,
@@ -20,7 +22,8 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index.js';
-import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
+import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
+
 import type {
   GrantFeatureInput,
   UseFeatureInput,
@@ -34,7 +37,6 @@ import type {
   CharacterFeaturesWithUsage,
   FeatureUsageHistoryParams,
 } from '../types/class-features.js';
-import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 
 /**
  * Subclass choice level mapping
@@ -407,63 +409,30 @@ export class ClassFeaturesService {
     const { characterId, restType, userId } = input;
 
     // Get all character features with ownership check
-    const allFeatures = await db.query.characterFeatures.findMany({
-      where: and(
-        eq(characterFeatures.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
+    // ⚡ Bolt: Optimized N+1 update loop into a single atomic UPDATE ... FROM query.
+    // This reduces database round-trips from O(N) (number of character features) to O(1).
+    // 🛡️ Sentinel: Incorporate ownership check into the batch UPDATE query for defense-in-depth.
+    const restoredRows = await db.execute<{ feature_name: string }>(sql`
+      UPDATE ${characterFeatures} cf
+      SET uses_remaining = cfl.uses_count
+      FROM ${classFeaturesLibrary} cfl
+      WHERE cf.feature_id = cfl.id
+        AND cf.character_id = ${characterId}
+        AND cfl.uses_count IS NOT NULL
+        AND (
+          (${restType} = 'short' AND cfl.uses_per_rest = 'short_rest')
+          OR
+          (${restType} = 'long' AND (cfl.uses_per_rest = 'short_rest' OR cfl.uses_per_rest = 'long_rest'))
         )
-      ),
-      with: {
-        feature: true,
-      },
-    });
+        AND EXISTS (
+          SELECT 1 FROM ${characters} c
+          WHERE c.id = cf.character_id
+          AND (c.user_id = ${userId} OR c.owner_id = ${userId})
+        )
+      RETURNING cfl.feature_name
+    `);
 
-    const featuresRestored: string[] = [];
-
-    // Determine which features to restore based on rest type
-    for (const charFeature of allFeatures) {
-      const feature = charFeature.feature!;
-
-      let shouldRestore = false;
-
-      if (restType === 'short') {
-        // Short rest restores short_rest features
-        shouldRestore = feature.usesPerRest === 'short_rest';
-      } else if (restType === 'long') {
-        // Long rest restores both short_rest and long_rest features
-        shouldRestore =
-          feature.usesPerRest === 'short_rest' ||
-          feature.usesPerRest === 'long_rest';
-      }
-
-      if (shouldRestore && feature.usesCount !== null) {
-        // Restore uses to maximum
-        // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth.
-        await db
-          .update(characterFeatures)
-          .set({ usesRemaining: feature.usesCount })
-          .where(and(
-            eq(characterFeatures.id, charFeature.id),
-            eq(characterFeatures.characterId, characterId),
-            exists(
-              db.select()
-                .from(characters)
-                .where(and(
-                  eq(characters.id, characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                ))
-            )
-          ));
-
-        featuresRestored.push(feature.featureName);
-      }
-    }
+    const featuresRestored = restoredRows.map(row => row.feature_name);
 
     return {
       featuresRestored,

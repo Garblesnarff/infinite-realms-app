@@ -15,9 +15,11 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
+
 import { useSceneWebSocket, type TokenUpdateData } from '@/hooks/useSceneWebSocket';
-import { useBattleMapStore } from '@/stores/useBattleMapStore';
 import { trpc } from '@/infrastructure/api/trpc-client';
+import logger from '@/lib/logger';
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 export interface BattleMapWebSocketSyncProps {
   /** Scene ID to sync */
@@ -47,7 +49,7 @@ export function BattleMapWebSocketSync({
    */
   const handleTokenUpdate = useCallback(
     (data: TokenUpdateData) => {
-      console.log('[BattleMapWebSocketSync] Token update received:', data);
+      logger.debug('[BattleMapWebSocketSync] Token update received', { data });
 
       // If this update has an optimisticId, remove it from our pending updates
       if (data.optimisticId) {
@@ -93,7 +95,7 @@ export function BattleMapWebSocketSync({
    * Log connection state changes
    */
   useEffect(() => {
-    console.log('[BattleMapWebSocketSync] Connection state:', connectionState);
+    logger.info('[BattleMapWebSocketSync] Connection state changed', { state: connectionState });
   }, [connectionState]);
 
   // This component doesn't render anything
