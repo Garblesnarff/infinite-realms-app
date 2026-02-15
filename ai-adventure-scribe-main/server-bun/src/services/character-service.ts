@@ -743,41 +743,35 @@ export class CharacterService {
 
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
     if (spellIds.length > 0) {
-      const spellInserts = spellIds.map(spellId => ({
-        characterId: sql`${characterId}`,
-        spellId: sql`${spellId}`,
-        sourceClassId: sql`${classData.id}`,
-        isPrepared: sql`true`,
-        sourceFeature: sql`'base'`,
-      }));
-
-      // Use a single query with multiple SELECT ... WHERE EXISTS combined via UNION ALL
-      // to ensure atomicity and ownership verification for each inserted row.
-      const selectQueries = spellInserts.map(insert =>
-        db.select(insert)
-          .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing O(N) UNION ALL loop with a single O(1) joined SELECT.
+      // This maintains atomic ownership verification while significantly reducing SQL complexity.
+      await db.insert(characterSpells).select(
+        db.select({
+          characterId: sql`${characterId}`,
+          spellId: classSpells.spellId,
+          sourceClassId: sql`${classData.id}`,
+          isPrepared: sql`true`,
+          sourceFeature: sql`'base'`,
+        })
+        .from(classSpells)
+        .innerJoin(characters, and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+        .where(and(
+          eq(classSpells.classId, classData.id),
+          inArray(classSpells.spellId, spellIds)
+        ))
       );
-
-      // Join all select queries with unionAll
-      let finalSelect: any = selectQueries[0];
-      for (let i = 1; i < selectQueries.length; i++) {
-        finalSelect = finalSelect.unionAll(selectQueries[i]);
-      }
-
-      await db.insert(characterSpells).select(finalSelect);
     }
 
     // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
-    // 🛡️ Sentinel: Incorporate ownership check into the SELECT query for defense-in-depth
-    // Fetch all current spells for the character across all classes
-    const allCharacterSpells = await db
+    // Optimized to use SQL aggregation (string_agg) instead of fetching every spell row.
+    // This reduces data transfer and memory usage by processing the concatenation in the database.
+    const [spellSummary] = await db
       .select({
-        name: spells.name,
-        level: spells.level,
+        cantrips: sql<string>`string_agg(${spells.name}, ',') FILTER (WHERE ${spells.level} = 0)`,
+        leveled: sql<string>`string_agg(${spells.name}, ',') FILTER (WHERE ${spells.level} > 0)`,
       })
       .from(characterSpells)
       .innerJoin(spells, eq(characterSpells.spellId, spells.id))
@@ -787,14 +781,11 @@ export class CharacterService {
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ));
 
-    const cantrips = allCharacterSpells.filter((s: any) => s.level === 0).map((s: any) => s.name);
-    const leveledSpells = allCharacterSpells.filter((s: any) => s.level > 0).map((s: any) => s.name);
-
-    // Update the character table columns
-    await this.updateSpells(characterId, userId, {
-      cantrips,
-      knownSpells: leveledSpells,
-      preparedSpells: leveledSpells, // Default all as prepared for now to match current behavior
+    // Update the character table columns directly with aggregated results
+    await this.update(characterId, userId, {
+      cantrips: spellSummary?.cantrips || null,
+      knownSpells: spellSummary?.leveled || null,
+      preparedSpells: spellSummary?.leveled || null, // Default all as prepared for now to match current behavior
     });
 
     return { success: true, message: 'Character spells saved successfully' };
