@@ -221,18 +221,18 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           .maybeSingle();
 
         if (!error && data) {
-          console.log(`[SimpleGameChat] ✅ Message verified in database after ${attempt} retries`);
+          logger.debug(`[SimpleGameChat] ✅ Message verified in database after ${attempt} retries`);
           return true;
         }
 
         if (attempt < maxRetries - 1) {
           const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
-          console.log(`[SimpleGameChat] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          logger.debug(`[SimpleGameChat] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
-      console.error(`[SimpleGameChat] ❌ Message verification failed after ${maxRetries} retries`);
+      logger.error(`[SimpleGameChat] ❌ Message verification failed after ${maxRetries} retries`);
       return false;
     },
     []
@@ -243,7 +243,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
    * Returns true if save and verification succeeded, false otherwise
    */
   const saveMessageToDatabase = useCallback(async (message: ChatMessage, sessionId: string): Promise<boolean> => {
-    console.log('[SimpleGameChat] Saving message to database:', {
+    logger.debug('[SimpleGameChat] Saving message to database:', {
       messageId: message.id,
       sessionId,
       timestamp: new Date().toISOString(),
@@ -260,24 +260,24 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       });
 
       if (error) {
-        console.error('[SimpleGameChat] ❌ Database insert FAILED:', error);
+        logger.error('[SimpleGameChat] ❌ Database insert FAILED:', { error });
         throw error;
       }
 
-      console.log('[SimpleGameChat] Database insert promise resolved, verifying...');
+      logger.debug('[SimpleGameChat] Database insert promise resolved, verifying...');
 
       // Verify the message actually exists in the database
       const verified = await waitForMessageToExist(message.id);
 
       if (!verified) {
-        console.error('[SimpleGameChat] ❌ Message verification failed');
+        logger.error('[SimpleGameChat] ❌ Message verification failed');
         return false;
       }
 
-      console.log('[SimpleGameChat] ✅ Message saved and verified:', message.id);
+      logger.debug('[SimpleGameChat] ✅ Message saved and verified:', { messageId: message.id });
       return true;
     } catch (error) {
-      console.error('[SimpleGameChat] Exception during save:', error);
+      logger.error('[SimpleGameChat] Exception during save:', { error });
       handleAsyncError(error, {
         userMessage: 'Failed to save message',
         logLevel: 'warn',
@@ -315,7 +315,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       // Save user message to database
       const saved = await saveMessageToDatabase(userMessage, session.id);
       if (!saved) {
-        console.warn('[SimpleGameChat] User message not saved, but continuing for UI resilience');
+        logger.warn('[SimpleGameChat] User message not saved, but continuing for UI resilience');
       }
 
       try {
@@ -369,7 +369,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           const saved = await saveMessageToDatabase(dmMessage, session.id);
 
           if (!saved) {
-            console.warn('[SimpleGameChat] DM message not saved, skipping state update');
+            logger.warn('[SimpleGameChat] DM message not saved, skipping state update');
             return; // Don't add to state if save failed
           }
 

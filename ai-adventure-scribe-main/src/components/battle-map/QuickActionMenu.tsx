@@ -31,6 +31,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 import { Z_INDEX } from '@/constants/z-index';
 import { useHotkeys, BATTLE_MAP_HOTKEYS } from '@/hooks/use-hotkeys';
+import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -482,7 +483,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       shortcut: 'T',
       description: 'Target this token',
       onAction: () => {
-        console.log('Target token:', tokenId);
+        logger.debug('Target token:', { tokenId });
       },
     },
     {
@@ -492,7 +493,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       shortcut: 'M',
       description: 'Move this token',
       onAction: () => {
-        console.log('Move token:', tokenId);
+        logger.debug('Move token:', { tokenId });
       },
     },
     {
@@ -503,7 +504,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       description: 'Attack with this token',
       variant: 'danger',
       onAction: () => {
-        console.log('Attack with token:', tokenId);
+        logger.debug('Attack with token:', { tokenId });
       },
     },
     {
@@ -514,7 +515,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       description: 'Heal this token',
       variant: 'success',
       onAction: () => {
-        console.log('Heal token:', tokenId);
+        logger.debug('Heal token:', { tokenId });
       },
     },
     {
@@ -525,7 +526,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       description: 'Apply condition',
       variant: 'warning',
       onAction: () => {
-        console.log('Apply condition to token:', tokenId);
+        logger.debug('Apply condition to token:', { tokenId });
       },
     },
     {
@@ -536,7 +537,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       description: 'Toggle visibility',
       enabled: isGM,
       onAction: () => {
-        console.log('Toggle visibility for token:', tokenId);
+        logger.debug('Toggle visibility for token:', { tokenId });
       },
     },
     {
@@ -547,7 +548,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       description: 'Apply damage',
       variant: 'danger',
       onAction: () => {
-        console.log('Apply damage to token:', tokenId);
+        logger.debug('Apply damage to token:', { tokenId });
       },
     },
     {
@@ -559,7 +560,7 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
       variant: 'danger',
       enabled: isGM,
       onAction: () => {
-        console.log('Delete token:', tokenId);
+        logger.debug('Delete token:', { tokenId });
       },
     },
   ];
