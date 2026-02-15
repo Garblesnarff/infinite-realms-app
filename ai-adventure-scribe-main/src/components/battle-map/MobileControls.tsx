@@ -127,13 +127,24 @@ interface GestureHintsProps {
 const GestureHints: React.FC<GestureHintsProps> = ({ onDismiss }) => {
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gesture-hints-title"
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
       style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
     >
       <div className="bg-background border rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Touch Gestures</h3>
-          <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Close hints">
+          <h3 id="gesture-hints-title" className="text-lg font-semibold">
+            Touch Gestures
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onDismiss}
+            aria-label="Close hints"
+            type="button"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -211,6 +222,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick }) => {
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'flex flex-col items-center justify-center gap-1 p-3 min-w-[60px] min-h-[60px] rounded-lg transition-all',
@@ -352,6 +364,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="rounded-full shadow-lg"
             aria-label={isCollapsed ? "Expand controls" : "Collapse controls"}
+            aria-expanded={!isCollapsed}
+            type="button"
           >
             {isCollapsed ? <Maximize2 className="h-5 w-5" /> : <X className="h-5 w-5" />}
           </Button>
@@ -362,8 +376,10 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
           {/* Left Scroll Button */}
           {showLeftScroll && (
             <button
+              type="button"
               onClick={() => scrollTools('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-background/90 backdrop-blur-sm border rounded-r-lg p-2 shadow-md"
+              className="absolute left-0 top-1/2 -translate-y-1/2 bg-background/90 backdrop-blur-sm border rounded-r-lg p-2 shadow-md"
+              style={{ zIndex: Z_INDEX.DROPDOWN }}
               aria-label="Scroll left"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -389,8 +405,10 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
           {/* Right Scroll Button */}
           {showRightScroll && (
             <button
+              type="button"
               onClick={() => scrollTools('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-background/90 backdrop-blur-sm border rounded-l-lg p-2 shadow-md"
+              className="absolute right-0 top-1/2 -translate-y-1/2 bg-background/90 backdrop-blur-sm border rounded-l-lg p-2 shadow-md"
+              style={{ zIndex: Z_INDEX.DROPDOWN }}
               aria-label="Scroll right"
             >
               <ChevronRight className="h-5 w-5" />
@@ -410,6 +428,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               onClick={handleZoomOut}
               className="min-w-[44px] min-h-[44px]"
               aria-label="Zoom out"
+              title="Zoom out"
+              type="button"
             >
               <ZoomOut className="h-5 w-5" />
             </Button>
@@ -419,6 +439,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
               onClick={handleZoomIn}
               className="min-w-[44px] min-h-[44px]"
               aria-label="Zoom in"
+              title="Zoom in"
+              type="button"
             >
               <ZoomIn className="h-5 w-5" />
             </Button>
@@ -440,6 +462,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
                 onClick={onHelpClick}
                 className="min-w-[44px] min-h-[44px]"
                 aria-label="Help"
+                title="Help"
+                type="button"
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>
@@ -498,6 +522,8 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
             onClick={() => setIsCollapsed(false)}
             className="rounded-full shadow-lg min-w-[56px] min-h-[56px]"
             aria-label="Show controls"
+            aria-expanded={!isCollapsed}
+            type="button"
           >
             <Menu className="h-6 w-6" />
           </Button>
