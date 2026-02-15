@@ -27,8 +27,13 @@ if (!connectionString) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-// Create the postgres client
-const client = postgres(connectionString);
+// Create the postgres client with pool configuration
+const client = postgres(connectionString, {
+  max: Number(process.env.PGPOOL_MAX || 25),
+  idle_timeout: 20,
+  connect_timeout: 10,
+  max_lifetime: 60 * 30,
+});
 
 // Create Drizzle instance with schema for relational queries
 export const db = drizzle(client, { schema });

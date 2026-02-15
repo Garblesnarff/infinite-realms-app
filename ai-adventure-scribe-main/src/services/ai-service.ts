@@ -1,13 +1,8 @@
-/* eslint-disable max-lines */
-
 import { generateCampaignDescription, generateCampaignName } from './ai/campaign-generator';
 import { ChatPersistence } from './ai/chat-persistence';
 import { ContextBuilder } from './ai/context-builder';
 import { processDMResponse } from './ai/dm-response-processor';
-import { AgentOrchestrator } from './crewai/agent-orchestrator';
 import { MemoryManager } from './memory-manager';
-import migrationMonitoringService from './migration-monitoring';
-import { SessionStateService } from './session-state-service';
 
 import type { ChatMessage, NarrationSegment, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
@@ -17,15 +12,6 @@ import type { RollRequest } from '@/components/game/DiceRollRequest';
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { detectCombatFromText, type CombatDetectionResult } from '@/utils/combatDetection';
-
-// Type-only import for LegacyChatMessage (doesn't load the module)
-type LegacyChatMessage = {
-  id: string;
-  role: string;
-  content: string;
-  timestamp: Date;
-  narrationSegments?: NarrationSegment[];
-};
 
 // In-flight request deduplication with 2s TTL
 const inFlight = new Map<string, { ts: number; promise: Promise<AIResponse | unknown> }>();
@@ -37,37 +23,6 @@ function keyFor(sessionId: string | undefined, message: string, historyLen: numb
 }
 
 export class AIService {
-  /** Feature flag to enable CrewAI orchestrator integration. */
-  private static useCrewAI(): boolean {
-    try {
-      const raw = String(
-        (import.meta as unknown as { env: Record<string, string> }).env?.VITE_USE_CREWAI_DM ?? '',
-      )
-        .toLowerCase()
-        .trim();
-      return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Feature flag to enable LangGraph migration.
-   * When enabled, uses LangGraph-based agent system instead of custom messaging.
-   */
-  private static useLangGraph(): boolean {
-    try {
-      const raw = String(
-        (import.meta as unknown as { env: Record<string, string> }).env
-          ?.VITE_FEATURE_USE_LANGGRAPH ?? '',
-      )
-        .toLowerCase()
-        .trim();
-      return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
-    } catch {
-      return false;
-    }
-  }
   /**
    * Generate a campaign description using AI with fallback
    * Delegates to modular campaign-generator.ts which includes verbalized sampling
@@ -115,8 +70,6 @@ export class AIService {
     dice_rolls?: unknown[];
     combatDetection?: CombatDetectionResult;
   }> {
-    // Decision about path (CrewAI vs Gemini) happens below
-
     // Dedupe in-flight chat calls (2s TTL)
     const key = keyFor(
       params.context?.sessionId,
@@ -132,71 +85,6 @@ export class AIService {
 
     const p = (async () => {
       try {
-        // ========================================================================
-        // LANGGRAPH MIGRATION PATH (Feature Flag)
-        // ========================================================================
-        // If LangGraph is enabled, delegate to the new system via compatibility adapter
-        if (this.useLangGraph()) {
-          try {
-            logger.info(
-              '[AIService] Using LangGraph agent system (VITE_FEATURE_USE_LANGGRAPH=true)',
-            );
-
-            // Dynamic import to avoid loading LangGraph when feature is disabled
-            const { getLegacyCompatibilityAdapter } =
-              await import('@/agents/langgraph/adapters/legacy-compatibility');
-            const adapter = getLegacyCompatibilityAdapter();
-
-            // Convert ChatMessage[] to LegacyChatMessage[]
-            const legacyHistory: LegacyChatMessage[] = (params.conversationHistory || []).map(
-              (msg) => ({
-                id: msg.id,
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.timestamp,
-                narrationSegments: msg.narrationSegments,
-              }),
-            );
-
-            const result = await adapter.chatWithDM({
-              message: params.message,
-              context: params.context,
-              conversationHistory: legacyHistory,
-              onStream: params.onStream,
-              userPlan: params.userPlan,
-              turnCount: params.turnCount,
-            });
-
-            logger.info('[AIService] LangGraph response generated successfully');
-            return result;
-          } catch (langGraphError) {
-            logger.error(
-              '[AIService] LangGraph failed, falling back to legacy system:',
-              langGraphError,
-            );
-
-            // Record fallback
-            migrationMonitoringService.recordInteraction({
-              system: 'langgraph',
-              outcome: 'fallback',
-              durationMs: 0,
-              messageLength: params.message.length,
-              responseLength: 0,
-              errorType: langGraphError instanceof Error ? langGraphError.name : 'Unknown',
-              errorMessage:
-                langGraphError instanceof Error ? langGraphError.message : 'Unknown error',
-              sessionId: params.context.sessionId,
-              timestamp: new Date(),
-            });
-
-            // Continue to legacy path below
-          }
-        }
-
-        // ========================================================================
-        // LEGACY PATH (Custom Messaging + Gemini)
-        // ========================================================================
-
         // Retrieve relevant memories to enhance context
         let relevantMemories: Memory[] = [];
         if (params.context.sessionId) {
@@ -232,83 +120,7 @@ export class AIService {
           });
         }
 
-        // Optional path: delegate to CrewAI orchestrator behind feature flag
-        if (this.useCrewAI() && params.context.sessionId) {
-          try {
-            logger.info('Using CrewAI microservice for chat...');
-            const sessionState = await SessionStateService.getState(params.context.sessionId);
-            const crewResult = await AgentOrchestrator.generateResponse({
-              message: params.message,
-              context: params.context,
-              conversationHistory: params.conversationHistory || [],
-              sessionState,
-            });
-
-            // If CrewAI returned placeholder text, generate final prose via Gemini but keep CrewAI roll_requests
-            let finalText = crewResult.text || '';
-            const isPlaceholder = finalText.trim().startsWith('[CrewAI placeholder]');
-            const rollRequests = crewResult.roll_requests || [];
-            if (isPlaceholder) {
-              // If a roll is requested, prompt the user to roll first instead of narrating outcomes
-              if (Array.isArray(rollRequests) && rollRequests.length > 0) {
-                const rr = rollRequests[0];
-                const typeLabel =
-                  rr.type === 'check'
-                    ? 'Check'
-                    : rr.type === 'save'
-                      ? 'Saving Throw'
-                      : rr.type === 'attack'
-                        ? 'Attack'
-                        : rr.type === 'damage'
-                          ? 'Damage'
-                          : 'Initiative';
-                const purpose =
-                  rr.purpose || (rr.type === 'check' ? 'Ability/Skill Check' : typeLabel);
-                const target = rr.dc ? ` (DC ${rr.dc})` : rr.ac ? ` (AC ${rr.ac})` : '';
-                const advantage = rr.advantage
-                  ? ' with advantage'
-                  : rr.disadvantage
-                    ? ' with disadvantage'
-                    : '';
-                finalText = `Please roll ${purpose}${target}${advantage}.`;
-              } else {
-                logger.info('CrewAI returned placeholder text; generating narration via LLM.');
-                try {
-                  const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${params.message}"`;
-                  const genAIResult = await llmApiClient.generateText({
-                    prompt,
-                    temperature: 0.9,
-                    maxTokens: 8192,
-                  });
-                  finalText = genAIResult || finalText;
-                } catch (e) {
-                  logger.warn('LLM fallback for placeholder failed, using placeholder text:', e);
-                }
-              }
-            }
-
-            // Post-processing parity: memory extraction and world expansion
-            // Using unified processor for consistency
-            return processDMResponse({
-              rawResponse: finalText,
-              context: params.context,
-              message: params.message,
-              conversationHistory: params.conversationHistory || [],
-              userPlan: params.userPlan,
-              turnCount: params.turnCount,
-              voiceContext: null,
-              isFirstMessage: false,
-              combatDetection,
-              roll_requests: crewResult.roll_requests,
-              dice_rolls: (crewResult as unknown as { dice_rolls: unknown[] }).dice_rolls,
-            });
-          } catch (crewError) {
-            logger.warn('CrewAI orchestrator failed, falling back to OpenRouter:', crewError);
-            // Continue to legacy path below
-          }
-        }
-
-        // Use local Gemini API
+        // Use OpenRouter API
         logger.info(`Using OpenRouter API for chat`);
 
         const isFirstMessage =

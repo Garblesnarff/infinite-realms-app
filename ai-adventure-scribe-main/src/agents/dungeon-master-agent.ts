@@ -8,7 +8,6 @@
  * Dependencies:
  * - Agent interfaces and types (src/agents/types.ts)
  * - Messaging service (src/agents/messaging/agent-messaging-service.ts)
- * - CrewAI communication types (src/agents/crewai/types/communication.ts)
  * - Error handling services (src/agents/error/services/ErrorHandlingService.ts)
  * - Response coordinator (src/agents/services/response/response-coordinator.ts)
  * - Game state types (src/types/gameState.ts)

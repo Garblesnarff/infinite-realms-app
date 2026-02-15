@@ -202,10 +202,6 @@ export default tseslint.config(
               message: 'Use @/infrastructure/api instead of importing directly from services',
             },
             {
-              name: '@/services/crewai/crewai-client',
-              message: 'Use @/infrastructure/api instead of importing directly from services',
-            },
-            {
               name: '@/lib/trpc/client',
               message: 'Use @/infrastructure/api instead of importing from lib/trpc',
             },

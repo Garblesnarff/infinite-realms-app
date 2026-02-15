@@ -17,6 +17,3 @@ export type {
   GenerateImageParams,
   AppendMessageImageParams,
 } from './rest-client';
-
-// CrewAI types
-export type { CrewAIRollRequest, CrewAIResponse } from './crewai-client';

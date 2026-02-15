@@ -8,7 +8,7 @@ import type { ClassEquipment } from './types';
 import logger from '@/lib/logger';
 
 // In-flight request deduplication with 2s TTL
-const inFlight = new Map<string, { ts: number; promise: Promise<any> }>();
+const inFlight = new Map<string, { ts: number; promise: Promise<unknown> }>();
 const DEDUPE_MS = 2000;
 
 /**
@@ -42,20 +42,6 @@ export function getOrCreateDeduped<T>(key: string, factory: () => Promise<T>): P
   inFlight.set(key, { ts: now, promise });
 
   return promise;
-}
-
-/**
- * Check if CrewAI feature flag is enabled
- */
-export function useCrewAI(): boolean {
-  try {
-    const raw = String((import.meta as any).env?.VITE_USE_CREWAI_DM ?? '')
-      .toLowerCase()
-      .trim();
-    return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -149,8 +135,13 @@ export function getClassEquipment(className: string): ClassEquipment {
 /**
  * Add equipment context to prompt
  */
-export function addEquipmentContext(char: any): string {
-  const classEquipment = getClassEquipment(char.class?.name || char.class || 'Fighter');
+export function addEquipmentContext(char: Record<string, unknown>): string {
+  const charClass = char.class;
+  const className =
+    (typeof charClass === 'object' && charClass !== null && 'name' in charClass
+      ? (charClass as Record<string, unknown>).name
+      : charClass) || 'Fighter';
+  const classEquipment = getClassEquipment(String(className));
   return `
 <equipment>
 ${classEquipment.weapons.join(', ')} | ${classEquipment.armor}

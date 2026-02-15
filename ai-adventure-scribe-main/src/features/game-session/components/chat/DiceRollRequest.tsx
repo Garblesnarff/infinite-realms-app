@@ -7,12 +7,12 @@
 import { Dice6, Zap, ArrowUp, ArrowDown, Target, AlertCircle, Info } from 'lucide-react';
 import React, { useState, useMemo, useId } from 'react';
 
-import { DiceRollEmbed } from '@/components/DiceRollEmbed';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { DiceRollEmbed } from '@/features/game-session/components';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import {
@@ -47,7 +47,7 @@ interface DiceRollRequestProps {
  */
 export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
   request,
-  onRoll,
+  onRoll: _onRoll,
   onManualResult,
   onCancel,
   batchProgress,
@@ -239,7 +239,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
     setIsRolling(true);
   };
 
-  const handleDiceRollComplete = (result: number | any, details?: any) => {
+  const handleDiceRollComplete = (result: number | unknown, _details?: unknown) => {
     // After animation completes, submit the result
     setIsRolling(false);
 
@@ -248,7 +248,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
     if (typeof result === 'number') {
       totalResult = result;
     } else if (result && typeof result === 'object' && 'total' in result) {
-      totalResult = result.total;
+      totalResult = (result as { total: number }).total;
     } else {
       logger.warn('Unexpected result type in handleDiceRollComplete:', result);
       totalResult = 0;
@@ -312,6 +312,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
               {rollCalculation.formula}
             </div>
             {/* DC/AC hidden from players - AI DM still receives it in data model */}
+            {/* eslint-disable-next-line no-constant-binary-expression */}
             {false && (request.dc || request.ac) && (
               <Badge variant="outline" className="text-sm">
                 {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
