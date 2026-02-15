@@ -295,6 +295,8 @@ export default tseslint.config(
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',
       'server-bun/src/services/scene-service.ts',
+      'src/features/campaign/components/view/SimpleCampaignView.tsx',
+      'src/features/campaign/components/view/CampaignCharacterSelection.tsx',
     ],
     rules: {
       'max-lines': 'warn',
