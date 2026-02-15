@@ -1,49 +1,41 @@
 # Bolt's Journal
 
-## 2025-05-15 - Vector Embedding Over-fetching
-**Learning:** Selecting `*` on tables with vector embeddings (like `campaign_chunks.embedding`) can lead to massive unnecessary data transfer (~3KB per row for 768-dim vectors).
-**Action:** Always use explicit column lists when querying lore tables to exclude the `embedding` column unless specifically needed for similarity calculations.
+## Established Patterns
 
-## 2025-05-22 - [Drizzle N+1 Batching]
-**Learning:** The blog posts tRPC router used an anti-pattern where child relations (categories/tags) were fetched individually for each post in a loop.
-**Action:** Use `inArray` from `drizzle-orm` to fetch all child relations in a single batch query for the entire list of parent items.
+### Vector Embedding Over-fetching
+**Learning:** Selecting `*` on tables with vector embeddings (like `campaign_chunks.embedding`) transfers ~3KB per row for 768-dim vectors.
+**Action:** Always use explicit column lists when querying lore tables to exclude the `embedding` column unless needed for similarity calculations.
 
-## 2025-05-22 - [Corrupted Source Files & Build Failures]
-**Learning:** Found that `ai-adventure-scribe-main/src/services/ai/context-builder.ts` was truncated at the end, causing a build failure (Unterminated string literal).
-**Action:** Always verify if a build failure is due to your changes or existing corruption. If the file is truncated, report it as a separate infrastructure issue.
+### N+1 Query Batching
+**Learning:** Common anti-pattern: fetching child relations individually in a loop (e.g., blog post categories, combat participant conditions, creature stats for AoE spells).
+**Action:** Use `inArray` from `drizzle-orm` to fetch all child relations in a single batch query. For creature stats, use `getCreatureStatsBatch` pattern to reduce O(N) to O(1).
 
-## 2025-05-22 - [Drizzle Type Conflicts]
-**Learning:** Conflicting versions of `drizzle-orm` in nested `node_modules` (root vs server-bun) caused type errors regarding private properties like `shouldInlineParams`.
-**Action:** When working in monorepos or nested projects, ensure dependency versions are synchronized to avoid opaque type errors.
-
-## 2025-01-29 - [Combat Conditions N+1 & Truncated Files]
-**Learning:** Found an N+1 query pattern in `server-bun/src/routes/v1/combat/status.ts` where participant conditions were fetched in a loop. Also discovered truncated files in `src/services/ai/` that broke the build.
-**Action:** Always check for batching opportunities in loops hitting the DB. Use `db.execute(sql`...`)` for efficient multi-table joins when Drizzle relations aren't mapped. Ensure template literals with backticks are escaped to prevent Vite build failures.
-
-## 2025-01-30 - tRPC Context Connection Churn
-**Learning:** `resolveUserPlan` in `server-bun/src/trpc/context.ts` was creating a new PostgreSQL pool for every authenticated request, adding 10-50ms latency.
+### Connection Pool Reuse
+**Learning:** Creating new PostgreSQL pools per request (e.g., in tRPC context resolution) adds 10-50ms latency.
 **Action:** Use the existing Drizzle `db` instance for context resolution. Use relational query callbacks to bypass cross-package drizzle-orm type conflicts.
 
-## 2025-01-31 - [Redundant Combat State Queries]
-**Learning:** The `CombatInitiativeService` was performing redundant database queries by calling `getCurrentTurn` inside `getCombatState` and `advanceTurn`. Each call re-fetched the encounter and all participants even when they were already available in memory.
-**Action:** Avoid calling helper methods that repeat database fetches when the data is already available. Use Drizzle's relational queries (`db.query`) with `with` to fetch related data in a single round-trip, and perform dependent logic (like finding the current participant) in-memory.
+### Redundant Database Fetches
+**Learning:** Helper methods that re-fetch data already available in memory waste round-trips. Example: `getCurrentTurn` inside `getCombatState` re-fetching encounters and participants.
+**Action:** Use Drizzle's relational queries (`db.query`) with `with` to fetch related data in a single round-trip. Perform dependent logic (like finding the current participant) in-memory.
 
-## 2025-05-23 - [Blocking Event Loop with Synchronous Logging]
-**Learning:** High-frequency WebSocket handlers and tRPC middleware using `console.log(JSON.stringify(...))` block the Bun event loop synchronously, causing measurable latency under load.
-**Action:** Replace all `console.log` in request/message processing paths with a pino-based `logger` utility. Use structured logging (passing objects) to ensure asynchronous, non-blocking log output.
+### Synchronous Logging Blocking
+**Learning:** `console.log(JSON.stringify(...))` in high-frequency WebSocket handlers and tRPC middleware blocks the Bun event loop.
+**Action:** Use the pino-based `logger` utility with structured logging (passing objects) for non-blocking output.
 
-## 2025-02-07 - [Combat Condition Management Optimizations]
-**Learning:** Found N+1 update patterns in `ConditionsService.applyCondition` where superseded conditions were removed individually. Also identified sequential `await` calls in the combat status route that could be parallelized.
-**Action:** Use batch updates with `IN` clauses for condition deactivation. Parallelize independent data fetches using `Promise.all` in API routes to reduce response times.
+### Batch Updates for State Changes
+**Learning:** Sequential individual updates (e.g., deactivating superseded conditions one-by-one) can be consolidated. Sequential `await` calls for independent data can be parallelized.
+**Action:** Use batch updates with `IN` clauses. Use `Promise.all` for independent data fetches in API routes.
 
-## 2026-02-09 - Combat Creature Stats Batching
-**Learning:** Multiple targets in spell attacks (e.g. Area of Effect) were causing N+1 database queries because creature statistics were fetched individually for each target.
-**Action:** Implemented `getCreatureStatsBatch` using Drizzle's `inArray` to fetch all target statistics in a single query. Updated `resolveSpellAttack` to use this batch fetch, reducing database round-trips from O(N) to O(1) for statistics retrieval.
+### Consolidated Query Patterns
+**Learning:** Sequential `findFirst`/`select` calls that depend on each other can be combined using `innerJoin` or `leftJoin`. "Verify then update" patterns can be made atomic by including ownership checks in the `WHERE` clause.
+**Action:** For "set one active" operations, use `CASE WHEN id = :id THEN true ELSE false END` to toggle a single active row while deactivating others in one round-trip.
 
-## 2026-02-10 - [Token Config Round-trips]
-**Learning:** Consolidated multiple sequential database fetches into a single joined query in `TokenService.applyDefaultConfig`. This pattern is useful when multiple authorization checks and related configuration lookups are performed before a state-changing operation.
-**Action:** Identify sequences of `findFirst` or `select` calls that depend on each other and combine them using `innerJoin` or `leftJoin` to reduce database round-trips while maintaining existing authorization and error handling semantics.
+## Specific Fixes
 
-## 2026-02-15 - Atomic Ownership & Multi-row Toggles
-**Learning:** Sequential SELECTs for ownership verification and sequential UPDATEs for toggling states (like `isActive`) can be consolidated into 1 SELECT + 1 UPDATE. Using `sql` with `CASE WHEN id = :id THEN true ELSE false END` allows toggling a single active row while deactivating others in one round-trip.
-**Action:** Look for "verify then update" patterns and replace them with atomic updates that include the ownership check in the `WHERE` clause. For "set one active" operations, use the `CASE` pattern to reduce round-trips from 4 to 2.
+### 2025-05-22 - Drizzle Type Conflicts
+**Learning:** Conflicting versions of `drizzle-orm` in nested `node_modules` (root vs server-bun) cause type errors regarding private properties like `shouldInlineParams`.
+**Action:** Ensure dependency versions are synchronized across the monorepo to avoid opaque type errors.
+
+### 2025-05-22 - Corrupted Source Files
+**Learning:** Found that source files can be truncated, causing build failures (unterminated string literals). This is an infrastructure issue, not a code issue.
+**Action:** Always verify if a build failure is due to your changes or existing corruption before attempting fixes.

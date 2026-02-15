@@ -1,416 +1,279 @@
 # AGENTS.md
 
-This file provides guidance to all AI Agents when working with code in this repository.
+This file provides guidance to all AI agents working with code in this repository. **Last updated: 2026-02-15.**
 
-## Project: InfiniteRealms (AI Adventure Scribe)
+For quick-reference gotchas and workflows, see `CLAUDE.md`. This file covers architecture and development patterns.
 
-A solo fantasy RPG platform with persistent worlds, multi-agent AI storytelling, and long-term memory. Players create campaigns and characters that evolve across generations in their own personal universe.
+## Project: InfiniteRealms
+
+A solo fantasy RPG platform with an AI-powered Dungeon Master. Players create D&D 5E campaigns and characters with persistent worlds and long-term memory.
+
+**Live at**: https://infiniterealms.app | **Blog**: https://blog.infiniterealms.app
+
+---
+
+## Critical Rules
+
+1. **This is PRODUCTION** on a Hetzner VPS. Changes go live immediately.
+2. **Authentication is WorkOS AuthKit**, NOT Supabase Auth. `supabase.auth.getUser()` returns `null`.
+3. **RLS is DISABLED**. You MUST add `.eq('user_id', user.id)` to ALL Supabase queries manually.
+4. **Two runtimes**: `server-bun/` = Bun (supports `@/` imports). `supabase/functions/` = Deno (NO path aliases, use `./relative.ts`).
+5. **Never commit `.env` files or hardcode secrets.**
+6. **Vitest config is explicit**: New test files must be manually added to `vitest.config.ts` in both `include` and `coverage.include`.
+7. **ESLint enforces 200-line file limit**. Use `/* eslint-disable max-lines */` if unavoidable.
+8. **Pre-commit hooks** run ESLint + Prettier on ALL staged files, secret detection, and conventional commit enforcement.
+
+---
 
 ## Development Commands
 
-We track work in Beads instead of Markdown. Run \`bd quickstart\` to see how.
-
-bd - Dependency-Aware Issue Tracker
-
-Issues chained together like beads.
-
-GETTING STARTED
-  bd init   Initialize bd in your project
-            Creates .beads/ directory with project-specific database
-            Auto-detects prefix from directory name (e.g., myapp-1, myapp-2)
-
-  bd init --prefix api   Initialize with custom prefix
-            Issues will be named: api-1, api-2, ...
-
-CREATING ISSUES
-  bd create "Fix login bug"
-  bd create "Add auth" -p 0 -t feature
-  bd create "Write tests" -d "Unit tests for auth" --assignee alice
-
-VIEWING ISSUES
-  bd list       List all issues
-  bd list --status open  List by status
-  bd list --priority 0  List by priority (0-4, 0=highest)
-  bd show bd-1       Show issue details
-
-MANAGING DEPENDENCIES
-  bd dep add bd-1 bd-2     Add dependency (bd-2 blocks bd-1)
-  bd dep tree bd-1  Visualize dependency tree
-  bd dep cycles      Detect circular dependencies
-
-DEPENDENCY TYPES
-  blocks  Task B must complete before task A
-  related  Soft connection, doesn't block progress
-  parent-child  Epic/subtask hierarchical relationship
-  discovered-from  Auto-created when AI discovers related work
-
-READY WORK
-  bd ready       Show issues ready to work on
-            Ready = status is 'open' AND no blocking dependencies
-            Perfect for agents to claim next work!
-
-UPDATING ISSUES
-  bd update bd-1 --status in_progress
-  bd update bd-1 --priority 0
-  bd update bd-1 --assignee bob
-
-CLOSING ISSUES
-  bd close bd-1
-  bd close bd-2 bd-3 --reason "Fixed in PR #42"
-
-DATABASE LOCATION
-  bd automatically discovers your database:
-    1. --db /path/to/db.db flag
-    2. $BEADS_DB environment variable
-    3. .beads/*.db in current directory or ancestors
-    4. ~/.beads/default.db as fallback
-
-AGENT INTEGRATION
-  bd is designed for AI-supervised workflows:
-    • Agents create issues when discovering new work
-    • bd ready shows unblocked work ready to claim
-    • Use --json flags for programmatic parsing
-    • Dependencies prevent agents from duplicating effort
-
-DATABASE EXTENSION
-  Applications can extend bd's SQLite database:
-    • Add your own tables (e.g., myapp_executions)
-    • Join with issues table for powerful queries
-    • See EXTENDING.md for integration patterns
-
-GIT WORKFLOW (AUTO-SYNC)
-  bd automatically keeps git in sync:
-    • ✓ Export to JSONL after CRUD operations (5s debounce)
-    • ✓ Import from JSONL when newer than DB (after git pull)
-    • ✓ Works seamlessly across machines and team members
-    • No manual export/import needed!
-  Disable with: --no-auto-flush or --no-auto-import
-
-Ready to start!
-Run bd create "My first issue" to create your first issue.
-
-Tip: Use the wrapper for reliability
 ```bash
-# Always call bd via the repo wrapper to avoid PATH issues
-bash ./scripts/bd.sh list --status open
-bash ./scripts/bd.sh create "Example issue"
-```
+# Build (ALWAYS run before pushing)
+npm run build                          # Frontend (Vite)
+npm run server:test                    # Server tests (Bun)
+npx vitest run                         # Frontend/service tests
 
-### Frontend & Backend
-```bash
-# Full multi-service dev (frontend + backend + CrewAI service)
-npm run dev
+# Dev
+npm run dev                            # Frontend + backend concurrently
+npm run dev:frontend                   # Vite dev server (port 3000)
+npm run dev:backend                    # Bun API server (port 8888)
 
-# Individual services
-npm run dev:frontend   # frontend (Vite, port 3000)
-npm run dev:backend    # server build + start (port 8888)
-npm run dev:crewai     # CrewAI FastAPI (uvicorn, port 8000)
-
-# Note: package.json has dev:full referencing dev:database (not defined).
-# Use `npm run dev` instead.
-```
-
-### Building & Testing
-```bash
-# Build frontend for production
-npm run build
-
-# Development build
-npm run build:dev
+# Production
+pm2 restart infiniterealms-bun         # Restart API server
+pm2 logs infiniterealms-bun            # View server logs
 
 # Lint
-npm run lint
-
-# Preview production build locally
-npm run preview
-
-# Server tests
-npm run server:test
-
-# Frontend/services tests (on demand)
-npx vitest run
+npm run lint                           # ESLint
+npm run lint:fix                       # ESLint --fix
 ```
 
-### Backend Server (Express + TypeScript)
+### Issue Tracking (Beads)
+
+We use **Beads** (`bd` command), not GitHub issues.
+
 ```bash
-# Build & run
-npm run server:dev          # builds then starts on port 8888
-npm run server:build
-npm run server:start
-
-# Migrations & seeds (via ts-node)
-npx ts-node --project server/tsconfig.json server/src/scripts/migrate.ts
-npx ts-node --project server/tsconfig.json server/src/scripts/run-all-migrations.ts
-npx ts-node --project server/tsconfig.json server/src/scripts/seed.ts
-npx ts-node --project server/tsconfig.json server/src/scripts/comprehensive-seed.ts
-npx ts-node --project server/tsconfig.json server/src/scripts/seed-bard-spells.ts
-
-# Supabase-specific seed
-npm run server:seed-bard-spells-supabase
+bash ./scripts/bd.sh list --status open    # List open issues
+bash ./scripts/bd.sh create "Fix bug"      # Create issue
+bash ./scripts/bd.sh close <bead-id> --reason "Fixed"
 ```
 
-### Test Data & Utilities
-```bash
-# Seed test data for development
-npm run seed:test-data
+Always reference beads in commits: `Closes bead: <bead-id>`
 
-# Check for unused dependencies
-npm run check-deps
-
-# Find unused exports
-npm run check-unused-exports
-```
+---
 
 ## Architecture Overview
 
-### Multi-Agent AI System (Core Innovation)
-The application uses a **collaborative multi-agent architecture** where specialized AI agents work together:
+### Tech Stack
 
-- **Dungeon Master Agent** (`src/agents/dungeon-master-agent.ts`): Storytelling, narrative generation, NPC behavior
-- **Rules Interpreter Agent** (`src/agents/rules-interpreter-agent.ts`): D&D 5E rule enforcement, combat mechanics, spell validation
-- **Agent Communication**: Asynchronous messaging via `src/agents/messaging/` using production-grade message queues
-- **Error Recovery**: Resilient offline-first messaging with state synchronization (`src/agents/error/`)
+| Layer | Technology | Location |
+|-------|-----------|----------|
+| Frontend | React 18 + TypeScript + Vite | `src/` |
+| UI | Shadcn/ui (Radix + Tailwind) | `src/components/ui/` |
+| State | TanStack Query + React Contexts + Zustand | `src/contexts/`, `src/hooks/` |
+| API Server | **Bun + Elysia** (port 8888) | `server-bun/src/` |
+| ORM | Drizzle ORM | `server-bun/src/db/` |
+| Database | PostgreSQL 15 (local Supabase Docker) | port 54321 |
+| Edge Functions | Deno (Supabase) | `supabase/functions/` |
+| AI Model | **Mistral Small Creative via OpenRouter** | `src/services/ai/` |
+| Auth | **WorkOS AuthKit** | `src/contexts/AuthContext.tsx` |
+| Blog | SSR via Bun/Elysia | `server-bun/src/routes/blog.tsx` |
 
-### Memory Architecture (Long-term Persistence)
-InfiniteRealms implements sophisticated episodic memory beyond simple context windows:
+### Directory Structure
 
-- **Memory Classification**: Events, dialogue, and actions stored with importance scores (`src/agents/services/memory/MemoryImportanceService.ts`)
-- **Vector Embeddings**: Semantic search via OpenAI embeddings for contextual retrieval
-- **Hierarchical Storage**: World → Campaign → Session memory scoping
-- **Memory Context**: `src/contexts/MemoryContext.tsx` for state management
-- **Memory Hooks**: `src/hooks/memory/` for retrieval and persistence
+```
+ai-adventure-scribe-main/
+├── server-bun/src/            # Bun/Elysia API server (PRODUCTION)
+│   ├── index.ts               # Entry point
+│   ├── app.ts                 # Elysia app setup
+│   ├── ws.ts                  # WebSocket (Foundry VTT)
+│   ├── routes/                # SSR routes (blog, landing, SEO)
+│   │   └── v1/               # REST API routes
+│   ├── trpc/                  # tRPC routers
+│   ├── services/              # Backend services (30+ services)
+│   ├── views/                 # Blog/landing SSR templates
+│   ├── middleware/             # Auth, rate-limit, metrics
+│   ├── lib/                   # DB connection (postgres.js)
+│   └── db/schema/             # Drizzle schema definitions
+├── src/                       # React frontend
+│   ├── components/            # UI components (feature-based)
+│   ├── features/              # Feature modules (auth, campaign, game-session)
+│   ├── services/              # Frontend services
+│   │   ├── ai/               # AI service (context builder, DM response)
+│   │   ├── combat/           # Combat system services
+│   │   └── ...
+│   ├── hooks/                 # React hooks
+│   ├── contexts/              # React contexts
+│   ├── data/                  # D&D reference data (spells, feats, levels)
+│   ├── utils/                 # Utility functions (D&D math, combat, etc.)
+│   └── types/                 # TypeScript type definitions
+├── supabase/functions/        # Deno edge functions
+│   ├── dm-agent-execute/      # DM agent (Deno runtime)
+│   └── ...
+├── .jules/                    # Jules agent learning journals
+├── CLAUDE.md                  # Quick reference and gotchas
+└── AGENTS.md                  # This file (architecture guide)
+```
 
-### State Management Patterns
-- **React Contexts** (`src/contexts/`): Campaign, Character, Memory, Message state
-- **TanStack Query**: Server state synchronization with Supabase
-- **Custom Hooks** (`src/hooks/`): Encapsulate complex logic (AI responses, game sessions, combat)
+### What Does NOT Exist (Deleted Code)
 
-### Backend Services (Dual Architecture)
+These were removed in a major cleanup (Feb 2026). Do NOT reference them:
 
-#### Supabase Edge Functions (`supabase/functions/`)
-Serverless Deno functions for AI and core operations:
-- `dm-agent-execute/`: Main DM agent execution with Gemini LLM
-- `rules-interpreter-execute/`: Rules validation and enforcement
-- `chat-ai/`: Real-time conversational AI
-- `generate-embedding/`: Vector embedding generation
-- `text-to-speech/`: ElevenLabs TTS integration
-- `generate-campaign-description/`: AI campaign description generation
- - `get-secret/`: Secret retrieval helper
+- ~~`server/`~~ - Old Express backend. Use `server-bun/` instead.
+- ~~`crewai-service/`~~ - CrewAI Python service. Removed entirely.
+- ~~`src/agents/`~~ - Old multi-agent messaging system. Removed.
+- ~~`src/services/crewai/`~~ - CrewAI orchestration adapters. Removed.
+- ~~`src/services/gemini-api-manager.ts`~~ - Direct Gemini client. Removed.
+- ~~`refactor-plan/`~~ - Old refactoring phases. Removed.
+- ~~`roadmaps/`~~ - Old roadmap docs. Removed.
 
-#### Express Backend Server (`server/src/`)
-Backup REST API with PostgreSQL:
-- JWT authentication (`/v1/auth/*`)
-- Campaign/Character CRUD (`/v1/campaigns/*`, `/v1/characters/*`)
-- WebSocket chat per session (`/ws`)
-- AI provider endpoints (`/v1/ai/respond`)
-- Stripe billing (`/v1/billing/*`)
+---
 
-### Frontend Component Organization
+## AI Service Architecture (DM Chat)
 
-**Feature-Based Structure** (`src/components/`):
-- `auth/`: Authentication UI
-- `campaign-creation/`, `campaign-list/`, `campaign-view/`: Campaign management
-- `character-creation/`, `character-list/`, `character-sheet/`: Character management
-- `game/`: Core gameplay interface and messaging
-- `combat/`: Combat system with D&D 5E mechanics
-- `spellcasting/`: Spell selection and casting UI
-- `ui/`: Shadcn UI components (Radix + Tailwind)
+The live call chain for AI Dungeon Master responses:
 
-### Type System (`src/types/`)
-Strongly-typed contracts for:
-- `agent.ts`: AI agent interfaces and tasks
-- `campaign.ts`, `character.ts`: Core game entities
-- `gameState.ts`: Location, NPCs, scene status
-- `memory.ts`: Memory storage and classification
-- `dialogue.ts`: Message history formats
+```
+AIService.chatWithDM()                  [src/services/ai-service.ts]
+  -> MemoryManager.getRelevantMemories() [src/services/memory-manager.ts]
+  -> detectCombatFromText()              [src/utils/combatDetection.ts]
+  -> ContextBuilder.build()              [src/services/ai/context-builder.ts]
+     -> ContextBuilderPrompts.*()        [src/services/ai/context-builder-prompts.ts]
+  -> llmApiClient.generateText()         [src/services/llm-api-client.ts]
+     -> OpenRouter API (Mistral Small Creative)
+  -> processDMResponse()                 [src/services/ai/dm-response-processor.ts]
+     -> parseXMLTagsFromResponse()       [src/services/ai/xml-parser.ts]
+```
 
-### AI Service Integration (`src/services/`)
-- **Gemini API Manager** (`gemini-api-manager.ts`, `gemini-api-manager-singleton.ts`)
-- **Character Generators**: Background, description, image generation
-- **Combat AI** (`combat/`): Combat flow with AI narration
-- **Image Generation** (`gemini-image-service.ts`): Character and campaign visuals
-- **CrewAI Orchestrator** (`crewai/*`): Agent orchestration adapters
-- **Spell System** (`localSpellService.ts`, `characterSpellApi.ts`): D&D spell management
+**Key facts**:
+- AI model is **Mistral Small Creative** via **OpenRouter** (not Gemini, not direct API)
+- Log messages still say "Gemini" in some places - these are outdated strings, not the actual provider
+- Memory retrieval uses vector embeddings for contextual recall
+- Combat detection runs client-side before the AI call
+- Response XML is parsed for structured data (dice rolls, options, etc.)
 
-## Key Technical Patterns
+---
 
-### 1. Agent Messaging Protocol (MCP)
-Agents communicate via structured messages with retry logic and error recovery. See `src/agents/messaging/agent-messaging-service.ts`.
+## Backend Services (server-bun/)
 
-### 2. Memory Retrieval Flow
+The Bun/Elysia server provides:
+
+**Core Services** (`server-bun/src/services/`):
+- `campaign-service.ts` - Campaign CRUD with ownership enforcement
+- `character-service.ts` - Character management with dual ownership (userId + ownerId)
+- `session-service.ts` - Game session management
+- `combat-*-service.ts` - Combat initiative, attacks, HP, actions
+- `conditions-service.ts` - D&D condition tracking
+- `spell-slots-service.ts` - Spell slot management
+- `rest-service.ts` - Short/long rest mechanics
+- `class-features-service.ts` - Class feature tracking
+- `blog-service.ts` - Blog post CRUD and publishing
+
+**API Layer**:
+- tRPC routers (`server-bun/src/trpc/routers/`) - Primary API
+- REST routes (`server-bun/src/routes/v1/`) - Legacy/specific endpoints
+- SSR routes (`server-bun/src/routes/blog.tsx`, `landing.tsx`) - Server-rendered pages
+
+**Security Pattern** (CRITICAL):
 ```typescript
-// Memory importance scoring → Semantic search → Context assembly
-// See: src/hooks/memory/useMemoryRetrieval.ts
-// See: src/agents/services/memory/MemoryImportanceService.ts
+// CORRECT - ownership check in WHERE clause
+const result = await db.select()
+  .from(campaigns)
+  .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
+
+// CORRECT - return 404 (not 403) for unauthorized access
+if (!result) throw new NotFoundError('Campaign not found');
+
+// WRONG - leaks resource existence
+if (result.userId !== userId) throw new ForbiddenError('Not authorized');
 ```
 
-### 3. AI Response Generation
-```typescript
-// Multi-step: Player action → Intent detection → Rule validation → Narrative generation
-// See src/hooks/use-ai-response.ts for full implementation
-```
+---
 
-### 4. Campaign State Persistence
-All state changes sync to Supabase real-time database with optimistic updates via TanStack Query.
+## Frontend Patterns
 
-## Testing Strategy
+### State Management
+- **React Contexts**: `AuthContext`, `CampaignContext`, `CharacterContext`, `GameContext`, `CombatContext`, `MemoryContext`
+- **TanStack Query**: Server state via tRPC
+- **Zustand**: Battle map store, local UI state
 
-**Test Coverage** (Vitest + React Testing Library):
-- Server: `server/tests/*.test.ts`
-- Frontend components: `src/components/**/__tests__/*.test.tsx`
-- Services/hooks: `src/services/**/__tests__/*.test.ts` (and colocated feature tests)
-- Agents: targeted tests like `src/agents/services/intent/PlayerIntentDetector.test.ts`
+### Component Organization
+- `src/components/` - Shared/legacy components
+- `src/features/` - Feature modules (game-session, campaign, character, auth)
+- `src/components/ui/` - Shadcn primitives (do NOT modify directly)
 
-**Run Tests**:
+### Hooks
+- `src/hooks/use-ai-response.ts` - AI DM interaction
+- `src/hooks/use-game-session.ts` - Game session lifecycle
+- `src/hooks/use-combat-*.ts` - Combat system hooks
+- `src/hooks/use-messages.ts` - Chat history with pagination/dedup
+
+---
+
+## D&D 5E Rules
+
+### Passive Skills (Common AI Bug)
+- Formula: `10 + modifier + proficiency` (NO ROLL)
+- Observant feat: +5 to Passive Perception/Investigation
+- The AI DM must NEVER ask players to "roll a passive check"
+
+### Combat Math
+- Resistance: halve damage (floor)
+- Vulnerability: double damage
+- If both apply: resistance first (floor), then vulnerability
+- Proficiency bonus: `Math.floor((level - 1) / 4) + 2`
+- Minimum 1 HP gained per level
+
+### Key Utility Files
+- `src/utils/character-calculations.ts` - HP, AC, ability scores
+- `src/utils/combatDetection.ts` - Combat state detection from text
+- `src/utils/conditionEffects.ts` - Condition modifiers (use `rollType`, not `participantType`)
+- `src/utils/classFeatures.ts` - Class feature scaling by level
+- `src/utils/exhaustionUtils.ts` - Exhaustion level penalties
+- `src/utils/grappleUtils.ts` - Grapple mechanics (DC-based, not contested)
+- `src/data/spellOptions.ts` - Complete spell lists
+- `src/data/levelProgression.ts` - Level-up data
+
+---
+
+## Testing
+
+**Framework**: Vitest + React Testing Library
+
 ```bash
-npm run server:test           # Server tests
-npx vitest run                # Frontend/services tests
+npm run server:test    # Server tests (Bun)
+npx vitest run         # Frontend/service tests
 ```
 
-## Environment Configuration
+**Important**:
+- New test files MUST be added to `vitest.config.ts` in both `include` and `coverage.include`
+- Test files using JSX (like `QueryClientProvider`) must use `.tsx` extension
+- Mock `vi.mock()` calls must appear BEFORE project imports
+- Use `eslint-disable max-lines` for test files exceeding 200 lines
+- When testing D&D math, include edge cases (score 1, modifier -5, level boundaries)
+- When testing randomness (dice rolls, rerolls), always mock `Math.random()` or the dice engine
 
-### Frontend (.env.local)
-```bash
-VITE_SUPABASE_URL=            # Supabase project URL
-VITE_SUPABASE_ANON_KEY=       # Public anon key
-VITE_GEMINI_API_KEYS=         # Comma-separated Gemini keys
-VITE_ELEVENLABS_API_KEY=      # TTS service
-VITE_OPENROUTER_API_KEY=      # Image generation
-```
+---
 
-### Server (server/.env)
-```bash
-DATABASE_URL=                 # PostgreSQL connection
-JWT_SECRET=                   # Auth token secret
-OPENAI_API_KEY=              # Embeddings
-ANTHROPIC_API_KEY=           # Optional Claude API
-STRIPE_SECRET_KEY=           # Billing
-STRIPE_WEBHOOK_SECRET=       # Webhook verification
-```
+## Database
 
-## Supabase Schema Patterns
+**PostgreSQL 15** via local Supabase Docker stack (NOT Supabase Cloud).
 
-**Core Tables**:
-- `campaigns`: Campaign metadata with genre/setting
-- `characters`: D&D 5E character sheets with stats/inventory
-- `campaign_sessions`: Individual gameplay sessions
-- `memories`: Classified memory storage with embeddings
-- `game_messages`: Message history with AI/player attribution
-- `spells`, `classes`, `races`: D&D reference data
+**Core Tables**: `campaigns`, `characters`, `campaign_sessions`, `game_messages`, `memories`, `spells`, `classes`, `races`, `combat_encounters`, `combat_participants`, `blog_posts`
 
-**RLS Policies**: Row-level security ensures user data isolation
+**RLS is DISABLED** on most tables. All data isolation must be enforced in application code via `userId` filtering in WHERE clauses.
 
-## D&D 5E Implementation Notes
+**ORM**: Drizzle (`server-bun/src/db/schema/`). Use `inArray` for batch queries, `exists` subqueries for ownership checks.
 
-### Spell System Architecture
-- **Data Source**: `src/data/spellOptions.ts` - Complete D&D 5E spell lists
-- **Validation**: Class restrictions, spell level limits, cantrip vs prepared distinction
-- **Racial Bonuses**: Handled in character creation wizard
-- **Multiclass**: Edge cases tested in `src/__tests__/edge-cases/multiclass-spell-validation.test.ts`
+---
 
-### Combat System
-- **Initiative Tracking**: `src/services/combat/` with turn order management
-- **Dice Rolling**: `@dice-roller/rpg-dice-roller` for D20 system
-- **AI Integration**: `use-combat-ai-integration.ts` for narrative combat flow
+## Code Standards
 
-## Code Standards & Refactoring
-
-**Active Refactor Plan** (`refactor-plan/`):
-- Phase 1: Directory documentation (README.md files) ✓
-- Phase 2: File naming (kebab-case conversion)
-- Phase 3: File headers and import organization
-- Phase 4: Function documentation (JSDoc)
-- Phase 5: Code segmentation and splitting
-- Phase 6: Type safety improvements
-- Phase 7: Implementation notes
-- Phase 8: Test coverage expansion
-
-**Naming Conventions**:
-- Files: `kebab-case.ts/tsx` (in progress)
-- Components: `PascalCase`
-- Functions: `camelCase`
-- Constants: `UPPER_SNAKE_CASE`
-
-## Specialized Agent System
-
-**Custom Claude Agents** (`.claude/agents/`):
-General-purpose engineering agent profiles (e.g., `frontend-engineer.md`, `backend-architect.md`, `test-engineer.md`, `security-engineer.md`, `ai-integration-specialist.md`).
-
-Domain-specific logic for spells, rules, and narration is implemented by code-based agents under `src/agents/*`.
-
-## Persistent Worlds Roadmap
-
-**Next Major Features** (`roadmaps/`):
-1. **Phase 1**: User-owned worlds with cross-campaign persistence
-2. **Phase 2**: Family lineage and generational NPCs
-3. **Phase 3**: Timeline evolution (medieval→steampunk→cyberpunk)
-4. **Phase 4**: Hierarchical memory (World→Campaign→Session)
-5. **Phase 5**: Campaign-to-fiction compilation
-6. **Phase 6**: Visual generation (1000 daily free images)
-7. **Phase 7**: 3D world visualization (deck.gl)
-
-## Important Development Notes
-
-### AI Integration Limits
-- **Gemini Flash**: Primary model, supports 2M token context for long memory
-- **Rate Limiting**: API key rotation via comma-separated `VITE_GEMINI_API_KEYS`
-- **Fallback**: Express server can use Anthropic/OpenAI as backup
-
-### Performance Considerations
-- **Memory Retrieval**: Vector search limited to top-k=10 for response speed
-- **Image Generation**: Async queue to prevent UI blocking
-- **WebSocket**: One connection per session, auto-reconnect on disconnect
-
-### Security
-- **JWT Tokens**: 24-hour expiry, refresh via Supabase Auth
-- **RLS Policies**: All Supabase tables enforce user ownership
-- **API Keys**: Never exposed to client, proxied via Edge Functions
-
-## Debugging & Development Tools
-
-### Server Logs
-```bash
-# View server console
-PORT=8888 node server/dist/index.js
-
-# Run migrations (verbose)
-npx ts-node --project server/tsconfig.json server/src/scripts/migrate.ts -- --verbose
-```
-
-### Supabase CLI
-```bash
-# Local development
-npx supabase start
-npx supabase db diff
-
-# Deploy functions
-npx supabase functions deploy dm-agent-execute
-```
-
-### Browser DevTools
-- React DevTools: Component hierarchy and state
-- TanStack Query DevTools: Server state inspection
-- Network tab: Edge Function invocations and responses
-
-## Common Workflows
-
-### Adding a New AI Agent
-1. Create agent file in `src/agents/`
-2. Implement `AgentInterface` from `src/types/agent.ts`
-3. Register with messaging service
-4. Add Edge Function wrapper in `supabase/functions/`
-5. Update frontend hook in `src/hooks/ai/`
-
-### Adding D&D Content
-1. Update data in `src/data/` (e.g., `spellOptions.ts`)
-2. Run seed script: `npx ts-node --project server/tsconfig.json server/src/scripts/seed.ts` (or `npm run server:seed-bard-spells-supabase` for Bard data)
-3. Verify in Supabase dashboard
-4. Update validation in `src/agents/rules/*`
-5. Add tests in `src/__tests__/`
-
-### Creating New Components
-1. Place in feature directory (`src/components/[feature]/`)
-2. Use Shadcn UI primitives from `src/components/ui/`
-3. Add TypeScript types in `src/types/`
-4. Create tests in `src/components/[feature]/__tests__/`
-
+- **Files**: `kebab-case.ts/tsx`
+- **Components**: `PascalCase`
+- **Functions**: `camelCase`
+- **Constants**: `UPPER_SNAKE_CASE`
+- **Max file length**: 200 lines (ESLint enforced)
+- **Imports**: Strict ordering enforced by ESLint
+- **Commits**: Conventional commits required (`feat:`, `fix:`, `chore:`, etc.)
+- **No `any` types**: Use `unknown` or proper types
+- **No empty object types**: Use `Record<string, never>` instead of `{}`
