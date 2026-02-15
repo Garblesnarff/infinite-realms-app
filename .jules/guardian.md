@@ -75,3 +75,7 @@
 ## 2024-05-24 - [Class Features Coverage & Scaling Logic]
 **Learning:** `src/utils/classFeatures.ts` contains complex ternary-based scaling logic for class features (e.g., Barbarian Rage uses, Bardic Inspiration dice) that can be easily misread. Testing revealed that coverage tools are sensitive to branch coverage even when all lines are executed, requiring specific tests for each threshold.
 **Action:** When testing level-based scaling, always include test cases for the exact threshold levels (e.g., if logic is `level < 3 ? 2 : 3`, test levels 2 and 3). Ensure that large utility files and their tests are added to the `max-lines` override list in `eslint.config.js` to maintain lint compliance while allowing comprehensive suites.
+
+## 2025-06-25 - [Message Hook Coverage & Vitest JSX]
+**Learning:** The `useMessages` hook manages chat history with pagination and deduplication. Testing revealed that `vitest.config.ts` requires explicit registration of both the test file and the source file for coverage to work. Also discovered that tests using JSX (like `QueryClientProvider`) must use the `.tsx` extension, or they will fail with a syntax error during SWC transformation.
+**Action:** When testing hooks that use React Query, wrap them in a `QueryClientProvider` and use `.tsx` for the test file. Ensure that overlapping message IDs are tested to verify deduplication logic in the hook's `useEffect`.
