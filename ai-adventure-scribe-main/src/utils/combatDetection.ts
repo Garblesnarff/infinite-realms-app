@@ -86,6 +86,7 @@ const COMBAT_KEYWORDS = {
   damage: [
     'takes damage',
     'deals damage',
+    'damage',
     'hit points',
     'HP',
     'wounded',
@@ -149,7 +150,7 @@ const ENEMY_TEMPLATES = {
 /**
  * Detect combat scenarios from DM text
  */
-export function detectCombatFromText(text: string, context?: unknown): CombatDetectionResult {
+export function detectCombatFromText(text: string, _context?: unknown): CombatDetectionResult {
   const lowerText = text.toLowerCase();
   let combatScore = 0;
   let combatType: CombatDetectionResult['combatType'] = 'none';
@@ -421,12 +422,22 @@ export function createCombatParticipantsFromDetection(
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
 
+    // Parse CR (handle fractional strings like "1/4")
+    let numericCR = 1;
+    if (typeof enemy.estimatedCR === 'string') {
+      if (enemy.estimatedCR.includes('/')) {
+        const [num, den] = enemy.estimatedCR.split('/').map(Number);
+        numericCR = num / den;
+      } else {
+        numericCR = parseFloat(enemy.estimatedCR);
+      }
+    } else {
+      numericCR = Number(enemy.estimatedCR || 1);
+    }
+
     // Estimate initiative modifier based on CR (higher CR = better dex)
     // CR 0-2: +1, CR 3-5: +2, CR 6-10: +3, CR 11+: +4
-    const initiativeModifier = Math.min(
-      4,
-      Math.max(1, Math.floor((enemy.estimatedCR || 1) / 3) + 1),
-    );
+    const initiativeModifier = Math.min(4, Math.max(1, Math.floor(numericCR / 3) + 1));
 
     participants.push({
       id: `enemy-${enemy.name.toLowerCase()}-${i}`,

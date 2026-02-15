@@ -131,6 +131,7 @@ export default defineConfig({
       'src/utils/__tests__/diceCommandParser.test.ts',
       'src/utils/__tests__/classFeatures.test.ts',
       'src/utils/__tests__/characterModifiers.test.ts',
+      'src/utils/__tests__/combatDetection.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -238,6 +239,7 @@ export default defineConfig({
         'src/utils/character-level-utils.ts',
         'src/utils/diceCommandParser.ts',
         'src/utils/classFeatures.ts',
+        'src/utils/combatDetection.ts',
       ],
       exclude: [
         '**/__tests__/**',

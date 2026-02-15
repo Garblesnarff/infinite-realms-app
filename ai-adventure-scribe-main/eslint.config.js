@@ -280,6 +280,7 @@ export default tseslint.config(
       'src/utils/characterModifiers.ts',
       'src/utils/conditionEffects.ts',
       'src/utils/condition-definitions.ts',
+      'src/utils/combatDetection.ts',
       'src/utils/multiclassing.ts',
       'src/utils/__tests__/multiclassing.test.ts',
       'src/utils/classFeatures.ts',
