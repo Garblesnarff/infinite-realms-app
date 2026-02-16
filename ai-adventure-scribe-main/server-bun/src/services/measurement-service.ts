@@ -16,13 +16,14 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt, or, exists } from 'drizzle-orm';
+import { eq, and, lt, or, exists, isNotNull } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
   measurementTemplates,
   scenes,
   tokens,
+  characters,
   type MeasurementTemplate,
   type Token,
 } from '../../../db/schema/index.js';
@@ -137,21 +138,22 @@ export class MeasurementService {
    * Calculate which tokens are affected by a template
    * Uses geometry calculations based on template type
    */
-  static async calculateAffectedTokens(templateId: string, userId: string): Promise<AffectedTokensResult> {
-    // Get the template with scene info to check authorization
+  static async calculateAffectedTokens(
+    templateId: string,
+    userId: string
+  ): Promise<AffectedTokensResult> {
+    // 🛡️ Sentinel: Get the template with scene info to check authorization and ownership
     const [existing] = await db
       .select({
         template: measurementTemplates,
+        sceneOwnerId: scenes.userId,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          or(
-            eq(measurementTemplates.createdBy, userId),
-            eq(scenes.userId, userId)
-          )
+          or(eq(measurementTemplates.createdBy, userId), eq(scenes.userId, userId))
         )
       )
       .limit(1);
@@ -160,13 +162,36 @@ export class MeasurementService {
       throw new NotFoundError('Template', templateId);
     }
 
-    const template = existing.template;
+    const { template, sceneOwnerId } = existing;
+    const isSceneOwner = sceneOwnerId === userId;
 
-    // Get all tokens in the same scene
-    const sceneTokens = await db
-      .select()
+    // 🛡️ Sentinel: Get tokens in the same scene, respecting visibility for non-GMs
+    const tokensResult = await db
+      .select({
+        token: tokens,
+      })
       .from(tokens)
-      .where(eq(tokens.sceneId, template.sceneId));
+      .leftJoin(characters, eq(tokens.actorId, characters.id))
+      .where(
+        and(
+          eq(tokens.sceneId, template.sceneId),
+          isSceneOwner
+            ? undefined
+            : or(
+                // Players can see visible tokens
+                and(eq(tokens.isVisible, true), eq(tokens.isHidden, false)),
+                // Players can always see tokens they created
+                eq(tokens.createdBy, userId),
+                // Players can always see their own characters' tokens
+                and(
+                  isNotNull(tokens.actorId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                )
+              )
+        )
+      );
+
+    const sceneTokens = tokensResult.map((r) => r.token);
 
     // Filter tokens based on template geometry
     const affectedTokens = sceneTokens.filter((token) => {
@@ -396,12 +421,12 @@ export class MeasurementService {
           eq(measurementTemplates.sceneId, sceneId),
           eq(measurementTemplates.isTemporary, true),
           lt(measurementTemplates.createdAt, cutoffDate),
-          sql`EXISTS (
-            SELECT 1
-            FROM scenes s
-            WHERE s.id = ${measurementTemplates.sceneId}
-              AND s.user_id = ${userId}
-          )`
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, measurementTemplates.sceneId), eq(scenes.userId, userId)))
+          )
         )
       )
       .returning({ id: measurementTemplates.id });
