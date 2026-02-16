@@ -306,8 +306,9 @@ export class ProgressionService {
     const newLevel = this.calculateLevelFromXP(newTotalXp);
     const levelsGained = newLevel - oldLevel;
 
-    // Update progression
-    const [updatedProgression] = await db
+    // ⚡ Bolt: Parallelize database updates to reduce round-trip latency.
+    // Progression update, character level update, and event logging are independent operations.
+    const progressionUpdate = db
       .update(levelProgression)
       .set({
         currentLevel: newLevel,
@@ -330,32 +331,33 @@ export class ProgressionService {
       ))
       .returning();
 
-    if (!updatedProgression) {
-      throw new Error('Failed to update progression');
-    }
+    const charUpdate = levelsGained > 0
+      ? db
+          .update(characters)
+          .set({
+            level: newLevel,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      : Promise.resolve();
 
-    // Also update character level
-    if (levelsGained > 0) {
-      await db
-        .update(characters)
-        .set({
-          level: newLevel,
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ));
-    }
-
-    // Log XP event
-    await db.insert(experienceEvents).values({
+    const eventLog = db.insert(experienceEvents).values({
       characterId,
       sessionId: sessionId || null,
       xpGained: xp,
       source,
       description: description || null,
     });
+
+    const [updatedRows] = await Promise.all([progressionUpdate, charUpdate, eventLog]);
+    const updatedProgression = (updatedRows as any)[0];
+
+    if (!updatedProgression) {
+      throw new Error('Failed to update progression');
+    }
 
     return {
       newXp: updatedProgression.currentXp,
@@ -535,7 +537,7 @@ export class ProgressionService {
       }
 
       // Update stats in database
-      await db
+      const statsUpdate = db
         .update(characterStats)
         .set({
           strength: updatedStats.strength,
@@ -558,44 +560,84 @@ export class ProgressionService {
               ))
           )
         ));
+
+      // ⚡ Bolt: Parallelize all database updates for character level-up.
+      // Stats, character record, and level progression are independent updates.
+      const newTotalXp = this.getXPForLevel(newLevel);
+      const charUpdate = db
+        .update(characters)
+        .set({
+          level: newLevel,
+          experiencePoints: newTotalXp,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ));
+
+      const progressionUpdate = db
+        .update(levelProgression)
+        .set({
+          currentLevel: newLevel,
+          currentXp: newTotalXp,
+          totalXp: newTotalXp,
+          xpToNextLevel: this.calculateXPToNextLevel(newLevel, newTotalXp),
+          lastLevelUp: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(levelProgression.characterId, characterId),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
+        ));
+
+      await Promise.all([statsUpdate, charUpdate, progressionUpdate]);
+    } else {
+      // ⚡ Bolt: Parallelize level and progression updates when no ASI is required.
+      const newTotalXp = this.getXPForLevel(newLevel);
+      const charUpdate = db
+        .update(characters)
+        .set({
+          level: newLevel,
+          experiencePoints: newTotalXp,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ));
+
+      const progressionUpdate = db
+        .update(levelProgression)
+        .set({
+          currentLevel: newLevel,
+          currentXp: newTotalXp,
+          totalXp: newTotalXp,
+          xpToNextLevel: this.calculateXPToNextLevel(newLevel, newTotalXp),
+          lastLevelUp: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(levelProgression.characterId, characterId),
+          exists(
+            db.select()
+              .from(characters)
+              .where(and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              ))
+          )
+        ));
+
+      await Promise.all([charUpdate, progressionUpdate]);
     }
-
-    // Update character level and XP
-    const newTotalXp = this.getXPForLevel(newLevel);
-    await db
-      .update(characters)
-      .set({
-        level: newLevel,
-        experiencePoints: newTotalXp,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
-
-    // Update progression
-    await db
-      .update(levelProgression)
-      .set({
-        currentLevel: newLevel,
-        currentXp: newTotalXp,
-        totalXp: newTotalXp,
-        xpToNextLevel: this.calculateXPToNextLevel(newLevel, newTotalXp),
-        lastLevelUp: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ));
 
     // Get class features for this level (placeholder)
     const newClassFeatures: ClassFeature[] = [];

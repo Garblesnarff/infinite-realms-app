@@ -23,6 +23,7 @@ import {
   type FeatureUsageLog,
 } from '../../../db/schema/index.js';
 import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
+import { progressionLogger } from '../lib/logger.js';
 
 import type {
   GrantFeatureInput,
@@ -539,7 +540,7 @@ export class ClassFeaturesService {
         newFeatures.push(feature);
       } catch (error) {
         // Skip if already granted
-        console.warn(`Failed to grant feature ${feature.featureName}:`, error);
+        progressionLogger.warn({ msg: `Failed to grant feature ${feature.featureName}`, error });
       }
     }
 
@@ -773,7 +774,7 @@ export class ClassFeaturesService {
         grantedFeatures.push(feature);
       } catch (error) {
         // Skip if already granted
-        console.warn(`Failed to grant feature ${feature.featureName}:`, error);
+        progressionLogger.warn({ msg: `Failed to grant feature ${feature.featureName}`, error });
       }
     }
 
