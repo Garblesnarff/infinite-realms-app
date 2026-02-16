@@ -300,7 +300,8 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
       >
         {/* Glow effect on hover */}
         <div
-          className={`absolute inset-0 z-[${Z_INDEX.BACKGROUND_LAYER}] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+          style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
         >
           <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
         </div>
@@ -416,7 +417,8 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
       >
         {/* Glow effect on hover */}
         <div
-          className={`absolute inset-0 z-[${Z_INDEX.BACKGROUND_LAYER}] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+          style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
         >
           <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
         </div>

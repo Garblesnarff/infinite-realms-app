@@ -152,7 +152,8 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
     >
       {/* Glow effect on hover - uses OVERLAY_EFFECT for visual effects */}
       <div
-        className={`absolute inset-0 z-[${Z_INDEX.OVERLAY_EFFECT}] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
         <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
       </div>
@@ -195,7 +196,11 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
         {/* Overlay and popup for all cards */}
         <div className="featured-overlay bg-gradient-to-b from-infinite-purple/80 via-transparent to-infinite-dark/90" />
         <div
-          className={`hover-popup ${isHovered ? `opacity-100 pointer-events-auto z-[${Z_INDEX.CARD_HOVER}]` : 'opacity-0 pointer-events-none'} absolute left-1/2 top-1/2 transition-all duration-200 w-80 max-w-full filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.2)]`}
+          className={cn(
+            'hover-popup absolute left-1/2 top-1/2 transition-all duration-200 w-80 max-w-full filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.2)]',
+            isHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+          )}
+          style={{ zIndex: isHovered ? Z_INDEX.CARD_HOVER : undefined }}
         >
           <div className="bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-xl border border-border">
             <div className="text-xl font-bold text-foreground mb-2 leading-tight break-words">
@@ -283,7 +288,10 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
         </div>
 
         {/* Mobile actions (visible on touch / small screens) */}
-        <div className={`absolute bottom-3 left-3 z-[${Z_INDEX.CARD_HOVER}] flex gap-2 md:hidden`}>
+        <div
+          className="absolute bottom-3 left-3 flex gap-2 md:hidden"
+          style={{ zIndex: Z_INDEX.CARD_HOVER }}
+        >
           <Button
             size="sm"
             className="bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
@@ -303,7 +311,7 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
             aria-label="Enter campaign"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/app/campaign/${campaign.id}`);
+              navigate(`/app/campaigns/${campaign.id}`);
             }}
           >
             Enter
@@ -313,8 +321,14 @@ const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: Cam
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogPortal>
-          <AlertDialogOverlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <AlertDialogContent className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border !bg-white dark:!bg-slate-100 rounded-lg border-infinite-purple/30 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg dark:border-gray-300 text-foreground">
+          <AlertDialogOverlay
+            className="fixed inset-0 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+            style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+          />
+          <AlertDialogContent
+            className="fixed left-[50%] top-[50%] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border !bg-white dark:!bg-slate-100 rounded-lg border-infinite-purple/30 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg dark:border-gray-300 text-foreground"
+            style={{ zIndex: Z_INDEX.MODAL }}
+          >
             <AlertDialogHeader className="flex flex-col space-y-2 text-center">
               <AlertDialogTitle className="text-lg font-semibold text-foreground">
                 Delete Campaign
