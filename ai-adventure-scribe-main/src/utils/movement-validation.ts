@@ -171,7 +171,10 @@ function linesIntersect(
     ((b2.y - b1.y) * (b2.x - a1.x) + (b1.x - b2.x) * (b2.y - a1.y)) / det;
   const gamma = ((a1.y - a2.y) * (b2.x - a1.x) + (a2.x - a1.x) * (b2.y - a1.y)) / det;
 
-  return lambda > 0 && lambda < 1 && gamma > 0 && gamma < 1;
+  // Use inclusive check for wall boundaries (gamma) to prevent moving through corners.
+  // Use inclusive check for destination (lambda <= 1) to prevent landing on a wall.
+  // Use exclusive check for start point (lambda > 0) to allow moving away if already on a wall.
+  return lambda > 0 && lambda <= 1 && gamma >= 0 && gamma <= 1;
 }
 
 // ===========================
