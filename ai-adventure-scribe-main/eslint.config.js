@@ -294,6 +294,8 @@ export default tseslint.config(
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',
       'server-bun/src/services/scene-service.ts',
+      'server-bun/src/services/conditions-service.ts',
+      'server-bun/src/services/conditions/condition-mechanics.ts',
       'src/features/campaign/components/view/SimpleCampaignView.tsx',
       'src/features/campaign/components/view/CampaignCharacterSelection.tsx',
     ],
