@@ -93,7 +93,7 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
 
         if (sessionId) {
           const verification = await verifySessionOwnership(sessionId, userId);
-          if (!verification.success || !verification.error) {
+          if (!verification.success) {
             set.status = verification.error?.status || 404;
             return { error: verification.error?.message || 'Session not found' };
           }
@@ -129,10 +129,10 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
         const { sessionId, notes } = body;
         const userId = (user as AuthUser).userId;
 
-        // 🛡️ Sentinel: Verify session ownership for long rests to prevent IDOR.
+        // Verify session ownership for long rests to prevent IDOR.
         if (sessionId) {
           const verification = await verifySessionOwnership(sessionId, userId);
-          if (!verification.success || !verification.error) {
+          if (!verification.success) {
             set.status = verification.error?.status || 404;
             return { error: verification.error?.message || 'Session not found' };
           }
@@ -211,7 +211,7 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
 
         if (sessionId) {
           const verification = await verifySessionOwnership(sessionId, userId);
-          if (!verification.success || !verification.error) {
+          if (!verification.success) {
             set.status = verification.error?.status || 404;
             return { error: verification.error?.message || 'Session not found' };
           }
