@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 
-import type { Memory, MemoryType, MemorySubcategory } from '@/components/game/memory/types';
+import type { Memory, MemoryType, MemorySubcategory } from '@/types/memory';
 
-import { isValidMemoryType, isValidMemorySubcategory } from '@/components/game/memory/types';
+import { isValidMemoryType, isValidMemorySubcategory } from '@/types/memory';
 
 interface FilterOptions {
   types?: MemoryType[];

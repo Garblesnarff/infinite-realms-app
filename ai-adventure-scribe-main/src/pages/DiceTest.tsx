@@ -4,11 +4,10 @@ import React, { useState } from 'react';
 import { logger } from '../lib/logger';
 import { type ChatMessage } from '../services/ai-service';
 
-import { DMChatBubble } from '@/components/game/chat/DMChatBubble';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { DiceRollEmbed } from '@/features/game-session/components';
+import { DMChatBubble, DiceRollEmbed } from '@/features/game-session/components';
 
 export default function DiceTest() {
   const [customExpression, setCustomExpression] = useState('1d20+5');

@@ -4,7 +4,7 @@
  * Parses DM messages to detect and extract dice roll requests
  */
 
-import type { RollRequest } from '@/components/game/DiceRollRequest';
+import type { RollRequest } from '@/types/roll-request';
 
 export interface ParsedRollRequest extends RollRequest {
   originalText: string;

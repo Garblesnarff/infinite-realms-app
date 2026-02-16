@@ -17,7 +17,7 @@ export class AIExecutionManager {
     functionName: string,
     payload?: Record<string, unknown>,
     options: ExecutionOptions = { fallbackOnFailure: true },
-  ): Promise<any> {
+  ): Promise<unknown> {
     const applicable = this.strategies.filter((strategy) => strategy.canExecute(functionName));
     if (!applicable.length) {
       throw new Error(`No execution strategy available for ${functionName}`);

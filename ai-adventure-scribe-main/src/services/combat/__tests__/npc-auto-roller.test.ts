@@ -7,19 +7,18 @@ import {
   executeAllNPCRolls,
   formatNPCRollResult,
   isAttackHit,
-  isCheckSuccess
+  isCheckSuccess,
 } from '../npc-auto-roller';
 
-import type { RollRequest } from '@/components/game/DiceRollRequest';
+import type { RollRequest } from '@/types/roll-request';
 
 import { DiceEngine } from '@/services/dice/DiceEngine';
-
 
 // Mock DiceEngine
 vi.mock('@/services/dice/DiceEngine', () => ({
   DiceEngine: {
-    roll: vi.fn()
-  }
+    roll: vi.fn(),
+  },
 }));
 
 // Mock logger
@@ -28,8 +27,8 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
-    debug: vi.fn()
-  }
+    debug: vi.fn(),
+  },
 }));
 
 describe('npc-auto-roller', () => {
@@ -45,14 +44,14 @@ describe('npc-auto-roller', () => {
         purpose: 'Longsword attack',
         autoExecute: true,
         actorName: 'Goblin',
-        ac: 15
+        ac: 15,
       };
 
       const mockResult = {
         total: 18,
         naturalRoll: 13,
         critical: false,
-        rolls: [{ dice: 20, value: 13 }]
+        rolls: [{ dice: 20, value: 13 }],
       };
 
       (DiceEngine.roll as any).mockReturnValue(mockResult);
@@ -64,7 +63,7 @@ describe('npc-auto-roller', () => {
         disadvantage: undefined,
         purpose: 'Longsword attack',
         actorId: 'Goblin',
-        secret: true
+        secret: true,
       });
       expect(result.request).toBe(mockRequest);
       expect(result.result).toBe(mockResult);
@@ -76,10 +75,12 @@ describe('npc-auto-roller', () => {
         type: 'attack',
         formula: '1d20+5',
         purpose: 'Longsword attack',
-        autoExecute: false
+        autoExecute: false,
       };
 
-      await expect(executeNPCRoll(mockRequest)).rejects.toThrow('executeNPCRoll called on non-auto-execute roll request');
+      await expect(executeNPCRoll(mockRequest)).rejects.toThrow(
+        'executeNPCRoll called on non-auto-execute roll request',
+      );
     });
 
     it('should handle DiceEngine errors', async () => {
@@ -87,7 +88,7 @@ describe('npc-auto-roller', () => {
         type: 'attack',
         formula: 'invalid',
         purpose: 'test',
-        autoExecute: true
+        autoExecute: true,
       };
 
       (DiceEngine.roll as any).mockImplementation(() => {
@@ -101,17 +102,27 @@ describe('npc-auto-roller', () => {
   describe('executeAllNPCRolls', () => {
     it('should partition mixed roll requests correctly', async () => {
       const requests: RollRequest[] = [
-        { type: 'attack', formula: '1d20+5', purpose: 'NPC 1', autoExecute: true, actorName: 'NPC 1' },
+        {
+          type: 'attack',
+          formula: '1d20+5',
+          purpose: 'NPC 1',
+          autoExecute: true,
+          actorName: 'NPC 1',
+        },
         { type: 'attack', formula: '1d20+3', purpose: 'Player 1', autoExecute: false },
-        { type: 'damage', formula: '1d8+2', purpose: 'NPC 2', autoExecute: true, actorName: 'NPC 2' }
+        {
+          type: 'damage',
+          formula: '1d8+2',
+          purpose: 'NPC 2',
+          autoExecute: true,
+          actorName: 'NPC 2',
+        },
       ];
 
       const mockRoll1 = { total: 15, naturalRoll: 10, critical: false };
       const mockRoll2 = { total: 7, naturalRoll: 5, critical: false };
 
-      (DiceEngine.roll as any)
-        .mockReturnValueOnce(mockRoll1)
-        .mockReturnValueOnce(mockRoll2);
+      (DiceEngine.roll as any).mockReturnValueOnce(mockRoll1).mockReturnValueOnce(mockRoll2);
 
       const result = await executeAllNPCRolls(requests);
 
@@ -125,11 +136,13 @@ describe('npc-auto-roller', () => {
     it('should continue processing even if one NPC roll fails', async () => {
       const requests: RollRequest[] = [
         { type: 'attack', formula: 'fail', purpose: 'Fail', autoExecute: true },
-        { type: 'attack', formula: 'success', purpose: 'Success', autoExecute: true }
+        { type: 'attack', formula: 'success', purpose: 'Success', autoExecute: true },
       ];
 
       (DiceEngine.roll as any)
-        .mockImplementationOnce(() => { throw new Error('Fail'); })
+        .mockImplementationOnce(() => {
+          throw new Error('Fail');
+        })
         .mockReturnValueOnce({ total: 10 });
 
       const result = await executeAllNPCRolls(requests);
@@ -144,7 +157,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'attack', purpose: 'Greataxe', ac: 15, actorName: 'Orc' } as RollRequest,
         result: { total: 18, naturalRoll: 13, critical: false } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -155,7 +168,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'attack', purpose: 'Greataxe', ac: 15, actorName: 'Orc' } as RollRequest,
         result: { total: 12, naturalRoll: 7, critical: false } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -166,7 +179,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'attack', purpose: 'Greataxe', actorName: 'Orc' } as RollRequest,
         result: { total: 25, naturalRoll: 20, critical: true } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -178,7 +191,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'attack', purpose: 'Greataxe', actorName: 'Orc' } as RollRequest,
         result: { total: 6, naturalRoll: 1, critical: false } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -190,7 +203,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'damage', purpose: 'Fireball damage', actorName: 'Mage' } as RollRequest,
         result: { total: 28 } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -201,7 +214,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'save', purpose: 'Dex Save', dc: 15, actorName: 'Rogue' } as RollRequest,
         result: { total: 17 } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -212,7 +225,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'save', purpose: 'Con Save', dc: 12, actorName: 'Zombie' } as RollRequest,
         result: { total: 8 } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -223,7 +236,7 @@ describe('npc-auto-roller', () => {
       const autoRoll = {
         request: { type: 'initiative', actorName: 'Wolf' } as RollRequest,
         result: { total: 14 } as any,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
       const output = formatNPCRollResult(autoRoll);
@@ -235,7 +248,7 @@ describe('npc-auto-roller', () => {
     it('should return true if total >= ac', () => {
       const autoRoll = {
         request: { type: 'attack', ac: 15 } as RollRequest,
-        result: { total: 15 } as any
+        result: { total: 15 } as any,
       };
       expect(isAttackHit(autoRoll as any)).toBe(true);
     });
@@ -243,7 +256,7 @@ describe('npc-auto-roller', () => {
     it('should return false if total < ac', () => {
       const autoRoll = {
         request: { type: 'attack', ac: 15 } as RollRequest,
-        result: { total: 14 } as any
+        result: { total: 14 } as any,
       };
       expect(isAttackHit(autoRoll as any)).toBe(false);
     });
@@ -251,7 +264,7 @@ describe('npc-auto-roller', () => {
     it('should return false if not an attack', () => {
       const autoRoll = {
         request: { type: 'save', ac: 15 } as RollRequest,
-        result: { total: 20 } as any
+        result: { total: 20 } as any,
       };
       expect(isAttackHit(autoRoll as any)).toBe(false);
     });
@@ -261,7 +274,7 @@ describe('npc-auto-roller', () => {
     it('should return true if total >= dc', () => {
       const autoRoll = {
         request: { dc: 15 } as RollRequest,
-        result: { total: 15 } as any
+        result: { total: 15 } as any,
       };
       expect(isCheckSuccess(autoRoll as any)).toBe(true);
     });
@@ -269,7 +282,7 @@ describe('npc-auto-roller', () => {
     it('should return false if total < dc', () => {
       const autoRoll = {
         request: { dc: 15 } as RollRequest,
-        result: { total: 14 } as any
+        result: { total: 14 } as any,
       };
       expect(isCheckSuccess(autoRoll as any)).toBe(false);
     });
@@ -277,7 +290,7 @@ describe('npc-auto-roller', () => {
     it('should return false if no dc', () => {
       const autoRoll = {
         request: { type: 'check' } as RollRequest,
-        result: { total: 20 } as any
+        result: { total: 20 } as any,
       };
       expect(isCheckSuccess(autoRoll as any)).toBe(false);
     });

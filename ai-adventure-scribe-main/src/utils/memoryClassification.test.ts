@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { processContent, classifySegment } from './memory/classification';
 import { CLASSIFICATION_PATTERNS } from './memory/patterns';
 
-import type { MemoryType } from '@/components/game/memory/types';
+import type { MemoryType } from '@/types/memory';
 
 describe('Memory Classification', () => {
   describe('classifySegment', () => {

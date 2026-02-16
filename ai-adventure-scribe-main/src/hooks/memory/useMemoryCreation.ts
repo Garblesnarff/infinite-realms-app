@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { Memory } from '@/components/game/memory/types';
+import type { Memory } from '@/types/memory';
 
-import { MemoryType, isValidMemoryType } from '@/components/game/memory/types';
 import { isSemanticMemoriesEnabled } from '@/config/featureFlags';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { isValidMemoryType } from '@/types/memory';
 import { processContent } from '@/utils/memoryClassification';
 
 const MIN_SEGMENT_LENGTH = 50;

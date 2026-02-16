@@ -2,7 +2,7 @@ import { calculateImportance } from './importance';
 import { CLASSIFICATION_PATTERNS } from './patterns';
 import { splitIntoSegments } from './segmentation';
 
-import type { MemoryType } from '@/components/game/memory/types';
+import type { MemoryType } from '@/types/memory';
 
 /**
  * Interface for classified memory segment

@@ -5,13 +5,14 @@
  *
  * Dependencies:
  * - Supabase client (src/integrations/supabase/client.ts)
- * - Memory type (src/components/game/memory/types.ts)
+ * - Memory type (src/types/memory.ts)
  *
  * @author AI Dungeon Master Team
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { Memory, isValidMemoryType } from '@/components/game/memory/types';
+import { isValidMemoryType } from '@/types/memory';
+import type { Memory } from '@/types/memory';
 import { logger } from '../../../lib/logger';
 
 export class MemoryLoader {

@@ -8,8 +8,8 @@ import {
   sortMemoriesByRelevance,
 } from './contextValidation';
 
-import type { Memory } from '@/components/game/memory/types';
 import type { Campaign } from '@/types/campaign';
+import type { Memory } from '@/types/memory';
 
 interface EnhancedGameContext {
   campaign: {

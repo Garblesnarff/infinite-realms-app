@@ -4,9 +4,10 @@
  * without requiring player input
  */
 
-import type { RollRequest } from '@/components/game/DiceRollRequest';
-import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
+import type { RollRequest } from '@/types/roll-request';
+
 import logger from '@/lib/logger';
+import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 
 export interface AutoRollResult {
   request: RollRequest;
@@ -70,7 +71,7 @@ export async function executeNPCRoll(request: RollRequest): Promise<AutoRollResu
  * @returns Object containing auto-executed NPC rolls and remaining player rolls
  */
 export async function executeAllNPCRolls(
-  requests: RollRequest[]
+  requests: RollRequest[],
 ): Promise<{ npcRolls: AutoRollResult[]; playerRolls: RollRequest[] }> {
   const npcRolls: AutoRollResult[] = [];
   const playerRolls: RollRequest[] = [];
@@ -124,8 +125,8 @@ export function formatNPCRollResult(autoRoll: AutoRollResult): string {
       const criticalText = result.critical
         ? ' **CRITICAL HIT!**'
         : result.naturalRoll === 1
-        ? ' **Critical Miss!**'
-        : '';
+          ? ' **Critical Miss!**'
+          : '';
 
       return `🎲 ${actorName} ${request.purpose}: **${result.total}** ${hitOrMiss}${criticalText}`;
     }

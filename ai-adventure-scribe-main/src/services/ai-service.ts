@@ -7,7 +7,7 @@ import { MemoryManager } from './memory-manager';
 import type { ChatMessage, NarrationSegment, GameContext } from './ai/shared/types';
 import type { Memory } from './memory-manager';
 import type { SessionVoiceContext } from './voice-consistency-service';
-import type { RollRequest } from '@/components/game/DiceRollRequest';
+import type { RollRequest } from '@/types/roll-request';
 
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';

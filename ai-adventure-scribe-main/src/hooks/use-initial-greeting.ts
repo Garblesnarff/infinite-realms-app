@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 
-import type { Memory, MemoryType } from '@/components/game/memory/types';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
+import type { Memory, MemoryType } from '@/types/memory';
 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -138,12 +138,6 @@ export const useInitialGreeting = ({
         throw new Error(`Failed to load campaign: ${campaignError.message}`);
       }
 
-      // Build initial greeting prompt (not currently used externally, but kept for reference)
-      const greetingPrompt = buildGreetingPrompt(
-        characterData as unknown as Character,
-        campaignData as unknown as Campaign,
-      );
-
       logger.info('[Initial Greeting] Generated prompt for AI service');
 
       // Generate AI response using AIService
@@ -226,29 +220,6 @@ export const useInitialGreeting = ({
         });
       }
     }
-  };
-
-  const buildGreetingPrompt = (character: Character, campaign: Campaign): string => {
-    return `You are the Dungeon Master for a D&D 5e campaign called "${campaign.name || 'Untitled Campaign'}".
-
-A new adventure is beginning. The player character is:
-- Name: ${character.name}
-- Race: ${character.race?.name || character.race || 'Unknown'}
-- Class: ${character.class?.name || character.class || 'Unknown'} (Level ${character.level || 1})
-- Background: ${character.background?.name || character.background || 'Unknown'}
-
-Campaign Setting: ${campaign.description || 'A fantasy world of adventure and mystery.'}
-
-Your task: Write an engaging opening scene that:
-1. Introduces the character into the world naturally
-2. Sets the scene with vivid environmental details (time, weather, location)
-3. Provides immediate context for where they are and why
-4. Includes a subtle hook or opportunity for adventure
-5. Ends with a question or situation that invites player action
-
-Keep it immersive, detailed, and true to D&D 5e style. This is the very beginning of their adventure, so set an exciting tone while establishing the world. Make the character feel like they belong in this moment.
-
-Write in second person ("You...") and present tense. Length: 2-3 paragraphs.`;
   };
 
   const createInitialMemories = async (

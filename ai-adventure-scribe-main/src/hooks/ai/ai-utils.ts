@@ -5,19 +5,19 @@
  *
  * Dependencies:
  * - Supabase client (src/integrations/supabase/client.ts)
- * - ChatMessage and Memory types (src/types/game.ts, src/components/game/memory/types.ts)
+ * - ChatMessage and Memory types (src/types/game.ts, src/types/memory.ts)
  *
  * @author AI Dungeon Master Team
  */
 
-import type { Memory } from '@/components/game/memory/types';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
+import type { Memory } from '@/types/memory';
 
-import { isValidMemoryType } from '@/components/game/memory/types';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { isValidMemoryType } from '@/types/memory';
 
 /**
  * Formats chat messages into a task object for the DM Agent.

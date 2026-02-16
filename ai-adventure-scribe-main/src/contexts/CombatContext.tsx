@@ -6,7 +6,7 @@
  * as they would be managed at a physical D&D table.
  */
 
-import React, { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useMemo, useRef } from 'react';
 
 import { useCharacter } from './CharacterContext';
 import {
@@ -18,14 +18,17 @@ import {
   handleLongRest,
   handleHideAction,
 } from './combat/action-handlers';
+import { buildCharacterData } from './combat/character-data';
 import { combatReducer, initialCombatState } from './combat/combat-reducer';
-import {
-  createCombatParticipant,
-  sortByInitiative,
-  type CharacterData,
-} from './combat/participant-factory';
+import { createCombatParticipant, sortByInitiative } from './combat/participant-factory';
 import { saveEncounterToDatabase as saveToDb } from './combat/persistence';
+import {
+  createReactionHandlers,
+  createParticipantReactionHandlers,
+} from './combat/reaction-handlers';
+import { createWeaponHandlers } from './combat/weapon-handlers';
 
+import type { ActionHandlerResult } from './combat/action-handlers';
 import type {
   CombatEncounter,
   CombatParticipant,
@@ -34,15 +37,9 @@ import type {
   ConditionName,
   CombatContextValue,
   DamageType,
-  ReactionOpportunity,
-  ActionType,
-  Equipment,
 } from '@/types/combat';
 
-import {
-  applyConditionEffects,
-  removeConditionEffects,
-} from '@/utils/conditionEffects';
+import { applyConditionEffects, removeConditionEffects } from '@/utils/conditionEffects';
 import { rollDie } from '@/utils/diceRolls';
 import { calculateDamage } from '@/utils/diceUtils';
 import { processMovementAction } from '@/utils/movementUtils';
@@ -50,8 +47,25 @@ import { checkReactionTriggers } from '@/utils/reactionTriggers';
 import { checkConcentration } from '@/utils/spell-management';
 
 // ===========================
-// Supabase Client
+// Action Dispatch Table
 // ===========================
+
+type ActionDispatchEntry = (
+  action: Partial<CombatActionType>,
+  participant: CombatParticipant,
+) => ActionHandlerResult | undefined;
+
+const actionDispatchTable: Record<string, ActionDispatchEntry> = {
+  cast_spell: (action, participant) =>
+    participant.participantType === 'player' ? handleSpellCast(action, participant) : undefined,
+  divine_smite: (action, participant) => handleDivineSmite(action, participant),
+  use_class_feature: (action, participant) =>
+    action.featureUsed === 'rage' ? handleRageActivation(action, participant) : undefined,
+  end_rage: (_action, participant) => handleRageDeactivation(participant),
+  short_rest: (_action, participant) => handleShortRest(participant, 1),
+  long_rest: (_action, participant) => handleLongRest(participant),
+  hide: (_action, participant) => handleHideAction(participant),
+};
 
 // ===========================
 // Context Creation
@@ -76,9 +90,36 @@ interface CombatProviderProps {
   sessionId?: string;
 }
 
-export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessionId: _sessionId }) => {
+export const CombatProvider: React.FC<CombatProviderProps> = ({
+  children,
+  sessionId: _sessionId,
+}) => {
   const [state, dispatch] = useReducer(combatReducer, initialCombatState);
   const { state: characterState } = useCharacter();
+
+  // Ref to provide current state to extracted handlers without stale closures
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // ===========================
+  // Extracted Handlers (stable references - dispatch never changes)
+  // ===========================
+
+  const {
+    addReactionOpportunity,
+    removeReactionOpportunity,
+    clearReactionOpportunities,
+    setPendingReaction,
+  } = useMemo(() => createReactionHandlers(dispatch), []);
+
+  const {
+    addParticipantReactionOpportunity,
+    removeParticipantReactionOpportunity,
+    clearParticipantReactionOpportunities,
+  } = useMemo(() => createParticipantReactionHandlers(dispatch, () => stateRef.current), []);
+
+  const { equipMainHandWeapon, equipOffHandWeapon, unequipMainHandWeapon, unequipOffHandWeapon } =
+    useMemo(() => createWeaponHandlers(dispatch), []);
 
   // ===========================
   // Database Operations
@@ -95,26 +136,11 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   const startCombat = useCallback(
     async (sessionId: string, initialParticipants: Partial<CombatParticipant>[]) => {
       const encounterId = crypto.randomUUID();
-
-      // Build character data for enriching player participants
-      const characterData: CharacterData | null = characterState.character ? {
-        id: characterState.character.id,
-        spellSlots: characterState.character.spellSlots,
-        preparedSpells: characterState.character.preparedSpells,
-        activeConcentration: characterState.character.activeConcentration,
-        damageResistances: characterState.character.damageResistances,
-        damageImmunities: characterState.character.damageImmunities,
-        damageVulnerabilities: characterState.character.damageVulnerabilities,
-        fightingStyles: characterState.character.fightingStyles,
-        visionTypes: characterState.character.visionTypes,
-        obscurement: characterState.character.obscurement,
-        isHidden: characterState.character.isHidden,
-        stealthCheckBonus: characterState.character.stealthCheckBonus,
-      } : null;
+      const characterData = buildCharacterData(characterState.character);
 
       // Create participants using the factory function
       const participantsWithInitiative = initialParticipants.map((p) =>
-        createCombatParticipant(p, { rollInitiative: true, characterData })
+        createCombatParticipant(p, { rollInitiative: true, characterData }),
       );
 
       // Sort by initiative (highest first)
@@ -221,30 +247,17 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       );
       if (!participant) return;
 
-      // Handle action based on type using extracted handlers
-      let handlerResult;
-
-      if (action.actionType === 'cast_spell' && participant.participantType === 'player') {
-        handlerResult = handleSpellCast(action, participant);
-        if (handlerResult.actionUpdates) {
-          fullAction = { ...fullAction, ...handlerResult.actionUpdates };
-        }
-      } else if (action.actionType === 'divine_smite') {
-        handlerResult = handleDivineSmite(action, participant);
-      } else if (action.actionType === 'use_class_feature' && action.featureUsed === 'rage') {
-        handlerResult = handleRageActivation(action, participant);
-      } else if (action.actionType === 'end_rage') {
-        handlerResult = handleRageDeactivation(participant);
-      } else if (action.actionType === 'short_rest') {
-        handlerResult = handleShortRest(participant, 1);
-      } else if (action.actionType === 'long_rest') {
-        handlerResult = handleLongRest(participant);
-      } else if (action.actionType === 'hide') {
-        handlerResult = handleHideAction(participant);
-      }
+      // Handle action based on type using dispatch table
+      const handler = action.actionType ? actionDispatchTable[action.actionType] : undefined;
+      const handlerResult = handler?.(action, participant);
 
       // Apply handler result if present
       if (handlerResult) {
+        // For cast_spell, merge all action updates into fullAction
+        if (action.actionType === 'cast_spell' && handlerResult.actionUpdates) {
+          fullAction = { ...fullAction, ...handlerResult.actionUpdates };
+        }
+
         dispatch({
           type: 'UPDATE_PARTICIPANT',
           participantId: action.participantId!,
@@ -281,7 +294,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
         await dealDamage(action.targetParticipantId, action.damageDealt, action.damageType);
       }
     },
-    [state.activeEncounter],
+    [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity],
   );
 
   const dealDamage = useCallback(
@@ -473,21 +486,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
 
   const addParticipant = useCallback(
     async (participant: Partial<CombatParticipant>) => {
-      // Build character data for enriching player participants
-      const characterData: CharacterData | null = characterState.character ? {
-        id: characterState.character.id,
-        spellSlots: characterState.character.spellSlots,
-        preparedSpells: characterState.character.preparedSpells,
-        activeConcentration: characterState.character.activeConcentration,
-        damageResistances: characterState.character.damageResistances,
-        damageImmunities: characterState.character.damageImmunities,
-        damageVulnerabilities: characterState.character.damageVulnerabilities,
-        fightingStyles: characterState.character.fightingStyles,
-        visionTypes: characterState.character.visionTypes,
-        obscurement: characterState.character.obscurement,
-        isHidden: characterState.character.isHidden,
-        stealthCheckBonus: characterState.character.stealthCheckBonus,
-      } : null;
+      const characterData = buildCharacterData(characterState.character);
 
       const fullParticipant = createCombatParticipant(participant, {
         rollInitiative: !participant.initiative,
@@ -509,107 +508,6 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
     },
     [],
   );
-
-  // ===========================
-  // Reaction Opportunities
-  // ===========================
-
-  const addReactionOpportunity = useCallback((opportunity: ReactionOpportunity) => {
-    dispatch({ type: 'ADD_REACTION_OPPORTUNITY', opportunity });
-  }, []);
-
-  const removeReactionOpportunity = useCallback((opportunityId: string) => {
-    dispatch({ type: 'REMOVE_REACTION_OPPORTUNITY', opportunityId });
-  }, []);
-
-  const clearReactionOpportunities = useCallback(() => {
-    dispatch({ type: 'CLEAR_REACTION_OPPORTUNITIES' });
-  }, []);
-
-  const setPendingReaction = useCallback((opportunityId: string, selectedReaction: ActionType) => {
-    dispatch({ type: 'SET_PENDING_REACTION', opportunityId, selectedReaction });
-  }, []);
-
-  // ===========================
-  // Weapon Management
-  // ===========================
-
-  const equipMainHandWeapon = useCallback((participantId: string, weapon: Equipment) => {
-    dispatch({
-      type: 'UPDATE_PARTICIPANT',
-      participantId,
-      updates: { mainHandWeapon: weapon },
-    });
-  }, []);
-
-  const equipOffHandWeapon = useCallback((participantId: string, weapon: Equipment) => {
-    dispatch({
-      type: 'UPDATE_PARTICIPANT',
-      participantId,
-      updates: { offHandWeapon: weapon },
-    });
-  }, []);
-
-  const unequipMainHandWeapon = useCallback((participantId: string) => {
-    dispatch({
-      type: 'UPDATE_PARTICIPANT',
-      participantId,
-      updates: { mainHandWeapon: undefined },
-    });
-  }, []);
-
-  const unequipOffHandWeapon = useCallback((participantId: string) => {
-    dispatch({
-      type: 'UPDATE_PARTICIPANT',
-      participantId,
-      updates: { offHandWeapon: undefined },
-    });
-  }, []);
-
-  // ===========================
-  // Participant Reaction Opportunities
-  // ===========================
-
-  const addParticipantReactionOpportunity = useCallback(
-    (participantId: string, opportunity: ReactionOpportunity) => {
-      dispatch({
-        type: 'UPDATE_PARTICIPANT',
-        participantId,
-        updates: {
-          reactionOpportunities: [
-            ...(state.activeEncounter?.participants.find((p) => p.id === participantId)
-              ?.reactionOpportunities || []),
-            opportunity,
-          ],
-        },
-      });
-    },
-    [state.activeEncounter],
-  );
-
-  const removeParticipantReactionOpportunity = useCallback(
-    (participantId: string, opportunityId: string) => {
-      dispatch({
-        type: 'UPDATE_PARTICIPANT',
-        participantId,
-        updates: {
-          reactionOpportunities: (
-            state.activeEncounter?.participants.find((p) => p.id === participantId)
-              ?.reactionOpportunities || []
-          ).filter((opp) => opp.id !== opportunityId),
-        },
-      });
-    },
-    [state.activeEncounter],
-  );
-
-  const clearParticipantReactionOpportunities = useCallback((participantId: string) => {
-    dispatch({
-      type: 'UPDATE_PARTICIPANT',
-      participantId,
-      updates: { reactionOpportunities: [] },
-    });
-  }, []);
 
   // ===========================
   // Movement Actions
@@ -647,9 +545,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   // Context Value
   // ===========================
 
-  // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
-  // Using useMemo ensures that components consuming this context only re-render
-  // when the actual state or dependent actions change.
+  // Stabilize context value to prevent unnecessary re-renders of consumers.
   const contextValue: CombatContextValue = useMemo(
     () => ({
       state,
@@ -675,10 +571,8 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       addParticipantReactionOpportunity,
       removeParticipantReactionOpportunity,
       clearParticipantReactionOpportunities,
-
       // Movement actions
       moveParticipant,
-
       // Weapon management
       equipMainHandWeapon,
       equipOffHandWeapon,

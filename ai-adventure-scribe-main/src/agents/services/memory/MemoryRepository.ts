@@ -3,7 +3,7 @@ import logger from '@/lib/logger';
 import { isSemanticMemoriesEnabled } from '@/config/featureFlags';
 
 import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
-import type { Memory } from '@/components/game/memory/types';
+import type { Memory } from '@/types/memory';
 
 let hasLoggedSemanticDisabled = false;
 

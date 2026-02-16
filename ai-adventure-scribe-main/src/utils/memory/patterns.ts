@@ -1,4 +1,4 @@
-import type { MemoryType } from '@/components/game/memory/types';
+import type { MemoryType } from '@/types/memory';
 
 /**
  * Interface for classification pattern

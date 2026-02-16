@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
+/* eslint-disable max-lines */
 /**
  * Blog Route Helpers
  * Shared utilities for blog route handlers
@@ -9,6 +9,8 @@ import { authenticateRequest, type AuthUser } from '../../../lib/auth.js';
 import { sql } from '../../../lib/db.js';
 import { supabaseService } from '../../../lib/supabase.js';
 import { getBlogRole } from '../../../middleware/blog-author.js';
+
+import type { ZodError } from 'zod';
 
 export type BlogRole = 'viewer' | 'author' | 'admin';
 
@@ -88,10 +90,10 @@ export async function requireBlogAdminAuth(request: Request): Promise<BlogAuthRe
 /**
  * Handle Zod validation errors
  */
-export function handleValidationError(error: any) {
+export function handleValidationError(error: ZodError) {
   return {
     error: 'Invalid request payload',
-    details: error?.flatten?.() ?? error?.issues ?? error,
+    details: error.flatten(),
   };
 }
 
@@ -265,8 +267,8 @@ export async function deletePostRelations(postId: string, authorScopeId?: string
 /**
  * Check if error is a "not found" PGRST116 error
  */
-export const slugNotFoundError = (error: any) =>
-  error && typeof error === 'object' && 'code' in error && (error as any).code === 'PGRST116';
+export const slugNotFoundError = (error: { code?: string } | null | undefined) =>
+  error != null && error.code === 'PGRST116';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -389,6 +391,21 @@ export function normalizeStatusPayload(
   }
 
   return payload;
+}
+
+/**
+ * Get author scope ID for mutation operations.
+ * Admins get null (no scope restriction), authors get their own author ID.
+ */
+export async function getAuthorScopeIdForMutation(
+  blogRole: BlogRole,
+  userId: string,
+): Promise<string | null> {
+  if (blogRole === 'admin') {
+    return null;
+  }
+
+  return await fetchAuthorIdForUser(userId);
 }
 
 /**

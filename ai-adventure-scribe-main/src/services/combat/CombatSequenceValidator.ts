@@ -5,6 +5,16 @@
  */
 
 import { combatAuditSystem } from '../combat-audit';
+import {
+  detectsDirectDamage,
+  detectsCombatStart,
+  detectsAttackRequest,
+  detectsSkillCheck,
+  detectsDamageRequest,
+  containsAC,
+  containsDC,
+  containsModifier,
+} from './dm-response-patterns';
 
 import logger from '@/lib/logger';
 
@@ -54,6 +64,11 @@ export interface TurnOrder {
   isInitiativeComplete: boolean;
 }
 
+// TTL for combat state cleanup (4 hours)
+const COMBAT_STATE_TTL_MS = 4 * 60 * 60 * 1000;
+// Minimum interval between cleanup sweeps (5 minutes)
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
 export class CombatSequenceValidator {
   private static instance: CombatSequenceValidator;
   private combatPhases: Map<string, CombatPhase[]> = new Map();
@@ -69,6 +84,8 @@ export class CombatSequenceValidator {
   > = new Map();
   private turnOrders: Map<string, TurnOrder> = new Map();
   private initiativeEntries: Map<string, InitiativeEntry[]> = new Map();
+  private lastActivityTimestamp: Map<string, number> = new Map();
+  private lastCleanupAt = 0;
 
   static getInstance(): CombatSequenceValidator {
     if (!CombatSequenceValidator.instance) {
@@ -84,6 +101,7 @@ export class CombatSequenceValidator {
     this.activeCombats.add(combatId);
     this.combatPhases.set(combatId, []);
     this.initiativeRolled.delete(combatId);
+    this.lastActivityTimestamp.set(combatId, Date.now());
     logger.info(`🗡️ Combat ${combatId} started - initiative required`);
   }
 
@@ -100,6 +118,7 @@ export class CombatSequenceValidator {
   ): void {
     // Mark combat as active when first initiative entry is added
     this.activeCombats.add(combatId);
+    this.lastActivityTimestamp.set(combatId, Date.now());
 
     // Start audit for this combat if not already started
     if (!this.initiativeEntries.has(combatId)) {
@@ -341,11 +360,17 @@ export class CombatSequenceValidator {
    * Validate a DM response for combat rule compliance
    */
   validateDMResponse(response: string, combatId?: string): CombatValidationResult {
+    this.cleanupStaleState();
+
+    if (combatId) {
+      this.lastActivityTimestamp.set(combatId, Date.now());
+    }
+
     const errors: CombatValidationError[] = [];
     const warnings: CombatValidationError[] = [];
 
     // Check for direct damage without attack roll
-    if (this.detectsDirectDamage(response) && !this.hasPendingAttack(combatId)) {
+    if (detectsDirectDamage(response) && !this.hasPendingAttack(combatId)) {
       errors.push({
         type: 'missing_attack_roll',
         message: 'Damage roll requested without preceding attack roll',
@@ -356,7 +381,7 @@ export class CombatSequenceValidator {
     }
 
     // Check for combat start without initiative
-    if (this.detectsCombatStart(response) && combatId && !this.initiativeRolled.has(combatId)) {
+    if (detectsCombatStart(response) && combatId && !this.initiativeRolled.has(combatId)) {
       errors.push({
         type: 'missing_initiative',
         message: 'Combat started without initiative roll',
@@ -371,7 +396,7 @@ export class CombatSequenceValidator {
       const turnOrder = this.turnOrders.get(combatId);
       if (
         !turnOrder?.isInitiativeComplete &&
-        (this.detectsAttackRequest(response) || this.detectsSkillCheck(response))
+        (detectsAttackRequest(response) || detectsSkillCheck(response))
       ) {
         errors.push({
           type: 'wrong_sequence',
@@ -384,7 +409,7 @@ export class CombatSequenceValidator {
     }
 
     // Check for attack without AC
-    if (this.detectsAttackRequest(response) && !this.containsAC(response)) {
+    if (detectsAttackRequest(response) && !containsAC(response)) {
       errors.push({
         type: 'missing_ac',
         message: 'Attack roll requested without target AC',
@@ -394,7 +419,7 @@ export class CombatSequenceValidator {
     }
 
     // Check for skill check without DC
-    if (this.detectsSkillCheck(response) && !this.containsDC(response)) {
+    if (detectsSkillCheck(response) && !containsDC(response)) {
       errors.push({
         type: 'missing_dc',
         message: 'Skill check requested without DC',
@@ -404,7 +429,7 @@ export class CombatSequenceValidator {
     }
 
     // Check for damage roll without modifier
-    if (this.detectsDamageRequest(response) && !this.containsModifier(response)) {
+    if (detectsDamageRequest(response) && !containsModifier(response)) {
       warnings.push({
         type: 'missing_modifier',
         message: 'Damage roll missing ability modifier',
@@ -477,55 +502,6 @@ export class CombatSequenceValidator {
     this.combatPhases.set(combatId, phases);
   }
 
-  private detectsDirectDamage(response: string): boolean {
-    const damagePatterns = [
-      /roll\s+\d*d\d+(?:\+\d+)?\s+(?:for\s+)?damage/gi,
-      /roll\s+damage/gi,
-      /\d*d\d+(?:\+\d+)?\s+damage/gi,
-    ];
-    return damagePatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsCombatStart(response: string): boolean {
-    const combatPatterns = [
-      /combat\s+begins/gi,
-      /initiative/gi,
-      /roll\s+for\s+initiative/gi,
-      /battle\s+starts/gi,
-    ];
-    return combatPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsAttackRequest(response: string): boolean {
-    const attackPatterns = [
-      /make\s+an?\s+attack\s+roll/gi,
-      /roll\s+(?:to\s+)?attack/gi,
-      /attack\s+roll/gi,
-    ];
-    return attackPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsSkillCheck(response: string): boolean {
-    const skillPatterns = [/make\s+a\s+\w+\s+check/gi, /roll\s+a\s+\w+\s+check/gi, /\w+\s+check/gi];
-    return skillPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsDamageRequest(response: string): boolean {
-    return /roll.*damage/gi.test(response);
-  }
-
-  private containsAC(response: string): boolean {
-    return /AC\s+\d+/gi.test(response) || /armor\s+class\s+\d+/gi.test(response);
-  }
-
-  private containsDC(response: string): boolean {
-    return /DC\s+\d+/gi.test(response) || /difficulty\s+class\s+\d+/gi.test(response);
-  }
-
-  private containsModifier(response: string): boolean {
-    return /\+\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(response);
-  }
-
   private hasPendingAttack(combatId?: string): boolean {
     if (!combatId) return this.pendingAttacks.size > 0;
 
@@ -566,6 +542,53 @@ export class CombatSequenceValidator {
   }
 
   /**
+   * Remove state for combats that have been inactive longer than COMBAT_STATE_TTL_MS.
+   * Called periodically from validateDMResponse to prevent unbounded memory growth.
+   */
+  private cleanupStaleState(): void {
+    const now = Date.now();
+
+    // Throttle cleanup to avoid running on every call
+    if (now - this.lastCleanupAt < CLEANUP_INTERVAL_MS) {
+      return;
+    }
+    this.lastCleanupAt = now;
+
+    let cleanedCount = 0;
+
+    for (const [combatId, lastActivity] of this.lastActivityTimestamp) {
+      if (now - lastActivity > COMBAT_STATE_TTL_MS) {
+        this.activeCombats.delete(combatId);
+        this.initiativeRolled.delete(combatId);
+        this.combatPhases.delete(combatId);
+        this.turnOrders.delete(combatId);
+        this.initiativeEntries.delete(combatId);
+        this.lastActivityTimestamp.delete(combatId);
+
+        // Clean up pending attacks for this combat
+        for (const [attackId] of this.pendingAttacks) {
+          if (attackId.startsWith(combatId)) {
+            this.pendingAttacks.delete(attackId);
+          }
+        }
+
+        // Clean up awaiting damage for this combat
+        for (const [attackId] of this.awaitingDamage) {
+          if (attackId.startsWith(combatId)) {
+            this.awaitingDamage.delete(attackId);
+          }
+        }
+
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      logger.info(`🧹 Cleaned up ${cleanedCount} stale combat state(s)`);
+    }
+  }
+
+  /**
    * Clear all state for testing
    */
   clearAllState(): void {
@@ -576,6 +599,7 @@ export class CombatSequenceValidator {
     this.awaitingDamage.clear();
     this.turnOrders.clear();
     this.initiativeEntries.clear();
+    this.lastActivityTimestamp.clear();
     combatAuditSystem.clearAuditData();
   }
 
@@ -591,6 +615,7 @@ export class CombatSequenceValidator {
     this.combatPhases.delete(combatId);
     this.turnOrders.delete(combatId);
     this.initiativeEntries.delete(combatId);
+    this.lastActivityTimestamp.delete(combatId);
 
     // Clean up any pending attacks for this combat
     for (const [attackId] of this.pendingAttacks) {
@@ -630,7 +655,7 @@ export class CombatSequenceValidator {
    */
   validateCombatState(
     combatId: string,
-    action: 'attack' | 'damage' | 'save',
+    _action: 'attack' | 'damage' | 'save',
   ): { valid: boolean; reason?: string } {
     if (!this.activeCombats.has(combatId)) {
       return { valid: false, reason: 'Combat not active' };

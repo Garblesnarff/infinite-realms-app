@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryService } from '../MemoryService';
 import * as featureFlags from '@/config/featureFlags';
-import type { Memory, MemoryType } from '@/components/game/memory/types';
+import type { Memory, MemoryType } from '@/types/memory';
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => {

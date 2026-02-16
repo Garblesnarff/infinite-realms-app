@@ -1,9 +1,6 @@
 import { llmApiClient } from '@/services/llm-api-client';
 
-import type {
-  Memory as UIMemory,
-  MemoryType as UIMemoryType,
-} from '@/components/game/memory/types';
+import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';
 import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
 
 import { MemoryImportanceService } from './MemoryImportanceService';
