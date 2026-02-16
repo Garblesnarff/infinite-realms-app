@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * WallSegment Component
  *
@@ -13,11 +14,16 @@
  * @module components/battle-map/WallSegment
  */
 
-import React, { useMemo, useRef, useState, useCallback } from 'react';
-import * as THREE from 'three';
-import { ThreeEvent } from '@react-three/fiber';
 import { Line } from '@react-three/drei';
-import type { Point2D, VisionBlocker, DoorState } from '@/types/scene';
+import React, { useMemo, useRef, useState, useCallback, useId } from 'react';
+import * as THREE from 'three';
+
+import type { Point2D, VisionBlocker } from '@/types/scene';
+import type { ThreeEvent } from '@react-three/fiber';
+
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Z_INDEX } from '@/constants/z-index';
 
 // ===========================
 // Types
@@ -212,7 +218,7 @@ interface WallEndpointProps {
   isSelected: boolean;
 }
 
-function WallEndpoint({ position, index, isSelected }: WallEndpointProps) {
+function WallEndpoint({ position, index: _index, isSelected }: WallEndpointProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   const color = isHovered ? '#fbbf24' : isSelected ? '#ffffff' : '#94a3b8';
@@ -325,70 +331,96 @@ export function WallPropertiesPanel({
   onDelete,
   onClose,
 }: WallPropertiesPanelProps) {
+  const lightId = useId();
+  const moveId = useId();
+  const soundId = useId();
+  const heightId = useId();
+
   return (
-    <div className="absolute top-4 right-4 bg-card p-4 rounded-lg border border-border shadow-lg w-64 z-10">
+    <div
+      className="absolute top-4 right-4 bg-card p-4 rounded-lg border border-border shadow-lg w-64"
+      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold">Wall Properties</h3>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="text-muted-foreground hover:text-foreground"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          aria-label="Close"
+          type="button"
         >
-          ×
-        </button>
+          <span className="text-lg">×</span>
+        </Button>
       </div>
 
       <div className="space-y-3">
         {/* Blocks Light */}
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <div className="flex items-center gap-2">
           <input
+            id={lightId}
             type="checkbox"
             checked={wall.blocksLight}
             onChange={(e) => onUpdate({ blocksLight: e.target.checked })}
-            className="rounded"
+            className="h-4 w-4 rounded border-input"
           />
-          <span>Blocks Vision/Light</span>
-        </label>
+          <Label htmlFor={lightId} className="text-sm cursor-pointer select-none font-normal">
+            Blocks Vision/Light
+          </Label>
+        </div>
 
         {/* Blocks Movement */}
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <div className="flex items-center gap-2">
           <input
+            id={moveId}
             type="checkbox"
             checked={wall.blocksMovement}
             onChange={(e) => onUpdate({ blocksMovement: e.target.checked })}
-            className="rounded"
+            className="h-4 w-4 rounded border-input"
           />
-          <span>Blocks Movement</span>
-        </label>
+          <Label htmlFor={moveId} className="text-sm cursor-pointer select-none font-normal">
+            Blocks Movement
+          </Label>
+        </div>
 
         {/* Blocks Sound */}
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <div className="flex items-center gap-2">
           <input
+            id={soundId}
             type="checkbox"
             checked={wall.blocksSound ?? false}
             onChange={(e) => onUpdate({ blocksSound: e.target.checked })}
-            className="rounded"
+            className="h-4 w-4 rounded border-input"
           />
-          <span>Blocks Sound</span>
-        </label>
+          <Label htmlFor={soundId} className="text-sm cursor-pointer select-none font-normal">
+            Blocks Sound
+          </Label>
+        </div>
 
         {/* Height */}
-        <div>
-          <label className="text-sm text-muted-foreground">Height (ft)</label>
+        <div className="space-y-1">
+          <Label htmlFor={heightId} className="text-sm text-muted-foreground font-normal">
+            Height (ft)
+          </Label>
           <input
+            id={heightId}
             type="number"
             value={wall.height ?? 10}
             onChange={(e) => onUpdate({ height: parseFloat(e.target.value) })}
-            className="w-full mt-1 px-2 py-1 text-sm border border-border rounded"
+            className="w-full px-2 py-1 text-sm border border-border rounded bg-background"
           />
         </div>
 
         {/* Delete Button */}
-        <button
+        <Button
+          variant="destructive"
           onClick={onDelete}
-          className="w-full px-3 py-2 text-sm bg-destructive text-destructive-foreground rounded hover:bg-destructive/90"
+          className="w-full h-9 text-sm"
+          type="button"
         >
           Delete Wall
-        </button>
+        </Button>
       </div>
     </div>
   );
