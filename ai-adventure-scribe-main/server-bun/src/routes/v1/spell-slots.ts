@@ -10,19 +10,63 @@
  * Ported from /server/src/routes/v1/spell-slots.ts
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
+import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
-
-// Import service from Bun server
-import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotsService } from '../../services/spell-slots-service.js';
+
 import type {
   SpellSlotUsageQuery,
   ClassName,
 } from '../../types/spell-slots.js';
+
+const useSpellSlotSchema = t.Object({
+  spellName: t.String({ minLength: 1 }),
+  spellLevel: t.Number({ minimum: 0, maximum: 9 }),
+  slotLevelUsed: t.Number({ minimum: 1, maximum: 9 }),
+  sessionId: t.Optional(t.String()),
+});
+
+const restoreSpellSlotsSchema = t.Object({
+  level: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
+  amount: t.Optional(t.Number({ minimum: 0 })),
+});
+
+const initializeSpellSlotsSchema = t.Object({
+  classes: t.Array(
+    t.Object({
+      className: t.String({ minLength: 1 }),
+      level: t.Number({ minimum: 1, maximum: 20 }),
+    })
+  ),
+});
+
+function mapSpellSlotsError(
+  set: any,
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+): { error: string; details?: string } {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage, details: error instanceof Error ? error.message : 'Unknown error' };
+}
 
 // Character-specific spell slot routes
 export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' })
@@ -75,77 +119,71 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * POST /v1/characters/:id/spell-slots/use
    * Use a spell slot
    */
-  .post('/:id/spell-slots/use', async ({ params, body, set, user }) => {
-    try {
-      const { spellName, spellLevel, slotLevelUsed, sessionId } = body as any;
+  .post(
+    '/:id/spell-slots/use',
+    async ({ params, body, set, user }) => {
+      try {
+        const { spellName, spellLevel, slotLevelUsed, sessionId } = body;
 
-      if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
+        if (sessionId) {
+          const verification = await verifySessionOwnership(sessionId, (user as any).userId);
+          if (!verification.success) {
+            set.status = verification.error!.status;
+            return { error: verification.error!.message };
+          }
         }
+
+        const result = await SpellSlotsService.useSpellSlot(
+          {
+            characterId: params.id,
+            spellName,
+            spellLevel,
+            slotLevelUsed,
+            sessionId,
+          },
+          (user as { userId: string }).userId
+        );
+
+        return result;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOT_USE error', error });
+        return mapSpellSlotsError(set, error, 'Failed to use spell slot');
       }
-
-      // Validate input
-      if (!spellName) {
-        set.status = 400;
-        return { error: 'spellName is required' };
-      }
-
-      if (spellLevel === undefined || spellLevel < 0 || spellLevel > 9) {
-        set.status = 400;
-        return { error: 'spellLevel must be between 0 and 9' };
-      }
-
-      if (slotLevelUsed === undefined || slotLevelUsed < 1 || slotLevelUsed > 9) {
-        set.status = 400;
-        return { error: 'slotLevelUsed must be between 1 and 9' };
-      }
-
-      const result = await SpellSlotsService.useSpellSlot({
-        characterId: params.id,
-        spellName,
-        spellLevel,
-        slotLevelUsed,
-        sessionId,
-      }, (user as { userId: string }).userId);
-
-      return result;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOT_USE error', error });
-      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
-      return {
-        error: 'Failed to use spell slot',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+    },
+    {
+      body: useSpellSlotSchema,
     }
-  })
+  )
 
   /**
    * POST /v1/characters/:id/spell-slots/restore
    * Restore spell slots (long rest or specific restoration)
    */
-  .post('/:id/spell-slots/restore', async ({ params, body, set, user }) => {
-    try {
-      const { level, amount } = body as any;
+  .post(
+    '/:id/spell-slots/restore',
+    async ({ params, body, set, user }) => {
+      try {
+        const { level, amount } = body;
 
-      const result = await SpellSlotsService.restoreSpellSlots({
-        characterId: params.id,
-        level,
-        amount,
-      }, (user as { userId: string }).userId);
+        const result = await SpellSlotsService.restoreSpellSlots(
+          {
+            characterId: params.id,
+            level,
+            amount,
+          },
+          (user as { userId: string }).userId
+        );
 
-      return result;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOTS_RESTORE error', error });
-      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
-      return {
-        error: 'Failed to restore spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+        return result;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOTS_RESTORE error', error });
+        return mapSpellSlotsError(set, error, 'Failed to restore spell slots');
+      }
+    },
+    {
+      body: restoreSpellSlotsSchema,
     }
-  })
+  )
 
   /**
    * GET /v1/characters/:id/spell-slots/history
@@ -179,32 +217,29 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
    * POST /v1/characters/:id/spell-slots/initialize
    * Initialize spell slots for a character based on their class(es) and level(s)
    */
-  .post('/:id/spell-slots/initialize', async ({ params, body, set, user }) => {
-    try {
-      const { classes } = body as { classes: Array<{ className: ClassName; level: number }> };
+  .post(
+    '/:id/spell-slots/initialize',
+    async ({ params, body, set, user }) => {
+      try {
+        const { classes } = body;
 
-      if (!classes || !Array.isArray(classes) || classes.length === 0) {
-        set.status = 400;
-        return { error: 'classes array is required' };
+        const spellSlots = await SpellSlotsService.initializeSpellSlots(
+          params.id,
+          (user as { userId: string }).userId,
+          classes as any
+        );
+
+        set.status = 201;
+        return spellSlots;
+      } catch (error) {
+        logger.error({ msg: 'SPELL_SLOTS_INIT error', error });
+        return mapSpellSlotsError(set, error, 'Failed to initialize spell slots');
       }
-
-      const spellSlots = await SpellSlotsService.initializeSpellSlots(
-        params.id,
-        (user as { userId: string }).userId,
-        classes
-      );
-
-      set.status = 201;
-      return spellSlots;
-    } catch (error) {
-      logger.error({ msg: 'SPELL_SLOTS_INIT error', error });
-      set.status = error instanceof Error && 'status' in (error as any) ? (error as any).status : 500;
-      return {
-        error: 'Failed to initialize spell slots',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      };
+    },
+    {
+      body: initializeSpellSlotsSchema,
     }
-  });
+  );
 
 // Utility spell slot routes (not character-specific)
 export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
