@@ -8,6 +8,8 @@
 import { WorkOS } from '@workos-inc/node';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
 
+import { logger } from '../lib/logger.js';
+
 // Initialize WorkOS client with API key
 export const workos = new WorkOS(process.env.WORKOS_API_KEY!);
 
@@ -44,7 +46,7 @@ export async function verifyWorkOSToken(accessToken: string) {
 
     // Extract user information from verified token
     if (!payload.sub) {
-      console.error('WorkOS token missing sub claim');
+      logger.error('WorkOS token missing sub claim');
       return null;
     }
 
@@ -53,25 +55,35 @@ export async function verifyWorkOSToken(accessToken: string) {
       email: payload.email as string,
     };
   } catch (error) {
-    // Log specific error for debugging with token details
+    // ⚡ Bolt: Replaced console.error with structured logger and optimized token decoding on error.
     if (error instanceof Error) {
-      // Decode token payload to see expiry (without verifying signature)
       try {
         const parts = accessToken.split('.');
         if (parts.length === 3) {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          const expTime = payload.exp ? new Date(payload.exp * 1000).toISOString() : 'N/A';
-          const nowTime = new Date().toISOString();
-          const tokenAgeSec = payload.iat ? Math.floor((Date.now() / 1000) - payload.iat) : 'N/A';
-          console.error(`WorkOS token verification failed: ${error.message}`);
-          console.error(`  Token exp: ${expTime}, Now: ${nowTime}, Token age: ${tokenAgeSec}s`);
-          console.error(`  Token sub: ${payload.sub}, sid: ${payload.sid}`);
+          logger.error({
+            msg: 'WorkOS token verification failed',
+            error: error.message,
+            tokenData: {
+              exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'N/A',
+              now: new Date().toISOString(),
+              ageSec: payload.iat ? Math.floor(Date.now() / 1000 - payload.iat) : 'N/A',
+              sub: payload.sub,
+              sid: payload.sid,
+            },
+          });
+        } else {
+          logger.error({ msg: 'WorkOS token verification failed: Invalid format', error: error.message });
         }
-      } catch {
-        console.error('WorkOS token verification failed:', error.message);
+      } catch (decodeError) {
+        logger.error({
+          msg: 'WorkOS token verification failed',
+          error: error.message,
+          decodeError: decodeError instanceof Error ? decodeError.message : String(decodeError),
+        });
       }
     } else {
-      console.error('WorkOS token verification failed:', error);
+      logger.error({ msg: 'WorkOS token verification failed', error });
     }
     return null;
   }

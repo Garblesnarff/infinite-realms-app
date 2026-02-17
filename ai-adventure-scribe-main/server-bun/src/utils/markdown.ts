@@ -1,14 +1,16 @@
+import hljs from 'highlight.js/lib/core';
+import bash from 'highlight.js/lib/languages/bash';
+import css from 'highlight.js/lib/languages/css';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import python from 'highlight.js/lib/languages/python';
+import sql from 'highlight.js/lib/languages/sql';
+import typescript from 'highlight.js/lib/languages/typescript';
+import yaml from 'highlight.js/lib/languages/yaml';
 import { marked } from 'marked';
 import sanitizeHtml, { type Attributes } from 'sanitize-html';
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import typescript from 'highlight.js/lib/languages/typescript';
-import python from 'highlight.js/lib/languages/python';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
-import yaml from 'highlight.js/lib/languages/yaml';
-import sql from 'highlight.js/lib/languages/sql';
-import css from 'highlight.js/lib/languages/css';
+
+import { logger } from '../lib/logger.js';
 
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('typescript', typescript);
@@ -39,7 +41,7 @@ renderer.code = function renderCode({ text, lang }: any) {
       detectedLanguage = result.language ? normalizeLanguage(result.language) : 'plaintext';
     }
   } catch (error) {
-    console.warn('Failed to highlight code block', error);
+    logger.warn({ msg: 'Failed to highlight code block', error });
     highlighted = escapeHtml(code);
     detectedLanguage = 'plaintext';
   }

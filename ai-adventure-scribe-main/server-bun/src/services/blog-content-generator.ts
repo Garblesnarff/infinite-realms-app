@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 
+import { logger } from '../lib/logger.js';
+
 interface CommitData {
   hash: string;
   message: string;
@@ -270,7 +272,8 @@ Format your response as JSON with these fields:
         suggestedTags: parsed.suggestedTags || [],
       };
     } catch (error) {
-      console.error('[BlogContentGenerator] Failed to parse AI response:', error);
+      // ⚡ Bolt: Replaced console.error with structured logger and included raw text for debugging.
+      logger.error({ msg: '[BlogContentGenerator] Failed to parse AI response', error, text });
       // Return a basic structure with the raw content
       return {
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} - ${identifier}`,

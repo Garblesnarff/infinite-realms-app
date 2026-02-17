@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 
+import { logger } from '../lib/logger.js';
+
 interface BlogTopic {
   title: string;
   keywords: string[];
@@ -168,7 +170,8 @@ Format your response as JSON:
       const parsed = JSON.parse(jsonMatch[0]);
       return parsed.topics || [];
     } catch (error) {
-      console.error('[BlogIdeation] Failed to parse AI response:', error);
+      // ⚡ Bolt: Replaced console.error with structured logger and included raw text for debugging.
+      logger.error({ msg: '[BlogIdeation] Failed to parse AI response', error, text });
       // Return a fallback topic if parsing fails
       return [{
         title: 'Exploring the Future of Solo RPG Gaming',

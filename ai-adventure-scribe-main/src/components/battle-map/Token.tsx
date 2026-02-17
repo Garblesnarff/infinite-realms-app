@@ -80,7 +80,7 @@ export interface TokenProps {
  * />
  * ```
  */
-export const Token: React.FC<TokenProps> = ({
+export const Token: React.FC<TokenProps> = React.memo(({
   token,
   gridSize,
   isSelected = false,
@@ -369,7 +369,7 @@ export const Token: React.FC<TokenProps> = ({
       </mesh>
     </group>
   );
-};
+});
 
 /**
  * TokenGroup Component
@@ -407,7 +407,7 @@ export interface TokenGroupProps {
   onTokenContextMenu?: (token: TokenData, event: ThreeEvent<MouseEvent>) => void;
 }
 
-export const TokenGroup: React.FC<TokenGroupProps> = ({
+export const TokenGroup: React.FC<TokenGroupProps> = React.memo(({
   tokens,
   gridSize,
   selectedTokenIds = [],
@@ -443,4 +443,7 @@ export const TokenGroup: React.FC<TokenGroupProps> = ({
       })}
     </group>
   );
-};
+});
+
+Token.displayName = 'Token';
+TokenGroup.displayName = 'TokenGroup';
