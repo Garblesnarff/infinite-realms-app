@@ -16,7 +16,7 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt, or, exists, isNotNull } from 'drizzle-orm';
+import { eq, and, lt, or, exists, isNotNull, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client.js';
 import {
@@ -165,6 +165,21 @@ export class MeasurementService {
     const { template, sceneOwnerId } = existing;
     const isSceneOwner = sceneOwnerId === userId;
 
+    // ⚡ Bolt: Pre-parse template values to avoid redundant parsing in the filter loop.
+    const originX = parseFloat(String(template.originX));
+    const originY = parseFloat(String(template.originY));
+    const distance = parseFloat(String(template.distance));
+    const direction = parseFloat(String(template.direction));
+    const width = template.width ? parseFloat(String(template.width)) : null;
+
+    // ⚡ Bolt: Added spatial bounding box check to the SQL query.
+    // This reduces data transfer and in-memory processing by filtering out tokens
+    // that are clearly outside the template's maximum range.
+    const minX = originX - distance;
+    const maxX = originX + distance;
+    const minY = originY - distance;
+    const maxY = originY + distance;
+
     // 🛡️ Sentinel: Get tokens in the same scene, respecting visibility for non-GMs
     const tokensResult = await db
       .select({
@@ -175,6 +190,9 @@ export class MeasurementService {
       .where(
         and(
           eq(tokens.sceneId, template.sceneId),
+          // ⚡ Bolt: Spatial bounding box filter (numeric cast handled by Drizzle/PG)
+          sql`${tokens.positionX} BETWEEN ${minX} AND ${maxX}`,
+          sql`${tokens.positionY} BETWEEN ${minY} AND ${maxY}`,
           isSceneOwner
             ? undefined
             : or(
@@ -194,8 +212,11 @@ export class MeasurementService {
     const sceneTokens = tokensResult.map((r) => r.token);
 
     // Filter tokens based on template geometry
+    // ⚡ Bolt: Pass pre-parsed template values for better performance
+    const parsedTemplate = { originX, originY, distance, direction, width };
+
     const affectedTokens = sceneTokens.filter((token) => {
-      return this.isTokenInTemplate(template, token);
+      return this.isTokenInTemplate(template, token, parsedTemplate);
     });
 
     return {
@@ -213,13 +234,19 @@ export class MeasurementService {
   /**
    * Check if a token is within a template's area
    */
-  private static isTokenInTemplate(template: MeasurementTemplate, token: Token): boolean {
+  private static isTokenInTemplate(
+    template: MeasurementTemplate,
+    token: Token,
+    // ⚡ Bolt: Optional pre-parsed values to avoid redundant parsing
+    parsedTemplate?: { originX: number; originY: number; distance: number; direction: number; width: number | null }
+  ): boolean {
     const tokenX = parseFloat(String(token.positionX));
     const tokenY = parseFloat(String(token.positionY));
-    const originX = parseFloat(String(template.originX));
-    const originY = parseFloat(String(template.originY));
-    const distance = parseFloat(String(template.distance));
-    const direction = parseFloat(String(template.direction));
+
+    const originX = parsedTemplate?.originX ?? parseFloat(String(template.originX));
+    const originY = parsedTemplate?.originY ?? parseFloat(String(template.originY));
+    const distance = parsedTemplate?.distance ?? parseFloat(String(template.distance));
+    const direction = parsedTemplate?.direction ?? parseFloat(String(template.direction));
 
     switch (template.templateType) {
       case 'sphere':
@@ -236,8 +263,8 @@ export class MeasurementService {
 
       case 'line':
       case 'ray': {
-        const width = template.width ? parseFloat(String(template.width)) : 5;
-        return this.isInLine(tokenX, tokenY, originX, originY, distance, direction, width);
+        const width = parsedTemplate?.width ?? (template.width ? parseFloat(String(template.width)) : 5);
+        return this.isInLine(tokenX, tokenY, originX, originY, distance, direction, width ?? 5);
       }
 
       default:
