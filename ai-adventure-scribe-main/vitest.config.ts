@@ -138,6 +138,7 @@ export default defineConfig({
       'src/utils/__tests__/combatDetection.test.ts',
       'src/utils/__tests__/movement-validation.test.ts',
       'src/utils/__tests__/template-calculations.test.ts',
+      'src/features/campaign/components/creation/steps/GenreSelection.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -253,6 +254,7 @@ export default defineConfig({
         'src/utils/movement-validation.ts',
         'src/utils/__tests__/movement-validation.test.ts',
         'src/utils/template-calculations.ts',
+        'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       ],
       exclude: [
         '**/__tests__/**',

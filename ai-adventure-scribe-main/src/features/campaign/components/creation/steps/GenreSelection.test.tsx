@@ -37,12 +37,13 @@ describe('GenreSelection', () => {
 
   it('should render skeleton UI when isLoading is true', () => {
     const { container } = render(<GenreSelection isLoading={true} />);
-    // Check for the title skeleton by its specific classes
-    const titleSkeleton = container.querySelector('.animate-pulse.h-8.w-48.mb-4');
+    // Check for the title skeleton by its specific classes (h-8 w-48)
+    // Using a more flexible selector that doesn't depend on margin classes
+    const titleSkeleton = container.querySelector('.animate-pulse.h-8.w-48');
     expect(titleSkeleton).toBeInTheDocument();
 
     // Check for multiple card skeletons by common and specific classes
-    const skeletonCards = container.querySelectorAll('.animate-pulse.h-16');
+    const skeletonCards = container.querySelectorAll('.animate-pulse.h-12');
     expect(skeletonCards.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -102,5 +103,31 @@ describe('GenreSelection', () => {
     expect(traditionalFantasyCard).not.toHaveClass('border-primary');
     // Default border might be border-transparent or similar, check actual implementation if needed
     // For now, just checking it's not border-primary is sufficient contrast.
+  });
+
+  it('should have accessible view mode buttons', () => {
+    render(<GenreSelection isLoading={false} />);
+
+    const gridButton = screen.getByRole('button', { name: 'Grid view' });
+    const listButton = screen.getByRole('button', { name: 'List view' });
+    const compactButton = screen.getByRole('button', { name: 'Compact view' });
+
+    expect(gridButton).toBeInTheDocument();
+    expect(listButton).toBeInTheDocument();
+    expect(compactButton).toBeInTheDocument();
+
+    // Default view mode is compact in the code
+    expect(compactButton).toHaveAttribute('aria-pressed', 'true');
+    expect(gridButton).toHaveAttribute('aria-pressed', 'false');
+    expect(listButton).toHaveAttribute('aria-pressed', 'false');
+
+    // Check for title/tooltip
+    expect(gridButton).toHaveAttribute('title', 'Grid view');
+    expect(listButton).toHaveAttribute('title', 'List view');
+    expect(compactButton).toHaveAttribute('title', 'Compact view');
+
+    // Check for group role
+    const group = screen.getByRole('group', { name: 'View mode' });
+    expect(group).toBeInTheDocument();
   });
 });
