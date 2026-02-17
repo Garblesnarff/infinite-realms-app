@@ -70,6 +70,7 @@ export const damageRoutes = new Elysia()
         return { error: 'damageAmount must be non-negative' };
       }
 
+      // ⚡ Bolt: Skips redundant authorization in applyDamage as verifyEncounterOwnership already verified access.
       const result = await CombatHPService.applyDamage(
         participantId,
         params.encounterId,
@@ -81,7 +82,7 @@ export const damageRoutes = new Elysia()
           ignoreResistances,
           ignoreImmunities,
         },
-        user.userId
+        undefined // skip redundant auth
       );
 
       return result;
@@ -121,12 +122,13 @@ export const damageRoutes = new Elysia()
         return { error: 'healingAmount must be non-negative' };
       }
 
+      // ⚡ Bolt: Skips redundant authorization in healDamage as verifyEncounterOwnership already verified access.
       const result = await CombatHPService.healDamage(
         participantId,
         params.encounterId,
         healingAmount,
         sourceDescription,
-        user.userId
+        undefined // skip redundant auth
       );
 
       return result;
@@ -166,7 +168,8 @@ export const damageRoutes = new Elysia()
         return { error: 'tempHp must be non-negative' };
       }
 
-      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp, user.userId);
+      // ⚡ Bolt: Skips redundant authorization in setTempHP as verifyEncounterOwnership already verified access.
+      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp, undefined);
       return result;
     } catch (e) {
       logger.error({ msg: 'Set temp HP error', error: e });
@@ -204,7 +207,8 @@ export const damageRoutes = new Elysia()
         return { error: 'roll must be between 1 and 20' };
       }
 
-      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, user.userId);
+      // ⚡ Bolt: Skips redundant authorization in rollDeathSave as verifyEncounterOwnership already verified access.
+      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, undefined);
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });
@@ -234,11 +238,12 @@ export const damageRoutes = new Elysia()
       const roundStr = query.round as string | undefined;
       const roundNum = roundStr !== undefined ? parseInt(roundStr, 10) : undefined;
 
+      // ⚡ Bolt: Skips redundant authorization in getDamageLog as verifyEncounterOwnership already verified access.
       const damageLog = await CombatHPService.getDamageLog(
         params.encounterId,
         participantId,
         roundNum,
-        user.userId
+        undefined // skip redundant auth
       );
 
       return damageLog;

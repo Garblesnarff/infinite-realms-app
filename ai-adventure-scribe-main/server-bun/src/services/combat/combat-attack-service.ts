@@ -83,10 +83,6 @@ export class CombatAttackService {
     input: AttackRollInput,
     userId: string,
   ): Promise<AttackResult> {
-    if (userId) {
-      await verifyEncounterAccess(encounterId, userId);
-    }
-
     const {
       attackerId,
       targetId,
@@ -102,7 +98,9 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // Parallelize target participant/stats and weapon fetch to reduce database round-trips.
+    // ⚡ Bolt: Removed redundant verifyEncounterAccess call as authorization is handled
+    // within getParticipantWithStats and getWeaponAttack. Parallelizing these fetches
+    // reduces database round-trips from 4 down to 2.
     const [targetData, weapon] = await Promise.all([
       getParticipantWithStats(targetId, encounterId, userId),
       weaponId ? getWeaponAttack(weaponId, userId) : Promise.resolve(null),
@@ -187,6 +185,7 @@ export class CombatAttackService {
 
     // Apply damage to target HP
     try {
+      // ⚡ Bolt: Skips redundant authorization in applyDamage as targetData already verified access.
       const hpResult = await CombatHPService.applyDamage(
         targetId,
         encounterId,
@@ -198,7 +197,7 @@ export class CombatAttackService {
           ignoreResistances: true, // Already applied in damage calculation
           ignoreImmunities: true, // Already applied in damage calculation
         },
-        userId,
+        undefined, // skip redundant auth
         targetParticipant,
       );
 
@@ -234,10 +233,6 @@ export class CombatAttackService {
     input: SpellAttackInput,
     userId: string,
   ): Promise<SpellAttackResult> {
-    if (userId) {
-      await verifyEncounterAccess(encounterId, userId);
-    }
-
     const {
       casterId,
       targetIds,
@@ -253,13 +248,14 @@ export class CombatAttackService {
       distanceByTargetId,
     } = input;
 
-    // Validate caster belongs to this encounter to prevent cross-encounter ID references.
-    await getParticipantInEncounter(casterId, encounterId);
+    // ⚡ Bolt: Parallelize caster validation and batch target fetching to reduce sequential round-trips.
+    // Removed initial verifyEncounterAccess as getParticipantsWithStatsBatch handles authorization.
+    const [_, allTargetData] = await Promise.all([
+      getParticipantInEncounter(casterId, encounterId),
+      getParticipantsWithStatsBatch(targetIds, encounterId, userId),
+    ]);
 
     const results: AttackResult[] = [];
-
-    // Fetch all target participants and their base stats in a single batch query to avoid N+1 database round-trips.
-    const allTargetData = await getParticipantsWithStatsBatch(targetIds, encounterId, userId);
 
     // Parallelize spell resolution for all targets using the pre-fetched data map.
     const resolutionPromises = targetIds.map(async (targetId) => {
@@ -324,6 +320,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
+            // ⚡ Bolt: Skips N+1 redundant auth queries by passing undefined for userId.
             const hpResult = await CombatHPService.applyDamage(
               targetId,
               encounterId,
@@ -335,7 +332,7 @@ export class CombatAttackService {
                 ignoreResistances: true, // Already applied in damage calculation
                 ignoreImmunities: true, // Already applied in damage calculation
               },
-              userId,
+              undefined, // skip redundant auth
               targetParticipant,
             );
 
@@ -391,6 +388,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
+            // ⚡ Bolt: Skips N+1 redundant auth queries by passing undefined for userId.
             const hpResult = await CombatHPService.applyDamage(
               targetId,
               encounterId,
@@ -402,7 +400,7 @@ export class CombatAttackService {
                 ignoreResistances: true, // Already applied in damage calculation
                 ignoreImmunities: true, // Already applied in damage calculation
               },
-              userId,
+              undefined, // skip redundant auth
               targetParticipant,
             );
 

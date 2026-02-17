@@ -196,6 +196,7 @@ export class CombatHPService {
     );
 
     // ⚡ Bolt: Parallelize status update and damage logging to reduce sequential database round-trips.
+    // ⚡ Bolt: Skips redundant participantInEncounterExists subquery if data was already verified/pre-fetched.
     const updatePromise = db
       .update(combatParticipantStatus)
       .set({
@@ -207,7 +208,9 @@ export class CombatHPService {
       })
       .where(and(
         eq(combatParticipantStatus.participantId, participantId),
-        this.participantInEncounterExists(participantId, encounterId)
+        preFetchedParticipant
+          ? undefined
+          : this.participantInEncounterExists(participantId, encounterId)
       ))
       .returning();
 

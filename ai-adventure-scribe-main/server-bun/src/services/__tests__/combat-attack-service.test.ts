@@ -165,15 +165,6 @@ describe('CombatAttackService', () => {
         }])
       });
 
-      // Mock verifyEncounterAccess
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ id: mockEncounterId }])
-      });
-
       const result = await service.resolveAttack(mockEncounterId, {
         attackerId: 'attacker-123',
         targetId: mockTargetId,
