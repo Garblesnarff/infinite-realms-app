@@ -289,44 +289,33 @@ export class ConditionsService {
     participantId: string,
     userId?: string
   ): Promise<ParticipantConditionWithDetails[]> {
-    // When user context is provided, explicitly verify access first so callers
-    // get a consistent NOT_FOUND for missing/unauthorized participants.
-    if (userId) {
-      const participantAccess = await db.execute<Record<string, unknown>>(
-        sql`
-          SELECT cp.id
-          FROM combat_participants cp
-          JOIN combat_encounters ce ON ce.id = cp.encounter_id
-          JOIN game_sessions gs ON gs.id = ce.session_id
-          LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
-          LEFT JOIN characters char ON char.id = gs.character_id
-          WHERE cp.id = ${participantId}
-            AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
-          LIMIT 1
-        `
-      );
-
-      if (!participantAccess || participantAccess.length === 0) {
-        throw new NotFoundError('Participant', participantId);
-      }
-    }
-
-    // 🛡️ Sentinel: Incorporate ownership check directly into the query when userId is provided
-    // This prevents IDOR and existence leakage.
+    // ⚡ Bolt: Optimized to consolidate participant verification and condition retrieval into a single query.
+    // This reduces database round-trips from 2 to 1 while maintaining strict ownership checks.
+    // Using a LEFT JOIN from combat_participants ensures we can distinguish between "Participant not found/unauthorized" (0 rows)
+    // and "Participant found but no active conditions" (1 row with null condition fields).
     const result = await db.execute<Record<string, unknown>>(
       sql`
         SELECT
-          cpc.*,
+          cp.id as participant_id,
+          cpc.id as condition_instance_id,
+          cpc.condition_id,
+          cpc.duration_type,
+          cpc.duration_value,
+          cpc.save_dc,
+          cpc.save_ability,
+          cpc.applied_at_round,
+          cpc.expires_at_round,
+          cpc.source_description,
+          cpc.is_active,
+          cpc.created_at,
           cl.name as condition_name,
           cl.description as condition_description,
           cl.mechanical_effects,
           cl.icon_name
-        FROM combat_participant_conditions cpc
-        JOIN conditions_library cl ON cl.id = cpc.condition_id
+        FROM combat_participants cp
         ${
           userId
             ? sql`
-        JOIN combat_participants cp ON cp.id = cpc.participant_id
         JOIN combat_encounters ce ON ce.id = cp.encounter_id
         JOIN game_sessions gs ON gs.id = ce.session_id
         LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
@@ -334,8 +323,9 @@ export class ConditionsService {
         `
             : sql``
         }
-        WHERE cpc.participant_id = ${participantId}
-          AND cpc.is_active = true
+        LEFT JOIN combat_participant_conditions cpc ON cpc.participant_id = cp.id AND cpc.is_active = true
+        LEFT JOIN conditions_library cl ON cl.id = cpc.condition_id
+        WHERE cp.id = ${participantId}
           ${
             userId
               ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
@@ -345,32 +335,42 @@ export class ConditionsService {
       `
     );
 
-    return (result || []).map((row: any) => {
-      const mechanicalEffects = this.parseMechanicalEffects(row.mechanical_effects);
+    if (!result || result.length === 0) {
+      if (userId) {
+        throw new NotFoundError('Participant', participantId);
+      }
+      return [];
+    }
 
-      return {
-        id: row.id,
-        participantId: row.participant_id,
-        conditionId: row.condition_id,
-        durationType: row.duration_type as ConditionDurationType,
-        durationValue: row.duration_value,
-        saveDc: row.save_dc,
-        saveAbility: row.save_ability as SaveAbility | null,
-        appliedAtRound: row.applied_at_round,
-        expiresAtRound: row.expires_at_round,
-        sourceDescription: row.source_description,
-        isActive: row.is_active,
-        createdAt: new Date(row.created_at),
-        condition: {
-          id: row.condition_id,
-          name: row.condition_name,
-          description: row.condition_description,
-          mechanicalEffects,
-          iconName: row.icon_name,
+    // Filter out rows where no condition was found (result of LEFT JOIN when participant is healthy)
+    return (result || [])
+      .filter((row: any) => row.condition_instance_id !== null)
+      .map((row: any) => {
+        const mechanicalEffects = this.parseMechanicalEffects(row.mechanical_effects);
+
+        return {
+          id: row.condition_instance_id,
+          participantId: row.participant_id,
+          conditionId: row.condition_id,
+          durationType: row.duration_type as ConditionDurationType,
+          durationValue: row.duration_value,
+          saveDc: row.save_dc,
+          saveAbility: row.save_ability as SaveAbility | null,
+          appliedAtRound: row.applied_at_round,
+          expiresAtRound: row.expires_at_round,
+          sourceDescription: row.source_description,
+          isActive: row.is_active,
           createdAt: new Date(row.created_at),
-        },
-      };
-    });
+          condition: {
+            id: row.condition_id,
+            name: row.condition_name,
+            description: row.condition_description,
+            mechanicalEffects,
+            iconName: row.icon_name,
+            createdAt: new Date(row.created_at),
+          },
+        };
+      });
   }
 
   /**
@@ -382,26 +382,8 @@ export class ConditionsService {
     participantId: string,
     userId?: string
   ): Promise<AggregatedMechanicalEffects> {
-    // 🛡️ Sentinel: If userId is provided, verify participant access first
-    if (userId) {
-      const participantResult = await db.execute<Record<string, unknown>>(
-        sql`
-          SELECT cp.id FROM combat_participants cp
-          JOIN combat_encounters ce ON ce.id = cp.encounter_id
-          JOIN game_sessions gs ON gs.id = ce.session_id
-          LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
-          LEFT JOIN characters char ON char.id = gs.character_id
-          WHERE cp.id = ${participantId}
-            AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})
-          LIMIT 1
-        `
-      );
-
-      if (!participantResult || participantResult.length === 0) {
-        throw new NotFoundError('Participant', participantId);
-      }
-    }
-
+    // ⚡ Bolt: Removed redundant verification query.
+    // getActiveConditions already performs consolidated verification and data retrieval.
     const conditions = await this.getActiveConditions(participantId, userId);
     return this.calculateAggregatedEffects(conditions);
   }
