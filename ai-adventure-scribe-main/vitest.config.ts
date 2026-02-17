@@ -136,6 +136,7 @@ export default defineConfig({
       'src/utils/__tests__/characterModifiers.test.ts',
       'src/utils/__tests__/combatDetection.test.ts',
       'src/utils/__tests__/movement-validation.test.ts',
+      'src/utils/__tests__/template-calculations.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -249,6 +250,7 @@ export default defineConfig({
         'src/utils/combatDetection.ts',
         'src/utils/movement-validation.ts',
         'src/utils/__tests__/movement-validation.test.ts',
+        'src/utils/template-calculations.ts',
       ],
       exclude: [
         '**/__tests__/**',

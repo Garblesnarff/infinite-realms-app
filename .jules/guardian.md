@@ -91,3 +91,7 @@
 ## 2026-02-12 - [Combat Actions Hook Coverage & Concentration Mocking]
 **Learning:** The `useCombatActions` hook orchestrates complex combat state transitions and integrates with multiple other hooks (AI, Mechanics, Session). Testing revealed that `checkConcentration` from `@/utils/spell-management` must be explicitly mocked to return `true` in general damage tests, as a default mock returning `undefined` causes `!undefined` to evaluate to `true`, resulting in unintended concentration loss.
 **Action:** When testing hooks that manage concentration, always provide a default successful return value for `checkConcentration` in the `beforeEach` block. Use fake timers to test turn advancement in `handleEnemyAttack` as it uses `setTimeout`. Always verify both `include` and `coverage.include` arrays in `vitest.config.ts` are updated for new hook tests.
+
+## 2026-02-12 - [Area-of-Effect Template Calculations Coverage]
+**Learning:** `src/utils/template-calculations.ts` contains critical D&D 5e math for spell templates (cones, spheres, etc.) and grid-based distance rules. Testing it revealed that coordinate generation for shapes like cones and spheres requires precise math (direction corrections, arc steps) to match battle map grid square selection.
+**Action:** Always test AoE utilities with both pixel-perfect coordinate checks and grid-square occupancy checks (`getAffectedGridSquares`). Ensure new tests and source files are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
