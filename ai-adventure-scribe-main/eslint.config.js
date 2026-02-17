@@ -273,6 +273,8 @@ export default tseslint.config(
       'server-bun/src/services/character-folder-service.ts',
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
+      'server-bun/src/services/spell-slots-service.ts',
+      'server-bun/src/services/spell-slots/spell-slot-mechanics.ts',
       'server-bun/src/services/rest-service.ts',
       'server-bun/src/services/combat-hp-service.ts',
       'server-bun/src/services/combat/hp-mechanics.ts',
