@@ -14,7 +14,6 @@
  */
 
 /* eslint-disable max-lines */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
 import { Elysia, t } from 'elysia';
 
@@ -22,6 +21,29 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
+
+import type { Character } from '../../../../db/schema/index.js';
+
+/**
+ * Validation schema for character operations
+ */
+const characterSchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 255 }),
+  description: t.Optional(t.Nullable(t.String())),
+  race: t.Optional(t.Nullable(t.String())),
+  class: t.Optional(t.Nullable(t.String())),
+  level: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+  alignment: t.Optional(t.Nullable(t.String())),
+  experience_points: t.Optional(t.Number({ minimum: 0 })),
+  image_url: t.Optional(t.Nullable(t.String())),
+  avatar_url: t.Optional(t.Nullable(t.String())),
+  appearance: t.Optional(t.Nullable(t.String())),
+  personality_traits: t.Optional(t.Nullable(t.String())),
+  backstory_elements: t.Optional(t.Nullable(t.String())),
+  background: t.Optional(t.Nullable(t.String())),
+});
+
+const updateCharacterSchema = t.Partial(characterSchema);
 
 /**
  * Parse spell strings stored in the database
@@ -35,7 +57,7 @@ function parseSpellString(value: string | string[] | null): string[] {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [value];
     } catch {
-      return value.split(',').map(s => s.trim()).filter(Boolean);
+      return value.split(',').map((s) => s.trim()).filter(Boolean);
     }
   }
   return [];
@@ -45,7 +67,7 @@ function parseSpellString(value: string | string[] | null): string[] {
  * Map character object from database/service (camelCase) to API (snake_case)
  * for backward compatibility with frontend.
  */
-function mapCharacterToApi(character: any): any {
+function mapCharacterToApi(character: Character & { stats?: any }): any {
   if (!character) return null;
 
   return {
@@ -80,18 +102,20 @@ function mapCharacterToApi(character: any): any {
     folder_id: character.folderId,
     created_at: character.createdAt,
     updated_at: character.updatedAt,
-    stats: character.stats ? {
-      id: character.stats.id,
-      character_id: character.stats.characterId,
-      strength: character.stats.strength,
-      dexterity: character.stats.dexterity,
-      constitution: character.stats.constitution,
-      intelligence: character.stats.intelligence,
-      wisdom: character.stats.wisdom,
-      charisma: character.stats.charisma,
-      created_at: character.stats.createdAt,
-      updated_at: character.stats.updatedAt,
-    } : undefined,
+    stats: character.stats
+      ? {
+          id: character.stats.id,
+          character_id: character.stats.characterId,
+          strength: character.stats.strength,
+          dexterity: character.stats.dexterity,
+          constitution: character.stats.constitution,
+          intelligence: character.stats.intelligence,
+          wisdom: character.stats.wisdom,
+          charisma: character.stats.charisma,
+          created_at: character.stats.createdAt,
+          updated_at: character.stats.updatedAt,
+        }
+      : undefined,
   };
 }
 
@@ -133,7 +157,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
       // both userId AND ownerId for comprehensive character access.
       const characters = await CharacterService.listForUser(user!.userId);
-      return (characters || []).map(mapCharacterToApi);
+      return (characters || []).map((c) => mapCharacterToApi(c as any));
     } catch (error) {
       logger.error({ msg: 'CHARACTERS_LIST error', error });
       throw error;
@@ -144,31 +168,36 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters
    * Create a new character
    */
-  .post('/', async ({ body, set, user }) => {
-    try {
-      const charData = body as any;
-      const character = await CharacterService.create(user!.userId, {
-        name: charData.name,
-        description: charData.description,
-        race: charData.race,
-        class: charData.class,
-        level: charData.level,
-        alignment: charData.alignment,
-        experiencePoints: charData.experience_points,
-        imageUrl: charData.image_url,
-        appearance: charData.appearance,
-        personalityTraits: charData.personality_traits,
-        backstoryElements: charData.backstory_elements,
-        background: charData.background,
-      });
+  .post(
+    '/',
+    async ({ body, set, user }) => {
+      try {
+        const character = await CharacterService.create(user!.userId, {
+          name: body.name,
+          description: body.description,
+          race: body.race,
+          class: body.class,
+          level: body.level,
+          alignment: body.alignment,
+          experiencePoints: body.experience_points,
+          imageUrl: body.image_url,
+          appearance: body.appearance,
+          personalityTraits: body.personality_traits,
+          backstoryElements: body.backstory_elements,
+          background: body.background,
+        });
 
-      set.status = 201;
-      return mapCharacterToApi(character);
-    } catch (error) {
-      logger.error({ msg: 'CHARACTER_CREATE error', error });
-      throw error;
+        set.status = 201;
+        return mapCharacterToApi(character as any);
+      } catch (error) {
+        logger.error({ msg: 'CHARACTER_CREATE error', error });
+        throw error;
+      }
+    },
+    {
+      body: characterSchema,
     }
-  })
+  )
 
   /**
    * GET /v1/characters/:id
@@ -176,37 +205,42 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get('/:id', async ({ character }) => {
     // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
-    return mapCharacterToApi(character);
+    return mapCharacterToApi(character as any);
   })
 
   /**
    * PUT /v1/characters/:id
    * Update a character
    */
-  .put('/:id', async ({ params, body, user }) => {
-    try {
-      const charData = body as any;
-      const updated = await CharacterService.update(params.id, user!.userId, {
-        name: charData.name,
-        description: charData.description,
-        race: charData.race,
-        class: charData.class,
-        level: charData.level,
-        alignment: charData.alignment,
-        experiencePoints: charData.experience_points,
-        imageUrl: charData.image_url,
-        appearance: charData.appearance,
-        personalityTraits: charData.personality_traits,
-        backstoryElements: charData.backstory_elements,
-        background: charData.background,
-      });
+  .put(
+    '/:id',
+    async ({ params, body, user }) => {
+      try {
+        const updated = await CharacterService.update(params.id, user!.userId, {
+          name: body.name,
+          description: body.description,
+          race: body.race,
+          class: body.class,
+          level: body.level,
+          alignment: body.alignment,
+          experiencePoints: body.experience_points,
+          imageUrl: body.image_url,
+          appearance: body.appearance,
+          personalityTraits: body.personality_traits,
+          backstoryElements: body.backstory_elements,
+          background: body.background,
+        });
 
-      return mapCharacterToApi(updated);
-    } catch (error) {
-      logger.error({ msg: 'CHARACTER_UPDATE error', error });
-      throw error;
+        return mapCharacterToApi(updated as any);
+      } catch (error) {
+        logger.error({ msg: 'CHARACTER_UPDATE error', error });
+        throw error;
+      }
+    },
+    {
+      body: updateCharacterSchema,
     }
-  })
+  )
 
   /**
    * DELETE /v1/characters/:id

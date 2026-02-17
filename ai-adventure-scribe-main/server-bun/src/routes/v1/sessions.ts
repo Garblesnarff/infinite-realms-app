@@ -10,18 +10,20 @@
  * and existence masking.
  */
 
-import { Elysia } from 'elysia';
-import { authenticateRequest } from '../../lib/auth.js';
-import { sql } from '../../lib/db.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { SessionService } from '../../services/session-service.js';
+import { Elysia, t } from 'elysia';
+
 import { logger } from '../../lib/logger.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { authenticateRequest } from '../../lib/auth.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
+import { SessionService } from '../../services/session-service.js';
+
+import type { GameSession } from '../../../../db/schema/index.js';
 
 /**
  * Helper to map camelCase Session to snake_case for API compatibility
  */
-const mapSessionToApi = (session: any) => ({
+const mapSessionToApi = (session: GameSession): any => ({
   id: session.id,
   campaign_id: session.campaignId,
   character_id: session.characterId,
@@ -38,6 +40,16 @@ const mapSessionToApi = (session: any) => ({
   ruleset: session.ruleset,
   created_at: session.createdAt,
   updated_at: session.updatedAt,
+});
+
+/**
+ * Validation schema for creating a session
+ */
+const createSessionSchema = t.Object({
+  campaign_id: t.Optional(t.Nullable(t.String())),
+  character_id: t.Optional(t.Nullable(t.String())),
+  session_number: t.Optional(t.Number({ minimum: 1 })),
+  status: t.Optional(t.String()),
 });
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -57,32 +69,38 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * Create a new game session
    */
   .use(planRateLimit('default'))
-  .post('/', async ({ body, set, user }) => {
-    const { campaign_id, character_id, session_number } = body as {
-      campaign_id?: string;
-      character_id?: string;
-      session_number?: number;
-    };
+  .post(
+    '/',
+    async ({ body, set, user }) => {
+      const { campaign_id, character_id, session_number, status } = body;
 
-    try {
-      const session = await SessionService.createSession({
-        campaignId: campaign_id,
-        characterId: character_id,
-        sessionNumber: session_number,
-      }, (user as any).userId);
+      try {
+        const session = await SessionService.createSession(
+          {
+            campaignId: campaign_id,
+            characterId: character_id,
+            sessionNumber: session_number,
+            status: status || undefined,
+          },
+          (user as { userId: string }).userId
+        );
 
-      set.status = 201;
-      return mapSessionToApi(session);
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        set.status = 404;
-        return { error: error.message };
+        set.status = 201;
+        return mapSessionToApi(session);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: error.message };
+        }
+        logger.error({ msg: 'SESSION_CREATE error', error });
+        set.status = 500;
+        return { error: 'Failed to create session' };
       }
-      logger.error({ msg: 'SESSION_CREATE error', error });
-      set.status = 500;
-      return { error: 'Failed to create session' };
+    },
+    {
+      body: createSessionSchema,
     }
-  })
+  )
 
   /**
    * GET /v1/sessions/:id
@@ -92,7 +110,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { id } = params;
 
     try {
-      const session = await SessionService.getSessionById(id, (user as any).userId);
+      const session = await SessionService.getSessionById(id, (user as { userId: string }).userId);
       return mapSessionToApi(session);
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -114,7 +132,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { summary } = body as { summary?: string };
 
     try {
-      const session = await SessionService.completeSession(id, (user as any).userId, summary);
+      const session = await SessionService.completeSession(id, (user as { userId: string }).userId, summary);
       return mapSessionToApi(session);
     } catch (error) {
       if (error instanceof NotFoundError) {
