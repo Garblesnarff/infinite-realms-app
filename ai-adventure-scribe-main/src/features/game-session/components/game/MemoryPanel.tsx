@@ -1,5 +1,5 @@
 import { List, ChevronDown, ChevronUp, User, Sword, Menu, ChevronLeft } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
@@ -12,18 +12,19 @@ import type { ExtendedGameSession } from '@/hooks/use-game-session';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { useMemoryContext } from '@/contexts/MemoryContext';
 import { useMemoryFiltering } from '@/hooks/memory/useMemoryFiltering';
 import { useLocalStorage } from '@/hooks/use-local-storage';
-import { Textarea } from '@/components/ui/textarea';
 import { analytics } from '@/services/analytics';
-import { Z_INDEX } from '@/constants/z-index';
 
 interface MemoryPanelProps {
   sessionData: ExtendedGameSession | null;
@@ -82,6 +83,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   );
   const [localSessionNotes, setLocalSessionNotes] = useState('');
   const [panelWidth, setPanelWidth] = useState(panelState.panelWidth);
+  const sessionNotesId = useId();
 
   // Sync panel width with ref on mount
   useEffect(() => {
@@ -171,13 +173,18 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   if (isCollapsed) {
     if (isMobile) {
       return (
-        <div className={`fixed bottom-4 right-4 z-[${Z_INDEX.STICKY}] md:hidden`}>
+        <div
+          className="fixed bottom-4 right-4 md:hidden"
+          style={{ zIndex: Z_INDEX.STICKY }}
+        >
           <Sheet open={isMobileDrawerOpen} onOpenChange={setIsMobileDrawerOpen}>
             <SheetTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleMobileDrawer}
+                aria-label="Open game panel"
+                title="Open game panel"
                 className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow ${
                   isInCombat
                     ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
@@ -218,7 +225,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
                 isMobileDrawerOpen={true}
               />
               <SheetClose asChild>
-                <Button variant="ghost" size="sm" className="absolute left-4 top-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute left-4 top-4"
+                  aria-label="Close panel"
+                  title="Close panel"
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
               </SheetClose>
@@ -229,11 +242,16 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
     }
 
     return (
-      <div className={`hidden md:block fixed right-4 top-1/2 z-[${Z_INDEX.STICKY}]`}>
+      <div
+        className="hidden md:block fixed right-4 top-1/2"
+        style={{ zIndex: Z_INDEX.STICKY }}
+      >
         <Button
           variant="outline"
           size="sm"
           onClick={onToggle}
+          aria-label="Open game panel"
+          title="Open game panel"
           className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow hover:scale-110 ${
             isInCombat
               ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
@@ -302,6 +320,9 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
                 variant={activeTab === 'character' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => handleTabChange('character')}
+                aria-label="Character Sheet"
+                title="Character Sheet"
+                aria-pressed={activeTab === 'character'}
                 className="h-8 px-2"
               >
                 <User className="h-4 w-4" />
@@ -310,6 +331,9 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
                 variant={activeTab === 'memory' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => handleTabChange('memory')}
+                aria-label="Memories"
+                title="Memories"
+                aria-pressed={activeTab === 'memory'}
                 className={`h-8 px-2 transition-all duration-200 ${
                   activeTab === 'memory'
                     ? 'bg-infinite-teal text-white shadow-lg'
@@ -323,6 +347,9 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
                   variant={activeTab === 'combat' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => handleTabChange('combat')}
+                  aria-label="Combat"
+                  title="Combat"
+                  aria-pressed={activeTab === 'combat'}
                   className={`h-8 px-2 transition-all duration-200 ${
                     activeTab === 'combat'
                       ? 'bg-red-500 text-white shadow-lg animate-pulse'
@@ -347,8 +374,9 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
                 setIsExpanded(!isExpanded);
                 if (isExpanded) onToggle();
               }}
-              className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
+              aria-label={isExpanded ? 'Minimize' : 'Expand'}
               title={isExpanded ? 'Minimize' : 'Expand'}
+              className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
             >
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
             </Button>
@@ -356,8 +384,9 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
               variant="ghost"
               size="sm"
               onClick={() => onToggle()}
-              className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
+              aria-label="Close Panel"
               title="Close Panel"
+              className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -383,10 +412,14 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
               >
                 {/* Compact Session Notes Section */}
                 <div className="p-4 border-b border-border">
-                  <h4 className="font-display font-semibold mb-2 text-foreground text-sm">
+                  <Label
+                    htmlFor={sessionNotesId}
+                    className="font-display font-semibold mb-2 text-foreground text-sm block"
+                  >
                     📝 Session Notes
-                  </h4>
+                  </Label>
                   <Textarea
+                    id={sessionNotesId}
                     value={localSessionNotes}
                     onChange={(e) => setLocalSessionNotes(e.target.value)}
                     placeholder="Type your session notes here..."
@@ -487,6 +520,8 @@ const GameSidePanelContent: React.FC<{
   stopDrag,
   isMobileDrawerOpen,
 }) => {
+  const sessionNotesId = useId();
+
   // Mobile content uses the passed-in state and handlers
   const handleSaveNotes = () => {
     if (sessionData) {
@@ -499,7 +534,12 @@ const GameSidePanelContent: React.FC<{
       {/* Mobile Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h3 className="font-semibold text-foreground">Game Panel</h3>
-        <Button variant="ghost" size="sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Back"
+          title="Back"
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
       </div>
@@ -510,7 +550,14 @@ const GameSidePanelContent: React.FC<{
         {activeTab === 'memory' && (
           <div className="flex flex-col h-full">
             <div className="p-4 border-b">
+              <Label
+                htmlFor={sessionNotesId}
+                className="text-sm font-semibold mb-2 block"
+              >
+                📝 Session Notes
+              </Label>
               <Textarea
+                id={sessionNotesId}
                 value={localSessionNotes}
                 onChange={(e) => setLocalSessionNotes(e.target.value)}
                 placeholder="Session notes..."

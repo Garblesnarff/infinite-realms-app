@@ -57,3 +57,7 @@
 ## 2025-06-07 - Campaign Creation Accessibility and Z-Index
 **Learning:** Campaign creation steps (like Genre Selection) use many hardcoded z-indices for visual effects (overlays, hover popups). View mode toggles in these screens are often icon-only and lack state feedback. Brittle Vitest selectors targeting margin classes (e.g., `.mb-4`) cause tests to fail when design tweaks are made.
 **Action:** Migrate `GenreSelection` z-indices to `Z_INDEX` constants. Add `role="group"`, `aria-label`, and `aria-pressed` to view toggles. Update tests to use more robust selectors (e.g., targeting height/width or functional classes like `.animate-pulse`) instead of spacing classes.
+
+## 2025-06-12 - Memory Panel Accessibility and Z-Index Standardization
+**Learning:** The Game Side Panels (MemoryPanel and GameRightPanel) use complex layering that requires Z_INDEX constants for stability. Icon-only buttons for panel controls (Minimize, Expand, Close) and tab triggers require explicit ARIA attributes (aria-label, aria-pressed) to be accessible. Linking labels to textareas via useId improves the accessible name and hit target for session notes.
+**Action:** Always migrate z-index to inline style={{ zIndex: Z_INDEX.CONSTANT }}. Ensure all icon-only buttons have aria-label and title. Use useId for linking Labels to inputs. Correct documentation in constants files when it contradicts established best practices.

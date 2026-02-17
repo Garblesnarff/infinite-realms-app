@@ -45,12 +45,15 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = ({
   // Floating toggle button when collapsed
   return (
     <div
-      className={`fixed right-3 bottom-3 md:top-1/2 md:bottom-auto md:right-6 z-[${Z_INDEX.FLOATING_PANEL}] md:transform md:-translate-y-1/2 transition-all duration-300`}
+      className="fixed right-3 bottom-3 md:top-1/2 md:bottom-auto md:right-6 md:transform md:-translate-y-1/2 transition-all duration-300"
+      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
     >
       <Button
         variant="outline"
         size="sm"
         onClick={onToggle}
+        aria-label="Toggle game panel"
+        title="Toggle game panel"
         className={`rounded-full p-4 h-auto shadow-2xl border-2 hover:scale-110 transition-all duration-300 hover-glow focus-glow touch-manipulation min-h-[48px] min-w-[48px] ${
           combatMode
             ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'

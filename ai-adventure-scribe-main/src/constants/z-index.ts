@@ -23,11 +23,11 @@
  * ```tsx
  * import { Z_INDEX } from '@/constants/z-index';
  *
- * // For Tailwind classes
- * <div className={`fixed z-[${Z_INDEX.MODAL}]`}>Modal Content</div>
+ * // RIGHT - Always use inline styles for z-index (Tailwind JIT may not reliably generate arbitrary values)
+ * <div style={{ zIndex: Z_INDEX.MODAL }}>Modal Content</div>
  *
- * // For inline styles
- * <div style={{ zIndex: Z_INDEX.TOOLTIP }}>Tooltip</div>
+ * // AVOID - Tailwind arbitrary classes with constants are less reliable in this project
+ * <div className={`fixed z-[${Z_INDEX.MODAL}]`}>Modal Content</div>
  * ```
  *
  * Note: CSS files cannot import TypeScript constants.
