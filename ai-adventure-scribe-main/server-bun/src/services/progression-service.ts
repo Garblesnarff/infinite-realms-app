@@ -696,8 +696,9 @@ export class ProgressionService {
     const oldLevel = progression.currentLevel;
     const newTotalXp = this.getXPForLevel(level);
 
-    // Update progression
-    await db
+    // ⚡ Bolt: Parallelize independent database updates for milestone leveling.
+    // Progression update, character level update, and event logging are independent operations.
+    const progressionUpdate = db
       .update(levelProgression)
       .set({
         currentLevel: level,
@@ -719,8 +720,7 @@ export class ProgressionService {
         )
       ));
 
-    // Update character
-    await db
+    const charUpdate = db
       .update(characters)
       .set({
         level,
@@ -732,13 +732,14 @@ export class ProgressionService {
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ));
 
-    // Log milestone event
-    await db.insert(experienceEvents).values({
+    const eventLog = db.insert(experienceEvents).values({
       characterId,
       xpGained: 0,
       source: 'milestone',
       description: reason || `Milestone level set to ${level}`,
     });
+
+    await Promise.all([progressionUpdate, charUpdate, eventLog]);
 
     return { oldLevel, newLevel: level };
   }
