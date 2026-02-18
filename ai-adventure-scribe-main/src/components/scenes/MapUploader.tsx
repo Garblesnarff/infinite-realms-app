@@ -10,8 +10,8 @@
  * - Rotation control
  */
 
-import React, { useState, useRef, useCallback } from 'react';
-import { Upload, X, RotateCw, Grid, Move, ZoomIn, ZoomOut } from 'lucide-react';
+import { Upload, X, RotateCw, Grid, Move, ZoomIn } from 'lucide-react';
+import React, { useState, useRef, useCallback, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,6 +51,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
   const [offsetX, setOffsetX] = useState([0]);
   const [offsetY, setOffsetY] = useState([0]);
   const [rotation, setRotation] = useState(0);
+
+  const scaleId = useId();
+  const offsetXId = useId();
+  const offsetYId = useId();
   const [showGrid, setShowGrid] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -279,11 +283,12 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
             <CardContent className="p-6 space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-semibold">Image Adjustments</h4>
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="group" aria-label="Image adjustment tools">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowGrid(!showGrid)}
+                    aria-pressed={showGrid}
                   >
                     <Grid className="mr-2 h-4 w-4" />
                     {showGrid ? 'Hide Grid' : 'Show Grid'}
@@ -302,54 +307,60 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
               {/* Scale */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={scaleId} className="flex items-center gap-2">
                     <ZoomIn className="h-4 w-4" />
                     Scale
                   </Label>
                   <span className="text-sm text-muted-foreground">{scale[0]}%</span>
                 </div>
                 <Slider
+                  id={scaleId}
                   value={scale}
                   onValueChange={setScale}
                   min={10}
                   max={200}
                   step={1}
+                  aria-label="Scale percentage"
                 />
               </div>
 
               {/* Offset X */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={offsetXId} className="flex items-center gap-2">
                     <Move className="h-4 w-4" />
                     Horizontal Offset
                   </Label>
                   <span className="text-sm text-muted-foreground">{offsetX[0]}px</span>
                 </div>
                 <Slider
+                  id={offsetXId}
                   value={offsetX}
                   onValueChange={setOffsetX}
                   min={-500}
                   max={500}
                   step={1}
+                  aria-label="Horizontal offset in pixels"
                 />
               </div>
 
               {/* Offset Y */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={offsetYId} className="flex items-center gap-2">
                     <Move className="h-4 w-4" />
                     Vertical Offset
                   </Label>
                   <span className="text-sm text-muted-foreground">{offsetY[0]}px</span>
                 </div>
                 <Slider
+                  id={offsetYId}
                   value={offsetY}
                   onValueChange={setOffsetY}
                   min={-500}
                   max={500}
                   step={1}
+                  aria-label="Vertical offset in pixels"
                 />
               </div>
 

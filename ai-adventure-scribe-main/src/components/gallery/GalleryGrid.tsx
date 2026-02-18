@@ -90,7 +90,7 @@ const GalleryGrid: React.FC<GalleryGridProps> = ({ title, images, emptyMessage }
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 border-infinite-purple/30">
-          <DialogHeader className={`relative z-[${Z_INDEX.DROPDOWN}] pb-4`}>
+          <DialogHeader className="relative pb-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-infinite-gold to-infinite-purple bg-clip-text text-transparent">
               {active?.label || active?.name || 'Gallery Preview'}
             </DialogTitle>
