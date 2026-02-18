@@ -33,7 +33,8 @@ const Navigation: React.FC = () => {
   return (
     <nav
       id="app-nav"
-      className={`bg-infinite-dark/95 backdrop-blur supports-[backdrop-filter]:bg-infinite-dark/60 sticky top-0 z-[${Z_INDEX.STICKY}] w-full border-b border-infinite-purple/30`}
+      className="bg-infinite-dark/95 backdrop-blur supports-[backdrop-filter]:bg-infinite-dark/60 sticky top-0 w-full border-b border-infinite-purple/30"
+      style={{ zIndex: Z_INDEX.STICKY }}
     >
       <div className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
