@@ -76,9 +76,10 @@ vi.mock('drizzle-orm', async () => {
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     inArray: vi.fn((a, b) => ({ type: 'inArray', a, b })),
-    sql: {
-      join: vi.fn((args) => args),
-    }
+    sql: Object.assign(
+      vi.fn(() => ({ type: 'sql' })),
+      { join: vi.fn((args) => args) }
+    )
   };
 });
 
@@ -199,6 +200,105 @@ describe('CombatInitiativeService Security', () => {
       );
 
       expect(result.npcId).toBe('npc-good');
+    });
+  });
+
+  describe('rollInitiative Security', () => {
+    it('should throw NotFoundError if the user does not own the participant in rollInitiative', async () => {
+      // Mock verifyParticipantOwnership - fail (empty results means not found/unauthorized)
+      const qb = (db.select() as any);
+      qb._results = [];
+
+      (db.select as any).mockReturnValueOnce(qb);
+
+      await expect(CombatInitiativeService.rollInitiative(
+        mockEncounterId,
+        'other-participant',
+        15,
+        undefined,
+        mockUserId
+      )).rejects.toThrow(NotFoundError);
+    });
+
+    it('should succeed if the user owns the participant in rollInitiative', async () => {
+      // 1. Mock verifyParticipantOwnership - success
+      const qb1 = (db.select() as any);
+      qb1._results = [{ id: 'my-participant' }];
+      (db.select as any).mockReturnValueOnce(qb1);
+
+      // 2. Mock participant fetch for the service logic
+      (db.query.combatParticipants.findFirst as any).mockResolvedValue({
+        id: 'my-participant',
+        encounterId: mockEncounterId,
+        initiativeModifier: 2
+      });
+
+      // Mock findMany for calculateTurnOrder
+      (db.query.combatParticipants.findMany as any).mockResolvedValue([
+        { id: 'my-participant', initiative: 17, initiativeModifier: 2 }
+      ]);
+
+      // 3. Mock update
+      (db.update as any).mockReturnValueOnce({
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'my-participant' }])
+      });
+
+      const result = await CombatInitiativeService.rollInitiative(
+        mockEncounterId,
+        'my-participant',
+        15,
+        undefined,
+        mockUserId
+      );
+
+      expect(result.total).toBe(17); // 15 + 2
+    });
+  });
+
+  describe('reorderInitiative Security', () => {
+    it('should throw NotFoundError if the user does not own the participant in reorderInitiative', async () => {
+      const qb = (db.select() as any);
+      qb._results = [];
+      (db.select as any).mockReturnValueOnce(qb);
+
+      await expect(CombatInitiativeService.reorderInitiative(
+        mockEncounterId,
+        'other-participant',
+        20,
+        mockUserId
+      )).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('removeParticipant Security', () => {
+    it('should return early if the user does not own the participant in removeParticipant', async () => {
+      const qb = (db.select() as any);
+      qb._results = [];
+      (db.select as any).mockReturnValueOnce(qb);
+
+      await CombatInitiativeService.removeParticipant('other-participant', mockUserId);
+
+      // Verify that update was NOT called
+      expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it('should proceed if the user owns the participant in removeParticipant', async () => {
+      const qb = (db.select() as any);
+      qb._results = [{ id: 'my-participant', encounterId: mockEncounterId }];
+      (db.select as any).mockReturnValueOnce(qb);
+
+      // Mock update for removeParticipant
+      (db.update as any).mockReturnValueOnce({
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue({ length: 1 })
+      });
+
+      await CombatInitiativeService.removeParticipant('my-participant', mockUserId);
+
+      // Verify that update was called
+      expect(db.update).toHaveBeenCalled();
     });
   });
 });

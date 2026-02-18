@@ -189,6 +189,41 @@ export class CombatInitiativeService {
   }
 
   /**
+   * 🛡️ Sentinel: Verify user owns the specific participant.
+   * A user owns a participant if:
+   * 1. They are the DM of the campaign (owns the NPC or any character in the campaign)
+   * 2. They own the specific character linked to the participant.
+   * Throws NOT_FOUND for both missing and unauthorized access.
+   */
+  private static async verifyParticipantOwnership(
+    participantId: string,
+    encounterId: string,
+    userId: string
+  ): Promise<void> {
+    const [result] = await db
+      .select({ id: combatParticipants.id })
+      .from(combatParticipants)
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
+      .where(and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId),
+        or(
+          eq(campaigns.userId, userId), // DM can act as anyone in the campaign
+          eq(characters.userId, userId), // Player can act as their own character
+          eq(characters.ownerId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundError('Participant', participantId);
+    }
+  }
+
+  /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
    * @param participantInputs - Array of participants to add
@@ -355,7 +390,9 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<InitiativeRoll> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
+      // This prevents players from rolling initiative for other participants in the encounter.
+      await this.verifyParticipantOwnership(participantId, encounterId, userId);
     }
 
     // Get participant
@@ -555,7 +592,9 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<void> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
+      // This prevents unauthorized manual adjustment of initiative for other participants.
+      await this.verifyParticipantOwnership(participantId, encounterId, userId);
     }
 
     // Update participant initiative
@@ -713,6 +752,8 @@ export class CombatInitiativeService {
     let participant: { id: string; encounterId: string } | undefined;
 
     if (userId) {
+      // 🛡️ Sentinel: Updated to verify ownership of the specific participant, not just encounter access.
+      // This prevents players from removing other participants from combat.
       const [scopedParticipant] = await db
         .select({
           id: combatParticipants.id,
@@ -722,7 +763,7 @@ export class CombatInitiativeService {
         .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
         .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
         .where(and(
           eq(combatParticipants.id, participantId),
           or(
@@ -734,6 +775,8 @@ export class CombatInitiativeService {
         .limit(1);
 
       if (!scopedParticipant) {
+        // If not authorized or not found, we simply return (or could throw NotFoundError)
+        // Match existing behavior of returning early.
         return;
       }
 
