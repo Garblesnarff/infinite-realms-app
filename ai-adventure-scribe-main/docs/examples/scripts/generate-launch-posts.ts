@@ -4,7 +4,7 @@
  * Generate Launch Blog Posts for InfiniteRealms
  *
  * Uses Kimi K2 (via OpenRouter) to generate launch-related blog posts.
- * Run with: bun scripts/generate-launch-posts.ts
+ * Run with: bun docs/examples/scripts/generate-launch-posts.ts
  */
 
 import OpenAI from 'openai';
