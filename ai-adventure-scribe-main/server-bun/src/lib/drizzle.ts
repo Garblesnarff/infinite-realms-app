@@ -11,7 +11,7 @@
 
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from './db.js';
-import * as schema from '../../../db/schema/index.ts';
+import * as schema from '../../../db/schema/index';
 
 /**
  * Drizzle database instance with unified schema

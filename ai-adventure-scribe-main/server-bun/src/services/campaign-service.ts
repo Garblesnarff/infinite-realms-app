@@ -9,8 +9,8 @@
 
 import { and, desc, eq } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
-import { campaigns, type Campaign, type NewCampaign } from '../../../db/schema/index.js';
+import { db } from '../../../db/client';
+import { campaigns, type Campaign, type NewCampaign } from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 export class CampaignService {

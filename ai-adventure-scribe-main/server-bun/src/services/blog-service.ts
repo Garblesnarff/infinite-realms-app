@@ -1,4 +1,4 @@
-import { supabase } from '../../../src/infrastructure/database/index.js';
+import { supabase } from '../../../src/infrastructure/database/index';
 import { logger } from '../lib/logger.js';
 import { createExcerpt, renderMarkdown } from '../utils/markdown.js';
 

@@ -18,7 +18,7 @@
 
 import { eq, and, lt, or, exists, isNotNull, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   measurementTemplates,
   scenes,
@@ -26,7 +26,7 @@ import {
   characters,
   type MeasurementTemplate,
   type Token,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**

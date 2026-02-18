@@ -1,14 +1,14 @@
 import { and, eq, or } from 'drizzle-orm';
 
-import { db } from '../../../../../db/client.js';
+import { db } from '../../../../../db/client';
 import {
   combatEncounters,
   gameSessions,
   campaigns,
   characters,
-} from '../../../../../db/schema/index.js';
+} from '../../../../../db/schema/index';
 
-import type { CombatEncounter, GameSession } from '../../../../../db/schema/index.js';
+import type { CombatEncounter, GameSession } from '../../../../../db/schema/index';
 
 export interface VerificationResult {
   success: boolean;

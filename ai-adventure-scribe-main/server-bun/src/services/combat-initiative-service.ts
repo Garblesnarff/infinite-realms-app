@@ -8,7 +8,7 @@
 
 import { eq, and, sql, or, inArray } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   combatEncounters,
   combatParticipants,
@@ -18,7 +18,7 @@ import {
   npcs,
   type CombatEncounter,
   type CombatParticipant,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
 
 import type {

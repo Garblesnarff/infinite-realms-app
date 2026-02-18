@@ -17,7 +17,7 @@ import {
   blogPostCategories,
   blogPostTags,
   blogTags,
-} from '../../../../db/schema/index.js';
+} from '../../../../db/schema/index';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 import {
   canManagePost,

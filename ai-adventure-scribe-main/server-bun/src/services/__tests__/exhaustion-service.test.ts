@@ -2,12 +2,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { ExhaustionService } from '../exhaustion-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => {
+vi.mock('../../../../db/client', () => {
   const mock: any = {
     query: {
       combatParticipants: {

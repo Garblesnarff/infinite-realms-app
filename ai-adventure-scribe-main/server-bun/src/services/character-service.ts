@@ -13,7 +13,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   characterPermissions,
   characterSpells,
@@ -22,7 +22,7 @@ import {
   classes,
   classSpells,
   spells,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 import type {
@@ -30,7 +30,7 @@ import type {
   CharacterPermission,
   NewCharacter,
   PermissionLevel,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 
 export class CharacterService {
   /**

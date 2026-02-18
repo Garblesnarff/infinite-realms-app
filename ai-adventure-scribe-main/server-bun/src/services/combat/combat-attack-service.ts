@@ -32,7 +32,7 @@ import { NotFoundError, InternalServerError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CombatHPService } from '../combat-hp-service.js';
 
-import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index.js';
+import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
   AttackRollInput,
   AttackResult,

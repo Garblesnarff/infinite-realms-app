@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CharacterService } from '../character-service.js';
-import { db } from '../../../../db/client.js';
-import { characters, characterPermissions } from '../../../../db/schema/index.js';
+import { db } from '../../../../db/client';
+import { characters, characterPermissions } from '../../../../db/schema/index';
 import { TRPCError } from '@trpc/server';
 
 // Mock the database client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       characters: {

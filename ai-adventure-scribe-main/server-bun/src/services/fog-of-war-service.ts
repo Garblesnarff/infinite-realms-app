@@ -12,11 +12,11 @@ import { randomUUID } from 'crypto';
 
 import { and, eq, or } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
-import { characters, fogOfWar, scenes } from '../../../db/schema/index.js';
+import { db } from '../../../db/client';
+import { characters, fogOfWar, scenes } from '../../../db/schema/index';
 import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
 
-import type { FogOfWar } from '../../../db/schema/index.js';
+import type { FogOfWar } from '../../../db/schema/index';
 
 /**
  * Type for a revealed area polygon

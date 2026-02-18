@@ -10,13 +10,13 @@
 
 import { eq, and, asc, or, inArray, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   sceneDrawings,
   scenes,
   type SceneDrawing,
   type NewSceneDrawing,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**

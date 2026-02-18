@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { SceneService } from '../scene-service.js';
 import { NotFoundError } from '../../lib/errors.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => {
+vi.mock('../../../../db/client', () => {
   const mockDb = {
     query: {
       campaigns: {

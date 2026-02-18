@@ -22,7 +22,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
 
-import type { Character } from '../../../../db/schema/index.js';
+import type { Character } from '../../../../db/schema/index';
 
 /**
  * Validation schema for character operations

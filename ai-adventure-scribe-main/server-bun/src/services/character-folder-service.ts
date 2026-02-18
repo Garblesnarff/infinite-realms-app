@@ -11,12 +11,12 @@
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   characterFolders,
   characters,
   type CharacterFolder,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError } from '../lib/errors.js';
 
 export interface CreateFolderData {

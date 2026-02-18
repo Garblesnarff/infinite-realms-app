@@ -17,7 +17,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import * as schema from './schema/index.js';
+import * as schema from './schema/index';
 
 // Create postgres connection
 // Note: This connection is separate from Supabase's connection pool

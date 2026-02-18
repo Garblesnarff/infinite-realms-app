@@ -10,7 +10,7 @@
 
 import { eq, and, desc, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   scenes,
   sceneLayers,
@@ -22,7 +22,7 @@ import {
   type NewSceneLayer,
   type SceneSetting,
   type NewSceneSetting,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**

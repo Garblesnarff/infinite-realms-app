@@ -17,14 +17,14 @@
 
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   campaigns,
   characters,
   combatParticipants,
   combatParticipantStatus,
   npcs,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
 
 /**

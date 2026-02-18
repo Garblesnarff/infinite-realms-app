@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { CharacterFolderService } from '../character-folder-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       characterFolders: {

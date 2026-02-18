@@ -13,7 +13,7 @@ import { TokenService } from '../../services/token-service.js';
 import { broadcastToScene } from '../../ws.js';
 import { router, protectedProcedure } from '../trpc.js';
 
-import type { Token } from '../../../../db/schema/index.js';
+import type { Token } from '../../../../db/schema/index';
 
 /**
  * Zod validation schemas

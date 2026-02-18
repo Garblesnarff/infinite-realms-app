@@ -20,7 +20,7 @@ import { logger } from '../../lib/logger.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { CampaignService } from '../../services/campaign-service.js';
 
-import type { Campaign } from '../../../../db/schema/index.js';
+import type { Campaign } from '../../../../db/schema/index';
 
 /**
  * Validation schemas for campaign requests

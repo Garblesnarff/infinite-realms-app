@@ -12,7 +12,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { CreatureStats } from '../../../../db/schema/index.js';
+import type { CreatureStats } from '../../../../db/schema/index';
 import type { DamageType } from '../../types/combat.js';
 
 /**

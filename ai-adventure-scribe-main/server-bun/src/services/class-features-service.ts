@@ -10,7 +10,7 @@
 
 import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   classFeaturesLibrary,
   characterFeatures,
@@ -21,7 +21,7 @@ import {
   type CharacterFeature,
   type CharacterSubclass,
   type FeatureUsageLog,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import { progressionLogger } from '../lib/logger.js';
 

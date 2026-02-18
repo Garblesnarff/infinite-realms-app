@@ -14,8 +14,8 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import { workos, authConfig } from '../../services/workos.js';
-import { db } from '../../../../db/client.js';
-import { users } from '../../../../db/schema/index.js';
+import { db } from '../../../../db/client';
+import { users } from '../../../../db/schema/index';
 import { eq } from 'drizzle-orm';
 
 /**

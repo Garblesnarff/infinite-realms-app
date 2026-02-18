@@ -11,7 +11,7 @@
 
 import { and, desc, eq, exists, or } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   combatParticipants,
   combatParticipantStatus,
@@ -22,7 +22,7 @@ import {
   characters,
   type CombatParticipantStatus,
   type CombatDamageLog,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
 

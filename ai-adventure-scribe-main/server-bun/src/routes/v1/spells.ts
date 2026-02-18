@@ -18,8 +18,8 @@
 import { inArray } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
-import { db } from '../../../../db/client.js';
-import { classes } from '../../../../db/schema/index.js';
+import { db } from '../../../../db/client';
+import { classes } from '../../../../db/schema/index';
 import {
   getClassSpells,
   getSpellById,

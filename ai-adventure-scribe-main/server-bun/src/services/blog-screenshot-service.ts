@@ -1,5 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
-import { supabase } from '../../../src/infrastructure/database/index.js';
+import { supabase } from '../../../src/infrastructure/database/index';
 import { logger } from '../utils/logger.js';
 
 /**

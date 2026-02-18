@@ -11,8 +11,8 @@
 import { eq, count } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
-import { db } from '../../../../db/client.js';
-import { waitlist } from '../../../../db/schema/index.js';
+import { db } from '../../../../db/client';
+import { waitlist } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';

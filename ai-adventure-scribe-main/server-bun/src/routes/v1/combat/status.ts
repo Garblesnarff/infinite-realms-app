@@ -1,12 +1,12 @@
 /* eslint-disable max-lines, @typescript-eslint/no-explicit-any */
 import { Elysia } from 'elysia';
 
-import { db } from '../../../../../db/client.js';
+import { db } from '../../../../../db/client';
 import {
   gameSessions,
   campaigns,
   characters,
-} from '../../../../../db/schema/index.js';
+} from '../../../../../db/schema/index';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';

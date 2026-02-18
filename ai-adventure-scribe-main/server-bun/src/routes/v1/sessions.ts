@@ -18,7 +18,7 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { SessionService } from '../../services/session-service.js';
 
-import type { GameSession } from '../../../../db/schema/index.js';
+import type { GameSession } from '../../../../db/schema/index';
 
 /**
  * Helper to map camelCase Session to snake_case for API compatibility

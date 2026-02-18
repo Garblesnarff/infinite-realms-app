@@ -10,7 +10,7 @@
 
 import { sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { combatLogger } from '../lib/logger.js';
 import { ConditionMechanics, CONDITION_HIERARCHY, INCOMPATIBLE_CONDITIONS } from './conditions/condition-mechanics.js';

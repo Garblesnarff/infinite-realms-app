@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { and, desc, eq, exists, inArray, or, isNotNull } from 'drizzle-orm';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import {
   combatEncounters,
   combatParticipants,
@@ -23,10 +23,10 @@ import {
   creatureStats,
   characters,
   npcs,
-} from '../../../../db/schema/index.js';
+} from '../../../../db/schema/index';
 import { NotFoundError, InternalServerError } from '../../lib/errors.js';
 
-import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index.js';
+import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type { CreateWeaponAttackInput } from '../../types/combat.js';
 
 /**

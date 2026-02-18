@@ -9,8 +9,8 @@
 
 import { and, eq, exists, or, count, desc, inArray, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
-import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index.js';
+import { db } from '../../../db/client';
+import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
 import { NotFoundError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import { SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 

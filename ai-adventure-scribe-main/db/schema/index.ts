@@ -6,55 +6,55 @@
  */
 
 // Export all user tables and types
-export * from './users.js';
+export * from './users';
 
 // Export all waitlist tables and types
-export * from './waitlist.js';
+export * from './waitlist';
 
 // Export all blog tables and types
-export * from './blog.js';
+export * from './blog';
 
 // Export all game tables and types
-export * from './game.js';
+export * from './game';
 
 // Export all reference tables and types
-export * from './reference.js';
+export * from './reference';
 
 // Export all world-building tables and types
-export * from './world.js';
+export * from './world';
 
 // Export all combat tables and types
-export * from './combat.js';
+export * from './combat';
 
 // Export all rest system tables and types
-export * from './rest.js';
+export * from './rest';
 
 // Export all inventory tables and types
-export * from './inventory.js';
+export * from './inventory';
 
 // Export all progression tables and types
-export * from './progression.js';
+export * from './progression';
 
 // Export all class features tables and types
-export * from './class-features.js';
+export * from './class-features';
 
 // Export all scenes and maps tables and types
-export * from './scenes.js';
+export * from './scenes';
 
 // Export all fog of war and vision tables and types
-export * from './fog-of-war.js';
+export * from './fog-of-war';
 
 // Export all character permissions and folders tables and types
-export * from './character-permissions.js';
+export * from './character-permissions';
 
 // Export all drawings and measurements tables and types
-export * from './drawings.js';
+export * from './drawings';
 
 // Export all token tables and types
-export * from './tokens.js';
+export * from './tokens';
 
 // Export all lore keeper tables and types
-export * from './lore-keeper.js';
+export * from './lore-keeper';
 
 // Export all spell slots tables and types
-export * from './spell-slots.js';
+export * from './spell-slots';

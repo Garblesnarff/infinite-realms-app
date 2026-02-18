@@ -10,14 +10,14 @@
 /* eslint-disable max-lines */
 import { and, desc, eq, exists, or } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   characterHitDice,
   characters,
   restEvents,
   type CharacterHitDice,
   type RestEvent,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 import type {

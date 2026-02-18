@@ -2,11 +2,11 @@
 import { TRPCError } from '@trpc/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { TokenService } from '../token-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => {
+vi.mock('../../../../db/client', () => {
   const mockDb = {
     query: {
       characters: {

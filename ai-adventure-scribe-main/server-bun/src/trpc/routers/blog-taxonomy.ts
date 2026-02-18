@@ -15,7 +15,7 @@ import {
   blogPostCategories,
   blogPostTags,
   blogTags,
-} from '../../../../db/schema/index.js';
+} from '../../../../db/schema/index';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from '../trpc.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 import { canManagePost } from './blog-helpers.js';

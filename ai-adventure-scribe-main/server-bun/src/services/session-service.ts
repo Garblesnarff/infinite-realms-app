@@ -8,8 +8,8 @@
 
 import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
-import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index.js';
+import { db } from '../../../db/client';
+import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index';
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 /**

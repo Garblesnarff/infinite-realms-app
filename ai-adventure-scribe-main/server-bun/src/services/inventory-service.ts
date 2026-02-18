@@ -14,7 +14,7 @@
 
 import { eq, and, desc, or, sql, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   inventoryItems,
   consumableUsageLog,
@@ -23,7 +23,7 @@ import {
   type InventoryItem,
   type NewInventoryItem,
   type ConsumableUsageLog,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import {
   MAX_ATTUNED_ITEMS,

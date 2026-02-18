@@ -12,7 +12,7 @@
 import { TRPCError } from '@trpc/server';
 import { eq, and, desc, or, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   tokens,
   tokenConfigurations,
@@ -23,7 +23,7 @@ import {
   type NewToken,
   type TokenConfiguration,
   type NewTokenConfiguration,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 
 /**
  * Token creation data interface

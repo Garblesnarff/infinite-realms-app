@@ -9,7 +9,7 @@
  * The context is available in all tRPC procedures and middleware.
  */
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import { logger } from '../lib/logger.js';
 import { getBearerToken } from '../lib/jwt.js';
 import { verifyWorkOSToken } from '../services/workos.js';

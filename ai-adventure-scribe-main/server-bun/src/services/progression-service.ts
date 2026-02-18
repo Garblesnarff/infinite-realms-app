@@ -9,16 +9,16 @@
 
 import { eq, and, desc, or, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   experienceEvents,
   levelProgression,
   characters,
   characterStats,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
-import type { ExperienceEvent, LevelProgression } from '../../../db/schema/index.js';
+import type { ExperienceEvent, LevelProgression } from '../../../db/schema/index';
 import type {
   XPSource,
   AwardXPResult,

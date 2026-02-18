@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { SessionService } from '../session-service.js';
 import { NotFoundError } from '../../lib/errors.js';
-import { gameSessions } from '../../../../db/schema/index.js';
+import { gameSessions } from '../../../../db/schema/index';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       gameSessions: {

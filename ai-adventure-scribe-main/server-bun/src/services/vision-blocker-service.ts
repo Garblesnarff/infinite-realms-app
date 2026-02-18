@@ -9,13 +9,13 @@
 
 import { eq, and, asc, exists } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   visionBlockingShapes,
   scenes,
   type VisionBlockingShape,
   type NewVisionBlockingShape,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 /**
