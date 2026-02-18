@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * SelectableCard Component
  *
@@ -14,10 +15,12 @@
  * />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import * as React from 'react';
+
+import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 
 const selectableCardVariants = cva(
@@ -82,16 +85,14 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
       icon,
       badge,
       disabled = false,
-      showPreview = false,
-      previewContent,
+      showPreview: _showPreview = false,
+      previewContent: _previewContent,
       animate = true,
       children,
       ...props
     },
     ref,
   ) => {
-    const [isHovered, setIsHovered] = React.useState(false);
-
     const cardVariants = {
       hidden: { opacity: 0, y: 20, scale: 0.95 },
       visible: {
@@ -105,9 +106,17 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
       },
     };
 
-    const handleClick = () => {
+    const handleClick = (): void => {
       if (!disabled && onSelect) {
         onSelect();
+      }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent): void => {
+      if (disabled) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleClick();
       }
     };
 
@@ -116,7 +125,8 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
         {/* Selection Indicator */}
         {selected && (
           <motion.div
-            className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-infinite-purple text-white shadow-lg"
+            className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-infinite-purple text-white shadow-lg"
+            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
@@ -127,7 +137,10 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
 
         {/* Badge */}
         {badge && !selected && (
-          <div className="absolute top-2 right-2 z-10 rounded-full bg-infinite-gold px-2 py-0.5 text-xs font-semibold text-white shadow-md">
+          <div
+            className="absolute top-2 right-2 rounded-full bg-infinite-gold px-2 py-0.5 text-xs font-semibold text-white shadow-md"
+            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+          >
             {badge}
           </div>
         )}
@@ -184,6 +197,9 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
       return (
         <motion.div
           ref={ref}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          aria-pressed={selected}
           className={cn(
             selectableCardVariants({ variant, size }),
             selected &&
@@ -205,8 +221,7 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
           }
           whileTap={!disabled ? { scale: 0.98 } : undefined}
           onClick={handleClick}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          onKeyDown={handleKeyDown}
           {...props}
         >
           {CardContent}
@@ -217,6 +232,9 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
     return (
       <div
         ref={ref}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-pressed={selected}
         className={cn(
           selectableCardVariants({ variant, size }),
           selected &&
@@ -225,8 +243,7 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
           className,
         )}
         onClick={handleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onKeyDown={handleKeyDown}
         {...props}
       >
         {CardContent}

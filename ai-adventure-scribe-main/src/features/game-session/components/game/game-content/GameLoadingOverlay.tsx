@@ -16,7 +16,7 @@ interface GameLoadingOverlayProps {
 }
 
 export const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({ loadingPhase }) => {
-  const getPhaseMessage = () => {
+  const getPhaseMessage = (): string => {
     switch (loadingPhase) {
       case 'initial':
         return 'Welcome to your infinite realm...';
@@ -33,7 +33,8 @@ export const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({ loadingP
 
   return (
     <div
-      className={`fixed inset-0 z-[${Z_INDEX.LOADING_OVERLAY}] bg-background/90 backdrop-blur-md flex items-center justify-center`}
+      className="fixed inset-0 bg-background/90 backdrop-blur-md flex items-center justify-center"
+      style={{ zIndex: Z_INDEX.LOADING_OVERLAY }}
     >
       <div className="bg-card border border-border/60 rounded-xl p-8 shadow-2xl max-w-md mx-4 text-center">
         <div className="flex flex-col items-center space-y-6">
