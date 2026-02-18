@@ -1,14 +1,17 @@
+/* eslint-disable max-lines */
 /**
  * NPC Roll Display - "Behind the DM Screen"
  * A dramatic, mysterious popup showing auto-executed NPC dice rolls
  * Design: Dark fantasy aesthetic with aged parchment and arcane elements
  */
 
-import React, { useEffect, useState } from 'react';
-import { X, Scroll, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X, Scroll } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
+
+import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 
 interface NPCRollDisplayProps {
@@ -113,8 +116,10 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 flex items-center justify-center p-4"
+        style={{ zIndex: Z_INDEX.MODAL }}
         onClick={onDismiss}
+        aria-label="Behind the DM Screen popup"
       >
         {/* Backdrop with mystical atmosphere */}
         <motion.div
@@ -207,7 +212,8 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = ({
                 <button
                   onClick={onDismiss}
                   className="p-1 rounded-full hover:bg-white/10 transition-colors"
-                  aria-label="Close"
+                  aria-label="Close Behind the DM Screen popup"
+                  title="Close"
                 >
                   <X className="w-4 h-4 text-amber-600/70 hover:text-amber-600" />
                 </button>
