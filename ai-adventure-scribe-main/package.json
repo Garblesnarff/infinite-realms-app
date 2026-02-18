@@ -44,6 +44,8 @@
     "check-deps": "npx depcheck || true",
     "check-unused-exports": "npx ts-prune --paths ./tsconfig.json || true",
     "check-case": "node scripts/check-case-duplicates.js",
+    "check:db-modules": "node scripts/check-db-module-hygiene.js",
+    "check:guardrails": "npm run check-case && npm run check:db-modules",
     "check-dead": "npm run check-deps && npm run check-unused-exports && npm run check-case",
     "security-lint": "node scripts/security-lint.js",
     "docs:serve": "npm run dev"

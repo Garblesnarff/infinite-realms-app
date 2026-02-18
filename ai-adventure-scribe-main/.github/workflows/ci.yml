@@ -38,6 +38,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Guardrails
+        run: npm run check:db-modules
+
       - name: Server tests
         run: npm run server:test
 
