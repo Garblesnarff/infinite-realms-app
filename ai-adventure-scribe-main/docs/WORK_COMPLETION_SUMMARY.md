@@ -155,8 +155,8 @@ Successfully completed all 22 work units from the D&D 5E mechanics implementatio
 
 #### Work Unit 3.9: Frontend Integration Guide
 - **Main Guide**: `docs/FRONTEND_INTEGRATION.md` (42KB, 1,805 lines)
-- **Type Definitions**: `docs/client-types.ts` (15KB, 670 lines)
-- **API Client**: `docs/sample-api-client.ts` (21KB, 782 lines)
+- **Type Definitions**: `docs/examples/frontend-integration/client-types.ts` (15KB, 670 lines)
+- **API Client**: `docs/examples/frontend-integration/sample-api-client.ts` (21KB, 782 lines)
 - **Coverage**: All 6 D&D systems, 12 complete workflows
 
 **Documentation Quality:**
@@ -292,8 +292,8 @@ Successfully completed all 22 work units from the D&D 5E mechanics implementatio
 - `docs/MIGRATION_*.md` (5 files)
 - `docs/REFACTORING_LOG.md`
 - `docs/FRONTEND_INTEGRATION.md`
-- `docs/client-types.ts`
-- `docs/sample-api-client.ts`
+- `docs/examples/frontend-integration/client-types.ts`
+- `docs/examples/frontend-integration/sample-api-client.ts`
 - `docs/OPENAPI_DOCUMENTATION_*.md` (2 files)
 
 ### Test Files
