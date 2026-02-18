@@ -107,7 +107,7 @@ const post: NewBlogPost = {
 
 ## More Examples
 
-See `/db/example-queries.ts` for 10 comprehensive examples including:
+See `/docs/examples/db/example-queries.ts` for comprehensive examples including:
 - Transactions
 - Aggregates
 - Full-text search

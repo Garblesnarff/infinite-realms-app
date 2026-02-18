@@ -9,9 +9,11 @@
 db/
 ├── schema.ts              # Table definitions for blog CMS
 ├── client.ts              # Database client initialization
-├── example-queries.ts     # Example usage and type safety demos
 ├── README.md              # Comprehensive documentation
 └── SETUP_SUMMARY.md       # This file
+
+docs/examples/db/
+└── example-queries.ts      # Example usage and type safety demos
 ```
 
 #### 2. Dependencies Installed
@@ -188,7 +190,7 @@ Opens Drizzle Studio at `https://local.drizzle.studio`
 |------|---------|-------|
 | `db/schema.ts` | Table definitions & types | ~180 |
 | `db/client.ts` | Database connection setup | ~35 |
-| `db/example-queries.ts` | Usage examples | ~180 |
+| `docs/examples/db/example-queries.ts` | Usage examples | ~180 |
 | `db/README.md` | Comprehensive documentation | ~400 |
 | `drizzle.config.ts` | Drizzle Kit configuration | ~15 |
 
