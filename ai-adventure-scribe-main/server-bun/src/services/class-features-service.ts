@@ -8,7 +8,7 @@
  * @module server/services/class-features-service
  */
 
-import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
+import { eq, and, desc, sql, exists, or, isNull, inArray } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -22,8 +22,7 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index';
-import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
-import { progressionLogger } from '../lib/logger.js';
+import { NotFoundError, ConflictError, ValidationError, BusinessLogicError } from '../lib/errors.js';
 
 import type {
   GrantFeatureInput,
@@ -171,83 +170,100 @@ export class ClassFeaturesService {
 
   /**
    * Grant a feature to a character
+   * ⚡ Bolt: Optimized to use a single atomic query for existence and ownership verification.
    */
   static async grantFeature(input: GrantFeatureInput & { userId: string }): Promise<CharacterFeature> {
     const { characterId, featureId, acquiredAtLevel, userId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    // Verify feature exists
-    const feature = await this.getFeatureById(featureId);
-    if (!feature) {
-      throw new NotFoundError('Feature', featureId);
-    }
-
-    // Check if feature is already granted AND verify character ownership
-    const existing = await db.query.characterFeatures.findFirst({
-      where: and(
-        eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
-
-    if (existing) {
-      throw new ConflictError(`Feature ${feature.featureName} already granted to character`, {
-        featureId,
-        characterId,
-      });
-    }
-
-    // Verify ownership before granting
-    const [character] = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .limit(1);
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    // Grant the feature
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // ⚡ Bolt: Combined check for existing feature, character ownership, and library feature data.
+    // This reduces database round-trips from 4 down to 1.
     const [granted] = await db
       .insert(characterFeatures)
       .select(
         db
           .select({
             characterId: sql`${characterId}`,
-            featureId: sql`${featureId}`,
-            usesRemaining: sql`${feature.usesCount || null}`,
+            featureId: classFeaturesLibrary.id,
+            usesRemaining: classFeaturesLibrary.usesCount,
             isActive: sql`true`,
             acquiredAtLevel: sql`${acquiredAtLevel}`,
           })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
+          .from(classFeaturesLibrary)
+          .innerJoin(characters, and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+          .leftJoin(characterFeatures, and(
+            eq(characterFeatures.characterId, characterId),
+            eq(characterFeatures.featureId, classFeaturesLibrary.id)
+          ))
+          .where(and(
+            eq(classFeaturesLibrary.id, featureId),
+            isNull(characterFeatures.id)
+          ))
       )
       .returning();
 
     if (!granted) {
-      throw new NotFoundError('Character', characterId);
+      // If insertion failed, it could be because the feature is already granted,
+      // the character doesn't exist/isn't owned, or the feature ID is invalid.
+      // We perform one fallback check to throw the correct error.
+      const existing = await db.query.characterFeatures.findFirst({
+        where: and(eq(characterFeatures.characterId, characterId), eq(characterFeatures.featureId, featureId))
+      });
+
+      if (existing) {
+        throw new ConflictError('Feature already granted to character', { featureId, characterId });
+      }
+
+      await this.verifyCharacterOwnership(characterId, userId);
+      throw new NotFoundError('Feature', featureId);
     }
+
+    return granted;
+  }
+
+  /**
+   * Grant multiple features to a character in a single batch operation.
+   * ⚡ Bolt: Optimized to use a single INSERT ... SELECT query with joins to verify ownership
+   * and skip already granted features in one round-trip.
+   */
+  static async grantFeaturesBatch(
+    characterId: string,
+    featureIds: string[],
+    acquiredAtLevel: number,
+    userId: string
+  ): Promise<CharacterFeature[]> {
+    if (featureIds.length === 0) return [];
+
+    // 🛡️ Sentinel: Incorporate ownership check and "not already granted" check into a single atomic query.
+    // This reduces O(N) database round-trips to O(1).
+    const granted = await db
+      .insert(characterFeatures)
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: classFeaturesLibrary.id,
+            usesRemaining: classFeaturesLibrary.usesCount,
+            isActive: sql`true`,
+            acquiredAtLevel: sql`${acquiredAtLevel}`,
+          })
+          .from(classFeaturesLibrary)
+          .innerJoin(characters, and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+          .leftJoin(characterFeatures, and(
+            eq(characterFeatures.characterId, characterId),
+            eq(characterFeatures.featureId, classFeaturesLibrary.id)
+          ))
+          .where(and(
+            inArray(classFeaturesLibrary.id, featureIds),
+            isNull(characterFeatures.id) // Only insert if not already granted
+          ))
+      )
+      .returning();
 
     return granted;
   }
@@ -528,21 +544,12 @@ export class ClassFeaturesService {
     });
 
     // Grant subclass features
-    const newFeatures: ClassFeatureLibrary[] = [];
-    for (const feature of subclassFeatures) {
-      try {
-        await this.grantFeature({
-          characterId,
-          featureId: feature.id,
-          acquiredAtLevel: level,
-          userId,
-        });
-        newFeatures.push(feature);
-      } catch (error) {
-        // Skip if already granted
-        progressionLogger.warn({ msg: `Failed to grant feature ${feature.featureName}`, error });
-      }
-    }
+    // ⚡ Bolt: Optimized to grant all subclass features in a single batch operation.
+    // This reduces database round-trips from O(N) to O(1).
+    const featureIds = subclassFeatures.map(f => f.id);
+    await this.grantFeaturesBatch(characterId, featureIds, level, userId);
+
+    const newFeatures = subclassFeatures;
 
     return {
       subclass: subclassName,
@@ -752,32 +759,16 @@ export class ClassFeaturesService {
       });
     }
 
-    const allFeatures = [...classFeatures, ...subclassFeatures];
-    const grantedFeatures: ClassFeatureLibrary[] = [];
+    const allFeatures = [...classFeatures, ...subclassFeatures]
+      .filter(f => !f.featureName.includes('Archetype') &&
+                   !f.featureName.includes('Tradition') &&
+                   !f.featureName.includes('Domain'));
 
-    // Grant each feature
-    for (const feature of allFeatures) {
-      // Skip subclass choice features (just markers)
-      if (feature.featureName.includes('Archetype') ||
-          feature.featureName.includes('Tradition') ||
-          feature.featureName.includes('Domain')) {
-        continue;
-      }
+    // ⚡ Bolt: Optimized to grant all features for the level in a single batch operation.
+    // This reduces database round-trips from O(N) to O(1).
+    const featureIds = allFeatures.map(f => f.id);
+    await this.grantFeaturesBatch(characterId, featureIds, level, userId);
 
-      try {
-        await this.grantFeature({
-          characterId,
-          featureId: feature.id,
-          acquiredAtLevel: level,
-          userId,
-        });
-        grantedFeatures.push(feature);
-      } catch (error) {
-        // Skip if already granted
-        progressionLogger.warn({ msg: `Failed to grant feature ${feature.featureName}`, error });
-      }
-    }
-
-    return grantedFeatures;
+    return allFeatures;
   }
 }

@@ -36,10 +36,10 @@ vi.mock('../../../../db/client', () => ({
         limit: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
         groupBy: vi.fn().mockReturnThis(),
-        then: vi.fn((resolve: any) => resolve([])),
+        then: vi.fn(function(this: any, resolve: any) {
+          return Promise.resolve(this._results || []).then(resolve);
+        }),
       };
-      (mockChain.from as any).mockReturnValue(mockChain);
-      (mockChain.where as any).mockReturnValue(mockChain);
       return mockChain;
     }),
     insert: vi.fn(() => ({
@@ -99,7 +99,15 @@ describe('ClassFeaturesService', () => {
 
   describe('Security: grantFeature', () => {
     it('should throw NotFoundError if character not owned', async () => {
-      // Mock verifyCharacterOwnership
+      // Mock atomic insertion returns nothing
+      (db.insert as any).mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([])
+        })
+      });
+
+      // Mock fallback checks
+      (db.query.characterFeatures.findFirst as any).mockResolvedValue(null);
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
       await expect(ClassFeaturesService.grantFeature({
@@ -111,31 +119,13 @@ describe('ClassFeaturesService', () => {
     });
 
     it('should succeed if character is owned', async () => {
-      // Mock verifyCharacterOwnership
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-      (db.query.classFeaturesLibrary.findFirst as any).mockResolvedValue({ id: mockFeatureId, featureName: 'Test' });
-      (db.query.characterFeatures.findFirst as any).mockResolvedValue(null);
-
-      // Mock sequential calls to db.select
-      // 1. exists() in existing check
-      // 2. Pre-flight check
-      // 3. The sub-select inside insert().select()
-      (db.select as any)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: mockCharacterId }])
-            })
-          })
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-        });
+      const mockChain = {
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+      };
+      (db.select as any).mockReturnValue(mockChain);
 
       // Mock atomic insertion
       (db.insert as any).mockReturnValue({
@@ -156,38 +146,16 @@ describe('ClassFeaturesService', () => {
     });
 
     it('should throw NotFoundError if atomic insertion returns no rows (unauthorized)', async () => {
-      // Mock verifyCharacterOwnership
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-      (db.query.classFeaturesLibrary.findFirst as any).mockResolvedValue({ id: mockFeatureId, featureName: 'Test' });
-      (db.query.characterFeatures.findFirst as any).mockResolvedValue(null);
-
-      // Mock sequential calls to db.select
-      // 1. exists() in existing check
-      // 2. Pre-flight check
-      // 3. The sub-select inside insert().select()
-      (db.select as any)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: mockCharacterId }])
-            })
-          })
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-        });
-
-      // But atomic insertion returns nothing (e.g. race condition or RLS-like failure in subselect)
+      // Mock atomic insertion returns nothing (e.g. race condition or unauthorized)
       (db.insert as any).mockReturnValue({
         select: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([])
         })
       });
+
+      // Mock fallback checks
+      (db.query.characterFeatures.findFirst as any).mockResolvedValue(null);
+      (db.query.characters.findFirst as any).mockResolvedValue(null);
 
       await expect(ClassFeaturesService.grantFeature({
         characterId: mockCharacterId,
@@ -280,11 +248,17 @@ describe('ClassFeaturesService', () => {
 
   describe('Security: logFeatureUsage', () => {
     it('should throw NotFoundError if character not owned', async () => {
-      // Mock pre-flight check
+      // Mock pre-flight check failure
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([])
+        limit: vi.fn().mockImplementation(function(this: any) {
+          this._results = [];
+          return this;
+        }),
+        then: vi.fn(function(this: any, resolve: any) {
+          return Promise.resolve(this._results || []).then(resolve);
+        })
       });
 
       await expect(ClassFeaturesService.logFeatureUsage(
@@ -295,17 +269,18 @@ describe('ClassFeaturesService', () => {
     });
 
     it('should use atomic insertion for logging', async () => {
-      // Mock pre-flight check and insert select
-      (db.select as any)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue([{ id: mockCharacterId }])
+      // Mock pre-flight check success
+      (db.select as any).mockReturnValue({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(function(this: any) {
+          this._results = [{ id: mockCharacterId }];
+          return this;
+        }),
+        then: vi.fn(function(this: any, resolve: any) {
+          return Promise.resolve(this._results || []).then(resolve);
         })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-        });
+      });
 
       // Mock atomic insertion
       (db.insert as any).mockReturnValue({
