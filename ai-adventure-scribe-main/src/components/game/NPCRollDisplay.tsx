@@ -7,7 +7,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Scroll } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
@@ -20,7 +20,7 @@ interface NPCRollDisplayProps {
   autoDismissDelay?: number; // milliseconds, default 3000
 }
 
-export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = ({
+export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(({
   roll,
   onDismiss,
   autoDismissDelay = 3000,
@@ -357,7 +357,7 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = ({
       </motion.div>
     </AnimatePresence>
   );
-};
+});
 
 /**
  * Queue system for displaying multiple NPC rolls sequentially
@@ -366,13 +366,14 @@ export const useNPCRollQueue = () => {
   const [queue, setQueue] = useState<AutoRollResult[]>([]);
   const [currentRoll, setCurrentRoll] = useState<AutoRollResult | null>(null);
 
-  const addRolls = (rolls: AutoRollResult[]) => {
+  // ⚡ Bolt: Stabilize callback identities to prevent unnecessary re-renders of consuming components.
+  const addRolls = useCallback((rolls: AutoRollResult[]) => {
     setQueue((prev) => [...prev, ...rolls]);
-  };
+  }, []);
 
-  const dismissCurrent = () => {
+  const dismissCurrent = useCallback(() => {
     setCurrentRoll(null);
-  };
+  }, []);
 
   useEffect(() => {
     if (!currentRoll && queue.length > 0) {

@@ -33,7 +33,7 @@ const convertNarrationToAISegments = (narrationSegments: NarrationSegment[]) => 
   }));
 };
 
-export const DMChatBubble: React.FC<DMChatBubbleProps> = ({
+export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
   message,
   narrationSegments,
   onOptionSelect,
@@ -325,4 +325,4 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = ({
       </div>
     </div>
   );
-};
+});

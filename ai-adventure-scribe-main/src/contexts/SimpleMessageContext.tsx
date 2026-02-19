@@ -4,7 +4,7 @@
  * Provides a simple MessageContext for SimpleGameChat to work with VoiceHandler
  */
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 
 import type { ChatMessage } from '@/services/ai-service';
 import type { ChatMessage as GameChatMessage } from '@/types/game';
@@ -29,29 +29,37 @@ export const SimpleMessageProvider: React.FC<{
   queueStatus?: 'idle' | 'processing' | 'error' | 'retrying';
   children: ReactNode;
 }> = ({ messages, isLoading, sendMessage, queueStatus = 'idle', children }) => {
-  // Transform messages from ai-service format to VoiceHandler-compatible format
-  const transformedMessages: GameChatMessage[] = messages.map((msg) => ({
-    text: msg.content, // Transform content -> text
-    sender: (msg.role === 'assistant' ? 'dm' : msg.role === 'user' ? 'player' : 'system') as
-      | 'dm'
-      | 'player'
-      | 'system', // Transform role -> sender
-    id: msg.id,
-    timestamp: msg.timestamp.toISOString(),
-    context: {
-      emotion: 'neutral' as const,
-      intent: (msg.role === 'user' ? 'query' : 'response') as 'query' | 'response',
-    },
-    // Pass through narrationSegments for voice segmentation, preserving original types for VoiceDirector
-    narrationSegments: msg.narrationSegments,
-  }));
+  // ⚡ Bolt: Memoize transformed messages to prevent unnecessary re-calculations on parent re-renders.
+  const transformedMessages: GameChatMessage[] = useMemo(
+    () =>
+      messages.map((msg) => ({
+        text: msg.content, // Transform content -> text
+        sender: (msg.role === 'assistant' ? 'dm' : msg.role === 'user' ? 'player' : 'system') as
+          | 'dm'
+          | 'player'
+          | 'system', // Transform role -> sender
+        id: msg.id,
+        timestamp: msg.timestamp.toISOString(),
+        context: {
+          emotion: 'neutral' as const,
+          intent: (msg.role === 'user' ? 'query' : 'response') as 'query' | 'response',
+        },
+        // Pass through narrationSegments for voice segmentation, preserving original types for VoiceDirector
+        narrationSegments: msg.narrationSegments,
+      })),
+    [messages],
+  );
 
-  const value: SimpleMessageContextType = {
-    messages: transformedMessages,
-    isLoading,
-    sendMessage,
-    queueStatus,
-  };
+  // ⚡ Bolt: Memoize context value to prevent unnecessary re-renders of all context consumers.
+  const value: SimpleMessageContextType = useMemo(
+    () => ({
+      messages: transformedMessages,
+      isLoading,
+      sendMessage,
+      queueStatus,
+    }),
+    [transformedMessages, isLoading, sendMessage, queueStatus],
+  );
 
   return <SimpleMessageContext.Provider value={value}>{children}</SimpleMessageContext.Provider>;
 };
