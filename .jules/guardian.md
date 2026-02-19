@@ -95,3 +95,7 @@
 ## 2026-02-12 - [Area-of-Effect Template Calculations Coverage]
 **Learning:** `src/utils/template-calculations.ts` contains critical D&D 5e math for spell templates (cones, spheres, etc.) and grid-based distance rules. Testing it revealed that coordinate generation for shapes like cones and spheres requires precise math (direction corrections, arc steps) to match battle map grid square selection.
 **Action:** Always test AoE utilities with both pixel-perfect coordinate checks and grid-square occupancy checks (`getAffectedGridSquares`). Ensure new tests and source files are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
+
+## 2026-02-12 - [Magic Item Attunement Hook Coverage]
+**Learning:** The `useMagicItemAttunement` hook manages the state of magic item attunement for a character. Testing revealed that it correctly enforces D&D 5e RAW for the 3-item attunement limit and requirement validation (class, race, alignment) via the `magicItemEffects` utility.
+**Action:** When testing hooks that manage character state, always provide a mock `onCharacterUpdate` callback and verify it is called with the expected deep-copied and updated character object. Ensure new hook tests are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
