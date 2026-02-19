@@ -6,11 +6,18 @@
  * Now includes combat detection from DM text and automatic dice roll generation.
  */
 
-import { useEffect, useRef, useCallback, useContext } from 'react';
+/* eslint-disable max-lines */
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { logger } from '../lib/logger';
 
-import type { CombatEvent, CombatAction, CombatParticipant, ActionType } from '@/types/combat';
+import type {
+  CombatEvent,
+  CombatAction,
+  CombatParticipant,
+  ActionType,
+  CombatEncounter,
+} from '@/types/combat';
 import type { ChatMessage } from '@/types/game';
 import type { DetectedCombatAction, PlayerCharacterLike } from '@/utils/combatDetection';
 import type { DiceRoll } from '@/utils/diceUtils';
@@ -50,11 +57,31 @@ interface CombatAIIntegrationProps {
   campaignId?: string;
 }
 
+export interface UseCombatAIIntegrationReturn {
+  validateCombatAction: (
+    action: Partial<CombatAction>,
+    participant: CombatParticipant,
+  ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
+  processCombatEvent: (event: CombatEvent) => Promise<void>;
+  processDMResponse: (
+    dmMessage: ChatMessage,
+    playerCharacter?: PlayerCharacterLike,
+  ) => Promise<{
+    combatDetected: boolean;
+    shouldStartCombat: boolean;
+    shouldEndCombat: boolean;
+    combatMessages: ChatMessage[];
+  }>;
+  createCombatActionRoll: (action: DetectedCombatAction) => Promise<CombatMessageData | null>;
+  isInCombat: boolean;
+  encounter: CombatEncounter | null;
+}
+
 export const useCombatAIIntegration = ({
   sessionId,
-  characterId,
-  campaignId,
-}: CombatAIIntegrationProps) => {
+  characterId: _characterId,
+  campaignId: _campaignId,
+}: CombatAIIntegrationProps): UseCombatAIIntegrationReturn => {
   const combatContext = useCombat();
   const { addMessage } = useMessages(sessionId);
   const lastProcessedAction = useRef<string | null>(null);
@@ -64,19 +91,23 @@ export const useCombatAIIntegration = ({
   const seenActionHashesRef = useRef<Set<string>>(new Set());
   const lastCombatEndAtRef = useRef<number>(0);
   const MIN_COMBAT_CONFIDENCE = Number(
-    (import.meta as any)?.env?.VITE_MIN_COMBAT_CONFIDENCE ?? '0.55',
+    (import.meta as unknown as { env: Record<string, string> })?.env?.VITE_MIN_COMBAT_CONFIDENCE ??
+      '0.55',
   );
 
   if (!combatContext) {
     throw new Error('useCombatAIIntegration must be used within CombatProvider');
   }
 
-  const { state, startCombat, endCombat, addParticipant } = combatContext;
+  const { state, startCombat, endCombat, addParticipant: _addParticipant } = combatContext;
 
-  const combatState = {
-    isInCombat: state.isInCombat,
-    activeEncounter: state.activeEncounter,
-  };
+  const combatState = useMemo(
+    () => ({
+      isInCombat: state.isInCombat,
+      activeEncounter: state.activeEncounter,
+    }),
+    [state.isInCombat, state.activeEncounter],
+  );
 
   // Process DM response for combat content
   const processDMResponse = useCallback(
@@ -192,7 +223,14 @@ export const useCombatAIIntegration = ({
         combatMessages,
       };
     },
-    [state.activeEncounter, startCombat, endCombat, addParticipant],
+    [
+      state.activeEncounter,
+      startCombat,
+      endCombat,
+      MIN_COMBAT_CONFIDENCE,
+      sessionId,
+      state.isInCombat,
+    ],
   );
 
   // Create dice roll for a detected combat action
@@ -318,10 +356,8 @@ export const useCombatAIIntegration = ({
       if (!sessionId) return;
 
       try {
-        // Limit DM narration to ROUND_START events only to reduce AI call frequency
-        const shouldNarrate =
-          shouldTriggerDMNarration(event, combatState.activeEncounter) &&
-          event.type === 'ROUND_START';
+        // Limit DM narration to specific narrative events to balance experience and AI call frequency
+        const shouldNarrate = shouldTriggerDMNarration(event, combatState.activeEncounter);
 
         if (shouldNarrate) {
           // Format the message for DM agent
@@ -382,7 +418,7 @@ export const useCombatAIIntegration = ({
         logger.error('Error processing combat event:', error);
       }
     },
-    [sessionId, characterId, campaignId, combatState, addMessage],
+    [sessionId, combatState, addMessage],
   );
 
   // Validate combat action with rules interpreter
@@ -493,7 +529,7 @@ export const useCombatAIIntegration = ({
 };
 
 // Helper functions
-function shouldTriggerDMNarration(event: CombatEvent, encounter: unknown): boolean {
+function shouldTriggerDMNarration(event: CombatEvent, _encounter: unknown): boolean {
   const narrativeEvents = [
     'COMBAT_START',
     'COMBAT_END',
