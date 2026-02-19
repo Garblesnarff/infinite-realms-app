@@ -10,7 +10,6 @@
  * - Import button with loading state
  */
 
-import React, { useState, useCallback, useRef } from 'react';
 import {
   Upload,
   FileJson,
@@ -22,6 +21,9 @@ import {
   Sword,
   Star,
 } from 'lucide-react';
+import React, { useState, useCallback, useRef, useId } from 'react';
+
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -30,11 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 import { cn } from '@/lib/utils';
@@ -80,6 +79,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
   const trpc = useTRPC();
   const utils = useTRPCUtils();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameInputId = useId();
 
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -248,8 +248,11 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
           {/* File Upload Area */}
           {!characterData && (
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Upload character file"
               className={cn(
-                'border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer',
+                'border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 isDragging
                   ? 'border-infinite-purple bg-infinite-purple/10'
                   : 'border-border hover:border-infinite-purple/50 hover:bg-accent/50'
@@ -258,6 +261,12 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
             >
               <input
                 ref={fileInputRef}
@@ -274,7 +283,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
               <p className="text-sm text-muted-foreground mb-4">
                 or click to browse for a JSON file
               </p>
-              <Button variant="outline" type="button">
+              <Button variant="outline" type="button" tabIndex={-1}>
                 <Upload className="mr-2 h-4 w-4" />
                 Choose File
               </Button>
@@ -283,7 +292,11 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 
           {/* Validation Error */}
           {validationError && (
-            <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <div
+              role="alert"
+              aria-live="polite"
+              className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
+            >
               <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="font-semibold text-sm text-destructive">Validation Error</div>
@@ -298,6 +311,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                   setCharacterData(null);
                 }}
                 className="h-6 w-6"
+                aria-label="Clear validation error"
+                title="Clear validation error"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -308,7 +323,11 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
           {characterData && !validationError && (
             <div className="space-y-4">
               {/* Success indicator */}
-              <div className="flex items-start gap-3 p-4 bg-infinite-teal/10 border border-infinite-teal/30 rounded-lg">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-start gap-3 p-4 bg-infinite-teal/10 border border-infinite-teal/30 rounded-lg"
+              >
                 <Check className="h-5 w-5 text-infinite-teal flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <div className="font-semibold text-sm">File Validated</div>
@@ -324,6 +343,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                     setCharacterData(null);
                   }}
                   className="h-6 w-6"
+                  aria-label="Remove selected file"
+                  title="Remove selected file"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -413,9 +434,9 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 
               {/* Rename Option */}
               <div className="space-y-2">
-                <Label htmlFor="import-name">Character Name (Optional Rename)</Label>
+                <Label htmlFor={nameInputId}>Character Name (Optional Rename)</Label>
                 <Input
-                  id="import-name"
+                  id={nameInputId}
                   placeholder={characterData.character.name}
                   value={importName}
                   onChange={(e) => setImportName(e.target.value)}
