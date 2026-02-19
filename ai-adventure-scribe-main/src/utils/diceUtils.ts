@@ -25,8 +25,8 @@ export function rollDice(
   const { advantage, disadvantage, criticalThreshold = 20, halflingLucky } = options;
 
   // Can't have both advantage and disadvantage
-  const hasAdvantage = advantage && !disadvantage;
-  const hasDisadvantage = disadvantage && !advantage;
+  const hasAdvantage = !!(advantage && !disadvantage);
+  const hasDisadvantage = !!(disadvantage && !advantage);
 
   const results: number[] = [];
   let keptResults: number[] = [];
@@ -100,28 +100,52 @@ export function rollDamage(
 ): DiceRoll[] {
   const damageRolls: DiceRoll[] = [];
 
-  // Parse dice string (basic implementation)
-  const parts = diceString.split('+');
-  let modifier = 0;
+  // Use a more robust regex to find all dice groups and modifiers
+  // Matches "1d8", "+1d4", "-2", "+5", etc.
+  const partRegex = /([+-]?\d*d\d+|[+-]?\d+)/g;
+  const parts = diceString.replace(/\s+/g, '').match(partRegex) || [];
 
-  if (parts.length > 1) {
-    modifier = parseInt(parts[1]) || 0;
+  let totalModifier = 0;
+  const diceGroups: { count: number; dieType: number }[] = [];
+
+  for (const part of parts) {
+    if (part.includes('d')) {
+      const [countStr, dieTypeStr] = part.split('d');
+      // Handle cases like "d20", "+d20", "-d20"
+      let count = 1;
+      if (countStr && countStr !== '+' && countStr !== '-') {
+        count = parseInt(countStr);
+      } else if (countStr === '-') {
+        count = -1;
+      }
+
+      const dieType = parseInt(dieTypeStr);
+      diceGroups.push({ count, dieType });
+    } else {
+      totalModifier += parseInt(part);
+    }
   }
 
-  const dicePart = parts[0];
-  const diceMatch = dicePart.match(/(\d+)d(\d+)/);
-
-  if (diceMatch) {
-    let count = parseInt(diceMatch[1]);
-    const dieType = parseInt(diceMatch[2]);
+  // Roll each dice group
+  for (let i = 0; i < diceGroups.length; i++) {
+    const group = diceGroups[i];
+    let count = group.count;
 
     // Critical hits double dice, not modifiers
     if (critical) {
       count *= 2;
     }
 
-    const roll = rollDice(dieType, count, modifier, options);
+    // Apply the total modifier only to the first dice roll to avoid double-counting
+    const modifier = i === 0 ? totalModifier : 0;
+    const roll = rollDice(group.dieType, count, modifier, options);
     damageRolls.push(roll);
+  }
+
+  // Handle case where there are ONLY modifiers (no dice)
+  if (diceGroups.length === 0 && totalModifier !== 0) {
+    // Return a "roll" of 0 with the modifier
+    damageRolls.push(rollDice(0, 0, totalModifier, options));
   }
 
   return damageRolls;
@@ -252,23 +276,43 @@ export function parseDiceString(diceString: string): {
   count: number;
   modifier: number;
 } {
-  const parts = diceString.split('+');
-  let modifier = 0;
+  const partRegex = /([+-]?\d*d\d+|[+-]?\d+)/g;
+  const parts = diceString.replace(/\s+/g, '').match(partRegex) || [];
 
-  if (parts.length > 1) {
-    modifier = parseInt(parts[1]) || 0;
+  let totalModifier = 0;
+  let firstDiceGroup: { count: number; dieType: number } | null = null;
+
+  for (const part of parts) {
+    if (part.includes('d')) {
+      const [countStr, dieTypeStr] = part.split('d');
+      let count = 1;
+      if (countStr && countStr !== '+' && countStr !== '-') {
+        count = parseInt(countStr);
+      } else if (countStr === '-') {
+        count = -1;
+      }
+      const dieType = parseInt(dieTypeStr);
+
+      if (!firstDiceGroup) {
+        firstDiceGroup = { count, dieType };
+      } else {
+        // For multiple dice groups, we can only return one in this interface.
+        // We'll treat subsequent dice as their average value added to the modifier
+        // to give a somewhat sensible "modifier" if this is used for simple math.
+        totalModifier += Math.floor((count * (dieType + 1)) / 2);
+      }
+    } else {
+      totalModifier += parseInt(part);
+    }
   }
 
-  const dicePart = parts[0];
-  const diceMatch = dicePart.match(/(\d+)d(\d+)/);
-
-  if (diceMatch) {
+  if (firstDiceGroup) {
     return {
-      count: parseInt(diceMatch[1]),
-      dieType: parseInt(diceMatch[2]),
-      modifier,
+      count: firstDiceGroup.count,
+      dieType: firstDiceGroup.dieType,
+      modifier: totalModifier,
     };
   }
 
-  return { count: 1, dieType: 20, modifier: 0 };
+  return { count: 1, dieType: 20, modifier: totalModifier || 0 };
 }
