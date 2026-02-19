@@ -17,8 +17,8 @@ import {
   blogTags,
 } from '../../../../db/schema/index';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from '../trpc.js';
-import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 import { canManagePost } from './blog-helpers.js';
+import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 
 export const blogTaxonomyRouter = router({
   /**
@@ -27,29 +27,25 @@ export const blogTaxonomyRouter = router({
   getCategories: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
-      const categories = await ctx.db
-        .select()
-        .from(blogCategories)
-        .orderBy(blogCategories.name);
-
       if (!input.includeCount) {
-        return categories;
+        return await ctx.db.select().from(blogCategories).orderBy(blogCategories.name);
       }
 
-      // Add post counts - batched to avoid N+1 queries
-      const counts = await ctx.db
+      // ⚡ Bolt: Consolidated category list and post counts into a single joined query.
+      // This reduces database round-trips from 2 to 1 and improves performance.
+      const results = await ctx.db
         .select({
-          categoryId: blogPostCategories.categoryId,
-          count: sql<number>`count(*)::int`,
+          category: blogCategories,
+          postCount: sql<number>`count(${blogPostCategories.postId})::int`,
         })
-        .from(blogPostCategories)
-        .groupBy(blogPostCategories.categoryId);
+        .from(blogCategories)
+        .leftJoin(blogPostCategories, eq(blogCategories.id, blogPostCategories.categoryId))
+        .groupBy(blogCategories.id)
+        .orderBy(blogCategories.name);
 
-      const countMap = new Map(counts.map((c) => [c.categoryId, c.count]));
-
-      return categories.map((category) => ({
-        ...category,
-        postCount: countMap.get(category.id) ?? 0,
+      return results.map((r) => ({
+        ...r.category,
+        postCount: r.postCount,
       }));
     }),
 
@@ -59,26 +55,25 @@ export const blogTaxonomyRouter = router({
   getTags: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
-      const tags = await ctx.db.select().from(blogTags).orderBy(blogTags.name);
-
       if (!input.includeCount) {
-        return tags;
+        return await ctx.db.select().from(blogTags).orderBy(blogTags.name);
       }
 
-      // Add post counts - batched to avoid N+1 queries
-      const counts = await ctx.db
+      // ⚡ Bolt: Consolidated tag list and post counts into a single joined query.
+      // This reduces database round-trips from 2 to 1 and improves performance.
+      const results = await ctx.db
         .select({
-          tagId: blogPostTags.tagId,
-          count: sql<number>`count(*)::int`,
+          tag: blogTags,
+          postCount: sql<number>`count(${blogPostTags.postId})::int`,
         })
-        .from(blogPostTags)
-        .groupBy(blogPostTags.tagId);
+        .from(blogTags)
+        .leftJoin(blogPostTags, eq(blogTags.id, blogPostTags.tagId))
+        .groupBy(blogTags.id)
+        .orderBy(blogTags.name);
 
-      const countMap = new Map(counts.map((c) => [c.tagId, c.count]));
-
-      return tags.map((tag) => ({
-        ...tag,
-        postCount: countMap.get(tag.id) ?? 0,
+      return results.map((r) => ({
+        ...r.tag,
+        postCount: r.postCount,
       }));
     }),
 
