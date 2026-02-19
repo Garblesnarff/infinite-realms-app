@@ -255,7 +255,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/RaceSelection.tsx', // 766 lines
       'src/components/ui/sidebar.tsx', // 761 lines
       'src/services/ai/prompts/game-context-prompts.ts',
-      'src/services/ai/prompts/rules-prompts.ts',
+      'src/services/ai/prompts/combat-rules-prompts.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
       'src/utils/lighting-integration.ts',

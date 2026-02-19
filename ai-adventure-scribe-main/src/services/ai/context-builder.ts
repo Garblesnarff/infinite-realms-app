@@ -1,4 +1,5 @@
 import { ContextBuilderPrompts } from './context-builder-prompts';
+import { CombatRulesPrompts } from './prompts/combat-rules-prompts';
 import { RulesPrompts } from './prompts/rules-prompts';
 
 import type { Memory } from '../memory-manager';
@@ -27,9 +28,9 @@ export class ContextBuilder {
     }
 
     if (combatDetection) {
-      contextPrompt += RulesPrompts.formatCombatContext(combatDetection);
+      contextPrompt += CombatRulesPrompts.formatCombatContext(combatDetection);
       if (combatDetection.isCombat) {
-        contextPrompt += RulesPrompts.buildCombatRollRequirementsSection();
+        contextPrompt += CombatRulesPrompts.buildCombatRollRequirementsSection();
       }
     }
 
