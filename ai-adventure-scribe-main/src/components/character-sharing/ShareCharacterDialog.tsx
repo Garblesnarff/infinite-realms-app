@@ -9,18 +9,21 @@
  * - Current permissions list with manage options
  */
 
-import React, { useState, useEffect } from 'react';
 import {
   Share2,
   Search,
   UserPlus,
-  X,
   Eye,
   Edit,
   Crown,
   Shield,
   Trash2,
 } from 'lucide-react';
+import React, { useState, useId } from 'react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +31,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -35,20 +41,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
@@ -116,6 +108,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
   const { toast } = useToast();
   const trpc = useTRPC();
   const utils = useTRPCUtils();
+  const tokenControlId = useId();
+  const sheetEditId = useId();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -268,16 +262,22 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  aria-label="Search users"
                 />
               </div>
 
               {/* User suggestions */}
               {searchQuery && (
-                <div className="border rounded-md max-h-48 overflow-auto">
+                <div
+                  className="border rounded-md max-h-48 overflow-auto"
+                  role="listbox"
+                  aria-label="User suggestions"
+                >
                   {filteredUsers.length > 0 ? (
                     filteredUsers.map((user) => (
                       <button
                         key={user.id}
+                        role="option"
                         className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between"
                         onClick={() => {
                           setSelectedUserId(user.id);
@@ -306,7 +306,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 value={permissionLevel}
                 onValueChange={(value) => setPermissionLevel(value as PermissionLevel)}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Select permission level">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -352,12 +352,12 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
               <div className="space-y-3 pt-2 border-t">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="token-control"
+                    id={tokenControlId}
                     checked={canControlToken}
                     onCheckedChange={(checked) => setCanControlToken(checked === true)}
                   />
                   <Label
-                    htmlFor="token-control"
+                    htmlFor={tokenControlId}
                     className="text-sm font-normal cursor-pointer"
                   >
                     Can control character token in battle maps
@@ -365,11 +365,11 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="sheet-edit"
+                    id={sheetEditId}
                     checked={canEditSheet}
                     onCheckedChange={(checked) => setCanEditSheet(checked === true)}
                   />
-                  <Label htmlFor="sheet-edit" className="text-sm font-normal cursor-pointer">
+                  <Label htmlFor={sheetEditId} className="text-sm font-normal cursor-pointer">
                     Can edit character sheet details
                   </Label>
                 </div>
@@ -424,7 +424,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             handleUpdatePermission(permission.userId, value as PermissionLevel)
                           }
                         >
-                          <SelectTrigger className="w-32">
+                          <SelectTrigger className="w-32" aria-label="Change permission level">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -440,6 +440,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                           onClick={() => handleRevoke(permission.userId)}
                           disabled={revokeMutation.isPending}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          aria-label="Revoke access"
+                          title="Revoke access"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
