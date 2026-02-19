@@ -560,7 +560,7 @@ SELECT * FROM game_sessions WHERE status = 'active';
 ### Test Scripts
 
 - `/home/wonky/ai-adventure-scribe-main/scripts/test-session-constraints.js`
-- `/home/wonky/ai-adventure-scribe-main/scripts/test-archival.sql`
+- `/home/wonky/ai-adventure-scribe-main/docs/examples/sql/test-archival.sql`
 - `/home/wonky/ai-adventure-scribe-main/src/agents/messaging/services/storage/__tests__/indexeddb-cleanup.test.ts`
 
 ### Comprehensive Guides
