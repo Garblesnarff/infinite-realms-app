@@ -23,6 +23,7 @@ import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { trpc } from '@/infrastructure/api/trpc-client';
 import { cn } from '@/lib/utils';
 import { GridType } from '@/types/scene';
@@ -248,11 +249,12 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               >
                 <div
                   className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative z-10',
+                    'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative',
                     index < currentStep && 'bg-electricCyan text-white',
                     index === currentStep && 'bg-infinite-purple text-white ring-4 ring-infinite-purple/20',
                     index > currentStep && 'bg-muted text-muted-foreground',
                   )}
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
                 >
                   {index < currentStep ? <Check className="h-5 w-5" /> : index + 1}
                 </div>

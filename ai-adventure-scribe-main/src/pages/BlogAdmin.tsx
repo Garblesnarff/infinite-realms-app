@@ -2,14 +2,16 @@ import { FileText, FolderTree, Tags, Image, LogOut } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+import { clearBlogAdminToken } from './BlogAdminLogin';
+
 import { BlogCategoryManager } from '@/components/blog-admin/blog-category-manager';
 import { BlogMediaManager } from '@/components/blog-admin/blog-media-manager';
 import { BlogPostsList } from '@/components/blog-admin/blog-posts-list';
 import { BlogTagManager } from '@/components/blog-admin/blog-tag-manager';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
-import { clearBlogAdminToken } from './BlogAdminLogin';
 
 const BlogAdmin: React.FC = () => {
   const { isBlogAdmin, refreshBlogRole } = useAuth();
@@ -43,7 +45,7 @@ const BlogAdmin: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" style={{ zIndex: Z_INDEX.STICKY }}>
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" />

@@ -5,13 +5,14 @@
  * Route: /explore
  */
 
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Sparkles } from 'lucide-react';
 
 import { StarterCampaignCard } from '@/components/campaigns/StarterCampaignCard';
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
 export const ExploreGalleryPage: React.FC = () => {
@@ -29,7 +30,7 @@ export const ExploreGalleryPage: React.FC = () => {
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900/20 to-gray-900">
         {/* Header */}
-        <header className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-lg border-b border-gray-800">
+        <header className="sticky top-0 bg-gray-900/80 backdrop-blur-lg border-b border-gray-800" style={{ zIndex: Z_INDEX.STICKY }}>
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
               <ArrowLeft className="w-5 h-5" />

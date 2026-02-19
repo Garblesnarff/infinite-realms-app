@@ -1,5 +1,7 @@
-import React from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import React from 'react';
+
+import { Z_INDEX } from '@/constants/z-index';
 
 export const HeroSection: React.FC = () => {
   /**
@@ -41,7 +43,7 @@ export const HeroSection: React.FC = () => {
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
       {/* Background Image with Overlay */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0" style={{ zIndex: Z_INDEX.BASE }}>
         <img
           src="/hero-bg-v2.jpg"
           alt="Ancient ruins glowing with purple magic"
@@ -52,7 +54,7 @@ export const HeroSection: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 container mx-auto px-4 text-center">
+      <div className="relative container mx-auto px-4 text-center" style={{ zIndex: Z_INDEX.DROPDOWN }}>
 
         {/* Beta Pill */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30 backdrop-blur-md mb-8 animate-fade-in-up">

@@ -65,3 +65,7 @@
 ## 2025-06-14 - Gallery Accessibility and Component Redundancy
 **Learning:** Interactive gallery items implemented as `div` elements require full keyboard support (role="button", tabIndex, onKeyDown) and visible focus states (focus-visible) to be accessible. The project contains duplicate component structures in `src/components/` and `src/features/` (e.g., `GalleryGrid.tsx`), which can lead to inconsistent UX if only one is updated.
 **Action:** Always verify if a component has a duplicate in `src/features/` or `src/components/` and synchronize accessibility and z-index fixes across both. Use `e.preventDefault()` in keyboard handlers for the Space key to prevent scrolling.
+
+## 2025-06-16 - Z-Index Standardization and Sticky Header Layering
+**Learning:** Hardcoded z-index classes like `z-50` for sticky headers can conflict with the centralized `Z_INDEX` hierarchy, potentially causing headers to appear above modal backdrops (which also use 50). Standardizing to `Z_INDEX.STICKY` (30) ensures headers remain below modals while still staying on top of base content.
+**Action:** Migrate hardcoded `z-index` classes to `style={{ zIndex: Z_INDEX.CONSTANT }}`. For sticky headers, use `Z_INDEX.STICKY`. For existing `z-10` values, map to `Z_INDEX.DROPDOWN` to maintain behavior while standardizing. Add complex files (like `SceneCreationWizard.tsx`) to `eslint.config.js` overrides if they exceed the 200-line limit to ensure build passes after minor changes.
