@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+
 import logger from '@/lib/logger';
 
 // ===========================
@@ -85,7 +86,8 @@ export interface UseHotkeysReturn {
 /**
  * Check if element is a text input field
  */
-function defaultIsInputField(element: HTMLElement): boolean {
+function defaultIsInputField(element: HTMLElement | null): boolean {
+  if (!element || !element.tagName) return false;
   const tagName = element.tagName.toLowerCase();
   return (
     tagName === 'input' ||
@@ -230,7 +232,7 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
       if (!enabled) return;
 
       // Check if in input field
-      const target = event.target as HTMLElement;
+      const target = event.target as HTMLElement | null;
       if (!allowInInput && isInputField(target)) {
         return;
       }
