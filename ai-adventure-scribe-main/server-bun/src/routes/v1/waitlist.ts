@@ -14,6 +14,7 @@ import { Elysia } from 'elysia';
 import { db } from '../../../../db/client';
 import { waitlist } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
+import { requireAdmin } from '../../middleware/admin.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 import { sendWaitlistConfirmation } from '../../services/email-service.js';
@@ -112,6 +113,7 @@ export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
    * Get waitlist stats (auth-protected, admin only)
    */
   .use(requireAuth)
+  .use(requireAdmin)
   .use(createSimpleRateLimit({ windowMs: 60_000, max: 10, key: 'waitlist:stats' }))
   .get('/stats', async ({ user, set }) => {
     if (!user) {
