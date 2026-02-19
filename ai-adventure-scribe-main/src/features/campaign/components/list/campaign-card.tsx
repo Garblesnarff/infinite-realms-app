@@ -1,5 +1,6 @@
+/* eslint-disable max-lines */
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Trash2, Play, AlertTriangle } from 'lucide-react';
+import { Trash2, Play } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,6 +26,7 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { cn } from '@/lib/utils';
 
 interface CampaignCardProps {
   campaign: {
@@ -46,7 +48,11 @@ interface CampaignCardProps {
  * Displays individual campaign information in a card format
  * @param campaign - Campaign data to display
  */
-const CampaignCardComponent = ({ campaign, isFeatured = false, coverImage }: CampaignCardProps) => {
+const CampaignCardComponent = ({
+  campaign,
+  isFeatured: _isFeatured = false,
+  coverImage,
+}: CampaignCardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
