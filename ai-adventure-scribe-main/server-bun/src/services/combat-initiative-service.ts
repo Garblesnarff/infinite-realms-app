@@ -237,9 +237,6 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<CombatState> {
     if (userId) {
-      await this.verifySessionAccess(sessionId, userId);
-
-      // ⚡ Bolt: Prevent cross-tenant references by validating all character-linked participants in batch.
       const characterIds = [
         ...new Set(
           participantInputs
@@ -247,8 +244,6 @@ export class CombatInitiativeService {
             .filter((id): id is string => Boolean(id))
         ),
       ];
-      await this.verifyCharactersAccessBatch(characterIds, userId);
-
       const npcIds = [
         ...new Set(
           participantInputs
@@ -256,7 +251,13 @@ export class CombatInitiativeService {
             .filter((id): id is string => Boolean(id))
         ),
       ];
-      await this.verifyNPCsAccessBatch(npcIds, userId);
+
+      // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
+      await Promise.all([
+        this.verifySessionAccess(sessionId, userId),
+        this.verifyCharactersAccessBatch(characterIds, userId),
+        this.verifyNPCsAccessBatch(npcIds, userId),
+      ]);
     }
 
     // Create the encounter
@@ -340,13 +341,14 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<CombatParticipant> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
-      if (input.characterId) {
-        await this.verifyCharacterAccess(input.characterId, userId);
-      }
-      if (input.npcId) {
-        await this.verifyNPCAccess(input.npcId, userId);
-      }
+      // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
+      await Promise.all([
+        this.verifyEncounterAccess(encounterId, userId),
+        input.characterId
+          ? this.verifyCharacterAccess(input.characterId, userId)
+          : Promise.resolve(),
+        input.npcId ? this.verifyNPCAccess(input.npcId, userId) : Promise.resolve(),
+      ]);
     }
 
     // Roll initiative (d20 + modifier)
@@ -389,19 +391,16 @@ export class CombatInitiativeService {
     modifier?: number,
     userId?: string
   ): Promise<InitiativeRoll> {
-    if (userId) {
-      // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
-      // This prevents players from rolling initiative for other participants in the encounter.
-      await this.verifyParticipantOwnership(participantId, encounterId, userId);
-    }
-
-    // Get participant
-    const participant = await db.query.combatParticipants.findFirst({
-      where: (cp, { eq, and }) => and(
-        eq(cp.id, participantId),
-        eq(cp.encounterId, encounterId)
-      ),
-    });
+    // ⚡ Bolt: Parallelize ownership verification and participant retrieval to reduce latency
+    const [_, participant] = await Promise.all([
+      userId
+        ? this.verifyParticipantOwnership(participantId, encounterId, userId)
+        : Promise.resolve(),
+      db.query.combatParticipants.findFirst({
+        where: (cp, { eq, and }) =>
+          and(eq(cp.id, participantId), eq(cp.encounterId, encounterId)),
+      }),
+    ]);
 
     if (!participant) {
       throw new NotFoundError('Participant', participantId);
