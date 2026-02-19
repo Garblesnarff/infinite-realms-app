@@ -143,7 +143,19 @@ export class SessionService {
           totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
         })
         .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId))
+        .where(and(
+          eq(dialogueHistory.sessionId, sessionId),
+          // 🛡️ Sentinel: Incorporate ownership check directly into the dialogue history query
+          // for defense-in-depth, ensuring no messages are leaked even if session check is bypassed.
+          exists(
+            db.select()
+              .from(gameSessions)
+              .where(and(
+                eq(gameSessions.id, dialogueHistory.sessionId),
+                this.getOwnershipCondition(userId)
+              ))
+          )
+        ))
         .orderBy(asc(dialogueHistory.timestamp))
         .limit(limit)
         .offset(offset),
@@ -299,7 +311,19 @@ export class SessionService {
           totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
         })
         .from(dialogueHistory)
-        .where(eq(dialogueHistory.sessionId, sessionId))
+        .where(and(
+          eq(dialogueHistory.sessionId, sessionId),
+          // 🛡️ Sentinel: Incorporate ownership check directly into the dialogue history query
+          // for defense-in-depth, ensuring no messages are leaked even if session check is bypassed.
+          exists(
+            db.select()
+              .from(gameSessions)
+              .where(and(
+                eq(gameSessions.id, dialogueHistory.sessionId),
+                this.getOwnershipCondition(userId)
+              ))
+          )
+        ))
         .orderBy(desc(dialogueHistory.timestamp))
         .limit(limit)
         .offset(offset),
@@ -324,14 +348,13 @@ export class SessionService {
     campaignId: string,
     userId: string
   ): Promise<GameSession[]> {
-    // Verify campaign ownership
-    const campaign = await db.query.campaigns.findFirst({
-      where: and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId))
-    });
-    if (!campaign) throw new NotFoundError('Campaign', campaignId);
-
+    // 🛡️ Sentinel: Combined campaign ownership/access and session retrieval into a single query.
+    // This ensures atomic verification and masks resource existence for unauthorized users.
     return await db.query.gameSessions.findMany({
-      where: eq(gameSessions.campaignId, campaignId),
+      where: and(
+        eq(gameSessions.campaignId, campaignId),
+        this.getOwnershipCondition(userId)
+      ),
       orderBy: desc(gameSessions.sessionNumber),
     });
   }
