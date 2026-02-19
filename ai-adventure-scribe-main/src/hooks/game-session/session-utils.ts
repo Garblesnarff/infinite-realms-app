@@ -52,7 +52,7 @@ export const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | stri
  * Validates that a session object has required properties.
  */
 export function isValidSession(session: any): session is ExtendedGameSession {
-  return session && typeof session === 'object' && typeof session.id === 'string';
+  return !!(session && typeof session === 'object' && typeof session.id === 'string');
 }
 
 /**

@@ -99,3 +99,7 @@
 ## 2026-02-12 - [Magic Item Attunement Hook Coverage]
 **Learning:** The `useMagicItemAttunement` hook manages the state of magic item attunement for a character. Testing revealed that it correctly enforces D&D 5e RAW for the 3-item attunement limit and requirement validation (class, race, alignment) via the `magicItemEffects` utility.
 **Action:** When testing hooks that manage character state, always provide a mock `onCharacterUpdate` callback and verify it is called with the expected deep-copied and updated character object. Ensure new hook tests are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
+
+## 2026-02-19 - [Session Utilities Coverage & Strict Predicates]
+**Learning:** Found that `isValidSession` was returning `null` instead of `false` when passed `null`, due to the behavior of the `&&` operator in JavaScript. While technically falsy, this violated the expected boolean return type of the predicate.
+**Action:** Use the double-bang operator (`!!`) for type predicates that rely on logical AND chains to ensure a strict boolean return. Always verify hook and utility coverage by adding both the test file and source file to `vitest.config.ts`.
