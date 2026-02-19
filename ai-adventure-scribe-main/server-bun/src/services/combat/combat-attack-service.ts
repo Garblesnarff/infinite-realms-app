@@ -12,11 +12,11 @@
  * @module server/services/combat/combat-attack-service
  */
 
+/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
 import {
-  verifyEncounterAccess,
   getParticipantWithStats,
   getParticipantsWithStatsBatch,
   getWeaponAttack,
@@ -101,9 +101,11 @@ export class CombatAttackService {
     // ⚡ Bolt: Removed redundant verifyEncounterAccess call as authorization is handled
     // within getParticipantWithStats and getWeaponAttack. Parallelizing these fetches
     // reduces database round-trips from 4 down to 2.
-    const [targetData, weapon] = await Promise.all([
+    // 🛡️ Sentinel: Also verify that the requester owns the attacker to prevent IDOR.
+    const [targetData, weapon, _attacker] = await Promise.all([
       getParticipantWithStats(targetId, encounterId, userId),
       weaponId ? getWeaponAttack(weaponId, userId) : Promise.resolve(null),
+      getParticipantInEncounter(attackerId, encounterId, userId),
     ]);
 
     if (!targetData) {
@@ -250,8 +252,9 @@ export class CombatAttackService {
 
     // ⚡ Bolt: Parallelize caster validation and batch target fetching to reduce sequential round-trips.
     // Removed initial verifyEncounterAccess as getParticipantsWithStatsBatch handles authorization.
+    // 🛡️ Sentinel: Pass userId to getParticipantInEncounter to verify caster ownership.
     const [_, allTargetData] = await Promise.all([
-      getParticipantInEncounter(casterId, encounterId),
+      getParticipantInEncounter(casterId, encounterId, userId),
       getParticipantsWithStatsBatch(targetIds, encounterId, userId),
     ]);
 
