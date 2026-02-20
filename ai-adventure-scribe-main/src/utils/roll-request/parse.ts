@@ -186,9 +186,9 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
     }
   });
 
-  // Skill/Ability checks and saves with explicit dice
+  // Skill/Ability checks and saves with explicit dice (must look like a formula, not just a DC)
   const checkPattern =
-    /make\s+an?\s+(constitution|dexterity|strength|intelligence|wisdom|charisma|[\w\s]+)\s+(check|save|saving\s+throw).*?\(([^)]+)(?:,\s*DC\s+(\d+))?\)/gi;
+    /make\s+an?\s+(constitution|dexterity|strength|intelligence|wisdom|charisma|[\w\s]+)\s+(check|save|saving\s+throw).*?\((?!\s*DC\s*\d+\s*\))([^)]+)(?:,\s*DC\s+(\d+))?\)/gi;
   while ((match = checkPattern.exec(text)) !== null) {
     const ability = match[1].toLowerCase();
     const type = match[2].toLowerCase();
@@ -370,13 +370,13 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
   }
 
   const uniqueRequests = requests
+    .filter((r) => r.confidence > 0.5)
+    .sort((a, b) => b.confidence - a.confidence)
     .filter(
       (request, index, self) =>
         index ===
-        self.findIndex((r) => r.formula === request.formula && r.purpose === request.purpose),
-    )
-    .filter((r) => r.confidence > 0.5)
-    .sort((a, b) => b.confidence - a.confidence);
+        self.findIndex((r) => r.purpose === request.purpose),
+    );
 
   return uniqueRequests;
 }

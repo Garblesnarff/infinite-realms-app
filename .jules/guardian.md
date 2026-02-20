@@ -107,3 +107,7 @@
 ## 2026-02-20 - [Message Queue Hook Coverage & Retry Bug Detection]
 **Learning:** The `useMessageQueue` hook manages complex message persistence with exponential backoff and batching. Testing revealed a potential bug where a failure in batch processing after a successful single message insertion could cause the original message to be retried, potentially leading to primary key violations in Supabase.
 **Action:** Always use `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync()` to test hooks with retry logic and exponential backoff. Ensure that mocks for chainable services like Supabase return stable objects or use `vi.hoisted` to avoid mismatched mock instances. Add new hook tests to both `include` and `coverage.include` in `vitest.config.ts`.
+
+## 2026-02-20 - [Pending Rolls Hook Coverage & Parser Fixes]
+**Learning:** Found that `usePendingRolls` was completely untested. Testing revealed a bug in `parseRollRequests` where simple DC mentions in parentheses like "(DC 15)" were being incorrectly captured as dice formulas (resulting in "1d20"). Also found that the deduplication logic in the parser was keeping the first match regardless of confidence, which could lead to lower-quality results being returned.
+**Action:** Use negative lookahead in regex to exclude DC-only patterns from formula capture. Sort by confidence before applying unique filters in the parser. Always verify hook coverage by adding both the test and the source file to `vitest.config.ts`.
