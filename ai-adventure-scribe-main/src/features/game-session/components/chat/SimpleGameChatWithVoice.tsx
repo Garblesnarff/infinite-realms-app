@@ -6,7 +6,7 @@
  */
 
 import { Send, Loader2, LogOut } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -14,19 +14,35 @@ import { DMChatBubble } from './chat/DMChatBubble';
 
 import type { ChatMessage, GameContext } from '@/services/ai-service';
 
+import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
-import { NarrationSegment } from '@/hooks/use-ai-response';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSimpleGameSession } from '@/hooks/use-simple-game-session';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { handleAsyncError } from '@/utils/error-handler';
+
+/**
+ * PlayerChatBubble Component
+ * Memoized to prevent re-renders when other messages or state changes
+ */
+const PlayerChatBubble = React.memo(({ content, timestamp }: { content: string; timestamp: Date }) => (
+  <div className="flex justify-end">
+    <div className="max-w-[80%] p-4 rounded-lg shadow-sm bg-infinite-purple text-white ml-4">
+      <div className="whitespace-pre-wrap leading-relaxed">{content}</div>
+      <div className="text-xs mt-2 text-infinite-purple-100">
+        {timestamp.toLocaleTimeString()}
+      </div>
+    </div>
+  </div>
+));
+
+PlayerChatBubble.displayName = 'PlayerChatBubble';
 
 interface SimpleGameChatWithVoiceProps {
   campaignId: string;
@@ -59,13 +75,13 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   const { currentRoll, addRolls, dismissCurrent } = useNPCRollQueue();
 
   // Scroll to bottom when messages change
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   /**
    * Generate an opening message for a new session
@@ -451,6 +467,27 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
     }
   }, [session, endSession, navigate]);
 
+  // ⚡ Bolt: Memoize the message list to prevent re-mapping on every re-render (e.g. during typing)
+  const renderedMessages = useMemo(
+    () =>
+      messages.map((message) =>
+        message.role === 'assistant' ? (
+          <DMChatBubble
+            key={message.id}
+            message={message}
+            narrationSegments={message.narrationSegments as any}
+          />
+        ) : (
+          <PlayerChatBubble
+            key={message.id}
+            content={message.content}
+            timestamp={message.timestamp}
+          />
+        ),
+      ),
+    [messages],
+  );
+
   // Loading state - only show loading if we're actually loading something
   if (sessionLoading || (isLoadingHistory && !hasLoadedHistory)) {
     return (
@@ -505,24 +542,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
             {/* Messages Area */}
             <ScrollArea className="flex-1 px-6 py-4">
               <div className="space-y-4 pb-4">
-                {messages.map((message, index) =>
-                  message.role === 'assistant' ? (
-                    <DMChatBubble
-                      key={index}
-                      message={message}
-                      narrationSegments={message.narrationSegments as any}
-                    />
-                  ) : (
-                    <div key={index} className="flex justify-end">
-                      <div className="max-w-[80%] p-4 rounded-lg shadow-sm bg-infinite-purple text-white ml-4">
-                        <div className="whitespace-pre-wrap leading-relaxed">{message.content}</div>
-                        <div className="text-xs mt-2 text-infinite-purple-100">
-                          {message.timestamp.toLocaleTimeString()}
-                        </div>
-                      </div>
-                    </div>
-                  ),
-                )}
+                {renderedMessages}
 
                 {/* Loading indicator */}
                 {isSending && (
