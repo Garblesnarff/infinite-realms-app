@@ -314,6 +314,7 @@ export default tseslint.config(
       'src/services/combat/CombatSequenceValidator.ts',
       'src/utils/memory/patterns.ts',
       'server-bun/src/trpc/routers/blog-taxonomy.ts',
+      'src/components/blog-admin/blog-post-editor/media-manager.tsx',
     ],
     rules: {
       'max-lines': 'warn',

@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useBlogMedia, useUploadBlogMedia, useDeleteBlogMedia } from '@/hooks/blog/useBlogMedia';
+import { cn } from '@/lib/utils';
 import { compressImage, convertToWebP } from '@/utils/image-compression';
 
 interface MediaManagerProps {
@@ -85,8 +86,9 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
         });
 
         toast.success(`Uploaded ${file.name}`);
-      } catch (error: any) {
-        toast.error(`Failed to upload ${file.name}: ${error.message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to upload ${file.name}: ${message}`);
       }
     }
 
@@ -103,8 +105,9 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
       if (selectedAsset?.id === asset.id) {
         setSelectedAsset(null);
       }
-    } catch (error: any) {
-      toast.error(`Failed to delete media: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to delete media: ${message}`);
     }
   };
 
@@ -174,10 +177,21 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                   {mediaAssets.map((asset) => (
                     <Card
                       key={asset.id}
-                      className={`group cursor-pointer transition-all hover:shadow-lg ${
-                        selectedAsset?.id === asset.id ? 'ring-2 ring-primary' : ''
-                      } ${currentMediaUrl === asset.publicUrl ? 'ring-2 ring-green-500' : ''}`}
+                      className={cn(
+                        'group cursor-pointer transition-all hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none',
+                        selectedAsset?.id === asset.id ? 'ring-2 ring-primary' : '',
+                        currentMediaUrl === asset.publicUrl ? 'ring-2 ring-green-500' : '',
+                      )}
                       onClick={() => setSelectedAsset(asset)}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedAsset?.id === asset.id}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedAsset(asset);
+                        }
+                      }}
                     >
                       <CardContent className="p-0">
                         <div className="relative aspect-square overflow-hidden rounded-t-lg">
@@ -187,7 +201,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                             className="w-full h-full object-cover"
                             loading="lazy"
                           />
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <Button
                               size="icon"
                               variant="secondary"
@@ -195,6 +209,8 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                                 e.stopPropagation();
                                 handleSelectAsset(asset);
                               }}
+                              aria-label="Select image"
+                              title="Select image"
                             >
                               <ExternalLink className="w-4 h-4" />
                             </Button>
@@ -205,6 +221,8 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                                 e.stopPropagation();
                                 setDeleteTarget(asset);
                               }}
+                              aria-label="Delete image"
+                              title="Delete image"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
