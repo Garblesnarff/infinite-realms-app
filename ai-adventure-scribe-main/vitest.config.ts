@@ -148,6 +148,7 @@ export default defineConfig({
       'src/utils/__tests__/movement-validation.test.ts',
       'src/utils/__tests__/template-calculations.test.ts',
       'src/features/campaign/components/creation/steps/GenreSelection.test.tsx',
+      'src/features/campaign/components/view/sections/CampaignHeader.test.tsx',
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
     ],
     exclude: [
@@ -276,6 +277,7 @@ export default defineConfig({
         'src/utils/__tests__/movement-validation.test.ts',
         'src/utils/template-calculations.ts',
         'src/features/campaign/components/creation/steps/GenreSelection.tsx',
+        'src/features/campaign/components/view/sections/CampaignHeader.tsx',
         'src/components/game/NPCRollDisplay.tsx',
       ],
       exclude: [
