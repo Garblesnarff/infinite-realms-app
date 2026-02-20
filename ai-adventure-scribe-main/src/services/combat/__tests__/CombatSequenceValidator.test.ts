@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { combatSequenceValidator } from '../CombatSequenceValidator';
+
 import { combatAuditSystem } from '../../combat-audit';
+import { combatSequenceValidator } from '../CombatSequenceValidator';
+
 import logger from '@/lib/logger';
 
 describe('CombatSequenceValidator', () => {
@@ -223,7 +225,8 @@ describe('CombatSequenceValidator', () => {
     it('should return invalid if turnOrder is missing even if initiativeRolled is true', () => {
       combatSequenceValidator.startCombat(combatId);
       // Manually mess with state to hit edge case
-      (combatSequenceValidator as any).initiativeRolled.add(combatId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((combatSequenceValidator as any).turnManager as any).initiativeRolled.add(combatId);
       const result = combatSequenceValidator.validateCombatState(combatId, 'attack');
       expect(result.valid).toBe(false);
       expect(result.reason).toBe('Initiative phase not complete');

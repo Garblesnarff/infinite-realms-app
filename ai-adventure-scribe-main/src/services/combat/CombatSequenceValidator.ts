@@ -6,6 +6,11 @@
 
 import { combatAuditSystem } from '../combat-audit';
 import {
+  CombatTurnManager,
+  type InitiativeEntry,
+  type TurnOrder,
+} from './CombatTurnManager';
+import {
   detectsDirectDamage,
   detectsCombatStart,
   detectsAttackRequest,
@@ -17,6 +22,8 @@ import {
 } from './dm-response-patterns';
 
 import logger from '@/lib/logger';
+
+export type { InitiativeEntry, TurnOrder };
 
 export interface CombatPhase {
   phase: 'pre-combat' | 'initiative' | 'attack' | 'damage' | 'resolution';
@@ -47,23 +54,6 @@ export interface CombatValidationResult {
   suggestedResponse?: string;
 }
 
-export interface InitiativeEntry {
-  actorId: string;
-  actorName: string;
-  initiative: number;
-  dexModifier: number;
-  isPlayer: boolean;
-  hasActed: boolean;
-}
-
-export interface TurnOrder {
-  combatId: string;
-  entries: InitiativeEntry[];
-  currentTurnIndex: number;
-  round: number;
-  isInitiativeComplete: boolean;
-}
-
 // TTL for combat state cleanup (4 hours)
 const COMBAT_STATE_TTL_MS = 4 * 60 * 60 * 1000;
 // Minimum interval between cleanup sweeps (5 minutes)
@@ -71,9 +61,9 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 export class CombatSequenceValidator {
   private static instance: CombatSequenceValidator;
+  private turnManager: CombatTurnManager = new CombatTurnManager();
   private combatPhases: Map<string, CombatPhase[]> = new Map();
   private activeCombats: Set<string> = new Set();
-  private initiativeRolled: Set<string> = new Set();
   private pendingAttacks: Map<
     string,
     { weaponName: string; targetAC?: number; timestamp: number }
@@ -82,8 +72,6 @@ export class CombatSequenceValidator {
     string,
     { attackRollId: string; isCritical: boolean; weaponName: string }
   > = new Map();
-  private turnOrders: Map<string, TurnOrder> = new Map();
-  private initiativeEntries: Map<string, InitiativeEntry[]> = new Map();
   private lastActivityTimestamp: Map<string, number> = new Map();
   private lastCleanupAt = 0;
 
@@ -100,7 +88,7 @@ export class CombatSequenceValidator {
   startCombat(combatId: string): void {
     this.activeCombats.add(combatId);
     this.combatPhases.set(combatId, []);
-    this.initiativeRolled.delete(combatId);
+    this.turnManager.clearEncounterState(combatId);
     this.lastActivityTimestamp.set(combatId, Date.now());
     logger.info(`🗡️ Combat ${combatId} started - initiative required`);
   }
@@ -120,138 +108,50 @@ export class CombatSequenceValidator {
     this.activeCombats.add(combatId);
     this.lastActivityTimestamp.set(combatId, Date.now());
 
-    // Start audit for this combat if not already started
-    if (!this.initiativeEntries.has(combatId)) {
-      combatAuditSystem.startCombatAudit(combatId);
-      this.initiativeEntries.set(combatId, []);
-    }
-
-    const entries = this.initiativeEntries.get(combatId)!;
-
-    // Remove existing entry for this actor (in case of re-roll)
-    const filteredEntries = entries.filter((e) => e.actorId !== actorId);
-
-    filteredEntries.push({
+    this.turnManager.addInitiativeEntry(
+      combatId,
       actorId,
       actorName,
       initiative,
       dexModifier,
       isPlayer,
-      hasActed: false,
-    });
-
-    this.initiativeEntries.set(combatId, filteredEntries);
+    );
     this.addPhase(combatId, 'initiative', actorId, `Initiative: ${initiative}`);
-
-    // Record initiative action for audit
-    combatAuditSystem.recordAction({
-      combatId,
-      actorId,
-      actorName,
-      actionType: 'initiative',
-      phase: 'initiative',
-      data: {
-        formula: `1d20+${dexModifier}`,
-        result: initiative,
-        description: `Initiative roll: ${initiative} (dex modifier: ${dexModifier > 0 ? '+' : ''}${dexModifier})`,
-      },
-    });
-
-    logger.info(`🎲 Initiative recorded for ${actorName}: ${initiative}`);
   }
 
   /**
    * Mark initiative as rolled and complete the initiative phase
    */
   completeInitiativePhase(combatId: string): TurnOrder | null {
-    const entries = this.initiativeEntries.get(combatId);
-    if (!entries || entries.length === 0) {
-      return null;
-    }
-
-    // Sort by initiative (highest first), use dex modifier as tiebreaker
-    const sortedEntries = [...entries].sort((a, b) => {
-      if (a.initiative !== b.initiative) {
-        return b.initiative - a.initiative; // Higher initiative goes first
-      }
-      return b.dexModifier - a.dexModifier; // Higher dex modifier wins ties
-    });
-
-    const turnOrder: TurnOrder = {
-      combatId,
-      entries: sortedEntries,
-      currentTurnIndex: 0,
-      round: 1,
-      isInitiativeComplete: true,
-    };
-
-    this.turnOrders.set(combatId, turnOrder);
-    this.initiativeRolled.add(combatId);
-    logger.info(`⚔️ Turn order established for combat ${combatId}`);
-
-    return turnOrder;
+    return this.turnManager.completeInitiativePhase(combatId);
   }
 
   /**
    * Get current turn order for a combat
    */
   getTurnOrder(combatId: string): TurnOrder | null {
-    return this.turnOrders.get(combatId) || null;
+    return this.turnManager.getTurnOrder(combatId);
   }
 
   /**
    * Get whose turn it is currently
    */
   getCurrentActor(combatId: string): InitiativeEntry | null {
-    const turnOrder = this.turnOrders.get(combatId);
-    if (!turnOrder || !turnOrder.isInitiativeComplete) {
-      return null;
-    }
-
-    return turnOrder.entries[turnOrder.currentTurnIndex] || null;
+    return this.turnManager.getCurrentActor(combatId);
   }
 
   /**
    * Advance to the next turn
    */
   nextTurn(combatId: string): InitiativeEntry | null {
-    const turnOrder = this.turnOrders.get(combatId);
-    if (!turnOrder) return null;
-
-    // Mark current actor as having acted
-    if (turnOrder.entries[turnOrder.currentTurnIndex]) {
-      turnOrder.entries[turnOrder.currentTurnIndex].hasActed = true;
-    }
-
-    // Move to next actor
-    turnOrder.currentTurnIndex++;
-
-    // If we've gone through everyone, start new round
-    if (turnOrder.currentTurnIndex >= turnOrder.entries.length) {
-      turnOrder.currentTurnIndex = 0;
-      turnOrder.round++;
-
-      // Reset hasActed for new round
-      turnOrder.entries.forEach((entry) => (entry.hasActed = false));
-
-      logger.info(`🔄 Round ${turnOrder.round} begins`);
-    }
-
-    const currentActor = turnOrder.entries[turnOrder.currentTurnIndex];
-    logger.info(`👤 ${currentActor.actorName}'s turn (Round ${turnOrder.round})`);
-
-    return currentActor;
+    return this.turnManager.nextTurn(combatId);
   }
 
   /**
    * Check if all required initiative rolls are complete
    */
   isInitiativeComplete(combatId: string, expectedActors: string[]): boolean {
-    const entries = this.initiativeEntries.get(combatId);
-    if (!entries) return false;
-
-    const rolledActors = new Set(entries.map((e) => e.actorId));
-    return expectedActors.every((actorId) => rolledActors.has(actorId));
+    return this.turnManager.isInitiativeComplete(combatId, expectedActors);
   }
 
   /**
@@ -381,7 +281,7 @@ export class CombatSequenceValidator {
     }
 
     // Check for combat start without initiative
-    if (detectsCombatStart(response) && combatId && !this.initiativeRolled.has(combatId)) {
+    if (detectsCombatStart(response) && combatId && !this.turnManager.hasInitiativeBeenRolled(combatId)) {
       errors.push({
         type: 'missing_initiative',
         message: 'Combat started without initiative roll',
@@ -393,7 +293,7 @@ export class CombatSequenceValidator {
 
     // Check for actions attempted before turn order is established
     if (combatId && this.activeCombats.has(combatId)) {
-      const turnOrder = this.turnOrders.get(combatId);
+      const turnOrder = this.turnManager.getTurnOrder(combatId);
       if (
         !turnOrder?.isInitiativeComplete &&
         (detectsAttackRequest(response) || detectsSkillCheck(response))
@@ -513,7 +413,7 @@ export class CombatSequenceValidator {
 
   private determineNextAction(combatId?: string): string | undefined {
     if (combatId && this.activeCombats.has(combatId)) {
-      if (!this.initiativeRolled.has(combatId)) {
+      if (!this.turnManager.hasInitiativeBeenRolled(combatId)) {
         return 'request_initiative';
       }
       if (this.isAwaitingDamage(combatId)) {
@@ -559,10 +459,8 @@ export class CombatSequenceValidator {
     for (const [combatId, lastActivity] of this.lastActivityTimestamp) {
       if (now - lastActivity > COMBAT_STATE_TTL_MS) {
         this.activeCombats.delete(combatId);
-        this.initiativeRolled.delete(combatId);
+        this.turnManager.clearEncounterState(combatId);
         this.combatPhases.delete(combatId);
-        this.turnOrders.delete(combatId);
-        this.initiativeEntries.delete(combatId);
         this.lastActivityTimestamp.delete(combatId);
 
         // Clean up pending attacks for this combat
@@ -594,11 +492,9 @@ export class CombatSequenceValidator {
   clearAllState(): void {
     this.combatPhases.clear();
     this.activeCombats.clear();
-    this.initiativeRolled.clear();
+    this.turnManager.clearAllState();
     this.pendingAttacks.clear();
     this.awaitingDamage.clear();
-    this.turnOrders.clear();
-    this.initiativeEntries.clear();
     this.lastActivityTimestamp.clear();
     combatAuditSystem.clearAuditData();
   }
@@ -611,10 +507,8 @@ export class CombatSequenceValidator {
     const auditReport = combatAuditSystem.endCombatAudit(combatId);
 
     this.activeCombats.delete(combatId);
-    this.initiativeRolled.delete(combatId);
+    this.turnManager.clearEncounterState(combatId);
     this.combatPhases.delete(combatId);
-    this.turnOrders.delete(combatId);
-    this.initiativeEntries.delete(combatId);
     this.lastActivityTimestamp.delete(combatId);
 
     // Clean up any pending attacks for this combat
@@ -661,11 +555,11 @@ export class CombatSequenceValidator {
       return { valid: false, reason: 'Combat not active' };
     }
 
-    if (!this.initiativeRolled.has(combatId)) {
+    if (!this.turnManager.hasInitiativeBeenRolled(combatId)) {
       return { valid: false, reason: 'Initiative phase not complete' };
     }
 
-    const turnOrder = this.turnOrders.get(combatId);
+    const turnOrder = this.turnManager.getTurnOrder(combatId);
     if (!turnOrder || !turnOrder.isInitiativeComplete) {
       return { valid: false, reason: 'Initiative phase not complete' };
     }

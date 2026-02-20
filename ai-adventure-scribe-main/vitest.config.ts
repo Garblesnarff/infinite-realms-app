@@ -197,6 +197,7 @@ export default defineConfig({
         'src/utils/abilityScoreUtils.ts',
         'src/services/combat/damage-integrator.ts',
         'src/services/combat/CombatSequenceValidator.ts',
+        'src/services/combat/CombatTurnManager.ts',
         'src/services/combat/npc-auto-roller.ts',
         'src/services/combat/rollStateManager.ts',
         'src/utils/sentence-segmenter.ts',
