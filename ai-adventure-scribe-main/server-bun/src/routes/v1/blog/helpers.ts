@@ -106,109 +106,116 @@ export async function syncPostRelations(
   tagIds?: string[],
   authorScopeId?: string | null,
 ) {
-  if (authorScopeId) {
-    const { data: scopedPost, error: scopedError } = await supabaseService
-      .from('blog_posts')
-      .select('id')
-      .eq('id', postId)
-      .eq('author_id', authorScopeId)
-      .maybeSingle();
+  // ⚡ Bolt: Removed redundant pre-flight ownership check as it's handled by callers
+  // and enforced within the atomic SQL queries via WHERE EXISTS clauses.
 
-    if (scopedError) throw scopedError;
-    if (!scopedPost) throw new Error('BLOG_POST_NOT_FOUND');
-  }
+  // ⚡ Bolt: Use Promise.all to parallelize category and tag synchronization tasks
+  // for improved performance during blog post updates.
+  const tasks: Promise<void>[] = [];
 
   if (categoryIds !== undefined) {
-    if (authorScopeId) {
-      await sql`
-        DELETE FROM blog_post_categories bpc
-        WHERE bpc.post_id = ${postId}
-          AND EXISTS (
-            SELECT 1
-            FROM blog_posts bp
-            WHERE bp.id = bpc.post_id
-              AND bp.author_id = ${authorScopeId}
-          )
-      `;
+    tasks.push(
+      (async () => {
+        if (authorScopeId) {
+          await sql`
+            DELETE FROM blog_post_categories bpc
+            WHERE bpc.post_id = ${postId}
+              AND EXISTS (
+                SELECT 1
+                FROM blog_posts bp
+                WHERE bp.id = bpc.post_id
+                  AND bp.author_id = ${authorScopeId}
+              )
+          `;
 
-      for (const categoryId of categoryIds) {
-        await sql`
-          INSERT INTO blog_post_categories (post_id, category_id)
-          SELECT ${postId}, ${categoryId}
-          WHERE EXISTS (
-            SELECT 1
-            FROM blog_posts bp
-            WHERE bp.id = ${postId}
-              AND bp.author_id = ${authorScopeId}
-          )
-          ON CONFLICT DO NOTHING
-        `;
-      }
-    } else {
-      const { error: deleteError } = await supabaseService
-        .from('blog_post_categories')
-        .delete()
-        .eq('post_id', postId);
-      if (deleteError) throw deleteError;
+          if (categoryIds.length > 0) {
+            // ⚡ Bolt: Replaced O(N) insertion loop with a single O(1) batch query using UNNEST.
+            await sql`
+              INSERT INTO blog_post_categories (post_id, category_id)
+              SELECT ${postId}, unnest(${categoryIds}::uuid[])
+              WHERE EXISTS (
+                SELECT 1
+                FROM blog_posts bp
+                WHERE bp.id = ${postId}
+                  AND bp.author_id = ${authorScopeId}
+              )
+              ON CONFLICT DO NOTHING
+            `;
+          }
+        } else {
+          const { error: deleteError } = await supabaseService
+            .from('blog_post_categories')
+            .delete()
+            .eq('post_id', postId);
+          if (deleteError) throw deleteError;
 
-      if (categoryIds.length > 0) {
-        const insertPayload = categoryIds.map((categoryId) => ({
-          post_id: postId,
-          category_id: categoryId,
-        }));
-        const { error: insertError } = await supabaseService
-          .from('blog_post_categories')
-          .insert(insertPayload);
-        if (insertError) throw insertError;
-      }
-    }
+          if (categoryIds.length > 0) {
+            const insertPayload = categoryIds.map((categoryId) => ({
+              post_id: postId,
+              category_id: categoryId,
+            }));
+            const { error: insertError } = await supabaseService
+              .from('blog_post_categories')
+              .insert(insertPayload);
+            if (insertError) throw insertError;
+          }
+        }
+      })(),
+    );
   }
 
   if (tagIds !== undefined) {
-    if (authorScopeId) {
-      await sql`
-        DELETE FROM blog_post_tags bpt
-        WHERE bpt.post_id = ${postId}
-          AND EXISTS (
-            SELECT 1
-            FROM blog_posts bp
-            WHERE bp.id = bpt.post_id
-              AND bp.author_id = ${authorScopeId}
-          )
-      `;
+    tasks.push(
+      (async () => {
+        if (authorScopeId) {
+          await sql`
+            DELETE FROM blog_post_tags bpt
+            WHERE bpt.post_id = ${postId}
+              AND EXISTS (
+                SELECT 1
+                FROM blog_posts bp
+                WHERE bp.id = bpt.post_id
+                  AND bp.author_id = ${authorScopeId}
+              )
+          `;
 
-      for (const tagId of tagIds) {
-        await sql`
-          INSERT INTO blog_post_tags (post_id, tag_id)
-          SELECT ${postId}, ${tagId}
-          WHERE EXISTS (
-            SELECT 1
-            FROM blog_posts bp
-            WHERE bp.id = ${postId}
-              AND bp.author_id = ${authorScopeId}
-          )
-          ON CONFLICT DO NOTHING
-        `;
-      }
-    } else {
-      const { error: deleteError } = await supabaseService
-        .from('blog_post_tags')
-        .delete()
-        .eq('post_id', postId);
-      if (deleteError) throw deleteError;
+          if (tagIds.length > 0) {
+            // ⚡ Bolt: Replaced O(N) insertion loop with a single O(1) batch query using UNNEST.
+            await sql`
+              INSERT INTO blog_post_tags (post_id, tag_id)
+              SELECT ${postId}, unnest(${tagIds}::uuid[])
+              WHERE EXISTS (
+                SELECT 1
+                FROM blog_posts bp
+                WHERE bp.id = ${postId}
+                  AND bp.author_id = ${authorScopeId}
+              )
+              ON CONFLICT DO NOTHING
+            `;
+          }
+        } else {
+          const { error: deleteError } = await supabaseService
+            .from('blog_post_tags')
+            .delete()
+            .eq('post_id', postId);
+          if (deleteError) throw deleteError;
 
-      if (tagIds.length > 0) {
-        const insertPayload = tagIds.map((tagId) => ({
-          post_id: postId,
-          tag_id: tagId,
-        }));
-        const { error: insertError } = await supabaseService
-          .from('blog_post_tags')
-          .insert(insertPayload);
-        if (insertError) throw insertError;
-      }
-    }
+          if (tagIds.length > 0) {
+            const insertPayload = tagIds.map((tagId) => ({
+              post_id: postId,
+              tag_id: tagId,
+            }));
+            const { error: insertError } = await supabaseService
+              .from('blog_post_tags')
+              .insert(insertPayload);
+            if (insertError) throw insertError;
+          }
+        }
+      })(),
+    );
   }
+
+  await Promise.all(tasks);
 }
 
 /**
@@ -216,15 +223,7 @@ export async function syncPostRelations(
  */
 export async function deletePostRelations(postId: string, authorScopeId?: string | null) {
   if (authorScopeId) {
-    const { data: scopedPost, error: scopedError } = await supabaseService
-      .from('blog_posts')
-      .select('id')
-      .eq('id', postId)
-      .eq('author_id', authorScopeId)
-      .maybeSingle();
-
-    if (scopedError) throw scopedError;
-    if (!scopedPost) throw new Error('BLOG_POST_NOT_FOUND');
+    // ⚡ Bolt: Removed redundant pre-flight ownership check.
 
     await sql`
       DELETE FROM blog_post_categories bpc
