@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 
 import { DMChatBubble } from './chat/DMChatBubble';
 
-import type { ChatMessage, GameContext } from '@/services/ai-service';
+import type { ChatMessage } from '@/services/ai-service';
 
 import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
+import { useChatHistory } from '@/features/game-session/hooks/use-chat-history';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSimpleGameSession } from '@/hooks/use-simple-game-session';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { AIService } from '@/services/ai-service';
 import { handleAsyncError } from '@/utils/error-handler';
 
 /**
@@ -47,8 +46,8 @@ PlayerChatBubble.displayName = 'PlayerChatBubble';
 interface SimpleGameChatWithVoiceProps {
   campaignId: string;
   characterId: string;
-  campaignDetails?: any;
-  characterDetails?: any;
+  campaignDetails?: Record<string, unknown>;
+  characterDetails?: Record<string, unknown>;
 }
 
 export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = ({
@@ -62,17 +61,40 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
     loading: sessionLoading,
     endSession,
   } = useSimpleGameSession(campaignId, characterId);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   // NPC Roll Display
   const [showNPCRolls] = useLocalStorage('game:showNPCRolls', true);
   const { currentRoll, addRolls, dismissCurrent } = useNPCRollQueue();
+
+  /**
+   * Extracted chat history and message logic
+   */
+  const {
+    messages,
+    isSending,
+    isLoadingHistory,
+    hasLoadedHistory,
+    sendMessage,
+  } = useChatHistory({
+    sessionId: session?.id,
+    campaignId,
+    characterId,
+    campaignDetails,
+    characterDetails,
+    onMessageReceived: (response: any) => {
+      // Display NPC roll popups if enabled and rolls are present
+      if (showNPCRolls && response?.context?.npcRollResults) {
+        const npcRolls = response.context.npcRollResults;
+        if (Array.isArray(npcRolls) && npcRolls.length > 0) {
+          logger.info(`🎲 Adding ${npcRolls.length} NPC rolls to display queue`);
+          addRolls(npcRolls);
+        }
+      }
+    },
+  });
 
   // Scroll to bottom when messages change
   const scrollToBottom = useCallback(() => {
@@ -82,343 +104,6 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
-
-  /**
-   * Generate an opening message for a new session
-   */
-  const generateOpeningMessage = useCallback(async () => {
-    if (!session?.id) return;
-
-    try {
-      const context: GameContext = {
-        sessionId: session.id,
-        campaignId,
-        characterId,
-        campaignDetails,
-        characterDetails,
-      };
-
-      logger.info('🎭 Generating opening message for new session...');
-      const response = await AIService.chatWithDM({
-        message: '',
-        context,
-        conversationHistory: [],
-      });
-
-      if (response) {
-        // Validate response structure and ensure proper display text
-        let displayText = '';
-        let segments = undefined;
-
-        if (typeof response === 'string') {
-          displayText = response;
-        } else if (response && typeof response === 'object') {
-          // Cast to any to handle the dynamic AI service response structure
-          const aiResponse = response as any;
-          displayText = aiResponse.text || aiResponse.content || '';
-          // AI service returns 'narration_segments' (snake_case)
-          segments = aiResponse.narration_segments || aiResponse.narrationSegments;
-        }
-
-        // Fallback if no valid text found
-        if (!displayText.trim()) {
-          displayText = 'The DM begins your adventure...';
-          logger.warn('⚠️ Empty response text, using fallback');
-        }
-
-        const dmMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: displayText,
-          timestamp: new Date(),
-          narrationSegments: segments as any[],
-        };
-
-        // Save opening message to database FIRST before adding to state
-        // This prevents race condition where image generation tries to attach
-        // before the message exists in the database
-        await saveMessageToDatabase(dmMessage, session.id);
-
-        // Now add to state to trigger UI update
-        setMessages([dmMessage]);
-      }
-    } catch (error) {
-      handleAsyncError(error, {
-        userMessage: 'Failed to start adventure. Please try again.',
-        context: {
-          location: 'SimpleGameChatWithVoice.generateOpeningMessage',
-          sessionId: session.id,
-        },
-      });
-    }
-  }, [session?.id, campaignId, characterId, campaignDetails, characterDetails]);
-
-  /**
-   * Load conversation history
-   */
-  const loadHistory = useCallback(async () => {
-    if (!session?.id || hasLoadedHistory) return;
-
-    setIsLoadingHistory(true);
-    try {
-      logger.info('📚 Loading conversation history for session:', session.id);
-
-      // Load message history from dialogue_history table
-      const { data: historyData, error: historyError } = await supabase
-        .from('dialogue_history')
-        .select('*')
-        .eq('session_id', session.id)
-        .order('sequence_number', { ascending: true });
-
-      if (historyError) {
-        logger.error('Error loading history:', historyError);
-        throw historyError;
-      }
-
-      if (historyData && historyData.length > 0) {
-        logger.info(`📚 Loaded ${historyData.length} messages from history`);
-
-        // Convert database messages to ChatMessage format
-        const loadedMessages: ChatMessage[] = historyData.map((msg: any) => ({
-          id: msg.id,
-          role:
-            msg.speaker_type === 'dm'
-              ? 'assistant'
-              : msg.speaker_type === 'player'
-                ? 'user'
-                : 'assistant',
-          content: msg.message,
-          timestamp: new Date(msg.timestamp),
-          // Note: Historical messages may not have narrationSegments
-          narrationSegments: undefined,
-        }));
-
-        setMessages(loadedMessages);
-        setHasLoadedHistory(true);
-      } else {
-        logger.info('📚 No message history found, generating opening message');
-        // If no messages exist, generate an opening message
-        await generateOpeningMessage();
-        setHasLoadedHistory(true);
-      }
-    } catch (error) {
-      handleAsyncError(error, {
-        userMessage: 'Failed to load history',
-        logLevel: 'warn',
-        showToast: false,
-        context: { location: 'SimpleGameChatWithVoice.loadHistory', sessionId: session.id },
-      });
-      // Fallback to generating opening message if history loading fails
-      await generateOpeningMessage();
-      setHasLoadedHistory(true);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [session?.id, hasLoadedHistory, generateOpeningMessage]);
-
-  // Load history when session is available and we haven't loaded it yet
-  useEffect(() => {
-    if (session?.id && !sessionLoading && !hasLoadedHistory && !isLoadingHistory) {
-      loadHistory();
-    }
-  }, [session?.id, sessionLoading, hasLoadedHistory, isLoadingHistory, loadHistory]);
-
-  /**
-   * Wait for a message to exist in the database with retry logic
-   * Handles potential transaction commit delays in distributed databases
-   */
-  const waitForMessageToExist = useCallback(
-    async (messageId: string, maxRetries = 5, initialDelay = 100): Promise<boolean> => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const { data, error } = await supabase
-          .from('dialogue_history')
-          .select('id')
-          .eq('id', messageId)
-          .maybeSingle();
-
-        if (!error && data) {
-          logger.debug(`[SimpleGameChat] ✅ Message verified in database after ${attempt} retries`);
-          return true;
-        }
-
-        if (attempt < maxRetries - 1) {
-          const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
-          logger.debug(`[SimpleGameChat] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-      }
-
-      logger.error(`[SimpleGameChat] ❌ Message verification failed after ${maxRetries} retries`);
-      return false;
-    },
-    []
-  );
-
-  /**
-   * Save a message to the database
-   * Returns true if save and verification succeeded, false otherwise
-   */
-  const saveMessageToDatabase = useCallback(async (message: ChatMessage, sessionId: string): Promise<boolean> => {
-    logger.debug('[SimpleGameChat] Saving message to database:', {
-      messageId: message.id,
-      sessionId,
-      timestamp: new Date().toISOString(),
-    });
-
-    try {
-      const { error } = await supabase.from('dialogue_history').insert({
-        id: message.id,
-        session_id: sessionId,
-        speaker_type:
-          message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
-        message: message.content,
-        timestamp: message.timestamp.toISOString(),
-      });
-
-      if (error) {
-        logger.error('[SimpleGameChat] ❌ Database insert FAILED:', { error });
-        throw error;
-      }
-
-      logger.debug('[SimpleGameChat] Database insert promise resolved, verifying...');
-
-      // Verify the message actually exists in the database
-      const verified = await waitForMessageToExist(message.id);
-
-      if (!verified) {
-        logger.error('[SimpleGameChat] ❌ Message verification failed');
-        return false;
-      }
-
-      logger.debug('[SimpleGameChat] ✅ Message saved and verified:', { messageId: message.id });
-      return true;
-    } catch (error) {
-      logger.error('[SimpleGameChat] Exception during save:', { error });
-      handleAsyncError(error, {
-        userMessage: 'Failed to save message',
-        logLevel: 'warn',
-        showToast: false,
-        context: { location: 'SimpleGameChatWithVoice.saveMessageToDatabase', sessionId },
-      });
-      // Don't throw here to avoid breaking the UI flow
-      return false;
-    }
-  }, [waitForMessageToExist]);
-
-  /**
-   * Send message to DM
-   */
-  const sendMessage = useCallback(
-    async (message: ChatMessage): Promise<void> => {
-      if (!session?.id || isSending) return;
-
-      const messageContent = typeof message === 'string' ? message : message.content;
-      if (!messageContent.trim()) return;
-
-      setIsSending(true);
-
-      // Add user message immediately
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: messageContent,
-        timestamp: new Date(),
-      };
-
-      const updatedMessages = [...messages, userMessage];
-      setMessages(updatedMessages);
-
-      // Save user message to database
-      const saved = await saveMessageToDatabase(userMessage, session.id);
-      if (!saved) {
-        logger.warn('[SimpleGameChat] User message not saved, but continuing for UI resilience');
-      }
-
-      try {
-        const context: GameContext = {
-          sessionId: session.id,
-          campaignId,
-          characterId,
-          campaignDetails,
-          characterDetails,
-        };
-
-        logger.info('🎭 Sending message to DM:', messageContent);
-        const response = await AIService.chatWithDM({
-          message: messageContent,
-          context,
-          conversationHistory: updatedMessages,
-        });
-
-        if (response) {
-          // Validate response structure and ensure proper display text
-          let displayText = '';
-          let segments = undefined;
-
-          if (typeof response === 'string') {
-            displayText = response;
-          } else if (response && typeof response === 'object') {
-            // Cast to any to handle the dynamic AI service response structure
-            const aiResponse = response as any;
-            displayText = aiResponse.text || aiResponse.content || '';
-            // AI service returns 'narration_segments' (snake_case)
-            segments = aiResponse.narration_segments || aiResponse.narrationSegments;
-          }
-
-          // Fallback if no valid text found
-          if (!displayText.trim()) {
-            displayText = 'The DM responds to your action...';
-            logger.warn('⚠️ Empty response text, using fallback');
-          }
-
-          const dmMessage: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: displayText,
-            timestamp: new Date(),
-            narrationSegments: segments as any[],
-          };
-
-          // Save DM message to database FIRST before adding to state
-          // This prevents race condition where image generation tries to attach
-          // before the message exists in the database
-          const saved = await saveMessageToDatabase(dmMessage, session.id);
-
-          if (!saved) {
-            logger.warn('[SimpleGameChat] DM message not saved, skipping state update');
-            return; // Don't add to state if save failed
-          }
-
-          // Now add to state to trigger UI update
-          setMessages((prev) => [...prev, dmMessage]);
-
-          // Display NPC roll popups if enabled and rolls are present
-          if (showNPCRolls && response.context?.npcRollResults) {
-            const npcRolls = response.context.npcRollResults;
-            if (Array.isArray(npcRolls) && npcRolls.length > 0) {
-              logger.info(`🎲 Adding ${npcRolls.length} NPC rolls to display queue`);
-              addRolls(npcRolls);
-            }
-          }
-        }
-      } catch (error) {
-        handleAsyncError(error, {
-          userMessage: 'Failed to send message. Please try again.',
-          context: {
-            location: 'SimpleGameChatWithVoice.sendMessage',
-            sessionId: session.id,
-            messageContent: message.content.substring(0, 50),
-          },
-        });
-
-        // Remove user message on failure
-        setMessages(messages);
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [session?.id, messages, isSending, campaignId, characterId, campaignDetails, characterDetails],
-  );
 
   /**
    * Handle form submission
@@ -475,7 +160,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           <DMChatBubble
             key={message.id}
             message={message}
-            narrationSegments={message.narrationSegments as any}
+            narrationSegments={message.narrationSegments}
           />
         ) : (
           <PlayerChatBubble
