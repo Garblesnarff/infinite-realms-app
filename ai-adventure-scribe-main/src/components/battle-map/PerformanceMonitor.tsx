@@ -12,12 +12,14 @@
  * @module components/battle-map/PerformanceMonitor
  */
 
-import React, { useEffect, useState, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -318,19 +320,16 @@ export function usePerformanceLogger(enabled: boolean = false, interval: number 
     const now = Date.now();
     if (now - lastLogRef.current >= interval) {
       lastLogRef.current = now;
-      console.group('⚡ Performance Metrics');
-      console.log(`FPS: ${metrics.fps}`);
-      console.log(`Render Time: ${metrics.renderTime.toFixed(2)}ms`);
-      console.log(`Draw Calls: ${metrics.drawCalls}`);
-      console.log(`Triangles: ${metrics.triangles.toLocaleString()}`);
-      console.log(`Geometries: ${metrics.geometries}`);
-      console.log(`Textures: ${metrics.textures}`);
-      if (metrics.memoryUsed) {
-        console.log(
-          `Memory: ${metrics.memoryUsed.toFixed(0)}MB / ${metrics.memoryLimit?.toFixed(0)}MB`
-        );
-      }
-      console.groupEnd();
+      logger.debug('⚡ Performance Metrics', {
+        fps: metrics.fps,
+        renderTimeMs: metrics.renderTime.toFixed(2),
+        drawCalls: metrics.drawCalls,
+        triangles: metrics.triangles,
+        geometries: metrics.geometries,
+        textures: metrics.textures,
+        memoryUsedMB: metrics.memoryUsed?.toFixed(0),
+        memoryLimitMB: metrics.memoryLimit?.toFixed(0),
+      });
     }
   }, [enabled, interval, metrics]);
 }
