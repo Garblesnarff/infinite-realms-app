@@ -8,8 +8,6 @@ import type { ChatMessage } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import { supabase } from '@/integrations/supabase/client';
-
-// Project Types
 import logger from '@/lib/logger';
 
 const MAX_RETRIES = 3;
@@ -108,7 +106,7 @@ export const useMessageQueue = (sessionId: string | null) => {
         variant: 'destructive',
       });
     },
-    onSuccess: (persistedMessage) => {
+    onSuccess: () => {
       // Invalidate and refetch messages to ensure cache is up-to-date
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     },

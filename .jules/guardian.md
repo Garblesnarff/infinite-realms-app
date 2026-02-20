@@ -103,3 +103,7 @@
 ## 2026-02-19 - [Session Utilities Coverage & Strict Predicates]
 **Learning:** Found that `isValidSession` was returning `null` instead of `false` when passed `null`, due to the behavior of the `&&` operator in JavaScript. While technically falsy, this violated the expected boolean return type of the predicate.
 **Action:** Use the double-bang operator (`!!`) for type predicates that rely on logical AND chains to ensure a strict boolean return. Always verify hook and utility coverage by adding both the test file and source file to `vitest.config.ts`.
+
+## 2026-02-20 - [Message Queue Hook Coverage & Retry Bug Detection]
+**Learning:** The `useMessageQueue` hook manages complex message persistence with exponential backoff and batching. Testing revealed a potential bug where a failure in batch processing after a successful single message insertion could cause the original message to be retried, potentially leading to primary key violations in Supabase.
+**Action:** Always use `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync()` to test hooks with retry logic and exponential backoff. Ensure that mocks for chainable services like Supabase return stable objects or use `vi.hoisted` to avoid mismatched mock instances. Add new hook tests to both `include` and `coverage.include` in `vitest.config.ts`.
