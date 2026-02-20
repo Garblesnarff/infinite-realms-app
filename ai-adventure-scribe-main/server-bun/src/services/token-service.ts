@@ -10,7 +10,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, and, desc, or, exists } from 'drizzle-orm';
+import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -147,38 +147,57 @@ export class TokenService {
    * Create a new token
    */
   static async createToken(sceneId: string, userId: string, data: CreateTokenData): Promise<Token> {
-    // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
-    await Promise.all([
-      this.verifySceneAccess(sceneId, userId),
-      data.actorId ? this.verifyCharacterOwnership(data.actorId, userId) : Promise.resolve(),
-    ]);
-
-    // Create token
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that tokens can only be added to scenes the user is authorized to access,
+    // and if an actorId is provided, that the user owns that character.
     const [token] = await db
       .insert(tokens)
-      .values({
-        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
-        sceneId,
-        actorId: data.actorId || null,
-        createdBy: userId,
-        name: data.name,
-        tokenType: data.tokenType,
-        positionX: String(data.positionX),
-        positionY: String(data.positionY),
-        imageUrl: data.imageUrl || null,
-        sizeWidth: data.sizeWidth ? String(data.sizeWidth) : '1.0',
-        sizeHeight: data.sizeHeight ? String(data.sizeHeight) : '1.0',
-        gridSize: data.gridSize || 'medium',
-        visionEnabled: data.visionEnabled || false,
-        visionRange: data.visionRange ? String(data.visionRange) : null,
-        emitsLight: data.emitsLight || false,
-        lightRange: data.lightRange ? String(data.lightRange) : null,
-        lightColor: data.lightColor || null,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            actorId: sql`${data.actorId || null}`,
+            createdBy: sql`${userId}`,
+            name: sql`${data.name}`,
+            tokenType: sql`${data.tokenType}`,
+            positionX: sql`${String(data.positionX)}`,
+            positionY: sql`${String(data.positionY)}`,
+            imageUrl: sql`${data.imageUrl || null}`,
+            sizeWidth: sql`${data.sizeWidth ? String(data.sizeWidth) : '1.0'}`,
+            sizeHeight: sql`${data.sizeHeight ? String(data.sizeHeight) : '1.0'}`,
+            gridSize: sql`${data.gridSize || 'medium'}`,
+            visionEnabled: sql`${data.visionEnabled || false}`,
+            visionRange: sql`${data.visionRange ? String(data.visionRange) : null}`,
+            emitsLight: sql`${data.emitsLight || false}`,
+            lightRange: sql`${data.lightRange ? String(data.lightRange) : null}`,
+            lightColor: sql`${data.lightColor || null}`,
+          })
+          .from(scenes)
+          .where(
+            and(
+              eq(scenes.id, sceneId),
+              eq(scenes.userId, userId),
+              data.actorId
+                ? exists(
+                    db
+                      .select()
+                      .from(characters)
+                      .where(
+                        and(
+                          eq(characters.id, data.actorId),
+                          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                        )
+                      )
+                  )
+                : sql`true`
+            )
+          )
+      )
       .returning();
 
     if (!token) {
-      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create token' });
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene or character not found' });
     }
 
     // If actorId is provided, create character-token link
