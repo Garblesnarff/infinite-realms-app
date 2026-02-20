@@ -316,6 +316,7 @@ export default tseslint.config(
       'server-bun/src/trpc/routers/blog-taxonomy.ts',
       'src/components/blog-admin/blog-post-editor/media-manager.tsx',
       'src/features/game-session/hooks/use-chat-history.ts',
+      'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
     ],
     rules: {
       'max-lines': 'warn',

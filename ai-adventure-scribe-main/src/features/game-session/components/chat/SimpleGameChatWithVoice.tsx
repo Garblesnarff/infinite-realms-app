@@ -6,18 +6,30 @@
  */
 
 import { Send, Loader2, LogOut } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { DMChatBubble } from './chat/DMChatBubble';
 
 import type { ChatMessage } from '@/services/ai-service';
+import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
 import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
 import { useChatHistory } from '@/features/game-session/hooks/use-chat-history';
@@ -62,6 +74,8 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
     endSession,
   } = useSimpleGameSession(campaignId, characterId);
   const [currentMessage, setCurrentMessage] = useState('');
+  const [isEndSessionDialogOpen, setIsEndSessionDialogOpen] = useState(false);
+  const chatInputId = useId();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -84,13 +98,16 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
     characterId,
     campaignDetails,
     characterDetails,
-    onMessageReceived: (response: any) => {
+    onMessageReceived: (response: unknown) => {
       // Display NPC roll popups if enabled and rolls are present
-      if (showNPCRolls && response?.context?.npcRollResults) {
-        const npcRolls = response.context.npcRollResults;
+      if (showNPCRolls && response && typeof response === 'object') {
+        const res = response as Record<string, unknown>;
+        const context = res.context as Record<string, unknown> | undefined;
+        const npcRolls = context?.npcRollResults;
+
         if (Array.isArray(npcRolls) && npcRolls.length > 0) {
           logger.info(`🎲 Adding ${npcRolls.length} NPC rolls to display queue`);
-          addRolls(npcRolls);
+          addRolls(npcRolls as AutoRollResult[]);
         }
       }
     },
@@ -126,29 +143,36 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   );
 
   /**
-   * End game session
+   * End game session confirmation
    */
-  const handleEndSession = useCallback(async () => {
+  const handleEndSession = useCallback(() => {
     if (!session) {
       logger.warn('No session to end');
       navigate('/');
       return;
     }
+    setIsEndSessionDialogOpen(true);
+  }, [session, navigate]);
 
-    if (
-      window.confirm('Are you sure you want to end this adventure? Your progress will be saved.')
-    ) {
-      try {
-        await endSession(session.id);
-        toast.success('Adventure ended. Your progress has been saved.');
-        navigate('/');
-      } catch (error) {
-        handleAsyncError(error, {
-          userMessage: 'Failed to end session properly, but navigating home.',
-          context: { location: 'SimpleGameChatWithVoice.handleEndSession', sessionId: session.id },
-        });
-        navigate('/');
-      }
+  /**
+   * Confirm end game session
+   */
+  const confirmEndSession = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setIsEndSessionDialogOpen(false);
+    try {
+      await endSession(session.id);
+      toast.success('Adventure ended. Your progress has been saved.');
+      navigate('/');
+    } catch (error) {
+      handleAsyncError(error, {
+        userMessage: 'Failed to end session properly, but navigating home.',
+        context: { location: 'SimpleGameChatWithVoice.handleEndSession', sessionId: session.id },
+      });
+      navigate('/');
     }
   }, [session, endSession, navigate]);
 
@@ -216,9 +240,11 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
 
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={handleEndSession}
-            className="absolute top-3 right-3 text-destructive hover:text-destructive hover:bg-destructive/5"
+            className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/5"
+            aria-label="End Adventure"
+            title="End Adventure"
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -250,19 +276,27 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
             {/* Input Area */}
             <div className="flex-shrink-0 p-6 border-t bg-card">
               <form onSubmit={handleSubmit} className="flex gap-2">
-                <Input
-                  value={currentMessage}
-                  onChange={(e) => setCurrentMessage(e.target.value)}
-                  placeholder="Describe your actions..."
-                  disabled={isSending}
-                  className="flex-1"
-                  maxLength={500}
-                />
+                <div className="flex-1">
+                  <Label htmlFor={chatInputId} className="sr-only">
+                    Describe your actions
+                  </Label>
+                  <Input
+                    id={chatInputId}
+                    value={currentMessage}
+                    onChange={(e) => setCurrentMessage(e.target.value)}
+                    placeholder="Describe your actions..."
+                    disabled={isSending}
+                    className="w-full"
+                    maxLength={500}
+                  />
+                </div>
                 <Button
                   type="submit"
                   disabled={isSending || !currentMessage.trim()}
                   size="sm"
                   className="px-4"
+                  aria-label={isSending ? "Sending..." : "Send Message"}
+                  title={isSending ? "Sending..." : "Send Message"}
                 >
                   {isSending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -285,6 +319,27 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       {showNPCRolls && currentRoll && (
         <NPCRollDisplay roll={currentRoll} onDismiss={dismissCurrent} autoDismissDelay={3000} />
       )}
+
+      {/* End Session Confirmation Dialog */}
+      <AlertDialog open={isEndSessionDialogOpen} onOpenChange={setIsEndSessionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Adventure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to end this adventure? Your progress will be saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmEndSession}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              End Adventure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SimpleMessageProvider>
   );
 };
