@@ -224,7 +224,6 @@ export const blogPostsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, updates } = input;
       const { categoryIds, tagIds, ...postUpdates } = updates;
-      const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
 
       const [existingPost] = await ctx.db
         .select({ id: blogPosts.id, authorId: blogPosts.authorId })
@@ -233,7 +232,13 @@ export const blogPostsRouter = router({
         .limit(1);
 
       if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
-      if (!(await canManagePost(ctx, id, existingPost.authorId))) {
+
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        id,
+        existingPost.authorId,
+      );
+      if (!canManage) {
         // Mask unauthorized access as not found to avoid disclosing post existence.
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
@@ -267,13 +272,34 @@ export const blogPostsRouter = router({
 
       const updatePayload: any = { ...postUpdates, updatedAt: new Date() };
       if (updates.status) {
-        Object.assign(updatePayload, normalizeStatusFields(updates.status, updates.scheduledFor, updates.publishedAt));
+        Object.assign(
+          updatePayload,
+          normalizeStatusFields(updates.status, updates.scheduledFor, updates.publishedAt),
+        );
       }
 
-      const [updatedPost] = await ctx.db.update(blogPosts).set(updatePayload).where(eq(blogPosts.id, id)).returning();
+      // 🛡️ Sentinel: Atomic update with ownership check (author or admin) in WHERE clause.
+      const [updatedPost] = await ctx.db
+        .update(blogPosts)
+        .set(updatePayload)
+        .where(
+          and(
+            eq(blogPosts.id, id),
+            userAuthorId && !isAdmin ? eq(blogPosts.authorId, userAuthorId) : undefined,
+          ),
+        )
+        .returning();
 
-      if (categoryIds !== undefined) await syncPostCategories(ctx, id, categoryIds);
-      if (tagIds !== undefined) await syncPostTags(ctx, id, tagIds);
+      if (!updatedPost) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      if (categoryIds !== undefined) {
+        await syncPostCategories(ctx, id, categoryIds, userAuthorId, isAdmin);
+      }
+      if (tagIds !== undefined) {
+        await syncPostTags(ctx, id, tagIds, userAuthorId, isAdmin);
+      }
 
       return updatedPost;
     }),
@@ -281,20 +307,42 @@ export const blogPostsRouter = router({
   /**
    * Delete blog post (PROTECTED)
    */
-  delete: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(async ({ input, ctx }) => {
-    const [existingPost] = await ctx.db
-      .select({ id: blogPosts.id, authorId: blogPosts.authorId })
-      .from(blogPosts)
-      .where(eq(blogPosts.id, input.id))
-      .limit(1);
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const [existingPost] = await ctx.db
+        .select({ id: blogPosts.id, authorId: blogPosts.authorId })
+        .from(blogPosts)
+        .where(eq(blogPosts.id, input.id))
+        .limit(1);
 
-    if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
-    if (!(await canManagePost(ctx, input.id, existingPost.authorId))) {
-      // Mask unauthorized access as not found to avoid disclosing post existence.
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
-    }
+      if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
 
-    await ctx.db.delete(blogPosts).where(eq(blogPosts.id, input.id));
-    return { success: true };
-  }),
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        input.id,
+        existingPost.authorId,
+      );
+      if (!canManage) {
+        // Mask unauthorized access as not found to avoid disclosing post existence.
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      // 🛡️ Sentinel: Atomic delete with ownership check in WHERE clause.
+      const [deleted] = await ctx.db
+        .delete(blogPosts)
+        .where(
+          and(
+            eq(blogPosts.id, input.id),
+            userAuthorId && !isAdmin ? eq(blogPosts.authorId, userAuthorId) : undefined,
+          ),
+        )
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      }
+
+      return { success: true };
+    }),
 });

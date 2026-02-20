@@ -17,7 +17,7 @@ import {
   blogTags,
 } from '../../../../db/schema/index';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from '../trpc.js';
-import { canManagePost } from './blog-helpers.js';
+import { canManagePost, syncPostCategories, syncPostTags } from './blog-helpers.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
 
 export const blogTaxonomyRouter = router({
@@ -261,7 +261,7 @@ export const blogTaxonomyRouter = router({
       z.object({
         postId: z.string().uuid(),
         categoryIds: z.array(z.string().uuid()).min(1).max(10),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const [post] = await ctx.db
@@ -274,22 +274,17 @@ export const blogTaxonomyRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        input.postId,
+        post.authorId,
+      );
+      if (!canManage) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      // Delete existing category associations
-      await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.postId, input.postId));
-
-      // Insert new associations
-      if (input.categoryIds.length > 0) {
-        await ctx.db.insert(blogPostCategories).values(
-          input.categoryIds.map((categoryId) => ({
-            postId: input.postId,
-            categoryId,
-          }))
-        );
-      }
+      // 🛡️ Sentinel: Use hardened helper with atomic ownership checks.
+      await syncPostCategories(ctx, input.postId, input.categoryIds, userAuthorId, isAdmin);
 
       return { success: true };
     }),
@@ -303,7 +298,7 @@ export const blogTaxonomyRouter = router({
       z.object({
         postId: z.string().uuid(),
         tagIds: z.array(z.string().uuid()).min(1).max(20),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const [post] = await ctx.db
@@ -316,22 +311,17 @@ export const blogTaxonomyRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        input.postId,
+        post.authorId,
+      );
+      if (!canManage) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      // Delete existing tag associations
-      await ctx.db.delete(blogPostTags).where(eq(blogPostTags.postId, input.postId));
-
-      // Insert new associations
-      if (input.tagIds.length > 0) {
-        await ctx.db.insert(blogPostTags).values(
-          input.tagIds.map((tagId) => ({
-            postId: input.postId,
-            tagId,
-          }))
-        );
-      }
+      // 🛡️ Sentinel: Use hardened helper with atomic ownership checks.
+      await syncPostTags(ctx, input.postId, input.tagIds, userAuthorId, isAdmin);
 
       return { success: true };
     }),
