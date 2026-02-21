@@ -191,9 +191,16 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
             </div>
 
             {/* HP Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="w-full bg-gray-200 rounded-full h-3 overflow-hidden"
+              role="progressbar"
+              aria-valuenow={combatState.currentHp}
+              aria-valuemin={0}
+              aria-valuemax={maxHp}
+              aria-label="Hit points"
+            >
               <div
-                className="bg-red-500 h-33 rounded-full transition-all"
+                className="bg-red-500 h-full rounded-full transition-all"
                 style={{
                   width: `${Math.max(0, (combatState.currentHp / maxHp) * 100)}%`,
                 }}
@@ -389,14 +396,18 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
                     {[1, 2, 3].map((i) => (
                       <button
                         key={i}
-                        className={`w-4 h-4 rounded-full border-2 ${
+                        type="button"
+                        className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 ${
                           i <= combatState.deathSaves.successes
                             ? 'bg-green-500 border-green-500'
-                            : 'border-green-500'
+                            : 'border-green-500 hover:bg-green-500/20'
                         }`}
                         onClick={() =>
                           updateDeathSave('success', i > combatState.deathSaves.successes)
                         }
+                        aria-label={`Death save success ${i}`}
+                        aria-pressed={i <= combatState.deathSaves.successes}
+                        title={`Mark death save success ${i}`}
                       />
                     ))}
                   </div>
@@ -408,14 +419,18 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
                     {[1, 2, 3].map((i) => (
                       <button
                         key={i}
-                        className={`w-4 h-4 rounded-full border-2 ${
+                        type="button"
+                        className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 ${
                           i <= combatState.deathSaves.failures
                             ? 'bg-red-500 border-red-500'
-                            : 'border-red-500'
+                            : 'border-red-500 hover:bg-red-500/20'
                         }`}
                         onClick={() =>
                           updateDeathSave('failure', i > combatState.deathSaves.failures)
                         }
+                        aria-label={`Death save failure ${i}`}
+                        aria-pressed={i <= combatState.deathSaves.failures}
+                        title={`Mark death save failure ${i}`}
                       />
                     ))}
                   </div>

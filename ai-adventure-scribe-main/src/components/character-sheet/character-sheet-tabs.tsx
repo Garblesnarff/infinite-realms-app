@@ -111,7 +111,10 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
                 />
               </div>
             ) : (
-              <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
+              <div
+                className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold"
+                aria-hidden="true"
+              >
                 {character.name?.charAt(0).toUpperCase() || '?'}
               </div>
             )}
@@ -203,7 +206,10 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
 
       {/* Tab Navigation and Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-7 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg">
+        <TabsList
+          className="grid w-full grid-cols-4 md:grid-cols-8 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg"
+          aria-label="Character sheet sections"
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
