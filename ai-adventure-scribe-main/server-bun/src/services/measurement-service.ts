@@ -27,7 +27,7 @@ import {
   type MeasurementTemplate,
   type Token,
 } from '../../../db/schema/index';
-import { InternalServerError, NotFoundError } from '../lib/errors.js';
+import { NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new measurement template
@@ -68,38 +68,34 @@ export class MeasurementService {
     userId: string,
     data: CreateTemplateData
   ): Promise<MeasurementTemplate> {
-    // Verify the scene exists and user has access (is the owner/GM)
-    const [scene] = await db
-      .select({ id: scenes.id })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    // Create the template
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that templates can only be added to scenes the user is authorized to access
+    // while masking resource existence in a single atomic database round-trip.
     const [template] = await db
       .insert(measurementTemplates)
-      .values({
-        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
-        sceneId,
-        createdBy: userId,
-        templateType: data.templateType,
-        originX: data.originX,
-        originY: data.originY,
-        direction: data.direction,
-        distance: data.distance,
-        width: data.width ?? null,
-        color: data.color ?? '#FF0000',
-        opacity: data.opacity ?? 0.5,
-        isTemporary: data.isTemporary ?? true,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            createdBy: sql`${userId}`,
+            templateType: sql`${data.templateType}`,
+            originX: sql`${data.originX}`,
+            originY: sql`${data.originY}`,
+            direction: sql`${data.direction}`,
+            distance: sql`${data.distance}`,
+            width: sql`${data.width ?? null}`,
+            color: sql`${data.color ?? '#FF0000'}`,
+            opacity: sql`${data.opacity ?? 0.5}`,
+            isTemporary: sql`${data.isTemporary ?? true}`,
+          })
+          .from(scenes)
+          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      )
       .returning();
 
     if (!template) {
-      throw new InternalServerError('Failed to create template');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Scene', sceneId);
     }
 
     return template;
@@ -428,19 +424,11 @@ export class MeasurementService {
     userId: string,
     maxAgeMinutes: number = 60
   ): Promise<number> {
-    // Verify scene ownership
-    const [scene] = await db
-      .select({ userId: scenes.userId })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
     const cutoffDate = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
 
+    // 🛡️ Sentinel: Atomic delete with ownership check via exists subquery.
+    // We removed the redundant pre-flight scene ownership query for performance
+    // and to follow the atomic verification pattern.
     const result = await db
       .delete(measurementTemplates)
       .where(

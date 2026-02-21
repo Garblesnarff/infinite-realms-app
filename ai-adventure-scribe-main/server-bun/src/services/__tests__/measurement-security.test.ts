@@ -35,11 +35,14 @@ vi.mock('../../../../db/client', () => {
         });
         return qb;
       }),
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
+      insert: vi.fn(() => {
+        const insertMock: any = {
+          values: vi.fn(() => insertMock),
+          select: vi.fn(() => insertMock),
           returning: vi.fn().mockResolvedValue([]),
-        })),
-      })),
+        };
+        return insertMock;
+      }),
       update: vi.fn(() => ({
         set: vi.fn(() => ({
           where: vi.fn(() => ({
@@ -80,32 +83,68 @@ describe('MeasurementService Security', () => {
     vi.clearAllMocks();
   });
 
-  describe('cleanupTemporaryTemplates', () => {
-    it('should not crash and should verify scene ownership', async () => {
-      const qb1 = (db.select() as any);
-      qb1._results = [{ userId: mockUserId }]; // Scene ownership check
+  describe('createTemplate', () => {
+    const mockData: any = {
+      templateType: 'sphere',
+      originX: 100,
+      originY: 100,
+      direction: 0,
+      distance: 20,
+    };
 
-      (db.select as any).mockReturnValueOnce(qb1);
+    it('should use atomic INSERT ... SELECT for ownership verification', async () => {
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([{ id: mockTemplateId, sceneId: mockSceneId }]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
 
-      // Mock delete
-      (db.delete as any).mockReturnValueOnce({
-        where: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: 't1' }, { id: 't2' }])
-      });
+      const result = await MeasurementService.createTemplate(mockSceneId, mockUserId, mockData);
 
-      const count = await MeasurementService.cleanupTemporaryTemplates(mockSceneId, mockUserId);
-      expect(count).toBe(2);
-      expect(db.delete).toHaveBeenCalled();
+      expect(db.insert).toHaveBeenCalled();
+      expect(mockInsertBuilder.select).toHaveBeenCalled();
+      expect(result.id).toBe(mockTemplateId);
     });
 
-    it('should throw NotFoundError if scene is not owned', async () => {
-      const qb1 = (db.select() as any);
-      qb1._results = []; // Scene not found/owned
+    it('should throw NotFoundError if insertion fails (unauthorized or missing scene)', async () => {
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([]); // No row inserted means no access
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
 
-      (db.select as any).mockReturnValueOnce(qb1);
-
-      await expect(MeasurementService.cleanupTemporaryTemplates(mockSceneId, mockUserId))
+      await expect(MeasurementService.createTemplate(mockSceneId, mockUserId, mockData))
         .rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('cleanupTemporaryTemplates', () => {
+    it('should use atomic DELETE with ownership check via exists', async () => {
+      const mockDeleteBuilder: any = {
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 't1' }, { id: 't2' }])
+      };
+      (db.delete as any).mockReturnValueOnce(mockDeleteBuilder);
+
+      const count = await MeasurementService.cleanupTemporaryTemplates(mockSceneId, mockUserId);
+
+      expect(count).toBe(2);
+      expect(db.delete).toHaveBeenCalled();
+
+      // Verify that the where clause was called with an "exists" condition
+      const whereArgs = mockDeleteBuilder.where.mock.calls[0][0];
+      // Search for the exists condition in the 'and' arguments
+      const hasExists = whereArgs.args.some((arg: any) => arg.type === 'exists');
+      expect(hasExists).toBe(true);
+    });
+
+    it('should return 0 if no templates found or scene not owned (masked)', async () => {
+      const mockDeleteBuilder: any = {
+        where: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([])
+      };
+      (db.delete as any).mockReturnValueOnce(mockDeleteBuilder);
+
+      const count = await MeasurementService.cleanupTemporaryTemplates(mockSceneId, mockUserId);
+      expect(count).toBe(0);
     });
   });
 
