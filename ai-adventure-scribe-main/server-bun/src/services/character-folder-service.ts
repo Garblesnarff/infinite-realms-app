@@ -53,26 +53,22 @@ export class CharacterFolderService {
    * Get all folder IDs in a subtree (including the folder itself)
    */
   private static async getFolderSubtree(folderId: string, userId: string): Promise<string[]> {
-    const allFolders = await db.query.characterFolders.findMany({
-      where: eq(characterFolders.userId, userId),
-      columns: { id: true, parentFolderId: true },
-    });
+    // ⚡ Bolt: Optimized to use a PostgreSQL recursive CTE to fetch only the relevant subtree IDs.
+    // This replaces the previous in-memory calculation which required fetching ALL folders for the user.
+    // Reduces database data transfer and application memory usage from O(N) to O(Subtree).
+    const results = await db.execute<{ id: string }>(sql`
+      WITH RECURSIVE folder_subtree AS (
+        SELECT ${characterFolders.id} FROM ${characterFolders}
+        WHERE ${characterFolders.id} = ${folderId} AND ${characterFolders.userId} = ${userId}
+        UNION ALL
+        SELECT f.${characterFolders.id} FROM ${characterFolders} f
+        JOIN folder_subtree fs ON f.${characterFolders.parentFolderId} = fs.${characterFolders.id}
+        WHERE f.${characterFolders.userId} = ${userId}
+      )
+      SELECT ${characterFolders.id} FROM folder_subtree
+    `);
 
-    const subtree: string[] = [folderId];
-    let currentLevel = [folderId];
-
-    while (currentLevel.length > 0) {
-      const nextLevel: string[] = [];
-      for (const folder of allFolders) {
-        if (folder.parentFolderId && currentLevel.includes(folder.parentFolderId)) {
-          subtree.push(folder.id);
-          nextLevel.push(folder.id);
-        }
-      }
-      currentLevel = nextLevel;
-    }
-
-    return subtree;
+    return results.map((r) => r.id as string);
   }
 
   /**
@@ -134,19 +130,23 @@ export class CharacterFolderService {
     // Get next sort order if not provided
     let sortOrder = data.sortOrder ?? 0;
     if (data.sortOrder === undefined) {
-      const existingFolders = await db.query.characterFolders.findMany({
-        where: and(
-          eq(characterFolders.userId, userId),
-          data.parentFolderId
-            ? eq(characterFolders.parentFolderId, data.parentFolderId)
-            : isNull(characterFolders.parentFolderId)
-        ),
-        columns: { sortOrder: true },
-      });
+      // ⚡ Bolt: Optimized to use SQL MAX() aggregation instead of fetching all folders at the same level.
+      // This reduces data transfer and memory usage during folder creation.
+      const [maxResult] = await db
+        .select({
+          maxSortOrder: sql<number>`max(${characterFolders.sortOrder})`,
+        })
+        .from(characterFolders)
+        .where(
+          and(
+            eq(characterFolders.userId, userId),
+            data.parentFolderId
+              ? eq(characterFolders.parentFolderId, data.parentFolderId)
+              : isNull(characterFolders.parentFolderId)
+          )
+        );
 
-      sortOrder = existingFolders.length > 0
-        ? Math.max(...existingFolders.map(f => f.sortOrder)) + 1
-        : 0;
+      sortOrder = (maxResult?.maxSortOrder ?? -1) + 1;
     }
 
     const [folder] = await db
