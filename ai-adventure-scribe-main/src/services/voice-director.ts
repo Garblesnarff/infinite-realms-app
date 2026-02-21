@@ -12,13 +12,14 @@
  *
  * @author AI Dungeon Master Team
  */
+
+import { VoiceAudioService } from './voice/voice-audio-service';
 import {
   type VoiceSegment,
   type VoicePool,
   type VoiceConfig,
   type AISegment,
   VOICE_POOLS,
-  ELEVENLABS_MODEL,
   assignVoice,
   detectVoiceCategoryFromNPCType,
   getCharacterVoiceMappings as getMappings,
@@ -30,60 +31,6 @@ import logger from '@/lib/logger';
 export type { VoiceSegment, VoicePool, VoiceConfig, AISegment };
 
 export class VoiceDirector {
-  // Logger
-  // Centralized logging utility for level-based filtering
-
-  // Audio cache for generated segments
-  private static audioCache: Map<string, { audioBlob: Blob; timestamp: number }> = new Map();
-  private static readonly CACHE_MAX_SIZE = 50;
-  private static readonly CACHE_MAX_AGE = 1000 * 60 * 60; // 1 hour
-
-  /**
-   * Generate cache key for audio segments
-   */
-  private static generateCacheKey(voiceId: string, text: string): string {
-    // Simple hash function for text
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      const char = text.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return `${voiceId}_${Math.abs(hash)}`;
-  }
-
-  /**
-   * Clean expired cache entries
-   */
-  private static cleanExpiredCache(): void {
-    const now = Date.now();
-    for (const [key, value] of VoiceDirector.audioCache.entries()) {
-      if (now - value.timestamp > VoiceDirector.CACHE_MAX_AGE) {
-        VoiceDirector.audioCache.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Manage cache size
-   */
-  private static manageCacheSize(): void {
-    if (VoiceDirector.audioCache.size > VoiceDirector.CACHE_MAX_SIZE) {
-      // Remove oldest entries
-      const entries = Array.from(VoiceDirector.audioCache.entries()).sort(
-        (a, b) => a[1].timestamp - b[1].timestamp,
-      );
-
-      const toRemove = entries.slice(0, 10); // Remove 10 oldest
-      toRemove.forEach(([key]) => {
-        VoiceDirector.audioCache.delete(key);
-      });
-
-      logger.info(`🧹 Cleaned up ${toRemove.length} old audio cache entries`);
-    }
-  }
-
-
   /**
    * Convert AI segments to voice-ready segments
    * This is the main entry point - replaces the complex parsing chain
@@ -105,7 +52,7 @@ export class VoiceDirector {
         }
 
         // Assign voice based on type and character
-        const voiceConfig = VoiceDirector.assignVoice(segment);
+        const voiceConfig = assignVoice(segment);
 
         const voiceSegment: VoiceSegment = {
           id: `segment_${Date.now()}_${i}`,
@@ -137,10 +84,6 @@ export class VoiceDirector {
   /**
    * Enhanced: Process plain text by detecting dialogue and attributing voices
    * Parses quoted speech with attribution to assign character voices
-   * Pattern examples:
-   *   - "Hello there!" the guard says.
-   *   - The merchant exclaims, "Welcome!"
-   *   - "Beware..." warns the wizard.
    */
   static processPlainText(text: string): VoiceSegment[] {
     logger.info('📝 VoiceDirector: Processing plain text with dialogue detection');
@@ -196,11 +139,6 @@ export class VoiceDirector {
     const segments: AISegment[] = [];
 
     // Regex to find quoted dialogue with optional attribution
-    // Matches patterns like:
-    // - "dialogue" the character says/asks/etc.
-    // - "dialogue," said the character
-    // - "dialogue," character says
-    // - The character says, "dialogue"
     const dialoguePattern = /(?:(?:(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?[""]([^""]+)[""]\s*(?:,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)?)?)/gi;
 
     let lastIndex = 0;
@@ -257,83 +195,10 @@ export class VoiceDirector {
   }
 
   /**
-   * Generate audio for a single segment with caching
+   * Generate audio for a single segment with caching - Delegated to VoiceAudioService
    */
   static async generateAudio(segment: VoiceSegment, apiKey: string): Promise<VoiceSegment> {
-    const cacheKey = VoiceDirector.generateCacheKey(segment.voiceId, segment.text);
-
-    // Check cache first
-    VoiceDirector.cleanExpiredCache();
-    const cachedAudio = VoiceDirector.audioCache.get(cacheKey);
-
-    if (cachedAudio) {
-      logger.debug(
-        `🔄 Using cached audio for ${segment.character}: "${segment.text.substring(0, 50)}..."`,
-      );
-      const audioUrl = URL.createObjectURL(cachedAudio.audioBlob);
-      return {
-        ...segment,
-        audioBlob: cachedAudio.audioBlob,
-        audioUrl,
-        isGenerating: false,
-      };
-    }
-
-    logger.info(
-      `🎵 Generating NEW audio for ${segment.character}: "${segment.text.substring(0, 50)}..."`,
-    );
-
-    try {
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${segment.voiceId}`,
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': apiKey,
-          },
-          body: JSON.stringify({
-            text: segment.text,
-            model_id: ELEVENLABS_MODEL,
-            voice_settings: segment.voiceSettings,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Cache the generated audio
-      VoiceDirector.audioCache.set(cacheKey, {
-        audioBlob,
-        timestamp: Date.now(),
-      });
-
-      // Manage cache size
-      VoiceDirector.manageCacheSize();
-
-      logger.debug(`💾 Cached audio for key: ${cacheKey}`);
-
-      return {
-        ...segment,
-        audioBlob,
-        audioUrl,
-        isGenerating: false,
-      };
-    } catch (error) {
-      logger.error(`❌ Failed to generate audio for ${segment.character}:`, error);
-      return {
-        ...segment,
-        error: error instanceof Error ? error.message : 'Audio generation failed',
-        isGenerating: false,
-      };
-    }
+    return VoiceAudioService.generateAudio(segment, apiKey);
   }
 
 
@@ -371,24 +236,17 @@ export class VoiceDirector {
   }
 
   /**
-   * Clear audio cache manually
+   * Clear audio cache manually - Delegated to VoiceAudioService
    */
   static clearAudioCache(): void {
-    const cacheSize = VoiceDirector.audioCache.size;
-    VoiceDirector.audioCache.clear();
-    logger.info(`🧹 Cleared ${cacheSize} cached audio segments`);
+    VoiceAudioService.clearAudioCache();
   }
 
   /**
-   * Get audio cache statistics
+   * Get audio cache statistics - Delegated to VoiceAudioService
    */
   static getAudioCacheStats(): { size: number; keys: string[] } {
-    const stats = {
-      size: VoiceDirector.audioCache.size,
-      keys: Array.from(VoiceDirector.audioCache.keys()),
-    };
-    logger.debug('📊 Audio Cache Stats:', stats);
-    return stats;
+    return VoiceAudioService.getAudioCacheStats();
   }
 
   /**
