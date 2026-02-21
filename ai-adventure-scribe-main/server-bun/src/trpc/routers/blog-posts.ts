@@ -23,8 +23,7 @@ import {
   canManagePost,
   normalizeStatusFields,
   resolveAuthorId,
-  syncPostCategories,
-  syncPostTags,
+  syncPostRelations,
 } from './blog-helpers.js';
 import {
   blogListQuerySchema,
@@ -210,8 +209,9 @@ export const blogPostsRouter = router({
 
     if (!post) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create post' });
 
-    if (categoryIds) await syncPostCategories(ctx, post.id, categoryIds);
-    if (tagIds) await syncPostTags(ctx, post.id, tagIds);
+    // ⚡ Bolt: Parallelize category and tag synchronization using syncPostRelations helper.
+    // This reduces sequential database round-trips from O(4) to O(2) for taxonomy.
+    await syncPostRelations(ctx, post.id, categoryIds, tagIds);
 
     return post;
   }),
@@ -294,12 +294,9 @@ export const blogPostsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      if (categoryIds !== undefined) {
-        await syncPostCategories(ctx, id, categoryIds, userAuthorId, isAdmin);
-      }
-      if (tagIds !== undefined) {
-        await syncPostTags(ctx, id, tagIds, userAuthorId, isAdmin);
-      }
+      // ⚡ Bolt: Parallelize category and tag synchronization using syncPostRelations helper.
+      // This reduces sequential database round-trips from O(4) to O(2) for taxonomy.
+      await syncPostRelations(ctx, id, categoryIds, tagIds, userAuthorId, isAdmin);
 
       return updatedPost;
     }),

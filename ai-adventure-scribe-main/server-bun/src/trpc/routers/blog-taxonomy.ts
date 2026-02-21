@@ -157,10 +157,9 @@ export const blogTaxonomyRouter = router({
   deleteCategory: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      // Delete post associations
-      await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.categoryId, input.id));
-
-      // Delete category
+      // ⚡ Bolt: Removed manual deletion of post associations.
+      // The schema defines ON DELETE CASCADE for blog_post_categories.category_id,
+      // so deleting the category automatically removes all associations in one round-trip.
       await ctx.db.delete(blogCategories).where(eq(blogCategories.id, input.id));
 
       return { success: true };
@@ -243,10 +242,9 @@ export const blogTaxonomyRouter = router({
   deleteTag: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      // Delete post associations
-      await ctx.db.delete(blogPostTags).where(eq(blogPostTags.tagId, input.id));
-
-      // Delete tag
+      // ⚡ Bolt: Removed manual deletion of post associations.
+      // The schema defines ON DELETE CASCADE for blog_post_tags.tag_id,
+      // so deleting the tag automatically removes all associations in one round-trip.
       await ctx.db.delete(blogTags).where(eq(blogTags.id, input.id));
 
       return { success: true };

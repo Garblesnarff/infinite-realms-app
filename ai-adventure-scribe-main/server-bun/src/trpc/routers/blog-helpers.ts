@@ -140,6 +140,34 @@ export function normalizeStatusFields(
 }
 
 /**
+ * Sync both categories and tags in parallel to avoid redundant sequential round-trips.
+ * Uses Promise.all to run category and tag synchronization tasks simultaneously.
+ */
+export async function syncPostRelations(
+  ctx: Context,
+  postId: string,
+  categoryIds?: string[],
+  tagIds?: string[],
+  userAuthorId?: string | null,
+  isAdmin?: boolean,
+): Promise<void> {
+  // ⚡ Bolt: Parallelize category and tag synchronization to reduce sequential database round-trips.
+  const tasks: Promise<void>[] = [];
+
+  if (categoryIds !== undefined) {
+    tasks.push(syncPostCategories(ctx, postId, categoryIds, userAuthorId, isAdmin));
+  }
+
+  if (tagIds !== undefined) {
+    tasks.push(syncPostTags(ctx, postId, tagIds, userAuthorId, isAdmin));
+  }
+
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+}
+
+/**
  * Sync post categories
  * Deletes existing relationships and creates new ones
  */
