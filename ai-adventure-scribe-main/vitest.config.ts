@@ -55,6 +55,7 @@ export default defineConfig({
       'src/services/combat/__tests__/CombatSequenceValidator.test.ts',
       'src/services/combat/__tests__/npc-auto-roller.test.ts',
       'src/services/combat/__tests__/rollStateManager.test.ts',
+      'src/services/combat/__tests__/CombatTurnManager.test.ts',
       'src/services/__tests__/ai-service-deduplication.test.ts',
       'src/services/__tests__/encounter-generator.test.ts',
       'src/services/encounters/__tests__/srd-loader.test.ts',
