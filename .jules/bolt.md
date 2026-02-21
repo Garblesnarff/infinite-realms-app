@@ -39,3 +39,7 @@
 ### 2025-05-22 - Corrupted Source Files
 **Learning:** Found that source files can be truncated, causing build failures (unterminated string literals). This is an infrastructure issue, not a code issue.
 **Action:** Always verify if a build failure is due to your changes or existing corruption before attempting fixes.
+
+## 2026-05-22 - Redundant Utility Calculations
+**Learning:** Core calculation utilities (like `calculateAllCharacterStats`) often call sub-functions that re-calculate the same shared values (proficiency bonus, skill modifiers, etc.), leading to O(N^2) or multiple O(N) paths in what should be O(1) or single O(N) operations.
+**Action:** Use parameter drilling to pass shared, pre-calculated values down to sub-functions. Add optional parameters to sub-function signatures to allow them to skip redundant work while maintaining backward compatibility.

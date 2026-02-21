@@ -39,6 +39,30 @@ export interface CharacterStats {
 }
 
 /**
+ * ⚡ Bolt: Static skills map to avoid re-allocation on every calculateSkillModifiers call.
+ */
+const SKILLS_MAP = {
+  Acrobatics: 'dexterity',
+  'Animal Handling': 'wisdom',
+  Arcana: 'intelligence',
+  Athletics: 'strength',
+  Deception: 'charisma',
+  History: 'intelligence',
+  Insight: 'wisdom',
+  Intimidation: 'charisma',
+  Investigation: 'intelligence',
+  Medicine: 'wisdom',
+  Nature: 'intelligence',
+  Perception: 'wisdom',
+  Performance: 'charisma',
+  Persuasion: 'charisma',
+  Religion: 'intelligence',
+  'Sleight of Hand': 'dexterity',
+  Stealth: 'dexterity',
+  Survival: 'wisdom',
+} as const;
+
+/**
  * Calculate proficiency bonus based on character level
  */
 export const calculateProficiencyBonus = (level: number): number => {
@@ -106,28 +130,38 @@ export const calculateArmorClass = (character: Character): number => {
 
 /**
  * Calculate spell save DC for spellcasters
+ * ⚡ Bolt: Added optional profBonus and ability to avoid redundant calculations.
  */
-export const calculateSpellSaveDC = (character: Character): number | undefined => {
-  const spellcastingAbility = getSpellcastingAbility(character.class);
-  if (!spellcastingAbility) return undefined;
+export const calculateSpellSaveDC = (
+  character: Character,
+  profBonus?: number,
+  spellcastingAbility?: keyof Character['abilityScores'] | null,
+): number | undefined => {
+  const ability = spellcastingAbility !== undefined ? spellcastingAbility : getSpellcastingAbility(character.class);
+  if (!ability) return undefined;
 
-  const abilityMod = character.abilityScores?.[spellcastingAbility]?.modifier || 0;
-  const profBonus = calculateProficiencyBonus(character.level || 1);
+  const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
+  const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
-  return 8 + profBonus + abilityMod;
+  return 8 + pb + abilityMod;
 };
 
 /**
  * Calculate spell attack bonus for spellcasters
+ * ⚡ Bolt: Added optional profBonus and ability to avoid redundant calculations.
  */
-export const calculateSpellAttackBonus = (character: Character): number | undefined => {
-  const spellcastingAbility = getSpellcastingAbility(character.class);
-  if (!spellcastingAbility) return undefined;
+export const calculateSpellAttackBonus = (
+  character: Character,
+  profBonus?: number,
+  spellcastingAbility?: keyof Character['abilityScores'] | null,
+): number | undefined => {
+  const ability = spellcastingAbility !== undefined ? spellcastingAbility : getSpellcastingAbility(character.class);
+  if (!ability) return undefined;
 
-  const abilityMod = character.abilityScores?.[spellcastingAbility]?.modifier || 0;
-  const profBonus = calculateProficiencyBonus(character.level || 1);
+  const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
+  const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
-  return profBonus + abilityMod;
+  return pb + abilityMod;
 };
 
 /**
@@ -202,45 +236,31 @@ export const calculateSpellSlots = (
 
 /**
  * Calculate skill modifiers for all skills
+ * ⚡ Bolt: Added optional profBonus to avoid redundant calculations.
+ * ⚡ Bolt: Optimized proficiency lookup using a Set.
  */
-export const calculateSkillModifiers = (character: Character): CharacterStats['skillModifiers'] => {
-  const profBonus = calculateProficiencyBonus(character.level || 1);
-
-  const skills = {
-    Acrobatics: 'dexterity',
-    'Animal Handling': 'wisdom',
-    Arcana: 'intelligence',
-    Athletics: 'strength',
-    Deception: 'charisma',
-    History: 'intelligence',
-    Insight: 'wisdom',
-    Intimidation: 'charisma',
-    Investigation: 'intelligence',
-    Medicine: 'wisdom',
-    Nature: 'intelligence',
-    Perception: 'wisdom',
-    Performance: 'charisma',
-    Persuasion: 'charisma',
-    Religion: 'intelligence',
-    'Sleight of Hand': 'dexterity',
-    Stealth: 'dexterity',
-    Survival: 'wisdom',
-  } as const;
+export const calculateSkillModifiers = (
+  character: Character,
+  profBonus?: number,
+): CharacterStats['skillModifiers'] => {
+  const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
   // Get class proficiencies (simplified)
   const classProficiencies = getClassSkillProficiencies(character.class);
   const raceProficiencies = getRaceSkillProficiencies(character.race, character.subrace);
-  const allProficiencies = [...classProficiencies, ...raceProficiencies];
+
+  // ⚡ Bolt: Use a Set for O(1) lookups instead of O(N) array includes in the loop.
+  const profSet = new Set([...classProficiencies, ...raceProficiencies]);
 
   const skillMods: CharacterStats['skillModifiers'] = {};
 
-  Object.entries(skills).forEach(([skill, ability]) => {
+  Object.entries(SKILLS_MAP).forEach(([skill, ability]) => {
     const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
-    const proficient = allProficiencies.includes(skill);
+    const proficient = profSet.has(skill);
     const expertise = false; // Could be enhanced to track expertise
 
     skillMods[skill] = {
-      modifier: abilityMod + (proficient ? profBonus : 0) + (expertise ? profBonus : 0),
+      modifier: abilityMod + (proficient ? pb : 0) + (expertise ? pb : 0),
       proficient,
       expertise,
     };
@@ -317,11 +337,13 @@ export const getRaceSkillProficiencies = (
 
 /**
  * Calculate saving throw modifiers
+ * ⚡ Bolt: Added optional profBonus to avoid redundant calculations.
  */
 export const calculateSavingThrowModifiers = (
   character: Character,
+  profBonus?: number,
 ): CharacterStats['savingThrowModifiers'] => {
-  const profBonus = calculateProficiencyBonus(character.level || 1);
+  const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
   const classProficiencies = getClassSavingThrowProficiencies(character.class);
 
   const savingThrows: CharacterStats['savingThrowModifiers'] = {};
@@ -330,7 +352,7 @@ export const calculateSavingThrowModifiers = (
     Object.entries(character.abilityScores).forEach(([ability, data]) => {
       const proficient = classProficiencies.includes(ability);
       savingThrows[ability] = {
-        modifier: data.modifier + (proficient ? profBonus : 0),
+        modifier: data.modifier + (proficient ? pb : 0),
         proficient,
       };
     });
@@ -366,16 +388,24 @@ export const calculateCarryingCapacity = (character: Character): number => {
 
 /**
  * Calculate passive perception
+ * ⚡ Bolt: Added optional skillMods to avoid redundant O(N) calculateSkillModifiers calls.
  */
-export const calculatePassivePerception = (character: Character): number => {
-  const skillMods = calculateSkillModifiers(character);
-  return 10 + (skillMods['Perception']?.modifier || 0);
+export const calculatePassivePerception = (
+  character: Character,
+  skillMods?: CharacterStats['skillModifiers'],
+): number => {
+  const mods = skillMods || calculateSkillModifiers(character);
+  return 10 + (mods['Perception']?.modifier || 0);
 };
 
 /**
  * Calculate all character stats at once
+ * ⚡ Bolt: Optimized by extracting shared values and eliminating redundant sub-calls.
+ * This reduces execution time by avoiding multiple O(N) skill calculations and repeated O(1) lookups.
  */
 export const calculateAllCharacterStats = (character: Character): CharacterStats => {
+  const level = character.level || 1;
+  const pb = calculateProficiencyBonus(level);
   const spellcastingAbility = getSpellcastingAbility(character.class);
 
   // Combined traits from race and subrace
@@ -386,26 +416,26 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     ...new Set([...(character.race?.languages || []), ...(character.subrace?.languages || [])]),
   ];
 
-  const skillMods = calculateSkillModifiers(character);
+  const skillMods = calculateSkillModifiers(character, pb);
 
   return {
-    proficiencyBonus: calculateProficiencyBonus(character.level || 1),
+    proficiencyBonus: pb,
     hitPoints: calculateHitPoints(character),
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: calculateArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
     speed: character.subrace?.speed || character.race?.speed || 30,
 
-    spellSaveDC: calculateSpellSaveDC(character),
-    spellAttackBonus: calculateSpellAttackBonus(character),
+    spellSaveDC: calculateSpellSaveDC(character, pb, spellcastingAbility),
+    spellAttackBonus: calculateSpellAttackBonus(character, pb, spellcastingAbility),
     spellcastingAbility: spellcastingAbility || undefined,
     spellSlots: calculateSpellSlots(character),
 
     skillModifiers: skillMods,
-    savingThrowModifiers: calculateSavingThrowModifiers(character),
+    savingThrowModifiers: calculateSavingThrowModifiers(character, pb),
 
     carryingCapacity: calculateCarryingCapacity(character),
-    passivePerception: calculatePassivePerception(character),
+    passivePerception: calculatePassivePerception(character, skillMods),
     passiveInvestigation: 10 + (skillMods['Investigation']?.modifier || 0),
     passiveInsight: 10 + (skillMods['Insight']?.modifier || 0),
 
