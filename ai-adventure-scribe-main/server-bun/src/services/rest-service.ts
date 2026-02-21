@@ -8,7 +8,7 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, or } from 'drizzle-orm';
+import { and, desc, eq, exists, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -144,26 +144,36 @@ export class RestService {
         .returning();
 
       if (!updated) {
-        throw new Error('Failed to update hit dice');
+        // 🛡️ Sentinel: Throw NotFoundError for unauthorized access or missing record to mask existence.
+        throw new NotFoundError('Character hit dice', characterId);
       }
 
       return updated;
     }
 
     // Create new hit dice record
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [hitDice] = await db
       .insert(characterHitDice)
-      .values({
-        characterId,
-        className,
-        dieType,
-        totalDice: level,
-        usedDice: 0,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          className: sql`${className}`,
+          dieType: sql`${dieType}`,
+          totalDice: sql`${level}`,
+          usedDice: sql`0`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!hitDice) {
-      throw new Error('Failed to create hit dice');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
     }
 
     return hitDice;
@@ -474,24 +484,33 @@ export class RestService {
     const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short');
 
     // Create rest event
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [restEvent] = await db
       .insert(restEvents)
-      .values({
-        characterId,
-        sessionId: sessionId || null,
-        restType: 'short',
-        startedAt: new Date(),
-        completedAt: new Date(),
-        hpRestored,
-        hitDiceSpent,
-        resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          sessionId: sql`${sessionId || null}`,
+          restType: sql`'short'`,
+          startedAt: sql`NOW()`,
+          completedAt: sql`NOW()`,
+          hpRestored: sql`${hpRestored}`,
+          hitDiceSpent: sql`${hitDiceSpent}`,
+          resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
+          interrupted: sql`false`,
+          notes: sql`${notes || null}`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!restEvent) {
-      throw new Error('Failed to create rest event');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
     }
 
     return {
@@ -542,24 +561,33 @@ export class RestService {
     const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long');
 
     // Create rest event
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [restEvent] = await db
       .insert(restEvents)
-      .values({
-        characterId,
-        sessionId: sessionId || null,
-        restType: 'long',
-        startedAt: new Date(),
-        completedAt: new Date(),
-        hpRestored,
-        hitDiceSpent: 0,
-        resourcesRestored: JSON.stringify(resourcesRestored),
-        interrupted: false,
-        notes: notes || null,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          sessionId: sql`${sessionId || null}`,
+          restType: sql`'long'`,
+          startedAt: sql`NOW()`,
+          completedAt: sql`NOW()`,
+          hpRestored: sql`${hpRestored}`,
+          hitDiceSpent: sql`0`,
+          resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
+          interrupted: sql`false`,
+          notes: sql`${notes || null}`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!restEvent) {
-      throw new Error('Failed to create rest event');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
     }
 
     return {
