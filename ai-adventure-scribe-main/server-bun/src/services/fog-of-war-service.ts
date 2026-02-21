@@ -10,11 +10,11 @@
 /* eslint-disable max-lines */
 import { randomUUID } from 'crypto';
 
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, fogOfWar, scenes } from '../../../db/schema/index';
-import { InternalServerError, NotFoundError, ValidationError } from '../lib/errors.js';
+import { NotFoundError, ValidationError } from '../lib/errors.js';
 
 import type { FogOfWar } from '../../../db/schema/index';
 
@@ -41,7 +41,7 @@ export interface RevealAreaInput {
 /**
  * Callback type for WebSocket broadcast
  */
-export type BroadcastCallback = (message: any) => void;
+export type BroadcastCallback = (message: unknown) => void;
 
 export class FogOfWarService {
   /**
@@ -135,85 +135,10 @@ export class FogOfWarService {
     input: RevealAreaInput,
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
-    // Validate points
-    if (!input.points || input.points.length < 3) {
-      throw new ValidationError('A polygon must have at least 3 points');
-    }
-
-    // Validate each point has x and y
-    for (const point of input.points) {
-      if (typeof point.x !== 'number' || typeof point.y !== 'number') {
-        throw new ValidationError('Each point must have numeric x and y coordinates');
-      }
-    }
-
-    // Create the new revealed area
-    const newArea: RevealedArea = {
-      id: randomUUID(),
-      points: input.points,
-      revealedAt: new Date().toISOString(),
-      revealedBy: input.revealedBy,
-      isPermanent: input.isPermanent ?? true,
-    };
-
-    // Try to find existing fog record
-    const existingRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
-    });
-
-    if (existingRecord) {
-      // Add to existing revealed areas
-      const updatedAreas = [...(existingRecord.revealedAreas as RevealedArea[]), newArea];
-
-      const [updated] = await db
-        .update(fogOfWar)
-        .set({
-          revealedAreas: updatedAreas,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(fogOfWar.id, existingRecord.id),
-            eq(fogOfWar.sceneId, sceneId),
-            eq(fogOfWar.userId, userId)
-          )
-        )
-        .returning();
-
-      if (!updated) {
-        throw new InternalServerError('Failed to update fog of war');
-      }
-    } else {
-      // Create new fog record
-      await db
-        .insert(fogOfWar)
-        .values({
-          sceneId,
-          userId,
-          revealedAreas: [newArea],
-        });
-    }
-
-    // Broadcast to WebSocket if callback provided
-    if (broadcast) {
-      broadcast({
-        type: 'fog:reveal',
-        sceneId,
-        userId,
-        timestamp: Date.now(),
-        data: {
-          areas: [newArea],
-          userId,
-        },
-      });
-    }
-
-    return newArea;
+    // ⚡ Bolt: Refactored to delegate to revealAreas to ensure consistent atomic optimization
+    // and reduce code duplication for validation and persistence logic.
+    const areas = await this.revealAreas(sceneId, userId, requesterId, [input], broadcast);
+    return areas[0];
   }
 
   /**
@@ -258,46 +183,24 @@ export class FogOfWarService {
       });
     }
 
-    // Try to find existing fog record
-    const existingRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
-    });
-
-    if (existingRecord) {
-      // Add to existing revealed areas
-      const updatedAreas = [...(existingRecord.revealedAreas as RevealedArea[]), ...newAreas];
-
-      const [updated] = await db
-        .update(fogOfWar)
-        .set({
-          revealedAreas: updatedAreas,
+    // ⚡ Bolt: Optimized N+1 query pattern by replacing read-modify-write with a single atomic UPSERT.
+    // This uses SQL jsonb_concat (||) to append new areas directly in the database,
+    // which eliminates a round-trip and prevents race conditions between concurrent reveals.
+    await db
+      .insert(fogOfWar)
+      .values({
+        sceneId,
+        userId,
+        revealedAreas: newAreas,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [fogOfWar.sceneId, fogOfWar.userId],
+        set: {
+          revealedAreas: sql`${fogOfWar.revealedAreas} || ${JSON.stringify(newAreas)}::jsonb`,
           updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(fogOfWar.id, existingRecord.id),
-            eq(fogOfWar.sceneId, sceneId),
-            eq(fogOfWar.userId, userId)
-          )
-        )
-        .returning();
-
-      if (!updated) {
-        throw new InternalServerError('Failed to update fog of war');
-      }
-    } else {
-      // Create new fog record
-      await db
-        .insert(fogOfWar)
-        .values({
-          sceneId,
-          userId,
-          revealedAreas: newAreas,
-        });
-    }
+        },
+      });
 
     // Broadcast to WebSocket if callback provided
     if (broadcast) {
