@@ -73,3 +73,7 @@
 ## 2025-06-16 - Z-Index Standardization and Sticky Header Layering
 **Learning:** Hardcoded z-index classes like `z-50` for sticky headers can conflict with the centralized `Z_INDEX` hierarchy, potentially causing headers to appear above modal backdrops (which also use 50). Standardizing to `Z_INDEX.STICKY` (30) ensures headers remain below modals while still staying on top of base content.
 **Action:** Migrate hardcoded `z-index` classes to `style={{ zIndex: Z_INDEX.CONSTANT }}`. For sticky headers, use `Z_INDEX.STICKY`. For existing `z-10` values, map to `Z_INDEX.DROPDOWN` to maintain behavior while standardizing. Add complex files (like `SceneCreationWizard.tsx`) to `eslint.config.js` overrides if they exceed the 200-line limit to ensure build passes after minor changes.
+
+## 2026-01-24 - Accessible Selectable Cards
+**Learning:** Selectable cards with inner checkboxes often suffer from nested interactivity, causing double-triggering of events and a poor keyboard/screen reader experience (redundant tab stops).
+**Action:** Use a single-interaction pattern for selectable cards. Assign `role="checkbox"`, `aria-checked`, and `tabIndex` to the parent `Card`. Mark the inner `Checkbox` component with `tabIndex={-1}` and `aria-hidden="true"`. This ensures the whole card is a single, focusable accessibility object.

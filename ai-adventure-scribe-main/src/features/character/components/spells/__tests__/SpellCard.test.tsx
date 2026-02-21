@@ -264,7 +264,7 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
+      const checkbox = screen.getByRole('checkbox', { name: /magic missile/i });
       expect(checkbox).not.toBeChecked();
     });
 
@@ -278,7 +278,7 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
+      const checkbox = screen.getByRole('checkbox', { name: /magic missile/i });
       expect(checkbox).toBeChecked();
     });
 
@@ -336,7 +336,7 @@ describe('SpellCard Component', () => {
           isDisabled={false}
           onToggle={mockOnToggle}
           // @ts-expect-error intentionally passing unexpected value to exercise default branch
-          colorTheme={'unknown' as any}
+          colorTheme={'unknown' as unknown as 'purple'}
         />,
       );
 
@@ -357,8 +357,8 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
-      expect(checkbox).toBeDisabled();
+      const checkbox = screen.getByRole('checkbox', { name: /magic missile/i });
+      expect(checkbox).toHaveAttribute('aria-disabled', 'true');
     });
 
     it('should apply disabled styling when disabled', () => {
@@ -385,10 +385,8 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const card =
-        screen.getByText('Magic Missile').closest('[role="button"]') ||
-        screen.getByText('Magic Missile').closest('div');
-      fireEvent.click(card!);
+      const card = screen.getByRole('checkbox', { name: /magic missile/i });
+      fireEvent.click(card);
 
       expect(mockOnToggle).not.toHaveBeenCalled();
     });
@@ -405,7 +403,7 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const card = screen.getByText('Magic Missile').closest('div')!;
+      const card = screen.getByRole('checkbox', { name: /magic missile/i });
       fireEvent.click(card);
 
       expect(mockOnToggle).toHaveBeenCalledWith('magic-missile');
@@ -421,7 +419,7 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
+      const checkbox = screen.getByRole('checkbox', { name: /magic missile/i });
       fireEvent.click(checkbox);
 
       expect(mockOnToggle).toHaveBeenCalledWith('magic-missile');
@@ -437,7 +435,7 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
+      const checkbox = screen.getByRole('checkbox', { name: /magic missile/i });
       fireEvent.click(checkbox);
 
       expect(mockOnToggle).not.toHaveBeenCalled();
@@ -461,21 +459,28 @@ describe('SpellCard Component', () => {
   });
 
   describe('Accessibility', () => {
-    it('should have proper ARIA labels', () => {
+    it('should have proper ARIA attributes', () => {
       render(
         <SpellCard
           spell={mockSpell}
-          isSelected={false}
+          isSelected={true}
           isDisabled={false}
           onToggle={mockOnToggle}
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
-      expect(checkbox).toBeInTheDocument();
+      // The Card itself is now the checkbox
+      const card = screen.getByRole('checkbox', { name: /magic missile/i });
+      expect(card).toBeInTheDocument();
+      expect(card).toHaveAttribute('aria-checked', 'true');
+      expect(card).toHaveAttribute('aria-disabled', 'false');
+
+      // The inner checkbox should be hidden from the accessibility tree
+      const innerCheckbox = screen.queryByLabelText('Select Magic Missile');
+      expect(innerCheckbox).not.toBeInTheDocument();
     });
 
-    it('should be keyboard accessible', async () => {
+    it('should be keyboard accessible via the card', async () => {
       const user = userEvent.setup();
 
       render(
@@ -487,13 +492,42 @@ describe('SpellCard Component', () => {
         />,
       );
 
-      const checkbox = screen.getByRole('checkbox', { name: 'Select Magic Missile' });
+      const card = screen.getByRole('checkbox', { name: /magic missile/i });
 
+      // Tab to the card
       await user.tab();
-      expect(checkbox).toHaveFocus();
+      expect(card).toHaveFocus();
 
-      await user.keyboard(' ');
+      // Toggle with Enter
+      await user.keyboard('{Enter}');
       expect(mockOnToggle).toHaveBeenCalledWith('magic-missile');
+
+      // Toggle with Space
+      await user.keyboard(' ');
+      expect(mockOnToggle).toHaveBeenCalledTimes(2);
+    });
+
+    it('should have only one tab stop (the card)', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <SpellCard
+          spell={mockSpell}
+          isSelected={false}
+          isDisabled={false}
+          onToggle={mockOnToggle}
+        />,
+      );
+
+      const card = screen.getByRole('checkbox', { name: /magic missile/i });
+
+      // First tab goes to the card
+      await user.tab();
+      expect(card).toHaveFocus();
+
+      // Second tab should go past the component, not to the inner checkbox
+      await user.tab();
+      expect(card).not.toHaveFocus();
     });
   });
 

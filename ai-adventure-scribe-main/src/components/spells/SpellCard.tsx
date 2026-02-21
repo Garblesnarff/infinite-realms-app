@@ -6,8 +6,6 @@ import {
   Target,
   Timer,
   Zap,
-  Sparkles,
-  BookOpen,
   RotateCcw,
 } from 'lucide-react';
 import React from 'react';
@@ -68,7 +66,13 @@ const SpellCard: React.FC<SpellCardProps> = ({
     schoolColors[spell.school] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
 
   // Get theme-specific colors for selection highlighting
-  const getThemeColors = () => {
+  const getThemeColors = (): {
+    border: string;
+    bg: string;
+    shadow: string;
+    checkbox: string;
+    ring: string;
+  } => {
     switch (colorTheme) {
       case 'gold':
         return {
@@ -77,6 +81,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
           shadow: 'shadow-infinite-gold/20',
           checkbox:
             'data-[state=checked]:bg-infinite-gold data-[state=checked]:border-infinite-gold',
+          ring: 'focus-visible:ring-infinite-gold',
         };
       case 'purple':
         return {
@@ -85,6 +90,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
           shadow: 'shadow-infinite-purple/20',
           checkbox:
             'data-[state=checked]:bg-infinite-purple data-[state=checked]:border-infinite-purple',
+          ring: 'focus-visible:ring-infinite-purple',
         };
       case 'teal':
         return {
@@ -93,6 +99,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
           shadow: 'shadow-infinite-teal/20',
           checkbox:
             'data-[state=checked]:bg-infinite-teal data-[state=checked]:border-infinite-teal',
+          ring: 'focus-visible:ring-infinite-teal',
         };
       default:
         return {
@@ -100,6 +107,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
           bg: 'bg-primary/5',
           shadow: 'shadow-primary/20',
           checkbox: 'data-[state=checked]:bg-primary data-[state=checked]:border-primary',
+          ring: 'focus-visible:ring-primary',
         };
     }
   };
@@ -111,6 +119,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
       <Card
         className={`
           transition-all duration-200 cursor-pointer hover:shadow-md
+          focus-visible:ring-2 focus-visible:outline-none ${themeColors.ring}
           ${
             isSelected
               ? `${themeColors.border} ${themeColors.bg} shadow-sm ${themeColors.shadow}`
@@ -119,6 +128,10 @@ const SpellCard: React.FC<SpellCardProps> = ({
           ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
           ${className}
         `}
+        role="checkbox"
+        tabIndex={isDisabled ? -1 : 0}
+        aria-checked={isSelected}
+        aria-disabled={isDisabled}
         onClick={() => {
           logger.info(`🪄 [SpellCard] Click on ${spell.name}:`, {
             spellId: spell.id,
@@ -128,6 +141,14 @@ const SpellCard: React.FC<SpellCardProps> = ({
           });
           if (!isDisabled) {
             onToggle(spell.id);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!isDisabled) {
+              onToggle(spell.id);
+            }
           }
         }}
       >
@@ -195,12 +216,13 @@ const SpellCard: React.FC<SpellCardProps> = ({
                   </div>
                 </div>
 
-                {/* Selection Checkbox */}
+                {/* Selection Checkbox - purely visual now as Card handles interaction */}
                 <Checkbox
                   checked={isSelected}
                   disabled={isDisabled}
                   className={`mt-1 ${themeColors.checkbox}`}
-                  aria-label={`Select ${spell.name}`}
+                  tabIndex={-1}
+                  aria-hidden="true"
                 />
               </div>
 
