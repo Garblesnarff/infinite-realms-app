@@ -350,6 +350,7 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
               <Input
                 type="number"
                 placeholder="Damage"
+                aria-label="Damage amount"
                 value={damageInput}
                 onChange={(e) => setDamageInput(e.target.value)}
                 className="text-sm"
@@ -363,6 +364,7 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
               <Input
                 type="number"
                 placeholder="Healing"
+                aria-label="Healing amount"
                 value={healingInput}
                 onChange={(e) => setHealingInput(e.target.value)}
                 className="text-sm"
@@ -384,7 +386,13 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
             <div className="border-t pt-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Death Saves</span>
-                <Button size="sm" variant="ghost" onClick={resetDeathSaves}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={resetDeathSaves}
+                  aria-label="Reset death saves"
+                  title="Reset death saves"
+                >
                   <RotateCcw className="w-3 h-3" />
                 </Button>
               </div>
