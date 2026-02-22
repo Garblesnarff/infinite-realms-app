@@ -81,3 +81,7 @@
 ## 2026-01-25 - Combat UI Accessibility
 **Learning:** Core combat components like `HPTracker` and `CombatActionPanel` often lack basic accessibility, making them difficult for screen reader users. Icon-only buttons for critical actions (damage/healing) need explicit labels.
 **Action:** Always use `useId` to link labels to inputs. Provide `aria-label` and `title` for icon-only buttons. Add `aria-label` to `Progress` bars to provide context for health status.
+
+## 2026-01-26 - Reusable Component Accessibility and UX
+**Learning:** Reusable components like `EditableDescription` are often duplicated across `src/components/` and `src/features/`. Missing `id`/`htmlFor` associations on these components reduce accessibility and clickability across many parts of the application. Adding a `title` to the edit button provides a helpful tooltip for mouse users.
+**Action:** Use `useId` to link labels to inputs in reusable components. Always synchronize changes across duplicated component locations. Add `title` to icon-only buttons for a better desktop UX.

@@ -1,5 +1,5 @@
 import { Edit3, Save, X, Sparkles } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -61,6 +61,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaId = useId();
 
   // Auto-resize textarea
   useEffect(() => {
@@ -124,7 +125,9 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
     <div className={cn('space-y-2', className)}>
       {/* Label and AI Badge Row */}
       <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
+        <Label htmlFor={textareaId} className="text-sm font-medium text-muted-foreground">
+          {label}
+        </Label>
         <div className="flex items-center gap-2">
           {isAiGenerated && !isEditing && (
             <Badge
@@ -142,6 +145,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
               onClick={handleEdit}
               disabled={disabled}
               className="h-6 w-6 p-0 hover:bg-accent"
+              title={`Edit ${label}`}
             >
               <Edit3 className="w-3 h-3" />
               <span className="sr-only">Edit {label}</span>
@@ -154,6 +158,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
       {isEditing ? (
         <div className="space-y-2">
           <Textarea
+            id={textareaId}
             ref={textareaRef}
             value={editValue}
             onChange={handleTextareaChange}
