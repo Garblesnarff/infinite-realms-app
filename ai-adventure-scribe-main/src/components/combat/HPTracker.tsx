@@ -1,12 +1,14 @@
 import { Heart, Shield, PlusCircle, MinusCircle } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 interface HPTrackerProps {
   participant: CombatParticipant;
@@ -23,6 +25,8 @@ const HPTracker: React.FC<HPTrackerProps> = ({
   showHPDetails = true,
   isInteractive = true,
 }) => {
+  const damageInputId = useId();
+  const healInputId = useId();
   const [damageAmount, setDamageAmount] = useState('');
   const [healAmount, setHealAmount] = useState('');
 
@@ -34,7 +38,7 @@ const HPTracker: React.FC<HPTrackerProps> = ({
   } = participant;
   const hpPercent = maxHitPoints > 0 ? (currentHitPoints / maxHitPoints) * 100 : 0;
 
-  const handleDamage = () => {
+  const handleDamage = (): void => {
     const damage = parseInt(damageAmount, 10);
     if (onDamage && !isNaN(damage) && damage > 0) {
       onDamage(participant.id, damage, 'slashing'); // Defaulting damage type for simplicity
@@ -42,7 +46,7 @@ const HPTracker: React.FC<HPTrackerProps> = ({
     }
   };
 
-  const handleHeal = () => {
+  const handleHeal = (): void => {
     const heal = parseInt(healAmount, 10);
     if (onHeal && !isNaN(heal) && heal > 0) {
       onHeal(participant.id, heal);
@@ -50,7 +54,7 @@ const HPTracker: React.FC<HPTrackerProps> = ({
     }
   };
 
-  const getHPColor = () => {
+  const getHPColor = (): string => {
     if (hpPercent <= 25) return 'bg-red-500';
     if (hpPercent <= 50) return 'bg-yellow-500';
     return 'bg-green-500';
@@ -86,32 +90,60 @@ const HPTracker: React.FC<HPTrackerProps> = ({
               <span className="text-sm text-muted-foreground">Status Unknown</span>
             )}
           </div>
-          <Progress value={hpPercent} className="h-2" />
+          <Progress
+            value={hpPercent}
+            className={cn('h-2', getHPColor())}
+            aria-label={`${participant.name} health percentage`}
+          />
         </div>
 
         {isInteractive && (
           <div className="flex gap-2">
             <div className="flex-1 flex gap-1">
+              <Label htmlFor={damageInputId} className="sr-only">
+                Damage Amount
+              </Label>
               <Input
+                id={damageInputId}
                 type="number"
                 placeholder="Damage"
                 value={damageAmount}
                 onChange={(e) => setDamageAmount(e.target.value)}
                 className="h-8"
+                aria-label="Damage amount"
               />
-              <Button onClick={handleDamage} size="sm" variant="destructive" className="h-8">
+              <Button
+                onClick={handleDamage}
+                size="sm"
+                variant="destructive"
+                className="h-8"
+                aria-label="Apply damage"
+                title="Apply damage"
+              >
                 <MinusCircle className="w-4 h-4" />
               </Button>
             </div>
             <div className="flex-1 flex gap-1">
+              <Label htmlFor={healInputId} className="sr-only">
+                Healing Amount
+              </Label>
               <Input
+                id={healInputId}
                 type="number"
                 placeholder="Heal"
                 value={healAmount}
                 onChange={(e) => setHealAmount(e.target.value)}
                 className="h-8"
+                aria-label="Healing amount"
               />
-              <Button onClick={handleHeal} size="sm" variant="secondary" className="h-8">
+              <Button
+                onClick={handleHeal}
+                size="sm"
+                variant="secondary"
+                className="h-8"
+                aria-label="Apply healing"
+                title="Apply healing"
+              >
                 <PlusCircle className="w-4 h-4" />
               </Button>
             </div>

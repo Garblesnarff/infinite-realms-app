@@ -77,3 +77,7 @@
 ## 2026-01-24 - Accessible Selectable Cards
 **Learning:** Selectable cards with inner checkboxes often suffer from nested interactivity, causing double-triggering of events and a poor keyboard/screen reader experience (redundant tab stops).
 **Action:** Use a single-interaction pattern for selectable cards. Assign `role="checkbox"`, `aria-checked`, and `tabIndex` to the parent `Card`. Mark the inner `Checkbox` component with `tabIndex={-1}` and `aria-hidden="true"`. This ensures the whole card is a single, focusable accessibility object.
+
+## 2026-01-25 - Combat UI Accessibility
+**Learning:** Core combat components like `HPTracker` and `CombatActionPanel` often lack basic accessibility, making them difficult for screen reader users. Icon-only buttons for critical actions (damage/healing) need explicit labels.
+**Action:** Always use `useId` to link labels to inputs. Provide `aria-label` and `title` for icon-only buttons. Add `aria-label` to `Progress` bars to provide context for health status.

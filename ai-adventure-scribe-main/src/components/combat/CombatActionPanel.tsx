@@ -11,7 +11,7 @@ import {
   Dice6,
   RotateCcw,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { type ActionDefinition, MANAGEMENT_ACTIONS } from './actions/ActionDefinitions';
 import { CombatActionGrid } from './actions/CombatActionGrid';
@@ -50,6 +50,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const { state, applyCondition, removeCondition } = useCombat();
   const { activeEncounter } = state;
 
+  const hitDiceInputId = useId();
   const [selectedAction, setSelectedAction] = useState<ActionDefinition | null>(null);
   const [selectedManagement, setSelectedManagement] = useState<string | null>(null);
   const [actionDetails, setActionDetails] = useState('');
@@ -235,8 +236,11 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
             ) : selectedAction.type === 'short_rest' || selectedAction.type === 'long_rest' ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">Hit dice to roll:</label>
+                  <label htmlFor={hitDiceInputId} className="text-sm font-medium">
+                    Hit dice to roll:
+                  </label>
                   <Input
+                    id={hitDiceInputId}
                     type="number"
                     min="1"
                     value={hitDiceToRoll}
