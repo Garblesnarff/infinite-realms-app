@@ -506,7 +506,7 @@ export class WorldBuilderService {
     campaignId: string,
     _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
     npc: { name: string; description: string; location: string },
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       // Check if NPC already exists (by name in this campaign)
       const { data: existing } = await supabase
@@ -518,7 +518,7 @@ export class WorldBuilderService {
 
       if (existing && existing.length > 0) {
         logger.debug(`[WorldBuilder] NPC "${npc.name}" already exists, skipping`);
-        return;
+        return true;
       }
 
       // Only use columns that exist in the npcs table schema:
@@ -533,11 +533,14 @@ export class WorldBuilderService {
 
       if (error) {
         logger.warn(`[WorldBuilder] Failed to save NPC "${npc.name}":`, error);
+        return false;
       } else {
         logger.debug(`[WorldBuilder] Saved NPC "${npc.name}" from XML`);
+        return true;
       }
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving NPC "${npc.name}":`, error);
+      return false;
     }
   }
 
@@ -548,7 +551,7 @@ export class WorldBuilderService {
     campaignId: string,
     _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
     location: { name: string; description: string; status?: string }, // status is optional, not saved
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       // Check if location already exists (by name in this campaign)
       const { data: existing } = await supabase
@@ -560,7 +563,7 @@ export class WorldBuilderService {
 
       if (existing && existing.length > 0) {
         logger.debug(`[WorldBuilder] Location "${location.name}" already exists, skipping`);
-        return;
+        return true;
       }
 
       // Only use columns that exist in the locations table schema:
@@ -576,11 +579,14 @@ export class WorldBuilderService {
 
       if (error) {
         logger.warn(`[WorldBuilder] Failed to save location "${location.name}":`, error);
+        return false;
       } else {
         logger.debug(`[WorldBuilder] Saved location "${location.name}" from XML`);
+        return true;
       }
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving location "${location.name}":`, error);
+      return false;
     }
   }
 
@@ -591,7 +597,7 @@ export class WorldBuilderService {
     campaignId: string,
     sessionId: string,
     quest: { name: string; update: string },
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       // Check if quest already exists (by name in this campaign)
       const { data: existing } = await supabase
@@ -613,10 +619,11 @@ export class WorldBuilderService {
 
         if (error) {
           logger.warn(`[WorldBuilder] Failed to update quest "${quest.name}":`, error);
+          return false;
         } else {
           logger.debug(`[WorldBuilder] Updated quest "${quest.name}" from XML`);
+          return true;
         }
-        return;
       }
 
       // Create new quest
@@ -631,11 +638,14 @@ export class WorldBuilderService {
 
       if (error) {
         logger.warn(`[WorldBuilder] Failed to save quest "${quest.name}":`, error);
+        return false;
       } else {
         logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML`);
+        return true;
       }
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving quest "${quest.name}":`, error);
+      return false;
     }
   }
 }
