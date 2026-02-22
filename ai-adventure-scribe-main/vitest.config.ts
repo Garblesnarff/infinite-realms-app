@@ -156,6 +156,7 @@ export default defineConfig({
       'src/features/campaign/components/creation/steps/GenreSelection.test.tsx',
       'src/features/campaign/components/view/sections/CampaignHeader.test.tsx',
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
+      'src/components/game/__tests__/DiceRollRequest.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -291,6 +292,7 @@ export default defineConfig({
         'src/features/campaign/components/creation/steps/GenreSelection.tsx',
         'src/features/campaign/components/view/sections/CampaignHeader.tsx',
         'src/components/game/NPCRollDisplay.tsx',
+        'src/components/game/DiceRollRequest.tsx',
       ],
       exclude: [
         '**/__tests__/**',

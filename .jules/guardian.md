@@ -115,3 +115,7 @@
 ## 2026-02-23 - [Geometry & Lighting Utilities Coverage]
 **Learning:** The `lineSegmentsIntersect` function in `geometry.ts` uses strict inequalities, meaning it returns `false` if segments touch at an endpoint. To test polygon closing segments in `isLineBlocked`, a wall must have more than 2 points and the line must intersect ONLY the segment connecting the last point to the first.
 **Action:** Always include both the test file and the source module in `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Use `eslint --fix` to handle complex import ordering requirements (vitest > local modules > alias types).
+
+## 2026-02-23 - [Dice Roll Request Coverage]
+**Learning:** Found that `DiceRollRequest.tsx` had complex logic for deriving ability modifiers from both purpose text and formula strings, which was completely untested. Discovered a testing gotcha where `lucide-react` icons in buttons can cause "multiple elements found" errors when querying by button text, because icons often have accessibility titles that match the text.
+**Action:** Always use exact regex boundaries when querying for buttons with icons, e.g., `screen.getByRole('button', { name: /^advantage$/i })`. Ensure coverage for both purpose-based and formula-based ability detection.
