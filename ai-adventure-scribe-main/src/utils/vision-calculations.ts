@@ -210,15 +210,12 @@ export function canSeeToken(
     globalLight
   );
 
-  // Normal vision requires light
-  if (visionType === 'basic' && lightLevel === 'dark') {
-    return false;
-  }
-
-  // Darkvision treats darkness as dim light
-  if (visionType === 'darkvision') {
+  // Check light level requirements
+  if (lightLevel === 'dark') {
     const darkvisionRange = viewer.vision.darkvision || 0;
-    if (lightLevel === 'dark' && distanceInFeet > darkvisionRange) {
+    const isWithinDarkvisionRange = darkvisionRange > 0 && distanceInFeet <= darkvisionRange;
+
+    if (!isWithinDarkvisionRange) {
       return false;
     }
   }
