@@ -256,6 +256,7 @@ export default tseslint.config(
       'src/components/ui/sidebar.tsx', // 761 lines
       'src/services/ai/prompts/game-context-prompts.ts',
       'src/services/ai/prompts/combat-rules-prompts.ts',
+      'src/services/ai/prompts/character-description-prompts.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
       'src/utils/lighting-integration.ts',
