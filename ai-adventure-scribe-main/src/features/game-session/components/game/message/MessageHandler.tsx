@@ -1,9 +1,10 @@
+/* eslint-disable max-lines */
 import React from 'react';
 
 import { useSessionValidator } from '../session/SessionValidator';
 
-import type { ChatMessage } from '@/types/game';
 import type { DiceRollContext } from '../../chat/MessageList';
+import type { ChatMessage } from '@/types/game';
 
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useGame } from '@/contexts/GameContext';
@@ -14,9 +15,9 @@ import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
 import { parseDiceCommand } from '@/utils/diceCommandParser';
-import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
 
 interface MessageHandlerProps {
@@ -24,7 +25,8 @@ interface MessageHandlerProps {
   campaignId: string | null;
   characterId: string | null;
   turnCount: number;
-  updateGameSessionState: (newState: Partial<any>) => Promise<void>; // Replace 'any' with ExtendedGameSession if possible
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updateGameSessionState: (newState: Partial<any>) => Promise<void>;
   onAIResponse?: (message: ChatMessage) => Promise<void>; // Callback for processing AI responses (e.g., combat detection)
   children: (props: {
     handleSendMessage: (message: string, context?: DiceRollContext) => Promise<void>;
@@ -49,6 +51,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
   const { state: characterState } = useCharacter();
   const character = characterState.character;
   const headerMode = String(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
   ).toLowerCase();
 
@@ -62,6 +65,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       message: string;
       context?: DiceRollContext;
       resolve: (value: void | PromiseLike<void>) => void;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       reject: (error: any) => void;
     }>
   >([]);
@@ -104,6 +108,14 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
   // Assuming validateSession is still relevant or adapted
   const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
 
+  // Ref keeps processSendQueue pointed at the latest actualSendMessage closure,
+  // preventing stale sessionId / extractMemories captures when the session changes.
+  const actualSendMessageRef = React.useRef<
+    (input: string, ctx?: DiceRollContext) => Promise<void>
+  >(async () => {
+    /* populated after actualSendMessage is defined */
+  });
+
   // Process the send queue one message at a time
   const processSendQueue = React.useCallback(async () => {
     // Don't process if already sending or queue is empty
@@ -115,7 +127,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
     const { message: playerInput, context, resolve, reject } = sendQueueRef.current[0];
 
     try {
-      await actualSendMessage(playerInput, context);
+      await actualSendMessageRef.current(playerInput, context);
       resolve();
     } catch (error) {
       reject(error);
@@ -130,14 +142,14 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
         processSendQueue();
       }
     }
-  }, []); // actualSendMessage uses refs so no deps needed
+  }, []); // stable — actualSendMessageRef.current is always the latest closure
 
   // The actual message sending logic (extracted from handleSendMessage)
   const actualSendMessage = async (playerInput: string, providedContext?: DiceRollContext) => {
     try {
       // Check if game is paused and this isn't a resume command
       const trimmedInput = playerInput.trim().toLowerCase();
-      const isResumeCommand = trimmedInput === '/resume' || trimmedInput.startsWith('/resume ');
+      const _isResumeCommand = trimmedInput === '/resume' || trimmedInput.startsWith('/resume ');
 
       // Note: We'll need to get the current session state to check if paused
       // For now, we'll assume we can check a property on the session
@@ -252,7 +264,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
           await sendMessage(diceRollMessage);
 
           // Also send to AI for context (so DM knows what was rolled)
-          const aiContextMessage = `Player rolled ${diceCommand.formula} and got ${rollResult.total}${diceCommand.label ? ` for ${diceCommand.label}` : ''}. ${rollResult.critical ? (rollResult.naturalRoll === 20 ? 'Critical success!' : 'Critical failure!') : ''}`;
+          const _aiContextMessage = `Player rolled ${diceCommand.formula} and got ${rollResult.total}${diceCommand.label ? ` for ${diceCommand.label}` : ''}. ${rollResult.critical ? (rollResult.naturalRoll === 20 ? 'Critical success!' : 'Critical failure!') : ''}`;
 
           const aiResponseMessage = await getAIResponse(
             [...messagesRef.current, diceRollMessage],
@@ -451,7 +463,8 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
 
         // Update current_scene_description with short blurb (not full reply)
         if (sanitizedAiResponseMessage.text) {
-          const blurb = headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
+          const blurb =
+            headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
           await updateGameSessionState((prev) => ({
             ...prev,
             current_scene_description: blurb,
@@ -521,6 +534,10 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       });
     }
   };
+
+  // Keep the ref current so processSendQueue always dispatches to the latest closure.
+  // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
+  actualSendMessageRef.current = actualSendMessage;
 
   // Public handleSendMessage that queues messages
   const handleSendMessage = React.useCallback(
