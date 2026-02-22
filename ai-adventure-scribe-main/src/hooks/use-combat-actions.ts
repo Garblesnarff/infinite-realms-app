@@ -5,9 +5,10 @@
  * Manages combat state transitions and validates actions using AI integration.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 import type { ActionType, ReactionOpportunity, CombatParticipant } from '@/types/combat';
+
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
@@ -54,15 +55,28 @@ export const useCombatActions = (_isDM: boolean = false) => {
   const [reactionOpportunities, setReactionOpportunities] = useState<ReactionOpportunity[]>([]);
 
   // Get player characters and potential enemies
-  const playerParticipants =
-    activeEncounter?.participants.filter((p) => p.participantType === 'player') || [];
-  const enemyParticipants =
-    activeEncounter?.participants.filter((p) => p.participantType === 'monster') || [];
+  // ⚡ Bolt: Memoize participant lists and turn state to prevent redundant filtering and calculations on every render.
+  const playerParticipants = useMemo(
+    () => activeEncounter?.participants.filter((p) => p.participantType === 'player') || [],
+    [activeEncounter?.participants],
+  );
+
+  const enemyParticipants = useMemo(
+    () => activeEncounter?.participants.filter((p) => p.participantType === 'monster') || [],
+    [activeEncounter?.participants],
+  );
+
   const playerCharacterId = characterState.character?.id;
-  const isPlayersTurn = Boolean(
-    activeEncounter?.currentTurnParticipantId &&
-      activeEncounter.participants.find((p) => p.id === activeEncounter.currentTurnParticipantId)
-        ?.characterId === playerCharacterId,
+
+  const isPlayersTurn = useMemo(
+    () =>
+      Boolean(
+        activeEncounter?.currentTurnParticipantId &&
+          activeEncounter.participants.find(
+            (p) => p.id === activeEncounter.currentTurnParticipantId,
+          )?.characterId === playerCharacterId,
+      ),
+    [activeEncounter?.currentTurnParticipantId, activeEncounter?.participants, playerCharacterId],
   );
 
   // Handle starting combat
