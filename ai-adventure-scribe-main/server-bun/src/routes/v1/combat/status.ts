@@ -299,10 +299,10 @@ export const statusRoutes = new Elysia()
         params.participantId,
         user.userId
       );
-      const effects = await ConditionsService.getMechanicalEffects(
-        params.participantId,
-        user.userId
-      );
+
+      // ⚡ Bolt: Use pre-fetched conditions to calculate aggregated effects in-memory.
+      // This avoids a second redundant database round-trip for the same participant's conditions.
+      const effects = ConditionsService.calculateAggregatedEffects(conditions);
 
       return {
         participantId: params.participantId,

@@ -757,24 +757,34 @@ export class ConditionsService {
   /**
    * Check if participant can take actions
    */
-  static async canTakeActions(participantId: string, userId?: string): Promise<{
+  static async canTakeActions(
+    participantId: string,
+    userId?: string,
+    effects?: AggregatedMechanicalEffects
+  ): Promise<{
     canAct: boolean;
     canReact: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateActionRestrictions(effects);
+    // ⚡ Bolt: Use pre-fetched mechanical effects if available to avoid redundant DB call.
+    const mechanicalEffects = effects || await this.getMechanicalEffects(participantId, userId);
+    return ConditionMechanics.calculateActionRestrictions(mechanicalEffects);
   }
 
   /**
    * Get speed modifiers for a participant
    */
-  static async getSpeedModifiers(participantId: string, userId?: string): Promise<{
+  static async getSpeedModifiers(
+    participantId: string,
+    userId?: string,
+    effects?: AggregatedMechanicalEffects
+  ): Promise<{
     speedMultiplier: number;
     speedOverride?: number;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateSpeedModifiers(effects);
+    // ⚡ Bolt: Use pre-fetched mechanical effects if available to avoid redundant DB call.
+    const mechanicalEffects = effects || await this.getMechanicalEffects(participantId, userId);
+    return ConditionMechanics.calculateSpeedModifiers(mechanicalEffects);
   }
 }
