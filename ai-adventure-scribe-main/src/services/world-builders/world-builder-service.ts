@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { LocationGenerator } from './location-generator';
 import { NPCGenerator } from './npc-generator';
 import { QuestGenerator } from './quest-generator';
@@ -56,7 +57,9 @@ export class WorldBuilderService {
     try {
       // SECURITY: Require userId for proper validation
       if (!userId) {
-        logger.warn('[WorldBuilder] No userId provided for campaign access validation - denying access');
+        logger.warn(
+          '[WorldBuilder] No userId provided for campaign access validation - denying access',
+        );
         return false;
       }
 
@@ -74,7 +77,9 @@ export class WorldBuilderService {
       }
 
       if (!campaign) {
-        logger.warn(`[WorldBuilder] Campaign ${campaignId} not found or user ${userId} does not have access`);
+        logger.warn(
+          `[WorldBuilder] Campaign ${campaignId} not found or user ${userId} does not have access`,
+        );
         return false;
       }
 
@@ -203,7 +208,7 @@ export class WorldBuilderService {
         .eq('id', context.campaignId)
         .single();
 
-      const genre = campaign?.genre || context.genre || 'fantasy';
+      const _genre = campaign?.genre || context.genre || 'fantasy';
 
       // Generate locations if needed
       if (buildingNeeds.suggestions.locations) {
@@ -499,7 +504,7 @@ export class WorldBuilderService {
    */
   static async saveNPCFromXML(
     campaignId: string,
-    _sessionId: string,  // Kept for API compatibility but not used (column doesn't exist)
+    _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
     npc: { name: string; description: string; location: string },
   ): Promise<void> {
     try {
@@ -523,7 +528,7 @@ export class WorldBuilderService {
         campaign_id: campaignId,
         name: npc.name,
         description: npc.description,
-        location: npc.location,  // Use 'location' not 'current_location'
+        location: npc.location, // Use 'location' not 'current_location'
       });
 
       if (error) {
@@ -541,8 +546,8 @@ export class WorldBuilderService {
    */
   static async saveLocationFromXML(
     campaignId: string,
-    _sessionId: string,  // Kept for API compatibility but not used (column doesn't exist)
-    location: { name: string; description: string; status?: string },  // status is optional, not saved
+    _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
+    location: { name: string; description: string; status?: string }, // status is optional, not saved
   ): Promise<void> {
     try {
       // Check if location already exists (by name in this campaign)
@@ -621,7 +626,7 @@ export class WorldBuilderService {
         title: quest.name,
         description: quest.update,
         status: 'active',
-        type: 'side', // Default type for XML-extracted quests
+        quest_type: 'side', // Default type for XML-extracted quests
       });
 
       if (error) {

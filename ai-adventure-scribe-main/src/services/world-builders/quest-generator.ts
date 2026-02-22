@@ -1,7 +1,9 @@
-import { llmApiClient } from '@/services/llm-api-client';
+/* eslint-disable max-lines */
 import { MemoryManager } from '../memory-manager';
+
 import type { Memory } from '@/types/memory';
 
+import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
@@ -401,10 +403,9 @@ export class QuestGenerator {
         title: quest.title,
         description: quest.description,
         quest_type: quest.type,
-        difficulty_level: quest.difficulty,
+        difficulty: quest.difficulty,
         status: 'available',
         campaign_id: quest.metadata.campaignId,
-        character_id: quest.metadata.characterId,
         metadata: {
           ...quest,
           generatedAt: quest.metadata.createdAt.toISOString(),
@@ -467,10 +468,7 @@ export class QuestGenerator {
       }
 
       // Build query with ownership validation
-      let campaignQuery = supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', campaignId);
+      let campaignQuery = supabase.from('campaigns').select('*').eq('id', campaignId);
 
       if (userId) {
         campaignQuery = campaignQuery.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
