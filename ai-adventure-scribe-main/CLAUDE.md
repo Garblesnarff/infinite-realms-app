@@ -362,12 +362,12 @@ When AI does something wrong, **educate via prompts** (fastest fix):
 
 ```bash
 # Build (ALWAYS run before pushing to production!)
-npm run build             # Frontend build
+bun run build             # Frontend build
 cd server-bun && bun run src/index.ts  # Test Bun server
 
 # Run dev environment
-npm run dev               # Frontend only
-npm run bun:dev           # Bun API server (dev mode with watch)
+bun run dev               # Frontend only
+bun run bun:dev           # Bun API server (dev mode with watch)
 
 # Bun Server (PRODUCTION)
 pm2 status                            # Check server status
@@ -376,8 +376,8 @@ pm2 logs infiniterealms-bun           # View server logs
 cd server-bun && bun run dev          # Dev mode with hot reload
 
 # Supabase (local Docker instance)
-npx supabase functions serve           # Test edge functions locally
-npx supabase functions deploy dm-agent-execute  # Deploy to local Supabase
+bunx supabase functions serve           # Test edge functions locally
+bunx supabase functions deploy dm-agent-execute  # Deploy to local Supabase
 
 # Docker (Supabase local stack)
 docker ps                           # See all 13 Supabase containers
@@ -422,7 +422,7 @@ git push origin main      # ⚠️ DEPLOYS TO PRODUCTION IMMEDIATELY
 1. Add `console.log('[YourFunction] ...')`
 2. Check Supabase logs or local terminal
 3. Verify Deno-compatible imports (no `@/`, use relative)
-4. Test locally: `npx supabase functions serve`
+4. Test locally: `bunx supabase functions serve`
 
 ### Publish Blog Post
 1. **Create post via admin UI**: `https://infiniterealms.app/admin/blog`
