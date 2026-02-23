@@ -8,7 +8,7 @@
  * @module server/services/drawing-service
  */
 
-import { eq, and, asc, or, inArray, exists } from 'drizzle-orm';
+import { eq, and, asc, or, inArray, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -64,40 +64,35 @@ export class DrawingService {
     userId: string,
     data: CreateDrawingData
   ): Promise<SceneDrawing> {
-    // Verify scene ownership
-    const [scene] = await db
-      .select({ id: scenes.id })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    // Create the drawing
+    // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
+    // This reduces database round-trips from 2 to 1 and prevents cross-scene unauthorized writes.
     const [drawing] = await db
       .insert(sceneDrawings)
-      .values({
-        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
-        sceneId,
-        createdBy: userId,
-        drawingType: data.drawingType,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        pointsData: data.pointsData as any,
-        strokeColor: data.strokeColor,
-        strokeWidth: data.strokeWidth,
-        fillColor: data.fillColor ?? null,
-        fillOpacity: data.fillOpacity ?? 0,
-        zIndex: data.zIndex ?? 0,
-        textContent: data.textContent ?? null,
-        fontSize: data.fontSize ?? null,
-        fontFamily: data.fontFamily ?? null,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            createdBy: sql`${userId}`,
+            drawingType: sql`${data.drawingType}`,
+            // Use JSON.stringify for complex pointsData array to ensure correct JSONB casting
+            pointsData: sql`${JSON.stringify(data.pointsData)}::jsonb`,
+            strokeColor: sql`${data.strokeColor}`,
+            strokeWidth: sql`${data.strokeWidth}`,
+            fillColor: sql`${data.fillColor ?? null}`,
+            fillOpacity: sql`${data.fillOpacity ?? 0}`,
+            zIndex: sql`${data.zIndex ?? 0}`,
+            textContent: sql`${data.textContent ?? null}`,
+            fontSize: sql`${data.fontSize ?? null}`,
+            fontFamily: sql`${data.fontFamily ?? null}`,
+          })
+          .from(scenes)
+          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      )
       .returning();
 
     if (!drawing) {
-      throw new InternalServerError('Failed to create drawing');
+      // If no row was inserted, it means the SELECT returned zero rows (unauthorized or scene not found)
+      throw new NotFoundError('Scene', sceneId);
     }
 
     return drawing;
@@ -186,24 +181,20 @@ export class DrawingService {
       return 0;
     }
 
-    // Verify user is the scene owner
-    const [scene] = await db
-      .select({ id: scenes.id })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    // Delete all specified drawings for this scene
+    // ⚡ Bolt: Optimized to use an atomic DELETE with an EXISTS subquery for ownership verification.
+    // This reduces database round-trips from 2 to 1 and ensures the user owns the scene.
     const result = await db
       .delete(sceneDrawings)
       .where(
         and(
           eq(sceneDrawings.sceneId, sceneId),
-          inArray(sceneDrawings.id, drawingIds)
+          inArray(sceneDrawings.id, drawingIds),
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+          )
         )
       )
       .returning({ id: sceneDrawings.id });
