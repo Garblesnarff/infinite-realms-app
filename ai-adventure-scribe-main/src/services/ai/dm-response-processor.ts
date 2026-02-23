@@ -1,9 +1,9 @@
 import { applyAssetPostProcessing, insertAssetTags, getCachedAssets } from './asset-processor';
-import { voiceConsistencyService } from '../voice-consistency-service';
+import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
 import { parseXMLTagsFromResponse } from './xml-parser';
 import { MemoryManager } from '../memory-manager';
-import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
-import { WorldBuilderService } from '../world-builders/world-builder-service';
+import { voiceConsistencyService } from '../voice-consistency-service';
+import { WorldBuilderService, WorldBuilderRepository } from '../world-builders';
 
 import type { MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
@@ -229,13 +229,17 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
           for (const npc of xmlParsed.worldUpdates.npcs) {
             if (
-              await WorldBuilderService.saveNPCFromXML(context.campaignId, context.sessionId!, npc)
+              await WorldBuilderRepository.saveNPCFromXML(
+                context.campaignId,
+                context.sessionId!,
+                npc,
+              )
             )
               savedNPCs++;
           }
           for (const loc of xmlParsed.worldUpdates.locations) {
             if (
-              await WorldBuilderService.saveLocationFromXML(
+              await WorldBuilderRepository.saveLocationFromXML(
                 context.campaignId,
                 context.sessionId!,
                 loc,
@@ -245,7 +249,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
           }
           for (const quest of xmlParsed.worldUpdates.quests) {
             if (
-              await WorldBuilderService.saveQuestFromXML(
+              await WorldBuilderRepository.saveQuestFromXML(
                 context.campaignId,
                 context.sessionId!,
                 quest,

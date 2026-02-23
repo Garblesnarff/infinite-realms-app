@@ -1,7 +1,6 @@
 import { Gauge, Clock, Theater, Zap, Skull, Grid, List, Eye, Check, Sparkles } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 
 /**
@@ -42,6 +42,9 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
 
   const [viewMode, setViewMode] = React.useState<'grid' | 'list' | 'compact'>('compact');
   const [searchQuery, setSearchQuery] = React.useState('');
+  const difficultyLabelId = useId();
+  const lengthLabelId = useId();
+  const toneLabelId = useId();
 
   /**
    * Handles parameter value changes
@@ -96,17 +99,21 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
+            aria-label="Search parameters"
           />
           <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">View:</span>
-          <div className="flex border rounded-md">
+          <div className="flex border rounded-md" role="group" aria-label="View mode">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('grid')}
               className="rounded-r-none"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+              title="Grid view"
             >
               <Grid className="w-4 h-4" />
             </Button>
@@ -115,6 +122,9 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
               size="sm"
               onClick={() => setViewMode('list')}
               className="rounded-none border-x"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+              title="List view"
             >
               <List className="w-4 h-4" />
             </Button>
@@ -123,6 +133,9 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
               size="sm"
               onClick={() => setViewMode('compact')}
               className="rounded-l-none"
+              aria-label="Compact view"
+              aria-pressed={viewMode === 'compact'}
+              title="Compact view"
             >
               <Eye className="w-4 h-4" />
             </Button>
@@ -131,7 +144,10 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
       </div>
       <div>
         <div className="text-center mb-6">
-          <Label className="text-xl font-serif font-semibold flex items-center justify-center">
+          <Label
+            id={difficultyLabelId}
+            className="text-xl font-serif font-semibold flex items-center justify-center"
+          >
             <Gauge className="h-5 w-5 mr-2 text-blue-600" />
             Difficulty Level
           </Label>
@@ -140,6 +156,7 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
           </p>
         </div>
         <RadioGroup
+          aria-labelledby={difficultyLabelId}
           value={state.campaign?.difficulty_level || ''}
           onValueChange={(value) => handleParameterChange('difficulty_level', value)}
           className={
@@ -279,11 +296,17 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
                     style={{ boxShadow: 'inset 0 0 60px 20px rgba(0,0,0,0.08)' }}
                   />
                   {isSelected && (
-                    <div className="absolute top-3 right-3 z-20 bg-primary text-primary-foreground rounded-full p-1">
+                    <div
+                      className="absolute top-3 right-3 bg-primary text-primary-foreground rounded-full p-1"
+                      style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                    >
                       <Check className="w-4 h-4" />
                     </div>
                   )}
-                  <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+                  <div
+                    className="absolute bottom-3 left-3 flex items-center gap-2"
+                    style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  >
                     <Gauge className="h-5 w-5" />
                     <span className="font-bold text-lg">{level.label}</span>
                   </div>
@@ -295,7 +318,10 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
 
       <div>
         <div className="text-center mb-6">
-          <Label className="text-xl font-serif font-semibold flex items-center justify-center">
+          <Label
+            id={lengthLabelId}
+            className="text-xl font-serif font-semibold flex items-center justify-center"
+          >
             <Clock className="h-5 w-5 mr-2 text-blue-600" />
             Campaign Length
           </Label>
@@ -304,6 +330,7 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
           </p>
         </div>
         <RadioGroup
+          aria-labelledby={lengthLabelId}
           value={state.campaign?.campaign_length || ''}
           onValueChange={(value) => handleParameterChange('campaign_length', value)}
           className={
@@ -443,11 +470,17 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
                     style={{ boxShadow: 'inset 0 0 60px 20px rgba(0,0,0,0.08)' }}
                   />
                   {isSelected && (
-                    <div className="absolute top-3 right-3 z-20 bg-primary text-primary-foreground rounded-full p-1">
+                    <div
+                      className="absolute top-3 right-3 bg-primary text-primary-foreground rounded-full p-1"
+                      style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                    >
                       <Check className="w-4 h-4" />
                     </div>
                   )}
-                  <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+                  <div
+                    className="absolute bottom-3 left-3 flex items-center gap-2"
+                    style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  >
                     <Clock className="h-5 w-5" />
                     <span className="font-bold text-lg">{length.label}</span>
                   </div>
@@ -459,7 +492,10 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
 
       <div>
         <div className="text-center mb-6">
-          <Label className="text-xl font-serif font-semibold flex items-center justify-center">
+          <Label
+            id={toneLabelId}
+            className="text-xl font-serif font-semibold flex items-center justify-center"
+          >
             <Theater className="h-5 w-5 mr-2 text-blue-600" />
             Campaign Tone
           </Label>
@@ -468,6 +504,7 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
           </p>
         </div>
         <RadioGroup
+          aria-labelledby={toneLabelId}
           value={state.campaign?.tone || ''}
           onValueChange={(value) => handleParameterChange('tone', value)}
           className={
@@ -612,11 +649,17 @@ const CampaignParameters: React.FC<{ isLoading?: boolean }> = ({ isLoading = fal
                     style={{ boxShadow: 'inset 0 0 60px 20px rgba(0,0,0,0.08)' }}
                   />
                   {isSelected && (
-                    <div className="absolute top-3 right-3 z-20 bg-primary text-primary-foreground rounded-full p-1">
+                    <div
+                      className="absolute top-3 right-3 bg-primary text-primary-foreground rounded-full p-1"
+                      style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                    >
                       <Check className="w-4 h-4" />
                     </div>
                   )}
-                  <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+                  <div
+                    className="absolute bottom-3 left-3 flex items-center gap-2"
+                    style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  >
                     {icon}
                     <span className="font-bold text-lg">{tone.label}</span>
                   </div>

@@ -9,8 +9,5 @@ export { QuestGenerator } from './quest-generator';
 export type { QuestRequest, GeneratedQuest, QuestStage } from './quest-generator';
 
 export { WorldBuilderService } from './world-builder-service';
-export type {
-  WorldBuildingContext,
-  WorldExpansionResult,
-  WorldBuildingTrigger,
-} from './world-builder-service';
+export { WorldBuilderRepository } from './world-builder-repository';
+export type { WorldBuildingContext, WorldExpansionResult, WorldBuildingTrigger } from './types';

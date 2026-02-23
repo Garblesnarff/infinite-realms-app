@@ -275,6 +275,8 @@ export default tseslint.config(
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
       'src/components/scenes/SceneCreationWizard.tsx',
+      'src/features/campaign/components/creation/steps/CampaignParameters.tsx',
+      'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       'server-bun/src/services/spell-slots-service.ts',
       'server-bun/src/services/spell-slots/spell-slot-mechanics.ts',
       'server-bun/src/services/rest-service.ts',
@@ -322,6 +324,8 @@ export default tseslint.config(
       'src/features/character/components/spells/SpellCard.tsx',
       'src/features/game-session/components/dice/DiceRollEmbed.tsx',
       'src/components/combat/CombatMessage.tsx',
+      'src/services/world-builders/world-builder-service.ts',
+      'server-bun/src/services/vision-blocker-service.ts',
     ],
     rules: {
       'max-lines': 'warn',

@@ -7,7 +7,7 @@
  * @module server/services/vision-blocker-service
  */
 
-import { eq, and, asc, exists } from 'drizzle-orm';
+import { eq, and, asc, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -46,31 +46,24 @@ export class VisionBlockerService {
       .select({ blockers: visionBlockingShapes })
       .from(visionBlockingShapes)
       .innerJoin(scenes, eq(visionBlockingShapes.sceneId, scenes.id))
-      .where(
-        and(
-          eq(visionBlockingShapes.sceneId, sceneId),
-          eq(scenes.userId, userId)
-        )
-      )
+      .where(and(eq(visionBlockingShapes.sceneId, sceneId), eq(scenes.userId, userId)))
       .orderBy(asc(visionBlockingShapes.createdAt));
 
-    return blockers.map(b => b.blockers);
+    return blockers.map((b) => b.blockers);
   }
 
   /**
    * Get a single vision blocker by ID
    */
-  static async getVisionBlocker(blockerId: string, userId: string): Promise<VisionBlockingShape | null> {
+  static async getVisionBlocker(
+    blockerId: string,
+    userId: string,
+  ): Promise<VisionBlockingShape | null> {
     const [result] = await db
       .select({ blocker: visionBlockingShapes })
       .from(visionBlockingShapes)
       .innerJoin(scenes, eq(visionBlockingShapes.sceneId, scenes.id))
-      .where(
-        and(
-          eq(visionBlockingShapes.id, blockerId),
-          eq(scenes.userId, userId)
-        )
-      )
+      .where(and(eq(visionBlockingShapes.id, blockerId), eq(scenes.userId, userId)))
       .limit(1);
 
     return result?.blocker || null;
@@ -82,19 +75,8 @@ export class VisionBlockerService {
   static async createVisionBlocker(
     sceneId: string,
     userId: string,
-    data: Omit<CreateVisionBlockerData, 'sceneId'>
+    data: Omit<CreateVisionBlockerData, 'sceneId'>,
   ): Promise<VisionBlockingShape> {
-    // 🛡️ Sentinel: Verify scene ownership with existence masking
-    const [sceneAccess] = await db
-      .select({ id: scenes.id })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!sceneAccess) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
     // Validate points
     if (!data.pointsData || data.pointsData.length < 2) {
       throw new ValidationError('A vision blocker must have at least 2 points (a line segment)');
@@ -114,26 +96,37 @@ export class VisionBlockerService {
       }
     } else if (data.doorState) {
       // Non-door shapes shouldn't have door state
-      throw new ValidationError(`Only doors can have a door state (shape type is ${data.shapeType})`);
+      throw new ValidationError(
+        `Only doors can have a door state (shape type is ${data.shapeType})`,
+      );
     }
 
+    // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
+    // This reduces database round-trips from 2 to 1 and prevents cross-scene unauthorized writes.
     const [blocker] = await db
       .insert(visionBlockingShapes)
-      .values({
-        sceneId,
-        shapeType: data.shapeType,
-        pointsData: data.pointsData,
-        blocksMovement: data.blocksMovement ?? true,
-        blocksVision: data.blocksVision ?? true,
-        blocksLight: data.blocksLight ?? true,
-        isOneWay: data.isOneWay ?? false,
-        doorState: data.doorState ?? (data.shapeType === 'door' ? 'closed' : null),
-        createdBy: userId,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            shapeType: sql`${data.shapeType}`,
+            // Use JSON.stringify for pointsData to ensure correct JSONB casting in subquery
+            pointsData: sql`${JSON.stringify(data.pointsData)}::jsonb`,
+            blocksMovement: sql`${data.blocksMovement ?? true}`,
+            blocksVision: sql`${data.blocksVision ?? true}`,
+            blocksLight: sql`${data.blocksLight ?? true}`,
+            isOneWay: sql`${data.isOneWay ?? false}`,
+            doorState: sql`${data.doorState ?? (data.shapeType === 'door' ? 'closed' : null)}`,
+            createdBy: sql`${userId}`,
+          })
+          .from(scenes)
+          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
+      )
       .returning();
 
     if (!blocker) {
-      throw new InternalServerError('Failed to create vision blocker');
+      // If no row was inserted, it means the SELECT returned zero rows (unauthorized or scene not found)
+      throw new NotFoundError('Scene', sceneId);
     }
 
     return blocker;
@@ -145,7 +138,7 @@ export class VisionBlockerService {
   static async updateVisionBlocker(
     blockerId: string,
     userId: string,
-    updates: UpdateVisionBlockerData
+    updates: UpdateVisionBlockerData,
   ): Promise<VisionBlockingShape> {
     // 🛡️ Sentinel: Get existing blocker (already checks scene ownership via join)
     const existingBlocker = await this.getVisionBlocker(blockerId, userId);
@@ -188,16 +181,12 @@ export class VisionBlockerService {
         and(
           eq(visionBlockingShapes.id, blockerId),
           exists(
-            db.select()
+            db
+              .select()
               .from(scenes)
-              .where(
-                and(
-                  eq(scenes.id, visionBlockingShapes.sceneId),
-                  eq(scenes.userId, userId)
-                )
-              )
-          )
-        )
+              .where(and(eq(scenes.id, visionBlockingShapes.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning();
 
@@ -219,16 +208,12 @@ export class VisionBlockerService {
         and(
           eq(visionBlockingShapes.id, blockerId),
           exists(
-            db.select()
+            db
+              .select()
               .from(scenes)
-              .where(
-                and(
-                  eq(scenes.id, visionBlockingShapes.sceneId),
-                  eq(scenes.userId, userId)
-                )
-              )
-          )
-        )
+              .where(and(eq(scenes.id, visionBlockingShapes.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning({ id: visionBlockingShapes.id });
 
@@ -274,16 +259,12 @@ export class VisionBlockerService {
         and(
           eq(visionBlockingShapes.id, blockerId),
           exists(
-            db.select()
+            db
+              .select()
               .from(scenes)
-              .where(
-                and(
-                  eq(scenes.id, visionBlockingShapes.sceneId),
-                  eq(scenes.userId, userId)
-                )
-              )
-          )
-        )
+              .where(and(eq(scenes.id, visionBlockingShapes.sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning();
 
@@ -301,7 +282,7 @@ export class VisionBlockerService {
   static async bulkCreateBlockers(
     sceneId: string,
     userId: string,
-    blockers: Array<Omit<CreateVisionBlockerData, 'sceneId'>>
+    blockers: Array<Omit<CreateVisionBlockerData, 'sceneId'>>,
   ): Promise<VisionBlockingShape[]> {
     // 🛡️ Sentinel: Verify scene ownership once with existence masking
     const [sceneAccess] = await db
@@ -356,10 +337,7 @@ export class VisionBlockerService {
       createdBy: userId,
     }));
 
-    const created = await db
-      .insert(visionBlockingShapes)
-      .values(values)
-      .returning();
+    const created = await db.insert(visionBlockingShapes).values(values).returning();
 
     return created;
   }
@@ -376,12 +354,12 @@ export class VisionBlockerService {
         and(
           eq(visionBlockingShapes.sceneId, sceneId),
           eq(visionBlockingShapes.shapeType, 'door'),
-          eq(scenes.userId, userId)
-        )
+          eq(scenes.userId, userId),
+        ),
       )
       .orderBy(asc(visionBlockingShapes.createdAt));
 
-    return doors.map(d => d.blockers);
+    return doors.map((d) => d.blockers);
   }
 
   /**
@@ -396,11 +374,12 @@ export class VisionBlockerService {
         and(
           eq(visionBlockingShapes.sceneId, sceneId),
           exists(
-            db.select()
+            db
+              .select()
               .from(scenes)
-              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-          )
-        )
+              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning({ id: visionBlockingShapes.id });
 
