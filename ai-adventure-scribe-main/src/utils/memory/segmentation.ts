@@ -24,7 +24,7 @@ import { SentenceSegmenter } from '@/utils/sentence-segmenter';
  * @returns Content with code blocks removed
  */
 export const stripCodeBlocks = (content: string): string => {
-  return content
+  const withoutCode = content
     // Remove fenced code blocks with optional language identifier (```json, ```ROLL_REQUESTS_V1, etc.)
     // This catches ROLL_REQUESTS_V1 blocks since they're always in triple backticks
     .replace(/```[a-zA-Z0-9_]*[\s\S]*?```/g, '')
@@ -35,6 +35,37 @@ export const stripCodeBlocks = (content: string): string => {
     // Remove multiple consecutive newlines (cleanup after removals)
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  return stripRollScaffolding(withoutCode);
+};
+
+/**
+ * Strip dice roll scaffolding text produced by formatDiceRoll() before segmentation.
+ * These patterns are transient game mechanics output, not durable memories.
+ *
+ * Matches the output format of formatDiceRoll() in MessageListContainer.tsx:
+ *   "Stealth Check: 15 (nat 13+2) vs DC 13 ✓"
+ *   "Attack Roll: 22 (nat 18+4) [ADV] ✓ CRITICAL HIT!"
+ *   "Perception Check: 8 (nat 6+2) ✗"
+ */
+export const stripRollScaffolding = (content: string): string => {
+  return (
+    content
+      // Remove success/failure markers (used exclusively by formatDiceRoll)
+      .replace(/[✓✗]/g, '')
+      // Remove natural roll notation: (nat 13+2), (nat 18-1), (nat 20)
+      .replace(/\(nat\s+\d+[+-]?\d*\)/g, '')
+      // Remove advantage/disadvantage tags
+      .replace(/\[(?:ADV|DIS)\]/g, '')
+      // Remove vs DC/AC comparisons
+      .replace(/\bvs\s+(?:DC|AC)\s+\d+/gi, '')
+      // Remove critical hit/miss markers
+      .replace(/\bCRITICAL\s+HIT!?/gi, '')
+      .replace(/\bCritical\s+Miss\b/gi, '')
+      // Normalize leftover whitespace
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  );
 };
 
 /**

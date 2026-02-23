@@ -335,7 +335,12 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       turnCountRef.current = newTurnCount;
 
       logger.info('[Memory Flow] Extracting memories from player input');
-      await extractMemories(playerInput); // Assuming this is non-critical path for state update
+      // Skip extraction for dice roll results — the formatted roll text
+      // (e.g., "Stealth Check: 15 (nat 13+2) vs DC 13 ✓") is transient scaffolding,
+      // not a durable game memory. The AI response that follows the roll IS extracted.
+      if (providedContext?.intent !== 'dice_roll') {
+        await extractMemories(playerInput); // Assuming this is non-critical path for state update
+      }
 
       // Optional: System acknowledgment (can be removed if AI response is fast)
       // const systemMessage: ChatMessage = { text: "Processing...", sender: 'system', context: { intent: 'acknowledgment' } };
