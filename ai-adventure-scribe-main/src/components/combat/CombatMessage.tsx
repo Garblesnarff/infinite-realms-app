@@ -1,30 +1,16 @@
+import { Sword, Shield, Zap, Heart, Skull, Target, Dice6 } from 'lucide-react';
 import React from 'react';
-import { Card } from '@/components/ui/card';
+
+
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Separator } from '@/components/ui/separator';
-import { DiceRoll } from '@/utils/diceUtils';
-import { DetectedCombatAction } from '@/utils/combatDetection';
-import { Sword, Shield, Zap, Heart, Skull, Target, Dice6 } from 'lucide-react';
+import { type CombatMessageData } from '@/utils/combat/ai-narration-utils';
+import { type DiceRoll } from '@/utils/diceUtils';
 
-export interface CombatMessageData {
-  type:
-    | 'attack_roll'
-    | 'damage_roll'
-    | 'saving_throw'
-    | 'skill_check'
-    | 'initiative'
-    | 'death_save'
-    | 'concentration_save';
-  actor: string;
-  target?: string;
-  roll: DiceRoll;
-  dc?: number;
-  success?: boolean;
-  critical?: boolean;
-  action?: DetectedCombatAction;
-  description: string;
-}
+// Re-export type for backward compatibility
+export type { CombatMessageData };
 
 interface CombatMessageProps {
   data: CombatMessageData;
