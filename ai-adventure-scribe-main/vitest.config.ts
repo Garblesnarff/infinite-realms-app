@@ -161,6 +161,8 @@ export default defineConfig({
       'src/features/campaign/components/view/sections/CampaignHeader.test.tsx',
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
       'src/components/game/__tests__/DiceRollRequest.test.tsx',
+      'src/utils/__tests__/parseMessageOptions.test.ts',
+      'src/components/game/__tests__/ActionOptions.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -301,6 +303,8 @@ export default defineConfig({
         'src/features/campaign/components/view/sections/CampaignHeader.tsx',
         'src/components/game/NPCRollDisplay.tsx',
         'src/components/game/DiceRollRequest.tsx',
+        'src/utils/parseMessageOptions.ts',
+        'src/components/game/ActionOptions.tsx',
       ],
       exclude: [
         '**/__tests__/**',
