@@ -141,38 +141,38 @@ Provides reusable utilities:
 
 ### All Tests
 ```bash
-npx vitest run
+bunx vitest run
 ```
 
 ### Specific Test Suites
 ```bash
 # Data integrity
-npx vitest run src/utils/__tests__/spell-data.test.ts
+bunx vitest run src/utils/__tests__/spell-data.test.ts
 
 # Validation logic
-npx vitest run src/utils/__tests__/spell-validation.test.ts
+bunx vitest run src/utils/__tests__/spell-validation.test.ts
 
 # Component tests
-npx vitest run src/components/spells/__tests__/SpellCard.test.tsx
+bunx vitest run src/components/spells/__tests__/SpellCard.test.tsx
 
 # Hook tests
-npx vitest run src/hooks/__tests__/useSpellSelection.test.ts
+bunx vitest run src/hooks/__tests__/useSpellSelection.test.ts
 
 # Integration tests
-npx vitest run src/__tests__/integration/spell-selection-flow.test.tsx
+bunx vitest run src/__tests__/integration/spell-selection-flow.test.tsx
 
 # Performance tests
-npx vitest run src/__tests__/performance/spell-performance.test.ts
+bunx vitest run src/__tests__/performance/spell-performance.test.ts
 ```
 
 ### Watch Mode (Development)
 ```bash
-npx vitest watch
+bunx vitest watch
 ```
 
 ### Coverage Report
 ```bash
-npx vitest run --coverage
+bunx vitest run --coverage
 ```
 
 ## Test Philosophy

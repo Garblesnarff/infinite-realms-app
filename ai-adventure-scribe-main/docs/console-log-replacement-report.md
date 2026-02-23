@@ -63,7 +63,7 @@ Replace all `console.log/warn/error/debug` statements with centralized logger ut
 
 ### 5. Build Verification
 
-**Command:** `npm run build:dev`
+**Command:** `bun run build:dev`
 **Status:** ✓ PASSED
 **Build Time:** 3m 48s
 **Output:** dist/index.html (1.95 kB)
@@ -150,7 +150,7 @@ Replace all `console.log/warn/error/debug` statements with centralized logger ut
 ## Success Criteria Verification
 
 - ✅ All 84 files updated with logger imports (60 active + 24 archived/skipped)
-- ✅ Build passes without errors (npm run build:dev ✓ PASSED)
+- ✅ Build passes without errors (bun run build:dev ✓ PASSED)
 - ✅ Commit created successfully (f7c1b1f)
 - ✅ No console statements in active codebase
 - ✅ Centralized logging implemented across all modules

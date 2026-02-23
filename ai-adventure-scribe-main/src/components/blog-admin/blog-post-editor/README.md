@@ -173,7 +173,7 @@ Unit tests are located in `__tests__/` directory:
 
 Run tests:
 ```bash
-npx vitest run src/components/blog-admin/blog-post-editor
+bunx vitest run src/components/blog-admin/blog-post-editor
 ```
 
 ## Accessibility

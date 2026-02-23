@@ -371,7 +371,7 @@ Tests are available at `/src/lib/logger.test.ts` demonstrating all usage pattern
 
 Run tests:
 ```bash
-npx vitest run src/lib/logger.test.ts
+bunx vitest run src/lib/logger.test.ts
 ```
 
 ## Examples

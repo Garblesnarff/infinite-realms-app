@@ -10,7 +10,7 @@ Runs on all pushes and pull requests.
 **Jobs:**
 1. **lint-and-tests** - Linting and unit/integration tests
    - Runs ESLint
-   - Runs server tests (`npm run server:test`)
+   - Runs server tests (`bun run server:test`)
    - Runs frontend tests with coverage
    - Uploads coverage artifacts
 
@@ -48,40 +48,40 @@ Nightly Dynamic Application Security Testing (DAST).
 ### Frontend Tests
 ```bash
 # Run all frontend tests
-npx vitest run
+bunx vitest run
 
 # Run with coverage
-npx vitest run --coverage
+bunx vitest run --coverage
 
 # Run specific test file
-npx vitest run src/agents/__tests__/dungeon-master-agent.test.ts
+bunx vitest run src/agents/__tests__/dungeon-master-agent.test.ts
 
 # Watch mode
-npx vitest
+bunx vitest
 ```
 
 ### Server Tests
 ```bash
 # Run all server tests
-npm run server:test
+bun run server:test
 
 # Run with coverage
-npx vitest run -c server/vitest.config.ts --coverage
+bunx vitest run -c server/vitest.config.ts --coverage
 
 # Run specific test suite
-npm run security-test
+bun run security-test
 ```
 
 ### E2E Tests
 ```bash
 # Run all E2E tests
-npm run e2e
+bun run e2e
 
 # Run with UI
-npx playwright test --ui
+bunx playwright test --ui
 
 # Run specific browser
-npx playwright test --project=chromium
+bunx playwright test --project=chromium
 ```
 
 ## Test Coverage Structure
@@ -191,7 +191,7 @@ include: [
 
 ### 3. Run test
 ```bash
-npx vitest run src/services/__tests__/my-service.test.ts
+bunx vitest run src/services/__tests__/my-service.test.ts
 ```
 
 ## Test Metrics

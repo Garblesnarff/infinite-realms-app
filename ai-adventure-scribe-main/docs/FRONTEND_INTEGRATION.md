@@ -61,8 +61,8 @@ async function apiRequest<T>(
 
 ```bash
 # Install dependencies
-npm install axios # or use fetch
-npm install @tanstack/react-query # recommended for data fetching
+bun install axios # or use fetch
+bun install @tanstack/react-query # recommended for data fetching
 ```
 
 ---

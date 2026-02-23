@@ -24,8 +24,8 @@ All success criteria met. Documentation is accessible and functional.
 
 **Installation Command Used:**
 ```bash
-npm install swagger-jsdoc swagger-ui-express
-npm install -D @types/swagger-jsdoc @types/swagger-ui-express
+bun install swagger-jsdoc swagger-ui-express
+bun install -D @types/swagger-jsdoc @types/swagger-ui-express
 ```
 
 ### 2. OpenAPI Configuration File ✅
@@ -188,8 +188,8 @@ router.post('/characters/:characterId/long', async (req, res) => {
 ```json
 {
   "scripts": {
-    "docs:generate": "npm run server:build && node server/dist/server/scripts/generate-openapi.js",
-    "docs:serve": "npm run dev"
+    "docs:generate": "bun run server:build && node server/dist/server/scripts/generate-openapi.js",
+    "docs:serve": "bun run dev"
   }
 }
 ```
@@ -197,10 +197,10 @@ router.post('/characters/:characterId/long', async (req, res) => {
 **Usage:**
 ```bash
 # Generate OpenAPI spec JSON file
-npm run docs:generate
+bun run docs:generate
 
 # Start dev server with Swagger UI
-npm run docs:serve
+bun run docs:serve
 
 # Access Swagger UI
 open http://localhost:8888/api-docs
@@ -402,7 +402,7 @@ Fix TypeScript errors in:
 - `server/src/__tests__/`
 - `server/src/services/`
 
-Then run: `npm run docs:generate`
+Then run: `bun run docs:generate`
 
 ### Partial Documentation
 57 endpoints have basic documentation (route definitions) but lack:
@@ -506,8 +506,8 @@ router.post('/:id', async (req, res) => {
 
 1. Modify JSDoc comments in route files
 2. Update type definitions in `server/src/types/*.ts`
-3. Regenerate spec: `npm run docs:generate`
-4. Test in Swagger UI: `npm run docs:serve`
+3. Regenerate spec: `bun run docs:generate`
+4. Test in Swagger UI: `bun run docs:serve`
 5. Commit changes to version control
 
 ### Version Control
@@ -579,7 +579,7 @@ To achieve 100% documentation coverage:
 
 3. **Fix TypeScript Errors** (to enable spec generation)
    - Resolve compilation errors
-   - Run `npm run docs:generate`
+   - Run `bun run docs:generate`
    - Verify `docs/openapi.json` is created
 
 4. **Testing & Validation**

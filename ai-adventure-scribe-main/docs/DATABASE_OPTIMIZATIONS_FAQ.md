@@ -527,7 +527,7 @@ ORDER BY seq_scan DESC;
 **Code Changes:**
 ```bash
 git revert COMMIT_HASH
-npm run server:build
+bun run server:build
 ```
 
 **Database Constraints:**
@@ -583,7 +583,7 @@ ERROR: permission denied for schema public
    # Apply migrations
    supabase db push
    # Test functionality
-   npm run server:test
+   bun run server:test
    ```
 
 2. **Test on Staging Environment:**

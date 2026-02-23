@@ -450,7 +450,7 @@ function process(data: unknown): ProcessedData | null {
 
 **Step 4:** Run TypeScript compiler
 ```bash
-npx tsc --project server/tsconfig.json --noEmit
+bunx tsc --project server/tsconfig.json --noEmit
 ```
 
 ---

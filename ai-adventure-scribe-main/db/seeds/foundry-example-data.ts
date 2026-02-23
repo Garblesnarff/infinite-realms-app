@@ -4,7 +4,7 @@
  * This script creates example campaigns, scenes, tokens, and related data
  * for demonstrating Foundry VTT integration features.
  *
- * Usage: npm run seed:foundry
+ * Usage: bun run seed:foundry
  */
 
 import 'dotenv/config';

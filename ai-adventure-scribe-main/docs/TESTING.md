@@ -230,19 +230,19 @@ describe('Progression Flow Integration', () => {
 ### Run All Tests
 
 ```bash
-npm run server:test
+bun run server:test
 ```
 
 ### Run Specific Test File
 
 ```bash
-npm run server:test spell-slots-service.test
+bun run server:test spell-slots-service.test
 ```
 
 ### Run Tests in Watch Mode
 
 ```bash
-npm run server:test -- --watch
+bun run server:test -- --watch
 ```
 
 ### Run Only Unit Tests (No Database)
@@ -251,14 +251,14 @@ Unit tests using fixtures will run even without DATABASE_URL:
 
 ```bash
 # These work without database
-npm run server:test spell-slots-service.test
-npm run server:test combat-attack-service.test
+bun run server:test spell-slots-service.test
+bun run server:test combat-attack-service.test
 ```
 
 ### Run Only Integration Tests
 
 ```bash
-npm run server:test --dir server/src/__tests__/integration
+bun run server:test --dir server/src/__tests__/integration
 ```
 
 ## Writing New Tests

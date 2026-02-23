@@ -177,7 +177,7 @@ The Foundry VTT integration provides a complete virtual tabletop system with rea
 
 ### Prerequisites
 
-- Node.js 18+ and npm/yarn/pnpm
+- Bun (https://bun.sh)
 - Supabase account (or self-hosted Supabase)
 - Modern browser with WebGL 2 support
 
@@ -191,7 +191,7 @@ The Foundry VTT integration provides a complete virtual tabletop system with rea
 
 2. **Install dependencies**
    ```bash
-   npm install
+   bun install
    ```
 
 3. **Set up environment variables**
@@ -209,12 +209,12 @@ The Foundry VTT integration provides a complete virtual tabletop system with rea
 
 4. **Run database migrations**
    ```bash
-   npm run db:migrate
+   bun run db:migrate
    ```
 
 5. **Start the development server**
    ```bash
-   npm run dev
+   bun run dev
    ```
 
 6. **Open the application**
@@ -268,17 +268,17 @@ Migrations are located in `/server/src/db/migrations/`.
 
 **Apply all migrations:**
 ```bash
-npm run db:migrate
+bun run db:migrate
 ```
 
 **Rollback last migration:**
 ```bash
-npm run db:rollback
+bun run db:rollback
 ```
 
 **Create new migration:**
 ```bash
-npm run db:migration:create migration-name
+bun run db:migration:create migration-name
 ```
 
 ### Manual Schema Setup
@@ -316,7 +316,7 @@ If you're adding Foundry integration to an existing AI Adventure Scribe installa
 
 2. **Run Foundry migrations**
    ```bash
-   npm run db:migrate
+   bun run db:migrate
    ```
 
 3. **Update tRPC routers**

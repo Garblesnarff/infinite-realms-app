@@ -14,7 +14,7 @@ Visit the interactive API documentation:
 #### OpenAPI Spec (JSON)
 Download the machine-readable specification:
 - **Location**: `/docs/openapi.json`
-- **Generate**: `npm run docs:generate`
+- **Generate**: `bun run docs:generate`
 
 ### Authentication
 
@@ -240,7 +240,7 @@ The Swagger UI provides an interactive "Try it out" button for each endpoint:
 ### Generate OpenAPI Spec
 
 ```bash
-npm run docs:generate
+bun run docs:generate
 ```
 
 Outputs to: `docs/openapi.json`
@@ -248,14 +248,14 @@ Outputs to: `docs/openapi.json`
 ### Start Development Server
 
 ```bash
-npm run docs:serve
+bun run docs:serve
 ```
 
 Access Swagger UI at: http://localhost:8888/api-docs
 
 ### Import to Postman
 
-1. Generate the OpenAPI spec: `npm run docs:generate`
+1. Generate the OpenAPI spec: `bun run docs:generate`
 2. In Postman: File > Import
 3. Select `docs/openapi.json`
 4. All endpoints will be imported with examples
@@ -304,7 +304,7 @@ Report bugs or request features:
 Want to improve the documentation?
 1. Fork the repository
 2. Add JSDoc comments to endpoints
-3. Run `npm run docs:generate`
+3. Run `bun run docs:generate`
 4. Submit a pull request
 
 ### Documentation Pattern

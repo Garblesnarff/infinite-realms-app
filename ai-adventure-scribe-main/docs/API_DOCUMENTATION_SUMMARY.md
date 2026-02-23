@@ -117,8 +117,8 @@ Comprehensive API documentation has been implemented for **64+ D&D 5E mechanics 
 - **Generate Script**: `/home/user/ai-adventure-scribe-main/server/scripts/generate-openapi.ts`
 - **NPM Commands**:
   ```bash
-  npm run docs:generate  # Generate OpenAPI spec JSON
-  npm run docs:serve     # Start server with Swagger UI
+  bun run docs:generate  # Generate OpenAPI spec JSON
+  bun run docs:serve     # Start server with Swagger UI
   ```
 
 #### 7. Examples & Try-It-Out ✅
@@ -185,7 +185,7 @@ Comprehensive API documentation has been implemented for **64+ D&D 5E mechanics 
 
 #### OpenAPI Spec (JSON)
 - **File Location**: `/docs/openapi.json`
-- **Generated Via**: `npm run docs:generate`
+- **Generated Via**: `bun run docs:generate`
 
 ### Architecture Highlights
 
@@ -247,7 +247,7 @@ To complete documentation for all 63+ endpoints:
 
 2. **Run generation script** after adding documentation:
    ```bash
-   npm run docs:generate
+   bun run docs:generate
    ```
 
 3. **Test in Swagger UI** to verify interactive functionality
@@ -294,7 +294,7 @@ To keep documentation up to date:
 
 1. Add JSDoc comments when creating new endpoints
 2. Update schemas when modifying types
-3. Regenerate spec: `npm run docs:generate`
+3. Regenerate spec: `bun run docs:generate`
 4. Test in Swagger UI after changes
 5. Commit `docs/openapi.json` to version control
 

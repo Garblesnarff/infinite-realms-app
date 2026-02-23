@@ -156,7 +156,7 @@ const posts = await db
 
 #### 1. Generate Types (First Time)
 ```bash
-npm run db:generate
+bun run db:generate
 ```
 
 This will:
@@ -179,7 +179,7 @@ const posts: BlogPost[] = await db
 
 #### 3. Visual Database Browser
 ```bash
-npm run db:studio
+bun run db:studio
 ```
 
 Opens Drizzle Studio at `https://local.drizzle.studio`
@@ -197,7 +197,7 @@ Opens Drizzle Studio at `https://local.drizzle.studio`
 ### Next Steps
 
 1. **Set DATABASE_URL**: Add to environment variables
-2. **Generate Types**: Run `npm run db:generate`
+2. **Generate Types**: Run `bun run db:generate`
 3. **Test Connection**: Try example queries
 4. **Gradual Migration**: Use Drizzle for new features
 5. **Keep Supabase**: Existing code works unchanged
@@ -246,7 +246,7 @@ const post: NewBlogPost = {
 **Solution**: Add `DATABASE_URL` to your `.env.local` file
 
 **Issue**: `Cannot find module 'drizzle-orm'`
-**Solution**: Run `npm install` to install dependencies
+**Solution**: Run `bun install` to install dependencies
 
 **Issue**: Type generation fails
 **Solution**: Check that `DATABASE_URL` is correct and database is accessible

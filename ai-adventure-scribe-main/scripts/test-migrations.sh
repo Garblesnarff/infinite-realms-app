@@ -3,7 +3,7 @@
 # Migration Testing Script
 # =============================================================================
 # Purpose: Test all database migrations in an isolated environment
-# Usage: npm run test:migrations
+# Usage: bun run test:migrations
 # or: ./scripts/test-migrations.sh
 #
 # This script:
@@ -82,7 +82,7 @@ preflight_checks() {
     # Check if Supabase CLI is available
     if ! command -v supabase &> /dev/null; then
         log_error "Supabase CLI not found"
-        echo "Install with: npm install -g supabase"
+        echo "Install with: bun install -g supabase"
         exit 1
     fi
     log_success "Supabase CLI found"

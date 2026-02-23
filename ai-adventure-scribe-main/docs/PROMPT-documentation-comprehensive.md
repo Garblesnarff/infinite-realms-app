@@ -1026,8 +1026,8 @@ router.get('/characters', requireAuth, async (req, res) => {
 
 ## Final Approval
 - [ ] Code reviewed (another human or AI)
-- [ ] All tests passing (npm run test)
-- [ ] No linting errors (npm run lint)
+- [ ] All tests passing (bun run test)
+- [ ] No linting errors (bun run lint)
 - [ ] All checklist items above verified
 - [ ] Deployment plan documented (if rollback needed)
 
@@ -1171,16 +1171,16 @@ vi.mock('@supabase/supabase-js', () => ({
 
 ```bash
 # All tests
-npm run server:test
+bun run server:test
 
 # Specific file
-npm run server:test -- server/tests/payment.test.ts
+bun run server:test -- server/tests/payment.test.ts
 
 # With coverage
-npm run server:test -- --coverage
+bun run server:test -- --coverage
 
 # Watch mode (re-run on file change)
-npm run server:test -- --watch
+bun run server:test -- --watch
 ```
 ```
 
@@ -1488,7 +1488,7 @@ rg "(API_KEY|SECRET|PASSWORD|TOKEN)" docs/
 **Verification:**
 ```bash
 # All files linted and error-free
-npm run lint
+bun run lint
 
 # Documentation readable and complete
 grep -l "WHY\|BUSINESS\|SECURITY\|MONETIZATION" \

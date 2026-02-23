@@ -291,7 +291,7 @@ useEffect(() => {
 
 Run tests:
 ```bash
-npx vitest run src/utils/equality.test.ts
+bunx vitest run src/utils/equality.test.ts
 ```
 
 All 18 tests should pass:

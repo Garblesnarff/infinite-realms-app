@@ -107,7 +107,7 @@ if (campaignId) {
 
 ### ✅ Build Verification
 ```bash
-npm run build:dev
+bun run build:dev
 ```
 - **Status**: PASSED
 - **Exit Code**: 0

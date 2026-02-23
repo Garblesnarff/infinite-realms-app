@@ -37,7 +37,7 @@ The Foundry VTT integration is a Next.js application with:
 
 2. **Node.js Environment**
    - Node.js 18+ LTS
-   - NPM, Yarn, or pnpm
+   - Bun
 
 3. **CDN/Asset Storage** (recommended)
    - AWS S3, Cloudflare R2, or similar
@@ -132,8 +132,8 @@ supabase db reset  # Applies all migrations
 ### 2. Run Migrations
 
 ```bash
-# Using npm scripts
-npm run db:migrate
+# Using bun scripts
+bun run db:migrate
 
 # Or manually via Supabase
 supabase db push
@@ -210,13 +210,13 @@ aws s3 cp backup_$(date +%Y%m%d).sql s3://backups/
 ### 1. Install Dependencies
 
 ```bash
-npm ci --production
+bun install --frozen-lockfile --production
 ```
 
 ### 2. Build Application
 
 ```bash
-npm run build
+bun run build
 ```
 
 This creates:
@@ -288,14 +288,14 @@ FROM node:18-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Build
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN bun run build
 
 # Production
 FROM base AS runner
@@ -362,10 +362,10 @@ volumes:
 
 ```bash
 # Install PM2
-npm install -g pm2
+bun install -g pm2
 
 # Start application
-pm2 start npm --name "adventure-scribe" -- start
+pm2 start bun --name "adventure-scribe" -- start
 pm2 save
 pm2 startup
 ```
@@ -391,7 +391,7 @@ gcloud run deploy adventure-scribe \
 **netlify.toml:**
 ```toml
 [build]
-  command = "npm run build"
+  command = "bun run build"
   publish = ".next"
 
 [[plugins]]
@@ -429,7 +429,7 @@ module.exports = {
 aws s3 sync public/maps s3://your-bucket/maps --acl public-read
 
 # Optimize images before upload
-npm install -g sharp-cli
+bun install -g sharp-cli
 sharp -i input.jpg -o output.webp -f webp -q 80
 ```
 
@@ -744,7 +744,7 @@ helm install redis bitnami/redis-cluster
 **Out of memory:**
 ```bash
 # Increase Node.js memory
-NODE_OPTIONS="--max-old-space-size=4096" npm start
+NODE_OPTIONS="--max-old-space-size=4096" bun start
 ```
 
 **Database connection errors:**

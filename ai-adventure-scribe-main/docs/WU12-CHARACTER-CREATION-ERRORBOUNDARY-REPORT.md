@@ -142,7 +142,7 @@ App (route level ErrorBoundary)
 
 ### Build Verification
 - **Status**: ✅ PASSED
-- **Command**: `npm run build:dev`
+- **Command**: `bun run build:dev`
 - **Result**: Built successfully with no errors
 - **Bundle Size**: 1,306.15 kB (main bundle)
 

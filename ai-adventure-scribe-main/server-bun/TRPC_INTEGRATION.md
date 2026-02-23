@@ -115,8 +115,8 @@ See `.env.example` for required environment variables:
 1. Ensure environment variables are set in `.env`
 2. Build TypeScript files (required for imports):
    ```bash
-   npm run server:build  # Builds /server/src
-   npx tsc db/schema/*.ts --module esnext --moduleResolution bundler --target esnext
+   bun run server:build  # Builds /server/src
+   bunx tsc db/schema/*.ts --module esnext --moduleResolution bundler --target esnext
    ```
 3. Start the Bun server:
    ```bash

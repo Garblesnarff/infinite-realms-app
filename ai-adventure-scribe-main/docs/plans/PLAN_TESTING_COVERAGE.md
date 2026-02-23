@@ -329,7 +329,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
+    command: 'bun run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },
@@ -343,7 +343,7 @@ export default defineConfig({
 - [ ] Create test setup files with mocks
 - [ ] Configure test databases (SQLite for tests)
 - [ ] Set up code coverage reporting
-- [ ] Add npm scripts for test commands
+- [ ] Add bun scripts for test commands
 
 **Test Commands:**
 ```json
@@ -357,7 +357,7 @@ export default defineConfig({
     "test:server:coverage": "vitest -c server/vitest.config.ts --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:all": "npm run test:coverage && npm run test:server:coverage && npm run test:e2e"
+    "test:all": "bun run test:coverage && bun run test:server:coverage && bun run test:e2e"
   }
 }
 ```
@@ -1610,16 +1610,16 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'bun'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run frontend unit tests
-        run: npm run test:coverage
+        run: bun run test:coverage
 
       - name: Run backend unit tests
-        run: npm run test:server:coverage
+        run: bun run test:server:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -1657,18 +1657,18 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'bun'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run database migrations
-        run: npm run server:migrate
+        run: bun run server:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
       - name: Run integration tests
-        run: npm run test:integration
+        run: bun run test:integration
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
@@ -1682,19 +1682,19 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'bun'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: bunx playwright install --with-deps
 
       - name: Build application
-        run: npm run build
+        run: bun run build
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: bun run test:e2e
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v3
@@ -1715,13 +1715,13 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: 'bun'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run performance tests
-        run: npm run test:performance
+        run: bun run test:performance
 
       - name: Upload performance results
         uses: actions/upload-artifact@v3
@@ -1738,16 +1738,16 @@ jobs:
 . "$(dirname -- "$0")/_/husky.sh"
 
 # Run linter
-npm run lint
+bun run lint
 
 # Run type checking
-npm run type-check
+bun run type-check
 
 # Run tests for changed files only
-npm run test:changed
+bun run test:changed
 
 # Check coverage doesn't decrease
-npm run test:coverage-check
+bun run test:coverage-check
 ```
 
 ### 5.3 Pull Request Checks
@@ -1772,15 +1772,15 @@ jobs:
       - name: Get base coverage
         run: |
           git checkout ${{ github.base_ref }}
-          npm ci
-          npm run test:coverage
+          bun install --frozen-lockfile
+          bun run test:coverage
           mv coverage/coverage-summary.json coverage-base.json
 
       - name: Get PR coverage
         run: |
           git checkout ${{ github.head_ref }}
-          npm ci
-          npm run test:coverage
+          bun install --frozen-lockfile
+          bun run test:coverage
 
       - name: Compare coverage
         run: |

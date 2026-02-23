@@ -444,7 +444,7 @@ VITE_FEATURE_USE_LANGGRAPH=true
 
 **Restart your dev server**:
 ```bash
-npm run dev
+bun run dev
 ```
 
 **Verify**:

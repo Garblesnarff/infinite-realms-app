@@ -59,10 +59,10 @@ psql "$STAGING_DATABASE_URL" -f supabase/migrations/20251017_create_blog_cms.sql
 psql "$STAGING_DATABASE_URL" -c "\dt blog_*"
 
 # Test admin CRUD operations
-npm run test:blog-admin
+bun run test:blog-admin
 
 # Test media upload
-npm run test:media-upload
+bun run test:media-upload
 
 # If all tests pass, apply to production
 psql "$DATABASE_URL" -f supabase/migrations/20251017_create_blog_cms.sql
@@ -1188,13 +1188,13 @@ find src -name "*.ts" -o -name "*.tsx" | xargs sed -i 's/console\.error(/logger.
 
 ```bash
 # Find unused exports
-npx ts-prune
+bunx ts-prune
 
 # Find unused imports
-npx eslint . --rule "no-unused-vars: error"
+bunx eslint . --rule "no-unused-vars: error"
 
 # Find dead code
-npx knip
+bunx knip
 
 # Remove unused files
 git ls-files --others --exclude-standard

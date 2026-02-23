@@ -256,13 +256,13 @@ Each module can be tested independently:
 
 ```bash
 # Test campaign generation
-npm run test src/services/ai/campaign-generator.test.ts
+bun run test src/services/ai/campaign-generator.test.ts
 
 # Test narration service
-npm run test src/services/ai/narration-service.test.ts
+bun run test src/services/ai/narration-service.test.ts
 
 # Test conversation service
-npm run test src/services/ai/conversation-service.test.ts
+bun run test src/services/ai/conversation-service.test.ts
 ```
 
 ## Future Enhancements

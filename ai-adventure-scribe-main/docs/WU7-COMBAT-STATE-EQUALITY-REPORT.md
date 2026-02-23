@@ -186,7 +186,7 @@ Test coverage includes:
 - Performance considerations
 - Edge cases (null, undefined, empty arrays)
 
-**Test Command**: `npx vitest run src/utils/equality.test.ts`
+**Test Command**: `bunx vitest run src/utils/equality.test.ts`
 
 ---
 

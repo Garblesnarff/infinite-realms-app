@@ -42,8 +42,8 @@ Successfully improved codebase quality through automated code fixes, achieving a
 
 **Actions**:
 ```bash
-npm run lint:fix  # ESLint auto-fix
-npm run format    # Prettier formatting
+bun run lint:fix  # ESLint auto-fix
+bun run format    # Prettier formatting
 ```
 
 **Improvements**:

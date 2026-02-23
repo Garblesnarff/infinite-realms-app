@@ -13,7 +13,7 @@ Your CI/CD environment needs:
 1. **Supabase CLI** installed
 2. **PostgreSQL** database available (or Supabase local instance)
 3. **Bash** shell
-4. **Node.js** and npm (for running via package.json)
+4. **Bun (https://bun.sh)
 
 ## GitHub Actions
 
@@ -46,10 +46,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: 'bun'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -60,7 +60,7 @@ jobs:
         run: supabase start
 
       - name: Run migration tests
-        run: CI=true npm run test:migrations
+        run: CI=true bun run test:migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
@@ -91,7 +91,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -102,15 +102,15 @@ jobs:
           supabase status
 
       - name: Run migration tests
-        run: CI=true npm run test:migrations
+        run: CI=true bun run test:migrations
 
       - name: Seed test data
         if: success()
-        run: npm run seed:test-data
+        run: bun run seed:test-data
 
       - name: Run application tests
         if: success()
-        run: npm test
+        run: bun test
 
       - name: Upload test results
         if: always()
@@ -146,12 +146,12 @@ test-migrations:
     POSTGRES_HOST: postgres
 
   before_script:
-    - npm ci
-    - npm install -g supabase
+    - bun install --frozen-lockfile
+    - bun install -g supabase
     - supabase start
 
   script:
-    - CI=true npm run test:migrations
+    - CI=true bun run test:migrations
 
   after_script:
     - supabase stop
@@ -186,7 +186,7 @@ jobs:
       - checkout
 
       - node/install-packages:
-          pkg-manager: npm
+          pkg-manager: bun
 
       - run:
           name: Install Supabase CLI
@@ -204,7 +204,7 @@ jobs:
 
       - run:
           name: Run migration tests
-          command: CI=true npm run test:migrations
+          command: CI=true bun run test:migrations
 
       - run:
           name: Stop Supabase
@@ -250,8 +250,8 @@ pipeline {
                 sh '''
                     nvm install ${NODE_VERSION}
                     nvm use ${NODE_VERSION}
-                    npm ci
-                    npm install -g supabase
+                    bun install --frozen-lockfile
+                    bun install -g supabase
                 '''
             }
         }
@@ -264,7 +264,7 @@ pipeline {
 
         stage('Test Migrations') {
             steps {
-                sh 'npm run test:migrations'
+                sh 'bun run test:migrations'
             }
         }
     }
@@ -304,7 +304,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy project files
 COPY . .
@@ -313,7 +313,7 @@ COPY . .
 RUN chmod +x scripts/test-migrations.sh
 
 # Run tests
-CMD ["npm", "run", "test:migrations"]
+CMD ["bun", "run", "test:migrations"]
 ```
 
 ### Docker Compose for Local Testing
@@ -390,7 +390,7 @@ Speed up CI by caching dependencies:
 - name: Cache node modules
   uses: actions/cache@v3
   with:
-    path: ~/.npm
+    path: ~/.bun
     key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 ```
 

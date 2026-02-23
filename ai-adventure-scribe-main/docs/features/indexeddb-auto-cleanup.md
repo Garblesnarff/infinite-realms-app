@@ -178,7 +178,7 @@ console.log('After:', service.getCleanupStats());
 Run the test suite:
 
 ```bash
-npm test -- src/agents/messaging/services/storage/__tests__/indexeddb-cleanup.test.ts
+bun test -- src/agents/messaging/services/storage/__tests__/indexeddb-cleanup.test.ts
 ```
 
 ## Performance Considerations

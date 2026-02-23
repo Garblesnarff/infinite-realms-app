@@ -45,7 +45,7 @@ InfiniteRealms implements comprehensive database optimizations for production-sc
 - [Monitoring Guide](docs/MONITORING.md)
 
 #### **Quick Start**
-1.  **Prerequisites**: Node.js and npm installed.
+1.  **Prerequisites**: Bun installed (https://bun.sh).
 2.  **Clone the repository**:
     ```bash
     git clone https://github.com/rob-smith/infinite-realms.git
@@ -53,12 +53,12 @@ InfiniteRealms implements comprehensive database optimizations for production-sc
     ```
 3.  **Install dependencies**:
     ```bash
-    npm install
+    bun install
     ```
 4.  **Run the development server**:
     *   Create a `.env.local` file and add your Supabase project URL and anon key.
     ```bash
-    npm run dev
+    bun run dev
     ```
 
 #### **Why This Matters**

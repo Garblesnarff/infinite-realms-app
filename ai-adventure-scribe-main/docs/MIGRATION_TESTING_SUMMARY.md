@@ -36,7 +36,7 @@ A comprehensive Bash script that:
 
 Now you can run tests with:
 ```bash
-npm run test:migrations
+bun run test:migrations
 ```
 
 ### 3. Documentation
@@ -121,13 +121,13 @@ Complete CI/CD integration guide with:
 
 ```bash
 # Install Supabase CLI (if not already installed)
-npm install -g supabase
+bun install -g supabase
 
 # Start Supabase local instance
 supabase start
 
 # Run migration tests
-npm run test:migrations
+bun run test:migrations
 ```
 
 ### Interactive Mode (Local Development)
@@ -146,7 +146,7 @@ The script will:
 ### Non-Interactive Mode (CI/CD)
 
 ```bash
-CI=true npm run test:migrations
+CI=true bun run test:migrations
 ```
 
 Skips confirmation prompts and runs automatically.
@@ -219,7 +219,7 @@ During implementation, the following observations were made:
 
 1. **Test the script locally**:
    ```bash
-   npm run test:migrations
+   bun run test:migrations
    ```
 
 2. **Review the output** and verify all tests pass
@@ -267,7 +267,7 @@ Common issues and solutions:
 
 ### Supabase CLI not found
 ```bash
-npm install -g supabase
+bun install -g supabase
 ```
 
 ### Supabase not running
@@ -299,7 +299,7 @@ For questions or issues:
 
 The migration testing system provides comprehensive, automated validation of all database migrations. It's designed to catch issues early, provide clear feedback, and integrate seamlessly into development and CI/CD workflows.
 
-**Key Takeaway**: Never deploy a migration without running `npm run test:migrations` first!
+**Key Takeaway**: Never deploy a migration without running `bun run test:migrations` first!
 
 ---
 

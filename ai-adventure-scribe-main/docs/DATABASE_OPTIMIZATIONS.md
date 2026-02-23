@@ -376,8 +376,8 @@ await manualCleanup(48 * 60 * 60 * 1000); // 48 hours
 
 **Verification:**
 ```bash
-npm run server:build
-npm run server:start
+bun run server:build
+bun run server:start
 # Test spell validation endpoint
 ```
 
