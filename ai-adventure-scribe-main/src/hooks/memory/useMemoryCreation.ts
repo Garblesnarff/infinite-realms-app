@@ -111,9 +111,28 @@ export const useMemoryCreation = (sessionId: string | null) => {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       logger.info('[Memory Creation] Memory created successfully');
-      queryClient.invalidateQueries({ queryKey: ['memories', sessionId] });
+      // Update cache directly to avoid triggering a refetch on every write.
+      // Multiple sequential writes (initial greeting, player + AI per turn) previously
+      // each fired invalidateQueries → full re-fetch, causing burst log noise and wasted
+      // network calls. setQueryData keeps the cache consistent with zero extra requests.
+      const validatedType = isValidMemoryType(data.type) ? data.type : 'general';
+      const newMemory: Memory = {
+        id: data.id,
+        type: validatedType,
+        content: data.content,
+        importance: data.importance || 0,
+        embedding: typeof data.embedding === 'string' ? JSON.parse(data.embedding) : data.embedding,
+        metadata: data.metadata,
+        created_at: data.created_at || new Date().toISOString(),
+        session_id: data.session_id,
+        updated_at: data.updated_at || new Date().toISOString(),
+      };
+      queryClient.setQueryData<Memory[]>(['memories', sessionId], (old = []) => [
+        newMemory,
+        ...old,
+      ]);
     },
     onError: (error) => {
       logger.error('[Memory Creation] Error in memory creation mutation:', error);
