@@ -7,7 +7,7 @@
  * @module server/services/progression-service
  */
 
-import { eq, and, desc, or, exists } from 'drizzle-orm';
+import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -171,41 +171,48 @@ export class ProgressionService {
    * Initialize progression for a new character
    */
   static async initializeProgression(characterId: string, userId: string): Promise<LevelProgression> {
-    // Verify character ownership first
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
     // Check if progression already exists
     const existing = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
+      where: and(
+        eq(levelProgression.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
     });
 
     if (existing) {
       return existing;
     }
 
-    // Create new progression
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that progression can only be initialized for characters the user is authorized to access.
     const [progression] = await db
       .insert(levelProgression)
-      .values({
-        characterId,
-        currentLevel: 1,
-        currentXp: 0,
-        xpToNextLevel: XP_THRESHOLDS[2] ?? 300, // 300 XP to level 2
-        totalXp: 0,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          currentLevel: sql`1`,
+          currentXp: sql`0`,
+          xpToNextLevel: sql`${XP_THRESHOLDS[2] ?? 300}`,
+          totalXp: sql`0`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!progression) {
-      throw new Error('Failed to create progression');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
     }
 
     return progression;
@@ -344,13 +351,21 @@ export class ProgressionService {
           ))
       : Promise.resolve();
 
-    const eventLog = db.insert(experienceEvents).values({
-      characterId,
-      sessionId: sessionId || null,
-      xpGained: xp,
-      source,
-      description: description || null,
-    });
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    const eventLog = db.insert(experienceEvents).select(
+      db.select({
+        characterId: sql`${characterId}`,
+        sessionId: sql`${sessionId || null}`,
+        xpGained: sql`${xp}`,
+        source: sql`${source}`,
+        description: sql`${description || null}`,
+      })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+    );
 
     const [updatedRows] = await Promise.all([progressionUpdate, charUpdate, eventLog]);
     const updatedProgression = (updatedRows as any)[0];
@@ -698,6 +713,7 @@ export class ProgressionService {
 
     // ⚡ Bolt: Parallelize independent database updates for milestone leveling.
     // Progression update, character level update, and event logging are independent operations.
+    // 🛡️ Sentinel: Added .returning() and check for updated rows to prevent unauthorized access success.
     const progressionUpdate = db
       .update(levelProgression)
       .set({
@@ -718,7 +734,8 @@ export class ProgressionService {
               or(eq(characters.userId, userId), eq(characters.ownerId, userId))
             ))
         )
-      ));
+      ))
+      .returning();
 
     const charUpdate = db
       .update(characters)
@@ -730,16 +747,31 @@ export class ProgressionService {
       .where(and(
         eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
+      ))
+      .returning();
 
-    const eventLog = db.insert(experienceEvents).values({
-      characterId,
-      xpGained: 0,
-      source: 'milestone',
-      description: reason || `Milestone level set to ${level}`,
-    });
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    const eventLog = db.insert(experienceEvents).select(
+      db.select({
+        characterId: sql`${characterId}`,
+        sessionId: sql`NULL`,
+        xpGained: sql`0`,
+        source: sql`'milestone'`,
+        description: sql`${reason || `Milestone level set to ${level}`}`,
+      })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+    );
 
-    await Promise.all([progressionUpdate, charUpdate, eventLog]);
+    const [progRows] = await Promise.all([progressionUpdate, charUpdate, eventLog]);
+
+    if (!progRows || progRows.length === 0) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character progression', characterId);
+    }
 
     return { oldLevel, newLevel: level };
   }
