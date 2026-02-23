@@ -9,7 +9,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
@@ -110,23 +110,6 @@ export class CharacterFolderService {
    * Create a new folder
    */
   static async createFolder(userId: string, data: CreateFolderData): Promise<CharacterFolder> {
-    // Validate parent folder exists and belongs to user if specified
-    if (data.parentFolderId) {
-      const parentFolder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, data.parentFolderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
-
-      if (!parentFolder) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Parent folder not found',
-        });
-      }
-    }
-
     // Get next sort order if not provided
     let sortOrder = data.sortOrder ?? 0;
     if (data.sortOrder === undefined) {
@@ -149,20 +132,50 @@ export class CharacterFolderService {
       sortOrder = (maxResult?.maxSortOrder ?? -1) + 1;
     }
 
-    const [folder] = await db
-      .insert(characterFolders)
-      .values({
-        userId,
-        name: data.name,
-        parentFolderId: data.parentFolderId || null,
-        color: data.color || null,
-        icon: data.icon || null,
-        sortOrder,
-      })
-      .returning();
+    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT when a parent folder is provided.
+    // This ensures that the parent folder belongs to the user in a single atomic operation
+    // while masking resource existence.
+    let folder: CharacterFolder | undefined;
+
+    if (data.parentFolderId) {
+      [folder] = await db
+        .insert(characterFolders)
+        .select(
+          db.select({
+            userId: sql`${userId}`,
+            name: sql`${data.name}`,
+            parentFolderId: characterFolders.id,
+            color: sql`${data.color || null}`,
+            icon: sql`${data.icon || null}`,
+            sortOrder: sql`${sortOrder}`,
+          })
+          .from(characterFolders)
+          .where(and(
+            eq(characterFolders.id, data.parentFolderId),
+            eq(characterFolders.userId, userId)
+          ))
+        )
+        .returning();
+    } else {
+      [folder] = await db
+        .insert(characterFolders)
+        .values({
+          userId,
+          name: data.name,
+          parentFolderId: null,
+          color: data.color || null,
+          icon: data.icon || null,
+          sortOrder,
+        })
+        .returning();
+    }
 
     if (!folder) {
-      throw new InternalServerError('Failed to create folder');
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing parent to mask existence.
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Parent folder not found',
+      });
     }
 
     return folder;
@@ -293,40 +306,9 @@ export class CharacterFolderService {
     folderId: string | null,
     userId: string
   ): Promise<boolean> {
-    // Verify character ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Character not found',
-      });
-    }
-
-    // If moving to a folder, verify it exists and belongs to user
-    if (folderId) {
-      const folder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, folderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
-
-      if (!folder) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Folder not found',
-        });
-      }
-    }
-
-    // Move character
-    const result = await db
+    // 🛡️ Sentinel: Refactored to use a single atomic UPDATE statement with inline ownership verification.
+    // This eliminates multiple pre-flight queries and prevents IDOR while masking resource existence.
+    const [updated] = await db
       .update(characters)
       .set({
         folderId: folderId,
@@ -334,10 +316,28 @@ export class CharacterFolderService {
       })
       .where(and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        folderId
+          ? exists(
+              db.select()
+                .from(characterFolders)
+                .where(and(
+                  eq(characterFolders.id, folderId),
+                  eq(characterFolders.userId, userId)
+                ))
+            )
+          : sql`true`
       ))
       .returning({ id: characters.id });
 
-    return result.length > 0;
+    if (!updated) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing resource to mask existence.
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Character or folder not found',
+      });
+    }
+
+    return true;
   }
 }

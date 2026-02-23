@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { db } from '../../../../db/client';
-import { SessionService } from '../session-service.js';
-import { NotFoundError } from '../../lib/errors.js';
 import { gameSessions } from '../../../../db/schema/index';
+import { NotFoundError } from '../../lib/errors.js';
+import { SessionService } from '../session-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -33,6 +35,15 @@ vi.mock('../../../../db/client', () => ({
         })),
       })),
     })),
+    insert: vi.fn(() => ({
+      select: vi.fn(() => ({
+        returning: vi.fn(),
+      })),
+      values: vi.fn(() => ({
+        returning: vi.fn(),
+      })),
+    })),
+    execute: vi.fn(),
   },
 }));
 
@@ -52,7 +63,7 @@ describe('SessionService', () => {
       ];
 
       // Setup mocks
-      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as any);
+      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as unknown as any);
 
       const mockOffset = vi.fn().mockResolvedValue(mockMessagesWithCount);
       const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });
@@ -95,14 +106,14 @@ describe('SessionService', () => {
       ];
 
       // Setup mocks
-      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as any);
+      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as unknown as any);
 
       const mockOffset = vi.fn().mockResolvedValue(mockMessagesWithCount);
       const mockLimit = vi.fn().mockReturnValue({ offset: mockOffset });
       const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
       const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
       const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(db.select).mockReturnValue({ from: mockFrom } as any);
+      vi.mocked(db.select).mockReturnValue({ from: mockFrom } as unknown as any);
 
       const result = await SessionService.getRecentMessages(sessionId, userId);
 
@@ -122,7 +133,7 @@ describe('SessionService', () => {
       const mockReturning = vi.fn().mockResolvedValue([mockSession]);
       const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
       const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(db.update).mockReturnValue({ set: mockSet } as any);
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as any);
 
       const result = await SessionService.completeSession(sessionId, userId);
 
@@ -135,10 +146,60 @@ describe('SessionService', () => {
       const mockReturning = vi.fn().mockResolvedValue([]);
       const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
       const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(db.update).mockReturnValue({ set: mockSet } as any);
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as any);
 
       await expect(SessionService.completeSession(sessionId, userId))
         .rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('createSession Security', () => {
+    it('should throw NotFoundError and NOT insert if campaign ownership verification fails', async () => {
+      const campaignId = 'unowned-campaign';
+
+      const mockReturning = vi.fn().mockResolvedValue([]);
+      const mockSelect = vi.fn().mockReturnValue({ returning: mockReturning });
+      vi.mocked(db.insert).mockReturnValue({ select: mockSelect } as unknown as any);
+
+      // Verify that no values() insert is called
+      const mockValues = vi.fn();
+      vi.mocked(db.insert).mockReturnValue({ select: mockSelect, values: mockValues } as unknown as any);
+
+      await expect(SessionService.createSession({ campaignId }, userId))
+        .rejects.toThrow(NotFoundError);
+
+      expect(db.insert).toHaveBeenCalledWith(gameSessions);
+      expect(mockSelect).toHaveBeenCalled();
+      expect(mockValues).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundError and NOT insert if character ownership verification fails', async () => {
+      const characterId = 'unowned-character';
+
+      const mockReturning = vi.fn().mockResolvedValue([]);
+      const mockSelect = vi.fn().mockReturnValue({ returning: mockReturning });
+      vi.mocked(db.insert).mockReturnValue({ select: mockSelect } as unknown as any);
+
+      await expect(SessionService.createSession({ characterId }, userId))
+        .rejects.toThrow(NotFoundError);
+
+      expect(db.insert).toHaveBeenCalledWith(gameSessions);
+      expect(mockSelect).toHaveBeenCalled();
+    });
+
+    it('should create session successfully with authorized campaign', async () => {
+      const campaignId = 'owned-campaign';
+      const mockSession = { id: 'new-session', campaignId };
+
+      const mockReturning = vi.fn().mockResolvedValue([mockSession]);
+      const mockSelect = vi.fn().mockReturnValue({ returning: mockReturning });
+      vi.mocked(db.insert).mockReturnValue({ select: mockSelect } as unknown as any);
+
+      const result = await SessionService.createSession({ campaignId }, userId);
+
+      expect(result).toEqual(mockSession);
+      expect(db.insert).toHaveBeenCalledWith(gameSessions);
+      expect(mockSelect).toHaveBeenCalled();
     });
   });
 });
