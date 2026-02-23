@@ -141,12 +141,6 @@ export const useProgressiveVoice = () => {
 
         // Try environment variable first (for development)
         const envApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-        logger.info('📝 Environment check:', {
-          hasEnvKey: !!envApiKey,
-          keyLength: envApiKey ? envApiKey.length : 0,
-          keyPrefix: envApiKey ? envApiKey.substring(0, 10) + '...' : 'N/A',
-        });
-
         if (envApiKey) {
           logger.info('✅ Using ElevenLabs API key from environment variable');
           setApiKey(envApiKey);
@@ -298,10 +292,6 @@ export const useProgressiveVoice = () => {
         segmentCount: aiSegments?.length || 0,
         isVoiceEnabled: state.isVoiceEnabled,
         isProcessing: state.isProcessing,
-        hasApiKey: !!apiKey,
-        hasApiKeyRef: !!apiKeyRef.current,
-        apiKeyLength: apiKey?.length || 0,
-        apiKeyRefLength: apiKeyRef.current?.length || 0,
       });
 
       if (!state.isVoiceEnabled || !aiSegments?.length || state.isProcessing) {
