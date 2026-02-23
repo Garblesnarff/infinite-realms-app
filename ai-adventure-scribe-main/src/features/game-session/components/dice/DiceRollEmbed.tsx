@@ -1,17 +1,19 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
-import { Howl } from 'howler';
-import * as THREE from 'three';
+import { Canvas } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
-import { Card } from '@/components/ui/card';
+import { Howl } from 'howler';
 import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Play, Volume2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+
+import type * as THREE from 'three';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import logger from '@/lib/logger';
 import telemetry from '@/lib/telemetry';
+import { DiceEngine, type DiceRollResult } from '@/services/dice/DiceEngine';
 import { fadeInUp, cardContainer, cardItem, diceRoll, pulseSuccess } from '@/utils/animations';
 
 interface DiceRollEmbedProps {
@@ -24,8 +26,11 @@ interface DiceRollEmbedProps {
   disadvantage?: boolean;
 }
 
-// Session-scoped degradation flags for 3D dice. Once WebGL context is lost,
-// we degrade to 2D/text mode for the rest of the session and warn only once.
+// Session-scoped state for 3D dice WebGL context resilience.
+// We allow up to MAX_CONTEXT_LOSS_RECOVERIES recovery attempts before permanently
+// degrading to 2D/text mode for the rest of the session.
+let __dice3dContextLossCount = 0;
+const MAX_CONTEXT_LOSS_RECOVERIES = 2;
 let __dice3dDead = false;
 let __dice3dWarned = false;
 
@@ -161,41 +166,74 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const [contextLost, setContextLost] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0);
   const diceSound = useRef<Howl | null>(null);
-  const disable3D =
-    String((import.meta as any)?.env?.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
+  // Refs to track listeners across canvas remounts so we can clean them up
+  const boundCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const boundOnLostRef = useRef<EventListener | null>(null);
+  const boundOnRestoredRef = useRef<EventListener | null>(null);
+  const envRecord = import.meta.env as Record<string, string | undefined>;
+  const disable3D = (envRecord.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
   const threeDEnabled = !disable3D && !__dice3dDead;
 
-  // Handle WebGL context loss and restoration
+  // Handle WebGL context loss and restoration.
+  // Allows up to MAX_CONTEXT_LOSS_RECOVERIES remount attempts before permanently degrading.
   const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+    // Remove stale listeners from the previous canvas element (if any) before attaching new ones.
+    if (boundCanvasRef.current && boundOnLostRef.current) {
+      boundCanvasRef.current.removeEventListener('webglcontextlost', boundOnLostRef.current);
+      boundCanvasRef.current.removeEventListener(
+        'webglcontextrestored',
+        boundOnRestoredRef.current!,
+      );
+    }
+
     const canvas = gl.domElement as HTMLCanvasElement;
-    const onLost = (e: Event) => {
-      // Prevent default to allow us to handle loss; permanently degrade for session
+
+    const onLost: EventListener = (e: Event) => {
       e.preventDefault();
-      __dice3dDead = true;
+      __dice3dContextLossCount++;
+      telemetry.recordWebGLContextLoss();
       setContextLost(true);
 
-      // Record WebGL context loss for crash correlation
-      telemetry.recordWebGLContextLoss();
-
-      if (!__dice3dWarned) {
-        __dice3dWarned = true;
+      if (__dice3dContextLossCount > MAX_CONTEXT_LOSS_RECOVERIES) {
+        __dice3dDead = true;
+        if (!__dice3dWarned) {
+          __dice3dWarned = true;
+          logger.warn(
+            'Dice 3D permanently disabled after repeated WebGL context losses; falling back to 2D/text for this session.',
+          );
+        }
+      } else {
         logger.warn(
-          'Dice 3D disabled after WebGL context loss; falling back to 2D/text for this session.',
+          `THREE.WebGLRenderer: Context Lost (loss #${__dice3dContextLossCount}). Attempting recovery...`,
         );
       }
     };
-    const onRestored = () => {
-      // We intentionally do not restore 3D once degraded for stability.
+
+    const onRestored: EventListener = () => {
+      if (__dice3dDead) return; // Already permanently degraded; ignore restoration.
+      logger.info('WebGL context restored; remounting 3D dice canvas.');
       setContextLost(false);
       setCanvasKey((k) => k + 1);
     };
 
-    canvas.addEventListener('webglcontextlost', onLost as any, { passive: false });
-    canvas.addEventListener('webglcontextrestored', onRestored as any);
+    canvas.addEventListener('webglcontextlost', onLost, { passive: false });
+    canvas.addEventListener('webglcontextrestored', onRestored);
 
+    boundCanvasRef.current = canvas;
+    boundOnLostRef.current = onLost;
+    boundOnRestoredRef.current = onRestored;
+  }, []);
+
+  // Clean up WebGL context event listeners when the component unmounts.
+  useEffect(() => {
     return () => {
-      canvas.removeEventListener('webglcontextlost', onLost as any);
-      canvas.removeEventListener('webglcontextrestored', onRestored as any);
+      if (boundCanvasRef.current && boundOnLostRef.current) {
+        boundCanvasRef.current.removeEventListener('webglcontextlost', boundOnLostRef.current);
+        boundCanvasRef.current.removeEventListener(
+          'webglcontextrestored',
+          boundOnRestoredRef.current!,
+        );
+      }
     };
   }, []);
 
@@ -223,7 +261,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     if (diceSound.current) {
       try {
         diceSound.current.play();
-      } catch (error) {
+      } catch (_error) {
         // Silently continue if sound fails to play
         logger.debug('Dice sound playback failed, continuing silently');
       }

@@ -320,6 +320,7 @@ export default tseslint.config(
       'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
       'src/components/spells/SpellCard.tsx',
       'src/features/character/components/spells/SpellCard.tsx',
+      'src/features/game-session/components/dice/DiceRollEmbed.tsx',
     ],
     rules: {
       'max-lines': 'warn',
