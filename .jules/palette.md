@@ -78,6 +78,10 @@
 **Learning:** Selectable cards with inner checkboxes often suffer from nested interactivity, causing double-triggering of events and a poor keyboard/screen reader experience (redundant tab stops).
 **Action:** Use a single-interaction pattern for selectable cards. Assign `role="checkbox"`, `aria-checked`, and `tabIndex` to the parent `Card`. Mark the inner `Checkbox` component with `tabIndex={-1}` and `aria-hidden="true"`. This ensures the whole card is a single, focusable accessibility object.
 
+### RadioGroup Accessibility
+**Learning:** Shadcn `RadioGroup` components in complex forms (like campaign creation steps) often lack clear associations with their section titles, making navigation difficult for screen reader users.
+**Action:** Use `useId` to link section labels to `RadioGroup` components via `aria-labelledby`. Always wrap icon-only view toggles in a `role="group"` container with a descriptive `aria-label`.
+
 ## 2026-01-25 - Combat UI Accessibility
 **Learning:** Core combat components like `HPTracker` and `CombatActionPanel` often lack basic accessibility, making them difficult for screen reader users. Icon-only buttons for critical actions (damage/healing) need explicit labels.
 **Action:** Always use `useId` to link labels to inputs. Provide `aria-label` and `title` for icon-only buttons. Add `aria-label` to `Progress` bars to provide context for health status.
@@ -85,3 +89,7 @@
 ## 2026-01-26 - Reusable Component Accessibility and UX
 **Learning:** Reusable components like `EditableDescription` are often duplicated across `src/components/` and `src/features/`. Missing `id`/`htmlFor` associations on these components reduce accessibility and clickability across many parts of the application. Adding a `title` to the edit button provides a helpful tooltip for mouse users.
 **Action:** Use `useId` to link labels to inputs in reusable components. Always synchronize changes across duplicated component locations. Add `title` to icon-only buttons for a better desktop UX.
+
+## 2026-01-27 - Campaign Creation Accessibility and Z-Index Standardization
+**Learning:** Complex form components like `CampaignParameters` often contain multiple sections with `RadioGroup` controls that lack proper semantic linkage to their titles. Icon-only view toggles and search inputs in these components are frequently missing accessible labels and state feedback. Standardizing z-index via `Z_INDEX` constants prevents visual layering bugs in card-based UIs.
+**Action:** Link `RadioGroup` to section titles using `useId` and `aria-labelledby`. Add `aria-label`, `aria-pressed`, and `title` to all icon-only buttons. Migrate all hardcoded `z-index` classes to inline styles with `Z_INDEX` constants.

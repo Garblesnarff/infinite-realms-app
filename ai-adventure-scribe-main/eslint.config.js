@@ -275,6 +275,8 @@ export default tseslint.config(
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
       'src/components/scenes/SceneCreationWizard.tsx',
+      'src/features/campaign/components/creation/steps/CampaignParameters.tsx',
+      'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       'server-bun/src/services/spell-slots-service.ts',
       'server-bun/src/services/spell-slots/spell-slot-mechanics.ts',
       'server-bun/src/services/rest-service.ts',
