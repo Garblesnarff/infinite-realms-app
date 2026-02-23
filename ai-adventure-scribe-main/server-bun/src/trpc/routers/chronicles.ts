@@ -33,15 +33,25 @@ import type { Context } from '../context.js';
  * Ownership is determined by the campaign's userId or the character's userId.
  * Throws NOT_FOUND (masked) if the session doesn't exist or isn't owned by the user.
  */
-async function verifySessionOwnership(
+export async function verifySessionOwnership(
   ctx: Context & { user: NonNullable<Context['user']> },
   sessionId: string,
-) {
+): Promise<{
+  sessionId: string;
+  campaignId: string | null;
+  sessionNumber: number | null;
+  campaignUserId: string | null;
+  characterUserId: string | null;
+  characterOwnerId: string | null;
+}> {
   const rows = await ctx.db
     .select({
       sessionId: gameSessions.id,
+      campaignId: gameSessions.campaignId,
+      sessionNumber: gameSessions.sessionNumber,
       campaignUserId: campaigns.userId,
       characterUserId: characters.userId,
+      characterOwnerId: characters.ownerId,
     })
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
@@ -57,11 +67,13 @@ async function verifySessionOwnership(
 
   const userId = ctx.user.userId;
   const ownsViaCampaign = row.campaignUserId === userId;
-  const ownsViaCharacter = row.characterUserId === userId;
+  const ownsViaCharacter = row.characterUserId === userId || row.characterOwnerId === userId;
 
   if (!ownsViaCampaign && !ownsViaCharacter) {
     throw new TRPCError({ code: 'NOT_FOUND' });
   }
+
+  return row;
 }
 
 // ─── Router ──────────────────────────────────────────────────────────────────
@@ -237,28 +249,36 @@ export const chroniclesRouter = router({
     .query(async ({ input, ctx }) => {
       const { newSessionId, campaignId } = input;
 
-      // Get the session number of the new session
-      const newSessionRows = await ctx.db
-        .select({ sessionNumber: gameSessions.sessionNumber })
-        .from(gameSessions)
-        .where(eq(gameSessions.id, newSessionId))
-        .limit(1);
+      // 🛡️ Sentinel: Verify ownership of the session while fetching its data.
+      // This incorporates dual-ownership (userId/ownerId) checks and masks existence.
+      const session = await verifySessionOwnership(ctx, newSessionId);
 
-      const newSession = newSessionRows[0];
-      if (!newSession?.sessionNumber || newSession.sessionNumber <= 1) {
+      // Verify that the session belongs to the provided campaignId
+      if (session.campaignId !== campaignId) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      if (!session.sessionNumber || session.sessionNumber <= 1) {
         return null;
       }
 
-      const previousSessionNumber = newSession.sessionNumber - 1;
+      const previousSessionNumber = session.sessionNumber - 1;
 
-      // Find the prior session in the same campaign
+      // Find the prior session in the same campaign, with ownership verification for defense-in-depth
       const priorSessionRows = await ctx.db
         .select({ id: gameSessions.id })
         .from(gameSessions)
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
         .where(
           and(
             eq(gameSessions.campaignId, campaignId),
             eq(gameSessions.sessionNumber, previousSessionNumber),
+            or(
+              eq(campaigns.userId, ctx.user.userId),
+              eq(characters.userId, ctx.user.userId),
+              eq(characters.ownerId, ctx.user.userId),
+            ),
           ),
         )
         .limit(1);
@@ -268,7 +288,7 @@ export const chroniclesRouter = router({
         return null;
       }
 
-      // Find the ready chronicle for the prior session
+      // Find the ready chronicle for the prior session, with explicit user filtering
       const chronicleRows = await ctx.db
         .select({ previouslyOn: sessionChronicles.previouslyOn })
         .from(sessionChronicles)
@@ -276,6 +296,7 @@ export const chroniclesRouter = router({
           and(
             eq(sessionChronicles.sessionId, priorSession.id),
             eq(sessionChronicles.status, 'ready'),
+            eq(sessionChronicles.userId, ctx.user.userId),
           ),
         )
         .limit(1);
