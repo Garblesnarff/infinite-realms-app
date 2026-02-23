@@ -229,7 +229,11 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
           for (const npc of xmlParsed.worldUpdates.npcs) {
             if (
-              await WorldBuilderRepository.saveNPCFromXML(context.campaignId, context.sessionId!, npc)
+              await WorldBuilderRepository.saveNPCFromXML(
+                context.campaignId,
+                context.sessionId!,
+                npc,
+              )
             )
               savedNPCs++;
           }

@@ -323,7 +323,9 @@ export default tseslint.config(
       'src/components/spells/SpellCard.tsx',
       'src/features/character/components/spells/SpellCard.tsx',
       'src/features/game-session/components/dice/DiceRollEmbed.tsx',
+      'src/components/combat/CombatMessage.tsx',
       'src/services/world-builders/world-builder-service.ts',
+      'server-bun/src/services/vision-blocker-service.ts',
     ],
     rules: {
       'max-lines': 'warn',

@@ -17,7 +17,7 @@ import {
   type SceneDrawing,
   type NewSceneDrawing,
 } from '../../../db/schema/index';
-import { InternalServerError, NotFoundError } from '../lib/errors.js';
+import { NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new drawing
@@ -45,15 +45,10 @@ export class DrawingService {
       .select({ drawings: sceneDrawings })
       .from(sceneDrawings)
       .innerJoin(scenes, eq(sceneDrawings.sceneId, scenes.id))
-      .where(
-        and(
-          eq(sceneDrawings.sceneId, sceneId),
-          eq(scenes.userId, userId)
-        )
-      )
+      .where(and(eq(sceneDrawings.sceneId, sceneId), eq(scenes.userId, userId)))
       .orderBy(asc(sceneDrawings.createdAt));
 
-    return drawings.map(d => d.drawings);
+    return drawings.map((d) => d.drawings);
   }
 
   /**
@@ -62,7 +57,7 @@ export class DrawingService {
   static async createDrawing(
     sceneId: string,
     userId: string,
-    data: CreateDrawingData
+    data: CreateDrawingData,
   ): Promise<SceneDrawing> {
     // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
     // This reduces database round-trips from 2 to 1 and prevents cross-scene unauthorized writes.
@@ -86,7 +81,7 @@ export class DrawingService {
             fontFamily: sql`${data.fontFamily ?? null}`,
           })
           .from(scenes)
-          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
       )
       .returning();
 
@@ -105,7 +100,7 @@ export class DrawingService {
   static async updateDrawing(
     drawingId: string,
     userId: string,
-    updates: Partial<NewSceneDrawing>
+    updates: Partial<NewSceneDrawing>,
   ): Promise<SceneDrawing | null> {
     // 🛡️ Sentinel: Atomic update with ownership check (creator OR scene owner)
     // We specifically omit internal/security fields from the update object
@@ -124,15 +119,13 @@ export class DrawingService {
           or(
             eq(sceneDrawings.createdBy, userId),
             exists(
-              db.select()
+              db
+                .select()
                 .from(scenes)
-                .where(and(
-                  eq(scenes.id, sceneDrawings.sceneId),
-                  eq(scenes.userId, userId)
-                ))
-            )
-          )
-        )
+                .where(and(eq(scenes.id, sceneDrawings.sceneId), eq(scenes.userId, userId))),
+            ),
+          ),
+        ),
       )
       .returning();
 
@@ -153,15 +146,13 @@ export class DrawingService {
           or(
             eq(sceneDrawings.createdBy, userId),
             exists(
-              db.select()
+              db
+                .select()
                 .from(scenes)
-                .where(and(
-                  eq(scenes.id, sceneDrawings.sceneId),
-                  eq(scenes.userId, userId)
-                ))
-            )
-          )
-        )
+                .where(and(eq(scenes.id, sceneDrawings.sceneId), eq(scenes.userId, userId))),
+            ),
+          ),
+        ),
       )
       .returning({ id: sceneDrawings.id });
 
@@ -175,7 +166,7 @@ export class DrawingService {
   static async bulkDeleteDrawings(
     sceneId: string,
     drawingIds: string[],
-    userId: string
+    userId: string,
   ): Promise<number> {
     if (drawingIds.length === 0) {
       return 0;
@@ -193,9 +184,9 @@ export class DrawingService {
             db
               .select()
               .from(scenes)
-              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-          )
-        )
+              .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId))),
+          ),
+        ),
       )
       .returning({ id: sceneDrawings.id });
 
@@ -215,8 +206,8 @@ export class DrawingService {
       .where(
         and(
           eq(sceneDrawings.id, drawingId),
-          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId))
-        )
+          or(eq(sceneDrawings.createdBy, userId), eq(scenes.userId, userId)),
+        ),
       )
       .limit(1);
 

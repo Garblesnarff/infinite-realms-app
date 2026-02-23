@@ -7,11 +7,7 @@ import { MemoryManager } from '../memory-manager';
 import type { LocationRequest, GeneratedLocation } from './location-generator';
 import type { NPCRequest, GeneratedNPC } from './npc-generator';
 import type { QuestRequest, GeneratedQuest } from './quest-generator';
-import type {
-  WorldBuildingContext,
-  WorldExpansionResult,
-  WorldBuildingTrigger
-} from './types';
+import type { WorldBuildingContext, WorldExpansionResult, WorldBuildingTrigger } from './types';
 
 import { isWorldBuilderEnabled } from '@/config/featureFlags';
 import { supabase } from '@/integrations/supabase/client';
@@ -116,7 +112,7 @@ export class WorldBuilderService {
     // Security check: Validate user owns this campaign
     const hasAccess = await WorldBuilderRepository.validateUserCampaignAccess(
       context.campaignId,
-      context.userId
+      context.userId,
     );
     if (!hasAccess) {
       logger.warn('🚨 Unauthorized world building attempt blocked');
