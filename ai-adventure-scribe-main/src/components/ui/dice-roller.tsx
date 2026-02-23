@@ -137,6 +137,8 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
           onClick={performRoll}
           disabled={disabled || isRolling}
           className="flex items-center gap-1 hover:bg-primary/10"
+          aria-label={label ? `Roll ${label}` : `Roll ${dice}`}
+          title={label ? `Roll ${label}` : `Roll ${dice}`}
         >
           <Dice6 className={cn('w-3 h-3', isRolling && 'animate-spin')} />
           {label || dice}
@@ -165,7 +167,11 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
 
       {/* Last roll result */}
       {lastRoll && (
-        <Badge variant="outline" className={cn('text-sm font-mono', getResultColor())}>
+        <Badge
+          variant="outline"
+          className={cn('text-sm font-mono', getResultColor())}
+          aria-live="polite"
+        >
           {lastRoll.total}
         </Badge>
       )}

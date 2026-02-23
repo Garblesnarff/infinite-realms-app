@@ -13,7 +13,7 @@ import {
   ShieldAlert,
   Eye,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 interface MainTabProps {
@@ -45,6 +46,10 @@ interface CombatState {
  * Includes HP management, AC, initiative, and death saves
  */
 const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
+  const damageId = useId();
+  const healingId = useId();
+  const descriptionId = useId();
+
   // Calculate max HP (simplified formula)
   const maxHp = Math.max(
     1,
@@ -197,7 +202,7 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
               aria-valuenow={combatState.currentHp}
               aria-valuemin={0}
               aria-valuemax={maxHp}
-              aria-label="Hit points"
+              aria-label={`${character.name}'s hit points`}
             >
               <div
                 className="bg-red-500 h-full rounded-full transition-all"
@@ -347,10 +352,13 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
           {/* Damage/Healing Controls */}
           <div className="flex gap-2">
             <div className="flex-1">
+              <Label htmlFor={damageId} className="sr-only">
+                Damage amount
+              </Label>
               <Input
+                id={damageId}
                 type="number"
                 placeholder="Damage"
-                aria-label="Damage amount"
                 value={damageInput}
                 onChange={(e) => setDamageInput(e.target.value)}
                 className="text-sm"
@@ -361,10 +369,13 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
               </Button>
             </div>
             <div className="flex-1">
+              <Label htmlFor={healingId} className="sr-only">
+                Healing amount
+              </Label>
               <Input
+                id={healingId}
                 type="number"
                 placeholder="Healing"
-                aria-label="Healing amount"
                 value={healingInput}
                 onChange={(e) => setHealingInput(e.target.value)}
                 className="text-sm"
@@ -544,7 +555,11 @@ const MainTab: React.FC<MainTabProps> = ({ character, onUpdate }) => {
           <CardTitle>Character Description</CardTitle>
         </CardHeader>
         <CardContent>
+          <Label htmlFor={descriptionId} className="sr-only">
+            Character description
+          </Label>
           <Textarea
+            id={descriptionId}
             value={character.description || ''}
             placeholder="Describe your character's appearance, personality, and background..."
             className="min-h-[100px] resize-none"
