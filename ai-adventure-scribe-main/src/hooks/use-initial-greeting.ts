@@ -12,7 +12,11 @@ import { AIService } from '@/services/ai-service';
 
 interface InitialGreetingProps {
   sessionId: string | null;
-  sessionData: { turn_count?: number; starter_campaign_id?: string | null } | null;
+  sessionData: {
+    turn_count?: number;
+    starter_campaign_id?: string | null;
+    session_number?: number | null;
+  } | null;
   characterId: string | null;
   campaignId: string | null;
   messages: ChatMessage[];
@@ -140,6 +144,31 @@ export const useInitialGreeting = ({
 
       logger.info('[Initial Greeting] Generated prompt for AI service');
 
+      // Fetch "Previously On" recap for continuation sessions (session_number > 1)
+      let previouslyOnText: string | null = null;
+      if (
+        sessionData?.session_number &&
+        sessionData.session_number > 1 &&
+        campaignId &&
+        sessionId
+      ) {
+        try {
+          const token = localStorage.getItem('workos_access_token');
+          const res = await fetch(
+            `/api/trpc/chronicles.getPreviouslyOn?input=${encodeURIComponent(
+              JSON.stringify({ newSessionId: sessionId, campaignId }),
+            )}`,
+            token ? { headers: { Authorization: `Bearer ${token}` } } : {},
+          );
+          if (res.ok) {
+            const json = await res.json();
+            previouslyOnText = json?.result?.data?.previouslyOn ?? null;
+          }
+        } catch {
+          // Non-blocking — failure just means no recap shown
+        }
+      }
+
       // Generate AI response using AIService
       const openingText = await AIService.generateOpeningMessage({
         context: {
@@ -167,7 +196,19 @@ export const useInitialGreeting = ({
         greetingMessage.text.substring(0, 100) + '...',
       );
 
-      // Call the callback to add the message to the conversation
+      // 1. Inject "Previously On" recap if this is a continuation session
+      if (previouslyOnText) {
+        const previouslyOnMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          sender: 'dm',
+          text: previouslyOnText,
+          timestamp: new Date().toISOString(),
+          context: { previouslyOn: true },
+        };
+        await onGreetingGenerated(previouslyOnMessage);
+      }
+
+      // 2. Normal DM opening message
       await onGreetingGenerated(greetingMessage);
 
       // Create initial memories if callback is provided

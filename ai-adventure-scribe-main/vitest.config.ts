@@ -165,6 +165,7 @@ export default defineConfig({
       'src/components/game/__tests__/DiceRollRequest.test.tsx',
       'src/utils/__tests__/parseMessageOptions.test.ts',
       'src/components/game/__tests__/ActionOptions.test.tsx',
+      'src/features/game-session/components/game/message/__tests__/session-continuity-regression.test.tsx',
     ],
     exclude: [
       'node_modules/**',

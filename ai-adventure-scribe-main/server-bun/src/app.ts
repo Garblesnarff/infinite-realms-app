@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+/* eslint-disable import/order */
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
@@ -9,6 +11,7 @@ import { randomUUID } from 'crypto';
 import { appRouter, createContext } from './trpc/index.js';
 import { wsPlugin } from './ws';
 import { blogRoutes } from './routes/blog.js';
+import { chronicleRoutes } from './routes/chronicle.js';
 import { landingRoutes } from './routes/landing.js';
 import { seoRoutes } from './routes/seo.js';
 import { authRoutes } from './routes/v1/auth';
@@ -45,6 +48,7 @@ export function createApp() {
     // Request logging middleware
     .onRequest(({ request, store }) => {
       const start = performance.now();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (store as any).__startTime = start;
 
       const requestId = request.headers.get('x-request-id') || randomUUID();
@@ -56,6 +60,7 @@ export function createApp() {
       });
     })
     .onAfterHandle(({ request, response, store, set }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const start = (store as any).__startTime || performance.now();
       const durationMs = performance.now() - start;
       const url = new URL(request.url);
@@ -76,7 +81,7 @@ export function createApp() {
           route: url.pathname,
           status: String(status),
         },
-        durationMs / 1000
+        durationMs / 1000,
       );
 
       logger.info({
@@ -103,7 +108,12 @@ export function createApp() {
 
       return {
         error: 'Internal Server Error',
-        message: process.env.NODE_ENV === 'production' ? undefined : (error instanceof Error ? error.message : String(error)),
+        message:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : error instanceof Error
+              ? error.message
+              : String(error),
       };
     })
     // Security headers middleware
@@ -180,7 +190,7 @@ export function createApp() {
           'X-Environment',
           'x-environment',
         ],
-      })
+      }),
     )
     // Swagger documentation
     .use(
@@ -196,7 +206,7 @@ export function createApp() {
             { name: 'Metrics', description: 'Prometheus metrics' },
           ],
         },
-      })
+      }),
     )
     // Static file serving for /dist/assets
     .use(
@@ -204,7 +214,7 @@ export function createApp() {
         assets: process.env.VITE_CLIENT_DIST || 'dist',
         prefix: '/assets',
         alwaysStatic: true,
-      })
+      }),
     )
     // Static file serving for blog assets (uses absolute path from project root)
     .use(
@@ -212,7 +222,7 @@ export function createApp() {
         assets: '/var/www/infiniterealms/ai-adventure-scribe-main/dist/blog-assets',
         prefix: '/blog-assets',
         alwaysStatic: true,
-      })
+      }),
     )
     // Health check endpoint
     .get(
@@ -228,7 +238,7 @@ export function createApp() {
           tags: ['Health'],
           description: 'Health check endpoint',
         },
-      }
+      },
     )
     // Prometheus metrics endpoint
     .get(
@@ -237,7 +247,10 @@ export function createApp() {
         const metricsToken = process.env.METRICS_TOKEN;
         const allowlistRaw = process.env.METRICS_ALLOWLIST;
         const allowlist = allowlistRaw
-          ? allowlistRaw.split(',').map((v) => v.trim()).filter(Boolean)
+          ? allowlistRaw
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean)
           : [];
 
         if (metricsToken || allowlist.length > 0) {
@@ -256,7 +269,7 @@ export function createApp() {
           if (allowlist.length > 0) {
             const forwardedFor = request.headers.get('x-forwarded-for');
             const realIp = request.headers.get('x-real-ip');
-            const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : (realIp || '');
+            const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : realIp || '';
 
             if (!allowlist.includes(clientIp)) {
               set.status = 403;
@@ -273,7 +286,7 @@ export function createApp() {
           tags: ['Metrics'],
           description: 'Prometheus metrics endpoint',
         },
-      }
+      },
     );
 
   // Auth routes (REST API for OAuth flow)
@@ -356,6 +369,7 @@ export function createApp() {
 
   // SSR routes (React Server-Side Rendering with Web Streams)
   app.use(blogRoutes);
+  app.use(chronicleRoutes);
   app.use(landingRoutes);
   app.use(seoRoutes);
 

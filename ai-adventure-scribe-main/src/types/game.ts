@@ -11,10 +11,12 @@ export type SessionStatus = 'active' | 'expired' | 'ending';
  * Must be compatible with Supabase's Json type
  */
 export interface MessageContext {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
   location?: string | null;
   emotion?: string | null;
   intent?: string | null;
+  previouslyOn?: boolean;
   diceRoll?: {
     formula: string;
     count: number;
@@ -34,15 +36,18 @@ export interface MessageContext {
     type: string;
     actor?: string;
     target?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     roll?: any;
     dc?: number;
     success?: boolean;
     critical?: boolean;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action?: any;
     description?: string;
     participants?: Array<{
       name: string;
       initiative: number;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       roll: any;
     }>;
     summary?: {
