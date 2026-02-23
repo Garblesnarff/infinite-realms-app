@@ -14,7 +14,7 @@
  */
 
 export interface AssetTag {
-  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene';
+  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene' | 'entity';
   key: string;
   fullMatch: string;
 }
@@ -28,7 +28,7 @@ export interface ParsedAssets {
 
 /** Regex pattern to match [ASSET:type:key] tags */
 export const ASSET_TAG_PATTERN =
-  /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
+  /\[ASSET:(character|npc|location|monster|item|scene|entity):([a-z0-9-]+)\]/gi;
 
 /**
  * Parse asset tags from message content
@@ -51,13 +51,16 @@ export function parseAssetTags(content: string): ParsedAssets {
     });
   }
 
-  // Remove asset tags from content for display
-  const cleanContent = content.replace(ASSET_TAG_PATTERN, '').trim();
+  // Remove asset tags from content for display, collapsing any resulting double spaces
+  const cleanContent = content
+    .replace(ASSET_TAG_PATTERN, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 
   // Deduplicate assets (same entity may be mentioned multiple times)
   const uniqueAssets = assets.filter(
     (asset, index, self) =>
-      index === self.findIndex((a) => a.type === asset.type && a.key === asset.key)
+      index === self.findIndex((a) => a.type === asset.type && a.key === asset.key),
   );
 
   return {

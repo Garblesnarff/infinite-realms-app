@@ -44,9 +44,15 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
       const beforeMatch = result.slice(Math.max(0, match.index - 50), match.index);
       if (beforeMatch.includes('[ASSET:')) continue;
 
-      // Insert the asset tag before the matched name
+      // Walk back past leading markdown markers (*) so the tag lands outside any emphasis span.
+      // e.g., *Zara spoke* becomes [ASSET:npc:zara] *Zara spoke* not *[ASSET:npc:zara] Zara spoke*
+      let insertIndex = match.index;
+      while (insertIndex > 0 && result[insertIndex - 1] === '*') {
+        insertIndex--;
+      }
+
       const tag = `[ASSET:${asset.type}:${asset.key}] `;
-      result = result.slice(0, match.index) + tag + result.slice(match.index);
+      result = result.slice(0, insertIndex) + tag + result.slice(insertIndex);
     }
   }
 
@@ -61,11 +67,13 @@ export function applyAssetPostProcessing<T extends { text: string }>(response: T
   if (!cachedAssets || !cachedAssets.assets.length) return response;
   const processedText = insertAssetTags(response.text, cachedAssets.assets);
   if (processedText !== response.text) {
-    logger.info(`[Asset Post-Processing] Inserted asset tags for ${cachedAssets.assets.length} available assets`);
+    logger.info(
+      `[Asset Post-Processing] Inserted asset tags for ${cachedAssets.assets.length} available assets`,
+    );
   }
   return {
     ...response,
-    text: processedText
+    text: processedText,
   };
 }
 
@@ -112,22 +120,24 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
         const imageUrl = metadata?.image_url as string | undefined;
 
         if (imageUrl && chunk.entity_name) {
-          let assetType = 'entity';
+          let assetType = 'npc'; // recognized fallback
           const chunkType = chunk.chunk_type as string;
           if (chunkType.startsWith('npc')) assetType = 'npc';
           else if (chunkType === 'location') assetType = 'location';
           else if (chunkType === 'item') assetType = 'item';
           else if (chunkType === 'monster' || chunkType === 'encounter') assetType = 'monster';
+          else if (chunkType === 'scene') assetType = 'scene';
+          else if (chunkType.startsWith('character')) assetType = 'character';
 
           assets.push({
             type: assetType,
             // Clean key: must match generateKey() in use-campaign-assets.ts
             key: chunk.entity_name
               .toLowerCase()
-              .replace(/[""''«»`]/g, '')      // Remove all quote variants (Unicode + ASCII)
-              .replace(/[^a-z0-9\s-]/g, '')   // Remove remaining special chars
-              .replace(/\s+/g, '-')           // Spaces to hyphens
-              .replace(/-+/g, '-')            // Collapse multiple hyphens
+              .replace(/[""''«»`]/g, '') // Remove all quote variants (Unicode + ASCII)
+              .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
+              .replace(/\s+/g, '-') // Spaces to hyphens
+              .replace(/-+/g, '-') // Collapse multiple hyphens
               .trim(),
             name: chunk.entity_name,
           });
@@ -159,7 +169,7 @@ CORRECT: "As you enter, [ASSET:npc:elara] Elara greets you."
 INCORRECT: "As you enter, Elara greets you [ASSET:npc:elara]."
 </MANDATORY_REQUIREMENT>
 
-${assets.map(a => `- ${a.name} [ASSET:${a.type}:${a.key}]`).join('\n')}
+${assets.map((a) => `- ${a.name} [ASSET:${a.type}:${a.key}]`).join('\n')}
 </available_visual_assets>`;
 
   return prompt;
