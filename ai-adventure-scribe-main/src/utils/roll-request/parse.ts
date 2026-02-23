@@ -373,9 +373,7 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
     .filter((r) => r.confidence > 0.5)
     .sort((a, b) => b.confidence - a.confidence)
     .filter(
-      (request, index, self) =>
-        index ===
-        self.findIndex((r) => r.purpose === request.purpose),
+      (request, index, self) => index === self.findIndex((r) => r.purpose === request.purpose),
     );
 
   return uniqueRequests;
@@ -408,6 +406,11 @@ export function normalizeFormula(formula: string): string {
     } else {
       normalized = '1d20';
     }
+  }
+
+  // Preserve symbolic ability formulas like "1d20+cha", "1d20+wis" — validated by component
+  if (/^\d*d\d+[+-][a-z]+$/.test(normalized)) {
+    return normalized;
   }
 
   if (!normalized.match(/^\d*d\d+([+-]\d+)*$/)) {

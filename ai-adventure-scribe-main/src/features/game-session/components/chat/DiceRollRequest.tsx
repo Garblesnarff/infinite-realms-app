@@ -134,7 +134,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
           }
         }
 
-        // Check for ability names in purpose
+        // Check for ability names in purpose (word-boundary match to avoid e.g. "int" in "intimidation")
         if (!ability) {
           for (const abilityName of [
             'strength',
@@ -144,9 +144,10 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
             'wisdom',
             'charisma',
           ]) {
+            const abbrev = abilityName.slice(0, 3);
             if (
               purposeLower.includes(abilityName) ||
-              purposeLower.includes(abilityName.slice(0, 3))
+              new RegExp(`\\b${abbrev}\\b`).test(purposeLower)
             ) {
               ability = abilityName as AbilityName;
               break;

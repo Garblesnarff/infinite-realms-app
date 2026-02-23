@@ -2,11 +2,7 @@ import { type Dispatch, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { GameAction } from './game-reducer';
-import type {
-  DiceRollRequest,
-  DiceRollRequestType,
-  DamageType,
-} from '@/types/combat';
+import type { DiceRollRequest, DiceRollRequestType, DamageType } from '@/types/combat';
 
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
@@ -38,7 +34,7 @@ export interface AiRollRequest {
  */
 export const useAiRollProcessor = (
   dispatch: Dispatch<GameAction>,
-  requestDiceRoll: (request: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>) => string
+  requestDiceRoll: (request: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>) => string,
 ): {
   processAiResponse: (rollRequests: AiRollRequest[]) => void;
   throttledProcessAiResponse: (rollRequests: AiRollRequest[]) => void;
@@ -108,6 +104,7 @@ export const useAiRollProcessor = (
             rollRequest.rollConfig.dieType,
             rollRequest.rollConfig.count,
             rollRequest.rollConfig.modifier,
+            rollRequest.rollConfig.abilityModifier || '',
             rollRequest.rollConfig.advantage ? 'adv' : '',
             rollRequest.rollConfig.disadvantage ? 'dis' : '',
           ].join('|');
@@ -170,18 +167,15 @@ function parseRollFormula(formula?: string): Partial<DiceRollRequest['rollConfig
 
     // Match patterns like "1d20+dex", "1d20+str", etc. (symbolic modifiers)
     // These will be resolved by the DiceRollRequest component using character stats
-    const symbolicMatch = formula.match(/^(\d+)?d(\d+)([-+]\w+)?$/);
+    const symbolicMatch = formula.match(/^(\d+)?d(\d+)([-+])([a-z]+)$/);
     if (symbolicMatch) {
-      const [, countStr, dieTypeStr] = symbolicMatch;
-      logger.info(
-        '🎲 Parsed roll with symbolic modifier:',
-        formula,
-        '→ using defaults, component will calculate',
-      );
+      const [, countStr, dieTypeStr, , abilityStr] = symbolicMatch;
+      logger.info('🎲 Parsed roll with symbolic modifier:', formula, '→ ability:', abilityStr);
       return {
         count: countStr ? parseInt(countStr) : 1,
         dieType: parseInt(dieTypeStr),
-        modifier: 0, // Component will calculate actual modifier from character stats
+        modifier: 0, // Component resolves actual modifier from character stats
+        abilityModifier: abilityStr, // preserved for UI resolution e.g. "cha", "int", "wis"
       };
     }
 
