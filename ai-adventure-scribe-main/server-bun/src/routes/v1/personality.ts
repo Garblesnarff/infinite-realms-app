@@ -9,15 +9,31 @@
  * Ported from /server/src/routes/v1/personality.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { supabase } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { supabase } from '../../lib/supabase.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 
 // Valid personality types
 const VALID_TYPES = ['traits', 'ideals', 'bonds', 'flaws'] as const;
 type PersonalityType = typeof VALID_TYPES[number];
+
+/**
+ * Interface for a single personality element row
+ */
+interface PersonalityRow {
+  id: string;
+  text?: string;
+  ideal?: string;
+  bond?: string;
+  flaw?: string;
+  background: string | null;
+  source: string;
+  alignment?: string;
+  created_at: string;
+}
 
 // Map type to table name
 const TABLE_MAP: Record<PersonalityType, string> = {
@@ -25,6 +41,14 @@ const TABLE_MAP: Record<PersonalityType, string> = {
   ideals: 'personality_ideals',
   bonds: 'personality_bonds',
   flaws: 'personality_flaws',
+};
+
+// ⚡ Bolt: Define explicit column lists for each table to avoid over-fetching and improve query performance.
+const COLUMN_MAP: Record<PersonalityType, string> = {
+  traits: 'id, text, background, source, created_at',
+  ideals: 'id, ideal, background, alignment, source, created_at',
+  bonds: 'id, bond, background, source, created_at',
+  flaws: 'id, flaw, background, source, created_at',
 };
 
 export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
@@ -56,8 +80,8 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
     const tableName = TABLE_MAP[type as PersonalityType];
 
     try {
-      // Build query with optional filters
-      let queryBuilder = supabase.from(tableName).select('*');
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
+      let queryBuilder = supabase.from(tableName).select(COLUMN_MAP[type as PersonalityType]);
 
       // Add background filter if provided (only for traits table)
       // SECURITY: Validate background parameter to prevent injection
@@ -112,54 +136,59 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
     const { background } = query as { background?: string };
 
     try {
-      const results: Record<string, any> = {};
+      const results: Record<string, PersonalityRow> = {};
 
-      // Fetch random items for each type
-      for (const type of VALID_TYPES) {
+      // ⚡ Bolt: Parallelize all database queries using Promise.all to reduce total latency.
+      // Replaced sequential O(N) loop with O(1) concurrent execution.
+      // Also used explicit columns instead of select('*') to minimize bandwidth usage.
+      const fetchPromises = VALID_TYPES.map(async (type) => {
         const tableName = TABLE_MAP[type];
-
-        let queryBuilder = supabase.from(tableName).select('*');
+        let queryBuilder = supabase.from(tableName).select(COLUMN_MAP[type]);
 
         // Add background filter if provided (only for traits table)
         if (background && typeof background === 'string' && tableName === 'personality_traits') {
           const validBackground = /^[a-zA-Z0-9_-]+$/.test(background);
           if (!validBackground) {
-            set.status = 400;
-            return {
-              error: 'Invalid background parameter',
-              message: 'Background must contain only alphanumeric characters, hyphens, and underscores',
-            };
+             throw new Error('Invalid background parameter');
           }
           queryBuilder = queryBuilder.or(`background.eq.${background},background.is.null`);
         }
 
         const { data, error } = await queryBuilder;
+        if (error) throw error;
+        return { type, data: data as PersonalityRow[] };
+      });
 
-        if (error) {
-          logger.error({ msg: `Error fetching random ${type}`, error });
-          set.status = 500;
-          return { error: 'Database error', message: `Failed to fetch ${type}` };
-        }
+      const responses = await Promise.all(fetchPromises);
 
+      responses.forEach(({ type, data }) => {
         if (data && data.length > 0) {
-          const randomIndex = Math.floor(Math.random() * data.length);
-          results[type] = data[randomIndex];
-        }
-
-        // For traits, get a second random trait
-        if (type === 'traits' && data && data.length > 1) {
-          let secondRandomIndex;
           const firstIndex = Math.floor(Math.random() * data.length);
-          do {
-            secondRandomIndex = Math.floor(Math.random() * data.length);
-          } while (secondRandomIndex === firstIndex);
+          results[type] = data[firstIndex];
 
-          results.traits2 = data[secondRandomIndex];
+          // For traits, get a second random trait
+          if (type === 'traits' && data.length > 1) {
+            let secondRandomIndex;
+            do {
+              secondRandomIndex = Math.floor(Math.random() * data.length);
+            } while (secondRandomIndex === firstIndex);
+
+            // Re-use results from traits query for efficiency
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (results as any).traits2 = data[secondRandomIndex];
+          }
         }
-      }
+      });
 
       return { success: true, data: results };
     } catch (e) {
+      if (e instanceof Error && e.message === 'Invalid background parameter') {
+        set.status = 400;
+        return {
+          error: 'Invalid background parameter',
+          message: 'Background must contain only alphanumeric characters, hyphens, and underscores',
+        };
+      }
       logger.error({ msg: 'Error in GET /personality/batch/random', error: e });
       set.status = 500;
       return { error: 'Internal server error', message: 'An unexpected error occurred' };
@@ -196,7 +225,8 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
     const boundedLimit = Math.max(1, Math.min(limitRaw, 1000)); // Max 1000 results
 
     try {
-      let queryBuilder = supabase.from(tableName).select('*').limit(boundedLimit);
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+      let queryBuilder = supabase.from(tableName).select(COLUMN_MAP[type as PersonalityType]).limit(boundedLimit);
 
       // Add background filter if provided (only for traits table)
       if (background && typeof background === 'string' && tableName === 'personality_traits') {
