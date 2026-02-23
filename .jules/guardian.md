@@ -119,3 +119,7 @@
 ## 2026-02-23 - [Dice Roll Request Coverage]
 **Learning:** Found that `DiceRollRequest.tsx` had complex logic for deriving ability modifiers from both purpose text and formula strings, which was completely untested. Discovered a testing gotcha where `lucide-react` icons in buttons can cause "multiple elements found" errors when querying by button text, because icons often have accessibility titles that match the text.
 **Action:** Always use exact regex boundaries when querying for buttons with icons, e.g., `screen.getByRole('button', { name: /^advantage$/i })`. Ensure coverage for both purpose-based and formula-based ability detection.
+
+## 2026-02-23 - [Vision Calculations Bug Fix & Coverage]
+**Learning:** Found a bug in `canSeeToken` where vision modes other than `basic` and `darkvision` (like `tremorsense`, `blindsight`, `truesight`) were incorrectly returning `true` in total darkness even when the target was outside their special range/conditions. This was because the light level check only explicitly handled `basic` and `darkvision`.
+**Action:** Always ensure light level requirements are checked for all vision types when they are outside their special-case logic blocks. Added comprehensive test coverage for `vision-calculations.ts` reaching 100% line coverage.
