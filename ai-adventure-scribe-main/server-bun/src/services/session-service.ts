@@ -6,7 +6,7 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, isNull, desc, asc, sql, or, exists } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql, or, exists, type SQL } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index';
@@ -29,7 +29,7 @@ export class SessionService {
   /**
    * Helper to build ownership condition for a session
    */
-  private static getOwnershipCondition(userId: string) {
+  private static getOwnershipCondition(userId: string): SQL | undefined {
     return or(
       exists(
         db.select()
@@ -62,36 +62,86 @@ export class SessionService {
     sessionNumber?: number;
     status?: string;
   }, userId: string): Promise<GameSession> {
-    // SECURITY: Verify ownership of campaign or character before creating session
-    if (data.campaignId) {
-      const campaign = await db.query.campaigns.findFirst({
-        where: and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))
-      });
-      if (!campaign) throw new NotFoundError('Campaign', data.campaignId);
-    }
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that sessions can only be created for campaigns or characters the user is authorized to access
+    // while masking resource existence in a single atomic database round-trip.
+    let session: GameSession | undefined;
 
-    if (data.characterId) {
-      const character = await db.query.characters.findFirst({
-        where: and(
-          eq(characters.id, data.characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+    if (data.campaignId && data.characterId) {
+      [session] = await db
+        .insert(gameSessions)
+        .select(
+          db.select({
+            campaignId: sql`${data.campaignId}`,
+            characterId: sql`${data.characterId}`,
+            sessionNumber: sql`${data.sessionNumber || 1}`,
+            status: sql`${data.status || 'active'}`,
+            startTime: sql`NOW()`,
+          })
+          .from(campaigns)
+          .innerJoin(characters, eq(characters.id, data.characterId))
+          .where(and(
+            eq(campaigns.id, data.campaignId),
+            eq(campaigns.userId, userId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
         )
-      });
-      if (!character) throw new NotFoundError('Character', data.characterId);
+        .returning();
+    } else if (data.campaignId) {
+      [session] = await db
+        .insert(gameSessions)
+        .select(
+          db.select({
+            campaignId: sql`${data.campaignId}`,
+            characterId: sql`NULL::uuid`,
+            sessionNumber: sql`${data.sessionNumber || 1}`,
+            status: sql`${data.status || 'active'}`,
+            startTime: sql`NOW()`,
+          })
+          .from(campaigns)
+          .where(and(
+            eq(campaigns.id, data.campaignId),
+            eq(campaigns.userId, userId)
+          ))
+        )
+        .returning();
+    } else if (data.characterId) {
+      [session] = await db
+        .insert(gameSessions)
+        .select(
+          db.select({
+            campaignId: sql`NULL::uuid`,
+            characterId: sql`${data.characterId}`,
+            sessionNumber: sql`${data.sessionNumber || 1}`,
+            status: sql`${data.status || 'active'}`,
+            startTime: sql`NOW()`,
+          })
+          .from(characters)
+          .where(and(
+            eq(characters.id, data.characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+        )
+        .returning();
+    } else {
+      // No linked resource, allow session creation for any authenticated user
+      [session] = await db
+        .insert(gameSessions)
+        .values({
+          campaignId: null,
+          characterId: null,
+          sessionNumber: data.sessionNumber || 1,
+          status: data.status || 'active',
+          startTime: new Date(),
+        })
+        .returning();
     }
 
-    const [session] = await db
-      .insert(gameSessions)
-      .values({
-        campaignId: data.campaignId || null,
-        characterId: data.characterId || null,
-        sessionNumber: data.sessionNumber || 1,
-        status: data.status || 'active',
-        startTime: new Date(),
-      })
-      .returning();
+    if (!session) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Campaign or Character', data.campaignId || data.characterId || 'unknown');
+    }
 
-    if (!session) throw new InternalServerError('Failed to create session');
     return session;
   }
 
