@@ -10,13 +10,14 @@
 
 /**
  * Detect if the response contains direct damage rolls/requests
- * (e.g., "roll 2d6+3 damage", "roll damage", "1d8 damage")
+ * (e.g., "roll 2d6+3 damage", "roll damage", "1d8 damage", "10 damage")
  */
 export function detectsDirectDamage(response: string): boolean {
   const damagePatterns = [
-    /roll\s+\d*d\d+(?:\+\d+)?\s+(?:for\s+)?damage/gi,
+    /roll\s+\d*d\d+(?:[+-]\d+)?(?:\s+\w+)?\s+(?:for\s+)?damage/gi,
     /roll\s+damage/gi,
-    /\d*d\d+(?:\+\d+)?\s+damage/gi,
+    /\d*d\d+(?:[+-]\d+)?(?:\s+\w+)?\s+damage/gi,
+    /\d+\s+damage/gi,
   ];
   return damagePatterns.some((pattern) => pattern.test(response));
 }
@@ -53,7 +54,13 @@ export function detectsAttackRequest(response: string): boolean {
  * (e.g., "make a Perception check", "roll a Stealth check", "Athletics check")
  */
 export function detectsSkillCheck(response: string): boolean {
-  const skillPatterns = [/make\s+a\s+\w+\s+check/gi, /roll\s+a\s+\w+\s+check/gi, /\w+\s+check/gi];
+  const skillPatterns = [
+    /make\s+an?\s+[\w\s()]+\s+check/gi,
+    /roll\s+an?\s+[\w\s()]+\s+check/gi,
+    // For standalone mentions, we want to be careful not to match too much
+    // but D&D skills are often 1-3 words plus optional ability
+    /(?:[\w()]+\s+){1,3}check/gi,
+  ];
   return skillPatterns.some((pattern) => pattern.test(response));
 }
 
@@ -67,24 +74,28 @@ export function detectsDamageRequest(response: string): boolean {
 
 /**
  * Check if the response contains an Armor Class reference
- * (e.g., "AC 15", "armor class 18")
+ * (e.g., "AC 15", "armor class 18", "AC: 15")
  */
 export function containsAC(response: string): boolean {
-  return /AC\s+\d+/gi.test(response) || /armor\s+class\s+\d+/gi.test(response);
+  return /AC\s*[:\s]\s*\d+/gi.test(response) || /armor\s+class\s*[:\s]\s*\d+/gi.test(response);
 }
 
 /**
  * Check if the response contains a Difficulty Class reference
- * (e.g., "DC 12", "difficulty class 15")
+ * (e.g., "DC 12", "difficulty class 15", "DC: 12")
  */
 export function containsDC(response: string): boolean {
-  return /DC\s+\d+/gi.test(response) || /difficulty\s+class\s+\d+/gi.test(response);
+  return (
+    /DC\s*[:\s]\s*\d+/gi.test(response) ||
+    /difficulty\s+class\s*[:\s]\s*\d+/gi.test(response) ||
+    /DC\s+is\s+\d+/gi.test(response)
+  );
 }
 
 /**
  * Check if the response contains an ability/damage modifier
- * (e.g., "+STR", "+3", "+dex")
+ * (e.g., "+STR", "+3", "-dex", "-1")
  */
 export function containsModifier(response: string): boolean {
-  return /\+\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(response);
+  return /[+-]\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(response);
 }

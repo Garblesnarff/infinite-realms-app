@@ -123,3 +123,7 @@
 ## 2026-02-23 - [Vision Calculations Bug Fix & Coverage]
 **Learning:** Found a bug in `canSeeToken` where vision modes other than `basic` and `darkvision` (like `tremorsense`, `blindsight`, `truesight`) were incorrectly returning `true` in total darkness even when the target was outside their special range/conditions. This was because the light level check only explicitly handled `basic` and `darkvision`.
 **Action:** Always ensure light level requirements are checked for all vision types when they are outside their special-case logic blocks. Added comprehensive test coverage for `vision-calculations.ts` reaching 100% line coverage.
+
+## 2026-02-24 - [Combat Pattern Detection Coverage & Bug Fixes]
+**Learning:** Found that `dm-response-patterns.ts` was completely untested and contained several critical bugs: 1) Negative modifiers (e.g., "-1", "-dex") were ignored by regex. 2) Plain number damage (e.g., "10 damage") was missed in favor of only dice formulas. 3) Multi-word skills (e.g., "Sleight of Hand") and parenthesized skills (e.g., "Wisdom (Perception)") caused detection failure. 4) Strict whitespace requirements in AC/DC mentions missed common formats like "AC: 15" or "DC is 12".
+**Action:** When implementing heuristic-based narrative detection, use flexible regex patterns that allow for optional colons, varied whitespace, and common filler words (like "is"). Always test for both positive and negative numeric transitions. Added comprehensive test coverage for `dm-response-patterns.ts` reaching 100% statement and branch coverage.
