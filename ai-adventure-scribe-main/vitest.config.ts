@@ -175,6 +175,7 @@ export default defineConfig({
       'src/features/game-session/components/game/message/__tests__/session-continuity-regression.test.tsx',
       'src/features/game-session/components/chat/__tests__/DiceRollRequest.symbolic.test.tsx',
       'src/components/ui/__tests__/DialogSheetAccessibility.test.tsx',
+      'src/features/game-session/components/chat/chat/__tests__/DMChatBubble.accessibility.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -325,6 +326,8 @@ export default defineConfig({
         'src/components/game/DiceRollRequest.tsx',
         'src/utils/parseMessageOptions.ts',
         'src/components/game/ActionOptions.tsx',
+        'src/features/game-session/components/chat/chat/DMChatBubble.tsx',
+        'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
       ],
       exclude: [
         '**/__tests__/**',

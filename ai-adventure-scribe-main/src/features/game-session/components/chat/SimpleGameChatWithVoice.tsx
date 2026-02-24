@@ -251,7 +251,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
 
           <CardContent className="flex-1 flex flex-col overflow-hidden p-0 pt-2">
             {/* Messages Area */}
-            <ScrollArea className="flex-1 px-6 py-4">
+            <ScrollArea className="flex-1 px-6 py-4" aria-label="Chat history">
               <div className="space-y-4 pb-4">
                 {renderedMessages}
 

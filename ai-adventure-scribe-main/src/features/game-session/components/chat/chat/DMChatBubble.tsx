@@ -165,12 +165,18 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
     <div className="flex justify-start animate-in slide-in-from-left-2 duration-500">
       <div className="flex max-w-[85%] flex-row items-start">
         {/* Enhanced DM Avatar */}
-        <div className="flex-shrink-0 mr-4 relative">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-infinite-purple to-infinite-teal text-white shadow-lg border-2 border-white/20 hover-glow transition-all duration-300">
+        <div className="flex-shrink-0 mr-4 relative" aria-label="Dungeon Master">
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-gradient-to-br from-infinite-purple to-infinite-teal text-white shadow-lg border-2 border-white/20 hover-glow transition-all duration-300"
+            aria-hidden="true"
+          >
             <span className="text-xs">🎭</span>
           </div>
-          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-infinite-gold rounded-full flex items-center justify-center border-2 border-background">
-            <span className="text-[8px] font-bold text-infinite-dark">DM</span>
+          <div
+            className="absolute -bottom-1 -right-1 w-4 h-4 bg-infinite-gold rounded-full flex items-center justify-center border-2 border-background"
+            aria-label="DM Badge"
+          >
+            <span className="text-[8px] font-bold text-infinite-dark" aria-hidden="true">DM</span>
           </div>
         </div>
 
@@ -199,18 +205,28 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
                   onClick={handlePlayPause}
                   disabled={isProcessing}
                   className="h-9 w-9 p-0 rounded-full hover:bg-infinite-purple/20 focus-glow transition-all duration-200 hover:scale-105"
+                  aria-label={isThisMessagePlaying ? "Pause narration" : "Play narration"}
+                  title={isThisMessagePlaying ? "Pause" : "Play"}
+                  aria-pressed={isThisMessagePlaying}
                 >
                   {isThisMessagePlaying ? (
-                    <Pause className="h-4 w-4 text-infinite-teal" />
+                    <Pause className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
                   ) : (
-                    <Play className="h-4 w-4 text-infinite-gold" />
+                    <Play className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
                   )}
                 </Button>
 
                 {/* Enhanced Progress Bar */}
                 {isThisMessagePlaying && (
                   <div className="flex-1 flex items-center gap-3">
-                    <div className="flex-1 bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="flex-1 bg-white/10 rounded-full h-2 overflow-hidden"
+                      role="progressbar"
+                      aria-label="Narration progress"
+                      aria-valuenow={Math.round(calculateProgress())}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
                       <div
                         className="h-full bg-gradient-to-r from-infinite-teal to-infinite-purple transition-all duration-300 ease-out rounded-full"
                         style={{ width: `${calculateProgress()}%` }}
@@ -228,11 +244,14 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
                   size="sm"
                   onClick={toggleMute}
                   className="h-9 w-9 p-0 rounded-full hover:bg-infinite-teal/20 focus-glow transition-all duration-200 hover:scale-105"
+                  aria-label={isMuted ? "Unmute narration" : "Mute narration"}
+                  title={isMuted ? "Unmute" : "Mute"}
+                  aria-pressed={isMuted}
                 >
                   {isMuted ? (
-                    <VolumeX className="h-4 w-4 text-red-400" />
+                    <VolumeX className="h-4 w-4 text-red-400" aria-hidden="true" />
                   ) : (
-                    <Volume2 className="h-4 w-4 text-infinite-teal" />
+                    <Volume2 className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
                   )}
                 </Button>
 
@@ -243,8 +262,10 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
                     size="sm"
                     onClick={handlePlayPause}
                     className="h-9 w-9 p-0 rounded-full hover:bg-destructive/20 text-destructive focus-glow transition-all duration-200 hover:scale-105"
+                    aria-label="Retry narration"
+                    title="Retry"
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 )}
               </div>
@@ -254,9 +275,9 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
             {isProcessing &&
               isThisMessagePlaying &&
               !(currentSegmentIndex >= 0 && segments[currentSegmentIndex]) && (
-                <div className="flex items-center gap-3 pt-3 border-t border-white/10">
+                <div className="flex items-center gap-3 pt-3 border-t border-white/10" aria-live="polite">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-infinite-purple/10 px-3 py-1 rounded-full">
-                    <div className="flex gap-1">
+                    <div className="flex gap-1" aria-hidden="true">
                       <div className="w-1.5 h-1.5 bg-infinite-purple rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                       <div className="w-1.5 h-1.5 bg-infinite-teal rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                       <div className="w-1.5 h-1.5 bg-infinite-gold rounded-full animate-bounce"></div>
@@ -282,9 +303,9 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
 
             {/* Enhanced Error Message */}
             {error && !isProcessing && (
-              <div className="flex items-center gap-3 pt-3 border-t border-destructive/20">
+              <div className="flex items-center gap-3 pt-3 border-t border-destructive/20" role="status">
                 <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 px-3 py-1 rounded-full">
-                  <AlertCircle className="h-4 w-4" />
+                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
                   <span className="font-medium">Mystical interference detected - click retry</span>
                 </div>
               </div>
@@ -313,7 +334,10 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(({
           )}
 
           {/* Enhanced Timestamp */}
-          <div className="text-xs text-muted-foreground/60 px-2 font-mono bg-card/30 rounded px-2 py-1">
+          <div
+            className="text-xs text-muted-foreground/60 px-2 font-mono bg-card/30 rounded px-2 py-1"
+            aria-label={message.timestamp ? `Sent at ${new Date(message.timestamp).toLocaleTimeString()}` : undefined}
+          >
             {message.timestamp
               ? new Date(message.timestamp).toLocaleTimeString([], {
                   hour: '2-digit',
