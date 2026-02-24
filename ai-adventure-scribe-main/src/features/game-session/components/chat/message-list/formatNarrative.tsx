@@ -1,4 +1,9 @@
+/* eslint-disable max-lines */
 import React from 'react';
+
+import { sanitizeEmphasisDelimiters } from './sanitize-emphasis';
+
+export { sanitizeEmphasisDelimiters };
 
 const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
 const BULLET_PATTERN = /^[-•]/;
@@ -34,7 +39,7 @@ const splitIntoSentences = (block: string): string[] => {
 
   while ((match = regex.exec(block)) !== null) {
     sentences.push(match[0].trim());
-    lastMatchEnd = regex.lastIndex;  // Track position BEFORE lastIndex resets to 0
+    lastMatchEnd = regex.lastIndex; // Track position BEFORE lastIndex resets to 0
   }
 
   // Use our tracked position, not regex.lastIndex (which resets to 0 after loop)
@@ -150,15 +155,15 @@ export const formatNarrative = (
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
-  // Clean any leaked brainstorming patterns before processing
-  const trimmed = cleanBrainstorming(rawText);
+  // Clean brainstorming artifacts and sanitize markdown delimiters before processing
+  const trimmed = sanitizeEmphasisDelimiters(cleanBrainstorming(rawText));
 
   if (!trimmed) {
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
   // Normalize for comparison - handles quotes, dashes, and whitespace
-  const normalize = (value: string) =>
+  const normalize = (value: string): string =>
     value
       .replace(/[\u2018\u2019\u201C\u201D]/g, "'") // Smart quotes to straight
       .replace(/[\u2013\u2014]/g, '-') // En/em dashes to hyphen
@@ -179,7 +184,6 @@ export const formatNarrative = (
       const currentNorm = normalize(rawParagraphs[i]);
       const currentStart = currentNorm.slice(0, 60);
       let isDuplicate = false;
-      let duplicateReason = '';
 
       // Check 1: This paragraph starts the same as a previous one (simple dup)
       if (seenStarts.some((s) => s === currentStart)) {

@@ -44,11 +44,13 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
       const beforeMatch = result.slice(Math.max(0, match.index - 50), match.index);
       if (beforeMatch.includes('[ASSET:')) continue;
 
-      // Walk back past leading markdown markers (*) so the tag lands outside any emphasis span.
-      // e.g., *Zara spoke* becomes [ASSET:npc:zara] *Zara spoke* not *[ASSET:npc:zara] Zara spoke*
+      // Walk back past leading markdown markers so the tag lands outside any emphasis span.
+      // Handles "*Name", "**Name", "* Name", "** Name" (space between marker and name).
       let insertIndex = match.index;
-      while (insertIndex > 0 && result[insertIndex - 1] === '*') {
-        insertIndex--;
+      const before = result.slice(0, insertIndex);
+      const trailingEmphasis = before.match(/\*+\s*$/);
+      if (trailingEmphasis) {
+        insertIndex -= trailingEmphasis[0].length;
       }
 
       const tag = `[ASSET:${asset.type}:${asset.key}] `;

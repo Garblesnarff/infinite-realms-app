@@ -67,6 +67,8 @@ export default defineConfig({
       'src/services/ai/__tests__/character-description-prompts.test.ts',
       'src/services/ai/__tests__/character-description-parser.test.ts',
       'src/services/ai/__tests__/xml-world-update-accounting.test.ts',
+      'src/services/ai/__tests__/asset-processor.test.ts',
+      'src/features/game-session/components/chat/message-list/__tests__/sanitize-emphasis.test.ts',
       'src/agents/__tests__/encounter-validation.test.ts',
       'src/agents/__tests__/encounter-validator-party.test.ts',
       'src/agents/__tests__/dungeon-master-agent.test.ts',
