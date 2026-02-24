@@ -11,12 +11,13 @@
  */
 
 import { TRPCError } from '@trpc/server';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
-import { workos, authConfig } from '../../services/workos.js';
+
 import { db } from '../../../../db/client';
 import { users } from '../../../../db/schema/index';
-import { eq } from 'drizzle-orm';
+import { workos, authConfig } from '../../services/workos.js';
+import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 
 /**
  * Auth router for WorkOS authentication
@@ -44,15 +45,14 @@ export const authRouter = router({
     .input(
       z.object({
         code: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Authenticate with WorkOS using the authorization code
-      const { user, accessToken, refreshToken } =
-        await workos.userManagement.authenticateWithCode({
-          code: input.code,
-          clientId: authConfig.clientId,
-        });
+      const { user, accessToken, refreshToken } = await workos.userManagement.authenticateWithCode({
+        code: input.code,
+        clientId: authConfig.clientId,
+      });
 
       // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert-then-find' with a single atomic UPSERT.
       // This reduces database round-trips from 2-3 down to 1 for every authentication callback.
@@ -85,7 +85,7 @@ export const authRouter = router({
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          plan: userData?.plan || 'free',
+          plan: userData.plan,
         },
         accessToken,
         refreshToken,
@@ -114,7 +114,7 @@ export const authRouter = router({
   /**
    * Logout - revoke session
    */
-  logout: protectedProcedure.mutation(async ({ ctx }) => {
+  logout: protectedProcedure.mutation(async () => {
     // WorkOS sessions are stateless JWT tokens
     // No server-side revocation needed
     // Client will remove the token from storage
@@ -128,7 +128,7 @@ export const authRouter = router({
     .input(
       z.object({
         refreshToken: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const response = await workos.userManagement.authenticateWithRefreshToken({
@@ -153,7 +153,7 @@ export const authRouter = router({
         email: z.string().email(),
         firstName: z.string().optional(),
         lastName: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       if (input.userId !== ctx.user.userId) {
