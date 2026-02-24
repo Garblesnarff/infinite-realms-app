@@ -3,7 +3,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { DiceRollRequest } from '../DiceRollRequest';
+
 import { useCharacter } from '@/contexts/CharacterContext';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 
@@ -90,7 +92,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     expect(screen.getByText(/Ability Check Requested/i)).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe('DiceRollRequest', () => {
         request={damageRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     expect(screen.getByText('2d6+3')).toBeInTheDocument();
@@ -123,7 +125,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     const advButton = screen.getByRole('button', { name: /^advantage$/i });
@@ -154,7 +156,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Enter Manually/i }));
@@ -180,7 +182,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
@@ -197,7 +199,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
@@ -211,7 +213,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
@@ -226,7 +228,7 @@ describe('DiceRollRequest', () => {
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
         onCancel={mockOnCancel}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
@@ -245,14 +247,14 @@ describe('DiceRollRequest', () => {
         request={skillRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
-        mockCharacter,
-        'skill',
-        'strength',
-        'athletics'
+      mockCharacter,
+      'skill',
+      'strength',
+      'athletics',
     );
   });
 
@@ -268,14 +270,14 @@ describe('DiceRollRequest', () => {
         request={abilityRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
-        mockCharacter,
-        'check',
-        'strength',
-        undefined
+      mockCharacter,
+      'check',
+      'strength',
+      undefined,
     );
   });
 
@@ -287,18 +289,14 @@ describe('DiceRollRequest', () => {
     };
 
     render(
-      <DiceRollRequest
-        request={request}
-        onRoll={mockOnRoll}
-        onManualResult={mockOnManualResult}
-      />
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
-        mockCharacter,
-        'check',
-        'dexterity',
-        undefined
+      mockCharacter,
+      'check',
+      'dexterity',
+      undefined,
     );
   });
 
@@ -312,7 +310,7 @@ describe('DiceRollRequest', () => {
         request={defaultRequest}
         onRoll={mockOnRoll}
         onManualResult={mockOnManualResult}
-      />
+      />,
     );
 
     expect(screen.getByText('1d20')).toBeInTheDocument();
@@ -334,7 +332,7 @@ describe('DiceRollRequest', () => {
           request={{ ...defaultRequest, type: type as any }}
           onRoll={mockOnRoll}
           onManualResult={mockOnManualResult}
-        />
+        />,
       );
       expect(screen.getByText(regex)).toBeInTheDocument();
       unmount();
@@ -344,15 +342,11 @@ describe('DiceRollRequest', () => {
   it('handles formula with numbers as-is', () => {
     const request = {
       ...defaultRequest,
-      formula: '1d20+5'
+      formula: '1d20+5',
     };
 
     render(
-      <DiceRollRequest
-        request={request}
-        onRoll={mockOnRoll}
-        onManualResult={mockOnManualResult}
-      />
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
     expect(screen.getByText('1d20+5')).toBeInTheDocument();
@@ -363,19 +357,91 @@ describe('DiceRollRequest', () => {
     const request = {
       ...defaultRequest,
       dc: 15,
-      ac: 18
+      ac: 18,
     };
 
     render(
-      <DiceRollRequest
-        request={request}
-        onRoll={mockOnRoll}
-        onManualResult={mockOnManualResult}
-      />
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
     expect(screen.getByText(/DC 15/i)).toBeInTheDocument();
     // In DiceRollRequest.tsx: {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
     // So if both DC and AC are present, it only shows DC.
+  });
+
+  // --- Symbolic formula guard (regression: 1d20+cha/int/wis crashes dice engine) ---
+
+  it('shows loading spinner when character is null and formula is symbolic', () => {
+    (useCharacter as any).mockReturnValue({ state: { character: null } });
+    // Make calculateRollWithBreakdown return the raw symbolic formula (character is null path)
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '1d20+cha',
+      breakdown: ['1d20+cha'],
+      totalModifier: 0,
+      isProficient: false,
+    });
+
+    const request = { type: 'check' as const, formula: '1d20+cha', purpose: 'Deception check' };
+    render(
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
+    );
+
+    expect(screen.getByText(/loading character data/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('dice-roll-embed')).not.toBeInTheDocument();
+  });
+
+  it('auto-switches to manual mode when character loaded but formula remains symbolic', () => {
+    // Simulate a resolution failure: calculateRollWithBreakdown returns symbolic formula
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '1d20+cha',
+      breakdown: ['1d20+cha'],
+      totalModifier: 0,
+      isProficient: false,
+    });
+
+    const request = { type: 'check' as const, formula: '1d20+cha', purpose: 'Charisma check' };
+    render(
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
+    );
+
+    // Manual mode should activate — input visible, Roll Dice button absent
+    expect(screen.getByLabelText(/enter your roll result/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /roll dice/i })).not.toBeInTheDocument();
+  });
+
+  it('1d20+int — resolved numeric formula enables Roll Dice button', () => {
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '1d20-1',
+      breakdown: ['1d20', 'INT -1'],
+      totalModifier: -1,
+      isProficient: false,
+    });
+
+    const request = { type: 'check' as const, formula: '1d20+int', purpose: 'Arcana check' };
+    render(
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
+    );
+
+    const rollButton = screen.getByRole('button', { name: /roll dice/i });
+    expect(rollButton).not.toBeDisabled();
+    expect(screen.getByText('1d20-1')).toBeInTheDocument();
+  });
+
+  it('1d20+wis — resolved numeric formula enables Roll Dice button', () => {
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '1d20+2',
+      breakdown: ['1d20', 'WIS +2'],
+      totalModifier: 2,
+      isProficient: false,
+    });
+
+    const request = { type: 'check' as const, formula: '1d20+wis', purpose: 'Perception check' };
+    render(
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
+    );
+
+    const rollButton = screen.getByRole('button', { name: /roll dice/i });
+    expect(rollButton).not.toBeDisabled();
+    expect(screen.getByText('1d20+2')).toBeInTheDocument();
   });
 });
