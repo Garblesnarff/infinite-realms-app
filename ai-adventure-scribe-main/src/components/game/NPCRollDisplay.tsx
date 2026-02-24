@@ -7,7 +7,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Scroll } from 'lucide-react';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
@@ -19,6 +19,55 @@ interface NPCRollDisplayProps {
   onDismiss: () => void;
   autoDismissDelay?: number; // milliseconds, default 3000
 }
+
+/**
+ * ⚡ Bolt: Static status configuration moved outside the component to avoid
+ * re-allocation on every render.
+ */
+const STATUS_CONFIG_BASE = {
+  critical: {
+    color: 'from-amber-600 via-yellow-500 to-amber-600',
+    glow: 'shadow-[0_0_30px_rgba(251,191,36,0.6)]',
+    text: 'CRITICAL HIT!',
+    icon: '✨',
+  },
+  fumble: {
+    color: 'from-slate-700 via-slate-600 to-slate-700',
+    glow: 'shadow-[0_0_20px_rgba(71,85,105,0.4)]',
+    text: 'Critical Fumble',
+    icon: '💀',
+  },
+  hit: {
+    color: 'from-red-800 via-red-600 to-red-800',
+    glow: 'shadow-[0_0_25px_rgba(220,38,38,0.5)]',
+    text: 'HIT', // Will be suffixed with AC in component
+    icon: '⚔️',
+  },
+  miss: {
+    color: 'from-slate-600 via-slate-500 to-slate-600',
+    glow: 'shadow-[0_0_15px_rgba(100,116,139,0.3)]',
+    text: 'MISS', // Will be suffixed with AC in component
+    icon: '🛡️',
+  },
+  success: {
+    color: 'from-green-800 via-green-600 to-green-800',
+    glow: 'shadow-[0_0_25px_rgba(22,163,74,0.5)]',
+    text: 'SUCCESS', // Will be suffixed with DC in component
+    icon: '✓',
+  },
+  fail: {
+    color: 'from-orange-800 via-orange-600 to-orange-800',
+    glow: 'shadow-[0_0_20px_rgba(234,88,12,0.4)]',
+    text: 'FAIL', // Will be suffixed with DC in component
+    icon: '✗',
+  },
+  neutral: {
+    color: 'from-purple-800 via-purple-600 to-purple-800',
+    glow: 'shadow-[0_0_20px_rgba(147,51,234,0.4)]',
+    text: '',
+    icon: '🎲',
+  },
+};
 
 export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(({
   roll,
@@ -45,8 +94,10 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(({
     };
   }, [autoDismissDelay, onDismiss]);
 
-  // Determine result status
-  const getResultStatus = () => {
+  /**
+   * ⚡ Bolt: Memoized result status calculation to prevent redundant work.
+   */
+  const status = useMemo(() => {
     if (result.critical) return 'critical';
     if (result.naturalRoll === 1) return 'fumble';
 
@@ -59,56 +110,23 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(({
     }
 
     return 'neutral';
-  };
+  }, [result.critical, result.naturalRoll, result.total, request.type, request.ac, request.dc]);
 
-  const status = getResultStatus();
+  /**
+   * ⚡ Bolt: Construct dynamic config from static base.
+   */
+  const config = useMemo(() => {
+    const base = STATUS_CONFIG_BASE[status];
+    let text = base.text;
 
-  const statusConfig = {
-    critical: {
-      color: 'from-amber-600 via-yellow-500 to-amber-600',
-      glow: 'shadow-[0_0_30px_rgba(251,191,36,0.6)]',
-      text: 'CRITICAL HIT!',
-      icon: '✨',
-    },
-    fumble: {
-      color: 'from-slate-700 via-slate-600 to-slate-700',
-      glow: 'shadow-[0_0_20px_rgba(71,85,105,0.4)]',
-      text: 'Critical Fumble',
-      icon: '💀',
-    },
-    hit: {
-      color: 'from-red-800 via-red-600 to-red-800',
-      glow: 'shadow-[0_0_25px_rgba(220,38,38,0.5)]',
-      text: `HIT (AC ${request.ac})`,
-      icon: '⚔️',
-    },
-    miss: {
-      color: 'from-slate-600 via-slate-500 to-slate-600',
-      glow: 'shadow-[0_0_15px_rgba(100,116,139,0.3)]',
-      text: `MISS (AC ${request.ac})`,
-      icon: '🛡️',
-    },
-    success: {
-      color: 'from-green-800 via-green-600 to-green-800',
-      glow: 'shadow-[0_0_25px_rgba(22,163,74,0.5)]',
-      text: `SUCCESS (DC ${request.dc})`,
-      icon: '✓',
-    },
-    fail: {
-      color: 'from-orange-800 via-orange-600 to-orange-800',
-      glow: 'shadow-[0_0_20px_rgba(234,88,12,0.4)]',
-      text: `FAIL (DC ${request.dc})`,
-      icon: '✗',
-    },
-    neutral: {
-      color: 'from-purple-800 via-purple-600 to-purple-800',
-      glow: 'shadow-[0_0_20px_rgba(147,51,234,0.4)]',
-      text: '',
-      icon: '🎲',
-    },
-  };
+    if (status === 'hit' || status === 'miss') {
+      text = `${base.text} (AC ${request.ac})`;
+    } else if (status === 'success' || status === 'fail') {
+      text = `${base.text} (DC ${request.dc})`;
+    }
 
-  const config = statusConfig[status];
+    return { ...base, text };
+  }, [status, request.ac, request.dc]);
 
   return (
     <AnimatePresence>
