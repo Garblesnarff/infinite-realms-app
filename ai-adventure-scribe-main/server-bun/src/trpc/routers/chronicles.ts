@@ -264,39 +264,25 @@ export const chroniclesRouter = router({
 
       const previousSessionNumber = session.sessionNumber - 1;
 
-      // Find the prior session in the same campaign, with ownership verification for defense-in-depth
-      const priorSessionRows = await ctx.db
-        .select({ id: gameSessions.id })
-        .from(gameSessions)
+      // ⚡ Bolt: Combined session ownership verification and chronicle lookup into a single joined query.
+      // This eliminates the 1+1 query pattern and ensures atomic security checks for session continuity.
+      const chronicleRows = await ctx.db
+        .select({ previouslyOn: sessionChronicles.previouslyOn })
+        .from(sessionChronicles)
+        .innerJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .leftJoin(characters, eq(gameSessions.characterId, characters.id))
         .where(
           and(
             eq(gameSessions.campaignId, campaignId),
             eq(gameSessions.sessionNumber, previousSessionNumber),
+            eq(sessionChronicles.status, 'ready'),
+            eq(sessionChronicles.userId, ctx.user.userId),
             or(
               eq(campaigns.userId, ctx.user.userId),
               eq(characters.userId, ctx.user.userId),
               eq(characters.ownerId, ctx.user.userId),
             ),
-          ),
-        )
-        .limit(1);
-
-      const priorSession = priorSessionRows[0];
-      if (!priorSession) {
-        return null;
-      }
-
-      // Find the ready chronicle for the prior session, with explicit user filtering
-      const chronicleRows = await ctx.db
-        .select({ previouslyOn: sessionChronicles.previouslyOn })
-        .from(sessionChronicles)
-        .where(
-          and(
-            eq(sessionChronicles.sessionId, priorSession.id),
-            eq(sessionChronicles.status, 'ready'),
-            eq(sessionChronicles.userId, ctx.user.userId),
           ),
         )
         .limit(1);
@@ -317,6 +303,8 @@ export const chroniclesRouter = router({
   getByShareToken: publicProcedure
     .input(z.object({ token: z.string().min(32).max(32) }))
     .query(async ({ input, ctx }) => {
+      // ⚡ Bolt: Combined chronicle, session, and campaign queries into a single joined query
+      // to eliminate the 1+1 query pattern and reduce database round-trips for public views.
       const rows = await ctx.db
         .select({
           chapterTitle: sessionChronicles.chapterTitle,
@@ -325,8 +313,12 @@ export const chroniclesRouter = router({
           generatedAt: sessionChronicles.generatedAt,
           sessionId: sessionChronicles.sessionId,
           previouslyOn: sessionChronicles.previouslyOn,
+          sessionNumber: gameSessions.sessionNumber,
+          campaignName: campaigns.name,
         })
         .from(sessionChronicles)
+        .leftJoin(gameSessions, eq(sessionChronicles.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .where(
           and(eq(sessionChronicles.shareToken, input.token), eq(sessionChronicles.status, 'ready')),
         )
@@ -338,27 +330,14 @@ export const chroniclesRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
 
-      // Join to get session number and campaign name
-      const sessionRows = await ctx.db
-        .select({
-          sessionNumber: gameSessions.sessionNumber,
-          campaignName: campaigns.name,
-        })
-        .from(gameSessions)
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .where(eq(gameSessions.id, chronicle.sessionId))
-        .limit(1);
-
-      const sessionInfo = sessionRows[0];
-
       return {
         chapterTitle: chronicle.chapterTitle,
         chronicleText: chronicle.chronicleText,
         illustrationUrl: chronicle.illustrationUrl,
         generatedAt: chronicle.generatedAt,
         previouslyOn: chronicle.previouslyOn,
-        sessionNumber: sessionInfo?.sessionNumber ?? null,
-        campaignName: sessionInfo?.campaignName ?? null,
+        sessionNumber: chronicle.sessionNumber ?? null,
+        campaignName: chronicle.campaignName ?? null,
       };
     }),
 });
