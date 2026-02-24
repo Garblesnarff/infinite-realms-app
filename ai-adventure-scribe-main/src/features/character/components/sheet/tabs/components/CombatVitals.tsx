@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 
 interface CombatVitalsProps {
   character: Character;
@@ -80,21 +81,12 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
           </div>
 
           {/* HP Bar */}
-          <div
-            className="w-full bg-gray-200 rounded-full h-3 overflow-hidden"
-            role="progressbar"
-            aria-valuenow={combatState.currentHp}
-            aria-valuemin={0}
-            aria-valuemax={maxHp}
+          <Progress
+            value={(combatState.currentHp / maxHp) * 100}
+            className="h-3"
+            indicatorClassName="bg-red-500"
             aria-label={`${character.name}'s hit points`}
-          >
-            <div
-              className="bg-red-500 h-full rounded-full transition-all"
-              style={{
-                width: `${Math.max(0, (combatState.currentHp / maxHp) * 100)}%`,
-              }}
-            />
-          </div>
+          />
 
           {/* Temp HP */}
           {combatState.tempHp > 0 && (
@@ -300,7 +292,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                     <button
                       key={i}
                       type="button"
-                      className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 ${
+                      className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         i <= combatState.deathSaves.successes
                           ? 'bg-green-500 border-green-500'
                           : 'border-green-500 hover:bg-green-500/20'
@@ -323,7 +315,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                     <button
                       key={i}
                       type="button"
-                      className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 ${
+                      className={`w-4 h-4 rounded-full border-2 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                         i <= combatState.deathSaves.failures
                           ? 'bg-red-500 border-red-500'
                           : 'border-red-500 hover:bg-red-500/20'

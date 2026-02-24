@@ -1,28 +1,13 @@
-import {
-  Package,
-  Coins,
-  Sword,
-  Shield,
-  Weight,
-  Plus,
-  Minus,
-  Star,
-  Zap,
-  Heart,
-  ZapIcon,
-  Info,
-} from 'lucide-react';
-import React, { useState } from 'react';
+import { Package, Coins, Sword, Shield, Weight, Star, Info } from 'lucide-react';
+import React from 'react';
 
 import type { Character } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import DiceRoller from '@/components/ui/dice-roller';
-import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { useMagicItemAttunement } from '@/hooks/use-magic-item-attunement';
-import { validateAttunementRequirements } from '@/utils/magicItemEffects';
 
 interface InventoryTabProps {
   character: Character;
@@ -50,8 +35,10 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
     pp: character.currency?.pp || 0,
   };
 
-  const { attuneToItem, removeAttunement, getItemAttunementStatus, getAttunementSummary } =
-    useMagicItemAttunement(character, onUpdate);
+  const { attuneToItem, removeAttunement, getAttunementSummary } = useMagicItemAttunement(
+    character,
+    onUpdate,
+  );
 
   // Calculate carrying capacity
   const strengthScore = character.abilityScores?.strength?.score || 10;
@@ -205,27 +192,20 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                   <span>Heavy: {heavilyEncumbered}</span>
                   <span>Max: {carryingCapacity}</span>
                 </div>
-                <div
-                  className="w-full bg-gray-200 rounded-full h-2 overflow-hidden"
-                  role="progressbar"
-                  aria-valuenow={totalWeight}
-                  aria-valuemin={0}
-                  aria-valuemax={carryingCapacity}
+                <Progress
+                  value={(totalWeight / carryingCapacity) * 100}
+                  className="h-2"
+                  indicatorClassName={
+                    encumbranceStatus === 'overloaded'
+                      ? 'bg-red-500'
+                      : encumbranceStatus === 'heavily-encumbered'
+                        ? 'bg-orange-500'
+                        : encumbranceStatus === 'encumbered'
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                  }
                   aria-label="Carrying capacity"
-                >
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      encumbranceStatus === 'overloaded'
-                        ? 'bg-red-500'
-                        : encumbranceStatus === 'heavily-encumbered'
-                          ? 'bg-orange-500'
-                          : encumbranceStatus === 'encumbered'
-                            ? 'bg-yellow-500'
-                            : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min(100, (totalWeight / carryingCapacity) * 100)}%` }}
-                  />
-                </div>
+                />
               </div>
 
               {encumbranceStatus !== 'normal' && (
@@ -380,10 +360,11 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                 return (
                   <div
                     key={slot}
-                    className={`w-8 h-8 rounded border-2 flex items-center justify-center ${
+                    className={`w-8 h-8 rounded border-2 flex items-center justify-center transition-colors ${
                       isOccupied ? 'bg-purple-500 border-purple-600 text-white' : 'border-gray-300'
                     }`}
                     aria-label={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
+                    title={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
                   >
                     {isOccupied && <Star className="w-4 h-4" />}
                   </div>
