@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -49,27 +49,25 @@ export async function verifySessionOwnership(
       sessionId: gameSessions.id,
       campaignId: gameSessions.campaignId,
       sessionNumber: gameSessions.sessionNumber,
-      campaignUserId: campaigns.userId,
-      characterUserId: characters.userId,
-      characterOwnerId: characters.ownerId,
     })
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
     .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-    .where(eq(gameSessions.id, sessionId))
+    .where(
+      and(
+        eq(gameSessions.id, sessionId),
+        or(
+          eq(campaigns.userId, ctx.user.userId),
+          eq(characters.userId, ctx.user.userId),
+          eq(characters.ownerId, ctx.user.userId),
+        ),
+      ),
+    )
     .limit(1);
 
   const row = rows[0];
 
   if (!row) {
-    throw new TRPCError({ code: 'NOT_FOUND' });
-  }
-
-  const userId = ctx.user.userId;
-  const ownsViaCampaign = row.campaignUserId === userId;
-  const ownsViaCharacter = row.characterUserId === userId || row.characterOwnerId === userId;
-
-  if (!ownsViaCampaign && !ownsViaCharacter) {
     throw new TRPCError({ code: 'NOT_FOUND' });
   }
 
@@ -91,7 +89,12 @@ export const chroniclesRouter = router({
       const rows = await ctx.db
         .select()
         .from(sessionChronicles)
-        .where(eq(sessionChronicles.sessionId, input.sessionId))
+        .where(
+          and(
+            eq(sessionChronicles.sessionId, input.sessionId),
+            eq(sessionChronicles.userId, ctx.user.userId),
+          ),
+        )
         .limit(1);
 
       return rows[0] ?? null;
@@ -109,14 +112,19 @@ export const chroniclesRouter = router({
 
       await verifySessionOwnership(ctx, sessionId);
 
-      // Check for an existing chronicle
+      // Check for an existing chronicle for THIS user
       const existing = await ctx.db
         .select({
           id: sessionChronicles.id,
           status: sessionChronicles.status,
         })
         .from(sessionChronicles)
-        .where(eq(sessionChronicles.sessionId, sessionId))
+        .where(
+          and(
+            eq(sessionChronicles.sessionId, sessionId),
+            eq(sessionChronicles.userId, ctx.user.userId),
+          ),
+        )
         .limit(1);
 
       const existingRow = existing[0];
@@ -133,11 +141,16 @@ export const chroniclesRouter = router({
       let chronicleId: string;
 
       if (existingRow) {
-        // Update failed/pending row back to generating
+        // Update failed/pending row back to generating with atomic ownership check
         await ctx.db
           .update(sessionChronicles)
           .set({ status: 'generating', errorMessage: null, updatedAt: new Date() })
-          .where(eq(sessionChronicles.id, existingRow.id));
+          .where(
+            and(
+              eq(sessionChronicles.id, existingRow.id),
+              eq(sessionChronicles.userId, ctx.user.userId),
+            ),
+          );
         chronicleId = existingRow.id;
       } else {
         const [inserted] = await ctx.db
@@ -155,6 +168,7 @@ export const chroniclesRouter = router({
       const userPlan = ctx.user.plan;
       const capturedChronicleId = chronicleId;
       const capturedSessionId = sessionId;
+      const capturedUserId = ctx.user.userId;
 
       // Fire-and-forget background generation
       (async () => {
@@ -178,7 +192,12 @@ export const chroniclesRouter = router({
                 generatedAt: new Date(),
                 updatedAt: new Date(),
               })
-              .where(eq(sessionChronicles.id, capturedChronicleId));
+              .where(
+                and(
+                  eq(sessionChronicles.id, capturedChronicleId),
+                  eq(sessionChronicles.userId, capturedUserId),
+                ),
+              );
           } else {
             // Free tier: plain summary, no illustration, no shareToken
             const content = await chronicleGenerator.generateFreeChronicle(capturedSessionId);
@@ -192,7 +211,12 @@ export const chroniclesRouter = router({
                 generatedAt: new Date(),
                 updatedAt: new Date(),
               })
-              .where(eq(sessionChronicles.id, capturedChronicleId));
+              .where(
+                and(
+                  eq(sessionChronicles.id, capturedChronicleId),
+                  eq(sessionChronicles.userId, capturedUserId),
+                ),
+              );
           }
         } catch (err) {
           await db
@@ -202,7 +226,12 @@ export const chroniclesRouter = router({
               errorMessage: err instanceof Error ? err.message : String(err),
               updatedAt: new Date(),
             })
-            .where(eq(sessionChronicles.id, capturedChronicleId));
+            .where(
+              and(
+                eq(sessionChronicles.id, capturedChronicleId),
+                eq(sessionChronicles.userId, capturedUserId),
+              ),
+            );
         }
       })();
 
