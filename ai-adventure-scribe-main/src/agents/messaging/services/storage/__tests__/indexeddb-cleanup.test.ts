@@ -23,9 +23,12 @@ vi.mock('../../../../../lib/logger', () => ({
 describe('IndexedDBService - Cleanup Functionality', () => {
   let service: IndexedDBService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // @ts-ignore - reset singleton for deterministic initialization per test
+    IndexedDBService.instance = undefined;
     // Get the singleton instance
     service = IndexedDBService.getInstance();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   describe('clearOldMessages', () => {

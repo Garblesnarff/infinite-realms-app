@@ -18,6 +18,72 @@ import { ConnectionStateService } from '../services/connection/ConnectionStateSe
 import { OfflineStateService } from '../services/offline/OfflineStateService';
 import { MessageType, MessagePriority, QueuedMessage } from '../types';
 
+const { mockIndexedDbStorage, resetIndexedDbMock } = vi.hoisted(() => {
+  const messages = new Map<string, any>();
+  let queueState: any = null;
+  let offlineState: any = null;
+
+  const storage = {
+    storeMessage: vi.fn(async (msg: any) => {
+      messages.set(msg.id, msg);
+    }),
+    updateMessageStatus: vi.fn(async (id: string, status: string) => {
+      const msg = messages.get(id);
+      if (msg) msg.status = status;
+    }),
+    getPendingMessages: vi.fn(async () =>
+      Array.from(messages.values()).filter((m: any) => m.status === 'pending'),
+    ),
+    saveQueueState: vi.fn(async (state: any) => {
+      queueState = state;
+    }),
+    getQueueState: vi.fn(async () => queueState),
+    saveOfflineState: vi.fn(async (state: any) => {
+      offlineState = state;
+    }),
+    getOfflineState: vi.fn(async () => offlineState),
+    clearOldMessages: vi.fn(async () => 0),
+  };
+
+  return {
+    mockIndexedDbStorage: storage,
+    resetIndexedDbMock: () => {
+      messages.clear();
+      queueState = null;
+      offlineState = null;
+    },
+  };
+});
+
+const { mockQueueStateManager, resetQueueMetrics } = vi.hoisted(() => {
+  const metrics = {
+    totalProcessed: 0,
+    failedDeliveries: 0,
+    avgProcessingTime: 0,
+  };
+
+  const queueStateManager = {
+    saveQueueSnapshot: vi.fn().mockResolvedValue(undefined),
+    validateQueueState: vi.fn().mockResolvedValue(true),
+    updateMetrics: vi.fn((_processingTime: number, success: boolean) => {
+      metrics.totalProcessed += 1;
+      if (!success) {
+        metrics.failedDeliveries += 1;
+      }
+    }),
+    getMetrics: vi.fn(() => ({ ...metrics })),
+  };
+
+  return {
+    mockQueueStateManager: queueStateManager,
+    resetQueueMetrics: () => {
+      metrics.totalProcessed = 0;
+      metrics.failedDeliveries = 0;
+      metrics.avgProcessingTime = 0;
+    },
+  };
+});
+
 // Mock dependencies
 vi.mock('../../../lib/logger', () => ({
   logger: {
@@ -60,38 +126,9 @@ vi.mock('../../error/services/recovery-service', () => ({
 
 // Mock IndexedDB
 vi.mock('../services/storage/IndexedDBService', () => {
-  const messages = new Map();
-  let queueState: any = null;
-  let offlineState: any = null;
-
   return {
     IndexedDBService: {
-      getInstance: vi.fn(() => ({
-        storeMessage: vi.fn(async (msg: any) => {
-          messages.set(msg.id, msg);
-        }),
-        updateMessageStatus: vi.fn(async (id: string, status: string) => {
-          const msg = messages.get(id);
-          if (msg) msg.status = status;
-        }),
-        getPendingMessages: vi.fn(async () => {
-          return Array.from(messages.values()).filter((m: any) => m.status === 'pending');
-        }),
-        saveQueueState: vi.fn(async (state: any) => {
-          queueState = state;
-        }),
-        getQueueState: vi.fn(async () => queueState),
-        saveOfflineState: vi.fn(async (state: any) => {
-          offlineState = state;
-        }),
-        getOfflineState: vi.fn(async () => offlineState),
-        clearOldMessages: vi.fn(async () => 0),
-        __reset: () => {
-          messages.clear();
-          queueState = null;
-          offlineState = null;
-        },
-      })),
+      getInstance: vi.fn(() => mockIndexedDbStorage),
     },
   };
 });
@@ -126,16 +163,7 @@ vi.mock('../services/sync/managers/SyncStateManager', () => ({
 
 vi.mock('../services/queue/QueueStateManager', () => ({
   QueueStateManager: {
-    getInstance: vi.fn(() => ({
-      saveQueueSnapshot: vi.fn().mockResolvedValue(undefined),
-      validateQueueState: vi.fn().mockResolvedValue(true),
-      updateMetrics: vi.fn(),
-      getMetrics: vi.fn(() => ({
-        totalProcessed: 0,
-        failedDeliveries: 0,
-        avgProcessingTime: 0,
-      })),
-    })),
+    getInstance: vi.fn(() => mockQueueStateManager),
   },
 }));
 
@@ -207,6 +235,10 @@ describe('Messaging System Integration Tests', () => {
   });
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    resetIndexedDbMock();
+    resetQueueMetrics();
+
     // Reset all singletons
     // @ts-ignore
     MessageQueueService.instance = undefined;

@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
@@ -47,13 +46,13 @@ import { useMessageQueue } from '../use-message-queue';
 
 import { useToast } from '@/hooks/use-toast';
 
-
-const createQueryClient = (): QueryClient => new QueryClient({
-  defaultOptions: {
-    queries: { retry: false },
-    mutations: { retry: false },
-  },
-});
+const createQueryClient = (): QueryClient =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
 
 describe('useMessageQueue', () => {
   let queryClient: QueryClient;
@@ -70,6 +69,7 @@ describe('useMessageQueue', () => {
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
@@ -82,7 +82,7 @@ describe('useMessageQueue', () => {
     const message: any = {
       text: 'Hello',
       sender: 'player',
-      context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' }
+      context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' },
     };
 
     let persistedMessage;
@@ -91,13 +91,15 @@ describe('useMessageQueue', () => {
     });
 
     expect(mockFrom).toHaveBeenCalledWith('dialogue_history');
-    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'test-uuid',
-      message: 'Hello',
-      speaker_type: 'player',
-      session_id: sessionId,
-      context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' }
-    }));
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'test-uuid',
+        message: 'Hello',
+        speaker_type: 'player',
+        session_id: sessionId,
+        context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' },
+      }),
+    );
     expect(persistedMessage.id).toBe('test-uuid');
     expect(result.current.queueStatus).toBe('idle');
   });
@@ -135,26 +137,25 @@ describe('useMessageQueue', () => {
     const message: any = { text: 'Fail me', sender: 'player' };
 
     await act(async () => {
-      try {
-        const mutationPromise = result.current.messageMutation.mutateAsync(message);
+      const mutationPromise = result.current.messageMutation.mutateAsync(message);
+      const handledPromise = mutationPromise.catch(() => undefined);
 
-        // Max retries is 3
-        for (let i = 0; i < 3; i++) {
-           await vi.runAllTimersAsync();
-        }
-
-        await mutationPromise;
-      } catch (_e) {
-        // Expected error
+      // Max retries is 3
+      for (let i = 0; i < 3; i++) {
+        await vi.runAllTimersAsync();
       }
+
+      await handledPromise;
     });
 
     expect(mockInsert).toHaveBeenCalledTimes(3);
     expect(result.current.queueStatus).toBe('error');
     expect(result.current.queueLength).toBe(1);
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      variant: 'destructive',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: 'destructive',
+      }),
+    );
   });
 
   it('should process batch of queued messages when a new message succeeds', async () => {
@@ -171,15 +172,14 @@ describe('useMessageQueue', () => {
 
     // 1. Get a message into the queue
     await act(async () => {
-      try {
-        const p = result.current.messageMutation.mutateAsync({
-          text: 'Queued',
-          sender: 'player',
-          context: { location: 'Cave' }
-        } as any);
-        await vi.runAllTimersAsync();
-        await p;
-      } catch (_e) { /* expected */ }
+      const p = result.current.messageMutation.mutateAsync({
+        text: 'Queued',
+        sender: 'player',
+        context: { location: 'Cave' },
+      } as any);
+      const handled = p.catch(() => undefined);
+      await vi.runAllTimersAsync();
+      await handled;
     });
 
     expect(result.current.queueLength).toBe(1);
@@ -187,19 +187,24 @@ describe('useMessageQueue', () => {
     // 2. Send a new message that succeeds
     (uuidv4 as any).mockReturnValue('new-uuid');
     await act(async () => {
-      await result.current.messageMutation.mutateAsync({ text: 'Success', sender: 'player' } as any);
+      await result.current.messageMutation.mutateAsync({
+        text: 'Success',
+        sender: 'player',
+      } as any);
     });
 
     // 5 calls: 3 for failed message, 1 for successful message, 1 for batch
     expect(mockInsert).toHaveBeenCalledTimes(5);
     expect(result.current.queueLength).toBe(0);
     // Verify batch insert had the context
-    expect(mockInsert).toHaveBeenLastCalledWith(expect.arrayContaining([
-      expect.objectContaining({
-        message: 'Queued',
-        context: expect.objectContaining({ location: 'Cave' })
-      })
-    ]));
+    expect(mockInsert).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Queued',
+          context: expect.objectContaining({ location: 'Cave' }),
+        }),
+      ]),
+    );
   });
 
   it('should manually retry queued messages', async () => {
@@ -214,11 +219,13 @@ describe('useMessageQueue', () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
 
     await act(async () => {
-      try {
-        const p = result.current.messageMutation.mutateAsync({ text: 'Queued', sender: 'player' } as any);
-        await vi.runAllTimersAsync();
-        await p;
-      } catch (_e) { /* expected */ }
+      const p = result.current.messageMutation.mutateAsync({
+        text: 'Queued',
+        sender: 'player',
+      } as any);
+      const handled = p.catch(() => undefined);
+      await vi.runAllTimersAsync();
+      await handled;
     });
 
     expect(result.current.queueLength).toBe(1);
@@ -244,11 +251,13 @@ describe('useMessageQueue', () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
 
     await act(async () => {
-      try {
-        const p = result.current.messageMutation.mutateAsync({ text: 'Queued', sender: 'player' } as any);
-        await vi.runAllTimersAsync();
-        await p;
-      } catch (_e) { /* expected */ }
+      const p = result.current.messageMutation.mutateAsync({
+        text: 'Queued',
+        sender: 'player',
+      } as any);
+      const handled = p.catch(() => undefined);
+      await vi.runAllTimersAsync();
+      await handled;
     });
 
     expect(result.current.queueLength).toBe(1);
@@ -260,9 +269,11 @@ describe('useMessageQueue', () => {
 
     expect(mockInsert).toHaveBeenCalledTimes(4);
     expect(result.current.queueLength).toBe(1); // Still 1 because it failed
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Error',
-      description: 'Failed to process message batch. Will retry later.',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+        description: 'Failed to process message batch. Will retry later.',
+      }),
+    );
   });
 });

@@ -16,6 +16,53 @@ import { IndexedDBService } from '../storage/IndexedDBService';
 import { MessageType, MessagePriority, QueuedMessage } from '../../types';
 import { StoredMessage, QueueState } from '../storage/types';
 
+const { mockStorage, resetMockStorage } = vi.hoisted(() => {
+  const mockMessages: Map<string, StoredMessage> = new Map();
+  let mockQueueState: QueueState | null = null;
+
+  const storage = {
+    storeMessage: vi.fn(async (msg: StoredMessage) => {
+      mockMessages.set(msg.id, msg);
+      return Promise.resolve();
+    }),
+    updateMessageStatus: vi.fn(async (id: string, status: string) => {
+      const msg = mockMessages.get(id);
+      if (msg) {
+        msg.status = status as StoredMessage['status'];
+      }
+      return Promise.resolve();
+    }),
+    getPendingMessages: vi.fn(async () => {
+      const pending: StoredMessage[] = [];
+      mockMessages.forEach((msg) => {
+        if (msg.status === 'pending') {
+          pending.push(msg);
+        }
+      });
+      return Promise.resolve(pending);
+    }),
+    saveQueueState: vi.fn(async (state: QueueState) => {
+      mockQueueState = state;
+      return Promise.resolve();
+    }),
+    getQueueState: vi.fn(async () => Promise.resolve(mockQueueState)),
+    clearOldMessages: vi.fn(async () => Promise.resolve(0)),
+    __clearMockData: () => {
+      mockMessages.clear();
+      mockQueueState = null;
+    },
+    __getMockMessages: () => mockMessages,
+    __getMockQueueState: () => mockQueueState,
+  };
+
+  return {
+    mockStorage: storage,
+    resetMockStorage: () => {
+      storage.__clearMockData();
+    },
+  };
+});
+
 // Mock dependencies
 vi.mock('../../../../lib/logger', () => ({
   logger: {
@@ -27,50 +74,9 @@ vi.mock('../../../../lib/logger', () => ({
 
 // Mock IndexedDBService
 vi.mock('../storage/IndexedDBService', () => {
-  const mockMessages: Map<string, StoredMessage> = new Map();
-  let mockQueueState: QueueState | null = null;
-
   return {
     IndexedDBService: {
-      getInstance: vi.fn(() => ({
-        storeMessage: vi.fn(async (msg: StoredMessage) => {
-          mockMessages.set(msg.id, msg);
-          return Promise.resolve();
-        }),
-        updateMessageStatus: vi.fn(async (id: string, status: string) => {
-          const msg = mockMessages.get(id);
-          if (msg) {
-            msg.status = status as StoredMessage['status'];
-          }
-          return Promise.resolve();
-        }),
-        getPendingMessages: vi.fn(async () => {
-          const pending: StoredMessage[] = [];
-          mockMessages.forEach((msg) => {
-            if (msg.status === 'pending') {
-              pending.push(msg);
-            }
-          });
-          return Promise.resolve(pending);
-        }),
-        saveQueueState: vi.fn(async (state: QueueState) => {
-          mockQueueState = state;
-          return Promise.resolve();
-        }),
-        getQueueState: vi.fn(async () => {
-          return Promise.resolve(mockQueueState);
-        }),
-        clearOldMessages: vi.fn(async () => {
-          return Promise.resolve(0);
-        }),
-        // Helpers for testing
-        __clearMockData: () => {
-          mockMessages.clear();
-          mockQueueState = null;
-        },
-        __getMockMessages: () => mockMessages,
-        __getMockQueueState: () => mockQueueState,
-      })),
+      getInstance: vi.fn(() => mockStorage),
     },
   };
 });
@@ -111,17 +117,18 @@ describe('MessagePersistenceService', () => {
   });
 
   beforeEach(() => {
+    vi.clearAllMocks();
     // Reset singleton
     // @ts-ignore
     MessagePersistenceService.instance = undefined;
 
+    resetMockStorage();
     service = MessagePersistenceService.getInstance();
     mockStorage = IndexedDBService.getInstance();
-    mockStorage.__clearMockData?.();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Singleton Pattern', () => {

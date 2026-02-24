@@ -2,30 +2,65 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryService } from '../MemoryService';
 import * as featureFlags from '@/config/featureFlags';
 import type { Memory, MemoryType } from '@/types/memory';
+import { llmApiClient } from '@/services/llm-api-client';
+
+const {
+  mockInsert: baseMockInsert,
+  mockUpdate: baseMockUpdate,
+  mockRpc: baseMockRpc,
+  mockFunctionsInvoke: baseMockFunctionsInvoke,
+  setQueryResult,
+  mockFrom,
+} = vi.hoisted(() => {
+  let queryResult: { data: any; error: any } = { data: [], error: null };
+
+  const insert = vi.fn(async () => ({ data: null, error: null }));
+  const update = vi.fn(async () => ({ data: null, error: null }));
+  const rpc = vi.fn();
+  const functionsInvoke = vi.fn();
+
+  const createQueryBuilder = () => {
+    const builder: Record<string, any> = {};
+    const chainMethods = ['select', 'eq', 'neq', 'gte', 'lte', 'order', 'limit', 'delete'];
+
+    chainMethods.forEach((method) => {
+      builder[method] = vi.fn(() => builder);
+    });
+
+    builder.single = vi.fn(async () => queryResult);
+    builder.insert = insert;
+    builder.update = vi.fn((...args: any[]) => {
+      update(...args);
+      return builder;
+    });
+    builder.then = (onFulfilled: any, onRejected: any) =>
+      Promise.resolve(queryResult).then(onFulfilled, onRejected);
+    builder.catch = (onRejected: any) => Promise.resolve(queryResult).catch(onRejected);
+    builder.finally = (onFinally: any) => Promise.resolve(queryResult).finally(onFinally);
+
+    return builder;
+  };
+
+  return {
+    mockInsert: insert,
+    mockUpdate: update,
+    mockRpc: rpc,
+    mockFunctionsInvoke: functionsInvoke,
+    setQueryResult: (result: { data: any; error: any }) => {
+      queryResult = result;
+    },
+    mockFrom: vi.fn(() => createQueryBuilder()),
+  };
+});
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => {
-  const mockInsert = vi.fn();
-  const mockSelect = vi.fn();
-  const mockUpdate = vi.fn();
-  const mockRpc = vi.fn();
-  const mockFunctionsInvoke = vi.fn();
-
   return {
     supabase: {
-      from: vi.fn(() => ({
-        select: mockSelect.mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        single: vi.fn().mockReturnThis(),
-        insert: mockInsert,
-        update: mockUpdate.mockReturnThis(),
-      })),
-      rpc: mockRpc,
+      from: mockFrom,
+      rpc: baseMockRpc,
       functions: {
-        invoke: mockFunctionsInvoke,
+        invoke: baseMockFunctionsInvoke,
       },
     },
   };
@@ -81,12 +116,8 @@ vi.mock('@/services/llm-api-client', () => ({
   },
 }));
 
-// Import after mocking
-import { supabase } from '@/integrations/supabase/client';
-
 describe('Memory Service Integration', () => {
   let mockInsert: any;
-  let mockSelect: any;
   let mockUpdate: any;
   let mockRpc: any;
   let mockFunctionsInvoke: any;
@@ -95,26 +126,26 @@ describe('Memory Service Integration', () => {
     vi.clearAllMocks();
     vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
 
-    // Get references to the mocked functions
-    mockInsert = vi.fn();
-    mockSelect = vi.fn();
-    mockUpdate = vi.fn();
-    mockRpc = vi.fn();
-    mockFunctionsInvoke = vi.fn();
-
-    vi.mocked(supabase.from).mockReturnValue({
-      select: mockSelect.mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      single: vi.fn().mockReturnThis(),
-      insert: mockInsert,
-      update: mockUpdate.mockReturnThis(),
-    } as any);
-
-    vi.mocked(supabase.rpc).mockImplementation(mockRpc as any);
-    vi.mocked(supabase.functions.invoke).mockImplementation(mockFunctionsInvoke as any);
+    mockInsert = baseMockInsert;
+    mockUpdate = baseMockUpdate;
+    mockRpc = baseMockRpc;
+    mockFunctionsInvoke = baseMockFunctionsInvoke;
+    setQueryResult({ data: [], error: null });
+    vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
+      JSON.stringify({
+        memories: [
+          {
+            session_id: 'session-123',
+            type: 'quest',
+            category: 'main_quest',
+            content: 'Find the Dragon Scroll',
+            importance: 5,
+            emotional_tone: 'intense',
+            metadata: {},
+          },
+        ],
+      }),
+    );
   });
 
   afterEach(() => {
@@ -455,7 +486,7 @@ describe('Memory Service Integration', () => {
         },
       ];
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemories,
         error: null,
       });
@@ -480,7 +511,7 @@ describe('Memory Service Integration', () => {
         },
       ];
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemories,
         error: null,
       });
@@ -507,7 +538,7 @@ describe('Memory Service Integration', () => {
         },
       ];
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: recentMemories,
         error: null,
       });
@@ -533,7 +564,7 @@ describe('Memory Service Integration', () => {
         },
       ];
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemories,
         error: null,
       });
@@ -626,7 +657,7 @@ describe('Memory Service Integration', () => {
         narrative_weight: 5,
       };
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemory,
         error: null,
       });
@@ -651,7 +682,7 @@ describe('Memory Service Integration', () => {
         narrative_weight: 10,
       };
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemory,
         error: null,
       });
@@ -670,7 +701,7 @@ describe('Memory Service Integration', () => {
     });
 
     it('should handle non-existent memory gracefully', async () => {
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: null,
         error: null,
       });
@@ -708,7 +739,7 @@ describe('Memory Service Integration', () => {
         },
       ];
 
-      mockSelect.mockResolvedValue({
+      setQueryResult({
         data: mockMemories,
         error: null,
       });
