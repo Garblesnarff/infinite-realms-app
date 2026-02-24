@@ -65,32 +65,26 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
           clientId: authConfig.clientId,
         });
 
-      // Create or update user in database
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.id, user.id),
-      });
-
-      if (!existingUser) {
-        // Create new user with free plan by default
-        await db.insert(users).values({
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
+      // This reduces database round-trips from 2 down to 1 for every authentication callback.
+      await db
+        .insert(users)
+        .values({
           id: user.id,
           email: user.email,
           plan: 'free',
           firstName: user.firstName || null,
           lastName: user.lastName || null,
-        });
-      } else {
-        // Update existing user info
-        await db
-          .update(users)
-          .set({
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
             email: user.email,
             firstName: user.firstName || null,
             lastName: user.lastName || null,
             updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id));
-      }
+          },
+        });
 
       // Redirect to frontend with tokens in URL hash
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
