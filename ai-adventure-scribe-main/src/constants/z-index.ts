@@ -28,6 +28,9 @@
  *
  * // AVOID - Tailwind arbitrary classes with constants are less reliable in this project
  * <div className={`fixed z-[${Z_INDEX.MODAL}]`}>Modal Content</div>
+ *
+ * // Note: The above AVOID pattern is being phased out in core UI components
+ * // to ensure consistent layering across all browsers and build environments.
  * ```
  *
  * Note: CSS files cannot import TypeScript constants.
@@ -69,6 +72,9 @@ export const Z_INDEX = {
 
   // Popovers and context menus
   POPOVER: 70,
+
+  // Context menus (alias for POPOVER)
+  CONTEXT_MENU: 70,
 
   // Tooltips
   TOOLTIP: 80,

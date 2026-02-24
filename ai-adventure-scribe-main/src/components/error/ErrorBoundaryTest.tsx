@@ -34,7 +34,8 @@ export const ErrorBoundaryTest: React.FC = () => {
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-[${Z_INDEX.LOADING_OVERLAY}] p-4 bg-card border-2 border-destructive rounded-lg shadow-lg`}
+      className="fixed bottom-4 right-4 p-4 bg-card border-2 border-destructive rounded-lg shadow-lg"
+      style={{ zIndex: Z_INDEX.LOADING_OVERLAY }}
     >
       <div className="space-y-2">
         <p className="text-xs font-semibold text-destructive">Error Boundary Test</p>
@@ -85,7 +86,8 @@ export const AsyncErrorBoundaryTest: React.FC = () => {
 
   return (
     <div
-      className={`fixed bottom-4 left-4 z-[${Z_INDEX.LOADING_OVERLAY}] p-4 bg-card border-2 border-yellow-500 rounded-lg shadow-lg`}
+      className="fixed bottom-4 left-4 p-4 bg-card border-2 border-yellow-500 rounded-lg shadow-lg"
+      style={{ zIndex: Z_INDEX.LOADING_OVERLAY }}
     >
       <div className="space-y-2">
         <p className="text-xs font-semibold text-yellow-600">Async Error Test</p>

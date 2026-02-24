@@ -93,3 +93,7 @@
 ## 2026-01-27 - Campaign Creation Accessibility and Z-Index Standardization
 **Learning:** Complex form components like `CampaignParameters` often contain multiple sections with `RadioGroup` controls that lack proper semantic linkage to their titles. Icon-only view toggles and search inputs in these components are frequently missing accessible labels and state feedback. Standardizing z-index via `Z_INDEX` constants prevents visual layering bugs in card-based UIs.
 **Action:** Link `RadioGroup` to section titles using `useId` and `aria-labelledby`. Add `aria-label`, `aria-pressed`, and `title` to all icon-only buttons. Migrate all hardcoded `z-index` classes to inline styles with `Z_INDEX` constants.
+
+## 2026-01-28 - Core UI Z-Index Standardization and Type Safety
+**Learning:** Tailwind JIT arbitrary values for z-index (e.g., `z-[${Z_INDEX.POPOVER}]`) are unreliable and can fail to generate CSS classes, causing overlays to hide behind other elements. Centralizing all overlay z-indices in `src/constants/z-index.ts` and using explicit `style={{ zIndex: Z_INDEX.CONSTANT }}` ensures reliable layering. Missing constants like `CONTEXT_MENU` lead to TypeScript errors in UI components.
+**Action:** Migrate all Radix-based UI components (Popover, DropdownMenu, Toast, Tooltip, ContextMenu) to use inline styles for z-index. Ensure all semantic overlay types have corresponding entries in `Z_INDEX`.
