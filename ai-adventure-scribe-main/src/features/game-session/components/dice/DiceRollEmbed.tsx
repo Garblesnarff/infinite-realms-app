@@ -2,7 +2,7 @@ import { OrbitControls, Text } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Howl } from 'howler';
-import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Play, Volume2 } from 'lucide-react';
+import { Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Play, Volume2, AlertCircle } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 import type * as THREE from 'three';
@@ -163,6 +163,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const [result, setResult] = useState<DiceRollResult | null>(null);
   const [isRolling, setIsRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
+  const [rollError, setRollError] = useState<string | null>(null);
   const [contextLost, setContextLost] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0);
   const diceSound = useRef<Howl | null>(null);
@@ -256,6 +257,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
 
     setIsRolling(true);
     setHasRolled(true);
+    setRollError(null);
 
     // Play sound effect
     if (diceSound.current) {
@@ -270,20 +272,29 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     // Add rolling animation delay
     setTimeout(
       () => {
-        const rollResult = DiceEngine.roll(expression, {
-          purpose,
-          advantage,
-          disadvantage,
-        });
-        setResult(rollResult);
-        setIsRolling(false);
+        try {
+          const rollResult = DiceEngine.roll(expression, {
+            purpose,
+            advantage,
+            disadvantage,
+          });
+          setResult(rollResult);
+          setIsRolling(false);
 
-        // Show result for 2 seconds before calling callback
-        setTimeout(() => {
-          if (onRoll) {
-            onRoll(rollResult);
-          }
-        }, 2000);
+          // Show result for 2 seconds before calling callback
+          setTimeout(() => {
+            if (onRoll) {
+              onRoll(rollResult);
+            }
+          }, 2000);
+        } catch (err) {
+          logger.error('DiceRollEmbed: failed to roll expression:', expression, err);
+          setIsRolling(false);
+          setHasRolled(false);
+          setRollError(
+            `Unable to parse dice formula "${expression}". Please enter your result manually.`,
+          );
+        }
       },
       showAnimation ? 1500 : 100,
     );
@@ -358,6 +369,14 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
             </Button>
           )}
         </div>
+
+        {/* Roll error — shown when DiceEngine fails (e.g. symbolic formula not resolved) */}
+        {rollError && (
+          <div className="flex items-center gap-2 text-xs text-red-600 mb-2">
+            <AlertCircle className="w-3 h-3 flex-shrink-0" />
+            <span>{rollError}</span>
+          </div>
+        )}
 
         {/* 3D Dice Animation (feature-flagged) */}
         <AnimatePresence>

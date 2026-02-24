@@ -41,6 +41,11 @@ interface DiceRollRequestProps {
   className?: string;
 }
 
+/** Returns true when the formula is safe to pass to the dice engine (no unresolved symbolic modifiers). */
+function isNumericFormula(formula: string): boolean {
+  return !/\b(cha|int|wis|str|dex|con|mod|modifier)\b/i.test(formula);
+}
+
 /**
  * Interactive Dice Roll Request Component
  * Shows when DM requests a roll, allows player to roll or input manually
@@ -182,6 +187,18 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
       };
     }
   }, [character, request]);
+
+  // Derived: null when formula still contains symbolic ability names (not yet resolved to numeric)
+  const resolvedFormula = isNumericFormula(rollCalculation.formula)
+    ? rollCalculation.formula
+    : null;
+
+  // If character is loaded but the formula could not be resolved to numeric, fall back to manual entry
+  React.useEffect(() => {
+    if (character && resolvedFormula === null) {
+      setManualMode(true);
+    }
+  }, [character, resolvedFormula]);
 
   const getTypeColor = () => {
     switch (request.type) {
@@ -374,11 +391,17 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
         {/* Roll Actions */}
         {!manualMode ? (
           <div className="space-y-3">
-            {showDiceAnimation ? (
+            {/* Character not yet loaded — formula cannot be resolved */}
+            {!character && resolvedFormula === null ? (
+              <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-400" />
+                Loading character data…
+              </div>
+            ) : showDiceAnimation && resolvedFormula ? (
               // Show animated dice rolling
               <div className="bg-slate-50 rounded-lg p-4 border-2 border-dashed border-slate-200">
                 <DiceRollEmbed
-                  expression={rollCalculation.formula}
+                  expression={resolvedFormula}
                   purpose={request.purpose}
                   onRoll={handleDiceRollComplete}
                   autoRoll={true}
@@ -392,7 +415,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
               <>
                 <Button
                   onClick={handleAutoRoll}
-                  disabled={isRolling}
+                  disabled={isRolling || !resolvedFormula}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
                   size="lg"
                 >
