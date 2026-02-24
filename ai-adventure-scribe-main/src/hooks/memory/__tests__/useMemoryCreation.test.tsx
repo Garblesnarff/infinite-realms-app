@@ -153,7 +153,9 @@ describe('useMemoryCreation', () => {
       mockFrom.mockReturnValue({
         insert: insertSpy,
         select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'mem-3', ...mockMemory, importance: 5 }, error: null }),
+        single: vi
+          .fn()
+          .mockResolvedValue({ data: { id: 'mem-3', ...mockMemory, importance: 5 }, error: null }),
       } as any);
 
       (supabase.functions.invoke as any).mockResolvedValue({
@@ -195,7 +197,10 @@ describe('useMemoryCreation', () => {
       const { result } = renderHook(() => useMemoryCreation(sessionId), { wrapper });
 
       await act(async () => {
-        await (result.current as any).createMemory({ type: 'invalid-type', content: 'Valid content' });
+        await (result.current as any).createMemory({
+          type: 'invalid-type',
+          content: 'Valid content',
+        });
       });
 
       expect(mockToast).toHaveBeenCalledWith(
@@ -208,8 +213,10 @@ describe('useMemoryCreation', () => {
 
   describe('extractMemories', () => {
     it('should filter short segments and duplicates, and prioritize by importance', async () => {
-      const longContent1 = 'This is a long enough segment that should be processed correctly and it has more than fifty characters.';
-      const longContent2 = 'Another long enough segment that is different from the previous one and also has high importance.';
+      const longContent1 =
+        'This is a long enough segment that should be processed correctly and it has more than fifty characters.';
+      const longContent2 =
+        'Another long enough segment that is different from the previous one and also has high importance.';
 
       const mockSegments = [
         { content: 'Too short', type: 'general', importance: 1 }, // < 50 chars
@@ -247,7 +254,12 @@ describe('useMemoryCreation', () => {
 
     it('should skip segments with invalid types', async () => {
       const mockSegments = [
-        { content: 'Valid length segment that has an invalid type assigned to it by the classifier.', type: 'invalid' as any, importance: 5 },
+        {
+          content:
+            'Valid length segment that has an invalid type assigned to it by the classifier.',
+          type: 'invalid' as any,
+          importance: 5,
+        },
       ];
 
       (processContent as any).mockReturnValue(mockSegments);
@@ -268,7 +280,9 @@ describe('useMemoryCreation', () => {
 
       const { result } = renderHook(() => useMemoryCreation(sessionId), { wrapper });
 
-      await expect(result.current.extractMemories('Some content')).rejects.toThrow('Extraction failed');
+      await expect(result.current.extractMemories('Some content')).rejects.toThrow(
+        'Extraction failed',
+      );
     });
   });
 

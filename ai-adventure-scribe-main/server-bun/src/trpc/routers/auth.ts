@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -45,18 +45,18 @@ export const authRouter = router({
     .input(
       z.object({
         code: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Authenticate with WorkOS using the authorization code
-      const { user, accessToken, refreshToken } =
-        await workos.userManagement.authenticateWithCode({
-          code: input.code,
-          clientId: authConfig.clientId,
-        });
+      const { user, accessToken, refreshToken } = await workos.userManagement.authenticateWithCode({
+        code: input.code,
+        clientId: authConfig.clientId,
+      });
 
-      // ⚡ Bolt: Optimized to use a single atomic upsert with returning() instead of 3 sequential queries.
-      // This handles both new users and profile updates in one database round-trip.
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert-then-find' with a single atomic UPSERT.
+      // This reduces database round-trips from 2-3 down to 1 for every authentication callback.
+      // Explicitly return only the plan column to avoid over-fetching.
       const [userData] = await db
         .insert(users)
         .values({
@@ -75,7 +75,9 @@ export const authRouter = router({
             updatedAt: new Date(),
           },
         })
-        .returning();
+        .returning({
+          plan: users.plan,
+        });
 
       return {
         user: {
@@ -126,7 +128,7 @@ export const authRouter = router({
     .input(
       z.object({
         refreshToken: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const response = await workos.userManagement.authenticateWithRefreshToken({
@@ -151,15 +153,18 @@ export const authRouter = router({
         email: z.string().email(),
         firstName: z.string().optional(),
         lastName: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       if (input.userId !== ctx.user.userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Forbidden' });
       }
-      // ⚡ Bolt: Optimized to use a single atomic upsert instead of 2 sequential queries.
-      // This significantly reduces login-path latency by consolidating ownership and profile sync.
-      const result = await db
+
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
+      // This reduces database round-trips from 2 down to 1.
+      // We use the PostgreSQL 'xmax' system column to determine if a row was inserted (0) or updated (non-zero).
+      // This preserves the API contract for 'created' while maintaining O(1) performance.
+      const [result] = await db
         .insert(users)
         .values({
           id: input.userId,
@@ -177,12 +182,10 @@ export const authRouter = router({
             updatedAt: new Date(),
           },
         })
-        .returning();
+        .returning({
+          created: sql<boolean>`(xmax = 0)`,
+        });
 
-      // We determine if it was created based on the updated_at being same as created_at (roughly)
-      // or we can just return success: true. The previous return also had created: true/false.
-      // Since created_at/updated_at are defaults, we can compare them if needed,
-      // but the UI usually doesn't care.
-      return { success: true, created: result.length > 0 };
+      return { success: true, created: result?.created ?? false };
     }),
 });

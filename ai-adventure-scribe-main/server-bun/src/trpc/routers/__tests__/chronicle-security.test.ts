@@ -19,7 +19,7 @@ vi.mock('../../../../../db/client', () => {
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     // Make it thenable to support await
-    then: vi.fn(function(this: any, resolve: any) {
+    then: vi.fn(function (this: any, resolve: any) {
       return Promise.resolve(this._results || []).then(resolve);
     }),
   };
@@ -59,7 +59,7 @@ vi.mock('../../services/chronicle-generator.js', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
     and: vi.fn((...args) => ({ type: 'and', args })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
@@ -90,7 +90,7 @@ describe('Chronicles Security', () => {
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         _results: [],
-        then: vi.fn(function(this: any, resolve: any) {
+        then: vi.fn(function (this: any, resolve: any) {
           return Promise.resolve(this._results || []).then(resolve);
         }),
       };
@@ -126,10 +126,10 @@ describe('Chronicles Security', () => {
               type: 'or',
               args: expect.arrayContaining([
                 expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-              ])
-            })
-          ])
-        })
+              ]),
+            }),
+          ]),
+        }),
       );
     });
 
@@ -152,7 +152,7 @@ describe('Chronicles Security', () => {
       mockCtx.db.select.mockReturnValue(qb);
 
       let queryCount = 0;
-      qb.then = vi.fn(function(this: any, resolve: any) {
+      qb.then = vi.fn(function (this: any, resolve: any) {
         queryCount++;
         if (queryCount === 1) {
           // verifySessionOwnership call
@@ -172,8 +172,8 @@ describe('Chronicles Security', () => {
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockSessionId }),
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-          ])
-        })
+          ]),
+        }),
       );
     });
 
@@ -184,7 +184,7 @@ describe('Chronicles Security', () => {
       mockCtx.db.select.mockReturnValue(qb);
 
       let queryCount = 0;
-      qb.then = vi.fn(function(this: any, resolve: any) {
+      qb.then = vi.fn(function (this: any, resolve: any) {
         queryCount++;
         if (queryCount === 1) {
           // verifySessionOwnership call
@@ -204,14 +204,15 @@ describe('Chronicles Security', () => {
       await caller.generate({ sessionId: mockSessionId });
 
       // The second select query's where call should be the check for existing chronicles
-      expect(qb.where).toHaveBeenNthCalledWith(2,
+      expect(qb.where).toHaveBeenNthCalledWith(
+        2,
         expect.objectContaining({
           type: 'and',
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockSessionId }),
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-          ])
-        })
+          ]),
+        }),
       );
     });
 
@@ -223,7 +224,7 @@ describe('Chronicles Security', () => {
 
       const mockChronicleId = 'existing-chronicle-id';
       let queryCount = 0;
-      qb.then = vi.fn(function(this: any, resolve: any) {
+      qb.then = vi.fn(function (this: any, resolve: any) {
         queryCount++;
         if (queryCount === 1) {
           // verifySessionOwnership call
@@ -246,8 +247,8 @@ describe('Chronicles Security', () => {
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockChronicleId }),
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-          ])
-        })
+          ]),
+        }),
       );
     });
 
@@ -267,8 +268,8 @@ describe('Chronicles Security', () => {
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockChronicleId }),
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-          ])
-        })
+          ]),
+        }),
       );
     });
 
@@ -279,18 +280,20 @@ describe('Chronicles Security', () => {
       const qb = mockCtx.db.select();
       mockCtx.db.select.mockReturnValue(qb);
 
-      qb.then = vi.fn(function(this: any, resolve: any) {
+      qb.then = vi.fn(function (this: any, resolve: any) {
         // Just mock the first call (verifySessionOwnership) for simplicity
-        return Promise.resolve([{
-          sessionId: mockSessionId,
-          campaignId: mockCampaignId,
-          sessionNumber: 2
-        }]).then(resolve);
+        return Promise.resolve([
+          {
+            sessionId: mockSessionId,
+            campaignId: mockCampaignId,
+            sessionNumber: 2,
+          },
+        ]).then(resolve);
       });
 
       await caller.getPreviouslyOn({
         newSessionId: mockSessionId,
-        campaignId: mockCampaignId
+        campaignId: mockCampaignId,
       });
 
       // Verify the first query (verifySessionOwnership) has ownership check
@@ -303,10 +306,10 @@ describe('Chronicles Security', () => {
               type: 'or',
               args: expect.arrayContaining([
                 expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
-              ])
-            })
-          ])
-        })
+              ]),
+            }),
+          ]),
+        }),
       );
     });
 
@@ -317,11 +320,13 @@ describe('Chronicles Security', () => {
       const qb = mockCtx.db.select();
       mockCtx.db.select.mockReturnValue(qb);
 
-      qb.then = vi.fn(function(this: any, resolve: any) {
-        return Promise.resolve([{
-          chapterTitle: 'Shared Title',
-          sessionId: mockSessionId
-        }]).then(resolve);
+      qb.then = vi.fn(function (this: any, resolve: any) {
+        return Promise.resolve([
+          {
+            chapterTitle: 'Shared Title',
+            sessionId: mockSessionId,
+          },
+        ]).then(resolve);
       });
 
       await caller.getByShareToken({ token: mockToken });
@@ -332,8 +337,8 @@ describe('Chronicles Security', () => {
           type: 'and',
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockToken }),
-          ])
-        })
+          ]),
+        }),
       );
     });
   });
