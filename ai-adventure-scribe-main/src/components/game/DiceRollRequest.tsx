@@ -141,8 +141,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
         // Determine roll type and calculate
         let rollType: 'attack' | 'save' | 'check' | 'skill' | 'initiative' = 'check';
 
-        if (request.type === 'skill_check' || skillName) {
+        if (skillName) {
           rollType = 'skill';
+        } else if (request.type === 'skill_check') {
+          // skill_check but no specific skill detected → plain ability check (won't throw)
+          rollType = 'check';
         } else if (request.type === 'save') {
           rollType = 'save';
         } else if (request.type === 'attack') {
@@ -170,12 +173,9 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       ? rollCalculation.formula
       : null;
 
-    // If character is loaded but formula could not be resolved, fall back to manual entry
-    React.useEffect(() => {
-      if (character && resolvedFormula === null) {
-        setManualMode(true);
-      }
-    }, [character, resolvedFormula]);
+    // Synchronous fallback: character loaded but formula still symbolic → show manual entry immediately.
+    // This replaces the previous useEffect approach which was async and could miss renders under React.memo.
+    const effectiveManualMode = manualMode || (!!character && resolvedFormula === null);
 
     const getTypeColor = () => {
       switch (request.type) {
@@ -365,7 +365,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
           </div>
 
           {/* Roll Actions */}
-          {!manualMode ? (
+          {!effectiveManualMode ? (
             <div className="space-y-3">
               {/* Character not yet loaded — formula cannot be resolved */}
               {!character && resolvedFormula === null ? (
@@ -387,11 +387,11 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   />
                 </div>
               ) : (
-                // Show roll dice button
+                // Show roll dice button (resolvedFormula is always non-null here)
                 <>
                   <Button
                     onClick={handleAutoRoll}
-                    disabled={isRolling || !resolvedFormula}
+                    disabled={isRolling}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     size="lg"
                   >
@@ -428,7 +428,9 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
             <div className="space-y-3">
               <div>
                 <label htmlFor={manualInputId} className="text-sm text-slate-600 mb-1 block">
-                  Enter your roll result:
+                  {resolvedFormula === null && !manualMode
+                    ? 'Roll formula could not be resolved — enter your dice result:'
+                    : 'Enter your roll result:'}
                 </label>
                 <Input
                   id={manualInputId}
@@ -450,23 +452,31 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 >
                   Submit
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setManualMode(false);
-                    setManualResult('');
-                  }}
-                  className="flex-1"
-                >
-                  Back to Roll
-                </Button>
+                {/* Only show "Back to Roll" when user voluntarily entered manual mode */}
+                {manualMode && resolvedFormula !== null && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setManualMode(false);
+                      setManualResult('');
+                    }}
+                    className="flex-1"
+                  >
+                    Back to Roll
+                  </Button>
+                )}
+                {onCancel && !manualMode && (
+                  <Button variant="ghost" onClick={onCancel} className="flex-1 text-xs" size="sm">
+                    Cancel
+                  </Button>
+                )}
               </div>
             </div>
           )}
 
           {/* Hint Text */}
           <p className="text-xs text-slate-500 mt-3 text-center">
-            {manualMode
+            {effectiveManualMode
               ? 'Enter the total result of your dice roll'
               : "Click 'Roll Dice' to automatically roll, or 'Enter Manually' if you prefer to roll physical dice"}
           </p>

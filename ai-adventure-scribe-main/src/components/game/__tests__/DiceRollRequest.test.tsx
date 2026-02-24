@@ -404,9 +404,38 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
-    // Manual mode should activate — input visible, Roll Dice button absent
-    expect(screen.getByLabelText(/enter your roll result/i)).toBeInTheDocument();
+    // effectiveManualMode is true synchronously — forced fallback label shown
+    expect(screen.getByLabelText(/roll formula could not be resolved/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /roll dice/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back to roll/i })).not.toBeInTheDocument();
+  });
+
+  it('skill_check type without detected skill name falls back to ability check (no throw)', () => {
+    (calculateRollWithBreakdown as any).mockReturnValue({
+      formula: '1d20+3',
+      breakdown: ['1d20', 'CHA +3'],
+      totalModifier: 3,
+      isProficient: false,
+    });
+
+    const request = {
+      type: 'skill_check' as const,
+      formula: '1d20+cha',
+      purpose: 'A general charisma test',
+    };
+    render(
+      <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
+    );
+
+    expect(screen.getByRole('button', { name: /roll dice/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/roll formula could not be resolved/i)).not.toBeInTheDocument();
+    // Must be called with 'check' rollType (not 'skill' which would throw with no skillName)
+    expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
+      mockCharacter,
+      'check',
+      'charisma',
+      undefined,
+    );
   });
 
   it('1d20+int — resolved numeric formula enables Roll Dice button', () => {
