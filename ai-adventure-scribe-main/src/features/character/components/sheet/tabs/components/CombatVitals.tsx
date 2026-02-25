@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { getHPColor } from '@/utils/hp-utils';
 
 interface CombatVitalsProps {
   character: Character;
@@ -84,7 +85,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
           <Progress
             value={(combatState.currentHp / maxHp) * 100}
             className="h-3"
-            indicatorClassName="bg-red-500"
+            indicatorClassName={getHPColor((combatState.currentHp / maxHp) * 100)}
             aria-label={`${character.name}'s hit points`}
           />
 
