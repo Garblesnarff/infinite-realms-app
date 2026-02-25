@@ -180,8 +180,8 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                         variant="secondary"
                         className="text-xs py-0.5 bg-purple-100 text-purple-800"
                       >
-                        {vision.type.charAt(0).toUpperCase() + vision.type.slice(1)} (
-                        {vision.range} ft)
+                        {vision.type.charAt(0).toUpperCase() + vision.type.slice(1)} ({vision.range}{' '}
+                        ft)
                       </Badge>
                     ))}
                   </div>
@@ -321,7 +321,9 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                           ? 'bg-red-500 border-red-500'
                           : 'border-red-500 hover:bg-red-500/20'
                       }`}
-                      onClick={() => updateDeathSave('failure', i > combatState.deathSaves.failures)}
+                      onClick={() =>
+                        updateDeathSave('failure', i > combatState.deathSaves.failures)
+                      }
                       aria-label={`Death save failure ${i}`}
                       aria-pressed={i <= combatState.deathSaves.failures}
                       title={`Mark death save failure ${i}`}

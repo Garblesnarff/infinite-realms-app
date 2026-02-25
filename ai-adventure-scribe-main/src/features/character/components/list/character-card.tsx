@@ -1,4 +1,4 @@
-import { ArrowRight, Play, Trash2, User, Sword, Shield, Star, AlertTriangle } from 'lucide-react';
+import { Play, Trash2, Sword, Shield, Star, AlertTriangle } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -129,28 +129,6 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
       setShowDeleteDialog(false);
     }
   }, [character.id, toast, onDelete, user?.id]);
-
-  // Generate avatar background color based on name
-  const getAvatarColor = useMemo(
-    () => (name: string) => {
-      const colors = [
-        'bg-infinite-purple',
-        'bg-infinite-gold',
-        'bg-infinite-teal',
-        'bg-destructive',
-        'bg-secondary',
-      ];
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return colors[Math.abs(hash) % colors.length];
-    },
-    [],
-  );
-
-  // Get first initial
-  const getInitial = useMemo(() => (name: string) => name.charAt(0).toUpperCase(), []);
 
   // Calculate ability score modifier
   const getModifier = (score: number) => {

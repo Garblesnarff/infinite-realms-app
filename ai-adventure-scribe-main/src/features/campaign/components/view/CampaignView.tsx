@@ -5,6 +5,8 @@ import { CampaignCollapsible } from './sections/CampaignCollapsible';
 import { CampaignHeader } from './sections/CampaignHeader';
 import { GameSession } from './sections/GameSession';
 
+import type { Campaign } from '@/types/game';
+
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -19,7 +21,7 @@ const CampaignView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [campaign, setCampaign] = React.useState<import('@/types/game').Campaign | null>(null);
+  const [campaign, setCampaign] = React.useState<Campaign | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(true);

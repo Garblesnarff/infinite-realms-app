@@ -27,7 +27,10 @@ import { getHPColor } from '@/utils/hp-utils';
 // Condition Icons & Colors
 // ===========================
 
-const CONDITION_ICONS: Record<ConditionName, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+const CONDITION_ICONS: Record<
+  ConditionName,
+  { icon: React.ComponentType<{ className?: string }>; color: string }
+> = {
   blinded: { icon: UserX, color: 'bg-gray-500' },
   charmed: { icon: Heart, color: 'bg-pink-500' },
   deafened: { icon: UserX, color: 'bg-slate-500' },
@@ -75,7 +78,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
   // Look up portrait from campaign assets
   const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
-  const assetType = participant.participantType === 'monster' || participant.participantType === 'enemy' ? 'monster' : 'npc';
+  const assetType =
+    participant.participantType === 'monster' || participant.participantType === 'enemy'
+      ? 'monster'
+      : 'npc';
   const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
   const getParticipantTypeIcon = (): React.ReactNode => {
@@ -130,11 +136,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
           {portraitUrl ? (
-            <img
-              src={portraitUrl}
-              alt={participant.name}
-              className="w-full h-full object-cover"
-            />
+            <img src={portraitUrl} alt={participant.name} className="w-full h-full object-cover" />
           ) : (
             getParticipantTypeIcon()
           )}

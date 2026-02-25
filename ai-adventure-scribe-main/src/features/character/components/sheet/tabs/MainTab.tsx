@@ -1,7 +1,6 @@
 import { Shield, Zap, Clock } from 'lucide-react';
 import React, { useId } from 'react';
 
-
 import CombatVitals from './components/CombatVitals';
 
 import type { Character } from '@/types/character';
