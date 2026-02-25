@@ -34,6 +34,18 @@ const MAX_CONTEXT_LOSS_RECOVERIES = 2;
 let __dice3dDead = false;
 let __dice3dWarned = false;
 
+// Burst-loss deduplication: multiple simultaneous canvas instances losing context within
+// CONTEXT_LOSS_DEBOUNCE_MS of each other are treated as one GPU-reclamation episode.
+const CONTEXT_LOSS_DEBOUNCE_MS = 500;
+let __lastContextLossEpisodeTime = 0;
+
+// Recovery cooldown: wait this long after webglcontextrestored before remounting,
+// giving the GPU time to stabilize before allocating a new context.
+const RECOVERY_COOLDOWN_MS = 1500;
+
+// Auto-fallback: if context is never restored within this window, permanently degrade.
+const AUTO_FALLBACK_TIMEOUT_MS = 8000;
+
 // 3D Dice Component
 function Dice3D({
   value,
@@ -171,6 +183,9 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const boundCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const boundOnLostRef = useRef<EventListener | null>(null);
   const boundOnRestoredRef = useRef<EventListener | null>(null);
+  // Timers for recovery cooldown and auto-fallback
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const envRecord = import.meta.env as Record<string, string | undefined>;
   const disable3D = (envRecord.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
   const threeDEnabled = !disable3D && !__dice3dDead;
@@ -191,9 +206,18 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
 
     const onLost: EventListener = (e: Event) => {
       e.preventDefault();
-      __dice3dContextLossCount++;
-      telemetry.recordWebGLContextLoss();
       setContextLost(true);
+
+      // Burst deduplication: if another canvas instance already handled this GPU-reclamation
+      // episode (within CONTEXT_LOSS_DEBOUNCE_MS), absorb silently — counter, telemetry, and
+      // logs have already been recorded for this episode.
+      const now = Date.now();
+      const isBurstLoss = now - __lastContextLossEpisodeTime < CONTEXT_LOSS_DEBOUNCE_MS;
+      if (isBurstLoss) return;
+
+      __lastContextLossEpisodeTime = now;
+      __dice3dContextLossCount++;
+      telemetry.recordWebGLContextLoss(); // once per episode, not per canvas instance
 
       if (__dice3dContextLossCount > MAX_CONTEXT_LOSS_RECOVERIES) {
         __dice3dDead = true;
@@ -205,16 +229,45 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
         }
       } else {
         logger.warn(
-          `THREE.WebGLRenderer: Context Lost (loss #${__dice3dContextLossCount}). Attempting recovery...`,
+          `THREE.WebGLRenderer: Context Lost (episode #${__dice3dContextLossCount}). Attempting recovery...`,
         );
+
+        // Auto-fallback: if context is never restored, permanently degrade after timeout.
+        if (autoFallbackTimerRef.current) clearTimeout(autoFallbackTimerRef.current);
+        autoFallbackTimerRef.current = setTimeout(() => {
+          autoFallbackTimerRef.current = null;
+          if (!__dice3dDead) {
+            __dice3dDead = true;
+            if (!__dice3dWarned) {
+              __dice3dWarned = true;
+              logger.warn(
+                'Dice 3D permanently disabled: WebGL context not restored within timeout window.',
+              );
+            }
+          }
+        }, AUTO_FALLBACK_TIMEOUT_MS);
       }
     };
 
     const onRestored: EventListener = () => {
       if (__dice3dDead) return; // Already permanently degraded; ignore restoration.
-      logger.info('WebGL context restored; remounting 3D dice canvas.');
-      setContextLost(false);
-      setCanvasKey((k) => k + 1);
+
+      // Cancel the auto-fallback — context came back in time.
+      if (autoFallbackTimerRef.current) {
+        clearTimeout(autoFallbackTimerRef.current);
+        autoFallbackTimerRef.current = null;
+      }
+
+      // Recovery cooldown: wait before remounting so the GPU can stabilize.
+      // Cancel any previous pending recovery in case of rapid lost→restored→lost cycles.
+      if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = setTimeout(() => {
+        recoveryTimerRef.current = null;
+        if (__dice3dDead) return; // May have been permanently degraded during the cooldown.
+        logger.info('WebGL context restored; remounting 3D dice canvas.');
+        setContextLost(false);
+        setCanvasKey((k) => k + 1);
+      }, RECOVERY_COOLDOWN_MS);
     };
 
     canvas.addEventListener('webglcontextlost', onLost, { passive: false });
@@ -225,7 +278,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     boundOnRestoredRef.current = onRestored;
   }, []);
 
-  // Clean up WebGL context event listeners when the component unmounts.
+  // Clean up WebGL context event listeners and pending timers when the component unmounts.
   useEffect(() => {
     return () => {
       if (boundCanvasRef.current && boundOnLostRef.current) {
@@ -234,6 +287,14 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           'webglcontextrestored',
           boundOnRestoredRef.current!,
         );
+      }
+      if (recoveryTimerRef.current) {
+        clearTimeout(recoveryTimerRef.current);
+        recoveryTimerRef.current = null;
+      }
+      if (autoFallbackTimerRef.current) {
+        clearTimeout(autoFallbackTimerRef.current);
+        autoFallbackTimerRef.current = null;
       }
     };
   }, []);
