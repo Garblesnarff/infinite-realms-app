@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCharacterImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +45,7 @@ interface CharacterCardProps {
 const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -96,7 +98,13 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
    */
   const handleDelete = useCallback(async () => {
     try {
-      const { error } = await supabase.from('characters').delete().eq('id', character.id);
+      if (!user?.id) throw new Error('No authenticated user');
+
+      const { error } = await supabase
+        .from('characters')
+        .delete()
+        .eq('id', character.id)
+        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`);
 
       if (error) throw error;
 
@@ -120,7 +128,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
       });
       setShowDeleteDialog(false);
     }
-  }, [character.id, toast, onDelete]);
+  }, [character.id, toast, onDelete, user?.id]);
 
   // Generate avatar background color based on name
   const getAvatarColor = useMemo(

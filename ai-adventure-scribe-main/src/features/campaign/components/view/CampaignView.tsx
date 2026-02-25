@@ -6,6 +6,7 @@ import { CampaignHeader } from './sections/CampaignHeader';
 import { GameSession } from './sections/GameSession';
 
 import { Card } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -17,6 +18,7 @@ import { isValidUUID } from '@/utils/validation';
 const CampaignView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [campaign, setCampaign] = React.useState<import('@/types/game').Campaign | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -44,12 +46,13 @@ const CampaignView: React.FC = () => {
   React.useEffect(() => {
     const fetchCampaign = async () => {
       try {
-        if (!id || !isValidUUID(id)) return;
+        if (!id || !isValidUUID(id) || !user?.id) return;
 
         const { data, error } = await supabase
           .from('campaigns')
           .select('*')
           .eq('id', id)
+          .eq('user_id', user.id)
           .maybeSingle();
 
         if (error) throw error;
@@ -79,7 +82,7 @@ const CampaignView: React.FC = () => {
     };
 
     fetchCampaign();
-  }, [id, toast, navigate]);
+  }, [id, toast, navigate, user?.id]);
 
   /**
    * Handles campaign deletion
@@ -88,8 +91,13 @@ const CampaignView: React.FC = () => {
     try {
       setIsDeleting(true);
       if (!id) throw new Error('No campaign ID provided');
+      if (!user?.id) throw new Error('No authenticated user');
 
-      const { error } = await supabase.from('campaigns').delete().eq('id', id);
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
