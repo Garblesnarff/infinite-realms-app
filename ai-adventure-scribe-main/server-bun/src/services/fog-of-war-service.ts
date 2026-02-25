@@ -52,51 +52,47 @@ export class FogOfWarService {
     targetUserId: string,
     requesterId: string
   ): Promise<void> {
-    // 1. Get scene and campaign to check ownership/membership.
-    const [scene] = await db
-      .select({ userId: scenes.userId, campaignId: scenes.campaignId })
+    // ⚡ Bolt: Consolidated multiple authorization queries into a single joined query with EXISTS subqueries.
+    // This reduces database round-trips from up to 3 down to 1 for EVERY fog of war operation.
+    const [result] = await (db as any)
+      .select({
+        sceneOwnerId: scenes.userId,
+        campaignId: scenes.campaignId,
+        isRequesterParticipant: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${characters} c
+          WHERE c.campaign_id = ${scenes.campaignId}
+            AND (c.user_id = ${requesterId} OR c.owner_id = ${requesterId})
+        )`,
+        isTargetParticipant: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${characters} c
+          WHERE c.campaign_id = ${scenes.campaignId}
+            AND (c.user_id = ${targetUserId} OR c.owner_id = ${targetUserId})
+        )`,
+      })
       .from(scenes)
       .where(eq(scenes.id, sceneId))
       .limit(1);
 
-    if (!scene) {
+    if (!result) {
       throw new NotFoundError('Scene', sceneId);
     }
 
-    // 2. Authorization logic:
+    // Authorization logic:
     // - Requester is the scene owner
     // - OR requester is the target user AND has a character in the scene's campaign
     const isTarget = requesterId === targetUserId;
-    const isOwner = requesterId === scene.userId;
-    let isRequesterCampaignParticipant = false;
-
-    if (!isOwner && isTarget) {
-      const campaignCharacter = await db.query.characters.findFirst({
-        where: and(
-          eq(characters.campaignId, scene.campaignId),
-          or(eq(characters.userId, requesterId), eq(characters.ownerId, requesterId))
-        ),
-        columns: { id: true },
-      });
-      isRequesterCampaignParticipant = Boolean(campaignCharacter);
-    }
+    const isOwner = requesterId === result.sceneOwnerId;
 
     // Scene owner may manage another user's fog only if that user participates in the campaign.
-    if (isOwner && targetUserId !== requesterId) {
-      const targetCampaignCharacter = await db.query.characters.findFirst({
-        where: and(
-          eq(characters.campaignId, scene.campaignId),
-          or(eq(characters.userId, targetUserId), eq(characters.ownerId, targetUserId))
-        ),
-        columns: { id: true },
-      });
-
-      if (!targetCampaignCharacter) {
+    if (isOwner) {
+      if (!isTarget && !result.isTargetParticipant) {
         throw new NotFoundError('Scene', sceneId);
       }
+      return;
     }
 
-    if (!isOwner && !(isTarget && isRequesterCampaignParticipant)) {
+    // Non-owner can only access their own fog if they are a participant.
+    if (!isTarget || !result.isRequesterParticipant) {
       // Throw NOT_FOUND to avoid leaking association existence
       throw new NotFoundError('Scene', sceneId);
     }

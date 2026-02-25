@@ -68,11 +68,67 @@ describe('FogOfWarService', () => {
     vi.clearAllMocks();
   });
 
+  describe('verifyAccess (internal)', () => {
+    it('should allow access if requester is the scene owner', async () => {
+      // Mock the consolidated authorization query
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.limit.mockResolvedValue([{
+        sceneOwnerId: mockUserId,
+        campaignId: 'camp-123',
+        isRequesterParticipant: true,
+        isTargetParticipant: true
+      }]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      // We call a method that uses verifyAccess internally
+      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
+    });
+
+    it('should throw NotFoundError if scene does not exist', async () => {
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.limit.mockResolvedValue([]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).rejects.toThrow('Scene not found');
+    });
+
+    it('should allow access if requester is target and is a participant', async () => {
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.limit.mockResolvedValue([{
+        sceneOwnerId: 'different-owner',
+        campaignId: 'camp-123',
+        isRequesterParticipant: true,
+        isTargetParticipant: true
+      }]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
+    });
+
+    it('should deny access if requester is target but not a participant', async () => {
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.limit.mockResolvedValue([{
+        sceneOwnerId: 'different-owner',
+        campaignId: 'camp-123',
+        isRequesterParticipant: false,
+        isTargetParticipant: false
+      }]);
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).rejects.toThrow('Scene not found');
+    });
+  });
+
   describe('revealAreas', () => {
     it('should use atomic UPSERT for revealing areas', async () => {
       // Mock verifyAccess
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{ userId: mockUserId, campaignId: 'camp-123' }]);
+      mockSelectBuilder.limit.mockResolvedValue([{
+        sceneOwnerId: mockUserId,
+        campaignId: 'camp-123',
+        isRequesterParticipant: true,
+        isTargetParticipant: true
+      }]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       // Mock the UPSERT
@@ -113,7 +169,12 @@ describe('FogOfWarService', () => {
     it('should throw ValidationError if polygon has less than 3 points', async () => {
       // Mock verifyAccess
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{ userId: mockUserId, campaignId: 'camp-123' }]);
+      mockSelectBuilder.limit.mockResolvedValue([{
+        sceneOwnerId: mockUserId,
+        campaignId: 'camp-123',
+        isRequesterParticipant: true,
+        isTargetParticipant: true
+      }]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       const mockInput = {
