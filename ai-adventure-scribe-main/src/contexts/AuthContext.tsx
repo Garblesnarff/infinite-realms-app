@@ -108,7 +108,7 @@ const loadCachedSession = (): WorkOSSession | null => {
 
   // Check for tokens in localStorage (set by CallbackPage)
   const accessToken = window.localStorage.getItem('workos_access_token');
-  const refreshToken = window.localStorage.getItem('workos_refresh_token');
+  const refreshToken = window.sessionStorage.getItem('workos_refresh_token') || window.localStorage.getItem('workos_refresh_token');
 
   if (accessToken) {
     return {
@@ -133,12 +133,18 @@ const persistSession = (session: WorkOSSession | null) => {
   if (session) {
     window.localStorage.setItem('workos_access_token', session.access_token);
     if (session.refresh_token) {
-      window.localStorage.setItem('workos_refresh_token', session.refresh_token);
+      // Keep refresh token scoped to browser session to reduce persistence risk.
+      window.sessionStorage.setItem('workos_refresh_token', session.refresh_token);
+      window.localStorage.removeItem('workos_refresh_token');
+    } else {
+      window.sessionStorage.removeItem('workos_refresh_token');
+      window.localStorage.removeItem('workos_refresh_token');
     }
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } else {
     window.localStorage.removeItem('workos_access_token');
     window.localStorage.removeItem('workos_refresh_token');
+    window.sessionStorage.removeItem('workos_refresh_token');
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
   }
 };

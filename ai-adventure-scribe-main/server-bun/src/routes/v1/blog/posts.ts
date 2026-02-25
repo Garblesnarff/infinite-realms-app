@@ -213,7 +213,7 @@ export const blogPostRoutes = new Elysia()
 
       set.status = 201;
       return mapBlogPost(data as unknown as BlogPostRow);
-    } catch (_error) {
+    } catch (error) {
       if (error instanceof Error) {
         if (error.message === 'BLOG_AUTHOR_NOT_FOUND') {
           set.status = 400;

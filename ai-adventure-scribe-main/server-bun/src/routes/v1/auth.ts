@@ -12,6 +12,7 @@
 
 import { Elysia } from 'elysia';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { logger } from '../../lib/logger';
 import { workos, authConfig } from '../../services/workos';
 import { db } from '../../lib/drizzle';
@@ -21,21 +22,54 @@ import { eq } from 'drizzle-orm';
 // Test auth configuration
 const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;
 const TEST_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
+const OAUTH_STATE_COOKIE = 'ir_oauth_state';
+const OAUTH_STATE_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
+
+function createOAuthState(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function getCookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(';').map((entry) => entry.trim());
+  for (const cookie of cookies) {
+    const [key, ...rest] = cookie.split('=');
+    if (key === name) {
+      return rest.join('=') || null;
+    }
+  }
+  return null;
+}
+
+function buildOAuthStateCookie(value: string, maxAgeSec: number): string {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `${OAUTH_STATE_COOKIE}=${value}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAgeSec}${secure}`;
+}
 
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   /**
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
    */
-  .get('/login', ({ redirect, set }) => {
+  .get('/login', ({ redirect, request, set }) => {
     try {
+      const state = createOAuthState();
       const authorizationUrl = workos.userManagement.getAuthorizationUrl({
         provider: 'authkit',
         clientId: authConfig.clientId,
         redirectUri: authConfig.redirectUri,
+        state,
         // Force account selection screen in Google OAuth
         prompt: 'select_account',
       });
+
+      const existingCookie = request.headers.get('cookie');
+      const hadPriorState = Boolean(getCookieValue(existingCookie, OAUTH_STATE_COOKIE));
+      set.headers['Set-Cookie'] = buildOAuthStateCookie(state, OAUTH_STATE_MAX_AGE_SECONDS);
+
+      if (hadPriorState) {
+        logger.warn({ msg: 'Replacing existing OAuth state cookie' });
+      }
 
       return redirect(authorizationUrl);
     } catch (error) {
@@ -49,12 +83,26 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
    * Handle OAuth callback from WorkOS
    * GET /v1/auth/callback?code=xxx
    */
-  .get('/callback', async ({ query, redirect, set }) => {
+  .get('/callback', async ({ query, request, redirect, set }) => {
     const code = query.code as string | undefined;
+    const state = query.state as string | undefined;
+
+    const cookieState = getCookieValue(request.headers.get('cookie'), OAUTH_STATE_COOKIE);
+    set.headers['Set-Cookie'] = buildOAuthStateCookie('', 0);
 
     if (!code) {
       set.status = 400;
       return { error: 'Missing authorization code' };
+    }
+
+    if (!state || !cookieState || state !== cookieState) {
+      logger.warn({
+        msg: 'OAuth state validation failed',
+        hasState: Boolean(state),
+        hasCookieState: Boolean(cookieState),
+      });
+      set.status = 400;
+      return { error: 'Invalid OAuth state' };
     }
 
     try {

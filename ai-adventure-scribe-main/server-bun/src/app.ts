@@ -133,7 +133,7 @@ export function createApp() {
       // Content Security Policy - allow self and common CDNs
       set.headers['Content-Security-Policy'] = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com",
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: blob: https:",
@@ -253,6 +253,13 @@ export function createApp() {
               .filter(Boolean)
           : [];
 
+        const metricsPublic = process.env.METRICS_PUBLIC === 'true' || process.env.METRICS_PUBLIC === '1';
+
+        if (!metricsPublic && process.env.NODE_ENV === 'production' && !metricsToken && allowlist.length === 0) {
+          set.status = 403;
+          return { error: 'Metrics endpoint is not configured for public access' };
+        }
+
         if (metricsToken || allowlist.length > 0) {
           const authHeader = request.headers.get('authorization') || '';
           const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
@@ -267,11 +274,12 @@ export function createApp() {
           }
 
           if (allowlist.length > 0) {
-            const forwardedFor = request.headers.get('x-forwarded-for');
-            const realIp = request.headers.get('x-real-ip');
+            const trustProxy = process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
+            const forwardedFor = trustProxy ? request.headers.get('x-forwarded-for') : null;
+            const realIp = trustProxy ? request.headers.get('x-real-ip') : null;
             const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : realIp || '';
 
-            if (!allowlist.includes(clientIp)) {
+            if (!clientIp || !allowlist.includes(clientIp)) {
               set.status = 403;
               return { error: 'Forbidden' };
             }
