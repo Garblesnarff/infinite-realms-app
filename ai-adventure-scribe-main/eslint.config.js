@@ -301,6 +301,7 @@ export default tseslint.config(
       'src/components/battle-map/TokenConditionIcons.tsx',
       'src/components/battle-map/VisionRange.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
+      'src/components/character-sheet/character-sheet-tabs.tsx',
       'src/components/character-sheet/tabs/InventoryTab.tsx',
       'src/features/character/components/sheet/tabs/InventoryTab.tsx',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
