@@ -41,7 +41,7 @@ export interface CharacterStats {
 /**
  * ⚡ Bolt: Static skills map to avoid re-allocation on every calculateSkillModifiers call.
  */
-const SKILLS_MAP = {
+export const SKILLS_MAP = {
   Acrobatics: 'dexterity',
   'Animal Handling': 'wisdom',
   Arcana: 'intelligence',

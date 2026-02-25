@@ -11,6 +11,7 @@ import DiceRoller from '@/components/ui/dice-roller';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombatState } from '@/features/character/hooks/use-combat-state';
+import { useCharacterStats } from '@/hooks/use-character-stats';
 
 interface MainTabProps {
   character: Character;
@@ -22,18 +23,17 @@ interface MainTabProps {
  * Includes HP management, AC, initiative, and death saves
  *
  * Refactored: Logic moved to useCombatState hook, UI moved to CombatVitals component.
+ * ⚡ Bolt: Wrapped in React.memo and uses useCharacterStats for optimized, centralized D&D calculations.
  */
-const MainTab: React.FC<MainTabProps> = ({ character }) => {
+const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUpdate }) => {
   const damageId = useId();
   const healingId = useId();
   const descriptionId = useId();
 
-  // Calculate max HP (simplified formula)
-  const maxHp = Math.max(
-    1,
-    character.level * (character.class?.hitDie || 8) +
-      character.abilityScores.constitution.modifier * character.level,
-  );
+  const stats = useCharacterStats(character);
+
+  // Use centralized calculations from useCharacterStats
+  const maxHp = stats?.hitPoints ?? 1;
 
   const {
     combatState,
@@ -47,44 +47,10 @@ const MainTab: React.FC<MainTabProps> = ({ character }) => {
     updateDeathSave,
   } = useCombatState(maxHp);
 
-  // Proficiency bonus calculation
-  const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
-
-  // Armor Class calculation with unarmored defense support
-  let armorClass = 10 + character.abilityScores.dexterity.modifier;
-
-  // Check for unarmored defense (Barbarian/monk without armor)
-  const hasUnarmoredDefense =
-    character.class &&
-    (character.class.name.toLowerCase() === 'barbarian' ||
-      character.class.name.toLowerCase() === 'monk');
-
-  const isWearingArmor = character.equippedArmor !== undefined && character.equippedArmor !== '';
-
-  // If character has unarmored defense and is not wearing armor, use unarmored AC
-  if (hasUnarmoredDefense && !isWearingArmor) {
-    switch (character.class!.name.toLowerCase()) {
-      case 'barbarian':
-        armorClass =
-          10 +
-          character.abilityScores.dexterity.modifier +
-          character.abilityScores.constitution.modifier;
-        break;
-      case 'monk':
-        armorClass =
-          10 + character.abilityScores.dexterity.modifier + character.abilityScores.wisdom.modifier;
-        break;
-    }
-  }
-
-  // Initiative modifier
-  const initiativeModifier = character.abilityScores.dexterity.modifier;
-
-  // Passive Perception
-  const passivePerception =
-    10 +
-    character.abilityScores.wisdom.modifier +
-    (character.personalityTraits.includes('Perception') ? proficiencyBonus : 0);
+  const proficiencyBonus = stats?.proficiencyBonus ?? 2;
+  const armorClass = stats?.armorClass ?? 10;
+  const initiativeModifier = stats?.initiative ?? 0;
+  const passivePerception = stats?.passivePerception ?? 10;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -213,6 +179,6 @@ const MainTab: React.FC<MainTabProps> = ({ character }) => {
       </Card>
     </div>
   );
-};
+});
 
 export default MainTab;
