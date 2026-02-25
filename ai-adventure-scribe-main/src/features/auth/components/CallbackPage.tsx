@@ -33,11 +33,12 @@ export default function CallbackPage() {
 
         logger.info('Successfully received tokens from backend');
 
-        // Store tokens in localStorage for persistence
-        // AuthContext will read these on app load
+        // Store access token for app auth and keep refresh token session-scoped.
+        // AuthContext will read these on app load.
         localStorage.setItem('workos_access_token', accessToken);
         if (refreshToken) {
-          localStorage.setItem('workos_refresh_token', refreshToken);
+          sessionStorage.setItem('workos_refresh_token', refreshToken);
+          localStorage.removeItem('workos_refresh_token');
         }
 
         // Clear URL hash
