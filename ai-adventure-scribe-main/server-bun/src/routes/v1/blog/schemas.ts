@@ -1,13 +1,19 @@
 import { z } from 'zod';
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const searchFilterRegex = /^[\p{L}\p{N}\s.,'"!?-]+$/u;
 
 export const blogListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(10),
   category: z.string().min(1).optional(),
   tag: z.string().min(1).optional(),
-  search: z.string().min(1).optional(),
+  search: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(searchFilterRegex, { message: 'Search contains invalid characters' })
+    .optional(),
   status: z.enum(['draft', 'review', 'scheduled', 'published', 'archived']).optional(),
   scheduledOnly: z.coerce.boolean().optional(),
 });

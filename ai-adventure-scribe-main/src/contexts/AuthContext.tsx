@@ -304,7 +304,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBlogRoleLoading(true);
     try {
       // Check for separate blog admin token first (independent of WorkOS auth)
-      const blogAdminToken = localStorage.getItem('blog_admin_token');
+      const blogAdminToken =
+        sessionStorage.getItem('blog_admin_token') || localStorage.getItem('blog_admin_token');
       if (blogAdminToken) {
         try {
           // Decode JWT to check expiration (server will verify signature)
@@ -316,6 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch {
           // Invalid token, remove it
+          sessionStorage.removeItem('blog_admin_token');
           localStorage.removeItem('blog_admin_token');
         }
       }

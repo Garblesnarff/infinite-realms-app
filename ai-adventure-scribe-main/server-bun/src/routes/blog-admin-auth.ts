@@ -5,8 +5,8 @@
  * independent of WorkOS authentication.
  */
 
-import { Elysia, t } from 'elysia';
 import bcrypt from 'bcryptjs';
+import { Elysia, t } from 'elysia';
 import jwt from 'jsonwebtoken';
 import { logger } from '../lib/logger';
 
@@ -14,6 +14,48 @@ import { logger } from '../lib/logger';
 const BLOG_ADMIN_USERNAME = process.env.BLOG_ADMIN_USERNAME;
 const BLOG_ADMIN_PASSWORD_HASH = process.env.BLOG_ADMIN_PASSWORD_HASH;
 const BLOG_ADMIN_JWT_SECRET = process.env.BLOG_ADMIN_JWT_SECRET;
+
+interface LoginBucket {
+  attempts: number;
+  windowStartMs: number;
+}
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const loginBuckets = new Map<string, LoginBucket>();
+
+function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0]?.trim() || 'unknown';
+  }
+  return request.headers.get('x-real-ip') || 'unknown';
+}
+
+function consumeLoginAttempt(key: string): { blocked: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const existing = loginBuckets.get(key);
+
+  if (!existing || now - existing.windowStartMs >= LOGIN_WINDOW_MS) {
+    loginBuckets.set(key, { attempts: 1, windowStartMs: now });
+    return { blocked: false, retryAfterSec: 0 };
+  }
+
+  existing.attempts += 1;
+  if (existing.attempts > LOGIN_MAX_ATTEMPTS) {
+    const retryAfterMs = existing.windowStartMs + LOGIN_WINDOW_MS - now;
+    return {
+      blocked: true,
+      retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    };
+  }
+
+  return { blocked: false, retryAfterSec: 0 };
+}
+
+function resetLoginAttempts(key: string) {
+  loginBuckets.delete(key);
+}
 
 export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
   /**
@@ -24,9 +66,18 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
    */
   .post(
     '/login',
-    async ({ body, set }) => {
+    async ({ body, request, set }) => {
       try {
         const { username, password } = body;
+        const ip = getClientIp(request);
+        const bucketKey = `${ip}:${String(username || '').toLowerCase()}`;
+
+        const throttleResult = consumeLoginAttempt(bucketKey);
+        if (throttleResult.blocked) {
+          set.status = 429;
+          set.headers['Retry-After'] = String(throttleResult.retryAfterSec);
+          return { error: 'Too many login attempts. Please try again later.' };
+        }
 
         logger.info('[BlogAdminAuth] Login attempt for:', username);
 
@@ -65,6 +116,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
         );
 
         logger.info('[BlogAdminAuth] Successful login for:', username);
+        resetLoginAttempts(bucketKey);
 
         return {
           success: true,
