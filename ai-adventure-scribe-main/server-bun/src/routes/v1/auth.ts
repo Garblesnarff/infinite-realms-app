@@ -162,11 +162,11 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
   /**
    * Test authentication endpoint for automated testing
-   * GET /v1/auth/test-login?secret=xxx
+   * GET /v1/auth/test-login (requires x-test-auth-secret header)
    *
    * SECURITY: Disabled in production unless ENABLE_TEST_AUTH is set.
    */
-  .get('/test-login', async ({ query, redirect, set }) => {
+  .get('/test-login', async ({ query, headers, redirect, set }) => {
     // SECURITY: Disable in production environment
     if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_AUTH) {
       set.status = 404;
@@ -179,10 +179,15 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       return { error: 'Unauthorized' };
     }
 
-    const secret = query.secret as string | undefined;
+    const headerSecret = headers['x-test-auth-secret'];
+    const querySecret = query.secret as string | undefined;
+
+    if (querySecret) {
+      logger.warn({ msg: 'Deprecated test auth query secret usage detected' });
+    }
 
     // Verify test auth secret
-    if (secret !== TEST_AUTH_SECRET) {
+    if (headerSecret !== TEST_AUTH_SECRET) {
       set.status = 401;
       return { error: 'Unauthorized' };
     }

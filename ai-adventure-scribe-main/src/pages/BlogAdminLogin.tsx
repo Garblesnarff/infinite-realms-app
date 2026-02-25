@@ -14,14 +14,17 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || '';
 export const BLOG_ADMIN_TOKEN_KEY = 'blog_admin_token';
 
 export const getBlogAdminToken = (): string | null => {
-  return localStorage.getItem(BLOG_ADMIN_TOKEN_KEY);
+  return sessionStorage.getItem(BLOG_ADMIN_TOKEN_KEY) || localStorage.getItem(BLOG_ADMIN_TOKEN_KEY);
 };
 
 export const setBlogAdminToken = (token: string): void => {
-  localStorage.setItem(BLOG_ADMIN_TOKEN_KEY, token);
+  sessionStorage.setItem(BLOG_ADMIN_TOKEN_KEY, token);
+  // Remove legacy persistent token if present
+  localStorage.removeItem(BLOG_ADMIN_TOKEN_KEY);
 };
 
 export const clearBlogAdminToken = (): void => {
+  sessionStorage.removeItem(BLOG_ADMIN_TOKEN_KEY);
   localStorage.removeItem(BLOG_ADMIN_TOKEN_KEY);
 };
 

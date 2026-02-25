@@ -50,7 +50,7 @@ export const blogAdminRoutes = new Elysia()
       }
 
       if (search) {
-        const sanitized = search.replace(/[%_]/g, '').trim();
+        const sanitized = search.trim().toLowerCase();
         if (sanitized.length > 0) {
           dbQuery = dbQuery.or(`title.ilike.%${sanitized}%,summary.ilike.%${sanitized}%`);
         }
