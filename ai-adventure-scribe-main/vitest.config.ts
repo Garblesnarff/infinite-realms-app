@@ -26,6 +26,7 @@ export default defineConfig({
       'src/utils/__tests__/character-calculations.test.ts',
       'src/utils/equality.test.ts',
       'src/utils/__tests__/roll-request-parser.test.ts',
+      'src/utils/roll-request/__tests__/validate.test.ts',
       'src/utils/__tests__/spell-validation.test.ts',
       'src/utils/__tests__/spell-validation-async.test.ts',
       'src/utils/__tests__/sentence-segmenter.test.ts',

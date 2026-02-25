@@ -31,12 +31,30 @@ export function extractPrimaryRollRequest(message: string): ParsedRollRequest | 
 }
 
 /**
+ * Returns the index of the last sentence-terminating character (.!?) in text,
+ * where the punctuation is followed by whitespace or is at end-of-string.
+ * Returns -1 if no boundary is found.
+ */
+export function findLastSentenceBoundary(text: string): number {
+  const boundaryPattern = /[.!?](?=\s|$)/g;
+  let lastIndex = -1;
+  let match: RegExpExecArray | null;
+  while ((match = boundaryPattern.exec(text)) !== null) {
+    lastIndex = match.index;
+  }
+  return lastIndex;
+}
+
+/**
  * CRITICAL: Truncates message at ROLL_REQUESTS_V1 block.
  * This prevents the AI's premature outcome narrative from being displayed.
  *
  * Use this BEFORE displaying/saving the message when roll requests are present.
  * The player should only see text BEFORE the roll request - the outcome comes
  * in a NEW response after the roll is completed.
+ *
+ * Truncation ends at the last complete sentence boundary (.!?) before the block.
+ * Paragraph structure is preserved. Falls back to cleaned text if no boundary found.
  */
 export function truncateAtRollRequest(message: string): string {
   if (!message) return message;
@@ -45,16 +63,30 @@ export function truncateAtRollRequest(message: string): string {
   const rollBlockMatch = message.match(/```ROLL_REQUESTS_V1[\s\S]*?```/);
 
   if (rollBlockMatch && rollBlockMatch.index !== undefined) {
-    // Keep only content BEFORE the roll request block
-    let truncated = message.substring(0, rollBlockMatch.index).trim();
+    const beforeBlock = message.substring(0, rollBlockMatch.index);
 
-    // Clean up trailing punctuation and whitespace
-    truncated = truncated
-      .replace(/\s+/g, ' ')
+    // Normalize whitespace within each paragraph while preserving paragraph breaks
+    const normalized = beforeBlock
+      .split(/\n{2,}/)
+      .map((para) => para.replace(/\s+/g, ' ').trim())
+      .filter((para) => para.length > 0)
+      .join('\n\n');
+
+    // Strip trailing incomplete-sentence punctuation and em-dashes
+    const withoutTrailingJunk = normalized
       .replace(/[,;:]\s*$/, '')
+      .replace(/—\s*$/, '')
       .trim();
 
-    return truncated;
+    // Find the last complete sentence boundary
+    const boundaryIdx = findLastSentenceBoundary(withoutTrailingJunk);
+
+    if (boundaryIdx === -1) {
+      // Fallback: no clean boundary found — return cleaned text as-is
+      return withoutTrailingJunk;
+    }
+
+    return withoutTrailingJunk.substring(0, boundaryIdx + 1).trim();
   }
 
   return message; // No roll block found - return as-is
