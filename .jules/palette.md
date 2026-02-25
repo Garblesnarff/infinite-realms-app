@@ -97,3 +97,7 @@
 ## 2026-01-28 - Core UI Z-Index Standardization and Type Safety
 **Learning:** Tailwind JIT arbitrary values for z-index (e.g., `z-[${Z_INDEX.POPOVER}]`) are unreliable and can fail to generate CSS classes, causing overlays to hide behind other elements. Centralizing all overlay z-indices in `src/constants/z-index.ts` and using explicit `style={{ zIndex: Z_INDEX.CONSTANT }}` ensures reliable layering. Missing constants like `CONTEXT_MENU` lead to TypeScript errors in UI components.
 **Action:** Migrate all Radix-based UI components (Popover, DropdownMenu, Toast, Tooltip, ContextMenu) to use inline styles for z-index. Ensure all semantic overlay types have corresponding entries in `Z_INDEX`.
+
+## 2026-01-29 - Sidebar Accessibility and Z-Index Standardization
+**Learning:** Core layout components like `Sidebar` often use hardcoded Tailwind z-index classes (`z-10`, `z-20`) that conflict with the centralized `Z_INDEX` hierarchy. Icon-only buttons for toggling the sidebar (`SidebarTrigger`) and interactive regions (`SidebarRail`) lack accessible state feedback (`aria-expanded`) and desktop hover tooltips.
+**Action:** Migrate all sidebar z-indices to inline `style={{ zIndex: Z_INDEX.CONSTANT }}`. Add `aria-expanded` and `title` (including keyboard shortcuts like Ctrl+B) to sidebar triggers and interactive rails to improve both accessibility and discoverability.
