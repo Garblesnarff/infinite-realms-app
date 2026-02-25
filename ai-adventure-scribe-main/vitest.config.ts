@@ -275,6 +275,7 @@ export default defineConfig({
         'src/hooks/use-game-session.ts',
         'src/hooks/game-session/use-session-initialization.ts',
         'src/hooks/memory/useMemoryCreation.ts',
+        'src/utils/spell-preparation.ts',
         'src/utils/racialAbilityBonuses.ts',
         'src/utils/racialTraits.ts',
         'src/engine/**/*.ts',
@@ -346,7 +347,6 @@ export default defineConfig({
         'vite.config.ts',
         'tailwind.config.ts',
         // Temporarily exclude low-covered utils until tests are added
-        'src/utils/spell-preparation.ts',
         'src/engine/eval/**/*.ts', // Exclude eval test utilities
       ],
       thresholds: {

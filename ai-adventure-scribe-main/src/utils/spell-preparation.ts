@@ -39,8 +39,15 @@ export interface SpellPreparationLimits {
 export function getSpellPreparationType(
   className: string,
 ): 'known' | 'prepared' | 'spellbook' | 'none' {
-  const preparedCasters = ['cleric', 'druid', 'paladin', 'ranger'];
-  const knownCasters = ['bard', 'sorcerer', 'warlock', 'eldritch knight', 'arcane trickster'];
+  const preparedCasters = ['cleric', 'druid', 'paladin'];
+  const knownCasters = [
+    'bard',
+    'sorcerer',
+    'warlock',
+    'ranger',
+    'eldritch knight',
+    'arcane trickster',
+  ];
 
   if (className.toLowerCase() === 'wizard') {
     return 'spellbook';
@@ -102,18 +109,28 @@ export function calculateSpellPreparationLimits(character: Character): SpellPrep
     maxSpellLevel,
   };
 
-  if (preparationType === 'prepared') {
-    // Prepared casters: Cleric, Druid, Paladin, Ranger
-    // Can prepare spells equal to ability modifier + class level (minimum 1)
-    limits.spellsPrepared = Math.max(1, abilityModifier + level);
-  } else if (preparationType === 'known') {
-    // Known casters: Bard, Sorcerer, Warlock
-    // Limited number of spells known
-    limits.spellsKnown = spellcastingInfo.spellsKnown;
-  } else if (preparationType === 'spellbook') {
-    // Wizard: Record spells in spellbook, prepare subset
-    limits.spellsKnown = spellcastingInfo.spellsKnown; // Spells in spellbook
-    limits.spellsPrepared = Math.max(1, abilityModifier + level); // Daily prepared
+  // Only set spells known/prepared if the character actually has spell slots of at least level 1
+  if (maxSpellLevel > 0) {
+    if (preparationType === 'prepared') {
+      // Prepared casters: Cleric, Druid, Paladin
+      // Can prepare spells equal to ability modifier + class level (minimum 1)
+      // Note: For Paladins, this usually starts at level 2
+      limits.spellsPrepared = Math.max(1, abilityModifier + level);
+    } else if (preparationType === 'known') {
+      // Known casters: Bard, Sorcerer, Warlock, Ranger
+      // Limited number of spells known
+      limits.spellsKnown = spellcastingInfo.spellsKnown;
+    } else if (preparationType === 'spellbook') {
+      // Wizard: Record spells in spellbook, prepare subset
+      limits.spellsKnown = spellcastingInfo.spellsKnown; // Spells in spellbook
+      limits.spellsPrepared = Math.max(1, abilityModifier + level); // Daily prepared
+    }
+  } else {
+    // No spell slots of level 1 or higher yet
+    if (preparationType !== 'none') {
+      limits.spellsPrepared = 0;
+      limits.spellsKnown = 0;
+    }
   }
 
   return limits;
