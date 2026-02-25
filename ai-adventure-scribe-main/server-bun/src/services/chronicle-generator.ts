@@ -2,7 +2,7 @@
 /* eslint-disable import/order */
 import OpenAI from 'openai';
 import { randomBytes } from 'crypto';
-import { eq, asc } from 'drizzle-orm';
+import { and, eq, asc, desc } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { dialogueHistory, gameSessions, campaigns, characters } from '../../../db/schema/index';
@@ -91,26 +91,44 @@ class ChronicleGenerator {
 
     const session = sessionRows[0];
 
-    // Fetch all messages with speakerType for this session, ascending by timestamp.
-    // We filter to 'dm' in JS to avoid a WHERE on a nullable text column.
-    const allMessages = await db
-      .select({
-        message: dialogueHistory.message,
-        speakerType: dialogueHistory.speakerType,
-      })
-      .from(dialogueHistory)
-      .where(eq(dialogueHistory.sessionId, sessionId))
-      .orderBy(asc(dialogueHistory.createdAt));
+    // ⚡ Bolt: Optimized DM message fetching by replacing the full-session scan with targeted
+    // parallel queries for the first and last moments. This reduces O(N) data transfer and
+    // memory pressure to O(1) by only fetching the 6 messages actually used for the summary.
+    const [firstMessages, lastMessages] = await Promise.all([
+      db
+        .select({
+          message: dialogueHistory.message,
+          createdAt: dialogueHistory.createdAt,
+        })
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm'))
+        )
+        .orderBy(asc(dialogueHistory.createdAt))
+        .limit(3),
+      db
+        .select({
+          message: dialogueHistory.message,
+          createdAt: dialogueHistory.createdAt,
+        })
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm'))
+        )
+        .orderBy(desc(dialogueHistory.createdAt))
+        .limit(3),
+    ]);
 
-    const dmOnly = allMessages.filter((m) => m.speakerType === 'dm');
-
-    // Use first 3 + last 3 DM messages as key moments, deduplicated.
-    const first3 = dmOnly.slice(0, 3);
-    const last3 = dmOnly.slice(-3);
+    // Combine and re-sort to ensure chronological order for the AI prompt
+    const combined = [...firstMessages, ...lastMessages].sort((a, b) => {
+      const timeA = a.createdAt?.getTime() || 0;
+      const timeB = b.createdAt?.getTime() || 0;
+      return timeA - timeB;
+    });
 
     const seen = new Set<string>();
     const keyMoments: string[] = [];
-    for (const row of [...first3, ...last3]) {
+    for (const row of combined) {
       if (!seen.has(row.message)) {
         seen.add(row.message);
         keyMoments.push(row.message.slice(0, 300));
