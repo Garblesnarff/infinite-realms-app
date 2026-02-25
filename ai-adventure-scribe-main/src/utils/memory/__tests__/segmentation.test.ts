@@ -42,6 +42,22 @@ describe('stripOptionMenus', () => {
     const input = 'The sword glints in the torchlight.';
     expect(stripOptionMenus(input)).toBe(input);
   });
+
+  it('strips (Request a ... check...) with trailing ellipsis before closing paren', () => {
+    const input = 'A. **Glance at the tray** (Request a Perception check...)';
+    expect(stripOptionMenus(input)).not.toContain('(Request a Perception check...)');
+  });
+
+  it('strips (Request an ... check...) — "an" variant with multi-word check and ellipsis', () => {
+    const input = 'B. **Reach for the fork** (Request an Arcana or Religion check...)';
+    expect(stripOptionMenus(input)).not.toContain('(Request an Arcana or Religion check...)');
+  });
+
+  it('strips parenthetical check request when A/B/C prefix is already absent (selected-option path)', () => {
+    // Player-selected action text arrives without the A/B/C prefix but may retain the parenthetical
+    const input = 'Glance at the tray. (Request a Perception check...)';
+    expect(stripOptionMenus(input)).not.toContain('(Request a Perception check...)');
+  });
 });
 
 describe('stripVisualPromptBlocks', () => {

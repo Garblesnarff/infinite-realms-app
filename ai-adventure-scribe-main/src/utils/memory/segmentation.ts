@@ -114,8 +114,8 @@ export const stripOptionMenus = (content: string): string =>
   content
     // Remove lines that begin with a single A/B/C letter-dot option prefix
     .replace(/^[A-Ca-c]\.\s+\**.*$/gm, '')
-    // Remove parenthetical helper phrases like (Request a Stealth check)
-    .replace(/\(Request\s+a[^)]*check\)/gi, '')
+    // Remove parenthetical helper phrases like (Request a Stealth check) or (Request an Arcana check...)
+    .replace(/\(Request\s+a[^)]*check[^)]*\)/gi, '')
     // Collapse excessive blank lines left behind
     .replace(/\n{3,}/g, '\n\n')
     .trim();

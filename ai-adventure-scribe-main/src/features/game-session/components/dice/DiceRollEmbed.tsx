@@ -34,6 +34,11 @@ const MAX_CONTEXT_LOSS_RECOVERIES = 2;
 let __dice3dDead = false;
 let __dice3dWarned = false;
 
+// Active canvas counter: limits simultaneous WebGL canvases to prevent GPU context
+// exhaustion during multi-roll sequences (attack + damage + save, etc.).
+let __activeDice3dCount = 0;
+const MAX_SIMULTANEOUS_DICE_3D = 1;
+
 // Burst-loss deduplication: multiple simultaneous canvas instances losing context within
 // CONTEXT_LOSS_DEBOUNCE_MS of each other are treated as one GPU-reclamation episode.
 const CONTEXT_LOSS_DEBOUNCE_MS = 500;
@@ -189,6 +194,8 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const envRecord = import.meta.env as Record<string, string | undefined>;
   const disable3D = (envRecord.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
   const threeDEnabled = !disable3D && !__dice3dDead;
+  // canRender3D also guards against GPU context exhaustion from simultaneous canvases
+  const canRender3D = threeDEnabled && __activeDice3dCount < MAX_SIMULTANEOUS_DICE_3D;
 
   // Handle WebGL context loss and restoration.
   // Allows up to MAX_CONTEXT_LOSS_RECOVERIES remount attempts before permanently degrading.
@@ -276,6 +283,9 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     boundCanvasRef.current = canvas;
     boundOnLostRef.current = onLost;
     boundOnRestoredRef.current = onRestored;
+
+    // Track active canvas count to prevent GPU context exhaustion during multi-roll sequences.
+    __activeDice3dCount++;
   }, []);
 
   // Clean up WebGL context event listeners and pending timers when the component unmounts.
@@ -296,6 +306,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
         clearTimeout(autoFallbackTimerRef.current);
         autoFallbackTimerRef.current = null;
       }
+      __activeDice3dCount = Math.max(0, __activeDice3dCount - 1);
     };
   }, []);
 
@@ -441,7 +452,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
 
         {/* 3D Dice Animation (feature-flagged) */}
         <AnimatePresence>
-          {showAnimation && threeDEnabled && hasRolled && (
+          {showAnimation && canRender3D && hasRolled && (
             <motion.div
               variants={cardItem}
               initial="hidden"

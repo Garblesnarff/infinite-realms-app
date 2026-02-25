@@ -134,4 +134,33 @@ describe('truncateAtRollRequest', () => {
     const msg = `Combat begins! Your heart races and—\n\n${ROLL_BLOCK}`;
     expect(truncateAtRollRequest(msg)).toBe('Combat begins!');
   });
+
+  it('handles roll block immediately adjacent to narrative (no blank line separator)', () => {
+    const msg = `You step forward carefully.\n${ROLL_BLOCK}`;
+    const result = truncateAtRollRequest(msg);
+    expect(result).toBe('You step forward carefully.');
+    expect(result).not.toContain('ROLL_REQUESTS_V1');
+  });
+
+  it('excludes A/B/C options that appear after the roll block', () => {
+    const msg = [
+      'The chamber is silent.',
+      '',
+      ROLL_BLOCK,
+      '',
+      'A. **Examine the altar**, look for traps.',
+      'B. **Retreat**, back to the corridor.',
+    ].join('\n');
+    const result = truncateAtRollRequest(msg);
+    expect(result).toBe('The chamber is silent.');
+    expect(result).not.toContain('Examine the altar');
+    expect(result).not.toContain('Retreat');
+  });
+
+  it('finds the last sentence boundary when narrative contains abbreviation-like periods mid-text', () => {
+    // findLastSentenceBoundary returns the LAST match, so "Dr." mid-sentence is not the final cut
+    const msg = `You meet Dr. Whisper at the inn. She greets you warmly.\n\n${ROLL_BLOCK}`;
+    const result = truncateAtRollRequest(msg);
+    expect(result).toBe('You meet Dr. Whisper at the inn. She greets you warmly.');
+  });
 });
