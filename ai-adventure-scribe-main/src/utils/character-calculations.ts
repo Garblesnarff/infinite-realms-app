@@ -41,7 +41,7 @@ export interface CharacterStats {
 /**
  * ⚡ Bolt: Static skills map to avoid re-allocation on every calculateSkillModifiers call.
  */
-const SKILLS_MAP = {
+export const SKILLS_MAP = {
   Acrobatics: 'dexterity',
   'Animal Handling': 'wisdom',
   Arcana: 'intelligence',
@@ -137,7 +137,10 @@ export const calculateSpellSaveDC = (
   profBonus?: number,
   spellcastingAbility?: keyof Character['abilityScores'] | null,
 ): number | undefined => {
-  const ability = spellcastingAbility !== undefined ? spellcastingAbility : getSpellcastingAbility(character.class);
+  const ability =
+    spellcastingAbility !== undefined
+      ? spellcastingAbility
+      : getSpellcastingAbility(character.class);
   if (!ability) return undefined;
 
   const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
@@ -155,7 +158,10 @@ export const calculateSpellAttackBonus = (
   profBonus?: number,
   spellcastingAbility?: keyof Character['abilityScores'] | null,
 ): number | undefined => {
-  const ability = spellcastingAbility !== undefined ? spellcastingAbility : getSpellcastingAbility(character.class);
+  const ability =
+    spellcastingAbility !== undefined
+      ? spellcastingAbility
+      : getSpellcastingAbility(character.class);
   if (!ability) return undefined;
 
   const abilityMod = character.abilityScores?.[ability]?.modifier || 0;

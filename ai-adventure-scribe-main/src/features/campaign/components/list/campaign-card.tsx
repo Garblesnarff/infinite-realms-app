@@ -23,6 +23,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCampaignImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -55,6 +56,7 @@ const CampaignCardComponent = ({
 }: CampaignCardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
@@ -106,7 +108,13 @@ const CampaignCardComponent = ({
    */
   const handleDelete = useCallback(async () => {
     try {
-      const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id);
+      if (!user?.id) throw new Error('No authenticated user');
+
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', campaign.id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -128,7 +136,7 @@ const CampaignCardComponent = ({
       });
       setShowDeleteDialog(false);
     }
-  }, [campaign.id, toast, queryClient]);
+  }, [campaign.id, toast, queryClient, user?.id]);
 
   // Use hot loaded image, fallback to coverImage, then default
   const resolvedImage = useMemo(() => {

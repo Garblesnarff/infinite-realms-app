@@ -21,12 +21,16 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { cn } from '@/lib/utils';
+import { getHPColor } from '@/utils/hp-utils';
 
 // ===========================
 // Condition Icons & Colors
 // ===========================
 
-const CONDITION_ICONS: Record<ConditionName, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+const CONDITION_ICONS: Record<
+  ConditionName,
+  { icon: React.ComponentType<{ className?: string }>; color: string }
+> = {
   blinded: { icon: UserX, color: 'bg-gray-500' },
   charmed: { icon: Heart, color: 'bg-pink-500' },
   deafened: { icon: UserX, color: 'bg-slate-500' },
@@ -74,7 +78,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
   // Look up portrait from campaign assets
   const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
-  const assetType = participant.participantType === 'monster' || participant.participantType === 'enemy' ? 'monster' : 'npc';
+  const assetType =
+    participant.participantType === 'monster' || participant.participantType === 'enemy'
+      ? 'monster'
+      : 'npc';
   const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
   const getParticipantTypeIcon = (): React.ReactNode => {
@@ -129,11 +136,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
           {portraitUrl ? (
-            <img
-              src={portraitUrl}
-              alt={participant.name}
-              className="w-full h-full object-cover"
-            />
+            <img src={portraitUrl} alt={participant.name} className="w-full h-full object-cover" />
           ) : (
             getParticipantTypeIcon()
           )}
@@ -181,6 +184,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
           <Progress
             value={hpPercent}
             className="h-2 flex-1"
+            indicatorClassName={getHPColor(hpPercent)}
             aria-label={`${participant.name} Health`}
           />
           <span className="min-w-[4rem] text-right text-sm font-medium">
@@ -324,6 +328,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
               size="icon"
               onClick={onAddParticipant}
               aria-label="Add participant"
+              title="Add participant"
               className="h-8 w-8"
             >
               <Plus className="h-4 w-4" />
