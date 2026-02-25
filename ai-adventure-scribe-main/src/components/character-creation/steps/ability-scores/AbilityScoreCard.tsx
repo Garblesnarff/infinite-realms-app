@@ -1,65 +1,102 @@
 import React from 'react';
 
+import type { Method } from '@/hooks/use-ability-score-selection';
 import type { AbilityScores } from '@/types/character';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { POINT_BUY_COSTS } from '@/utils/abilityScoreUtils';
+import { formatRacialBonus } from '@/utils/racialAbilityBonuses';
+
 
 interface AbilityScoreCardProps {
   ability: keyof AbilityScores;
-  score: number;
+  baseScore: number;
+  racialBonus: number;
+  finalScore: number;
   modifier: number;
+  description: string;
+  method: Method;
   remainingPoints: number;
-  onScoreChange: (ability: keyof AbilityScores, increase: boolean) => void;
-  isRollMode?: boolean;
+  nextCost: number;
+  onIncrease: (ability: keyof AbilityScores) => void;
+  onDecrease: (ability: keyof AbilityScores) => void;
 }
 
 /**
- * Component for displaying and managing individual ability scores
- * Handles both point buy and roll methods
+ * Component for displaying and managing an individual ability score
+ * Extracted from AbilityScoresSelection.tsx
  */
 const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
   ability,
-  score,
+  baseScore,
+  racialBonus,
+  finalScore,
   modifier,
+  description,
+  method,
   remainingPoints,
-  onScoreChange,
-  isRollMode = false,
+  nextCost,
+  onIncrease,
+  onDecrease,
 }) => {
-  const isIncreaseDisabled =
-    isRollMode ||
-    score === 15 ||
-    remainingPoints < POINT_BUY_COSTS[score + 1] - POINT_BUY_COSTS[score];
-  const isDecreaseDisabled = isRollMode || score === 8;
-
   return (
-    <Card className="p-4">
-      <h3 className="text-xl font-semibold capitalize mb-2">{ability}</h3>
-      <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onScoreChange(ability, false)}
-          disabled={isDecreaseDisabled}
-        >
-          -
-        </Button>
-        <span className="text-2xl font-bold">
-          {score}
-          <span className="text-sm ml-2 text-muted-foreground">
-            ({modifier >= 0 ? '+' : ''}
-            {modifier})
-          </span>
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onScoreChange(ability, true)}
-          disabled={isIncreaseDisabled}
-        >
-          +
-        </Button>
+    <Card className="p-4 hover:shadow-md transition-shadow">
+      <div className="space-y-3">
+        <div className="text-center">
+          <h3 className="text-lg font-bold capitalize">{ability}</h3>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onDecrease(ability)}
+            disabled={method !== 'pointBuy' || baseScore === 8}
+            className="w-8 h-8 p-0"
+            aria-label={`Decrease ${ability}`}
+          >
+            -
+          </Button>
+
+          <div className="text-center space-y-1">
+            <div className="text-xs text-muted-foreground">Base: {baseScore}</div>
+            {racialBonus > 0 && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                {formatRacialBonus(racialBonus)} racial
+              </Badge>
+            )}
+            <div className="text-3xl font-bold">{finalScore}</div>
+            <div
+              className={`text-sm font-medium ${
+                modifier > 0 ? 'text-green-600' : modifier < 0 ? 'text-red-600' : 'text-muted-foreground'
+              }`}
+            >
+              {modifier >= 0 ? '+' : ''}
+              {modifier}
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onIncrease(ability)}
+            disabled={method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost}
+            className="w-8 h-8 p-0"
+            aria-label={`Increase ${ability}`}
+          >
+            +
+          </Button>
+        </div>
+
+        {method === 'pointBuy' && baseScore < 15 && (
+          <div className="text-center">
+            <Badge variant="outline" className="text-xs">
+              Next: {nextCost} point{nextCost !== 1 ? 's' : ''}
+            </Badge>
+          </div>
+        )}
       </div>
     </Card>
   );
