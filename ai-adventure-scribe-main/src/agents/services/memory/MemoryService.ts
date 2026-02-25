@@ -1,4 +1,5 @@
 import { llmApiClient } from '@/services/llm-api-client';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
 import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';
 import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
@@ -102,6 +103,9 @@ export class MemoryService {
     aiResponse: string,
   ): Promise<MemoryExtractionResult> {
     try {
+      const cleanUserMessage = sanitizeForMemoryExtraction(userMessage);
+      const cleanAiResponse = sanitizeForMemoryExtraction(aiResponse);
+
       const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
 
 CONTEXT:
@@ -111,8 +115,8 @@ CONTEXT:
 - Active Quests: ${context.activeQuests?.join(', ') || 'None'}
 
 CONVERSATION:
-Player: ${userMessage}
-DM: ${aiResponse}
+Player: ${cleanUserMessage}
+DM: ${cleanAiResponse}
 
 Extract 1-4 key memories in this JSON format:
 {

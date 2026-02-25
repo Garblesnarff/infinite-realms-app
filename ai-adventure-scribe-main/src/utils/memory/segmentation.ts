@@ -80,9 +80,10 @@ export const splitIntoSegments = (
 ): string[] => {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  // Strip code blocks and JSON before segmentation to prevent
-  // technical content from being classified as memories
-  const cleanedContent = stripCodeBlocks(content);
+  // Strip all scaffolding before segmentation to prevent transient content
+  // (code blocks, ROLL_REQUESTS_V1, option menus, VISUAL PROMPT, separators)
+  // from being classified as memories
+  const cleanedContent = sanitizeForMemoryExtraction(content);
 
   // Use enhanced sentence splitting instead of basic regex
   const sentences = SentenceSegmenter.splitIntoSentences(cleanedContent);
@@ -98,6 +99,65 @@ export const splitIntoSegments = (
   );
 
   return optimizedSegments.map((s) => s.trim()).filter((s) => s.length > 0);
+};
+
+/**
+ * Strip A./B./C. player option menu lines and parenthetical helper phrases.
+ * Option menus are transient UX scaffolding, not durable narrative facts.
+ *
+ * Matches lines like:
+ *   "A. **Approach cautiously**, move through the shadows."
+ *   "B. **Charge forward**, yelling a battle cry."
+ *   "(Request a Stealth check)"
+ */
+export const stripOptionMenus = (content: string): string =>
+  content
+    // Remove lines that begin with a single A/B/C letter-dot option prefix
+    .replace(/^[A-Ca-c]\.\s+\**.*$/gm, '')
+    // Remove parenthetical helper phrases like (Request a Stealth check)
+    .replace(/\(Request\s+a[^)]*check\)/gi, '')
+    // Collapse excessive blank lines left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * Strip VISUAL PROMPT directives (fenced blocks and inline markers).
+ * Uses the same patterns as visualPrompt.ts to guarantee alignment.
+ */
+export const stripVisualPromptBlocks = (content: string): string =>
+  content
+    // Fenced: ```VISUAL PROMPT\n...\n``` (with flexible separators/spacing)
+    .replace(/```\s*VISUAL[_\s-]*PROMPT\s*\n[\s\S]*?```/gi, '')
+    // Inline: VISUAL PROMPT: ... (to end of line, with flexible separators)
+    .replace(/^[ \t]*VISUAL[_ -]*PROMPT\s*:?[ \t]*.*$/gim, '')
+    // Collapse excessive blank lines left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * Strip standalone separator lines (--- or ****).
+ * These are formatting-only artifacts with no narrative content.
+ */
+export const stripSeparatorLines = (content: string): string =>
+  content
+    .replace(/^[-*]{3,}\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * Full sanitization pass for memory extraction inputs.
+ * Chains all scaffolding-stripping passes so only durable narrative reaches
+ * the classifier or the LLM extraction prompt.
+ *
+ * Strips: code blocks, ROLL_REQUESTS_V1, roll scaffolding,
+ *         VISUAL PROMPT blocks, A/B/C option menus, separator lines.
+ */
+export const sanitizeForMemoryExtraction = (content: string): string => {
+  let text = stripCodeBlocks(content); // existing: ROLL_REQUESTS_V1, code blocks, roll markers
+  text = stripVisualPromptBlocks(text);
+  text = stripOptionMenus(text);
+  text = stripSeparatorLines(text);
+  return text;
 };
 
 /**

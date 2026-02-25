@@ -11,6 +11,7 @@ import type { ChatMessage, NarrationSegment, GameContext, AIResponse } from './s
 import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import logger from '@/lib/logger';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
 interface ProcessDMResponseParams {
   rawResponse: string;
@@ -304,7 +305,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
           const extractionResult = await MemoryManager.extractMemories(
             memoryContext,
             message,
-            result.text,
+            sanitizeForMemoryExtraction(result.text),
           );
 
           if (extractionResult.memories.length > 0) {
