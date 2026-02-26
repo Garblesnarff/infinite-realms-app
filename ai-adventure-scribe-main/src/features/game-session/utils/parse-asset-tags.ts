@@ -31,6 +31,28 @@ export const ASSET_TAG_PATTERN =
   /\[ASSET:(character|npc|location|monster|item|scene|entity):([a-z0-9-]+)\]/gi;
 
 /**
+ * Normalize asset tag keys that the AI may have generated with quoted or special
+ * characters (e.g. [ASSET:npc:remy-"the-manager"]).
+ *
+ * Uses a loose capture regex so it matches ANY key (not just well-formed ones),
+ * then rewrites each tag with a sanitized key so the strict ASSET_TAG_PATTERN
+ * can match and strip them in the next pass.
+ */
+export function normalizeAssetTagKeysInContent(content: string): string {
+  const loosePattern = /\[ASSET:(character|npc|location|monster|item|scene|entity):([^\]]+)\]/gi;
+  return content.replace(loosePattern, (_fullMatch, type, rawKey) => {
+    const normalized = rawKey
+      .toLowerCase()
+      .replace(/[""''«»`"']/g, '') // strip quote variants
+      .replace(/[^a-z0-9\s-]/g, '') // strip remaining specials
+      .replace(/\s+/g, '-') // spaces → hyphens
+      .replace(/-+/g, '-') // collapse duplicate hyphens
+      .replace(/^-+|-+$/g, ''); // trim surrounding hyphens
+    return `[ASSET:${type}:${normalized}]`;
+  });
+}
+
+/**
  * Parse asset tags from message content
  *
  * @param content - Raw message content that may contain [ASSET:...] tags
@@ -39,11 +61,14 @@ export const ASSET_TAG_PATTERN =
 export function parseAssetTags(content: string): ParsedAssets {
   const assets: AssetTag[] = [];
 
+  // Normalize malformed keys (e.g. with quotes) before the strict pattern runs
+  const normalizedContent = normalizeAssetTagKeysInContent(content);
+
   // Find all asset tags
   let match: RegExpExecArray | null;
   const pattern = new RegExp(ASSET_TAG_PATTERN.source, 'gi');
 
-  while ((match = pattern.exec(content)) !== null) {
+  while ((match = pattern.exec(normalizedContent)) !== null) {
     assets.push({
       type: match[1].toLowerCase() as AssetTag['type'],
       key: match[2].toLowerCase(),
@@ -52,7 +77,7 @@ export function parseAssetTags(content: string): ParsedAssets {
   }
 
   // Remove asset tags from content for display, collapsing any resulting double spaces
-  const cleanContent = content
+  const cleanContent = normalizedContent
     .replace(ASSET_TAG_PATTERN, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();

@@ -1,0 +1,59 @@
+import { describe, it, expect } from 'vitest';
+
+import { normalizeAssetTagKeysInContent, parseAssetTags } from '../parse-asset-tags';
+
+describe('normalizeAssetTagKeysInContent (issue #339)', () => {
+  it('normalizes a key with double-quotes to a valid slug', () => {
+    const input = 'Remy [ASSET:npc:remy-"the-manager"] greets you.';
+    const result = normalizeAssetTagKeysInContent(input);
+    expect(result).toContain('[ASSET:npc:remy-the-manager]');
+    expect(result).not.toContain('"');
+  });
+
+  it('normalizes a key with smart/curly quotes', () => {
+    const input = '[ASSET:npc:lord-\u201cdiabolo\u201d]';
+    const result = normalizeAssetTagKeysInContent(input);
+    expect(result).toContain('[ASSET:npc:lord-diabolo]');
+  });
+
+  it('passes through already-valid keys unchanged', () => {
+    const input = '[ASSET:location:bone-cathedral]';
+    expect(normalizeAssetTagKeysInContent(input)).toBe('[ASSET:location:bone-cathedral]');
+  });
+
+  it('handles mixed valid and malformed tags in one string', () => {
+    const input = '[ASSET:character:the-veteran] appeared beside [ASSET:npc:remy-"the-manager"].';
+    const result = normalizeAssetTagKeysInContent(input);
+    expect(result).toContain('[ASSET:character:the-veteran]');
+    expect(result).toContain('[ASSET:npc:remy-the-manager]');
+    expect(result).not.toContain('"');
+  });
+
+  it('is idempotent — applying twice gives the same result', () => {
+    const input = '[ASSET:npc:remy-"the-manager"]';
+    const once = normalizeAssetTagKeysInContent(input);
+    const twice = normalizeAssetTagKeysInContent(once);
+    expect(once).toBe(twice);
+  });
+});
+
+describe('parseAssetTags — malformed key handling (issue #339)', () => {
+  it('strips a tag with a quoted key from display content', () => {
+    const { cleanContent, assets } = parseAssetTags(
+      'You meet [ASSET:npc:remy-"the-manager"] at the door.',
+    );
+    expect(cleanContent).not.toContain('[ASSET:');
+    expect(cleanContent).toContain('You meet at the door.');
+    expect(assets).toHaveLength(1);
+    expect(assets[0].key).toBe('remy-the-manager');
+  });
+
+  it('strips multiple tags — one valid, one malformed — from display content', () => {
+    const { cleanContent, assets } = parseAssetTags(
+      '[ASSET:location:bone-cathedral] and [ASSET:npc:lord-"diabolo"] are present.',
+    );
+    expect(cleanContent).not.toContain('[ASSET:');
+    expect(cleanContent).toContain('are present.');
+    expect(assets).toHaveLength(2);
+  });
+});

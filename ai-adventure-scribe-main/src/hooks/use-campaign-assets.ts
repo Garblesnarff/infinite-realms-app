@@ -43,10 +43,10 @@ interface UseCampaignAssetsResult {
 function generateKey(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[""''«»`]/g, '')      // Remove all quote variants (Unicode + ASCII)
-    .replace(/[^a-z0-9\s-]/g, '')   // Remove remaining special chars
-    .replace(/\s+/g, '-')           // Spaces to hyphens
-    .replace(/-+/g, '-')            // Collapse multiple hyphens
+    .replace(/[""''«»`]/g, '') // Remove all quote variants (Unicode + ASCII)
+    .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
+    .replace(/\s+/g, '-') // Spaces to hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
     .trim();
 }
 
@@ -56,7 +56,7 @@ function generateKey(name: string): string {
  * @param starterCampaignId - The starter campaign ID (e.g., 'abyssal-descent')
  */
 export function useCampaignAssets(
-  starterCampaignId: string | null | undefined
+  starterCampaignId: string | null | undefined,
 ): UseCampaignAssetsResult {
   const [assets, setAssets] = useState<CampaignAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -200,10 +200,10 @@ export function useCampaignAssets(
     return map;
   }, [assets]);
 
-  // Get asset by type and key
+  // Get asset by type and key — tries exact key first, then normalized key as fallback
   const getAsset = useCallback(
     (type: string, key: string): CampaignAsset | null => {
-      return assetMap.get(`${type}:${key}`) || null;
+      return assetMap.get(`${type}:${key}`) || assetMap.get(`${type}:${generateKey(key)}`) || null;
     },
     [assetMap],
   );
