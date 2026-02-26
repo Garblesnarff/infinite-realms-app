@@ -334,7 +334,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         `,
         )
         .eq('id', characterId!)
-        .eq('user_id', user.id) // CRITICAL: Add ownership check
+        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`) // CRITICAL: Dual ownership check
         .maybeSingle();
 
       if (characterError) throw characterError;

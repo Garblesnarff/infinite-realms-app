@@ -124,11 +124,17 @@ export const useCharacterSave = () => {
         characterData.id = newCharacterId;
         savedCharacter = { ...character, id: newCharacterId, campaign_id: effectiveCampaignId };
       } else {
-        // For existing characters, use traditional update approach
+        // Check authentication for updates
+        if (!user) {
+          throw new Error('Authentication required for updating characters');
+        }
+
+        // For existing characters, use traditional update approach with dual ownership check
         const { error: updateError } = await supabase
           .from('characters')
           .update(characterData)
-          .eq('id', characterData.id);
+          .eq('id', characterData.id)
+          .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`);
 
         if (updateError) throw updateError;
 
@@ -279,7 +285,8 @@ export const useCharacterSave = () => {
           background_image: imageUrl,
           updated_at: new Date().toISOString(), // Ensure updated_at triggers realtime
         })
-        .eq('id', characterId);
+        .eq('id', characterId)
+        .or(`user_id.eq.${user?.id},owner_id.eq.${user?.id}`);
 
       if (error) {
         logger.error('Error updating character with background image:', error);

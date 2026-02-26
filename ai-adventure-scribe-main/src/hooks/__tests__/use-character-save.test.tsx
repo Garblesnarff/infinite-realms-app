@@ -12,6 +12,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: vi.fn(() => ({
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       upsert: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
     })),
@@ -131,7 +132,8 @@ describe('useCharacterSave', () => {
     // For background image update
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: null }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
@@ -166,12 +168,13 @@ describe('useCharacterSave', () => {
     };
 
     const mockUpdate = vi.fn().mockReturnThis();
-    const mockEq = vi.fn().mockResolvedValue({ error: null });
+    const mockEq = vi.fn().mockReturnThis();
+    const mockOr = vi.fn().mockResolvedValue({ error: null });
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
 
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'characters') {
-        return { update: mockUpdate, eq: mockEq };
+        return { update: mockUpdate, eq: mockEq, or: mockOr };
       }
       if (table === 'character_stats' || table === 'character_equipment') {
         return { upsert: mockUpsert };
@@ -216,7 +219,8 @@ describe('useCharacterSave', () => {
 
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: { message: 'Update Failed' } }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: { message: 'Update Failed' } }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
@@ -245,7 +249,8 @@ describe('useCharacterSave', () => {
       if (table === 'characters') {
         return {
           update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ error: null })
+          eq: vi.fn().mockReturnThis(),
+          or: vi.fn().mockResolvedValue({ error: null })
         };
       }
       // Fail stats save but succeed core character save
@@ -279,7 +284,8 @@ describe('useCharacterSave', () => {
       if (table === 'characters') {
         return {
           update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ error: null })
+          eq: vi.fn().mockReturnThis(),
+          or: vi.fn().mockResolvedValue({ error: null })
         };
       }
       return { upsert: vi.fn().mockResolvedValue({ error: null }) };
@@ -311,7 +317,8 @@ describe('useCharacterSave', () => {
       if (table === 'characters') {
         return {
           update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ error: null })
+          eq: vi.fn().mockReturnThis(),
+          or: vi.fn().mockResolvedValue({ error: null })
         };
       }
       return { upsert: vi.fn().mockResolvedValue({ error: null }) };
@@ -343,7 +350,8 @@ describe('useCharacterSave', () => {
 
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: null }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
@@ -367,7 +375,8 @@ describe('useCharacterSave', () => {
 
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: null }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
@@ -390,7 +399,8 @@ describe('useCharacterSave', () => {
 
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: null }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
@@ -414,7 +424,8 @@ describe('useCharacterSave', () => {
 
     (supabase.from as any).mockReturnValue({
       update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: { message: 'DB Update Failed' } }),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockResolvedValue({ error: { message: 'DB Update Failed' } }),
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
