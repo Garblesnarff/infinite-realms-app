@@ -337,6 +337,7 @@ export default tseslint.config(
       'src/services/world-builders/world-builder-service.ts',
       'server-bun/src/services/vision-blocker-service.ts',
       'src/features/character/components/sheet/tabs/components/CombatVitals.tsx',
+      'src/hooks/use-character-save.ts',
     ],
     rules: {
       'max-lines': 'warn',

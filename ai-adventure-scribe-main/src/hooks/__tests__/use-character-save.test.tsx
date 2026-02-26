@@ -227,10 +227,17 @@ describe('useCharacterSave', () => {
   it('should handle update error for existing character', async () => {
     const character: any = { id: 'existing-id', name: 'Updated Hero', abilityScores: {} };
 
-    (supabase.from as any).mockReturnValue({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockResolvedValue({ error: { message: 'Update Failed' } }),
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'characters') {
+        return {
+          update: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          or: vi.fn().mockResolvedValue({ error: { message: 'Update Failed' } }),
+        };
+      }
+      return {
+        upsert: vi.fn().mockResolvedValue({ error: null }),
+      };
     });
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
