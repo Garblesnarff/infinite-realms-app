@@ -9,6 +9,14 @@ const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
 const BULLET_PATTERN = /^[-•]/;
 
 /**
+ * Convert JSON-style backslash-escape sequences that the AI occasionally emits
+ * in narrative text (e.g. \" → ", \' → ', \\n → newline, \\t → tab).
+ * Applied before other sanitizers so downstream logic sees clean text.
+ */
+const unescapeJsonLiteralChars = (text: string): string =>
+  text.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+
+/**
  * Remove leaked verbalized sampling brainstorming patterns from AI response.
  * Safety filter to catch any internal reasoning that slips through.
  */
@@ -156,7 +164,7 @@ export const formatNarrative = (
   }
 
   // Clean brainstorming artifacts and sanitize markdown delimiters before processing
-  const trimmed = sanitizeEmphasisDelimiters(cleanBrainstorming(rawText));
+  const trimmed = sanitizeEmphasisDelimiters(cleanBrainstorming(unescapeJsonLiteralChars(rawText)));
 
   if (!trimmed) {
     return { content: null, charCount: 0, paragraphCount: 0 };

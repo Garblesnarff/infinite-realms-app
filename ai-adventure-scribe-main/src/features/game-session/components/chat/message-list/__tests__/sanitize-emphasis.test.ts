@@ -1,6 +1,10 @@
+import { type ReactElement } from 'react';
 import { describe, it, expect } from 'vitest';
 
+import { formatNarrative } from '../formatNarrative';
 import { sanitizeEmphasisDelimiters } from '../sanitize-emphasis';
+
+import type React from 'react';
 
 describe('sanitizeEmphasisDelimiters', () => {
   it('leaves valid *emphasis* unchanged', () => {
@@ -58,5 +62,40 @@ describe('sanitizeEmphasisDelimiters', () => {
   it('does not corrupt plain text with no asterisks', () => {
     const plain = 'The dungeon was dark and silent.';
     expect(sanitizeEmphasisDelimiters(plain)).toBe(plain);
+  });
+});
+
+describe('formatNarrative — JSON escape artifact handling (issue #340)', () => {
+  const extractText = (node: React.ReactNode): string => {
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(extractText).join('');
+    if (node && typeof node === 'object' && 'props' in node) {
+      return extractText((node as ReactElement).props.children as React.ReactNode);
+    }
+    return '';
+  };
+
+  it('unescapes backslash-quote sequences in AI narrative', () => {
+    const input = '\\"Now, which station do you want?\\"';
+    const { content } = formatNarrative(input);
+    const text = extractText(content);
+    expect(text).not.toContain('\\"');
+    expect(text).toContain('"Now, which station do you want?"');
+  });
+
+  it('unescapes backslash-single-quote sequences', () => {
+    const input = "It\\'s a trap!";
+    const { content } = formatNarrative(input);
+    const text = extractText(content);
+    expect(text).not.toContain("\\'");
+    expect(text).toContain("It's a trap!");
+  });
+
+  it('handles combined backslash-quote + emphasis artifacts', () => {
+    const input = '* Lord \\"Diabolo\\"* steps forward.';
+    const { content } = formatNarrative(input);
+    const text = extractText(content);
+    expect(text).not.toContain('\\"');
+    expect(text).toContain('"Diabolo"');
   });
 });
