@@ -87,15 +87,27 @@ export class SceneService {
    * List all scenes for a campaign
    */
   static async listScenesForCampaign(campaignId: string, userId: string): Promise<Scene[]> {
-    // Verify campaign ownership
-    await this.verifyCampaignOwnership(campaignId, userId);
+    // ⚡ Bolt: Consolidated campaign ownership verification and scene retrieval into a single joined query.
+    // This reduces database round-trips from 2 to 1 while maintaining the same security behavior.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = await (db as any)
+      .select({
+        scene: scenes,
+      })
+      .from(campaigns)
+      .leftJoin(scenes, and(eq(scenes.campaignId, campaigns.id), eq(scenes.userId, userId)))
+      .where(and(eq(campaigns.id, campaignId), eq(campaigns.userId, userId)))
+      .orderBy(desc(scenes.createdAt));
 
-    const sceneList = await db.query.scenes.findMany({
-      where: and(eq(scenes.campaignId, campaignId), eq(scenes.userId, userId)),
-      orderBy: [desc(scenes.createdAt)],
-    });
+    if (results.length === 0) {
+      // If no campaign was found for this user, throw NotFoundError
+      throw new NotFoundError('Campaign', campaignId);
+    }
 
-    return sceneList;
+    // Filter out null scenes (caused by leftJoin when campaign has no scenes)
+    return results
+      .map((r: { scene: Scene | null }) => r.scene)
+      .filter((s: Scene | null): s is Scene => s !== null);
   }
 
   /**
@@ -123,30 +135,35 @@ export class SceneService {
    * Create new scene with default settings and layers
    */
   static async createScene(userId: string, data: CreateSceneData): Promise<Scene> {
-    // Verify campaign ownership
-    await this.verifyCampaignOwnership(data.campaignId, userId);
-
-    // Create scene
+    // ⚡ Bolt: Optimized to use a single atomic INSERT ... SELECT query for ownership verification.
+    // This reduces database round-trips from 2 to 1 and prevents unauthorized writes.
     const [scene] = await db
       .insert(scenes)
-      .values({
-        userId,
-        name: data.name,
-        description: data.description || null,
-        campaignId: data.campaignId,
-        width: data.width || 20,
-        height: data.height || 20,
-        gridSize: data.gridSize || 5,
-        gridType: data.gridType || 'square',
-        gridColor: data.gridColor || '#000000',
-        backgroundImageUrl: data.backgroundImageUrl || null,
-        thumbnailUrl: data.thumbnailUrl || null,
-        isActive: false,
-      })
+      .select(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (db as any)
+          .select({
+            userId: sql`${userId}`,
+            name: sql`${data.name}`,
+            description: sql`${data.description || null}`,
+            campaignId: sql`${data.campaignId}`,
+            width: sql`${data.width || 20}`,
+            height: sql`${data.height || 20}`,
+            gridSize: sql`${data.gridSize || 5}`,
+            gridType: sql`${data.gridType || 'square'}`,
+            gridColor: sql`${data.gridColor || '#000000'}`,
+            backgroundImageUrl: sql`${data.backgroundImageUrl || null}`,
+            thumbnailUrl: sql`${data.thumbnailUrl || null}`,
+            isActive: sql`false`,
+          })
+          .from(campaigns)
+          .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))),
+      )
       .returning();
 
     if (!scene) {
-      throw new InternalServerError('Failed to create scene');
+      // If no row was inserted, it means the SELECT returned zero rows (unauthorized or campaign not found)
+      throw new NotFoundError('Campaign', data.campaignId);
     }
 
     // Create default layers
