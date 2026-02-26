@@ -146,7 +146,7 @@ const SelectableCard = React.forwardRef<HTMLDivElement, SelectableCardProps>(
         )}
 
         {/* Main Content */}
-        <div className="relative z-0 flex flex-col items-start space-y-2">
+        <div className="relative flex flex-col items-start space-y-2" style={{ zIndex: Z_INDEX.BASE }}>
           {/* Icon */}
           {icon && (
             <motion.div

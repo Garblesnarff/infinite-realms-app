@@ -1,4 +1,4 @@
-import { Package, Coins, Sword, Shield, Weight, Star, Info } from 'lucide-react';
+import { Package, Coins, Sword, Shield, Weight, Star, Info, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { Character } from '@/types/character';
@@ -35,10 +35,8 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
     pp: character.currency?.pp || 0,
   };
 
-  const { attuneToItem, removeAttunement, getAttunementSummary } = useMagicItemAttunement(
-    character,
-    onUpdate,
-  );
+  const { attuneToItem, removeAttunement, getAttunementSummary, isAttuning } =
+    useMagicItemAttunement(character, onUpdate);
 
   // Calculate carrying capacity
   const strengthScore = character.abilityScores?.strength?.score || 10;
@@ -314,6 +312,8 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                           size="sm"
                           variant={item.equipped ? 'default' : 'outline'}
                           onClick={() => toggleEquipped(item.itemId)}
+                          aria-pressed={item.equipped}
+                          title={item.equipped ? 'Unequip item' : 'Equip item'}
                         >
                           {item.equipped ? 'Unequip' : 'Equip'}
                         </Button>
@@ -324,8 +324,21 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                             variant={item.isAttuned ? 'secondary' : 'outline'}
                             onClick={() => handleAttuneToggle(item.itemId)}
                             className="text-xs"
-                            disabled={!item.equipped || !attunementStatus.canAttune}
+                            disabled={isAttuning || !item.equipped || (!item.isAttuned && !attunementStatus.canAttune)}
+                            aria-pressed={item.isAttuned}
+                            title={
+                              !item.equipped
+                                ? 'Must be equipped to attune'
+                                : item.isAttuned
+                                  ? 'Remove attunement'
+                                  : attunementStatus.canAttune
+                                    ? 'Attune to item'
+                                    : 'Attunement slots full'
+                            }
                           >
+                            {isAttuning ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : null}
                             {item.isAttuned ? 'Unattune' : 'Attune'}
                           </Button>
                         )}

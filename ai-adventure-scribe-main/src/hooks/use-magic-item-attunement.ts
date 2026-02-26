@@ -75,6 +75,7 @@ export const useMagicItemAttunement = (
    */
   const removeAttunement = useCallback(
     async (itemId: string): Promise<AttunementResult> => {
+      setIsAttuning(true);
       try {
         // Find the item in character inventory
         const item = character.inventory?.find((invItem) => invItem.itemId === itemId);
@@ -103,6 +104,8 @@ export const useMagicItemAttunement = (
       } catch (error) {
         logger.error('Error removing attunement:', error);
         return { success: false, message: 'Failed to remove attunement' };
+      } finally {
+        setIsAttuning(false);
       }
     },
     [character, onCharacterUpdate],

@@ -328,6 +328,7 @@ export default tseslint.config(
       'src/components/blog-admin/blog-post-editor/media-manager.tsx',
       'src/features/game-session/hooks/use-chat-history.ts',
       'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
+      'src/features/game-session/components/chat/ChatInput.tsx',
       'src/components/spells/SpellCard.tsx',
       'src/features/character/components/spells/SpellCard.tsx',
       'src/features/game-session/components/dice/DiceRollEmbed.tsx',

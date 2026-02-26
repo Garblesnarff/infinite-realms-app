@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Z_INDEX } from '@/constants/z-index';
 import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceCommandParser';
 
 interface ChatInputProps {
@@ -156,7 +157,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
 
             {/* Dice command suggestions */}
             {showDiceSuggestions && diceSuggestions.length > 0 && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
+              <div
+                className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto"
+                style={{ zIndex: Z_INDEX.DROPDOWN }}
+              >
                 <div className="p-2">
                   <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
                     <Dice6 className="w-3 h-3" />
