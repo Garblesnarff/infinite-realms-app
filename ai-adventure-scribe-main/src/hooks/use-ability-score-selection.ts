@@ -116,7 +116,9 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
           payload: { abilityScores: newScores },
         });
 
-        setRemainingPoints((prev) => prev - (POINT_COST[currentScore + 1] - POINT_COST[currentScore]));
+        setRemainingPoints(
+          (prev) => prev - (POINT_COST[currentScore + 1] - POINT_COST[currentScore]),
+        );
       }
     },
     [state.character?.abilityScores, remainingPoints, dispatch],
@@ -149,7 +151,9 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
           payload: { abilityScores: newScores },
         });
 
-        setRemainingPoints((prev) => prev + (POINT_COST[currentScore] - POINT_COST[currentScore - 1]));
+        setRemainingPoints(
+          (prev) => prev + (POINT_COST[currentScore] - POINT_COST[currentScore - 1]),
+        );
       }
     },
     [state.character?.abilityScores, dispatch],
@@ -361,9 +365,9 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
   // Validate standard array: must use exactly [15,14,13,12,10,8]
   const standardArrayValid = useMemo(() => {
     if (method !== 'standardArray') return true;
-    const usedScores = ABILITIES.map((ability) => state.character?.abilityScores?.[ability]?.score || 8).sort(
-      (a, b) => b - a,
-    );
+    const usedScores = ABILITIES.map(
+      (ability) => state.character?.abilityScores?.[ability]?.score || 8,
+    ).sort((a, b) => b - a);
     const expectedArray = [15, 14, 13, 12, 10, 8];
     return JSON.stringify(usedScores) === JSON.stringify(expectedArray);
   }, [method, state.character?.abilityScores]);

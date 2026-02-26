@@ -32,7 +32,7 @@ describe('useMulticlassing', () => {
     name: 'Test Character',
     level: 1,
     classLevels: [
-      { classId: 'fighter-id', className: 'Fighter', level: 1, hitDie: 10, features: [] }
+      { classId: 'fighter-id', className: 'Fighter', level: 1, hitDie: 10, features: [] },
     ],
   } as any;
 
@@ -45,7 +45,11 @@ describe('useMulticlassing', () => {
   describe('validateNewClass', () => {
     it('should validate a new class and update state', async () => {
       const mockNewClass: CharacterClass = { id: 'wizard-id', name: 'Wizard' } as any;
-      const mockValidationResult = { canMulticlass: true, requirements: [], missingRequirements: [] };
+      const mockValidationResult = {
+        canMulticlass: true,
+        requirements: [],
+        missingRequirements: [],
+      };
       (multiclassUtils.validateMulticlass as any).mockReturnValue(mockValidationResult);
 
       const { result } = renderHook(() => useMulticlassing(mockCharacter, onCharacterUpdate));
@@ -82,7 +86,11 @@ describe('useMulticlassing', () => {
   describe('addNewClass', () => {
     it('should add a new class successfully', async () => {
       const mockNewClass: CharacterClass = { id: 'wizard-id', name: 'Wizard' } as any;
-      const mockValidationResult = { canMulticlass: true, requirements: [], missingRequirements: [] };
+      const mockValidationResult = {
+        canMulticlass: true,
+        requirements: [],
+        missingRequirements: [],
+      };
       const mockUpdatedCharacter = { ...mockCharacter, totalLevel: 2 };
 
       (multiclassUtils.validateMulticlass as any).mockReturnValue(mockValidationResult);
@@ -107,7 +115,7 @@ describe('useMulticlassing', () => {
       const mockValidationResult = {
         canMulticlass: false,
         requirements: ['Int 13+'],
-        missingRequirements: ['Int 13+']
+        missingRequirements: ['Int 13+'],
       };
 
       (multiclassUtils.validateMulticlass as any).mockReturnValue(mockValidationResult);
@@ -149,8 +157,8 @@ describe('useMulticlassing', () => {
         ...mockCharacter,
         totalLevel: 2,
         classLevels: [
-          { classId: 'fighter-id', className: 'Fighter', level: 2, hitDie: 10, features: [] }
-        ]
+          { classId: 'fighter-id', className: 'Fighter', level: 2, hitDie: 10, features: [] },
+        ],
       };
       (multiclassUtils.levelUpClass as any).mockReturnValue(mockUpdatedCharacter);
 
@@ -170,7 +178,7 @@ describe('useMulticlassing', () => {
     it('should return "Unknown" if class name not found after level up', async () => {
       const mockUpdatedCharacter = {
         ...mockCharacter,
-        classLevels: []
+        classLevels: [],
       };
       (multiclassUtils.levelUpClass as any).mockReturnValue(mockUpdatedCharacter);
 
@@ -222,8 +230,8 @@ describe('useMulticlassing', () => {
         ...mockCharacter,
         classLevels: [
           { classId: 'f', level: 2 },
-          { classId: 'w', level: 3 }
-        ]
+          { classId: 'w', level: 3 },
+        ],
       } as any;
       const { result } = renderHook(() => useMulticlassing(mcChar, onCharacterUpdate));
       expect(result.current.getTotalLevel()).toBe(5);
@@ -234,8 +242,8 @@ describe('useMulticlassing', () => {
         ...mockCharacter,
         classLevels: [
           { classId: 'f', level: 1 },
-          { classId: 'w', level: 1 }
-        ]
+          { classId: 'w', level: 1 },
+        ],
       } as any;
       const { result } = renderHook(() => useMulticlassing(mcChar, onCharacterUpdate));
       expect(result.current.isMulticlassed()).toBe(true);

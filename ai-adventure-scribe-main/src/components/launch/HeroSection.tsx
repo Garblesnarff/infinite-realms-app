@@ -54,8 +54,10 @@ export const HeroSection: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="relative container mx-auto px-4 text-center" style={{ zIndex: Z_INDEX.DROPDOWN }}>
-
+      <div
+        className="relative container mx-auto px-4 text-center"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         {/* Beta Pill */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30 backdrop-blur-md mb-8 animate-fade-in-up">
           <Sparkles className="w-4 h-4 text-purple-400" />
@@ -64,16 +66,21 @@ export const HeroSection: React.FC = () => {
 
         {/* Main Headline */}
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 tracking-tight leading-tight drop-shadow-lg">
-          THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500">5E CAMPAIGN</span> <br />
+          THE{' '}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500">
+            5E CAMPAIGN
+          </span>{' '}
+          <br />
           THAT NEVER CANCELS
         </h1>
 
         {/* Subheadline - The Emotional Hook */}
         <p className="text-xl md:text-2xl text-gray-200 mb-10 max-w-3xl mx-auto leading-relaxed font-light">
-          The tabletop adventures you've been wanting, now possible.
-          An AI Game Master with <span className="text-white font-semibold">perfect memory</span>,
+          The tabletop adventures you've been wanting, now possible. An AI Game Master with{' '}
+          <span className="text-white font-semibold">perfect memory</span>,
           <span className="text-white font-semibold"> professional voice acting</span>, and
-          <span className="text-white font-semibold"> infinite patience</span>. No scheduling. No cancellations. Just play.
+          <span className="text-white font-semibold"> infinite patience</span>. No scheduling. No
+          cancellations. Just play.
         </p>
 
         {/* CTAs */}

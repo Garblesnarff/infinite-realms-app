@@ -1,4 +1,8 @@
-import type { CombatDetectionResult, DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
+import type {
+  CombatDetectionResult,
+  DetectedEnemy,
+  DetectedCombatAction,
+} from '@/utils/combatDetection';
 
 export class CombatRulesPrompts {
   static buildCombatRulesSection(): string {

@@ -80,7 +80,7 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
         const { data, error: queryError } = await supabase
           .from('starter_campaigns')
           .select(
-            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url'
+            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
           )
           .eq('is_published', true)
           .eq('is_complete', true)

@@ -179,11 +179,7 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
 
   return (
     <div
-      className={cn(
-        'fixed pointer-events-auto',
-        positionClasses[position],
-        className
-      )}
+      className={cn('fixed pointer-events-auto', positionClasses[position], className)}
       style={{ zIndex: Z_INDEX.TOAST }}
     >
       <Card className="w-64 shadow-lg">
@@ -242,8 +238,7 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Memory:</span>
                   <span className="font-mono">
-                    {metrics.memoryUsed.toFixed(0)} /{' '}
-                    {metrics.memoryLimit?.toFixed(0) ?? '?'} MB
+                    {metrics.memoryUsed.toFixed(0)} / {metrics.memoryLimit?.toFixed(0) ?? '?'} MB
                   </span>
                 </div>
               )}
@@ -298,7 +293,7 @@ export const FPSCounter: React.FC<{
         'fixed pointer-events-none font-mono text-sm font-bold',
         positionClasses[position],
         getFPSColor(metrics.fps),
-        className
+        className,
       )}
       style={{ zIndex: Z_INDEX.TOAST }}
     >

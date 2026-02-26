@@ -8,7 +8,7 @@ import {
   getCharacterSpells,
   createFallbackSpell,
   getAllSpells,
-  searchSpells
+  searchSpells,
 } from '../spell-lookup';
 
 // Mock logger
@@ -80,7 +80,7 @@ describe('spell-lookup', () => {
     it('should find a spell by UUID using reverse mapping', () => {
       // Find a UUID from the mapping
       const uuid = Object.keys(REVERSE_SPELL_ID_MAPPING).find(
-        (key) => REVERSE_SPELL_ID_MAPPING[key] === 'fire-bolt'
+        (key) => REVERSE_SPELL_ID_MAPPING[key] === 'fire-bolt',
       );
 
       if (!uuid) {
@@ -182,14 +182,14 @@ describe('spell-lookup', () => {
     });
 
     it('should handle spells without IDs gracefully', () => {
-       // Mocking getSpellsByIds to return a spell with missing ID is hard due to type safety
-       // But we can test the character with invalid IDs that get filtered or become fallbacks
-       const character = {
-         cantrips: [null as any, 'valid-one'],
-       };
-       const result = getCharacterSpells(character);
-       expect(result.cantrips).toHaveLength(1);
-       expect(result.cantrips[0].id).toBe('valid-one');
+      // Mocking getSpellsByIds to return a spell with missing ID is hard due to type safety
+      // But we can test the character with invalid IDs that get filtered or become fallbacks
+      const character = {
+        cantrips: [null as any, 'valid-one'],
+      };
+      const result = getCharacterSpells(character);
+      expect(result.cantrips).toHaveLength(1);
+      expect(result.cantrips[0].id).toBe('valid-one');
     });
   });
 

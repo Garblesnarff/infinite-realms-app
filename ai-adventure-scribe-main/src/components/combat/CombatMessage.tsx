@@ -1,7 +1,6 @@
 import { Sword, Shield, Zap, Heart, Skull, Target, Dice6 } from 'lucide-react';
 import React from 'react';
 
-
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';

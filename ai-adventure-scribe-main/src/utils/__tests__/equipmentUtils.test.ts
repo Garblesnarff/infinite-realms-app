@@ -7,7 +7,7 @@ import {
   equipOffHandWeapon,
   canDualWield,
   getEquippedWeapons,
-  getWeaponProficiencyBonus
+  getWeaponProficiencyBonus,
 } from '../equipmentUtils';
 
 import type { CombatParticipant } from '@/types/combat';
@@ -52,27 +52,27 @@ describe('equipmentUtils', () => {
     const weapons = createDefaultLightWeapons();
     const heavyWeapon: any = {
       name: 'Greataxe',
-      weaponProperties: { heavy: true }
+      weaponProperties: { heavy: true },
     };
 
     it('should return true if both weapons are light', () => {
       const participant: any = {
         mainHandWeapon: weapons.scimitar,
-        offHandWeapon: weapons.shortsword
+        offHandWeapon: weapons.shortsword,
       };
       expect(canDualWield(participant)).toBe(true);
     });
 
     it('should return false if main hand is missing', () => {
       const participant: any = {
-        offHandWeapon: weapons.shortsword
+        offHandWeapon: weapons.shortsword,
       };
       expect(canDualWield(participant)).toBe(false);
     });
 
     it('should return false if off hand is missing', () => {
       const participant: any = {
-        mainHandWeapon: weapons.scimitar
+        mainHandWeapon: weapons.scimitar,
       };
       expect(canDualWield(participant)).toBe(false);
     });
@@ -80,7 +80,7 @@ describe('equipmentUtils', () => {
     it('should return false if one weapon is not light', () => {
       const participant: any = {
         mainHandWeapon: heavyWeapon,
-        offHandWeapon: weapons.shortsword
+        offHandWeapon: weapons.shortsword,
       };
       expect(canDualWield(participant)).toBe(false);
     });
@@ -92,7 +92,7 @@ describe('equipmentUtils', () => {
     it('should return all equipped weapons', () => {
       const participant: any = {
         mainHandWeapon: weapons.scimitar,
-        offHandWeapon: weapons.shortsword
+        offHandWeapon: weapons.shortsword,
       };
       const equipped = getEquippedWeapons(participant);
       expect(equipped.mainHand).toEqual(weapons.scimitar);
@@ -104,7 +104,7 @@ describe('equipmentUtils', () => {
 
     it('should handle only main hand equipped', () => {
       const participant: any = {
-        mainHandWeapon: weapons.scimitar
+        mainHandWeapon: weapons.scimitar,
       };
       const equipped = getEquippedWeapons(participant);
       expect(equipped.allWeapons).toHaveLength(1);

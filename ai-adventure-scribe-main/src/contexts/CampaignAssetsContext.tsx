@@ -57,12 +57,10 @@ export function CampaignAssetsProvider({
       error,
       starterCampaignId: starterCampaignId || null,
     }),
-    [getAsset, getAssetImageUrl, assets, assetListForPrompt, isLoading, error, starterCampaignId]
+    [getAsset, getAssetImageUrl, assets, assetListForPrompt, isLoading, error, starterCampaignId],
   );
 
-  return (
-    <CampaignAssetsContext.Provider value={value}>{children}</CampaignAssetsContext.Provider>
-  );
+  return <CampaignAssetsContext.Provider value={value}>{children}</CampaignAssetsContext.Provider>;
 }
 
 /**

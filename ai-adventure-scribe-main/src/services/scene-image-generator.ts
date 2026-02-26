@@ -65,10 +65,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
   const referenceBase64s: string[] = [];
 
   // 1. Character avatar (highest priority - always first)
-  const charUrl =
-    req.referenceImageUrl ||
-    req.character?.avatar_url ||
-    req.character?.image_url;
+  const charUrl = req.referenceImageUrl || req.character?.avatar_url || req.character?.image_url;
   if (charUrl) {
     try {
       referenceBase64s.push(await fetchImageAsBase64(charUrl));
@@ -88,7 +85,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
       item: 5,
     };
     const sortedAssets = [...req.assetUrls].sort(
-      (a, b) => (assetPriority[a.type] ?? 6) - (assetPriority[b.type] ?? 6)
+      (a, b) => (assetPriority[a.type] ?? 6) - (assetPriority[b.type] ?? 6),
     );
 
     // Limit to 3 additional assets (4 total with character)
@@ -97,7 +94,10 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
         referenceBase64s.push(await fetchImageAsBase64(asset.url));
         logger.info('[SceneImage] Added asset reference', { type: asset.type, name: asset.name });
       } catch (e) {
-        logger.warn('[SceneImage] Failed to fetch asset reference', { type: asset.type, name: asset.name });
+        logger.warn('[SceneImage] Failed to fetch asset reference', {
+          type: asset.type,
+          name: asset.name,
+        });
       }
     }
   }

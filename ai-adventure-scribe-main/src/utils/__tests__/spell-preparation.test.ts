@@ -146,7 +146,7 @@ describe('spell-preparation', () => {
         char,
         ['magic-missile', 'shield'], // Prepared
         [], // Known
-        ['magic-missile', 'shield', 'mage-armor'] // Spellbook
+        ['magic-missile', 'shield', 'mage-armor'], // Spellbook
       );
 
       expect(result.valid).toBe(true);
@@ -175,7 +175,7 @@ describe('spell-preparation', () => {
         char,
         ['shield'],
         [],
-        ['magic-missile'] // Shield not in spellbook
+        ['magic-missile'], // Shield not in spellbook
       );
 
       expect(result.valid).toBe(false);
@@ -204,7 +204,7 @@ describe('spell-preparation', () => {
         char,
         ['magic-missile', 'shield'], // 2 spells, limit 1
         [],
-        ['magic-missile', 'shield']
+        ['magic-missile', 'shield'],
       );
 
       expect(result.valid).toBe(false);
@@ -222,7 +222,9 @@ describe('spell-preparation', () => {
       const result = await validateSpellPreparation(char, ['magic-missile']);
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Failed to validate spell preparation - could not fetch spell data');
+      expect(result.errors).toContain(
+        'Failed to validate spell preparation - could not fetch spell data',
+      );
     });
 
     it('should error if spellbook spell is not available to the class', async () => {
@@ -243,7 +245,7 @@ describe('spell-preparation', () => {
         char,
         ['magic-missile'],
         [],
-        ['magic-missile', 'fireball'] // Fireball not available
+        ['magic-missile', 'fireball'], // Fireball not available
       );
 
       expect(result.valid).toBe(false);
@@ -287,13 +289,17 @@ describe('spell-preparation', () => {
 
       (spellApi.getClassSpells as any).mockResolvedValue({
         cantrips: [],
-        spells: Array(5).fill(0).map((_, i) => ({ id: `spell-${i}` })),
+        spells: Array(5)
+          .fill(0)
+          .map((_, i) => ({ id: `spell-${i}` })),
       });
 
       const result = await validateSpellPreparation(
         char,
         [],
-        Array(5).fill(0).map((_, i) => `spell-${i}`) // 5 spells, limit 4
+        Array(5)
+          .fill(0)
+          .map((_, i) => `spell-${i}`), // 5 spells, limit 4
       );
 
       expect(result.valid).toBe(false);
@@ -331,14 +337,18 @@ describe('spell-preparation', () => {
 
       (spellApi.getClassSpells as any).mockResolvedValue({
         cantrips: [],
-        spells: Array(7).fill(0).map((_, i) => ({ id: `spell-${i}` })),
+        spells: Array(7)
+          .fill(0)
+          .map((_, i) => ({ id: `spell-${i}` })),
       });
 
       const result = await validateSpellPreparation(
         char,
         [],
         [],
-        Array(7).fill(0).map((_, i) => `spell-${i}`) // 7 spells, limit 6
+        Array(7)
+          .fill(0)
+          .map((_, i) => `spell-${i}`), // 7 spells, limit 6
       );
 
       expect(result.valid).toBe(false);
@@ -401,9 +411,9 @@ describe('spell-preparation', () => {
       const char = {
         class: {
           name: 'Wizard',
-          spellcasting: { ritualCasting: true }
+          spellcasting: { ritualCasting: true },
         },
-        level: 1
+        level: 1,
       } as any;
 
       (spellApi.getAllSpells as any).mockResolvedValue([
@@ -414,10 +424,7 @@ describe('spell-preparation', () => {
 
       (spellApi.getClassSpells as any).mockResolvedValue({
         cantrips: [],
-        spells: [
-          { id: 'detect-magic' },
-          { id: 'mage-armor' }
-        ]
+        spells: [{ id: 'detect-magic' }, { id: 'mage-armor' }],
       });
 
       const rituals = await getAvailableRitualSpells(char);
@@ -429,8 +436,8 @@ describe('spell-preparation', () => {
       const char = {
         class: {
           name: 'Sorcerer',
-          spellcasting: { ritualCasting: false }
-        }
+          spellcasting: { ritualCasting: false },
+        },
       } as any;
 
       const rituals = await getAvailableRitualSpells(char);
@@ -441,8 +448,8 @@ describe('spell-preparation', () => {
       const char = {
         class: {
           name: 'Wizard',
-          spellcasting: { ritualCasting: true }
-        }
+          spellcasting: { ritualCasting: true },
+        },
       } as any;
 
       (spellApi.getAllSpells as any).mockRejectedValue(new Error('API Down'));
@@ -456,8 +463,8 @@ describe('spell-preparation', () => {
     it('should return true if class has ritual casting', () => {
       const char = {
         class: {
-          spellcasting: { ritualCasting: true }
-        }
+          spellcasting: { ritualCasting: true },
+        },
       } as any;
       expect(canCastRituals(char)).toBe(true);
     });

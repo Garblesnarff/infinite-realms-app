@@ -104,7 +104,7 @@ export function validateMulticlass(
 
   // Check requirements for all EXISTING classes (multiclassing OUT)
   if (character.classLevels && character.classLevels.length > 0) {
-    character.classLevels.forEach(cls => {
+    character.classLevels.forEach((cls) => {
       checkClassReqs(cls.className);
     });
   } else if (character.class) {
@@ -118,7 +118,7 @@ export function validateMulticlass(
   return {
     canMulticlass,
     requirements: [...new Set(requirements)],
-    missingRequirements: [...new Set(missingRequirements)]
+    missingRequirements: [...new Set(missingRequirements)],
   };
 }
 

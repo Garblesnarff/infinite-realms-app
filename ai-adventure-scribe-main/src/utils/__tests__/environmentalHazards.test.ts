@@ -7,7 +7,7 @@ import {
   interactWithHazard,
   calculateHazardDamage,
   checkHazardImmunities,
-  applyHazardEffects
+  applyHazardEffects,
 } from '../environmentalHazards';
 
 // Mock diceUtils
@@ -217,7 +217,7 @@ describe('environmentalHazards utility', () => {
     it('should apply conditions on failed save', () => {
       const conditionHazard = {
         ...mockHazard,
-        conditions: [{ name: 'prone', duration: 1 }]
+        conditions: [{ name: 'prone', duration: 1 }],
       };
       (diceUtils.rollSavingThrow as any).mockReturnValue({ total: 5 });
       const result = interactWithHazard(mockCharacter, conditionHazard);
@@ -248,7 +248,7 @@ describe('environmentalHazards utility', () => {
     it('should return half damage on failed save (if onFail: half)', () => {
       const halfOnFail = {
         ...mockHazard,
-        damage: { ...mockHazard.damage, onFail: 'half' }
+        damage: { ...mockHazard.damage, onFail: 'half' },
       };
       (diceUtils.rollDice as any).mockReturnValue({ total: 12 });
       const damage = calculateHazardDamage(halfOnFail, false);
@@ -264,7 +264,7 @@ describe('environmentalHazards utility', () => {
     it('should return no damage on successful save (if onSuccess: none)', () => {
       const noneOnSuccess = {
         ...mockHazard,
-        damage: { ...mockHazard.damage, onSuccess: 'none' }
+        damage: { ...mockHazard.damage, onSuccess: 'none' },
       };
       (diceUtils.rollDice as any).mockReturnValue({ total: 12 });
       const damage = calculateHazardDamage(noneOnSuccess, true);

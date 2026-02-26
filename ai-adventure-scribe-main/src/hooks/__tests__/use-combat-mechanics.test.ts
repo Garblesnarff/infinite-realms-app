@@ -125,13 +125,15 @@ describe('useCombatMechanics', () => {
       } as any);
 
       vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
-        rolls: [{
-          dieType: 8,
-          count: 1,
-          modifier: 3,
-          results: [5],
-          total: 8,
-        }],
+        rolls: [
+          {
+            dieType: 8,
+            count: 1,
+            modifier: 3,
+            results: [5],
+            total: 8,
+          },
+        ],
         totalBeforeResistance: 8,
       } as any);
 
@@ -139,16 +141,24 @@ describe('useCombatMechanics', () => {
         await result.current.handleEnhancedAttack('p1', 'p2', 'attack');
       });
 
-      expect(diceUtils.rollAttack).toHaveBeenCalledWith(5, expect.objectContaining({
-        advantage: false,
-        disadvantage: false,
-        halflingLucky: true, // p1 has lucky trait in mock
-      }));
+      expect(diceUtils.rollAttack).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({
+          advantage: false,
+          disadvantage: false,
+          halflingLucky: true, // p1 has lucky trait in mock
+        }),
+      );
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('attack', 'p1', 'p2', expect.objectContaining({
-        damageDealt: 8,
-        hit: true,
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'attack',
+        'p1',
+        'p2',
+        expect.objectContaining({
+          damageDealt: 8,
+          hit: true,
+        }),
+      );
     });
 
     it('should handle critical hits and divine smite', async () => {
@@ -163,7 +173,7 @@ describe('useCombatMechanics', () => {
       vi.mocked(attackUtils.calculateAttackDamage).mockReturnValue({
         rolls: [
           { total: 12 }, // base
-          { total: 9 },  // smite
+          { total: 9 }, // smite
         ],
         totalBeforeResistance: 21,
       } as any);
@@ -172,10 +182,15 @@ describe('useCombatMechanics', () => {
         await result.current.handleEnhancedAttack('p1', 'p2', 'attack', false, false, 1);
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('attack', 'p1', 'p2', expect.objectContaining({
-        damageDealt: 21,
-        description: expect.stringContaining('CRITICAL HIT!'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'attack',
+        'p1',
+        'p2',
+        expect.objectContaining({
+          damageDealt: 21,
+          description: expect.stringContaining('CRITICAL HIT!'),
+        }),
+      );
     });
 
     it('should rely on calculateAttackDamage for Rage damage if present', async () => {
@@ -207,9 +222,14 @@ describe('useCombatMechanics', () => {
         await result.current.handleEnhancedAttack('p1', 'p2');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('attack', 'p1', 'p2', expect.objectContaining({
-        damageDealt: 12,
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'attack',
+        'p1',
+        'p2',
+        expect.objectContaining({
+          damageDealt: 12,
+        }),
+      );
       expect(classFeatures.getRageDamageBonus).not.toHaveBeenCalled();
     });
 
@@ -244,9 +264,14 @@ describe('useCombatMechanics', () => {
       });
 
       expect(classFeatures.getRageDamageBonus).toHaveBeenCalledWith(5);
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('attack', 'p1', 'p2', expect.objectContaining({
-        damageDealt: 12, // 10 + 2
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'attack',
+        'p1',
+        'p2',
+        expect.objectContaining({
+          damageDealt: 12, // 10 + 2
+        }),
+      );
     });
 
     it('should return early if participant not found', async () => {
@@ -272,11 +297,13 @@ describe('useCombatMechanics', () => {
       const dragonbornProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Dragonborn',
-            racialTraits: [{ name: 'breath_weapon' }],
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Dragonborn',
+              racialTraits: [{ name: 'breath_weapon' }],
+            },
+          ],
         },
       };
 
@@ -287,21 +314,28 @@ describe('useCombatMechanics', () => {
         await result.current.handleRacialTraitUse('p1', 'breath_weapon');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('bonus_action', 'p1', undefined, expect.objectContaining({
-        traitUsed: 'breath_weapon',
-        description: expect.stringContaining('uses their breath weapon'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'bonus_action',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          traitUsed: 'breath_weapon',
+          description: expect.stringContaining('uses their breath weapon'),
+        }),
+      );
     });
 
     it('should handle relentless_endurance trait', async () => {
       const halfOrcProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Half-Orc',
-            racialTraits: [{ name: 'relentless_endurance' }],
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Half-Orc',
+              racialTraits: [{ name: 'relentless_endurance' }],
+            },
+          ],
         },
       };
 
@@ -312,10 +346,15 @@ describe('useCombatMechanics', () => {
         await result.current.handleRacialTraitUse('p1', 'relentless_endurance');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('bonus_action', 'p1', undefined, expect.objectContaining({
-        traitUsed: 'relentless_endurance',
-        description: expect.stringContaining('drops to 1 hit point'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'bonus_action',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          traitUsed: 'relentless_endurance',
+          description: expect.stringContaining('drops to 1 hit point'),
+        }),
+      );
     });
 
     it('should not use trait if requirements not met', async () => {
@@ -333,11 +372,13 @@ describe('useCombatMechanics', () => {
       const unknownProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Hero',
-            racialTraits: [{ name: 'mysterious_power' }],
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Hero',
+              racialTraits: [{ name: 'mysterious_power' }],
+            },
+          ],
         },
       };
 
@@ -348,10 +389,15 @@ describe('useCombatMechanics', () => {
         await result.current.handleRacialTraitUse('p1', 'mysterious_power');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('bonus_action', 'p1', undefined, expect.objectContaining({
-        traitUsed: 'mysterious_power',
-        description: expect.stringContaining('uses mysterious_power'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'bonus_action',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          traitUsed: 'mysterious_power',
+          description: expect.stringContaining('uses mysterious_power'),
+        }),
+      );
     });
   });
 
@@ -360,13 +406,15 @@ describe('useCombatMechanics', () => {
       const rageProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Barbarian',
-            classFeatures: [{ name: 'rage' }],
-            resources: { rage: { current: 2 } },
-            isRaging: false,
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Barbarian',
+              classFeatures: [{ name: 'rage' }],
+              resources: { rage: { current: 2 } },
+              isRaging: false,
+            },
+          ],
         },
       };
 
@@ -377,23 +425,30 @@ describe('useCombatMechanics', () => {
         await result.current.handleClassFeature('p1', 'rage');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('use_class_feature', 'p1', undefined, expect.objectContaining({
-        featureUsed: 'rage',
-        description: expect.stringContaining('enters a rage'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'use_class_feature',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          featureUsed: 'rage',
+          description: expect.stringContaining('enters a rage'),
+        }),
+      );
     });
 
     it('should handle rage deactivation', async () => {
       const rageProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Barbarian',
-            classFeatures: [{ name: 'rage' }],
-            resources: { rage: { current: 2 } },
-            isRaging: true,
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Barbarian',
+              classFeatures: [{ name: 'rage' }],
+              resources: { rage: { current: 2 } },
+              isRaging: true,
+            },
+          ],
         },
       };
 
@@ -404,22 +459,29 @@ describe('useCombatMechanics', () => {
         await result.current.handleClassFeature('p1', 'rage');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('end_rage', 'p1', undefined, expect.objectContaining({
-        featureUsed: 'rage',
-        description: expect.stringContaining('stops raging'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'end_rage',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          featureUsed: 'rage',
+          description: expect.stringContaining('stops raging'),
+        }),
+      );
     });
 
     it('should handle Action Surge', async () => {
       const fighterProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Fighter',
-            classFeatures: [{ name: 'action_surge' }],
-            resources: { action_surge: { current: 1 } },
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Fighter',
+              classFeatures: [{ name: 'action_surge' }],
+              resources: { action_surge: { current: 1 } },
+            },
+          ],
         },
       };
 
@@ -430,22 +492,29 @@ describe('useCombatMechanics', () => {
         await result.current.handleClassFeature('p1', 'action_surge');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('action_surge', 'p1', undefined, expect.objectContaining({
-        featureUsed: 'action_surge',
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'action_surge',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          featureUsed: 'action_surge',
+        }),
+      );
     });
 
     it('should handle Second Wind', async () => {
       const fighterProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Fighter',
-            level: 5,
-            classFeatures: [{ name: 'second_wind' }],
-            resources: { second_wind: { current: 1 } },
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Fighter',
+              level: 5,
+              classFeatures: [{ name: 'second_wind' }],
+              resources: { second_wind: { current: 1 } },
+            },
+          ],
         },
       };
 
@@ -458,21 +527,28 @@ describe('useCombatMechanics', () => {
       });
 
       expect(diceUtils.rollDice).toHaveBeenCalledWith(10, 1, 5);
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('second_wind', 'p1', undefined, expect.objectContaining({
-        description: "Fighter uses Second Wind to heal 12 hit points",
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'second_wind',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          description: 'Fighter uses Second Wind to heal 12 hit points',
+        }),
+      );
     });
 
     it('should handle default case for unknown feature', async () => {
       const unknownProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Hero',
-            classFeatures: [{ name: 'unknown_talent' }],
-            resources: { unknown_talent: { current: 1 } },
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Hero',
+              classFeatures: [{ name: 'unknown_talent' }],
+              resources: { unknown_talent: { current: 1 } },
+            },
+          ],
         },
       };
 
@@ -483,10 +559,15 @@ describe('useCombatMechanics', () => {
         await result.current.handleClassFeature('p1', 'unknown_talent');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith('use_class_feature', 'p1', undefined, expect.objectContaining({
-        featureUsed: 'unknown_talent',
-        description: expect.stringContaining('uses unknown_talent'),
-      }));
+      expect(mockHandleCombatAction).toHaveBeenCalledWith(
+        'use_class_feature',
+        'p1',
+        undefined,
+        expect.objectContaining({
+          featureUsed: 'unknown_talent',
+          description: expect.stringContaining('uses unknown_talent'),
+        }),
+      );
     });
   });
 
@@ -495,12 +576,14 @@ describe('useCombatMechanics', () => {
       const dyingProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Dying Hero',
-            currentHitPoints: 0,
-            deathSaves: { successes: 0, failures: 0 },
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Dying Hero',
+              currentHitPoints: 0,
+              deathSaves: { successes: 0, failures: 0 },
+            },
+          ],
         },
       };
 
@@ -522,14 +605,19 @@ describe('useCombatMechanics', () => {
         await result.current.handleDeathSave('p1');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        deathSaves: { successes: 1, failures: 0 },
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          deathSaves: { successes: 1, failures: 0 },
+        }),
+      );
 
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        actionType: 'death_save',
-        description: "Dying Hero death save: 15 (Success) (1/3, 0/3)",
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'death_save',
+          description: 'Dying Hero death save: 15 (Success) (1/3, 0/3)',
+        }),
+      );
     });
 
     it('should return early if participant not found', async () => {
@@ -546,13 +634,15 @@ describe('useCombatMechanics', () => {
       const concentratingProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Wizard',
-            activeConcentration: { spellName: 'Haste' },
-            abilityScores: { constitution: { modifier: 2 } },
-            level: 5,
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Wizard',
+              activeConcentration: { spellName: 'Haste' },
+              abilityScores: { constitution: { modifier: 2 } },
+              level: 5,
+            },
+          ],
         },
       };
 
@@ -565,10 +655,12 @@ describe('useCombatMechanics', () => {
         await result.current.handleConcentrationSave('p1', 10);
       });
 
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        actionType: 'concentration_save',
-        concentrationResult: expect.objectContaining({ succeeded: true }),
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'concentration_save',
+          concentrationResult: expect.objectContaining({ succeeded: true }),
+        }),
+      );
       expect(mockUpdateParticipant).not.toHaveBeenCalled();
     });
 
@@ -576,13 +668,15 @@ describe('useCombatMechanics', () => {
       const concentratingProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Wizard',
-            activeConcentration: { spellName: 'Haste' },
-            abilityScores: { constitution: { modifier: 0 } },
-            level: 1,
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Wizard',
+              activeConcentration: { spellName: 'Haste' },
+              abilityScores: { constitution: { modifier: 0 } },
+              level: 1,
+            },
+          ],
         },
       };
 
@@ -594,9 +688,11 @@ describe('useCombatMechanics', () => {
         await result.current.handleConcentrationSave('p1', 10);
       });
 
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        concentrationResult: expect.objectContaining({ succeeded: false }),
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          concentrationResult: expect.objectContaining({ succeeded: false }),
+        }),
+      );
       expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', { activeConcentration: null });
     });
 
@@ -619,12 +715,14 @@ describe('useCombatMechanics', () => {
       const fighterProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Dual Wielder',
-            mainHandWeapon: { name: 'Scimitar' },
-            offHandWeapon: { name: 'Shortsword' },
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Dual Wielder',
+              mainHandWeapon: { name: 'Scimitar' },
+              offHandWeapon: { name: 'Shortsword' },
+            },
+          ],
         },
       };
 
@@ -647,20 +745,27 @@ describe('useCombatMechanics', () => {
       const unarmedProps = {
         ...defaultProps,
         activeEncounter: {
-          participants: [{
-            id: 'p1',
-            name: 'Unarmed',
-            mainHandWeapon: null,
-            offHandWeapon: null,
-          }],
+          participants: [
+            {
+              id: 'p1',
+              name: 'Unarmed',
+              mainHandWeapon: null,
+              offHandWeapon: null,
+            },
+          ],
         },
       };
 
       const { result } = renderHook(() => useCombatMechanics(unarmedProps));
       const mockWeapons = { scimitar: { name: 'S' }, shortsword: { name: 'SS' } };
       vi.mocked(equipmentUtils.createDefaultLightWeapons).mockReturnValue(mockWeapons as any);
-      vi.mocked(equipmentUtils.equipMainHandWeapon).mockReturnValue({ mainHandWeapon: mockWeapons.scimitar } as any);
-      vi.mocked(equipmentUtils.equipOffHandWeapon).mockReturnValue({ mainHandWeapon: mockWeapons.scimitar, offHandWeapon: mockWeapons.shortsword } as any);
+      vi.mocked(equipmentUtils.equipMainHandWeapon).mockReturnValue({
+        mainHandWeapon: mockWeapons.scimitar,
+      } as any);
+      vi.mocked(equipmentUtils.equipOffHandWeapon).mockReturnValue({
+        mainHandWeapon: mockWeapons.scimitar,
+        offHandWeapon: mockWeapons.shortsword,
+      } as any);
       vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(true);
 
       await act(async () => {

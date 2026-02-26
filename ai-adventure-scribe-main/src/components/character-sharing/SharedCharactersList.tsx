@@ -141,9 +141,7 @@ const SharedCharacterCard: React.FC<{
 
         {/* Description */}
         {character.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {character.description}
-          </p>
+          <p className="text-sm text-muted-foreground line-clamp-2">{character.description}</p>
         )}
 
         {/* Owner Info */}
@@ -203,11 +201,7 @@ export const SharedCharactersList: React.FC = () => {
   } | null>(null);
 
   // Fetch shared characters
-  const {
-    data: sharedCharacters,
-    isLoading,
-    error,
-  } = trpc.characters.listShared.useQuery();
+  const { data: sharedCharacters, isLoading, error } = trpc.characters.listShared.useQuery();
 
   // Remove self mutation
   const removeSelfMutation = trpc.characters.revokePermission.useMutation({
@@ -324,11 +318,7 @@ export const SharedCharactersList: React.FC = () => {
               : `No characters shared with ${filterPermission} permission.`}
           </p>
           {filterPermission !== 'all' && (
-            <Button
-              variant="outline"
-              onClick={() => setFilterPermission('all')}
-              className="mt-4"
-            >
+            <Button variant="outline" onClick={() => setFilterPermission('all')} className="mt-4">
               Clear Filter
             </Button>
           )}
@@ -351,9 +341,8 @@ export const SharedCharactersList: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Access</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove your access to "
-              {selectedCharacter?.name}"? You won't be able to view or edit this
-              character unless the owner shares it with you again.
+              Are you sure you want to remove your access to "{selectedCharacter?.name}"? You won't
+              be able to view or edit this character unless the owner shares it with you again.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

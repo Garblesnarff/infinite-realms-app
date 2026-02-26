@@ -85,7 +85,10 @@ export async function generateCampaignName(params: CampaignParams): Promise<stri
     });
 
     // Clean up the result - remove quotes, extra whitespace, etc.
-    const cleanedName = result.trim().replace(/^["']|["']$/g, '').trim();
+    const cleanedName = result
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .trim();
 
     logger.info('Successfully generated campaign name:', cleanedName);
     return cleanedName;

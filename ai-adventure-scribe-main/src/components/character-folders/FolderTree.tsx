@@ -109,7 +109,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
         onCharacterDrop(characterId, folder.id);
       }
     },
-    [folder.id, onCharacterDrop]
+    [folder.id, onCharacterDrop],
   );
 
   return (
@@ -122,7 +122,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
           'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           isSelected && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
           isDragOver && 'bg-infinite-gold/20 border-2 border-dashed border-infinite-gold',
-          !isSelected && !isDragOver && 'hover:bg-accent'
+          !isSelected && !isDragOver && 'hover:bg-accent',
         )}
         style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
         onClick={() => onSelect(folder.id)}
@@ -160,10 +160,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
         {!hasChildren && <div className="w-4" />}
 
         {/* Folder Icon with Color */}
-        <div
-          className="flex-shrink-0"
-          style={{ color: folder.color || undefined }}
-        >
+        <div className="flex-shrink-0" style={{ color: folder.color || undefined }}>
           {isExpanded && hasChildren ? (
             <FolderOpen className="h-5 w-5" />
           ) : (
@@ -313,7 +310,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onFolderSelect(folderId);
       }
     },
-    [onFolderSelect]
+    [onFolderSelect],
   );
 
   const handleEdit = useCallback(
@@ -322,7 +319,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onEditFolder(folderId);
       }
     },
-    [onEditFolder]
+    [onEditFolder],
   );
 
   const handleDelete = useCallback(
@@ -331,7 +328,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onDeleteFolder(folderId);
       }
     },
-    [onDeleteFolder]
+    [onDeleteFolder],
   );
 
   const handleChangeColor = useCallback(
@@ -340,14 +337,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onChangeColor(folderId);
       }
     },
-    [onChangeColor]
+    [onChangeColor],
   );
 
   if (error) {
     return (
-      <div className="p-4 text-sm text-destructive">
-        Failed to load folders. Please try again.
-      </div>
+      <div className="p-4 text-sm text-destructive">Failed to load folders. Please try again.</div>
     );
   }
 
@@ -357,12 +352,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
       <div className="flex items-center justify-between mb-4 px-3">
         <h3 className="text-sm font-semibold text-foreground">Folders</h3>
         {onCreateFolder && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCreateFolder}
-            className="h-8 gap-2"
-          >
+          <Button variant="ghost" size="sm" onClick={onCreateFolder} className="h-8 gap-2">
             <FolderPlus className="h-4 w-4" />
             New Folder
           </Button>
@@ -377,7 +367,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         className={cn(
           'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
-          selectedFolderId !== null && 'hover:bg-accent'
+          selectedFolderId !== null && 'hover:bg-accent',
         )}
         onClick={() => handleSelect(null)}
         onKeyDown={(e) => {

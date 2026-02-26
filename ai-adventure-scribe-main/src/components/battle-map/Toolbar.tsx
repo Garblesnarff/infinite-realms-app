@@ -31,12 +31,7 @@ import React, { useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
 import { cn } from '@/lib/utils';
@@ -170,7 +165,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick, orient
             className={cn(
               'relative',
               isActive && 'bg-primary text-primary-foreground',
-              !isActive && 'hover:bg-accent hover:text-accent-foreground'
+              !isActive && 'hover:bg-accent hover:text-accent-foreground',
             )}
             aria-label={tool.label}
             aria-pressed={isActive}
@@ -217,7 +212,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     (tool: ToolType) => {
       setTool(tool);
     },
-    [setTool]
+    [setTool],
   );
 
   // ===========================
@@ -234,7 +229,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       ...(isGM
         ? [
             createHotkeyFromPreset(BATTLE_MAP_HOTKEYS.WALL_TOOL, () => handleToolSelect('wall')),
-            createHotkeyFromPreset(BATTLE_MAP_HOTKEYS.FOG_TOOL, () => handleToolSelect('fog-brush')),
+            createHotkeyFromPreset(BATTLE_MAP_HOTKEYS.FOG_TOOL, () =>
+              handleToolSelect('fog-brush'),
+            ),
           ]
         : []),
       ...(onHelpClick
@@ -272,19 +269,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         position === 'right' && 'fixed right-4 top-1/2 -translate-y-1/2',
         position === 'top' && 'fixed top-4 left-1/2 -translate-x-1/2',
         position === 'bottom' && 'fixed bottom-4 left-1/2 -translate-x-1/2',
-        className
+        className,
       )}
       style={position ? { zIndex: Z_INDEX.FLOATING_PANEL } : undefined}
       role="toolbar"
       aria-label="Battle map tools"
     >
       {/* Navigation Tools */}
-      <div
-        className={cn(
-          'flex gap-1',
-          orientation === 'vertical' ? 'flex-col' : 'flex-row'
-        )}
-      >
+      <div className={cn('flex gap-1', orientation === 'vertical' ? 'flex-col' : 'flex-row')}>
         {navigationTools.map((tool) => (
           <ToolButton
             key={tool.id}
@@ -304,12 +296,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           />
 
           {/* Drawing Tools */}
-          <div
-            className={cn(
-              'flex gap-1',
-              orientation === 'vertical' ? 'flex-col' : 'flex-row'
-            )}
-          >
+          <div className={cn('flex gap-1', orientation === 'vertical' ? 'flex-col' : 'flex-row')}>
             {drawingTools.map((tool) => (
               <ToolButton
                 key={tool.id}
@@ -331,12 +318,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           />
 
           {/* GM Tools */}
-          <div
-            className={cn(
-              'flex gap-1',
-              orientation === 'vertical' ? 'flex-col' : 'flex-row'
-            )}
-          >
+          <div className={cn('flex gap-1', orientation === 'vertical' ? 'flex-col' : 'flex-row')}>
             {gmTools.map((tool) => (
               <ToolButton
                 key={tool.id}
@@ -358,31 +340,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             className="my-1"
           />
 
-          <div
-            className={cn(
-              'flex gap-1',
-              orientation === 'vertical' ? 'flex-col' : 'flex-row'
-            )}
-          >
+          <div className={cn('flex gap-1', orientation === 'vertical' ? 'flex-col' : 'flex-row')}>
             {showHelp && onHelpClick && (
               <TooltipProvider>
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={onHelpClick}
-                      aria-label="Help"
-                    >
+                    <Button variant="ghost" size="icon" onClick={onHelpClick} aria-label="Help">
                       <HelpCircle className="h-5 w-5" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side={orientation === 'vertical' ? 'right' : 'bottom'}>
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">Keyboard Shortcuts</span>
-                      <span className="text-xs font-mono bg-muted px-1 rounded self-start">
-                        ?
-                      </span>
+                      <span className="text-xs font-mono bg-muted px-1 rounded self-start">?</span>
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -432,7 +402,7 @@ export const ResponsiveToolbar: React.FC<ResponsiveToolbarProps> = ({
   ...props
 }) => {
   const [isMobile, setIsMobile] = React.useState(
-    typeof window !== 'undefined' ? window.innerWidth < mobileBreakpoint : false
+    typeof window !== 'undefined' ? window.innerWidth < mobileBreakpoint : false,
   );
 
   React.useEffect(() => {

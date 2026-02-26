@@ -42,16 +42,18 @@ import { handleAsyncError } from '@/utils/error-handler';
  * PlayerChatBubble Component
  * Memoized to prevent re-renders when other messages or state changes
  */
-const PlayerChatBubble = React.memo(({ content, timestamp }: { content: string; timestamp: Date }) => (
-  <div className="flex justify-end">
-    <div className="max-w-[80%] p-4 rounded-lg shadow-sm bg-infinite-purple text-white ml-4">
-      <div className="whitespace-pre-wrap leading-relaxed">{content}</div>
-      <div className="text-xs mt-2 text-infinite-purple-100">
-        {timestamp.toLocaleTimeString()}
+const PlayerChatBubble = React.memo(
+  ({ content, timestamp }: { content: string; timestamp: Date }) => (
+    <div className="flex justify-end">
+      <div className="max-w-[80%] p-4 rounded-lg shadow-sm bg-infinite-purple text-white ml-4">
+        <div className="whitespace-pre-wrap leading-relaxed">{content}</div>
+        <div className="text-xs mt-2 text-infinite-purple-100">
+          {timestamp.toLocaleTimeString()}
+        </div>
       </div>
     </div>
-  </div>
-));
+  ),
+);
 
 PlayerChatBubble.displayName = 'PlayerChatBubble';
 
@@ -86,13 +88,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
   /**
    * Extracted chat history and message logic
    */
-  const {
-    messages,
-    isSending,
-    isLoadingHistory,
-    hasLoadedHistory,
-    sendMessage,
-  } = useChatHistory({
+  const { messages, isSending, isLoadingHistory, hasLoadedHistory, sendMessage } = useChatHistory({
     sessionId: session?.id,
     campaignId,
     characterId,
@@ -295,8 +291,8 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
                   disabled={isSending || !currentMessage.trim()}
                   size="sm"
                   className="px-4"
-                  aria-label={isSending ? "Sending..." : "Send Message"}
-                  title={isSending ? "Sending..." : "Send Message"}
+                  aria-label={isSending ? 'Sending...' : 'Send Message'}
+                  title={isSending ? 'Sending...' : 'Send Message'}
                 >
                   {isSending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

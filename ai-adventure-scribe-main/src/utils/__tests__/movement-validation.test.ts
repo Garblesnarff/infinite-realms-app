@@ -13,11 +13,10 @@ import {
   gridDistance,
   type GridCoordinate,
   type TerrainInfo,
-  type Wall
+  type Wall,
 } from '../movement-validation';
 
 import { TokenSize } from '@/types/token';
-
 
 describe('movement-validation', () => {
   describe('getMovementCost', () => {
@@ -91,8 +90,8 @@ describe('movement-validation', () => {
       {
         from: { x: 0.5, y: -0.5 },
         to: { x: 0.5, y: 0.5 },
-        blocks: 'both'
-      }
+        blocks: 'both',
+      },
     ];
 
     it('should detect when movement is blocked by a wall', () => {
@@ -118,8 +117,8 @@ describe('movement-validation', () => {
         {
           from: { x: 0.5, y: -0.5 },
           to: { x: 0.5, y: 0.5 },
-          blocks: 'sight'
-        }
+          blocks: 'sight',
+        },
       ];
       const from: GridCoordinate = { x: 0, y: 0 };
       const to: GridCoordinate = { x: 1, y: 0 };
@@ -134,7 +133,7 @@ describe('movement-validation', () => {
       y: 0,
       width: 1,
       height: 1,
-      size: TokenSize.MEDIUM
+      size: TokenSize.MEDIUM,
     };
 
     it('should find reachable squares in an empty area', () => {
@@ -152,8 +151,8 @@ describe('movement-validation', () => {
         {
           from: { x: 0.5, y: -1 },
           to: { x: 0.5, y: 1 },
-          blocks: 'movement'
-        }
+          blocks: 'movement',
+        },
       ];
       const reachable = calculateReachableSquares(mockToken, 5, walls);
       expect(reachable).not.toContainEqual({ x: 1, y: 0 });
@@ -186,7 +185,7 @@ describe('movement-validation', () => {
 
     it('should find a path around a wall', () => {
       const simpleWalls: Wall[] = [
-        { from: { x: 0.5, y: -0.5 }, to: { x: 0.5, y: 0.5 }, blocks: 'movement' }
+        { from: { x: 0.5, y: -0.5 }, to: { x: 0.5, y: 0.5 }, blocks: 'movement' },
       ];
       const path = calculatePath({ x: 0, y: 0 }, { x: 1, y: 0 }, simpleWalls);
       expect(path).not.toBeNull();
@@ -205,7 +204,7 @@ describe('movement-validation', () => {
         { from: { x: -0.6, y: -0.6 }, to: { x: 0.6, y: -0.6 }, blocks: 'movement' },
         { from: { x: 0.6, y: -0.6 }, to: { x: 0.6, y: 0.6 }, blocks: 'movement' },
         { from: { x: 0.6, y: 0.6 }, to: { x: -0.6, y: 0.6 }, blocks: 'movement' },
-        { from: { x: -0.6, y: 0.6 }, to: { x: -0.6, y: -0.6 }, blocks: 'movement' }
+        { from: { x: -0.6, y: 0.6 }, to: { x: -0.6, y: -0.6 }, blocks: 'movement' },
       ];
 
       const path = calculatePath(from, to, robustWalls);

@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   parseMessageOptions,
   extractNarrativeContent,
-  createPlayerMessageFromOption
+  createPlayerMessageFromOption,
 } from '../parseMessageOptions';
 
 // Mock logger
@@ -24,11 +24,12 @@ describe('parseMessageOptions', () => {
 
   describe('parseMessageOptions', () => {
     it('should parse numbered bold options correctly', () => {
-      const content = "The door is locked. What do you do?\n\n1. **Try to pick the lock**, using your thieves' tools.\n2. **Kick the door down**, using your strength.";
+      const content =
+        "The door is locked. What do you do?\n\n1. **Try to pick the lock**, using your thieves' tools.\n2. **Kick the door down**, using your strength.";
       const result = parseMessageOptions(content);
 
       expect(result.hasOptions).toBe(true);
-      expect(result.content).toBe("The door is locked. What do you do?");
+      expect(result.content).toBe('The door is locked. What do you do?');
       expect(result.options).toHaveLength(2);
 
       expect(result.options[0]).toEqual({
@@ -41,13 +42,14 @@ describe('parseMessageOptions', () => {
       expect(result.options[1]).toEqual({
         id: 'option-2',
         number: 2,
-        text: "Kick the door down, using your strength.",
-        fullText: "**Kick the door down**, using your strength.",
+        text: 'Kick the door down, using your strength.',
+        fullText: '**Kick the door down**, using your strength.',
       });
     });
 
     it('should parse lettered bold options correctly', () => {
-      const content = "A mysterious stranger approaches.\n\nA. **Greet them friendly**, with a smile.\nB. **Draw your sword**, ready for a fight.";
+      const content =
+        'A mysterious stranger approaches.\n\nA. **Greet them friendly**, with a smile.\nB. **Draw your sword**, ready for a fight.';
       const result = parseMessageOptions(content);
 
       expect(result.hasOptions).toBe(true);
@@ -60,16 +62,17 @@ describe('parseMessageOptions', () => {
     });
 
     it('should fallback to numbered options without bolding', () => {
-      const content = "Choose your path:\n1. Go left into the forest\n2. Go right towards the mountains";
+      const content =
+        'Choose your path:\n1. Go left into the forest\n2. Go right towards the mountains';
       const result = parseMessageOptions(content);
 
       expect(result.hasOptions).toBe(true);
       expect(result.options).toHaveLength(2);
-      expect(result.options[0].text).toBe("Go left into the forest");
+      expect(result.options[0].text).toBe('Go left into the forest');
     });
 
     it('should fallback to lettered options without bolding', () => {
-      const content = "Choose your path:\nA. Go left\nB. Go right";
+      const content = 'Choose your path:\nA. Go left\nB. Go right';
       const result = parseMessageOptions(content);
 
       expect(result.hasOptions).toBe(true);
@@ -83,23 +86,23 @@ describe('parseMessageOptions', () => {
     });
 
     it('should handle content with no options', () => {
-      const content = "Just some narrative text with no numbered choices.";
+      const content = 'Just some narrative text with no numbered choices.';
       const result = parseMessageOptions(content);
       expect(result.hasOptions).toBe(false);
       expect(result.content).toBe(content);
     });
 
     it('should clean up narrative content by removing incomplete sentences', () => {
-      const content = "This is a complete sentence. This is an incomplete\n\n1. **Option 1**";
+      const content = 'This is a complete sentence. This is an incomplete\n\n1. **Option 1**';
       const result = parseMessageOptions(content);
-      expect(result.content).toBe("This is a complete sentence.");
+      expect(result.content).toBe('This is a complete sentence.');
     });
   });
 
   describe('extractNarrativeContent', () => {
     it('should return only narrative and strip options', () => {
-      const content = "Narrative here.\n\n1. **Option 1**";
-      expect(extractNarrativeContent(content)).toBe("Narrative here.");
+      const content = 'Narrative here.\n\n1. **Option 1**';
+      expect(extractNarrativeContent(content)).toBe('Narrative here.');
     });
   });
 
@@ -108,12 +111,12 @@ describe('parseMessageOptions', () => {
       const option = {
         id: 'opt1',
         number: 1,
-        text: "You draw your sword and attack yourself.",
-        fullText: "**You draw your sword** and attack yourself.",
+        text: 'You draw your sword and attack yourself.',
+        fullText: '**You draw your sword** and attack yourself.',
       };
 
       const result = createPlayerMessageFromOption(option);
-      expect(result).toBe("I draw my sword and attack myself.");
+      expect(result).toBe('I draw my sword and attack myself.');
     });
 
     it('should handle "you are" and "you\'re"', () => {
@@ -121,7 +124,7 @@ describe('parseMessageOptions', () => {
         id: 'opt1',
         number: 1,
         text: "You are ready and you're fast.",
-        fullText: "...",
+        fullText: '...',
       };
       expect(createPlayerMessageFromOption(option)).toBe("I am ready and I'm fast.");
     });
@@ -131,7 +134,7 @@ describe('parseMessageOptions', () => {
         id: 'opt1',
         number: 1,
         text: "You have your gear and you've prepared.",
-        fullText: "...",
+        fullText: '...',
       };
       expect(createPlayerMessageFromOption(option)).toBe("I have my gear and I've prepared.");
     });
@@ -141,49 +144,53 @@ describe('parseMessageOptions', () => {
         id: 'opt1',
         number: 1,
         text: "You will survive and you'll win. If you will fight, you will succeed.",
-        fullText: "...",
+        fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe("I will survive and I'll win. If I will fight, I will succeed.");
+      expect(createPlayerMessageFromOption(option)).toBe(
+        "I will survive and I'll win. If I will fight, I will succeed.",
+      );
     });
 
     it('should preserve case for "Your" at start of sentence', () => {
-       const option = {
+      const option = {
         id: 'opt1',
         number: 1,
-        text: "Your skill is great.",
-        fullText: "...",
+        text: 'Your skill is great.',
+        fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe("My skill is great.");
+      expect(createPlayerMessageFromOption(option)).toBe('My skill is great.');
     });
 
     it('should handle "yourself" conversion', () => {
-       const option = {
+      const option = {
         id: 'opt1',
         number: 1,
-        text: "Defend yourself!",
-        fullText: "...",
+        text: 'Defend yourself!',
+        fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe("Defend myself!");
+      expect(createPlayerMessageFromOption(option)).toBe('Defend myself!');
     });
 
     it('should handle "you" in both cases', () => {
-       const option = {
+      const option = {
         id: 'opt1',
         number: 1,
-        text: "You know that if you try, you can.",
-        fullText: "...",
+        text: 'You know that if you try, you can.',
+        fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe("I know that if I try, I can.");
+      expect(createPlayerMessageFromOption(option)).toBe('I know that if I try, I can.');
     });
 
     it('should handle various "you" patterns combined', () => {
-       const option = {
+      const option = {
         id: 'opt1',
         number: 1,
         text: "You have your gear. You'll need it. You've prepared yourself.",
-        fullText: "...",
+        fullText: '...',
       };
-      expect(createPlayerMessageFromOption(option)).toBe("I have my gear. I'll need it. I've prepared myself.");
+      expect(createPlayerMessageFromOption(option)).toBe(
+        "I have my gear. I'll need it. I've prepared myself.",
+      );
     });
   });
 });

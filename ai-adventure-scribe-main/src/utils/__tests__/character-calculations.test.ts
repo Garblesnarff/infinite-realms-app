@@ -14,7 +14,7 @@ import {
   calculateSavingThrowModifiers,
   calculateCarryingCapacity,
   calculatePassivePerception,
-  calculateAllCharacterStats
+  calculateAllCharacterStats,
 } from '../character-calculations';
 
 import type { Character } from '@/types/character';
@@ -41,7 +41,7 @@ describe('character-calculations', () => {
       class: { name: 'Fighter', hitDie: 10 } as any,
       abilityScores: {
         constitution: { score: 14, modifier: 2, savingThrow: false },
-      } as any
+      } as any,
     };
 
     it('should calculate correct HP for level 1', () => {
@@ -59,7 +59,7 @@ describe('character-calculations', () => {
         ...baseCharacter,
         abilityScores: {
           constitution: { score: 6, modifier: -2, savingThrow: false },
-        } as any
+        } as any,
       } as Character;
       // 10 - 2 (level 1) = 8
       expect(calculateHitPoints(frailCharacter)).toBe(8);
@@ -75,7 +75,7 @@ describe('character-calculations', () => {
         class: { name: 'Wizard', hitDie: 6 } as any,
         abilityScores: {
           constitution: { score: 1, modifier: -5, savingThrow: false },
-        } as any
+        } as any,
       } as Character;
       // 6 - 5 (level 1) = 1
       expect(calculateHitPoints(veryFrailCharacter)).toBe(1);
@@ -96,7 +96,7 @@ describe('character-calculations', () => {
         constitution: { score: 16, modifier: 3, savingThrow: false },
         wisdom: { score: 12, modifier: 1, savingThrow: false },
       } as any,
-      class: { name: 'Fighter' } as any
+      class: { name: 'Fighter' } as any,
     };
 
     it('should calculate base AC for non-unarmored defense classes', () => {
@@ -106,7 +106,7 @@ describe('character-calculations', () => {
     it('should calculate AC for Barbarian unarmored defense', () => {
       const barbarian = {
         ...baseCharacter,
-        class: { name: 'Barbarian' } as any
+        class: { name: 'Barbarian' } as any,
       };
       // 10 + 2 (Dex) + 3 (Con) = 15
       expect(calculateArmorClass(barbarian as Character)).toBe(15);
@@ -115,7 +115,7 @@ describe('character-calculations', () => {
     it('should calculate AC for Monk unarmored defense', () => {
       const monk = {
         ...baseCharacter,
-        class: { name: 'Monk' } as any
+        class: { name: 'Monk' } as any,
       };
       // 10 + 2 (Dex) + 1 (Wis) = 13
       expect(calculateArmorClass(monk as Character)).toBe(13);
@@ -125,7 +125,7 @@ describe('character-calculations', () => {
       const monkWithShield = {
         ...baseCharacter,
         class: { name: 'Monk' } as any,
-        equippedShield: 'Shield'
+        equippedShield: 'Shield',
       };
       // Monk unarmored defense doesn't work with shields.
       // Should be 10 + 2 (Dex) + 2 (Shield) = 14?
@@ -139,7 +139,7 @@ describe('character-calculations', () => {
       const barbWithShield = {
         ...baseCharacter,
         class: { name: 'Barbarian' } as any,
-        equippedShield: 'Shield'
+        equippedShield: 'Shield',
       };
       // 10 + 2 (Dex) + 3 (Con) + 2 (Shield) = 17
       expect(calculateArmorClass(barbWithShield as Character)).toBe(17);
@@ -152,7 +152,7 @@ describe('character-calculations', () => {
       class: { name: 'Wizard' } as any,
       abilityScores: {
         intelligence: { score: 16, modifier: 3, savingThrow: false },
-      } as any
+      } as any,
     };
 
     it('should get correct spellcasting ability', () => {
@@ -200,7 +200,7 @@ describe('character-calculations', () => {
         charisma: { modifier: -1 },
       } as any,
       class: { name: 'Fighter' } as any, // Fighter has Athletics
-      race: { name: 'Human' } as any
+      race: { name: 'Human' } as any,
     };
 
     it('should calculate modifiers correctly including proficiencies', () => {
@@ -210,21 +210,21 @@ describe('character-calculations', () => {
       expect(skillMods['Athletics']).toEqual({
         modifier: 5,
         proficient: true,
-        expertise: false
+        expertise: false,
       });
 
       // Stealth: 2 (Dex) + 0 (No Prof) = 2
       expect(skillMods['Stealth']).toEqual({
         modifier: 2,
         proficient: false,
-        expertise: false
+        expertise: false,
       });
 
       // Deception: -1 (Cha) + 0 (No Prof) = -1
       expect(skillMods['Deception']).toEqual({
         modifier: -1,
         proficient: false,
-        expertise: false
+        expertise: false,
       });
     });
   });
@@ -241,7 +241,7 @@ describe('character-calculations', () => {
           wisdom: { modifier: 0 },
           charisma: { modifier: -1 },
         } as any,
-        class: { name: 'Fighter' } as any // Fighter has Str and Con saves
+        class: { name: 'Fighter' } as any, // Fighter has Str and Con saves
       };
 
       const saveMods = calculateSavingThrowModifiers(fighter as Character);
@@ -255,7 +255,7 @@ describe('character-calculations', () => {
       const rogue: Partial<Character> = {
         level: 1,
         abilityScores: { dexterity: { modifier: 3 }, intelligence: { modifier: 2 } } as any,
-        class: { name: 'Rogue' } as any
+        class: { name: 'Rogue' } as any,
       };
       const saveMods = calculateSavingThrowModifiers(rogue as Character);
       expect(saveMods['dexterity'].proficient).toBe(true);
@@ -276,7 +276,7 @@ describe('character-calculations', () => {
       const character: Partial<Character> = {
         level: 1,
         abilityScores: { wisdom: { modifier: 2 } } as any,
-        class: { name: 'Cleric' } as any // Cleric has Insight, Medicine, Persuasion, Religion, History.
+        class: { name: 'Cleric' } as any, // Cleric has Insight, Medicine, Persuasion, Religion, History.
         // Wait, Cleric skills in code: ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion']
         // Perception is not there by default.
       };
@@ -285,7 +285,7 @@ describe('character-calculations', () => {
 
       const observantCharacter = {
         ...character,
-        class: { name: 'Rogue' } as any // Rogue has Perception in code
+        class: { name: 'Rogue' } as any, // Rogue has Perception in code
       };
       // Passive Perception = 10 + 2 (Wis) + 2 (Prof) = 14
       expect(calculatePassivePerception(observantCharacter as Character)).toBe(14);
@@ -303,9 +303,14 @@ describe('character-calculations', () => {
           dexterity: { modifier: 1 },
           strength: { score: 10, modifier: 0 },
           wisdom: { modifier: 0 },
-          charisma: { modifier: 0 }
+          charisma: { modifier: 0 },
         } as any,
-        race: { name: 'High Elf', speed: 30, traits: ['Darkvision'], languages: ['Common', 'Elvish'] } as any
+        race: {
+          name: 'High Elf',
+          speed: 30,
+          traits: ['Darkvision'],
+          languages: ['Common', 'Elvish'],
+        } as any,
       };
 
       const stats = calculateAllCharacterStats(character as Character);
@@ -330,7 +335,7 @@ describe('character-calculations', () => {
     it('should use subrace speed if available', () => {
       const character: Partial<Character> = {
         race: { speed: 30 } as any,
-        subrace: { speed: 35 } as any
+        subrace: { speed: 35 } as any,
       };
       const stats = calculateAllCharacterStats(character as Character);
       expect(stats.speed).toBe(35);
@@ -342,7 +347,7 @@ describe('character-calculations', () => {
       const woodElf: Partial<Character> = {
         race: { name: 'Elf' } as any,
         subrace: { name: 'Wood Elf' } as any,
-        abilityScores: { dexterity: { modifier: 2 } } as any
+        abilityScores: { dexterity: { modifier: 2 } } as any,
       };
       const skillMods = calculateSkillModifiers(woodElf as Character);
       expect(skillMods['Stealth'].proficient).toBe(true);
@@ -351,7 +356,7 @@ describe('character-calculations', () => {
     it('should handle Half-Elf proficiencies', () => {
       const halfElf: Partial<Character> = {
         race: { name: 'Half-Elf' } as any,
-        abilityScores: { charisma: { modifier: 2 } } as any
+        abilityScores: { charisma: { modifier: 2 } } as any,
       };
       const skillMods = calculateSkillModifiers(halfElf as Character);
       expect(skillMods['Deception'].proficient).toBe(true);
@@ -361,7 +366,7 @@ describe('character-calculations', () => {
     it('should handle Rogue skill proficiencies', () => {
       const rogue: Partial<Character> = {
         class: { name: 'Rogue' } as any,
-        abilityScores: { dexterity: { modifier: 2 } } as any
+        abilityScores: { dexterity: { modifier: 2 } } as any,
       };
       const skillMods = calculateSkillModifiers(rogue as Character);
       expect(skillMods['Stealth'].proficient).toBe(true);

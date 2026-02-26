@@ -95,9 +95,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
 
   const [name, setName] = useState('');
   const [color, setColor] = useState(FOLDER_COLORS[0].value);
-  const [selectedParentId, setSelectedParentId] = useState<string | null>(
-    parentFolderId || null
-  );
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(parentFolderId || null);
 
   const parentFolderSelectId = useId();
   const colorGroupId = useId();
@@ -145,9 +143,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Folder</DialogTitle>
-          <DialogDescription>
-            Create a folder to organize your characters.
-          </DialogDescription>
+          <DialogDescription>Create a folder to organize your characters.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -170,11 +166,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
           {/* Color Picker */}
           <div className="space-y-2">
             <Label id={colorGroupId}>Folder Color</Label>
-            <div
-              className="grid grid-cols-4 gap-2"
-              role="group"
-              aria-labelledby={colorGroupId}
-            >
+            <div className="grid grid-cols-4 gap-2" role="group" aria-labelledby={colorGroupId}>
               {FOLDER_COLORS.map((colorOption) => (
                 <button
                   key={colorOption.value}
@@ -319,11 +311,7 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
           {/* Color Picker */}
           <div className="space-y-2">
             <Label id={colorGroupId}>Folder Color</Label>
-            <div
-              className="grid grid-cols-4 gap-2"
-              role="group"
-              aria-labelledby={colorGroupId}
-            >
+            <div className="grid grid-cols-4 gap-2" role="group" aria-labelledby={colorGroupId}>
               {FOLDER_COLORS.map((colorOption) => (
                 <button
                   key={colorOption.value}
@@ -400,8 +388,8 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Folder</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete "{folderName}"? Characters in this folder will be
-            moved to the parent folder. This action cannot be undone.
+            Are you sure you want to delete "{folderName}"? Characters in this folder will be moved
+            to the parent folder. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

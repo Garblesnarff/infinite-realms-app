@@ -1,13 +1,4 @@
-import {
-  Eye,
-  Hand,
-  Gem,
-  Clock,
-  Target,
-  Timer,
-  Zap,
-  RotateCcw,
-} from 'lucide-react';
+import { Eye, Hand, Gem, Clock, Target, Timer, Zap, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import type { Spell } from '@/types/character';

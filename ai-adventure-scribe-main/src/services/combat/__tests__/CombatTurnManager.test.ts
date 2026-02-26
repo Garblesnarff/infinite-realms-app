@@ -34,11 +34,13 @@ describe('CombatTurnManager', () => {
       manager.addInitiativeEntry(combatId, 'actor-1', 'Hero', 15, 2, true);
 
       expect(combatAuditSystem.startCombatAudit).toHaveBeenCalledWith(combatId);
-      expect(combatAuditSystem.recordAction).toHaveBeenCalledWith(expect.objectContaining({
-        combatId,
-        actorId: 'actor-1',
-        actionType: 'initiative',
-      }));
+      expect(combatAuditSystem.recordAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          combatId,
+          actorId: 'actor-1',
+          actionType: 'initiative',
+        }),
+      );
     });
 
     it('should replace an existing entry for the same actor (re-roll)', () => {
@@ -129,7 +131,7 @@ describe('CombatTurnManager', () => {
       const turnOrder = manager.getTurnOrder(combatId);
       expect(turnOrder?.round).toBe(2);
       expect(turnOrder?.currentTurnIndex).toBe(0);
-      expect(turnOrder?.entries.every(e => e.hasActed === false)).toBe(true);
+      expect(turnOrder?.entries.every((e) => e.hasActed === false)).toBe(true);
     });
   });
 

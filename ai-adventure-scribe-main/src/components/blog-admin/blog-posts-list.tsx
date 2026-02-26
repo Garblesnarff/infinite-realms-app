@@ -193,10 +193,10 @@ export const BlogPostsList: React.FC = () => {
 
   const hasActiveFilters = Boolean(
     filters.search?.trim() ||
-      (filters.status && filters.status !== 'all') ||
-      filters.categoryId ||
-      filters.tagId ||
-      filters.scheduledOnly,
+    (filters.status && filters.status !== 'all') ||
+    filters.categoryId ||
+    filters.tagId ||
+    filters.scheduledOnly,
   );
 
   const renderTagBadges = (tagIds?: string[]) => {
@@ -453,9 +453,15 @@ export const BlogPostsList: React.FC = () => {
                                 size="sm"
                                 onClick={() => {
                                   if (post.status !== 'published') {
-                                    toast.info('Post must be published to view on the public blog. Click Publish first.');
+                                    toast.info(
+                                      'Post must be published to view on the public blog. Click Publish first.',
+                                    );
                                   } else {
-                                    window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener');
+                                    window.open(
+                                      `https://blog.infiniterealms.app/${post.slug}`,
+                                      '_blank',
+                                      'noopener',
+                                    );
                                   }
                                 }}
                                 aria-label={`View ${post.title} on blog`}
@@ -559,9 +565,15 @@ export const BlogPostsList: React.FC = () => {
                         className="flex-1"
                         onClick={() => {
                           if (post.status !== 'published') {
-                            toast.info('Post must be published to view on the public blog. Click Publish first.');
+                            toast.info(
+                              'Post must be published to view on the public blog. Click Publish first.',
+                            );
                           } else {
-                            window.open(`https://blog.infiniterealms.app/${post.slug}`, '_blank', 'noopener');
+                            window.open(
+                              `https://blog.infiniterealms.app/${post.slug}`,
+                              '_blank',
+                              'noopener',
+                            );
                           }
                         }}
                         disabled={isPending}

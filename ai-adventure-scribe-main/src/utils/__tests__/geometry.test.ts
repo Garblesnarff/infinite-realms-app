@@ -4,7 +4,7 @@ import {
   calculateDistance,
   isPointInVisionCone,
   lineSegmentsIntersect,
-  isLineBlocked
+  isLineBlocked,
 } from '../geometry';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
@@ -94,10 +94,13 @@ describe('geometry utils', () => {
       const walls: VisionBlocker[] = [
         {
           id: 'w1',
-          points: [{ x: 0, y: 10 }, { x: 10, y: 0 }],
+          points: [
+            { x: 0, y: 10 },
+            { x: 10, y: 0 },
+          ],
           blocksLight: true,
-          blocksMovement: true
-        }
+          blocksMovement: true,
+        },
       ];
       expect(isLineBlocked(from, to, walls)).toBe(true);
     });
@@ -106,10 +109,13 @@ describe('geometry utils', () => {
       const walls: VisionBlocker[] = [
         {
           id: 'w1',
-          points: [{ x: 0, y: 10 }, { x: 10, y: 0 }],
+          points: [
+            { x: 0, y: 10 },
+            { x: 10, y: 0 },
+          ],
           blocksLight: false,
-          blocksMovement: true
-        }
+          blocksMovement: true,
+        },
       ];
       expect(isLineBlocked(from, to, walls)).toBe(false);
     });
@@ -125,10 +131,14 @@ describe('geometry utils', () => {
       const walls: VisionBlocker[] = [
         {
           id: 'w2',
-          points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+          ],
           blocksLight: true,
-          blocksMovement: true
-        }
+          blocksMovement: true,
+        },
       ];
       expect(isLineBlocked(from2, to2, walls)).toBe(true);
     });

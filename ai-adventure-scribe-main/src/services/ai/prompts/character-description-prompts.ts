@@ -119,18 +119,21 @@ export class CharacterDescriptionPrompts {
     if (hasPhysicalTraits) {
       promptParts.push('');
       promptParts.push('  <physical_traits>');
-      if (characterData.gender)
-        promptParts.push(`    <gender>${characterData.gender}</gender>`);
+      if (characterData.gender) promptParts.push(`    <gender>${characterData.gender}</gender>`);
       if (characterData.age && characterData.age > 0)
         promptParts.push(`    <age>${characterData.age} years old</age>`);
       if (characterData.height && characterData.height > 0) {
         const totalInches = Math.round(characterData.height);
         const feet = Math.floor(totalInches / 12);
         const inches = totalInches - feet * 12;
-        promptParts.push(`    <height>${feet}'${inches}" (${Math.round(totalInches * 2.54)} cm)</height>`);
+        promptParts.push(
+          `    <height>${feet}'${inches}" (${Math.round(totalInches * 2.54)} cm)</height>`,
+        );
       }
       if (characterData.weight && characterData.weight > 0) {
-        promptParts.push(`    <weight>${Math.round(characterData.weight)} lbs (${Math.round(characterData.weight * 0.45)} kg)</weight>`);
+        promptParts.push(
+          `    <weight>${Math.round(characterData.weight)} lbs (${Math.round(characterData.weight * 0.45)} kg)</weight>`,
+        );
       }
       if (characterData.eyes) promptParts.push(`    <eye_color>${characterData.eyes}</eye_color>`);
       if (characterData.skin) promptParts.push(`    <skin_tone>${characterData.skin}</skin_tone>`);
@@ -265,13 +268,23 @@ export class CharacterDescriptionPrompts {
     // Verbalized Sampling for maximum creativity
     promptParts.push('');
     promptParts.push('<verbalized_sampling_technique>');
-    promptParts.push('  <instruction>Before generating the final description, internally brainstorm 3-4 distinct character concept variations with probability scores (0.0-1.0) representing how typical each approach is</instruction>');
+    promptParts.push(
+      '  <instruction>Before generating the final description, internally brainstorm 3-4 distinct character concept variations with probability scores (0.0-1.0) representing how typical each approach is</instruction>',
+    );
     promptParts.push('');
     promptParts.push('  <diversity_dimensions>');
-    promptParts.push(`    <tone_variation>Vary interpretations of "${tone}" tone - from obvious to subtle to unexpected</tone_variation>`);
-    promptParts.push('    <backstory_approach>Mix different backstory types: tragedy (prob: 0.7), triumph (prob: 0.6), mystery (prob: 0.4), redemption (prob: 0.5), wild card (prob: ≤0.3)</backstory_approach>');
-    promptParts.push('    <personality_depth>Range from straightforward (0.8) to complex/contradictory (0.3)</personality_depth>');
-    promptParts.push('    <uniqueness>From conventional representation (0.8) to subversive/unexpected take (0.25)</uniqueness>');
+    promptParts.push(
+      `    <tone_variation>Vary interpretations of "${tone}" tone - from obvious to subtle to unexpected</tone_variation>`,
+    );
+    promptParts.push(
+      '    <backstory_approach>Mix different backstory types: tragedy (prob: 0.7), triumph (prob: 0.6), mystery (prob: 0.4), redemption (prob: 0.5), wild card (prob: ≤0.3)</backstory_approach>',
+    );
+    promptParts.push(
+      '    <personality_depth>Range from straightforward (0.8) to complex/contradictory (0.3)</personality_depth>',
+    );
+    promptParts.push(
+      '    <uniqueness>From conventional representation (0.8) to subversive/unexpected take (0.25)</uniqueness>',
+    );
     promptParts.push('  </diversity_dimensions>');
     promptParts.push('');
     promptParts.push('  <example_process>');
@@ -281,7 +294,9 @@ export class CharacterDescriptionPrompts {
     promptParts.push('    3. Cheerful optimist who loves cooking (prob: 0.35) - Personality twist');
     promptParts.push('    4. Former scholar turned warrior (prob: 0.25) - Background subversion');
     promptParts.push('');
-    promptParts.push('    Select the most compelling concept that balances creativity with authenticity');
+    promptParts.push(
+      '    Select the most compelling concept that balances creativity with authenticity',
+    );
     promptParts.push('  </example_process>');
     promptParts.push('');
     promptParts.push('  <selection_criteria>Choose the concept that:');

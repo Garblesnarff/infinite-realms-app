@@ -309,7 +309,9 @@ export class VoiceConsistencyService {
 
       if (error) throw error;
 
-      logger.debug(`📊 Updated character usage for mapping: ${mappingId} (count: ${currentCount + 1})`);
+      logger.debug(
+        `📊 Updated character usage for mapping: ${mappingId} (count: ${currentCount + 1})`,
+      );
     } catch (error) {
       logger.error('Error updating character usage:', error);
     }

@@ -1,11 +1,7 @@
 import { Search, Grid, List, Eye, Check, Users, Zap } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 
-import {
-  RaceCardListView,
-  RaceCardCompactView,
-  RaceCardGridView,
-} from './race-selection/RaceCard';
+import { RaceCardListView, RaceCardCompactView, RaceCardGridView } from './race-selection/RaceCard';
 import { buildRaceCategories, filterRaces } from './race-selection/raceFilters';
 import { HalfElfAbilityChoice } from '../modals/HalfElfAbilityChoice';
 import { VariantHumanChoice } from '../modals/VariantHumanChoice';
@@ -50,7 +46,7 @@ const RaceSelection: React.FC = () => {
   // Filter and search logic (using extracted utility)
   const filteredRaces = useMemo(
     () => filterRaces(baseRaces, searchQuery, selectedCategory),
-    [searchQuery, selectedCategory]
+    [searchQuery, selectedCategory],
   );
 
   // Helper functions
@@ -225,11 +221,7 @@ const RaceSelection: React.FC = () => {
             {/* View Mode Toggles */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">View:</span>
-              <div
-                className="flex border rounded-md"
-                role="group"
-                aria-label="View mode"
-              >
+              <div className="flex border rounded-md" role="group" aria-label="View mode">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
@@ -289,7 +281,8 @@ const RaceSelection: React.FC = () => {
             {filteredRaces.map((baseRace) => {
               const isSelected = state.character?.race?.id === baseRace.id;
               const isFavorite = favorites.has(baseRace.id);
-              const canAddToComparison = comparisonRaces.length < 3 || comparisonRaces.some((r) => r.id === baseRace.id);
+              const canAddToComparison =
+                comparisonRaces.length < 3 || comparisonRaces.some((r) => r.id === baseRace.id);
 
               const cardProps = {
                 race: baseRace,
@@ -379,10 +372,7 @@ const RaceSelection: React.FC = () => {
                       </div>
                     )}
 
-                    <CardHeader
-                      className="relative"
-                      style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
-                    >
+                    <CardHeader className="relative" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
                       <div className="flex items-center gap-2">
                         <Users
                           className={`w-5 h-5 ${subrace.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}

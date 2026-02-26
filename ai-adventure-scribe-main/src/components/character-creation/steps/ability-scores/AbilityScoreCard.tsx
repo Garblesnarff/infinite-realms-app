@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatRacialBonus } from '@/utils/racialAbilityBonuses';
 
-
 interface AbilityScoreCardProps {
   ability: keyof AbilityScores;
   baseScore: number;
@@ -70,7 +69,11 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
             <div className="text-3xl font-bold">{finalScore}</div>
             <div
               className={`text-sm font-medium ${
-                modifier > 0 ? 'text-green-600' : modifier < 0 ? 'text-red-600' : 'text-muted-foreground'
+                modifier > 0
+                  ? 'text-green-600'
+                  : modifier < 0
+                    ? 'text-red-600'
+                    : 'text-muted-foreground'
               }`}
             >
               {modifier >= 0 ? '+' : ''}

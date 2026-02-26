@@ -46,7 +46,10 @@ class LlmApiClient {
 
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
     // Auto-reset offline fallback after 30 seconds
-    if (this.useOfflineFallback && Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS) {
+    if (
+      this.useOfflineFallback &&
+      Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS
+    ) {
       this.useOfflineFallback = false;
     }
 
@@ -100,7 +103,7 @@ class LlmApiClient {
           temperature: params.temperature,
           history: params.history,
           provider,
-          requestType: params.requestType || 'user',  // Default to 'user' for backwards compatibility
+          requestType: params.requestType || 'user', // Default to 'user' for backwards compatibility
         }),
       });
 
@@ -127,9 +130,9 @@ class LlmApiClient {
       // Rate limit - try multiple free fallback models
       if (isRateLimitErr) {
         const fallbackModels = [
-          'arcee-ai/trinity-large-preview:free',   // First fallback (free)
-          'stepfun/step-3.5-flash:free',           // Second fallback (free)
-          'nvidia/nemotron-3-nano-30b-a3b:free',   // Third fallback (free)
+          'arcee-ai/trinity-large-preview:free', // First fallback (free)
+          'stepfun/step-3.5-flash:free', // Second fallback (free)
+          'nvidia/nemotron-3-nano-30b-a3b:free', // Third fallback (free)
         ];
         console.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
 
@@ -195,7 +198,9 @@ class LlmApiClient {
           if (is404 && attempt < maxRetries - 1) {
             // Retry on 404 errors (message might not be committed yet)
             const delay = initialDelay * Math.pow(2, attempt); // 200ms, 400ms, 800ms, 1600ms, 3200ms
-            console.warn(`[LLMApiClient] 404 on image attachment, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            console.warn(
+              `[LLMApiClient] 404 on image attachment, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`,
+            );
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue; // Retry
           }
@@ -207,7 +212,9 @@ class LlmApiClient {
         // Success
         await res.json().catch(() => ({}));
         if (attempt > 0) {
-          console.log(`[LLMApiClient] ✅ Image attachment succeeded on retry attempt ${attempt + 1}`);
+          console.log(
+            `[LLMApiClient] ✅ Image attachment succeeded on retry attempt ${attempt + 1}`,
+          );
         }
         return;
       } catch (error) {

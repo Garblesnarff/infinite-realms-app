@@ -13,15 +13,8 @@ import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon';
 
-import {
-  getVisionColor,
-  getVisionOpacity,
-} from '@/utils/vision-calculations';
-import {
-  calculateVisionPolygon,
-  mergeVisionPolygons,
-} from '@/utils/vision-polygon';
-
+import { getVisionColor, getVisionOpacity } from '@/utils/vision-calculations';
+import { calculateVisionPolygon, mergeVisionPolygons } from '@/utils/vision-polygon';
 
 // ===========================
 // Types
@@ -106,7 +99,7 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
         // Create worker (path needs to be adjusted based on build config)
         try {
           workerRef.current = new Worker(
-            new URL('../../workers/vision-worker.ts', import.meta.url)
+            new URL('../../workers/vision-worker.ts', import.meta.url),
           );
 
           workerRef.current.onmessage = (event) => {
@@ -152,9 +145,7 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
         const poly = calculateVisionPolygon(tokenArray[0], walls, range);
         setPolygon(poly);
       } else {
-        const polygons = tokenArray.map((token) =>
-          calculateVisionPolygon(token, walls, range)
-        );
+        const polygons = tokenArray.map((token) => calculateVisionPolygon(token, walls, range));
         const merged = mergeVisionPolygons(polygons);
         setPolygon(merged);
       }
@@ -344,11 +335,7 @@ export const VisionBoundary: React.FC<VisionBoundaryProps> = ({
         />
       ) : (
         /* Arc for limited vision cone */
-        <VisionConeArc
-          token={token}
-          range={effectiveRange}
-          color={color}
-        />
+        <VisionConeArc token={token} range={effectiveRange} color={color} />
       )}
     </g>
   );
@@ -418,7 +405,7 @@ const VisionConeArc: React.FC<VisionConeArcProps> = ({ token, range, color }) =>
 export function useVisionPolygon(
   token: Token | null,
   walls: VisionBlocker[],
-  range?: number
+  range?: number,
 ): {
   polygon: VisionPolygonType | null;
   isCalculating: boolean;
@@ -441,7 +428,7 @@ export function useVisionPolygon(
         setPolygon(poly);
         setIsCalculating(false);
       },
-      { timeout: 100 }
+      { timeout: 100 },
     );
 
     return () => {

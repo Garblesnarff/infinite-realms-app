@@ -83,7 +83,7 @@ export function raycastToWalls(
   origin: Point2D,
   direction: Point2D,
   walls: VisionBlocker[],
-  maxDistance: number = Infinity
+  maxDistance: number = Infinity,
 ): RayIntersection | null {
   // Normalize direction
   const dirLength = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
@@ -106,7 +106,7 @@ export function raycastToWalls(
         origin,
         normalizedDir,
         wall.points[i],
-        wall.points[i + 1]
+        wall.points[i + 1],
       );
 
       if (intersection && intersection.distance < closestDistance) {
@@ -125,7 +125,7 @@ export function raycastToWalls(
         origin,
         normalizedDir,
         wall.points[wall.points.length - 1],
-        wall.points[0]
+        wall.points[0],
       );
 
       if (intersection && intersection.distance < closestDistance) {
@@ -162,7 +162,7 @@ export function raycastToWalls(
 export function getAllRayIntersections(
   origin: Point2D,
   walls: VisionBlocker[],
-  maxRange: number = 1000
+  maxRange: number = 1000,
 ): VisionEndpoint[] {
   const endpoints: VisionEndpoint[] = [];
   const uniqueAngles = new Set<number>();
@@ -184,11 +184,7 @@ export function getAllRayIntersections(
     const angle = Math.atan2(dy, dx);
 
     // Cast rays at vertex angle and small offsets to handle edge cases
-    const offsetAngles = [
-      angle - 0.00001,
-      angle,
-      angle + 0.00001,
-    ];
+    const offsetAngles = [angle - 0.00001, angle, angle + 0.00001];
 
     for (const testAngle of offsetAngles) {
       // Skip if we've already tested this angle (with some tolerance)
@@ -268,7 +264,7 @@ function rayLineSegmentIntersection(
   origin: Point2D,
   direction: Point2D,
   segmentStart: Point2D,
-  segmentEnd: Point2D
+  segmentEnd: Point2D,
 ): { point: Point2D; distance: number; normal: Point2D } | null {
   const dx = segmentEnd.x - segmentStart.x;
   const dy = segmentEnd.y - segmentStart.y;
@@ -280,7 +276,8 @@ function rayLineSegmentIntersection(
     return null;
   }
 
-  const u = ((origin.y - segmentStart.y) * direction.x - (origin.x - segmentStart.x) * direction.y) / det;
+  const u =
+    ((origin.y - segmentStart.y) * direction.x - (origin.x - segmentStart.x) * direction.y) / det;
   const t = ((origin.y - segmentStart.y) * dx - (origin.x - segmentStart.x) * dy) / det;
 
   // Check if intersection is within segment and ray
@@ -330,10 +327,7 @@ function rayLineSegmentIntersection(
  * // Returns {x: 5, y: 5}
  * ```
  */
-export function lineSegmentIntersection(
-  line1: LineSegment,
-  line2: LineSegment
-): Point2D | null {
+export function lineSegmentIntersection(line1: LineSegment, line2: LineSegment): Point2D | null {
   const x1 = line1.start.x;
   const y1 = line1.start.y;
   const x2 = line1.end.x;
@@ -410,10 +404,7 @@ export function sortEndpointsByAngle(endpoints: VisionEndpoint[]): VisionEndpoin
  * @param tolerance - Distance tolerance (default: 0.1 pixels)
  * @returns Deduplicated points
  */
-export function removeDuplicatePoints(
-  points: Point2D[],
-  tolerance: number = 0.1
-): Point2D[] {
+export function removeDuplicatePoints(points: Point2D[], tolerance: number = 0.1): Point2D[] {
   if (points.length === 0) return [];
 
   const unique: Point2D[] = [points[0]];
@@ -464,7 +455,7 @@ export function raycastCone(
   coneAngle: number,
   numRays: number,
   walls: VisionBlocker[],
-  maxDistance: number = 1000
+  maxDistance: number = 1000,
 ): RayIntersection[] {
   const intersections: RayIntersection[] = [];
   const startAngle = centerAngle - coneAngle / 2;
@@ -496,11 +487,7 @@ export function raycastCone(
  * @param wall - Wall that might cast shadow
  * @returns Whether point is in shadow
  */
-export function isInShadow(
-  point: Point2D,
-  lightSource: Point2D,
-  wall: VisionBlocker
-): boolean {
+export function isInShadow(point: Point2D, lightSource: Point2D, wall: VisionBlocker): boolean {
   if (!wall.blocksLight) return false;
 
   // Check each segment of the wall
@@ -520,12 +507,7 @@ export function isInShadow(
       y: dy / distance,
     };
 
-    const intersection = rayLineSegmentIntersection(
-      lightSource,
-      direction,
-      wallStart,
-      wallEnd
-    );
+    const intersection = rayLineSegmentIntersection(lightSource, direction, wallStart, wallEnd);
 
     if (intersection && intersection.distance < distance - 0.1) {
       return true; // Wall blocks light before reaching point

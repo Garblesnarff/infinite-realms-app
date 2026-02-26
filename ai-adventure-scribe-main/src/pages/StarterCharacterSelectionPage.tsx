@@ -321,7 +321,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
       // Navigate to game with correct URL format
       // GameContent expects: /app/game/{campaignId}?character={characterId}&starterCampaign={starterCampaignId}
       navigate(
-        `/app/game/${campaignId}?character=${character.id}&starterCampaign=${campaign.id}&new=true`
+        `/app/game/${campaignId}?character=${character.id}&starterCampaign=${campaign.id}&new=true`,
       );
     } catch (err) {
       logger.error('Error starting with character:', err);

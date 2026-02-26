@@ -47,8 +47,7 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 export interface EmptyStateProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof emptyStateVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof emptyStateVariants> {
   /** Predefined illustration type or custom icon */
   illustration?: keyof typeof iconMap | React.ReactNode;
   /** Custom icon component (overrides illustration) */

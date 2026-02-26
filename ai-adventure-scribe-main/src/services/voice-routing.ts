@@ -381,7 +381,9 @@ export function detectVoiceCategoryFromNPCType(character: string): string | unde
   }
 
   // Noble/Royalty types -> refined voice
-  if (/noble|lord|lady|duke|duchess|baron|count|prince|princess|king|queen|aristocrat/.test(lowerChar)) {
+  if (
+    /noble|lord|lady|duke|duchess|baron|count|prince|princess|king|queen|aristocrat/.test(lowerChar)
+  ) {
     return 'hero'; // Using hero pool for refined voices
   }
 

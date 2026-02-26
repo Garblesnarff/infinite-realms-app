@@ -213,7 +213,9 @@ export const getAlignmentPrompt = (alignment: string): string => {
   return alignmentMap[alignment.toLowerCase()] || 'balanced expression';
 };
 
-export const extractEnhancementVisuals = (enhancementSelections: EnhancementSelection[]): string[] => {
+export const extractEnhancementVisuals = (
+  enhancementSelections: EnhancementSelection[],
+): string[] => {
   const visualElements: string[] = [];
 
   enhancementSelections.forEach((selection) => {

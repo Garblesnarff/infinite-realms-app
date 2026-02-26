@@ -37,26 +37,14 @@ describe('ActionOptions', () => {
   });
 
   it('should not show options initially if delay is set', () => {
-    render(
-      <ActionOptions
-        options={mockOptions}
-        onOptionSelect={onOptionSelect}
-        delay={1000}
-      />
-    );
+    render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={1000} />);
 
     // Should show loading dots
     expect(screen.queryByText(/What would you like to do/i)).not.toBeInTheDocument();
   });
 
   it('should show options after the delay', () => {
-    render(
-      <ActionOptions
-        options={mockOptions}
-        onOptionSelect={onOptionSelect}
-        delay={1000}
-      />
-    );
+    render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={1000} />);
 
     act(() => {
       vi.advanceTimersByTime(1000);
@@ -67,13 +55,7 @@ describe('ActionOptions', () => {
   });
 
   it('should call onOptionSelect when an option is clicked', () => {
-    render(
-      <ActionOptions
-        options={mockOptions}
-        onOptionSelect={onOptionSelect}
-        delay={0}
-      />
-    );
+    render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
 
     act(() => {
       vi.runAllTimers();
@@ -88,13 +70,7 @@ describe('ActionOptions', () => {
   });
 
   it('should disable all options after one is selected', () => {
-    render(
-      <ActionOptions
-        options={mockOptions}
-        onOptionSelect={onOptionSelect}
-        delay={0}
-      />
-    );
+    render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
 
     act(() => {
       vi.runAllTimers();
@@ -124,7 +100,7 @@ describe('ActionOptions', () => {
         onOptionSelect={onOptionSelect}
         delay={0}
         disabled={true}
-      />
+      />,
     );
 
     act(() => {
@@ -140,13 +116,7 @@ describe('ActionOptions', () => {
   });
 
   it('should show correct icons for different keywords', () => {
-    render(
-      <ActionOptions
-        options={mockOptions}
-        onOptionSelect={onOptionSelect}
-        delay={0}
-      />
-    );
+    render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
 
     act(() => {
       vi.runAllTimers();
@@ -160,12 +130,7 @@ describe('ActionOptions', () => {
   });
 
   it('should not render anything if options array is empty', () => {
-    const { container } = render(
-      <ActionOptions
-        options={[]}
-        onOptionSelect={onOptionSelect}
-      />
-    );
+    const { container } = render(<ActionOptions options={[]} onOptionSelect={onOptionSelect} />);
 
     expect(container.firstChild).toBeNull();
   });

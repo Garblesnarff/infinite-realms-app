@@ -8,15 +8,21 @@ import type { Campaign } from '@/types/game';
 vi.mock('@/components/ui/alert-dialog', () => ({
   AlertDialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  AlertDialogContent: ({ children }: { children: React.ReactNode }) => <div data-testid="alert-dialog-content">{children}</div>,
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-dialog-content">{children}</div>
+  ),
   AlertDialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AlertDialogCancel: ({ children }: { children: React.ReactNode }) => <button>Cancel</button>,
-  AlertDialogAction: ({ children, onClick }: { children: React.ReactNode, onClick: () => void }) => (
-    <button onClick={onClick}>{children}</button>
-  ),
+  AlertDialogAction: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick: () => void;
+  }) => <button onClick={onClick}>{children}</button>,
 }));
 
 describe('CampaignHeader', () => {
@@ -29,16 +35,12 @@ describe('CampaignHeader', () => {
   } as any;
 
   it('renders campaign name', () => {
-    render(
-      <CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />
-    );
+    render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
     expect(screen.getByText('Test Campaign')).toBeDefined();
   });
 
   it('renders delete button with aria-label and title', () => {
-    render(
-      <CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />
-    );
+    render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
     const deleteBtn = screen.getByLabelText('Delete campaign');
     expect(deleteBtn).toBeDefined();
     expect(deleteBtn.getAttribute('title')).toBe('Delete campaign');
@@ -48,9 +50,7 @@ describe('CampaignHeader', () => {
     // In our mock, the content is always rendered, but in reality it's triggered.
     // Testing the actual Radix behavior might be hard without a full setup.
     // But we can at least check if the content exists in our mock.
-    render(
-      <CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />
-    );
+    render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
     expect(screen.getByTestId('alert-dialog-content')).toBeDefined();
     expect(screen.getByText(/Are you absolutely sure/)).toBeDefined();
     expect(screen.getByText(/permanently delete the campaign "Test Campaign"/)).toBeDefined();
@@ -58,9 +58,7 @@ describe('CampaignHeader', () => {
 
   it('calls onDelete when confirm button is clicked', () => {
     const onDelete = vi.fn();
-    render(
-      <CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={onDelete} />
-    );
+    render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={onDelete} />);
 
     const confirmBtn = screen.getByText('Delete Campaign');
     fireEvent.click(confirmBtn);
@@ -69,9 +67,7 @@ describe('CampaignHeader', () => {
   });
 
   it('shows "Deleting..." when isDeleting is true', () => {
-    render(
-      <CampaignHeader campaign={mockCampaign} isDeleting={true} onDelete={() => {}} />
-    );
+    render(<CampaignHeader campaign={mockCampaign} isDeleting={true} onDelete={() => {}} />);
     expect(screen.getByText('Deleting...')).toBeDefined();
   });
 });

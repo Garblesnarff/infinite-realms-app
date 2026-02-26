@@ -167,4 +167,3 @@ export function restoreSpellSlots(character: Character): Character {
 
   return { ...character, spellSlots: updatedSlots, activeConcentration: null };
 }
-

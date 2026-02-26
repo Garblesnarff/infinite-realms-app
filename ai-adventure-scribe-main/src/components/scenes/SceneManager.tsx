@@ -247,36 +247,49 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open scene menu">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Open scene menu"
+                      >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        onViewScene?.(scene.id);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewScene?.(scene.id);
+                        }}
+                      >
                         <Eye className="mr-2 h-4 w-4" />
                         View Scene
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        onEditScene?.(scene.id);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditScene?.(scene.id);
+                        }}
+                      >
                         Edit
                       </DropdownMenuItem>
                       {!scene.isActive && (
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          handleSetActive(scene.id);
-                        }}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetActive(scene.id);
+                          }}
+                        >
                           Set as Active
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleDuplicate(scene);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicate(scene);
+                        }}
+                      >
                         <Copy className="mr-2 h-4 w-4" />
                         Duplicate
                       </DropdownMenuItem>
@@ -297,9 +310,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
 
               {scene.description && (
                 <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {scene.description}
-                  </p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{scene.description}</p>
                 </CardContent>
               )}
             </Card>
@@ -365,31 +376,39 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onViewScene?.(scene.id);
-                    }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewScene?.(scene.id);
+                      }}
+                    >
                       <Eye className="mr-2 h-4 w-4" />
                       View Scene
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onEditScene?.(scene.id);
-                    }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditScene?.(scene.id);
+                      }}
+                    >
                       Edit
                     </DropdownMenuItem>
                     {!scene.isActive && (
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleSetActive(scene.id);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSetActive(scene.id);
+                        }}
+                      >
                         Set as Active
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      handleDuplicate(scene);
-                    }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicate(scene);
+                      }}
+                    >
                       <Copy className="mr-2 h-4 w-4" />
                       Duplicate
                     </DropdownMenuItem>

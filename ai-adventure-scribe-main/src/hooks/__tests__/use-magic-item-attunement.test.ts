@@ -60,11 +60,16 @@ describe('useMagicItemAttunement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (getAttunedItemCount as any).mockReturnValue(1);
-    (validateAttunementRequirements as any).mockReturnValue({ canAttune: true, reason: 'Meets all requirements' });
+    (validateAttunementRequirements as any).mockReturnValue({
+      canAttune: true,
+      reason: 'Meets all requirements',
+    });
   });
 
   it('should initialize with correct state', () => {
-    const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+    const { result } = renderHook(() =>
+      useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+    );
 
     expect(result.current.isAttuning).toBe(false);
     expect(result.current.attunedItemCount).toBe(1);
@@ -73,7 +78,9 @@ describe('useMagicItemAttunement', () => {
 
   describe('attuneToItem', () => {
     it('should fail if item is not found in inventory', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.attuneToItem('non-existent-item');
@@ -85,7 +92,9 @@ describe('useMagicItemAttunement', () => {
     });
 
     it('should fail if item is already attuned', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.attuneToItem('ring-of-protection');
@@ -102,7 +111,9 @@ describe('useMagicItemAttunement', () => {
         reason: 'Requires class: Wizard',
       });
 
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.attuneToItem('magic-sword');
@@ -114,7 +125,9 @@ describe('useMagicItemAttunement', () => {
     });
 
     it('should successfully attune to an item', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.attuneToItem('magic-sword');
@@ -127,14 +140,16 @@ describe('useMagicItemAttunement', () => {
           inventory: expect.arrayContaining([
             expect.objectContaining({ itemId: 'magic-sword', isAttuned: true }),
           ]),
-        })
+        }),
       );
     });
 
     it('should handle errors during attunement', async () => {
       // Force an error by making inventory null in a way that triggers an error in the hook
       const brokenCharacter = { ...mockCharacter, inventory: undefined };
-      const { result } = renderHook(() => useMagicItemAttunement(brokenCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(brokenCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.attuneToItem('magic-sword');
@@ -148,7 +163,9 @@ describe('useMagicItemAttunement', () => {
         throw new Error('Test error');
       });
 
-      const { result: result2 } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result: result2 } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
       const response2 = await act(async () => {
         return await result2.current.attuneToItem('magic-sword');
       });
@@ -161,7 +178,9 @@ describe('useMagicItemAttunement', () => {
 
   describe('removeAttunement', () => {
     it('should fail if item is not found in inventory', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.removeAttunement('non-existent-item');
@@ -173,7 +192,9 @@ describe('useMagicItemAttunement', () => {
     });
 
     it('should fail if item is not attuned', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.removeAttunement('magic-sword');
@@ -185,7 +206,9 @@ describe('useMagicItemAttunement', () => {
     });
 
     it('should successfully remove attunement from an item', async () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.removeAttunement('ring-of-protection');
@@ -198,7 +221,7 @@ describe('useMagicItemAttunement', () => {
           inventory: expect.arrayContaining([
             expect.objectContaining({ itemId: 'ring-of-protection', isAttuned: false }),
           ]),
-        })
+        }),
       );
     });
 
@@ -208,7 +231,9 @@ describe('useMagicItemAttunement', () => {
         throw new Error('Update failed');
       });
 
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const response = await act(async () => {
         return await result.current.removeAttunement('ring-of-protection');
@@ -222,7 +247,9 @@ describe('useMagicItemAttunement', () => {
 
   describe('getItemAttunementStatus', () => {
     it('should return correct status for existing items', () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const status = result.current.getItemAttunementStatus('magic-sword');
       expect(status.isAttuned).toBe(false);
@@ -233,7 +260,9 @@ describe('useMagicItemAttunement', () => {
     });
 
     it('should return correct status for non-existent items', () => {
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const status = result.current.getItemAttunementStatus('ghost-item');
       expect(status.isAttuned).toBe(false);
@@ -245,7 +274,9 @@ describe('useMagicItemAttunement', () => {
   describe('getAttunementSummary', () => {
     it('should return correct summary', () => {
       (getAttunedItemCount as any).mockReturnValue(2);
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const summary = result.current.getAttunementSummary();
       expect(summary.attunedCount).toBe(2);
@@ -255,7 +286,9 @@ describe('useMagicItemAttunement', () => {
 
     it('should reflect capacity correctly', () => {
       (getAttunedItemCount as any).mockReturnValue(3);
-      const { result } = renderHook(() => useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate));
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+      );
 
       const summary = result.current.getAttunementSummary();
       expect(summary.isAtCapacity).toBe(true);

@@ -8,7 +8,16 @@
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import React from 'react';
-import { User, MapPin, Sword, Package, Image as ImageIcon, X, Sparkles, Loader2 } from 'lucide-react';
+import {
+  User,
+  MapPin,
+  Sword,
+  Package,
+  Image as ImageIcon,
+  X,
+  Sparkles,
+  Loader2,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/constants/z-index';
@@ -100,7 +109,7 @@ const AssetCard: React.FC<{
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
         'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
         'cursor-pointer',
-        getAssetGradient(asset.type)
+        getAssetGradient(asset.type),
       )}
       title={`Click to view ${asset.name}`}
     >
@@ -118,7 +127,7 @@ const AssetCard: React.FC<{
               alt={asset.name}
               className={cn(
                 'w-full h-full object-cover transition-opacity duration-300',
-                imageLoaded ? 'opacity-100' : 'opacity-0'
+                imageLoaded ? 'opacity-100' : 'opacity-0',
               )}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
@@ -163,7 +172,7 @@ const GeneratedImageCard: React.FC<{
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
         'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
         'cursor-pointer',
-        getAssetGradient('generated')
+        getAssetGradient('generated'),
       )}
       title="Click to view generated scene"
     >
@@ -180,7 +189,7 @@ const GeneratedImageCard: React.FC<{
               alt="Generated scene"
               className={cn(
                 'w-full h-full object-cover transition-opacity duration-300',
-                imageLoaded ? 'opacity-100' : 'opacity-0'
+                imageLoaded ? 'opacity-100' : 'opacity-0',
               )}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
@@ -222,7 +231,7 @@ const GenerateButtonCard: React.FC<{
         isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl',
         'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
         'cursor-pointer',
-        getAssetGradient('generated')
+        getAssetGradient('generated'),
       )}
       title={isGenerating ? 'Generating...' : 'Generate scene image'}
     >
@@ -310,7 +319,10 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
       </div>
 
       {/* Expanded asset view modal - uses high z-index to appear above all game UI */}
-      <DialogPrimitive.Root open={!!expandedAsset} onOpenChange={(open) => !open && setExpandedAsset(null)}>
+      <DialogPrimitive.Root
+        open={!!expandedAsset}
+        onOpenChange={(open) => !open && setExpandedAsset(null)}
+      >
         <DialogPrimitive.Portal>
           {/* Overlay with very high z-index */}
           <DialogPrimitive.Overlay
@@ -332,9 +344,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             {expandedAsset && (
               <div className="relative">
                 {/* Close button */}
-                <DialogPrimitive.Close
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
-                >
+                <DialogPrimitive.Close className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
 
@@ -348,10 +358,12 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                 </div>
 
                 {/* Asset info */}
-                <div className={cn(
-                  'p-4 bg-gradient-to-t border-t',
-                  getAssetGradient(expandedAsset.type)
-                )}>
+                <div
+                  className={cn(
+                    'p-4 bg-gradient-to-t border-t',
+                    getAssetGradient(expandedAsset.type),
+                  )}
+                >
                   <h3 className="text-lg font-semibold text-white">{expandedAsset.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getAssetIcon(expandedAsset.type)}
@@ -388,9 +400,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             </DialogPrimitive.Description>
             {generatedImage?.url && (
               <div className="relative">
-                <DialogPrimitive.Close
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
-                >
+                <DialogPrimitive.Close className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
                 <div className="relative aspect-square md:aspect-[4/3] w-full">
@@ -400,10 +410,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <div className={cn(
-                  'p-4 bg-gradient-to-t border-t',
-                  getAssetGradient('generated')
-                )}>
+                <div className={cn('p-4 bg-gradient-to-t border-t', getAssetGradient('generated'))}>
                   <h3 className="text-lg font-semibold text-white">Generated Scene</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getAssetIcon('generated')}

@@ -27,7 +27,7 @@ describe('usePendingRolls', () => {
   it('should return no pending rolls when there are no DM messages', () => {
     const messages = [
       { sender: 'player', text: 'Hello' },
-      { sender: 'system', text: 'System message' }
+      { sender: 'system', text: 'System message' },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -40,7 +40,7 @@ describe('usePendingRolls', () => {
   it('should detect pending rolls from DM message', () => {
     const messages = [
       { sender: 'player', text: 'I open the door' },
-      { sender: 'dm', text: 'Make a Perception check (DC 15)' }
+      { sender: 'dm', text: 'Make a Perception check (DC 15)' },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -56,7 +56,7 @@ describe('usePendingRolls', () => {
   it('should resolve pending rolls when player responds with a dice roll', () => {
     const messages = [
       { sender: 'dm', text: 'Make a Perception check' },
-      { sender: 'player', text: 'Perception: 18 ✓' }
+      { sender: 'player', text: 'Perception: 18 ✓' },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -71,13 +71,13 @@ describe('usePendingRolls', () => {
       'Investigation: 7 ✗',
       'I rolled 15',
       'rolled a 20',
-      '18 ✓'
+      '18 ✓',
     ];
 
-    patterns.forEach(pattern => {
+    patterns.forEach((pattern) => {
       const messages = [
         { sender: 'dm', text: 'Make a check' },
-        { sender: 'player', text: pattern }
+        { sender: 'player', text: pattern },
       ];
       (useMessageContext as any).mockReturnValue({ messages });
 
@@ -89,7 +89,7 @@ describe('usePendingRolls', () => {
   it('should still be pending if player responds with non-roll message', () => {
     const messages = [
       { sender: 'dm', text: 'Make a Perception check' },
-      { sender: 'player', text: 'Wait, what was that?' }
+      { sender: 'player', text: 'Wait, what was that?' },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -106,7 +106,7 @@ describe('usePendingRolls', () => {
     const messages = [
       { sender: 'dm', text: 'Roll initiative' },
       { sender: 'player', text: 'rolled 18' },
-      { sender: 'dm', text: 'Please roll initiative' }
+      { sender: 'dm', text: 'Please roll initiative' },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -119,7 +119,7 @@ describe('usePendingRolls', () => {
   it('should detect rolls from context intent', () => {
     const messages = [
       { sender: 'dm', text: 'Make a check' },
-      { sender: 'player', text: 'I do it', context: { intent: 'dice_roll' } }
+      { sender: 'player', text: 'I do it', context: { intent: 'dice_roll' } },
     ];
     (useMessageContext as any).mockReturnValue({ messages });
 
@@ -135,9 +135,7 @@ describe('useLatestPendingRoll', () => {
   });
 
   it('should return the latest pending roll', () => {
-    const messages = [
-      { sender: 'dm', text: 'Make a Perception check and an Athletics check' }
-    ];
+    const messages = [{ sender: 'dm', text: 'Make a Perception check and an Athletics check' }];
     (useMessageContext as any).mockReturnValue({ messages });
 
     const { result } = renderHook(() => useLatestPendingRoll());

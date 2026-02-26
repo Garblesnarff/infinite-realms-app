@@ -83,14 +83,16 @@ describe('useAbilityScoreSelection', () => {
       result.current.handleReset();
     });
 
-    expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'UPDATE_CHARACTER',
-      payload: expect.objectContaining({
-        abilityScores: expect.objectContaining({
-          strength: expect.objectContaining({ score: 8 }),
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'UPDATE_CHARACTER',
+        payload: expect.objectContaining({
+          abilityScores: expect.objectContaining({
+            strength: expect.objectContaining({ score: 8 }),
+          }),
         }),
       }),
-    }));
+    );
     expect(result.current.remainingPoints).toBe(27);
   });
 
@@ -102,14 +104,16 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleIncreaseScore('strength');
       });
 
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 9 }),
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 9 }),
+            }),
           }),
         }),
-      }));
+      );
 
       expect(result.current.remainingPoints).toBe(26);
     });
@@ -134,13 +138,15 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleIncreaseScore('strength');
       });
 
-      expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 16 }),
+      expect(mockDispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 16 }),
+            }),
           }),
         }),
-      }));
+      );
     });
 
     it('should not increase score if not enough points', () => {
@@ -153,12 +159,14 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleIncreaseScore('strength');
       });
 
-      expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.any(Object),
+      expect(mockDispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.any(Object),
+          }),
         }),
-      }));
+      );
     });
 
     it('should decrease score and refund points', () => {
@@ -169,14 +177,16 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleDecreaseScore('strength');
       });
 
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 9 }),
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 9 }),
+            }),
           }),
         }),
-      }));
+      );
       expect(result.current.remainingPoints).toBe(28); // 27 + (cost(10) - cost(9)) = 27 + (2 - 1) = 28
     });
 
@@ -188,12 +198,14 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleDecreaseScore('strength');
       });
 
-      expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.any(Object),
+      expect(mockDispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.any(Object),
+          }),
         }),
-      }));
+      );
     });
   });
 
@@ -205,19 +217,21 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleStandardArray();
       });
 
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 15 }),
-            dexterity: expect.objectContaining({ score: 14 }),
-            constitution: expect.objectContaining({ score: 13 }),
-            intelligence: expect.objectContaining({ score: 12 }),
-            wisdom: expect.objectContaining({ score: 10 }),
-            charisma: expect.objectContaining({ score: 8 }),
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 15 }),
+              dexterity: expect.objectContaining({ score: 14 }),
+              constitution: expect.objectContaining({ score: 13 }),
+              intelligence: expect.objectContaining({ score: 12 }),
+              wisdom: expect.objectContaining({ score: 10 }),
+              charisma: expect.objectContaining({ score: 8 }),
+            }),
           }),
         }),
-      }));
+      );
     });
 
     it('should validate standard array', () => {
@@ -251,8 +265,8 @@ describe('useAbilityScoreSelection', () => {
         ...mockState.character,
         abilityScores: {
           ...mockState.character.abilityScores,
-          strength: { score: 16 }
-        }
+          strength: { score: 16 },
+        },
       };
       rerender();
       expect(result.current.standardArrayValid).toBe(false);
@@ -263,7 +277,14 @@ describe('useAbilityScoreSelection', () => {
     it('should roll all scores', () => {
       const mockRollResult = {
         scores: [18, 16, 14, 12, 10, 8],
-        details: [[6, 6, 6, 1], [6, 6, 4, 1], [6, 4, 4, 1], [4, 4, 4, 1], [4, 4, 2, 1], [4, 2, 2, 1]],
+        details: [
+          [6, 6, 6, 1],
+          [6, 6, 4, 1],
+          [6, 4, 4, 1],
+          [4, 4, 4, 1],
+          [4, 4, 2, 1],
+          [4, 2, 2, 1],
+        ],
       };
       (generateAbilityScoresDetailed as any).mockReturnValue(mockRollResult);
 
@@ -273,22 +294,31 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleRollScores();
       });
 
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 18 }),
-            charisma: expect.objectContaining({ score: 8 }),
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 18 }),
+              charisma: expect.objectContaining({ score: 8 }),
+            }),
           }),
         }),
-      }));
+      );
       expect(result.current.currentRollDetails).toEqual(mockRollResult);
     });
 
     it('should reroll a single score', () => {
       const initialRollResult = {
         scores: [10, 10, 10, 10, 10, 10],
-        details: [[4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1]],
+        details: [
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+        ],
       };
       (generateAbilityScoresDetailed as any).mockReturnValue(initialRollResult);
 
@@ -300,7 +330,14 @@ describe('useAbilityScoreSelection', () => {
 
       const updatedRollResult = {
         scores: [18, 10, 10, 10, 10, 10],
-        details: [[6, 6, 6, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1], [4, 3, 3, 1]],
+        details: [
+          [6, 6, 6, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+          [4, 3, 3, 1],
+        ],
       };
       (rerollSingleScoreDetailed as any).mockReturnValue(updatedRollResult);
 
@@ -308,14 +345,16 @@ describe('useAbilityScoreSelection', () => {
         result.current.handleRerollSingleScore(0);
       });
 
-      expect(mockDispatch).toHaveBeenLastCalledWith(expect.objectContaining({
-        type: 'UPDATE_CHARACTER',
-        payload: expect.objectContaining({
-          abilityScores: expect.objectContaining({
-            strength: expect.objectContaining({ score: 18 }),
+      expect(mockDispatch).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: 'UPDATE_CHARACTER',
+          payload: expect.objectContaining({
+            abilityScores: expect.objectContaining({
+              strength: expect.objectContaining({ score: 18 }),
+            }),
           }),
         }),
-      }));
+      );
     });
   });
 

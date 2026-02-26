@@ -100,7 +100,7 @@ function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate 
  * @returns Object containing templates array, loading state, and error
  */
 export function useStarterCharacterTemplates(
-  campaignId: string | undefined
+  campaignId: string | undefined,
 ): UseStarterCharacterTemplatesResult {
   const [templates, setTemplates] = useState<StarterCharacterTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -146,9 +146,7 @@ export function useStarterCharacterTemplates(
  * @param templateId - The UUID of the template
  * @returns Object containing template, loading state, and error
  */
-export function useStarterCharacterTemplate(
-  templateId: string | undefined
-): {
+export function useStarterCharacterTemplate(templateId: string | undefined): {
   template: StarterCharacterTemplate | null;
   isLoading: boolean;
   error: Error | null;

@@ -5,10 +5,7 @@ describe('image-label-generator', () => {
   describe('generateImageLabel', () => {
     describe('UUID and hex string filtering', () => {
       it('should filter out UUID segments (4-8 hex chars)', () => {
-        const label = generateImageLabel(
-          null,
-          'scene a66f6d92 4a01 4b0f in the ancient temple',
-        );
+        const label = generateImageLabel(null, 'scene a66f6d92 4a01 4b0f in the ancient temple');
         expect(label).not.toContain('a66f6d92');
         expect(label).not.toContain('4a01');
         expect(label).not.toContain('4b0f');
@@ -17,10 +14,7 @@ describe('image-label-generator', () => {
       });
 
       it('should filter out long hex strings', () => {
-        const label = generateImageLabel(
-          null,
-          'combat 58c4258ae55a ccfa1848 in the dark forest',
-        );
+        const label = generateImageLabel(null, 'combat 58c4258ae55a ccfa1848 in the dark forest');
         expect(label).not.toContain('58c4258ae55a');
         expect(label).not.toContain('ccfa1848');
         expect(label).toContain('dark');
@@ -109,10 +103,7 @@ describe('image-label-generator', () => {
 
     describe('stop words filtering', () => {
       it('should filter common stop words (a, an, the, etc.)', () => {
-        const label = generateImageLabel(
-          null,
-          'a dragon in the forest near an ancient temple',
-        );
+        const label = generateImageLabel(null, 'a dragon in the forest near an ancient temple');
         expect(label).not.toContain('the');
         expect(label).not.toContain('in');
         expect(label).not.toContain('near');
@@ -149,10 +140,7 @@ describe('image-label-generator', () => {
 
     describe('campaign context integration', () => {
       it('should include sanitized campaign name', () => {
-        const label = generateImageLabel(
-          "The Dragon's Lair",
-          'ancient temple with treasure',
-        );
+        const label = generateImageLabel("The Dragon's Lair", 'ancient temple with treasure');
         expect(label).toContain('dragons');
         expect(label).toContain('lair');
       });
@@ -193,10 +181,7 @@ describe('image-label-generator', () => {
       });
 
       it('should handle only UUIDs/hex strings', () => {
-        const label = generateImageLabel(
-          null,
-          'a66f6d92 4a01 4b0f 85fd 58c4258ae55a ccfa1848',
-        );
+        const label = generateImageLabel(null, 'a66f6d92 4a01 4b0f 85fd 58c4258ae55a ccfa1848');
         expect(label).toBe('scene'); // fallback when no good keywords
       });
 
@@ -213,11 +198,7 @@ describe('image-label-generator', () => {
 
       it('should handle very long scene text', () => {
         const longText =
-          'dragon ' +
-          'filler '.repeat(100) +
-          'castle ' +
-          'noise '.repeat(50) +
-          'ancient temple';
+          'dragon ' + 'filler '.repeat(100) + 'castle ' + 'noise '.repeat(50) + 'ancient temple';
         const label = generateImageLabel(null, longText, { maxKeywords: 4 });
         // Should extract meaningful keywords despite length
         // Scoring prioritizes: dragon (+3), ancient (+2), castle (+2), temple (+2)
@@ -356,9 +337,7 @@ describe('image-label-generator', () => {
       const label = generateImageLabel(null, original.toLowerCase());
       const formatted = formatLabelForDisplay(label);
       // Should produce title-case version
-      expect(formatted.split(' ').every((word) => word[0] === word[0].toUpperCase())).toBe(
-        true,
-      );
+      expect(formatted.split(' ').every((word) => word[0] === word[0].toUpperCase())).toBe(true);
     });
   });
 });

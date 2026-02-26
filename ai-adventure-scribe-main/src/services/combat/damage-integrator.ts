@@ -10,7 +10,6 @@ import type { DamageType } from '@/types/combat';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
-
 export interface DamageApplication {
   participantId: string;
   encounterId: string;
@@ -94,7 +93,7 @@ export function calculateModifiedDamage(
   damageType: DamageType,
   resistances: string[],
   immunities: string[],
-  vulnerabilities: string[]
+  vulnerabilities: string[],
 ): number {
   // Immunity = 0 damage
   if (immunities.includes(damageType)) {
@@ -107,14 +106,18 @@ export function calculateModifiedDamage(
   // Resistance = half damage (rounded down)
   if (resistances.includes(damageType)) {
     const reduced = Math.floor(modifiedDamage / 2);
-    logger.info(`[DamageIntegrator] Damage type ${damageType} is resisted - ${modifiedDamage} → ${reduced}`);
+    logger.info(
+      `[DamageIntegrator] Damage type ${damageType} is resisted - ${modifiedDamage} → ${reduced}`,
+    );
     modifiedDamage = reduced;
   }
 
   // Vulnerability = double damage
   if (vulnerabilities.includes(damageType)) {
     const doubled = modifiedDamage * 2;
-    logger.info(`[DamageIntegrator] Damage type ${damageType} is vulnerable - ${modifiedDamage} → ${doubled}`);
+    logger.info(
+      `[DamageIntegrator] Damage type ${damageType} is vulnerable - ${modifiedDamage} → ${doubled}`,
+    );
     modifiedDamage = doubled;
   }
 
@@ -125,9 +128,7 @@ export function calculateModifiedDamage(
  * Apply damage to a combat participant
  * Handles temp HP, resistances/vulnerabilities, consciousness, and logging
  */
-export async function applyDamageFromRoll(
-  damage: DamageApplication
-): Promise<HPUpdateResult> {
+export async function applyDamageFromRoll(damage: DamageApplication): Promise<HPUpdateResult> {
   const {
     participantId,
     encounterId,
@@ -139,7 +140,9 @@ export async function applyDamageFromRoll(
   } = damage;
 
   try {
-    logger.info(`[DamageIntegrator] Applying ${damageAmount} ${damageType} damage to ${participantId}`);
+    logger.info(
+      `[DamageIntegrator] Applying ${damageAmount} ${damageType} damage to ${participantId}`,
+    );
 
     // Get current status
     const status = await getParticipantStatus(participantId);
@@ -161,7 +164,7 @@ export async function applyDamageFromRoll(
       damageType,
       status.damage_resistances,
       status.damage_immunities,
-      status.damage_vulnerabilities
+      status.damage_vulnerabilities,
     );
 
     if (modifiedDamage === 0) {
@@ -237,7 +240,7 @@ export async function applyDamageFromRoll(
 
     logger.info(
       `[DamageIntegrator] ✓ Damage applied: ${status.current_hp} → ${newHP} HP` +
-        (becameUnconscious ? ' (UNCONSCIOUS)' : '')
+        (becameUnconscious ? ' (UNCONSCIOUS)' : ''),
     );
 
     return {
@@ -268,9 +271,7 @@ export async function applyDamageFromRoll(
 /**
  * Apply healing to a combat participant
  */
-export async function applyHealingFromRoll(
-  healing: HealingApplication
-): Promise<HPUpdateResult> {
+export async function applyHealingFromRoll(healing: HealingApplication): Promise<HPUpdateResult> {
   const { participantId, healingAmount } = healing;
 
   try {
@@ -332,7 +333,7 @@ export async function applyHealingFromRoll(
 
     logger.info(
       `[DamageIntegrator] ✓ Healing applied: ${status.current_hp} → ${newHP} HP` +
-        (becameConscious ? ' (CONSCIOUS)' : '')
+        (becameConscious ? ' (CONSCIOUS)' : ''),
     );
 
     return {
@@ -368,7 +369,7 @@ export async function applyDamageFromAutoRoll(
   encounterId: string,
   targetParticipantId: string,
   damageType: DamageType,
-  roundNumber: number
+  roundNumber: number,
 ): Promise<HPUpdateResult> {
   const { request, result } = roll;
 

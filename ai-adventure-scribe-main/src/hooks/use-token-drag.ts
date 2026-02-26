@@ -126,21 +126,18 @@ export function useTokenDrag(options: UseTokenDragOptions): UseTokenDragReturn {
   /**
    * Handle pointer down (start potential drag)
    */
-  const handlePointerDown = useCallback(
-    (event: PointerEvent | React.PointerEvent) => {
-      // Only handle left mouse button or primary touch
-      if ('button' in event && event.button !== 0) return;
+  const handlePointerDown = useCallback((event: PointerEvent | React.PointerEvent) => {
+    // Only handle left mouse button or primary touch
+    if ('button' in event && event.button !== 0) return;
 
-      const target = event.target as HTMLElement;
-      target.setPointerCapture?.(event.pointerId);
+    const target = event.target as HTMLElement;
+    target.setPointerCapture?.(event.pointerId);
 
-      dragStartRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-    },
-    [],
-  );
+    dragStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+  }, []);
 
   /**
    * Handle pointer move (track drag)

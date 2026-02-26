@@ -84,7 +84,9 @@ describe('useSessionInitialization', () => {
       single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
     });
 
-    renderHook(() => useSessionInitialization({ ...defaultProps, specificSessionId: 'spec-session' }));
+    renderHook(() =>
+      useSessionInitialization({ ...defaultProps, specificSessionId: 'spec-session' }),
+    );
 
     await waitFor(() => {
       expect(mockSetSessionData).toHaveBeenCalledWith(mockSession);
@@ -134,7 +136,7 @@ describe('useSessionInitialization', () => {
       id: 'completed-1',
       status: 'completed',
       session_number: 1,
-      current_scene_description: 'forest'
+      current_scene_description: 'forest',
     };
     const mockNewSession = { id: 'new-continuation', status: 'active' };
 
@@ -189,9 +191,11 @@ describe('useSessionInitialization', () => {
 
     await waitFor(() => {
       expect(mockSetSessionState).toHaveBeenCalledWith('error');
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        variant: 'destructive',
-      }));
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: 'destructive',
+        }),
+      );
     });
   });
 
@@ -245,7 +249,7 @@ describe('useSessionInitialization', () => {
     resolvePromise({ data: [], error: null });
 
     // Wait a bit to ensure nothing else is called
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(mockSetSessionState).not.toHaveBeenCalledWith('active');
     expect(mockCreateGameSession).not.toHaveBeenCalled();

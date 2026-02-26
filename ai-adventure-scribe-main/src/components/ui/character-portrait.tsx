@@ -52,8 +52,7 @@ const characterPortraitVariants = cva(
 );
 
 export interface CharacterPortraitProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof characterPortraitVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof characterPortraitVariants> {
   /** Character name */
   name: string;
   /** Character race */

@@ -11,7 +11,7 @@ import {
   fetchExistingSessions,
   fetchSessionById,
   updateSessionInDatabase,
-  SESSION_EXPIRY_TIME
+  SESSION_EXPIRY_TIME,
 } from '../game-session/session-utils';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -23,8 +23,8 @@ vi.mock('@/integrations/supabase/client', () => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
-    }))
-  }
+    })),
+  },
 }));
 
 // Mock Logger
@@ -74,14 +74,14 @@ describe('session-utils', () => {
         updated_at: '2023-01-01',
         sequence_number: 10,
         current_scene_description: 'Updated scene',
-        turn_count: 5
+        turn_count: 5,
       };
 
       const { sanitized, removed } = sanitizeSessionPatch(patch as any);
 
       expect(sanitized).toEqual({
         current_scene_description: 'Updated scene',
-        turn_count: 5
+        turn_count: 5,
       });
       expect(removed).toContain('id');
       expect(removed).toContain('campaign_id');
@@ -110,7 +110,7 @@ describe('session-utils', () => {
     it('should return false if session is not expired', () => {
       const session = {
         id: 's1',
-        start_time: new Date().toISOString()
+        start_time: new Date().toISOString(),
       };
       expect(isSessionExpired(session as any)).toBe(false);
     });
@@ -119,7 +119,7 @@ describe('session-utils', () => {
       const longAgo = new Date(Date.now() - SESSION_EXPIRY_TIME - 1000).toISOString();
       const session = {
         id: 's1',
-        start_time: longAgo
+        start_time: longAgo,
       };
       expect(isSessionExpired(session as any)).toBe(true);
     });
@@ -136,7 +136,7 @@ describe('session-utils', () => {
       (supabase.from as any).mockReturnValue({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null })
+        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
       });
 
       const result = await createSessionInDatabase('c1', 'ch1');
@@ -148,7 +148,7 @@ describe('session-utils', () => {
       (supabase.from as any).mockReturnValue({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } })
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
       });
 
       const result = await createSessionInDatabase('c1', 'ch1');
@@ -158,7 +158,7 @@ describe('session-utils', () => {
     it('should cleanup a session in the database', async () => {
       (supabase.from as any).mockReturnValue({
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
+        eq: vi.fn().mockResolvedValue({ error: null }),
       });
 
       const result = await cleanupSessionInDatabase('s1', 'summary');
@@ -168,7 +168,7 @@ describe('session-utils', () => {
     it('should handle error when cleaning up a session', async () => {
       (supabase.from as any).mockReturnValue({
         update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: { message: 'error' } })
+        eq: vi.fn().mockResolvedValue({ error: { message: 'error' } }),
       });
 
       const result = await cleanupSessionInDatabase('s1', 'summary');
@@ -181,7 +181,7 @@ describe('session-utils', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ data: mockSessions, error: null })
+        limit: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
       });
 
       const result = await fetchExistingSessions('c1', 'ch1');
@@ -193,7 +193,7 @@ describe('session-utils', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } })
+        limit: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
       });
 
       const result = await fetchExistingSessions('c1', 'ch1');
@@ -205,7 +205,7 @@ describe('session-utils', () => {
       (supabase.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null })
+        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
       });
 
       const result = await fetchSessionById('s1');
@@ -216,7 +216,7 @@ describe('session-utils', () => {
       (supabase.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } })
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
       });
 
       const result = await fetchSessionById('s1');
@@ -229,7 +229,7 @@ describe('session-utils', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null })
+        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
       });
 
       const result = await updateSessionInDatabase('s1', { turn_count: 5 });
@@ -241,7 +241,7 @@ describe('session-utils', () => {
         update: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } })
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
       });
 
       const result = await updateSessionInDatabase('s1', { turn_count: 5 });
@@ -254,24 +254,26 @@ describe('session-utils', () => {
       const mockMessages = [
         { message: 'Hello', speaker_type: 'player' },
         { message: 'Welcome', speaker_type: 'dm' },
-        { message: 'I attack', speaker_type: 'player' }
+        { message: 'I attack', speaker_type: 'player' },
       ];
 
       (supabase.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockMessages, error: null })
+        order: vi.fn().mockResolvedValue({ data: mockMessages, error: null }),
       });
 
       const summary = await generateSessionSummary('session-123');
-      expect(summary).toBe('Session completed with 3 total interactions: 2 player actions and 1 DM responses.');
+      expect(summary).toBe(
+        'Session completed with 3 total interactions: 2 player actions and 1 DM responses.',
+      );
     });
 
     it('should handle empty dialogue history', async () => {
       (supabase.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null })
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
       });
 
       const summary = await generateSessionSummary('session-123');
@@ -287,7 +289,7 @@ describe('session-utils', () => {
       (supabase.from as any).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } })
+        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
       });
 
       const summary = await generateSessionSummary('session-123');

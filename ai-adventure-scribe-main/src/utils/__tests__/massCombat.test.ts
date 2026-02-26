@@ -34,10 +34,7 @@ describe('massCombat utilities', () => {
   describe('calculateArmyStrength', () => {
     it('should calculate total strength correctly', () => {
       const army: Partial<Army> = {
-        units: [
-          { size: 100, hitPoints: 10 } as any,
-          { size: 50, hitPoints: 20 } as any,
-        ],
+        units: [{ size: 100, hitPoints: 10 } as any, { size: 50, hitPoints: 20 } as any],
       };
       expect(calculateArmyStrength(army as Army)).toBe(2000);
     });
@@ -222,7 +219,11 @@ describe('massCombat utilities', () => {
     });
 
     it('should succeed and return correct effect for known maneuver', () => {
-      const maneuver: TacticalManeuver = { id: 'flank_1', name: 'Flank', requiredCommanderLevel: 1 } as any;
+      const maneuver: TacticalManeuver = {
+        id: 'flank_1',
+        name: 'Flank',
+        requiredCommanderLevel: 1,
+      } as any;
       const commander: ArmyCommander = { name: 'Veteran', level: 10 } as any;
       const army = {} as any;
 
@@ -235,9 +236,15 @@ describe('massCombat utilities', () => {
     it('should handle other known maneuvers', () => {
       const commander: ArmyCommander = { level: 10 } as any;
 
-      expect(executeTacticalManeuver({ id: 'charge_1' } as any, commander, {} as any).effect).toBe('Cavalry units deal double damage on next attack.');
-      expect(executeTacticalManeuver({ id: 'rally_1' } as any, commander, {} as any).effect).toBe('Nearby friendly units regain 2 morale points.');
-      expect(executeTacticalManeuver({ id: 'unknown' } as any, commander, {} as any).effect).toBe('Tactical maneuver executed successfully.');
+      expect(executeTacticalManeuver({ id: 'charge_1' } as any, commander, {} as any).effect).toBe(
+        'Cavalry units deal double damage on next attack.',
+      );
+      expect(executeTacticalManeuver({ id: 'rally_1' } as any, commander, {} as any).effect).toBe(
+        'Nearby friendly units regain 2 morale points.',
+      );
+      expect(executeTacticalManeuver({ id: 'unknown' } as any, commander, {} as any).effect).toBe(
+        'Tactical maneuver executed successfully.',
+      );
     });
   });
 
@@ -268,7 +275,11 @@ describe('massCombat utilities', () => {
         position: { x: 10, y: 10 },
       } as any;
 
-      const round = simulateCombatRound([army1, army2], { dimensions: { width: 100, height: 100 } } as any, 1);
+      const round = simulateCombatRound(
+        [army1, army2],
+        { dimensions: { width: 100, height: 100 } } as any,
+        1,
+      );
 
       expect(round.roundNumber).toBe(1);
       expect(round.events.length).toBeGreaterThan(0);

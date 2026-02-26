@@ -1,13 +1,4 @@
-import {
-  Eye,
-  Hand,
-  Gem,
-  Clock,
-  Target,
-  Timer,
-  Zap,
-  RotateCcw,
-} from 'lucide-react';
+import { Eye, Hand, Gem, Clock, Target, Timer, Zap, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import type { Spell } from '@/types/character';
@@ -18,7 +9,6 @@ import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 import { getComponentTrackingInfo } from '@/utils/spellComponents';
-
 
 interface SpellCardProps {
   spell: Spell;

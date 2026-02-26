@@ -130,7 +130,7 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
   // Build conversation history context
   const historyContext = (params.conversationHistory || [])
     .slice(-10) // Keep last 10 messages for context
-    .map(msg => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
+    .map((msg) => `${msg.role === 'user' ? 'Player' : 'DM'}: ${msg.content}`)
     .join('\n\n');
 
   // For opening scenes (first message), use a prompt to trigger scene generation

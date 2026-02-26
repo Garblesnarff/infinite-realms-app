@@ -173,10 +173,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   if (isCollapsed) {
     if (isMobile) {
       return (
-        <div
-          className="fixed bottom-4 right-4 md:hidden"
-          style={{ zIndex: Z_INDEX.STICKY }}
-        >
+        <div className="fixed bottom-4 right-4 md:hidden" style={{ zIndex: Z_INDEX.STICKY }}>
           <Sheet open={isMobileDrawerOpen} onOpenChange={setIsMobileDrawerOpen}>
             <SheetTrigger asChild>
               <Button
@@ -242,10 +239,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
     }
 
     return (
-      <div
-        className="hidden md:block fixed right-4 top-1/2"
-        style={{ zIndex: Z_INDEX.STICKY }}
-      >
+      <div className="hidden md:block fixed right-4 top-1/2" style={{ zIndex: Z_INDEX.STICKY }}>
         <Button
           variant="outline"
           size="sm"
@@ -534,12 +528,7 @@ const GameSidePanelContent: React.FC<{
       {/* Mobile Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
         <h3 className="font-semibold text-foreground">Game Panel</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Back"
-          title="Back"
-        >
+        <Button variant="ghost" size="sm" aria-label="Back" title="Back">
           <ChevronLeft className="h-4 w-4" />
         </Button>
       </div>
@@ -550,10 +539,7 @@ const GameSidePanelContent: React.FC<{
         {activeTab === 'memory' && (
           <div className="flex flex-col h-full">
             <div className="p-4 border-b">
-              <Label
-                htmlFor={sessionNotesId}
-                className="text-sm font-semibold mb-2 block"
-              >
+              <Label htmlFor={sessionNotesId} className="text-sm font-semibold mb-2 block">
                 📝 Session Notes
               </Label>
               <Textarea

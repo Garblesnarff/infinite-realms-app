@@ -16,7 +16,11 @@ import { ArrowLeft, Map, Plus, Settings } from 'lucide-react';
 
 import { SceneManager } from '@/components/scenes/SceneManager';
 import { SceneCreationWizard } from '@/components/scenes/SceneCreationWizard';
-import { SceneTemplateLibrary, BUILT_IN_TEMPLATES, SceneTemplate } from '@/components/scenes/SceneTemplateLibrary';
+import {
+  SceneTemplateLibrary,
+  BUILT_IN_TEMPLATES,
+  SceneTemplate,
+} from '@/components/scenes/SceneTemplateLibrary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,7 +48,7 @@ export const SceneManagementPage: React.FC = () => {
   // Fetch campaign details
   const { data: campaign } = trpc.campaigns.getById.useQuery(
     { campaignId: campaignId! },
-    { enabled: !!campaignId }
+    { enabled: !!campaignId },
   );
 
   const createSceneFromTemplateMutation = trpc.scenes.create.useMutation({
@@ -240,7 +244,10 @@ export const SceneManagementPage: React.FC = () => {
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1">Lighting</p>
                     <p className="font-semibold">
-                      {Math.round(parseFloat(selectedTemplate.suggestedSettings.ambientLightLevel) * 100)}%
+                      {Math.round(
+                        parseFloat(selectedTemplate.suggestedSettings.ambientLightLevel) * 100,
+                      )}
+                      %
                     </p>
                   </div>
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
@@ -256,7 +263,9 @@ export const SceneManagementPage: React.FC = () => {
                   <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                     <li>Pre-configured dimensions and grid</li>
                     <li>Optimized lighting settings</li>
-                    {selectedTemplate.suggestedSettings.enableFogOfWar && <li>Fog of War enabled</li>}
+                    {selectedTemplate.suggestedSettings.enableFogOfWar && (
+                      <li>Fog of War enabled</li>
+                    )}
                     {selectedTemplate.suggestedSettings.enableDynamicLighting && (
                       <li>Dynamic lighting enabled</li>
                     )}

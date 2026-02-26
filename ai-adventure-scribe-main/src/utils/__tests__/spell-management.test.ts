@@ -7,7 +7,7 @@ import {
   deductSpellSlot,
   restoreSpellSlots,
   castSpell,
-  checkConcentration
+  checkConcentration,
 } from '../spell-management';
 
 import type { Character } from '@/types/character';
@@ -272,7 +272,7 @@ describe('spell-management', () => {
     it('should maintain concentration on successful save', () => {
       const participant = {
         activeConcentration: 'Haste',
-        abilityScores: { constitution: { modifier: 2 } }
+        abilityScores: { constitution: { modifier: 2 } },
       } as unknown as any;
 
       vi.spyOn(Math, 'random').mockReturnValue(0.9); // Roll 19 + 2 = 21
@@ -285,7 +285,7 @@ describe('spell-management', () => {
     it('should drop concentration on failed save', () => {
       const participant = {
         activeConcentration: 'Haste',
-        abilityScores: { constitution: { modifier: 0 } }
+        abilityScores: { constitution: { modifier: 0 } },
       } as unknown as any;
 
       vi.spyOn(Math, 'random').mockReturnValue(0.1); // Roll 3 + 0 = 3
@@ -298,7 +298,7 @@ describe('spell-management', () => {
     it('should use higher DC for high damage', () => {
       const participant = {
         activeConcentration: 'Haste',
-        abilityScores: { constitution: { modifier: 0 } }
+        abilityScores: { constitution: { modifier: 0 } },
       } as unknown as any;
 
       // Damage 40 -> DC 20

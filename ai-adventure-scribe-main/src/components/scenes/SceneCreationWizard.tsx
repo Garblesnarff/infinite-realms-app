@@ -145,7 +145,12 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
         }
         return true;
       case 1:
-        if (formData.width < 1 || formData.width > 100 || formData.height < 1 || formData.height > 100) {
+        if (
+          formData.width < 1 ||
+          formData.width > 100 ||
+          formData.height < 1 ||
+          formData.height > 100
+        ) {
           toast({
             title: 'Invalid Dimensions',
             description: 'Width and height must be between 1 and 100.',
@@ -220,7 +225,12 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </CardDescription>
             </div>
             {onCancel && (
-              <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close scene creation wizard">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onCancel}
+                aria-label="Close scene creation wizard"
+              >
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -244,14 +254,16 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
                 key={index}
                 className={cn(
                   'flex flex-col items-center gap-2 flex-1',
-                  index < STEPS.length - 1 && 'relative after:absolute after:top-5 after:left-[60%] after:w-full after:h-0.5 after:bg-border',
+                  index < STEPS.length - 1 &&
+                    'relative after:absolute after:top-5 after:left-[60%] after:w-full after:h-0.5 after:bg-border',
                 )}
               >
                 <div
                   className={cn(
                     'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative',
                     index < currentStep && 'bg-electricCyan text-white',
-                    index === currentStep && 'bg-infinite-purple text-white ring-4 ring-infinite-purple/20',
+                    index === currentStep &&
+                      'bg-infinite-purple text-white ring-4 ring-infinite-purple/20',
                     index > currentStep && 'bg-muted text-muted-foreground',
                   )}
                   style={{ zIndex: Z_INDEX.DROPDOWN }}
@@ -326,8 +338,12 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm font-medium mb-2">Preview Dimensions</p>
                 <p className="text-muted-foreground">
-                  Your scene will be <strong>{formData.width} × {formData.height}</strong> squares
-                  {' '}({formData.width * formData.gridSize} × {formData.height * formData.gridSize} feet)
+                  Your scene will be{' '}
+                  <strong>
+                    {formData.width} × {formData.height}
+                  </strong>{' '}
+                  squares ({formData.width * formData.gridSize} ×{' '}
+                  {formData.height * formData.gridSize} feet)
                 </p>
               </div>
 

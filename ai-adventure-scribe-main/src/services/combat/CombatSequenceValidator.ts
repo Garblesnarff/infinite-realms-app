@@ -5,11 +5,7 @@
  */
 
 import { combatAuditSystem } from '../combat-audit';
-import {
-  CombatTurnManager,
-  type InitiativeEntry,
-  type TurnOrder,
-} from './CombatTurnManager';
+import { CombatTurnManager, type InitiativeEntry, type TurnOrder } from './CombatTurnManager';
 import {
   detectsDirectDamage,
   detectsCombatStart,
@@ -281,7 +277,11 @@ export class CombatSequenceValidator {
     }
 
     // Check for combat start without initiative
-    if (detectsCombatStart(response) && combatId && !this.turnManager.hasInitiativeBeenRolled(combatId)) {
+    if (
+      detectsCombatStart(response) &&
+      combatId &&
+      !this.turnManager.hasInitiativeBeenRolled(combatId)
+    ) {
       errors.push({
         type: 'missing_initiative',
         message: 'Combat started without initiative roll',

@@ -10,7 +10,7 @@ test('Dialog has Close button with title', () => {
       <DialogContent>
         <div>Content</div>
       </DialogContent>
-    </Dialog>
+    </Dialog>,
   );
 
   const closeButton = screen.getByRole('button', { name: /close/i });
@@ -23,7 +23,7 @@ test('Sheet has Close button with title', () => {
       <SheetContent>
         <div>Content</div>
       </SheetContent>
-    </Sheet>
+    </Sheet>,
   );
 
   const closeButton = screen.getByRole('button', { name: /close/i });

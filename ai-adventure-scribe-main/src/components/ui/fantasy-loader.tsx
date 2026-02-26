@@ -31,8 +31,7 @@ const fantasyLoaderVariants = cva('inline-flex flex-col items-center justify-cen
 });
 
 export interface FantasyLoaderProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof fantasyLoaderVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof fantasyLoaderVariants> {
   /** Type of loader animation */
   type?: 'parchment' | 'spell' | 'dice' | 'cosmic' | 'shimmer' | 'spinner';
   /** Optional label text */

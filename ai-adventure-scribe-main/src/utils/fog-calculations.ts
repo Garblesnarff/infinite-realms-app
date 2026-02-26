@@ -56,7 +56,7 @@ export function calculateRevealedArea(
   token: Token,
   walls: VisionBlocker[],
   visionRange?: number,
-  gridSize: number = 100
+  gridSize: number = 100,
 ): FogPolygon {
   const origin = { x: token.x, y: token.y };
 
@@ -71,7 +71,7 @@ export function calculateRevealedArea(
         token.vision.range || 0,
         token.vision.darkvision || 0,
         token.vision.blindsight || 0,
-        token.vision.truesight || 0
+        token.vision.truesight || 0,
       );
     }
   }
@@ -90,7 +90,12 @@ export function calculateRevealedArea(
   }
 
   // Calculate visibility polygon using raycasting
-  const visibilityPolygon = calculateVisibilityPolygon(origin, rangeInPixels, walls, token.vision.angle);
+  const visibilityPolygon = calculateVisibilityPolygon(
+    origin,
+    rangeInPixels,
+    walls,
+    token.vision.angle,
+  );
 
   return {
     id: `fog-${token.id}-${Date.now()}`,
@@ -116,7 +121,7 @@ export function calculateVisibilityPolygon(
   origin: Point2D,
   maxRange: number,
   walls: VisionBlocker[],
-  visionAngle: number = 360
+  visionAngle: number = 360,
 ): Point2D[] {
   // Collect all unique angles to cast rays
   const angles = new Set<number>();
@@ -183,7 +188,7 @@ export function calculateVisibilityPolygon(
           origin,
           rayEnd,
           wall.points[i],
-          wall.points[i + 1]
+          wall.points[i + 1],
         );
 
         if (intersection) {
@@ -201,7 +206,7 @@ export function calculateVisibilityPolygon(
           origin,
           rayEnd,
           wall.points[wall.points.length - 1],
-          wall.points[0]
+          wall.points[0],
         );
 
         if (intersection) {
@@ -233,7 +238,7 @@ export function rayLineIntersection(
   rayOrigin: Point2D,
   rayEnd: Point2D,
   segmentStart: Point2D,
-  segmentEnd: Point2D
+  segmentEnd: Point2D,
 ): Point2D | null {
   const r_px = rayOrigin.x;
   const r_py = rayOrigin.y;
@@ -391,9 +396,7 @@ export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
     const xj = polygon[j].x;
     const yj = polygon[j].y;
 
-    const intersect =
-      yi > y !== yj > y &&
-      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
 
     if (intersect) inside = !inside;
   }
@@ -421,9 +424,7 @@ export function simplifyPolygon(points: Point2D[], tolerance: number = 1.0): Poi
     const next = points[i + 1];
 
     // Calculate cross product to check colinearity
-    const cross =
-      (curr.x - prev.x) * (next.y - prev.y) -
-      (curr.y - prev.y) * (next.x - prev.x);
+    const cross = (curr.x - prev.x) * (next.y - prev.y) - (curr.y - prev.y) * (next.x - prev.x);
 
     if (Math.abs(cross) > tolerance) {
       simplified.push(curr);
@@ -490,14 +491,12 @@ function perpendicularDistance(point: Point2D, lineStart: Point2D, lineEnd: Poin
 
   // Handle degenerate case where line is a point
   if (dx === 0 && dy === 0) {
-    return Math.sqrt(
-      Math.pow(point.x - lineStart.x, 2) + Math.pow(point.y - lineStart.y, 2)
-    );
+    return Math.sqrt(Math.pow(point.x - lineStart.x, 2) + Math.pow(point.y - lineStart.y, 2));
   }
 
   // Calculate perpendicular distance using cross product
   const numerator = Math.abs(
-    dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x
+    dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x,
   );
   const denominator = Math.sqrt(dx * dx + dy * dy);
 
@@ -536,7 +535,7 @@ export function calculatePolygonArea(points: Point2D[]): number {
 export function createCircularPolygon(
   center: Point2D,
   radius: number,
-  segments: number = 32
+  segments: number = 32,
 ): Point2D[] {
   const points: Point2D[] = [];
 
@@ -562,7 +561,7 @@ export function createCircularPolygon(
 export function createRectangularPolygon(
   topLeft: Point2D,
   width: number,
-  height: number
+  height: number,
 ): Point2D[] {
   return [
     topLeft,

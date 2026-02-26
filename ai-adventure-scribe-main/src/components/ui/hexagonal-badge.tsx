@@ -49,8 +49,7 @@ const hexagonalBadgeVariants = cva(
 );
 
 export interface HexagonalBadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof hexagonalBadgeVariants> {}
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof hexagonalBadgeVariants> {}
 
 const HexagonalBadge = React.forwardRef<HTMLDivElement, HexagonalBadgeProps>(
   ({ className, variant, size, pulse, ...props }, ref) => {

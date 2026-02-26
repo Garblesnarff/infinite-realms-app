@@ -5,9 +5,6 @@ import { getClassSpells } from '@/data/spellOptions';
 import { getRacialSpells } from '@/utils/spell-validation/racial-spells';
 import { getSpellcastingInfo } from '@/utils/spell-validation/spellcasting-info';
 
-
-
-
 /**
  * Validate spell selection for a character
  */

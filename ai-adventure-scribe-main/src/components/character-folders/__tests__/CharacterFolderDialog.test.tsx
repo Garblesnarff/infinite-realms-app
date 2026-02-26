@@ -21,9 +21,7 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 test('CreateFolderDialog has accessible color buttons', () => {
-  render(
-    <CreateFolderDialog open={true} onOpenChange={() => {}} />
-  );
+  render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   // Find the color picker group
   const group = screen.getByRole('group', { name: /folder color/i });
@@ -39,9 +37,7 @@ test('CreateFolderDialog has accessible color buttons', () => {
 });
 
 test('CreateFolderDialog links parent folder label to select trigger', () => {
-  render(
-    <CreateFolderDialog open={true} onOpenChange={() => {}} />
-  );
+  render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   const label = screen.getByText(/parent folder/i);
   const selectTrigger = screen.getByLabelText(/select parent folder/i);

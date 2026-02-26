@@ -2,13 +2,10 @@ import type { MulticlassCalculation } from '@/services/spellApi';
 import type { CharacterClass, Character } from '@/types/character';
 import type { SpellcastingInfo } from '@/utils/spell-validation/types';
 
-
-
 import { getClassSpells } from '@/data/spellOptions';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
 import { getSpellcastingInfo } from '@/utils/spell-validation/spellcasting-info';
-
 
 /**
  * Get maximum spell counts for a character class

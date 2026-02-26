@@ -40,9 +40,8 @@ describe('AI regenerate analytics', () => {
     const spy = vi
       .spyOn(AnalyticsModule.analytics, 'aiRegenerateClicked')
       .mockImplementation(() => {});
-    const { characterDescriptionGenerator } = await import(
-      '@/services/character-description-generator'
-    );
+    const { characterDescriptionGenerator } =
+      await import('@/services/character-description-generator');
 
     render(
       <MemoryRouter initialEntries={['/app/characters/create?campaign=cmp-123']}>

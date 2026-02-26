@@ -10,7 +10,7 @@ import {
   getConditionDescription,
   getConditionEffects,
   hasCondition,
-  CONDITION_EFFECTS
+  CONDITION_EFFECTS,
 } from '../conditionEffects';
 import { d20 } from '../diceRolls';
 
@@ -120,12 +120,19 @@ describe('conditionEffects', () => {
 
     it('should handle other conditions', () => {
       const conditions: ConditionName[] = [
-        'charmed', 'deafened', 'incapacitated', 'paralyzed',
-        'petrified', 'poisoned', 'prone', 'stunned',
-        'unconscious', 'surprised'
+        'charmed',
+        'deafened',
+        'incapacitated',
+        'paralyzed',
+        'petrified',
+        'poisoned',
+        'prone',
+        'stunned',
+        'unconscious',
+        'surprised',
       ];
 
-      conditions.forEach(name => {
+      conditions.forEach((name) => {
         mockParticipant.conditions = [{ name } as any];
         const modifiers = getConditionModifiers(mockParticipant, 'attack');
         expect(modifiers).toBeDefined();
@@ -135,7 +142,9 @@ describe('conditionEffects', () => {
     it('should handle specific condition effects', () => {
       // Charmed
       mockParticipant.conditions = [{ name: 'charmed' } as any];
-      const charmedMods = getConditionModifiers(mockParticipant, 'attack', { participantType: 'player' } as any);
+      const charmedMods = getConditionModifiers(mockParticipant, 'attack', {
+        participantType: 'player',
+      } as any);
       expect(charmedMods.autoFail).toBe(true);
 
       // Deafened

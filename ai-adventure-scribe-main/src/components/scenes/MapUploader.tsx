@@ -99,43 +99,52 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     return true;
   };
 
-  const handleFile = useCallback((file: File) => {
-    if (!validateFile(file)) {
-      return;
-    }
+  const handleFile = useCallback(
+    (file: File) => {
+      if (!validateFile(file)) {
+        return;
+      }
 
-    setImageFile(file);
+      setImageFile(file);
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreviewUrl(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
 
-    toast({
-      title: 'Image Loaded',
-      description: 'Adjust the image using the controls below, then click Upload.',
-    });
-  }, [toast]);
+      toast({
+        title: 'Image Loaded',
+        description: 'Adjust the image using the controls below, then click Upload.',
+      });
+    },
+    [toast],
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFile(files[0]);
-    }
-  }, [handleFile]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFile(files[0]);
-    }
-  }, [handleFile]);
+  const handleFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
   const handleUpload = async () => {
     if (!imageFile) {
@@ -151,7 +160,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
 
     try {
       // Upload to storage bucket
-      const filename = buildTimestampedFilename('scene-map', imageFile.name.split('.').pop() || 'png');
+      const filename = buildTimestampedFilename(
+        'scene-map',
+        imageFile.name.split('.').pop() || 'png',
+      );
       const path = `campaigns/${campaignId}/scenes/${filename}`;
 
       const result = await uploadFile('campaign-assets', path, imageFile, {
@@ -245,7 +257,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
           {/* Preview */}
           <Card variant="parchment">
             <CardContent className="p-4">
-              <div className="relative bg-slate-100 rounded-lg overflow-hidden" style={{ aspectRatio: `${width}/${height}` }}>
+              <div
+                className="relative bg-slate-100 rounded-lg overflow-hidden"
+                style={{ aspectRatio: `${width}/${height}` }}
+              >
                 {/* Background Image */}
                 <img
                   src={previewUrl}
@@ -293,11 +308,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
                     <Grid className="mr-2 h-4 w-4" />
                     {showGrid ? 'Hide Grid' : 'Show Grid'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRotate}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleRotate}>
                     <RotateCw className="mr-2 h-4 w-4" />
                     Rotate
                   </Button>

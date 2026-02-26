@@ -19,9 +19,7 @@ const mockRoll = {
 };
 
 test('NPCRollDisplay has accessible attributes', () => {
-  render(
-    <NPCRollDisplay roll={mockRoll as any} onDismiss={() => {}} />
-  );
+  render(<NPCRollDisplay roll={mockRoll as any} onDismiss={() => {}} />);
 
   // Check for the main container aria-label
   const container = screen.getByLabelText('Behind the DM Screen popup');

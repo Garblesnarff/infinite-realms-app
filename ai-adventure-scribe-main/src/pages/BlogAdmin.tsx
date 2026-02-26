@@ -19,10 +19,12 @@ const BlogAdmin: React.FC = () => {
   const handleLogout = () => {
     clearBlogAdminToken();
     // Trigger re-check of blog role
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'blog_admin_token',
-      newValue: null,
-    }));
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'blog_admin_token',
+        newValue: null,
+      }),
+    );
     refreshBlogRole();
   };
 
@@ -45,7 +47,10 @@ const BlogAdmin: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" style={{ zIndex: Z_INDEX.STICKY }}>
+      <header
+        className="sticky top-0 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        style={{ zIndex: Z_INDEX.STICKY }}
+      >
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -66,42 +71,42 @@ const BlogAdmin: React.FC = () => {
           </p>
         </div>
 
-      <Tabs defaultValue="posts" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-4">
-          <TabsTrigger value="posts" className="gap-2">
-            <FileText className="h-4 w-4" />
-            Posts
-          </TabsTrigger>
-          <TabsTrigger value="categories" className="gap-2">
-            <FolderTree className="h-4 w-4" />
-            Categories
-          </TabsTrigger>
-          <TabsTrigger value="tags" className="gap-2">
-            <Tags className="h-4 w-4" />
-            Tags
-          </TabsTrigger>
-          <TabsTrigger value="media" className="gap-2">
-            <Image className="h-4 w-4" />
-            Media
-          </TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="posts" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-4">
+            <TabsTrigger value="posts" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Posts
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="gap-2">
+              <FolderTree className="h-4 w-4" />
+              Categories
+            </TabsTrigger>
+            <TabsTrigger value="tags" className="gap-2">
+              <Tags className="h-4 w-4" />
+              Tags
+            </TabsTrigger>
+            <TabsTrigger value="media" className="gap-2">
+              <Image className="h-4 w-4" />
+              Media
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="posts" className="space-y-4">
-          <BlogPostsList />
-        </TabsContent>
+          <TabsContent value="posts" className="space-y-4">
+            <BlogPostsList />
+          </TabsContent>
 
-        <TabsContent value="categories" className="space-y-4">
-          <BlogCategoryManager />
-        </TabsContent>
+          <TabsContent value="categories" className="space-y-4">
+            <BlogCategoryManager />
+          </TabsContent>
 
-        <TabsContent value="tags" className="space-y-4">
-          <BlogTagManager />
-        </TabsContent>
+          <TabsContent value="tags" className="space-y-4">
+            <BlogTagManager />
+          </TabsContent>
 
-        <TabsContent value="media" className="space-y-4">
-          <BlogMediaManager />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="media" className="space-y-4">
+            <BlogMediaManager />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

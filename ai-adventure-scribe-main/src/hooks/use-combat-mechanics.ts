@@ -80,7 +80,7 @@ export const useCombatMechanics = ({
         {
           name: 'Longsword',
           damage: { dice: '1d8+3', type: 'slashing' },
-          properties: {}
+          properties: {},
         } as any,
         participant as any,
         isCritical,
@@ -317,7 +317,10 @@ export const useCombatMechanics = ({
       if (!participant.mainHandWeapon || !participant.offHandWeapon) {
         const weapons = createDefaultLightWeapons();
         updatedParticipant = equipMainHandWeapon(participant as any, weapons.scimitar) as any;
-        updatedParticipant = equipOffHandWeapon(updatedParticipant as any, weapons.shortsword) as any;
+        updatedParticipant = equipOffHandWeapon(
+          updatedParticipant as any,
+          weapons.shortsword,
+        ) as any;
       }
 
       if (!canUseTwoWeaponFighting(updatedParticipant as any)) {
@@ -326,12 +329,18 @@ export const useCombatMechanics = ({
       }
 
       // Main hand attack (action)
-      const mainHandAttack = makeMainHandAttack(updatedParticipant as any, targetId || selectedEnemy || '');
+      const mainHandAttack = makeMainHandAttack(
+        updatedParticipant as any,
+        targetId || selectedEnemy || '',
+      );
       await takeAction(mainHandAttack);
 
       // Off-hand attack (bonus action) - if bonus action available
       if (canMakeOffHandAttack(updatedParticipant as any)) {
-        const offHandAttack = makeOffHandAttack(updatedParticipant as any, targetId || selectedEnemy || '');
+        const offHandAttack = makeOffHandAttack(
+          updatedParticipant as any,
+          targetId || selectedEnemy || '',
+        );
         await takeAction(offHandAttack);
       }
     },

@@ -37,7 +37,7 @@ describe('CombatSequenceValidator', () => {
         actorName: 'Player 1',
         actionType: 'attack_roll',
         phase: 'turn',
-        data: { description: 'Attack without initiative' }
+        data: { description: 'Attack without initiative' },
       });
 
       const warnSpy = vi.spyOn(logger, 'warn');
@@ -123,13 +123,21 @@ describe('CombatSequenceValidator', () => {
     });
 
     it('isAwaitingDamage should return false if no attacks for combatId', () => {
-      const otherAttackId = combatSequenceValidator.recordAttackRequest('other-combat', 'p1', 'Sword');
+      const otherAttackId = combatSequenceValidator.recordAttackRequest(
+        'other-combat',
+        'p1',
+        'Sword',
+      );
       combatSequenceValidator.recordAttackResult(otherAttackId, 15, 10);
       expect(combatSequenceValidator.isAwaitingDamage(combatId)).toBe(false);
     });
 
     it('getAwaitingDamage should return null if no attacks for combatId', () => {
-      const otherAttackId = combatSequenceValidator.recordAttackRequest('other-combat', 'p1', 'Sword');
+      const otherAttackId = combatSequenceValidator.recordAttackRequest(
+        'other-combat',
+        'p1',
+        'Sword',
+      );
       combatSequenceValidator.recordAttackResult(otherAttackId, 15, 10);
       expect(combatSequenceValidator.getAwaitingDamage(combatId)).toBeNull();
     });
@@ -141,7 +149,7 @@ describe('CombatSequenceValidator', () => {
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.type === 'missing_attack_roll')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'missing_attack_roll')).toBe(true);
     });
 
     it('should detect missing initiative when combat starts', () => {
@@ -149,7 +157,7 @@ describe('CombatSequenceValidator', () => {
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.type === 'missing_initiative')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'missing_initiative')).toBe(true);
     });
 
     it('should detect action before initiative is complete', () => {
@@ -158,34 +166,34 @@ describe('CombatSequenceValidator', () => {
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.type === 'wrong_sequence')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'wrong_sequence')).toBe(true);
     });
 
     it('should detect missing AC in attack request', () => {
       const response = 'Make an attack roll with your bow.';
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
-      expect(result.errors.some(e => e.type === 'missing_ac')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'missing_ac')).toBe(true);
     });
 
     it('should detect missing DC in skill check', () => {
       const response = 'Make an Athletics check.';
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
-      expect(result.errors.some(e => e.type === 'missing_dc')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'missing_dc')).toBe(true);
     });
 
     it('should detect missing modifier in damage request', () => {
       const response = 'That hits! Roll 1d8 damage.';
       const result = combatSequenceValidator.validateDMResponse(response, combatId);
 
-      expect(result.warnings.some(w => w.type === 'missing_modifier')).toBe(true);
+      expect(result.warnings.some((w) => w.type === 'missing_modifier')).toBe(true);
     });
 
     it('should handle undefined combatId in validateDMResponse', () => {
       const response = 'Roll 1d8 damage.';
       const result = combatSequenceValidator.validateDMResponse(response);
-      expect(result.errors.some(e => e.type === 'missing_attack_roll')).toBe(true);
+      expect(result.errors.some((e) => e.type === 'missing_attack_roll')).toBe(true);
     });
 
     it('should validate correctly when all info is present', () => {

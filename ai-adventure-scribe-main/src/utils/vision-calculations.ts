@@ -7,15 +7,8 @@
  * @module utils/vision-calculations
  */
 
-import {
-  calculateDistance,
-  isLineBlocked,
-  isPointInVisionCone,
-} from './geometry';
-import {
-  type LightLevel,
-  getEffectiveLightLevel,
-} from './lighting-utils';
+import { calculateDistance, isLineBlocked, isPointInVisionCone } from './geometry';
+import { type LightLevel, getEffectiveLightLevel } from './lighting-utils';
 
 import type { VisionBlocker } from '@/types/scene';
 import type { Token, TokenVisionConfig } from '@/types/token';
@@ -75,7 +68,7 @@ export function calculateVisionRadius(token: Token): number {
  */
 export function getActiveVisionType(
   token: Token,
-  lightLevel: LightLevel
+  lightLevel: LightLevel,
 ): TokenVisionConfig['visionMode'] {
   const vision = token.vision;
 
@@ -133,7 +126,7 @@ export function canSeeToken(
   target: Token,
   walls: VisionBlocker[] = [],
   allTokens: Token[] = [],
-  globalLight: boolean = false
+  globalLight: boolean = false,
 ): boolean {
   // Check if viewer has vision enabled
   if (!viewer.vision.enabled) {
@@ -141,10 +134,7 @@ export function canSeeToken(
   }
 
   // Calculate distance
-  const distance = calculateDistance(
-    { x: viewer.x, y: viewer.y },
-    { x: target.x, y: target.y }
-  );
+  const distance = calculateDistance({ x: viewer.x, y: viewer.y }, { x: target.x, y: target.y });
   const distanceInFeet = distance / 20;
 
   // Get vision radius
@@ -159,7 +149,7 @@ export function canSeeToken(
       { x: viewer.x, y: viewer.y },
       viewer.rotation,
       viewer.vision.angle,
-      { x: target.x, y: target.y }
+      { x: target.x, y: target.y },
     );
     if (!isInCone) {
       return false;
@@ -170,18 +160,13 @@ export function canSeeToken(
   const visionType = viewer.vision.visionMode || 'basic';
   if (visionType === 'blindsight' || visionType === 'truesight') {
     // Check appropriate range
-    const specialRange = visionType === 'truesight'
-      ? viewer.vision.truesight || 0
-      : viewer.vision.blindsight || 0;
+    const specialRange =
+      visionType === 'truesight' ? viewer.vision.truesight || 0 : viewer.vision.blindsight || 0;
 
     if (distanceInFeet <= specialRange) {
       // Only hard walls block these
       const hardWalls = walls.filter((w) => w.blocksLight && w.blocksMovement);
-      return !isLineBlocked(
-        { x: viewer.x, y: viewer.y },
-        { x: target.x, y: target.y },
-        hardWalls
-      );
+      return !isLineBlocked({ x: viewer.x, y: viewer.y }, { x: target.x, y: target.y }, hardWalls);
     }
   }
 
@@ -196,7 +181,7 @@ export function canSeeToken(
   const lineBlocked = isLineBlocked(
     { x: viewer.x, y: viewer.y },
     { x: target.x, y: target.y },
-    walls
+    walls,
   );
 
   if (lineBlocked) {
@@ -204,11 +189,7 @@ export function canSeeToken(
   }
 
   // Check light level requirements
-  const lightLevel = getEffectiveLightLevel(
-    { x: target.x, y: target.y },
-    allTokens,
-    globalLight
-  );
+  const lightLevel = getEffectiveLightLevel({ x: target.x, y: target.y }, allTokens, globalLight);
 
   // Check light level requirements
   if (lightLevel === 'dark') {

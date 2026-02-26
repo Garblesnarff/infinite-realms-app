@@ -181,7 +181,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
 
       setState((prev) => ({ ...prev, currentDrawing: newDrawing }));
     },
-    [state, sceneId, userId]
+    [state, sceneId, userId],
   );
 
   const updateDrawing = useCallback((data: Partial<SceneDrawing>) => {
@@ -333,7 +333,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
         return null;
       }
     },
-    [sceneId, createDrawingMutation]
+    [sceneId, createDrawingMutation],
   );
 
   const deleteDrawing = useCallback(
@@ -354,7 +354,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
         logger.error('Failed to delete drawing', { error });
       }
     },
-    [deleteDrawingMutation, onDrawingDeleted]
+    [deleteDrawingMutation, onDrawingDeleted],
   );
 
   // ===========================

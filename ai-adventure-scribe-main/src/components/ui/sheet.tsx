@@ -50,7 +50,8 @@ const sheetVariants = cva(
 );
 
 interface SheetContentProps
-  extends Omit<React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, 'side'>,
+  extends
+    Omit<React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, 'side'>,
     VariantProps<typeof sheetVariants> {
   overlayClassName?: string;
   hideOverlay?: boolean;

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseDiceCommand, getDiceCommandSuggestions, mightBeDiceCommand } from '../diceCommandParser';
+import {
+  parseDiceCommand,
+  getDiceCommandSuggestions,
+  mightBeDiceCommand,
+} from '../diceCommandParser';
 
 describe('diceCommandParser', () => {
   describe('parseDiceCommand', () => {

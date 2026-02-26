@@ -1,10 +1,6 @@
-import {
-  type VoiceSegment,
-  ELEVENLABS_MODEL,
-} from '../voice-routing';
+import { type VoiceSegment, ELEVENLABS_MODEL } from '../voice-routing';
 
 import logger from '@/lib/logger';
-
 
 /**
  * Voice Audio Service

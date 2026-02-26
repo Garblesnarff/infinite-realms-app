@@ -48,86 +48,89 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
   /**
    * Play a single audio segment
    */
-  const playAudioSegment = React.useCallback((segment: VoiceSegment, index: number): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!segment.audioUrl) {
-        logger.warn(`⚠️ No audio URL for segment ${index + 1}`);
-        resolve();
-        return;
-      }
-
-      logger.info(
-        `▶️ Playing segment ${index + 1}: ${segment.character} - "${segment.text.substring(0, 50)}..."`,
-      );
-
-      // Use pre-created audio element if available, otherwise create new one
-      const audio = preCreatedAudio.current || new Audio();
-      preCreatedAudio.current = null; // Reset for next use
-
-      const onLoadedData = () => {
-        logger.info(`📦 Audio loaded for segment ${index + 1}`);
-        audio.volume = isMuted ? 0 : volume;
-        currentAudio.current = audio;
-
-        audio
-          .play()
-          .then(() => {
-            logger.info(`🎵 Successfully started playing segment ${index + 1}`);
-          })
-          .catch((playError) => {
-            logger.error(`❌ Failed to start playing segment ${index + 1}:`, playError);
-            resolve();
-          });
-      };
-
-      const onEnded = () => {
-        logger.info(`✅ Segment ${index + 1} finished playing`);
-
-        // Clean up the URL after playing
-        if (segment.audioUrl) {
-          URL.revokeObjectURL(segment.audioUrl);
+  const playAudioSegment = React.useCallback(
+    (segment: VoiceSegment, index: number): Promise<void> => {
+      return new Promise((resolve) => {
+        if (!segment.audioUrl) {
+          logger.warn(`⚠️ No audio URL for segment ${index + 1}`);
+          resolve();
+          return;
         }
 
-        cleanup();
-        if (onSegmentEnd) {
-          onSegmentEnd(index, segment.audioUrl!);
+        logger.info(
+          `▶️ Playing segment ${index + 1}: ${segment.character} - "${segment.text.substring(0, 50)}..."`,
+        );
+
+        // Use pre-created audio element if available, otherwise create new one
+        const audio = preCreatedAudio.current || new Audio();
+        preCreatedAudio.current = null; // Reset for next use
+
+        const onLoadedData = () => {
+          logger.info(`📦 Audio loaded for segment ${index + 1}`);
+          audio.volume = isMuted ? 0 : volume;
+          currentAudio.current = audio;
+
+          audio
+            .play()
+            .then(() => {
+              logger.info(`🎵 Successfully started playing segment ${index + 1}`);
+            })
+            .catch((playError) => {
+              logger.error(`❌ Failed to start playing segment ${index + 1}:`, playError);
+              resolve();
+            });
+        };
+
+        const onEnded = () => {
+          logger.info(`✅ Segment ${index + 1} finished playing`);
+
+          // Clean up the URL after playing
+          if (segment.audioUrl) {
+            URL.revokeObjectURL(segment.audioUrl);
+          }
+
+          cleanup();
+          if (onSegmentEnd) {
+            onSegmentEnd(index, segment.audioUrl!);
+          }
+          resolve();
+        };
+
+        const onError = (error: Event) => {
+          logger.error(`❌ Audio error for segment ${index + 1}:`, error);
+          cleanup();
+          resolve();
+        };
+
+        const onAbort = () => {
+          logger.info(`🛑 Audio aborted for segment ${index + 1}`);
+          cleanup();
+          resolve();
+        };
+
+        const cleanup = () => {
+          audio.removeEventListener('loadeddata', onLoadedData);
+          audio.removeEventListener('ended', onEnded);
+          audio.removeEventListener('error', onError);
+          audio.removeEventListener('abort', onAbort);
+          currentAudio.current = null;
+        };
+
+        audio.addEventListener('loadeddata', onLoadedData);
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('error', onError);
+        audio.addEventListener('abort', onAbort);
+
+        if (onSegmentStart) {
+          onSegmentStart(index);
         }
-        resolve();
-      };
 
-      const onError = (error: Event) => {
-        logger.error(`❌ Audio error for segment ${index + 1}:`, error);
-        cleanup();
-        resolve();
-      };
-
-      const onAbort = () => {
-        logger.info(`🛑 Audio aborted for segment ${index + 1}`);
-        cleanup();
-        resolve();
-      };
-
-      const cleanup = () => {
-        audio.removeEventListener('loadeddata', onLoadedData);
-        audio.removeEventListener('ended', onEnded);
-        audio.removeEventListener('error', onError);
-        audio.removeEventListener('abort', onAbort);
-        currentAudio.current = null;
-      };
-
-      audio.addEventListener('loadeddata', onLoadedData);
-      audio.addEventListener('ended', onEnded);
-      audio.addEventListener('error', onError);
-      audio.addEventListener('abort', onAbort);
-
-      if (onSegmentStart) {
-        onSegmentStart(index);
-      }
-
-      audio.src = segment.audioUrl;
-      audio.load();
-    });
-  }, [isMuted, volume, onSegmentStart, onSegmentEnd]);
+        audio.src = segment.audioUrl;
+        audio.load();
+      });
+    },
+    [isMuted, volume, onSegmentStart, onSegmentEnd],
+  );
 
   /**
    * Pause current playback
@@ -165,36 +168,42 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
   /**
    * Stop current playback
    */
-  const stopPlayback = React.useCallback((segments: VoiceSegment[]) => {
-    logger.info('🛑 Stopping progressive voice playback');
+  const stopPlayback = React.useCallback(
+    (segments: VoiceSegment[]) => {
+      logger.info('🛑 Stopping progressive voice playback');
 
-    if (currentAudio.current) {
-      currentAudio.current.pause();
-      currentAudio.current.currentTime = 0;
-      currentAudio.current = null;
-    }
-
-    segments.forEach((segment) => {
-      if (segment.audioUrl) {
-        URL.revokeObjectURL(segment.audioUrl);
+      if (currentAudio.current) {
+        currentAudio.current.pause();
+        currentAudio.current.currentTime = 0;
+        currentAudio.current = null;
       }
-    });
 
-    if (onPlaybackStop) {
-      onPlaybackStop();
-    }
-  }, [onPlaybackStop]);
+      segments.forEach((segment) => {
+        if (segment.audioUrl) {
+          URL.revokeObjectURL(segment.audioUrl);
+        }
+      });
+
+      if (onPlaybackStop) {
+        onPlaybackStop();
+      }
+    },
+    [onPlaybackStop],
+  );
 
   /**
    * Volume control
    */
-  const handleSetVolume = React.useCallback((newVolume: number) => {
-    const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    setVolume(clampedVolume);
-    if (currentAudio.current) {
-      currentAudio.current.volume = isMuted ? 0 : clampedVolume;
-    }
-  }, [isMuted, setVolume]);
+  const handleSetVolume = React.useCallback(
+    (newVolume: number) => {
+      const clampedVolume = Math.max(0, Math.min(1, newVolume));
+      setVolume(clampedVolume);
+      if (currentAudio.current) {
+        currentAudio.current.volume = isMuted ? 0 : clampedVolume;
+      }
+    },
+    [isMuted, setVolume],
+  );
 
   /**
    * Mute toggle
@@ -217,6 +226,6 @@ export const useVoiceAudioControl = (props: AudioControlProps = {}) => {
     resumePlayback,
     stopPlayback,
     handleSetVolume,
-    toggleMute
+    toggleMute,
   };
 };

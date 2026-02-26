@@ -9,7 +9,6 @@
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
 
-
 /**
  * Calculate Euclidean distance between two points
  *
@@ -36,7 +35,7 @@ export function isPointInVisionCone(
   origin: Point2D,
   rotation: number,
   angle: number,
-  target: Point2D
+  target: Point2D,
 ): boolean {
   // Full circle vision
   if (angle >= 360) {
@@ -71,12 +70,7 @@ export function isPointInVisionCone(
  * @param b2 - Second point of line B
  * @returns Whether the line segments intersect
  */
-export function lineSegmentsIntersect(
-  a1: Point2D,
-  a2: Point2D,
-  b1: Point2D,
-  b2: Point2D
-): boolean {
+export function lineSegmentsIntersect(a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D): boolean {
   const det = (a2.x - a1.x) * (b2.y - b1.y) - (b2.x - b1.x) * (a2.y - a1.y);
 
   if (det === 0) {
@@ -99,11 +93,7 @@ export function lineSegmentsIntersect(
  * @param walls - Vision blocking elements
  * @returns Whether the line is blocked
  */
-export function isLineBlocked(
-  from: Point2D,
-  to: Point2D,
-  walls: VisionBlocker[]
-): boolean {
+export function isLineBlocked(from: Point2D, to: Point2D, walls: VisionBlocker[]): boolean {
   for (const wall of walls) {
     if (!wall.blocksLight) {
       continue;

@@ -69,7 +69,7 @@ export function gridDistance(p1: Point2D, p2: Point2D, gridSize: number): number
   const fullDiagonalPairs = Math.floor(diagonal / 2);
   const remainingDiagonal = diagonal % 2;
 
-  const diagonalDistance = (fullDiagonalPairs * 15) + (remainingDiagonal * 5);
+  const diagonalDistance = fullDiagonalPairs * 15 + remainingDiagonal * 5;
   const straightDistance = straight * 5;
 
   return diagonalDistance + straightDistance;
@@ -87,7 +87,7 @@ export function calculateDistance(
   p1: Point2D,
   p2: Point2D,
   gridSize: number,
-  useGridDistance: boolean = true
+  useGridDistance: boolean = true,
 ): number {
   if (useGridDistance) {
     return gridDistance(p1, p2, gridSize);
@@ -103,7 +103,7 @@ export function calculateDistance(
 export function calculateMeasurementPath(
   waypoints: Point2D[],
   gridSize: number,
-  useGridDistance: boolean = true
+  useGridDistance: boolean = true,
 ): MeasurementPath {
   const segments: MeasurementSegment[] = [];
   let totalDistance = 0;
@@ -138,7 +138,7 @@ export function getConePoints(
   direction: number,
   distance: number,
   angle: number = 90,
-  gridSize: number
+  gridSize: number,
 ): Point2D[] {
   const distancePixels = (distance / FEET_PER_GRID_SQUARE) * gridSize;
   const halfAngle = (angle / 2) * (Math.PI / 180);
@@ -173,7 +173,7 @@ export function getTokensInCone(
   angle: number,
   distance: number,
   tokens: Token[],
-  gridSize: number
+  gridSize: number,
 ): Token[] {
   const conePoints = getConePoints(origin, direction, distance, angle, gridSize);
   return tokens.filter((token) => {
@@ -193,7 +193,7 @@ export function getSpherePoints(
   origin: Point2D,
   radius: number,
   gridSize: number,
-  segments: number = 32
+  segments: number = 32,
 ): Point2D[] {
   const radiusPixels = (radius / FEET_PER_GRID_SQUARE) * gridSize;
   const points: Point2D[] = [];
@@ -217,7 +217,7 @@ export function getTokensInSphere(
   radius: number,
   tokens: Token[],
   gridSize: number,
-  useGridDistance: boolean = true
+  useGridDistance: boolean = true,
 ): Token[] {
   return tokens.filter((token) => {
     const tokenCenter = { x: token.x + gridSize / 2, y: token.y + gridSize / 2 };
@@ -237,7 +237,7 @@ export function getCubePoints(
   origin: Point2D,
   size: number,
   gridSize: number,
-  rotation: number = 0
+  rotation: number = 0,
 ): Point2D[] {
   const sizePixels = (size / FEET_PER_GRID_SQUARE) * gridSize;
   const halfSize = sizePixels / 2;
@@ -269,7 +269,7 @@ export function getTokensInCube(
   size: number,
   tokens: Token[],
   gridSize: number,
-  rotation: number = 0
+  rotation: number = 0,
 ): Token[] {
   const cubePoints = getCubePoints(origin, size, gridSize, rotation);
   return tokens.filter((token) => {
@@ -290,7 +290,7 @@ export function getLinePoints(
   direction: number,
   length: number,
   width: number,
-  gridSize: number
+  gridSize: number,
 ): Point2D[] {
   const lengthPixels = (length / FEET_PER_GRID_SQUARE) * gridSize;
   const widthPixels = (width / FEET_PER_GRID_SQUARE) * gridSize;
@@ -334,7 +334,7 @@ export function getTokensInLine(
   width: number,
   length: number,
   tokens: Token[],
-  gridSize: number
+  gridSize: number,
 ): Token[] {
   const linePoints = getLinePoints(origin, direction, length, width, gridSize);
   return tokens.filter((token) => {
@@ -353,7 +353,7 @@ export function getTokensInLine(
 export function getAffectedGridSquares(
   template: MeasurementTemplate,
   gridSize: number,
-  gridType: GridType = GridType.SQUARE
+  gridType: GridType = GridType.SQUARE,
 ): Point2D[] {
   if (gridType !== GridType.SQUARE) {
     // TODO: Implement hexagonal grid support
@@ -370,17 +370,13 @@ export function getAffectedGridSquares(
         template.direction,
         template.distance,
         template.angle || 90,
-        gridSize
+        gridSize,
       );
       break;
 
     case TemplateType.SPHERE:
     case TemplateType.CYLINDER:
-      points = getSpherePoints(
-        { x: template.x, y: template.y },
-        template.distance,
-        gridSize
-      );
+      points = getSpherePoints({ x: template.x, y: template.y }, template.distance, gridSize);
       break;
 
     case TemplateType.CUBE:
@@ -388,7 +384,7 @@ export function getAffectedGridSquares(
         { x: template.x, y: template.y },
         template.distance,
         gridSize,
-        template.direction
+        template.direction,
       );
       break;
 
@@ -399,7 +395,7 @@ export function getAffectedGridSquares(
         template.direction,
         template.distance,
         template.width || 5,
-        gridSize
+        gridSize,
       );
       break;
   }
@@ -446,8 +442,7 @@ export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
     const yj = polygon[j].y;
 
     const intersect =
-      yi > point.y !== yj > point.y &&
-      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+      yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
 
     if (intersect) inside = !inside;
   }
@@ -507,7 +502,7 @@ export const defaultMovementColors: MovementRangeColors = {
 export function getMovementRangeColor(
   distance: number,
   speed: number,
-  colors: MovementRangeColors = defaultMovementColors
+  colors: MovementRangeColors = defaultMovementColors,
 ): string {
   if (distance <= speed) {
     return colors.normal;

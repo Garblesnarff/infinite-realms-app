@@ -9,18 +9,9 @@
  * @module utils/vision-polygon
  */
 
-import {
-  isLineBlocked,
-  isPointInVisionCone,
-} from './geometry';
-import {
-  getAllRayIntersections,
-  removeDuplicatePoints,
-  sortEndpointsByAngle,
-} from './raycasting';
-import {
-  calculateVisionRadius,
-} from './vision-calculations';
+import { isLineBlocked, isPointInVisionCone } from './geometry';
+import { getAllRayIntersections, removeDuplicatePoints, sortEndpointsByAngle } from './raycasting';
+import { calculateVisionRadius } from './vision-calculations';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token, TokenVisionConfig } from '@/types/token';
@@ -59,7 +50,7 @@ export interface VisionPolygon {
 export function calculateVisionPolygon(
   token: Token,
   walls: VisionBlocker[],
-  range?: number
+  range?: number,
 ): VisionPolygon {
   if (!token.vision.enabled) {
     return {
@@ -87,13 +78,7 @@ export function calculateVisionPolygon(
 
   // Handle vision cone (limited angle)
   if (token.vision.angle < 360) {
-    points = clipPolygonToCone(
-      points,
-      origin,
-      token.rotation,
-      token.vision.angle,
-      visionRange
-    );
+    points = clipPolygonToCone(points, origin, token.rotation, token.vision.angle, visionRange);
   }
 
   // Remove duplicate points
@@ -128,10 +113,7 @@ export function calculateVisionPolygon(
  * @param walls - All walls
  * @returns Filtered walls that block this token's vision
  */
-function filterWallsByVisionType(
-  token: Token,
-  walls: VisionBlocker[]
-): VisionBlocker[] {
+function filterWallsByVisionType(token: Token, walls: VisionBlocker[]): VisionBlocker[] {
   const visionType = token.vision.visionMode || 'basic';
 
   // Truesight and blindsight ignore transparent walls
@@ -163,7 +145,7 @@ function clipPolygonToCone(
   origin: Point2D,
   rotation: number,
   angle: number,
-  maxRange: number
+  maxRange: number,
 ): Point2D[] {
   const clipped: Point2D[] = [];
   const halfAngle = (angle / 2) * (Math.PI / 180);
@@ -213,7 +195,7 @@ export function hasLineOfSight(
   from: Point2D,
   to: Point2D,
   walls: VisionBlocker[],
-  quadTree?: { queryLine: (from: Point2D, to: Point2D) => VisionBlocker[] } // Use structural typing to avoid circular dependency
+  quadTree?: { queryLine: (from: Point2D, to: Point2D) => VisionBlocker[] }, // Use structural typing to avoid circular dependency
 ): boolean {
   if (quadTree) {
     // Use spatial partitioning for efficient queries

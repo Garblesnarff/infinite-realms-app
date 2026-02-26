@@ -283,7 +283,7 @@ const ShortcutItem: React.FC<ShortcutItemProps> = ({ shortcut, searchQuery }) =>
         </mark>
       ) : (
         part
-      )
+      ),
     );
   };
 
@@ -298,9 +298,7 @@ const ShortcutItem: React.FC<ShortcutItemProps> = ({ shortcut, searchQuery }) =>
             </Badge>
           )}
         </div>
-        {notes && (
-          <span className="text-xs text-muted-foreground">{notes}</span>
-        )}
+        {notes && <span className="text-xs text-muted-foreground">{notes}</span>}
       </div>
       <div className="flex items-center gap-1">
         {keys.map((key, index) => (
@@ -326,11 +324,7 @@ interface CategorySectionProps {
   searchQuery?: string;
 }
 
-const CategorySection: React.FC<CategorySectionProps> = ({
-  category,
-  shortcuts,
-  searchQuery,
-}) => {
+const CategorySection: React.FC<CategorySectionProps> = ({ category, shortcuts, searchQuery }) => {
   if (shortcuts.length === 0) return null;
 
   return (
@@ -396,7 +390,7 @@ export const HotkeyGuide: React.FC<HotkeyGuideProps> = ({
       shortcuts = shortcuts.filter(
         (s) =>
           s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.keys.some((k) => k.toLowerCase().includes(searchQuery.toLowerCase()))
+          s.keys.some((k) => k.toLowerCase().includes(searchQuery.toLowerCase())),
       );
     }
 
@@ -433,9 +427,7 @@ export const HotkeyGuide: React.FC<HotkeyGuideProps> = ({
             <Keyboard className="h-5 w-5" />
             Keyboard Shortcuts
           </DialogTitle>
-          <DialogDescription>
-            All available keyboard shortcuts for the battle map
-          </DialogDescription>
+          <DialogDescription>All available keyboard shortcuts for the battle map</DialogDescription>
         </DialogHeader>
 
         {/* Search */}
@@ -513,11 +505,7 @@ export interface HotkeyBadgeProps {
 /**
  * Display keyboard shortcut in a badge
  */
-export const HotkeyBadge: React.FC<HotkeyBadgeProps> = ({
-  keys,
-  className,
-  size = 'md',
-}) => {
+export const HotkeyBadge: React.FC<HotkeyBadgeProps> = ({ keys, className, size = 'md' }) => {
   const sizeClasses = {
     sm: 'px-1.5 py-0.5 text-[10px]',
     md: 'px-2 py-1 text-xs',
@@ -532,7 +520,7 @@ export const HotkeyBadge: React.FC<HotkeyBadgeProps> = ({
           <kbd
             className={cn(
               'font-mono bg-muted border border-border rounded shadow-sm',
-              sizeClasses[size]
+              sizeClasses[size],
             )}
           >
             {key}

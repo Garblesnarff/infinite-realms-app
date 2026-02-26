@@ -16,7 +16,7 @@ vi.mock('../../utils/environmentalHazards', () => ({
     applyHazardEffects: vi.fn(),
     calculateHazardDamage: vi.fn(),
     checkImmunities: vi.fn(),
-  }
+  },
 }));
 
 // Mock logger
@@ -25,7 +25,7 @@ vi.mock('@/lib/logger', () => ({
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
-  }
+  },
 }));
 
 describe('useEnvironmentalHazards hook', () => {
@@ -148,7 +148,11 @@ describe('useEnvironmentalHazards hook', () => {
     const returnedChar = result.current.applyHazardEffectsToCharacter(mockHazard.id, saveResult);
 
     expect(returnedChar).toEqual(updatedChar);
-    expect(hazardUtils.applyHazardEffects).toHaveBeenCalledWith(mockCharacter, mockHazard, saveResult);
+    expect(hazardUtils.applyHazardEffects).toHaveBeenCalledWith(
+      mockCharacter,
+      mockHazard,
+      saveResult,
+    );
   });
 
   it('should return character unchanged if hazard not found in applyHazardEffectsToCharacter', () => {

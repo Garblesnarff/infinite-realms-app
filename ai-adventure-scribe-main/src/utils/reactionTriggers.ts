@@ -382,7 +382,10 @@ export function isWithinReach(
 /**
  * Check if within counterspell range (60 feet)
  */
-export function isWithinCounterspellRange(caster: CombatParticipant, target: CombatParticipant): boolean {
+export function isWithinCounterspellRange(
+  caster: CombatParticipant,
+  target: CombatParticipant,
+): boolean {
   // Simplified - assume most combat happens within counterspell range
   return true;
 }

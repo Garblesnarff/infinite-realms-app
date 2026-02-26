@@ -122,7 +122,7 @@ describe('template-calculations', () => {
       const origin = { x: 100, y: 100 };
       const points = getSpherePoints(origin, 10, GRID_SIZE, 8);
       expect(points.length).toBe(8);
-      points.forEach(p => {
+      points.forEach((p) => {
         const dist = euclideanDistance(origin, p);
         expect(dist).toBeCloseTo(200);
       });
@@ -237,7 +237,9 @@ describe('template-calculations', () => {
 
     it('should return empty for unsupported grid types', () => {
       const template: any = { templateType: TemplateType.CUBE };
-      expect(getAffectedGridSquares(template, GRID_SIZE, GridType.HEXAGONAL_HORIZONTAL)).toEqual([]);
+      expect(getAffectedGridSquares(template, GRID_SIZE, GridType.HEXAGONAL_HORIZONTAL)).toEqual(
+        [],
+      );
     });
   });
 

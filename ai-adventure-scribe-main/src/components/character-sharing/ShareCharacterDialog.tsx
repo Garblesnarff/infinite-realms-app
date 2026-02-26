@@ -9,16 +9,7 @@
  * - Current permissions list with manage options
  */
 
-import {
-  Share2,
-  Search,
-  UserPlus,
-  Eye,
-  Edit,
-  Crown,
-  Shield,
-  Trash2,
-} from 'lucide-react';
+import { Share2, Search, UserPlus, Eye, Edit, Crown, Shield, Trash2 } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -113,9 +104,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>(
-    PermissionLevel.VIEWER
-  );
+  const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>(PermissionLevel.VIEWER);
   const [canControlToken, setCanControlToken] = useState(false);
   const [canEditSheet, setCanEditSheet] = useState(false);
 
@@ -124,10 +113,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
     data: permissions,
     isLoading: loadingPermissions,
     refetch: refetchPermissions,
-  } = trpc.characters.listPermissions.useQuery(
-    { characterId },
-    { enabled: open }
-  );
+  } = trpc.characters.listPermissions.useQuery({ characterId }, { enabled: open });
 
   // Share mutation
   const shareMutation = trpc.characters.share.useMutation({
@@ -230,7 +216,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
   const filteredUsers = mockUsers.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -356,10 +342,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                     checked={canControlToken}
                     onCheckedChange={(checked) => setCanControlToken(checked === true)}
                   />
-                  <Label
-                    htmlFor={tokenControlId}
-                    className="text-sm font-normal cursor-pointer"
-                  >
+                  <Label htmlFor={tokenControlId} className="text-sm font-normal cursor-pointer">
                     Can control character token in battle maps
                   </Label>
                 </div>
@@ -413,7 +396,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                           {permission.userName || permission.userId}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {permission.userEmail || `Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
+                          {permission.userEmail ||
+                            `Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
                         </div>
                       </div>
 

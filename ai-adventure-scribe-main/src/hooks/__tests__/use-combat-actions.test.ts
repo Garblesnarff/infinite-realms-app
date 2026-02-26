@@ -120,8 +120,22 @@ describe('useCombatActions', () => {
           isInCombat: false,
           activeEncounter: {
             participants: [
-              { id: 'p1', participantType: 'player', name: 'Hero', armorClass: 15, currentHitPoints: 20, maxHitPoints: 20 },
-              { id: 'm1', participantType: 'monster', name: 'Goblin', armorClass: 12, currentHitPoints: 7, maxHitPoints: 7 },
+              {
+                id: 'p1',
+                participantType: 'player',
+                name: 'Hero',
+                armorClass: 15,
+                currentHitPoints: 20,
+                maxHitPoints: 20,
+              },
+              {
+                id: 'm1',
+                participantType: 'monster',
+                name: 'Goblin',
+                armorClass: 12,
+                currentHitPoints: 7,
+                maxHitPoints: 7,
+              },
             ],
           },
         },
@@ -154,9 +168,7 @@ describe('useCombatActions', () => {
         state: {
           isInCombat: false,
           activeEncounter: {
-            participants: [
-              { id: 'm1', participantType: 'monster', name: 'Goblin' },
-            ],
+            participants: [{ id: 'm1', participantType: 'monster', name: 'Goblin' }],
           },
         },
         startCombat: mockStartCombat,
@@ -195,7 +207,7 @@ describe('useCombatActions', () => {
           name: 'Hero',
           currentHitPoints: 20,
           maxHitPoints: 20,
-          activeConcentration: 'Bless'
+          activeConcentration: 'Bless',
         },
       ],
     };
@@ -219,10 +231,12 @@ describe('useCombatActions', () => {
         currentHitPoints: 15,
         isUnconscious: false,
       });
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        damageDealt: 5,
-        actionType: 'damage_dealt',
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          damageDealt: 5,
+          actionType: 'damage_dealt',
+        }),
+      );
     });
 
     it('should set isUnconscious to true when HP reaches 0', async () => {
@@ -232,10 +246,13 @@ describe('useCombatActions', () => {
         await result.current.handleApplyDamage('p1', 25, 'fire');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        currentHitPoints: 0,
-        isUnconscious: true,
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          currentHitPoints: 0,
+          isUnconscious: true,
+        }),
+      );
     });
 
     it('should break concentration if check fails', async () => {
@@ -246,9 +263,12 @@ describe('useCombatActions', () => {
         await result.current.handleApplyDamage('p1', 10, 'necrotic');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        activeConcentration: null,
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          activeConcentration: null,
+        }),
+      );
     });
 
     it('should reset death saves when dropping to 0 HP from > 0', async () => {
@@ -258,10 +278,13 @@ describe('useCombatActions', () => {
         await result.current.handleApplyDamage('p1', 20, 'bludgeoning');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        isStable: false,
-        deathSaves: { successes: 0, failures: 0 },
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          isStable: false,
+          deathSaves: { successes: 0, failures: 0 },
+        }),
+      );
     });
 
     it('should not update if participant not found', async () => {
@@ -293,9 +316,9 @@ describe('useCombatActions', () => {
       vi.mocked(useCombat).mockReturnValue({
         state: {
           activeEncounter: {
-            participants: [{ id: 'p1', currentHitPoints: 20, activeConcentration: null }]
+            participants: [{ id: 'p1', currentHitPoints: 20, activeConcentration: null }],
           },
-          isInCombat: true
+          isInCombat: true,
         },
         updateParticipant: mockUpdateParticipant,
         takeAction: mockTakeAction,
@@ -307,21 +330,25 @@ describe('useCombatActions', () => {
         await result.current.handleApplyDamage('p1', 5, 'fire');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', expect.objectContaining({
-        currentHitPoints: 15
-      }));
-      expect(mockUpdateParticipant).not.toHaveBeenCalledWith('p1', expect.objectContaining({
-        activeConcentration: null
-      }));
+      expect(mockUpdateParticipant).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          currentHitPoints: 15,
+        }),
+      );
+      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({
+          activeConcentration: null,
+        }),
+      );
     });
   });
 
   describe('handleHealing', () => {
     const activeEncounter = {
       id: 'enc-1',
-      participants: [
-        { id: 'p1', name: 'Hero', currentHitPoints: 0, maxHitPoints: 20 },
-      ],
+      participants: [{ id: 'p1', name: 'Hero', currentHitPoints: 0, maxHitPoints: 20 }],
     };
 
     beforeEach(() => {
@@ -343,19 +370,21 @@ describe('useCombatActions', () => {
         currentHitPoints: 10,
         isUnconscious: false,
       });
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        actionType: 'heal',
-        effects: expect.objectContaining({ revivedFromUnconscious: true }),
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'heal',
+          effects: expect.objectContaining({ revivedFromUnconscious: true }),
+        }),
+      );
     });
 
     it('should heal without reviving if already conscious', async () => {
       vi.mocked(useCombat).mockReturnValue({
         state: {
           activeEncounter: {
-            participants: [{ id: 'p1', currentHitPoints: 10, maxHitPoints: 20 }]
+            participants: [{ id: 'p1', currentHitPoints: 10, maxHitPoints: 20 }],
           },
-          isInCombat: true
+          isInCombat: true,
         },
         updateParticipant: mockUpdateParticipant,
         takeAction: mockTakeAction,
@@ -371,9 +400,11 @@ describe('useCombatActions', () => {
         currentHitPoints: 15,
         isUnconscious: false,
       });
-      expect(mockTakeAction).toHaveBeenCalledWith(expect.objectContaining({
-        effects: expect.objectContaining({ revivedFromUnconscious: false }),
-      }));
+      expect(mockTakeAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          effects: expect.objectContaining({ revivedFromUnconscious: false }),
+        }),
+      );
     });
   });
 
@@ -402,7 +433,11 @@ describe('useCombatActions', () => {
     });
 
     it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValue({ isValid: false, suggestions: [], errors: ['No movement left'] });
+      mockValidateCombatAction.mockResolvedValue({
+        isValid: false,
+        suggestions: [],
+        errors: ['No movement left'],
+      });
       const { result } = renderHook(() => useCombatActions());
 
       await act(async () => {
@@ -526,7 +561,11 @@ describe('useCombatActions', () => {
       });
 
       await act(async () => {
-        await result.current.handleEnemyAttack({ name: 'Scimitar', attackBonus: 4, damageRoll: '1d6+2' });
+        await result.current.handleEnemyAttack({
+          name: 'Scimitar',
+          attackBonus: 4,
+          damageRoll: '1d6+2',
+        });
       });
 
       expect(mockTakeAction).toHaveBeenCalled();
@@ -561,10 +600,12 @@ describe('useCombatActions', () => {
         result.current.addEnemy();
       });
 
-      expect(mockAddParticipant).toHaveBeenCalledWith(expect.objectContaining({
-        name: 'Goblin',
-        participantType: 'monster',
-      }));
+      expect(mockAddParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Goblin',
+          participantType: 'monster',
+        }),
+      );
     });
   });
 });

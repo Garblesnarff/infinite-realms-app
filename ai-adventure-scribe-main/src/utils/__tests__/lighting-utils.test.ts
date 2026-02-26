@@ -5,7 +5,7 @@ import {
   getEffectiveLightLevel,
   calculateLightReach,
   stackLightLevels,
-  getLightSourcesAtPosition
+  getLightSourcesAtPosition,
 } from '../lighting-utils';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
@@ -48,7 +48,7 @@ describe('lighting utils', () => {
       createdBy: 'user-1',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      ...overrides
+      ...overrides,
     };
   };
 
@@ -67,7 +67,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: false, lightRange: 100, dimLightRange: 100, lightColor: '#ffffff' }
+        light: { emitsLight: false, lightRange: 100, dimLightRange: 100, lightColor: '#ffffff' },
       });
       expect(getEffectiveLightLevel(position, [token], false)).toBe('dark');
     });
@@ -76,7 +76,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 10, dimLightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 10, dimLightRange: 10, lightColor: '#ffffff' },
       });
       // distance = sqrt(100^2 + 100^2) = 141.4px
       // distanceInFeet = 141.4 / 20 = 7.07ft
@@ -88,7 +88,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 5, dimLightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 5, dimLightRange: 10, lightColor: '#ffffff' },
       });
       // distanceInFeet = 7.07ft
       // 7.07 > 5 (not bright), but 7.07 <= 5 + 10 = 15 (dim)
@@ -100,13 +100,13 @@ describe('lighting utils', () => {
         id: 'dim',
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 5, dimLightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 5, dimLightRange: 10, lightColor: '#ffffff' },
       });
       const tokenBright = createMockToken({
         id: 'bright',
         x: 80,
         y: 80,
-        light: { emitsLight: true, lightRange: 10, dimLightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 10, dimLightRange: 10, lightColor: '#ffffff' },
       });
       // tokenDim gives 'dim' at (100,100)
       // tokenBright gives 'bright' at (100,100)
@@ -118,7 +118,9 @@ describe('lighting utils', () => {
     const target: Point2D = { x: 100, y: 100 };
 
     it('should return reaches: false if token does not emit light', () => {
-      const token = createMockToken({ light: { emitsLight: false, lightRange: 10, lightColor: '#ffffff' } });
+      const token = createMockToken({
+        light: { emitsLight: false, lightRange: 10, lightColor: '#ffffff' },
+      });
       const result = calculateLightReach(token, target);
       expect(result.reaches).toBe(false);
     });
@@ -127,7 +129,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 2, dimLightRange: 2, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 2, dimLightRange: 2, lightColor: '#ffffff' },
       });
       // distanceInFeet = 7.07ft, total range = 4ft
       const result = calculateLightReach(token, target);
@@ -138,15 +140,18 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 20, dimLightRange: 20, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 20, dimLightRange: 20, lightColor: '#ffffff' },
       });
       const walls: VisionBlocker[] = [
         {
           id: 'w1',
-          points: [{ x: 50, y: 0 }, { x: 50, y: 200 }],
+          points: [
+            { x: 50, y: 0 },
+            { x: 50, y: 200 },
+          ],
           blocksLight: true,
-          blocksMovement: true
-        }
+          blocksMovement: true,
+        },
       ];
       const result = calculateLightReach(token, target, walls);
       expect(result.reaches).toBe(false);
@@ -156,7 +161,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' },
       });
       const result = calculateLightReach(token, target);
       expect(result.reaches).toBe(true);
@@ -167,7 +172,7 @@ describe('lighting utils', () => {
       const token = createMockToken({
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 5, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 5, lightColor: '#ffffff' },
       } as any); // Force missing dimLightRange
       const result = calculateLightReach(token, target);
       // distanceInFeet = 7.07, total range = 5 + 0 = 5
@@ -196,25 +201,25 @@ describe('lighting utils', () => {
         id: 't1',
         x: 0,
         y: 0,
-        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' },
       });
       const token2 = createMockToken({
         id: 't2',
         x: 200,
         y: 200,
-        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: true, lightRange: 10, lightColor: '#ffffff' },
       });
       const token3 = createMockToken({
         id: 't3',
         x: 0,
         y: 0,
-        light: { emitsLight: false, lightRange: 10, lightColor: '#ffffff' }
+        light: { emitsLight: false, lightRange: 10, lightColor: '#ffffff' },
       });
 
       const sources = getLightSourcesAtPosition(position, [token1, token2, token3]);
       expect(sources).toHaveLength(2);
-      expect(sources.map(s => s.token.id)).toContain('t1');
-      expect(sources.map(s => s.token.id)).toContain('t2');
+      expect(sources.map((s) => s.token.id)).toContain('t1');
+      expect(sources.map((s) => s.token.id)).toContain('t2');
     });
   });
 });

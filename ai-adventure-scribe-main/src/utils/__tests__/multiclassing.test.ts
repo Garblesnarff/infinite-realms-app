@@ -8,7 +8,7 @@ import {
   calculateMulticlassProficiencies,
   getMulticlassFeatures,
   addMulticlass,
-  levelUpClass
+  levelUpClass,
 } from '../multiclassing';
 
 import type { Character, CharacterClass } from '@/types/character';
@@ -16,10 +16,12 @@ import type { Character, CharacterClass } from '@/types/character';
 import * as levelProgression from '@/data/levelProgression';
 
 vi.mock('@/data/levelProgression', async () => {
-  const actual = await vi.importActual('@/data/levelProgression') as any;
+  const actual = (await vi.importActual('@/data/levelProgression')) as any;
   return {
     ...actual,
-    getAllClassFeaturesUpToLevel: vi.fn(() => [{ id: 'feature-1', name: 'Feature 1', description: 'Desc' }]),
+    getAllClassFeaturesUpToLevel: vi.fn(() => [
+      { id: 'feature-1', name: 'Feature 1', description: 'Desc' },
+    ]),
   };
 });
 
@@ -78,7 +80,7 @@ describe('multiclassing utilities', () => {
           level: 1,
           hitDie: 10,
           features: [],
-        }
+        },
       ],
       hitPoints: { maximum: 12, current: 12, temporary: 0 },
     };
@@ -189,7 +191,7 @@ describe('multiclassing utilities', () => {
             level: 5,
             hitDie: 10,
             features: [],
-          }
+          },
         ],
       };
       const hp = calculateMulticlassHitPoints(level5Fighter);
@@ -215,7 +217,7 @@ describe('multiclassing utilities', () => {
             level: 1,
             hitDie: 6,
             features: [],
-          }
+          },
         ],
       };
       const hp = calculateMulticlassHitPoints(multiclassChar);
@@ -241,7 +243,7 @@ describe('multiclassing utilities', () => {
             level: 3,
             hitDie: 6,
             features: [],
-          }
+          },
         ],
       };
       const hp = calculateMulticlassHitPoints(multiclassChar);
@@ -266,8 +268,8 @@ describe('multiclassing utilities', () => {
       const wizard = {
         ...baseCharacter,
         classLevels: [
-          { classId: 'wizard-id', className: 'Wizard', level: 3, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 3, hitDie: 6, features: [] },
+        ],
       };
       const result = calculateMulticlassSpellcasting(wizard);
       expect(result.combinedCasterLevel).toBe(3);
@@ -279,8 +281,8 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'cleric-id', className: 'Cleric', level: 2, hitDie: 8, features: [] },
-          { classId: 'wizard-id', className: 'Wizard', level: 3, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 3, hitDie: 6, features: [] },
+        ],
       };
       const result = calculateMulticlassSpellcasting(clericWizard);
       expect(result.combinedCasterLevel).toBe(5);
@@ -291,8 +293,8 @@ describe('multiclassing utilities', () => {
       const paladin = {
         ...baseCharacter,
         classLevels: [
-          { classId: 'paladin-id', className: 'Paladin', level: 3, hitDie: 10, features: [] }
-        ]
+          { classId: 'paladin-id', className: 'Paladin', level: 3, hitDie: 10, features: [] },
+        ],
       };
       const result = calculateMulticlassSpellcasting(paladin);
       expect(result.combinedCasterLevel).toBe(1); // floor(3/2) = 1
@@ -303,12 +305,14 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'warlock-id', className: 'Warlock', level: 3, hitDie: 8, features: [] },
-          { classId: 'wizard-id', className: 'Wizard', level: 2, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 2, hitDie: 6, features: [] },
+        ],
       };
       const result = calculateMulticlassSpellcasting(warlockWizard);
       expect(result.combinedCasterLevel).toBe(2);
-      expect(result.spellcastingClasses.find(c => c.className === 'Warlock')?.casterType).toBe('pact');
+      expect(result.spellcastingClasses.find((c) => c.className === 'Warlock')?.casterType).toBe(
+        'pact',
+      );
     });
 
     it('should handle third casters', () => {
@@ -316,8 +320,8 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'fighter-id', className: 'Fighter', level: 3, hitDie: 10, features: [] },
-          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        ],
       };
       const result = calculateMulticlassSpellcasting(fighterWizard);
       // Fighter 3: floor(3/3) = 1. Wizard 1: 1. Total: 2.
@@ -337,8 +341,8 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'fighter-id', className: 'Fighter', level: 1, hitDie: 10, features: [] },
-          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        ],
       };
       const result = calculateMulticlassProficiencies(multiclassChar);
       expect(result.savingThrows).not.toContain('intelligence');
@@ -349,8 +353,8 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'fighter-id', className: 'Fighter', level: 1, hitDie: 10, features: [] },
-          { classId: 'cleric-id', className: 'Cleric', level: 1, hitDie: 8, features: [] }
-        ]
+          { classId: 'cleric-id', className: 'Cleric', level: 1, hitDie: 8, features: [] },
+        ],
       };
       const result = calculateMulticlassProficiencies(fighterCleric);
       expect(result.armor).toContain('Light armor');
@@ -365,8 +369,8 @@ describe('multiclassing utilities', () => {
         ...baseCharacter,
         classLevels: [
           { classId: 'fighter-id', className: 'Fighter', level: 1, hitDie: 10, features: [] },
-          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] }
-        ]
+          { classId: 'wizard-id', className: 'Wizard', level: 1, hitDie: 6, features: [] },
+        ],
       };
       const features = getMulticlassFeatures(multiclassChar);
       expect(levelProgression.getAllClassFeaturesUpToLevel).toHaveBeenCalledTimes(2);
@@ -401,8 +405,8 @@ describe('multiclassing utilities', () => {
       const multiclassChar = addMulticlass(baseCharacter, mockWizard);
       const updated = levelUpClass(multiclassChar, 'wizard-id');
 
-      expect(updated.classLevels!.find(c => c.classId === 'wizard-id')?.level).toBe(2);
-      expect(updated.classLevels!.find(c => c.classId === 'fighter-id')?.level).toBe(1);
+      expect(updated.classLevels!.find((c) => c.classId === 'wizard-id')?.level).toBe(2);
+      expect(updated.classLevels!.find((c) => c.classId === 'fighter-id')?.level).toBe(1);
       expect(updated.totalLevel).toBe(3);
     });
 

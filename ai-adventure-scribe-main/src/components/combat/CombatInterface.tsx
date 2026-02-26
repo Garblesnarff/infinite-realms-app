@@ -6,14 +6,7 @@
  * Manages combat mode and participant selection.
  */
 
-import {
-  Sword,
-  Shield,
-  Users,
-  X,
-  Play,
-  RefreshCw,
-} from 'lucide-react';
+import { Sword, Shield, Users, X, Play, RefreshCw } from 'lucide-react';
 import React from 'react';
 
 import ActionPanel from './ActionPanel';
@@ -227,7 +220,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                     onHeal={handleHealing}
                     isInteractive={Boolean(
                       isDM ||
-                        (participant.characterId && participant.characterId === playerCharacterId),
+                      (participant.characterId && participant.characterId === playerCharacterId),
                     )}
                   />
                 ))}

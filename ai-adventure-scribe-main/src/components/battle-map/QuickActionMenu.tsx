@@ -17,16 +17,7 @@
  * @module components/battle-map/QuickActionMenu
  */
 
-import {
-  Target,
-  Move,
-  Sword,
-  Heart,
-  Skull,
-  Trash2,
-  Shield,
-  Eye,
-} from 'lucide-react';
+import { Target, Move, Sword, Heart, Skull, Trash2, Shield, Eye } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 import { Z_INDEX } from '@/constants/z-index';
@@ -87,7 +78,7 @@ function calculateRadialPosition(
   index: number,
   total: number,
   radius: number,
-  offsetAngle: number = -90
+  offsetAngle: number = -90,
 ): { x: number; y: number; angle: number } {
   const angleStep = 360 / total;
   const angle = offsetAngle + angleStep * index;
@@ -140,7 +131,7 @@ const RadialActionButton: React.FC<RadialActionButtonProps> = ({
         'shadow-lg border-2 border-background',
         action.enabled === false && 'opacity-40 cursor-not-allowed',
         action.enabled !== false && color,
-        isHovered && 'scale-110'
+        isHovered && 'scale-110',
       )}
       style={{
         left: `calc(50% + ${position.x}px)`,
@@ -233,7 +224,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
       action.onAction();
       onClose();
     },
-    [onClose]
+    [onClose],
   );
 
   // ===========================
@@ -258,10 +249,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
       {/* Menu Container */}
       <div
         ref={menuRef}
-        className={cn(
-          'fixed',
-          className
-        )}
+        className={cn('fixed', className)}
         style={{
           left: position.x,
           top: position.y,
@@ -289,9 +277,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
             ) : (
               <div className="h-6 w-6 rounded-full bg-primary" />
             )}
-            {centerLabel && (
-              <span className="text-xs font-medium">{centerLabel}</span>
-            )}
+            {centerLabel && <span className="text-xs font-medium">{centerLabel}</span>}
           </button>
         </div>
 
@@ -382,16 +368,8 @@ export interface UseQuickActionMenuReturn {
 /**
  * Hook for managing quick action menu state
  */
-export function useQuickActionMenu(
-  options: UseQuickActionMenuOptions
-): UseQuickActionMenuReturn {
-  const {
-    enableRightClick = true,
-    enableHotkey = true,
-    hotkeyConfig,
-    onOpen,
-    onClose,
-  } = options;
+export function useQuickActionMenu(options: UseQuickActionMenuOptions): UseQuickActionMenuReturn {
+  const { enableRightClick = true, enableHotkey = true, hotkeyConfig, onOpen, onClose } = options;
 
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -413,7 +391,7 @@ export function useQuickActionMenu(
       setIsOpen(true);
       onOpen?.(pos);
     },
-    [onOpen]
+    [onOpen],
   );
 
   const closeMenu = useCallback(() => {
@@ -455,7 +433,7 @@ export function useQuickActionMenu(
         openMenu({ x: event.clientX, y: event.clientY });
       }
     },
-    [enableRightClick, isOpen, openMenu, closeMenu]
+    [enableRightClick, isOpen, openMenu, closeMenu],
   );
 
   return {
@@ -570,4 +548,9 @@ export function getDefaultQuickActions(tokenId: string, isGM: boolean = false): 
 // Exports
 // ===========================
 
-export type { QuickActionMenuProps, QuickAction, UseQuickActionMenuOptions, UseQuickActionMenuReturn };
+export type {
+  QuickActionMenuProps,
+  QuickAction,
+  UseQuickActionMenuOptions,
+  UseQuickActionMenuReturn,
+};

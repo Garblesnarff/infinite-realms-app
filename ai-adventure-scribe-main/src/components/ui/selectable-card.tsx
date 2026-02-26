@@ -48,8 +48,7 @@ const selectableCardVariants = cva(
 );
 
 export interface SelectableCardProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof selectableCardVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof selectableCardVariants> {
   /** Card title */
   title: string;
   /** Card description */

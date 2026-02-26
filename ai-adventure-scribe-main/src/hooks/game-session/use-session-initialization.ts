@@ -1,10 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import {
-  type ExtendedGameSession,
-  type SessionState,
-  isSessionExpired
-} from './session-utils';
+import { type ExtendedGameSession, type SessionState, isSessionExpired } from './session-utils';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -265,5 +261,16 @@ export const useSessionInitialization = ({
         abortControllerRef.current = null;
       }
     };
-  }, [campaignId, characterId, createGameSession, cleanupSession, forceNew, specificSessionId, starterCampaignId, setSessionData, setSessionState, mountedRef]);
+  }, [
+    campaignId,
+    characterId,
+    createGameSession,
+    cleanupSession,
+    forceNew,
+    specificSessionId,
+    starterCampaignId,
+    setSessionData,
+    setSessionState,
+    mountedRef,
+  ]);
 };

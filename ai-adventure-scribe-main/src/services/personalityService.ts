@@ -6,10 +6,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 export interface PersonalityElement {
   id: string;
   // Different tables have different field names for the content
-  text?: string;       // personality_traits table uses 'text'
-  ideal?: string;      // personality_ideals table uses 'ideal'
-  bond?: string;       // personality_bonds table uses 'bond'
-  flaw?: string;       // personality_flaws table uses 'flaw'
+  text?: string; // personality_traits table uses 'text'
+  ideal?: string; // personality_ideals table uses 'ideal'
+  bond?: string; // personality_bonds table uses 'bond'
+  flaw?: string; // personality_flaws table uses 'flaw'
   background?: string;
   source: string;
   alignment?: string;

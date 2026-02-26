@@ -69,9 +69,7 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
             }}
             disabled={!available || isSubmitting}
           >
-            <ActionIcon
-              className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`}
-            />
+            <ActionIcon className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`} />
 
             <div className="text-center">
               <div className="font-medium text-sm">{action.name}</div>

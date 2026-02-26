@@ -105,8 +105,7 @@ export function isSessionExpired(session: ExtendedGameSession): boolean {
     logger.info(`✅ Session ${session.id} still active:`, {
       sessionId: session.id,
       elapsedHours: Math.round((elapsed / (1000 * 60 * 60)) * 100) / 100,
-      remainingHours:
-        Math.round(((SESSION_EXPIRY_TIME - elapsed) / (1000 * 60 * 60)) * 100) / 100,
+      remainingHours: Math.round(((SESSION_EXPIRY_TIME - elapsed) / (1000 * 60 * 60)) * 100) / 100,
     });
   }
 
@@ -156,7 +155,7 @@ export async function generateSessionSummary(sessionId: string): Promise<string>
  */
 export async function createSessionInDatabase(
   campaignId: string,
-  characterId: string
+  characterId: string,
 ): Promise<ExtendedGameSession | null> {
   const { data, error } = await supabase
     .from('game_sessions')
@@ -188,7 +187,7 @@ export async function createSessionInDatabase(
  */
 export async function cleanupSessionInDatabase(
   sessionId: string,
-  summary: string
+  summary: string,
 ): Promise<boolean> {
   const { error } = await supabase
     .from('game_sessions')
@@ -214,7 +213,7 @@ export async function cleanupSessionInDatabase(
 export async function fetchExistingSessions(
   campaignId: string,
   characterId: string,
-  limit: number = 5
+  limit: number = 5,
 ): Promise<ExtendedGameSession[]> {
   const { data, error } = await supabase
     .from('game_sessions')
@@ -255,7 +254,7 @@ export async function fetchSessionById(sessionId: string): Promise<ExtendedGameS
  */
 export async function updateSessionInDatabase(
   sessionId: string,
-  updates: Partial<ExtendedGameSession>
+  updates: Partial<ExtendedGameSession>,
 ): Promise<ExtendedGameSession | null> {
   const { data, error } = await supabase
     .from('game_sessions')

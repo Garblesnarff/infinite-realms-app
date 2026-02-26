@@ -69,7 +69,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = ({
           // onError
           (error) => {
             reject(error);
-          }
+          },
         );
       });
 
@@ -87,7 +87,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = ({
 
         if (Math.abs(imageAspect - gridAspect) > 0.01) {
           logger.info(
-            `Background image aspect ratio (${imageAspect.toFixed(2)}) differs from grid aspect ratio (${gridAspect.toFixed(2)})`
+            `Background image aspect ratio (${imageAspect.toFixed(2)}) differs from grid aspect ratio (${gridAspect.toFixed(2)})`,
           );
         }
       }
@@ -108,8 +108,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = ({
         height: loadedTexture.image?.height,
       });
     } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : 'Failed to load background image';
+      const errorMsg = error instanceof Error ? error.message : 'Failed to load background image';
       setLoadingState('error');
       setErrorMessage(errorMsg);
       logger.error('Failed to load background texture', { error, url: imageUrl });

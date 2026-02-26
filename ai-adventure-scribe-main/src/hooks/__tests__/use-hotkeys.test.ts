@@ -1,4 +1,3 @@
-
 /* eslint-disable max-lines */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -48,11 +47,11 @@ describe('useHotkeys', () => {
 
   it('should respect modifier keys (Ctrl)', () => {
     const ctrlCallback = vi.fn();
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 's', ctrl: true, callback: ctrlCallback }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 's', ctrl: true, callback: ctrlCallback }],
+      }),
+    );
 
     // Press 's' without Ctrl
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: false }));
@@ -65,11 +64,11 @@ describe('useHotkeys', () => {
 
   it('should respect modifier keys (Alt)', () => {
     const altCallback = vi.fn();
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'f', alt: true, callback: altCallback }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'f', alt: true, callback: altCallback }],
+      }),
+    );
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', altKey: true }));
     expect(altCallback).toHaveBeenCalledTimes(1);
@@ -77,11 +76,11 @@ describe('useHotkeys', () => {
 
   it('should respect modifier keys (Shift)', () => {
     const shiftCallback = vi.fn();
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'z', shift: true, callback: shiftCallback }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'z', shift: true, callback: shiftCallback }],
+      }),
+    );
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', shiftKey: true }));
     expect(shiftCallback).toHaveBeenCalledTimes(1);
@@ -89,11 +88,11 @@ describe('useHotkeys', () => {
 
   it('should handle multiple modifiers', () => {
     const multiCallback = vi.fn();
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'z', ctrl: true, shift: true, callback: multiCallback }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'z', ctrl: true, shift: true, callback: multiCallback }],
+      }),
+    );
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }));
     expect(multiCallback).toHaveBeenCalledTimes(1);
@@ -107,11 +106,11 @@ describe('useHotkeys', () => {
   });
 
   it('should not trigger when individual hotkey is disabled', () => {
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'a', callback: mockCallback, enabled: false }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'a', callback: mockCallback, enabled: false }],
+      }),
+    );
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
     expect(mockCallback).not.toHaveBeenCalled();
@@ -129,11 +128,11 @@ describe('useHotkeys', () => {
   });
 
   it('should not prevent default behavior if preventDefault is false', () => {
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'a', callback: mockCallback, preventDefault: false }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'a', callback: mockCallback, preventDefault: false }],
+      }),
+    );
 
     const event = new KeyboardEvent('keydown', { key: 'a' });
     const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
@@ -144,11 +143,11 @@ describe('useHotkeys', () => {
   });
 
   it('should stop propagation if stopPropagation is true', () => {
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'a', callback: mockCallback, stopPropagation: true }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'a', callback: mockCallback, stopPropagation: true }],
+      }),
+    );
 
     const event = new KeyboardEvent('keydown', { key: 'a' });
     const stopPropagationSpy = vi.spyOn(event, 'stopPropagation');
@@ -212,11 +211,11 @@ describe('useHotkeys', () => {
   });
 
   it('should detect registration status with isRegistered', () => {
-    const { result } = renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'k', ctrl: true, callback: vi.fn() }
-      ]
-    }));
+    const { result } = renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'k', ctrl: true, callback: vi.fn() }],
+      }),
+    );
 
     expect(result.current.isRegistered('k', { ctrl: true })).toBe(true);
     expect(result.current.isRegistered('k', { ctrl: false })).toBe(false);
@@ -225,11 +224,11 @@ describe('useHotkeys', () => {
   });
 
   it('should detect registration status with isRegistered without modifiers', () => {
-    const { result } = renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'x', callback: vi.fn() }
-      ]
-    }));
+    const { result } = renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'x', callback: vi.fn() }],
+      }),
+    );
 
     expect(result.current.isRegistered('x')).toBe(true);
     expect(result.current.isRegistered('x', { ctrl: false, alt: false, shift: false })).toBe(true);
@@ -239,11 +238,11 @@ describe('useHotkeys', () => {
     const firstCallback = vi.fn();
     const secondCallback = vi.fn();
 
-    const { result } = renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'c', callback: firstCallback, description: 'First' }
-      ]
-    }));
+    const { result } = renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'c', callback: firstCallback, description: 'First' }],
+      }),
+    );
 
     act(() => {
       result.current.registerHotkey({ key: 'c', callback: secondCallback, description: 'Second' });
@@ -294,14 +293,16 @@ describe('useHotkeys', () => {
 
   it('should log error when callback throws', () => {
     const error = new Error('Test error');
-    const throwCallback = vi.fn(() => { throw error; });
+    const throwCallback = vi.fn(() => {
+      throw error;
+    });
     const loggerSpy = vi.spyOn(logger, 'error');
 
-    renderHook(() => useHotkeys({
-      hotkeys: [
-        { key: 'e', callback: throwCallback }
-      ]
-    }));
+    renderHook(() =>
+      useHotkeys({
+        hotkeys: [{ key: 'e', callback: throwCallback }],
+      }),
+    );
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
 

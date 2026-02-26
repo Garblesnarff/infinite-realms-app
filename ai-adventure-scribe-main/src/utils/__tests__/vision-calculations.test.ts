@@ -28,50 +28,51 @@ vi.mock('../lighting-utils', () => ({
 }));
 
 describe('vision-calculations', () => {
-  const createMockToken = (overrides: any = {}): Token => ({
-    id: 'token-1',
-    sceneId: 'scene-1',
-    name: 'Test Token',
-    tokenType: TokenType.CHARACTER,
-    x: 100,
-    y: 100,
-    elevation: 0,
-    imageUrl: '',
-    width: 1,
-    height: 1,
-    size: TokenSize.MEDIUM,
-    scale: 1,
-    rotation: 0,
-    alpha: 1,
-    displayName: true,
-    nameplate: NameplatePosition.BOTTOM,
-    nameVisibility: 'all',
-    displayBars: 'always',
-    bar1: { attribute: 'hp', value: 10, max: 10, visible: true },
-    vision: {
-      enabled: true,
-      range: 60,
-      angle: 360,
-      visionMode: 'basic',
-    },
-    light: {
-      emitsLight: false,
-      lightRange: 0,
-      lightColor: '#ffffff',
-    },
-    statusEffects: [],
-    conditions: [],
-    disposition: TokenDisposition.FRIENDLY,
-    lockRotation: false,
-    hidden: false,
-    locked: false,
-    ownerIds: [],
-    observerIds: [],
-    createdBy: 'user-1',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...overrides,
-  } as any as Token);
+  const createMockToken = (overrides: any = {}): Token =>
+    ({
+      id: 'token-1',
+      sceneId: 'scene-1',
+      name: 'Test Token',
+      tokenType: TokenType.CHARACTER,
+      x: 100,
+      y: 100,
+      elevation: 0,
+      imageUrl: '',
+      width: 1,
+      height: 1,
+      size: TokenSize.MEDIUM,
+      scale: 1,
+      rotation: 0,
+      alpha: 1,
+      displayName: true,
+      nameplate: NameplatePosition.BOTTOM,
+      nameVisibility: 'all',
+      displayBars: 'always',
+      bar1: { attribute: 'hp', value: 10, max: 10, visible: true },
+      vision: {
+        enabled: true,
+        range: 60,
+        angle: 360,
+        visionMode: 'basic',
+      },
+      light: {
+        emitsLight: false,
+        lightRange: 0,
+        lightColor: '#ffffff',
+      },
+      statusEffects: [],
+      conditions: [],
+      disposition: TokenDisposition.FRIENDLY,
+      lockRotation: false,
+      hidden: false,
+      locked: false,
+      ownerIds: [],
+      observerIds: [],
+      createdBy: 'user-1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...overrides,
+    }) as any as Token;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,8 +99,8 @@ describe('vision-calculations', () => {
           blindsight: 10,
           tremorsense: 40,
           darkvision: 120,
-          angle: 360
-        }
+          angle: 360,
+        },
       });
       expect(calculateVisionRadius(token)).toBe(120);
     });
@@ -113,28 +114,41 @@ describe('vision-calculations', () => {
   describe('getActiveVisionType', () => {
     it('should prioritize truesight', () => {
       const token = createMockToken({
-        vision: { enabled: true, truesight: 60, blindsight: 30, tremorsense: 30, darkvision: 30, visionMode: 'basic' }
+        vision: {
+          enabled: true,
+          truesight: 60,
+          blindsight: 30,
+          tremorsense: 30,
+          darkvision: 30,
+          visionMode: 'basic',
+        },
       });
       expect(getActiveVisionType(token, 'bright')).toBe('truesight');
     });
 
     it('should prioritize blindsight over others except truesight', () => {
       const token = createMockToken({
-        vision: { enabled: true, blindsight: 30, tremorsense: 30, darkvision: 30, visionMode: 'basic' }
+        vision: {
+          enabled: true,
+          blindsight: 30,
+          tremorsense: 30,
+          darkvision: 30,
+          visionMode: 'basic',
+        },
       });
       expect(getActiveVisionType(token, 'bright')).toBe('blindsight');
     });
 
     it('should use tremorsense if others are missing', () => {
       const token = createMockToken({
-        vision: { enabled: true, tremorsense: 30, darkvision: 30, visionMode: 'basic' }
+        vision: { enabled: true, tremorsense: 30, darkvision: 30, visionMode: 'basic' },
       });
       expect(getActiveVisionType(token, 'bright')).toBe('tremorsense');
     });
 
     it('should use darkvision in dim or dark light', () => {
       const token = createMockToken({
-        vision: { enabled: true, darkvision: 60, visionMode: 'basic' }
+        vision: { enabled: true, darkvision: 60, visionMode: 'basic' },
       });
       expect(getActiveVisionType(token, 'dim')).toBe('darkvision');
       expect(getActiveVisionType(token, 'dark')).toBe('darkvision');
@@ -173,11 +187,11 @@ describe('vision-calculations', () => {
     it('should handle blindsight ignoring soft walls', () => {
       vi.mocked(geometry.calculateDistance).mockReturnValue(100); // 5ft
       const blindsightViewer = createMockToken({
-        vision: { enabled: true, blindsight: 30, visionMode: 'blindsight' }
+        vision: { enabled: true, blindsight: 30, visionMode: 'blindsight' },
       });
       const walls = [
         { id: 'w1', points: [], blocksLight: true, blocksMovement: false }, // Soft wall (e.g. curtain)
-        { id: 'w2', points: [], blocksLight: true, blocksMovement: true },  // Hard wall
+        { id: 'w2', points: [], blocksLight: true, blocksMovement: true }, // Hard wall
       ] as any[];
 
       vi.mocked(geometry.isLineBlocked).mockReturnValue(false); // Not blocked by hard wall
@@ -187,7 +201,7 @@ describe('vision-calculations', () => {
       expect(geometry.isLineBlocked).toHaveBeenCalledWith(
         expect.anything(),
         expect.anything(),
-        expect.arrayContaining([expect.objectContaining({ id: 'w2' })])
+        expect.arrayContaining([expect.objectContaining({ id: 'w2' })]),
       );
       expect(vi.mocked(geometry.isLineBlocked).mock.calls[0][2]).toHaveLength(1);
     });
@@ -195,7 +209,7 @@ describe('vision-calculations', () => {
     it('should handle truesight ignoring soft walls', () => {
       vi.mocked(geometry.calculateDistance).mockReturnValue(100); // 5ft
       const truesightViewer = createMockToken({
-        vision: { enabled: true, truesight: 60, visionMode: 'truesight' }
+        vision: { enabled: true, truesight: 60, visionMode: 'truesight' },
       });
       const walls = [
         { id: 'w1', points: [], blocksLight: true, blocksMovement: false },
@@ -213,16 +227,20 @@ describe('vision-calculations', () => {
       vi.mocked(geometry.isLineBlocked).mockReturnValue(true); // Line is blocked
       const tremorsenseViewer = createMockToken({
         vision: { enabled: true, tremorsense: 30, visionMode: 'tremorsense' },
-        elevation: 0
+        elevation: 0,
       });
       const targetSameElevation = createMockToken({ x: 100, y: 100, elevation: 0 });
       const targetDiffElevation = createMockToken({ x: 100, y: 100, elevation: 10 });
 
       // Should see target on same elevation even with walls
-      expect(canSeeToken(tremorsenseViewer as any, targetSameElevation, [{ id: 'w1' } as any])).toBe(true);
+      expect(
+        canSeeToken(tremorsenseViewer as any, targetSameElevation, [{ id: 'w1' } as any]),
+      ).toBe(true);
 
       // Should NOT see target on different elevation if walls block it (it's not tremorsense anymore)
-      expect(canSeeToken(tremorsenseViewer as any, targetDiffElevation, [{ id: 'w1' } as any])).toBe(false);
+      expect(
+        canSeeToken(tremorsenseViewer as any, targetDiffElevation, [{ id: 'w1' } as any]),
+      ).toBe(false);
     });
 
     it('should return false if line of sight is blocked by walls', () => {
@@ -245,7 +263,13 @@ describe('vision-calculations', () => {
       vi.mocked(lightingUtils.getEffectiveLightLevel).mockReturnValue('dark');
 
       const tremorsenseViewer = createMockToken({
-        vision: { enabled: true, range: 60, tremorsense: 30, visionMode: 'tremorsense', darkvision: 0 }
+        vision: {
+          enabled: true,
+          range: 60,
+          tremorsense: 30,
+          visionMode: 'tremorsense',
+          darkvision: 0,
+        },
       });
 
       expect(canSeeToken(tremorsenseViewer as any, target)).toBe(false);
@@ -262,8 +286,8 @@ describe('vision-calculations', () => {
           range: 120,
           blindsight: 30,
           darkvision: 60,
-          visionMode: 'blindsight'
-        }
+          visionMode: 'blindsight',
+        },
       });
 
       // Outside blindsight (30ft) but inside darkvision (60ft)
@@ -281,8 +305,8 @@ describe('vision-calculations', () => {
           range: 120,
           blindsight: 30,
           darkvision: 60,
-          visionMode: 'blindsight'
-        }
+          visionMode: 'blindsight',
+        },
       });
 
       expect(canSeeToken(multiVisionViewer as any, target)).toBe(false);

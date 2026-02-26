@@ -76,11 +76,13 @@ const CampaignParameterSection: React.FC<CampaignParameterSectionProps> = ({
             const icon = option.icon || <SectionIcon className="h-5 w-5" />;
 
             // Compact version of the icon (reduced size)
-            const compactIcon = option.icon
-              ? React.cloneElement(option.icon as React.ReactElement, {
-                  className: 'h-4 w-4',
-                })
-              : <SectionIcon className="h-4 w-4" />;
+            const compactIcon = option.icon ? (
+              React.cloneElement(option.icon as React.ReactElement, {
+                className: 'h-4 w-4',
+              })
+            ) : (
+              <SectionIcon className="h-4 w-4" />
+            );
 
             if (viewMode === 'list') {
               return (

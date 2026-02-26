@@ -67,7 +67,9 @@ export const useChatHistory = ({
 
         if (attempt < maxRetries - 1) {
           const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff
-          logger.debug(`[useChatHistory] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          logger.debug(
+            `[useChatHistory] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`,
+          );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
@@ -75,59 +77,62 @@ export const useChatHistory = ({
       logger.error(`[useChatHistory] ❌ Message verification failed after ${maxRetries} retries`);
       return false;
     },
-    []
+    [],
   );
 
   /**
    * Save a message to the database
    * Returns true if save and verification succeeded, false otherwise
    */
-  const saveMessageToDatabase = useCallback(async (message: ChatMessage, sid: string): Promise<boolean> => {
-    logger.debug('[useChatHistory] Saving message to database:', {
-      messageId: message.id,
-      sessionId: sid,
-      timestamp: new Date().toISOString(),
-    });
-
-    try {
-      const { error } = await supabase.from('dialogue_history').insert({
-        id: message.id,
-        session_id: sid,
-        speaker_type:
-          message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
-        message: message.content,
-        timestamp: message.timestamp.toISOString(),
+  const saveMessageToDatabase = useCallback(
+    async (message: ChatMessage, sid: string): Promise<boolean> => {
+      logger.debug('[useChatHistory] Saving message to database:', {
+        messageId: message.id,
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
       });
 
-      if (error) {
-        logger.error('[useChatHistory] ❌ Database insert FAILED:', { error });
-        throw error;
-      }
+      try {
+        const { error } = await supabase.from('dialogue_history').insert({
+          id: message.id,
+          session_id: sid,
+          speaker_type:
+            message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
+          message: message.content,
+          timestamp: message.timestamp.toISOString(),
+        });
 
-      logger.debug('[useChatHistory] Database insert promise resolved, verifying...');
+        if (error) {
+          logger.error('[useChatHistory] ❌ Database insert FAILED:', { error });
+          throw error;
+        }
 
-      // Verify the message actually exists in the database
-      const verified = await waitForMessageToExist(message.id);
+        logger.debug('[useChatHistory] Database insert promise resolved, verifying...');
 
-      if (!verified) {
-        logger.error('[useChatHistory] ❌ Message verification failed');
+        // Verify the message actually exists in the database
+        const verified = await waitForMessageToExist(message.id);
+
+        if (!verified) {
+          logger.error('[useChatHistory] ❌ Message verification failed');
+          return false;
+        }
+
+        logger.debug('[useChatHistory] ✅ Message saved and verified:', { messageId: message.id });
+        return true;
+      } catch (error) {
+        logger.error('[useChatHistory] Exception during save:', { error });
+        handleAsyncError(error, {
+          userMessage: 'Failed to save message',
+          logLevel: 'warn',
+          showToast: false,
+          context: { location: 'useChatHistory.saveMessageToDatabase', sessionId: sid },
+        });
+        // Don't throw here to avoid breaking the UI flow
         return false;
       }
-
-      logger.debug('[useChatHistory] ✅ Message saved and verified:', { messageId: message.id });
-      return true;
-    } catch (error) {
-      logger.error('[useChatHistory] Exception during save:', { error });
-      handleAsyncError(error, {
-        userMessage: 'Failed to save message',
-        logLevel: 'warn',
-        showToast: false,
-        context: { location: 'useChatHistory.saveMessageToDatabase', sessionId: sid },
-      });
-      // Don't throw here to avoid breaking the UI flow
-      return false;
-    }
-  }, [waitForMessageToExist]);
+    },
+    [waitForMessageToExist],
+  );
 
   /**
    * Generate an opening message for a new session
@@ -163,7 +168,8 @@ export const useChatHistory = ({
           const aiResponse = response as Record<string, unknown>;
           displayText = (aiResponse.text as string) || (aiResponse.content as string) || '';
           // AI service returns 'narration_segments' (snake_case)
-          segments = (aiResponse.narration_segments || aiResponse.narrationSegments) as NarrationSegment[];
+          segments = (aiResponse.narration_segments ||
+            aiResponse.narrationSegments) as NarrationSegment[];
         }
 
         // Fallback if no valid text found
@@ -200,7 +206,15 @@ export const useChatHistory = ({
         },
       });
     }
-  }, [sessionId, campaignId, characterId, campaignDetails, characterDetails, saveMessageToDatabase, onMessageReceived]);
+  }, [
+    sessionId,
+    campaignId,
+    characterId,
+    campaignDetails,
+    characterDetails,
+    saveMessageToDatabase,
+    onMessageReceived,
+  ]);
 
   /**
    * Load conversation history
@@ -228,19 +242,21 @@ export const useChatHistory = ({
         logger.info(`📚 Loaded ${historyData.length} messages from history`);
 
         // Convert database messages to ChatMessage format
-        const loadedMessages: ChatMessage[] = (historyData as unknown as DialogueHistoryRow[]).map((msg) => ({
-          id: msg.id,
-          role:
-            msg.speaker_type === 'dm'
-              ? 'assistant'
-              : msg.speaker_type === 'player'
-                ? 'user'
-                : 'assistant',
-          content: msg.message,
-          timestamp: new Date(msg.timestamp),
-          // Note: Historical messages may not have narrationSegments
-          narrationSegments: undefined,
-        }));
+        const loadedMessages: ChatMessage[] = (historyData as unknown as DialogueHistoryRow[]).map(
+          (msg) => ({
+            id: msg.id,
+            role:
+              msg.speaker_type === 'dm'
+                ? 'assistant'
+                : msg.speaker_type === 'player'
+                  ? 'user'
+                  : 'assistant',
+            content: msg.message,
+            timestamp: new Date(msg.timestamp),
+            // Note: Historical messages may not have narrationSegments
+            narrationSegments: undefined,
+          }),
+        );
 
         setMessages(loadedMessages);
         setHasLoadedHistory(true);
@@ -329,7 +345,8 @@ export const useChatHistory = ({
             const aiResponse = response as Record<string, unknown>;
             displayText = (aiResponse.text as string) || (aiResponse.content as string) || '';
             // AI service returns 'narration_segments' (snake_case)
-            segments = (aiResponse.narration_segments || aiResponse.narrationSegments) as NarrationSegment[];
+            segments = (aiResponse.narration_segments ||
+              aiResponse.narrationSegments) as NarrationSegment[];
           }
 
           // Fallback if no valid text found
@@ -378,7 +395,17 @@ export const useChatHistory = ({
         setIsSending(false);
       }
     },
-    [sessionId, messages, isSending, campaignId, characterId, campaignDetails, characterDetails, saveMessageToDatabase, onMessageReceived],
+    [
+      sessionId,
+      messages,
+      isSending,
+      campaignId,
+      characterId,
+      campaignDetails,
+      characterDetails,
+      saveMessageToDatabase,
+      onMessageReceived,
+    ],
   );
 
   return {

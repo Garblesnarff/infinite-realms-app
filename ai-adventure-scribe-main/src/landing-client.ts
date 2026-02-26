@@ -127,7 +127,7 @@ function initAnalytics() {
     'scroll',
     throttle(() => {
       const scrollPercent = Math.round(
-        ((window.scrollY + window.innerHeight) / document.body.scrollHeight) * 100
+        ((window.scrollY + window.innerHeight) / document.body.scrollHeight) * 100,
       );
 
       if (scrollPercent > maxScroll) {
@@ -140,7 +140,7 @@ function initAnalytics() {
           }
         });
       }
-    }, 250)
+    }, 250),
   );
 
   // Track CTA clicks

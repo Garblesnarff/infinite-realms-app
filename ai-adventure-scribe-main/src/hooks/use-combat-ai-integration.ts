@@ -9,12 +9,7 @@
 /* eslint-disable max-lines */
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 
-import type {
-  CombatEvent,
-  CombatAction,
-  CombatParticipant,
-  CombatEncounter,
-} from '@/types/combat';
+import type { CombatEvent, CombatAction, CombatParticipant, CombatEncounter } from '@/types/combat';
 import type { ChatMessage } from '@/types/game';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
 import type { DetectedCombatAction, PlayerCharacterLike } from '@/utils/combatDetection';
@@ -35,7 +30,6 @@ import {
 } from '@/utils/combatDetection';
 import { rollDice } from '@/utils/diceUtils';
 import { callEdgeFunction } from '@/utils/edgeFunctionHandler';
-
 
 // Re-export types and constants for backward compatibility
 export type { CombatMessageData };

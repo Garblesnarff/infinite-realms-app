@@ -1,7 +1,6 @@
 import type { CharacterClass } from '@/types/character';
 import type { SpellcastingInfo } from '@/utils/spell-validation/types';
 
-
 /**
  * Get complete spellcasting information for a class at level 1
  * Level 1 spell counts by class following D&D 5E rules

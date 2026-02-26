@@ -57,7 +57,7 @@ export function buildRaceCategories(races: CharacterRace[]): Array<{
 export function filterRaces(
   races: CharacterRace[],
   searchQuery: string,
-  category: string
+  category: string,
 ): CharacterRace[] {
   let filtered = races;
 
@@ -68,7 +68,7 @@ export function filterRaces(
       (race) =>
         race.name.toLowerCase().includes(query) ||
         race.description.toLowerCase().includes(query) ||
-        race.traits.some((trait) => trait.toLowerCase().includes(query))
+        race.traits.some((trait) => trait.toLowerCase().includes(query)),
     );
   }
 

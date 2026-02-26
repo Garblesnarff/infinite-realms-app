@@ -51,19 +51,13 @@ vi.mock('../BattleScene', () => ({
     }
 
     return (
-      <mesh
-        data-testid="battle-scene"
-        data-scene-id={sceneId}
-        data-show-loading={showLoading}
-      />
+      <mesh data-testid="battle-scene" data-scene-id={sceneId} data-show-loading={showLoading} />
     );
   },
   SceneLoadingOverlay: ({ message }: any) => (
     <div data-testid="scene-loading-overlay">{message || 'Loading...'}</div>
   ),
-  SceneErrorOverlay: ({ error }: any) => (
-    <div data-testid="scene-error-overlay">{error}</div>
-  ),
+  SceneErrorOverlay: ({ error }: any) => <div data-testid="scene-error-overlay">{error}</div>,
 }));
 
 // Mock logger
@@ -100,7 +94,7 @@ describe('BattleCanvas', () => {
 
     it('should apply custom className', () => {
       const { container } = render(
-        <BattleCanvas {...defaultProps} className="custom-canvas-class" />
+        <BattleCanvas {...defaultProps} className="custom-canvas-class" />,
       );
       const wrapper = container.querySelector('.custom-canvas-class');
       expect(wrapper).toBeInTheDocument();
@@ -132,9 +126,7 @@ describe('BattleCanvas', () => {
     });
 
     it('should initialize camera with custom zoom limits', async () => {
-      const { container } = render(
-        <BattleCanvas {...defaultProps} minZoom={0.25} maxZoom={8} />
-      );
+      const { container } = render(<BattleCanvas {...defaultProps} minZoom={0.25} maxZoom={8} />);
 
       await waitFor(() => {
         const camera = container.querySelector('[data-testid="camera-controller"]');
@@ -171,9 +163,7 @@ describe('BattleCanvas', () => {
     });
 
     it('should disable zoom controls when enableZoom is false', async () => {
-      const { container } = render(
-        <BattleCanvas {...defaultProps} enableZoom={false} />
-      );
+      const { container } = render(<BattleCanvas {...defaultProps} enableZoom={false} />);
 
       await waitFor(() => {
         const camera = container.querySelector('[data-testid="camera-controller"]');
@@ -220,7 +210,7 @@ describe('BattleCanvas', () => {
             width: 20,
             height: 20,
             gridSize: 100,
-          })
+          }),
         );
       });
     });
@@ -246,9 +236,7 @@ describe('BattleCanvas', () => {
     });
 
     it('should apply custom background color', () => {
-      const { container } = render(
-        <BattleCanvas {...defaultProps} backgroundColor="#ff0000" />
-      );
+      const { container } = render(<BattleCanvas {...defaultProps} backgroundColor="#ff0000" />);
       const canvas = container.querySelector('[data-testid="r3f-canvas"]');
       const props = canvas?.getAttribute('data-props');
       expect(props).toBeTruthy();
@@ -445,7 +433,7 @@ describe('BattleCanvas', () => {
           minZoom={0.1}
           maxZoom={10}
           onSceneLoaded={onSceneLoaded}
-        />
+        />,
       );
 
       expect(container.querySelector('[data-testid="r3f-canvas"]')).toBeInTheDocument();

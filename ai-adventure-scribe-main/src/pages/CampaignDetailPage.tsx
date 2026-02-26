@@ -207,9 +207,7 @@ const CampaignDetailPage: React.FC = () => {
         <meta name="description" content={campaign.premise} />
         <meta property="og:title" content={`${campaign.title} | Infinite Realms`} />
         <meta property="og:description" content={campaign.premise} />
-        {campaign.coverImageUrl && (
-          <meta property="og:image" content={campaign.coverImageUrl} />
-        )}
+        {campaign.coverImageUrl && <meta property="og:image" content={campaign.coverImageUrl} />}
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">

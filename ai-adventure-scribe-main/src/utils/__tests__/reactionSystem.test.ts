@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   processReactionResponse,
   clearExpiredReactions,
-  hasAvailableReactions
+  hasAvailableReactions,
 } from '../reactionSystem';
 import {
   createReactionOpportunity,
@@ -16,7 +16,7 @@ import {
   checkShieldSpellOpportunities,
   checkAbsorbElementsOpportunities,
   checkHellishRebukeOpportunities,
-  checkReactionTriggers
+  checkReactionTriggers,
 } from '../reactionTriggers';
 
 // Mock diceUtils
@@ -36,7 +36,7 @@ describe('reactionSystem', () => {
         'creature_leaves_reach',
         'Leaving reach',
         ['opportunity_attack'],
-        'p2'
+        'p2',
       );
 
       expect(opportunity.participantId).toBe('p1');
@@ -60,9 +60,9 @@ describe('reactionSystem', () => {
             participantType: 'enemy',
             currentHitPoints: 10,
             reactionTaken: false,
-            conditions: []
-          }
-        ]
+            conditions: [],
+          },
+        ],
       };
 
       const opportunities = checkOpportunityAttacks(movingParticipant, encounter, 'melee', 'far');
@@ -82,9 +82,9 @@ describe('reactionSystem', () => {
             participantType: 'enemy',
             currentHitPoints: 10,
             reactionTaken: false,
-            conditions: [{ name: 'paralyzed' }]
-          }
-        ]
+            conditions: [{ name: 'paralyzed' }],
+          },
+        ],
       };
 
       const opportunities = checkOpportunityAttacks(movingParticipant, encounter, 'melee', 'far');
@@ -101,9 +101,9 @@ describe('reactionSystem', () => {
             participantType: 'enemy',
             currentHitPoints: 10,
             reactionTaken: true,
-            conditions: []
-          }
-        ]
+            conditions: [],
+          },
+        ],
       };
 
       const opportunities = checkOpportunityAttacks(movingParticipant, encounter, 'melee', 'far');
@@ -120,9 +120,9 @@ describe('reactionSystem', () => {
             id: 'p2',
             currentHitPoints: 10,
             reactionTaken: false,
-            spellSlots: { 3: { current: 1 } }
-          }
-        ]
+            spellSlots: { 3: { current: 1 } },
+          },
+        ],
       };
 
       const opportunities = checkCounterspellOpportunities(caster, encounter, 3);
@@ -138,9 +138,9 @@ describe('reactionSystem', () => {
             id: 'p2',
             currentHitPoints: 10,
             reactionTaken: false,
-            spellSlots: { 1: { current: 4 }, 2: { current: 2 } }
-          }
-        ]
+            spellSlots: { 1: { current: 4 }, 2: { current: 2 } },
+          },
+        ],
       };
 
       const opportunities = checkCounterspellOpportunities(caster, encounter, 3);
@@ -154,7 +154,7 @@ describe('reactionSystem', () => {
       const target: any = {
         id: 'p2',
         reactionTaken: false,
-        classFeatures: [{ name: 'deflect_missiles' }]
+        classFeatures: [{ name: 'deflect_missiles' }],
       };
 
       const opportunities = checkDeflectMissilesOpportunities(attacker, target, true);
@@ -167,7 +167,7 @@ describe('reactionSystem', () => {
       const target: any = {
         id: 'p2',
         reactionTaken: false,
-        classFeatures: []
+        classFeatures: [],
       };
 
       const opportunities = checkDeflectMissilesOpportunities(attacker, target, true);
@@ -181,7 +181,7 @@ describe('reactionSystem', () => {
       const target: any = {
         id: 'p2',
         reactionTaken: false,
-        classFeatures: [{ name: 'uncanny_dodge' }]
+        classFeatures: [{ name: 'uncanny_dodge' }],
       };
 
       const opportunities = checkUncannyDodgeOpportunities(attacker, target, true);
@@ -197,7 +197,7 @@ describe('reactionSystem', () => {
         currentHitPoints: 10,
         reactionTaken: false,
         preparedSpells: ['shield'],
-        spellSlots: { 1: { current: 1 } }
+        spellSlots: { 1: { current: 1 } },
       };
       const encounter: any = { participants: [target] };
 
@@ -214,7 +214,7 @@ describe('reactionSystem', () => {
         currentHitPoints: 10,
         reactionTaken: false,
         preparedSpells: ['absorb_elements'],
-        spellSlots: { 1: { current: 1 } }
+        spellSlots: { 1: { current: 1 } },
       };
       const opportunities = checkAbsorbElementsOpportunities(target, {} as any, 'fire');
       expect(opportunities).toHaveLength(1);
@@ -229,7 +229,7 @@ describe('reactionSystem', () => {
         currentHitPoints: 10,
         reactionTaken: false,
         preparedSpells: ['hellish_rebuke'],
-        spellSlots: { 1: { current: 1 } }
+        spellSlots: { 1: { current: 1 } },
       };
       const attacker: any = { id: 'p1' };
       const opportunities = checkHellishRebukeOpportunities(target, attacker, {} as any);
@@ -243,8 +243,8 @@ describe('reactionSystem', () => {
       currentRound: 1,
       participants: [
         { id: 'p1', name: 'Player 1' },
-        { id: 'p2', name: 'Player 2' }
-      ]
+        { id: 'p2', name: 'Player 2' },
+      ],
     };
 
     it('should process opportunity attack correctly', () => {
@@ -303,7 +303,9 @@ describe('reactionSystem', () => {
 
     it('should throw error for unsupported reaction', () => {
       const opportunity = { participantId: 'p1', triggeredBy: 'p2' } as any;
-      expect(() => processReactionResponse(opportunity, 'dash' as any, encounter)).toThrow('Unsupported reaction type');
+      expect(() => processReactionResponse(opportunity, 'dash' as any, encounter)).toThrow(
+        'Unsupported reaction type',
+      );
     });
   });
 
@@ -311,7 +313,7 @@ describe('reactionSystem', () => {
     it('should clear opportunities that expire at end of turn', () => {
       const opportunities: any[] = [
         { id: 'o1', participantId: 'p1', expiresAtEndOfTurn: true },
-        { id: 'o2', participantId: 'p2', expiresAtEndOfTurn: true }
+        { id: 'o2', participantId: 'p2', expiresAtEndOfTurn: true },
       ];
 
       const cleared = clearExpiredReactions(opportunities, 'p1');
@@ -330,18 +332,18 @@ describe('reactionSystem', () => {
             participantType: 'enemy',
             currentHitPoints: 10,
             reactionTaken: false,
-            conditions: []
-          }
-        ]
+            conditions: [],
+          },
+        ],
       };
       const action: any = {
         actionType: 'attack',
         participantId: 'p1',
-        movement: { fromPosition: 'melee', toPosition: 'far' }
+        movement: { fromPosition: 'melee', toPosition: 'far' },
       };
 
       const opportunities = checkReactionTriggers(action, encounter);
-      expect(opportunities.some(o => o.trigger === 'creature_leaves_reach')).toBe(true);
+      expect(opportunities.some((o) => o.trigger === 'creature_leaves_reach')).toBe(true);
     });
 
     it('should check for counterspell on cast_spell', () => {
@@ -352,40 +354,40 @@ describe('reactionSystem', () => {
             id: 'p2',
             currentHitPoints: 10,
             reactionTaken: false,
-            spellSlots: { 3: { current: 1 } }
-          }
-        ]
+            spellSlots: { 3: { current: 1 } },
+          },
+        ],
       };
       const action: any = {
         actionType: 'cast_spell',
         participantId: 'p1',
-        spellLevel: 1
+        spellLevel: 1,
       };
 
       const opportunities = checkReactionTriggers(action, encounter);
-      expect(opportunities.some(o => o.availableReactions.includes('counterspell'))).toBe(true);
+      expect(opportunities.some((o) => o.availableReactions.includes('counterspell'))).toBe(true);
     });
 
     it('should check for defensive reactions on damage_dealt', () => {
-       const attacker: any = { id: 'p1', participantType: 'player' };
-       const target: any = {
-         id: 'p2',
-         participantType: 'enemy',
-         currentHitPoints: 10,
-         reactionTaken: false,
-         classFeatures: [{ name: 'uncanny_dodge' }]
-       };
-       const encounter: any = {
-         participants: [attacker, target]
-       };
-       const action: any = {
-         actionType: 'damage_dealt',
-         participantId: 'p1',
-         targetParticipantId: 'p2'
-       };
+      const attacker: any = { id: 'p1', participantType: 'player' };
+      const target: any = {
+        id: 'p2',
+        participantType: 'enemy',
+        currentHitPoints: 10,
+        reactionTaken: false,
+        classFeatures: [{ name: 'uncanny_dodge' }],
+      };
+      const encounter: any = {
+        participants: [attacker, target],
+      };
+      const action: any = {
+        actionType: 'damage_dealt',
+        participantId: 'p1',
+        targetParticipantId: 'p2',
+      };
 
-       const opportunities = checkReactionTriggers(action, encounter);
-       expect(opportunities.some(o => o.availableReactions.includes('uncanny_dodge'))).toBe(true);
+      const opportunities = checkReactionTriggers(action, encounter);
+      expect(opportunities.some((o) => o.availableReactions.includes('uncanny_dodge'))).toBe(true);
     });
 
     it('should check for polearm master on move', () => {
@@ -393,23 +395,20 @@ describe('reactionSystem', () => {
         id: 'p2',
         currentHitPoints: 10,
         reactionTaken: false,
-        classFeatures: [{ name: 'polearm_master' }]
+        classFeatures: [{ name: 'polearm_master' }],
       };
       const encounter: any = {
-        participants: [
-          { id: 'p1', participantType: 'player' },
-          master
-        ]
+        participants: [{ id: 'p1', participantType: 'player' }, master],
       };
       const action: any = {
         actionType: 'move',
         participantId: 'p1',
         fromPosition: 'far',
-        toPosition: 'melee'
+        toPosition: 'melee',
       };
 
       const opportunities = checkReactionTriggers(action, encounter);
-      expect(opportunities.some(o => o.trigger === 'creature_enters_reach')).toBe(true);
+      expect(opportunities.some((o) => o.trigger === 'creature_enters_reach')).toBe(true);
     });
   });
 

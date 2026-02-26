@@ -106,9 +106,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
       toast({
         title: 'Export Failed',
         description:
-          error instanceof Error
-            ? error.message
-            : 'Failed to export character. Please try again.',
+          error instanceof Error ? error.message : 'Failed to export character. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -119,22 +117,13 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          disabled={isExporting}
-          className={className}
-        >
+        <Button variant={variant} size={size} disabled={isExporting} className={className}>
           {isExporting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Download className="h-4 w-4" />
           )}
-          {showLabel && (
-            <span className="ml-2">
-              {isExporting ? 'Exporting...' : 'Export'}
-            </span>
-          )}
+          {showLabel && <span className="ml-2">{isExporting ? 'Exporting...' : 'Export'}</span>}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -142,9 +131,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
           <Download className="mr-2 h-4 w-4" />
           <div>
             <div className="font-medium">Export as JSON</div>
-            <div className="text-xs text-muted-foreground">
-              For backup or transfer
-            </div>
+            <div className="text-xs text-muted-foreground">For backup or transfer</div>
           </div>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -163,9 +150,13 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
 /**
  * Simple export button without dropdown (just JSON)
  */
-export const SimpleExportButton: React.FC<
-  Omit<ExportButtonProps, 'showLabel'>
-> = ({ characterId, characterName = 'Character', variant = 'outline', size = 'default', className }) => {
+export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> = ({
+  characterId,
+  characterName = 'Character',
+  variant = 'outline',
+  size = 'default',
+  className,
+}) => {
   const { toast } = useToast();
   const trpc = useTRPC();
   const [isExporting, setIsExporting] = useState(false);
@@ -194,9 +185,7 @@ export const SimpleExportButton: React.FC<
       toast({
         title: 'Export Failed',
         description:
-          error instanceof Error
-            ? error.message
-            : 'Failed to export character. Please try again.',
+          error instanceof Error ? error.message : 'Failed to export character. Please try again.',
         variant: 'destructive',
       });
     } finally {

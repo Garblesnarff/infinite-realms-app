@@ -78,7 +78,9 @@ const isTokenExpiringSoon = (token: string): boolean => {
 /**
  * Refresh the access token using the refresh token
  */
-const refreshAccessToken = async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> => {
+const refreshAccessToken = async (
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken: string } | null> => {
   try {
     const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
     const response = await fetch(`${apiUrl}/v1/auth/refresh`, {
@@ -108,7 +110,9 @@ const loadCachedSession = (): WorkOSSession | null => {
 
   // Check for tokens in localStorage (set by CallbackPage)
   const accessToken = window.localStorage.getItem('workos_access_token');
-  const refreshToken = window.sessionStorage.getItem('workos_refresh_token') || window.localStorage.getItem('workos_refresh_token');
+  const refreshToken =
+    window.sessionStorage.getItem('workos_refresh_token') ||
+    window.localStorage.getItem('workos_refresh_token');
 
   if (accessToken) {
     return {

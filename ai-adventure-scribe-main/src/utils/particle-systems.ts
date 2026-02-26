@@ -144,7 +144,9 @@ function adjustForQuality(baseCount: number, quality: ParticleQuality): number {
  * Creates a fire particle system configuration
  * Orange/red particles with upward motion
  */
-export function createFireParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createFireParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'fire',
     name: 'Fire',
@@ -192,7 +194,9 @@ export function createFireParticles(quality: ParticleQuality = ParticleQuality.M
  * Creates an ice particle system configuration
  * Blue/white crystalline particles
  */
-export function createIceParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createIceParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'ice',
     name: 'Ice',
@@ -240,7 +244,9 @@ export function createIceParticles(quality: ParticleQuality = ParticleQuality.ME
  * Creates a lightning particle system configuration
  * Electric blue sparks with rapid motion
  */
-export function createLightningParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createLightningParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'lightning',
     name: 'Lightning',
@@ -288,7 +294,9 @@ export function createLightningParticles(quality: ParticleQuality = ParticleQual
  * Creates a healing particle system configuration
  * Green/gold sparkles with gentle upward motion
  */
-export function createHealingParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createHealingParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'healing',
     name: 'Healing',
@@ -336,7 +344,9 @@ export function createHealingParticles(quality: ParticleQuality = ParticleQualit
  * Creates a poison particle system configuration
  * Green miasma with slow, spreading motion
  */
-export function createPoisonParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createPoisonParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'poison',
     name: 'Poison',
@@ -384,7 +394,9 @@ export function createPoisonParticles(quality: ParticleQuality = ParticleQuality
  * Creates a necrotic particle system configuration
  * Dark purple/black wisps with eerie movement
  */
-export function createNecroticParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createNecroticParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'necrotic',
     name: 'Necrotic',
@@ -432,7 +444,9 @@ export function createNecroticParticles(quality: ParticleQuality = ParticleQuali
  * Creates a radiant particle system configuration
  * Bright white/yellow light particles
  */
-export function createRadiantParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createRadiantParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'radiant',
     name: 'Radiant',
@@ -480,7 +494,9 @@ export function createRadiantParticles(quality: ParticleQuality = ParticleQualit
  * Creates a smoke particle system configuration
  * Gray smoke with upward drift
  */
-export function createSmokeParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createSmokeParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'smoke',
     name: 'Smoke',
@@ -528,7 +544,9 @@ export function createSmokeParticles(quality: ParticleQuality = ParticleQuality.
  * Creates a blood particle system configuration
  * Red droplets with downward motion (for damage effects)
  */
-export function createBloodParticles(quality: ParticleQuality = ParticleQuality.MEDIUM): ParticleSystemConfig {
+export function createBloodParticles(
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
+): ParticleSystemConfig {
   return {
     id: 'blood',
     name: 'Blood',
@@ -593,7 +611,7 @@ export type ParticleSystemType = keyof typeof ParticleSystemRegistry;
  */
 export function getParticleSystem(
   type: ParticleSystemType,
-  quality: ParticleQuality = ParticleQuality.MEDIUM
+  quality: ParticleQuality = ParticleQuality.MEDIUM,
 ): ParticleSystemConfig {
   const factory = ParticleSystemRegistry[type];
   return factory(quality);
@@ -626,7 +644,7 @@ export function calculateParticleOpacity(
   lifetime: number,
   baseOpacity: number,
   fadeIn: number = 0,
-  fadeOut: number = 0
+  fadeOut: number = 0,
 ): number {
   const progress = age / lifetime;
 
@@ -650,7 +668,7 @@ export function calculateParticleScale(
   age: number,
   lifetime: number,
   startScale: number,
-  endScale: number
+  endScale: number,
 ): number {
   const progress = age / lifetime;
   return startScale + (endScale - startScale) * progress;

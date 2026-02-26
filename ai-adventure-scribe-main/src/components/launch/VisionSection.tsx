@@ -18,7 +18,6 @@ export const VisionSection: React.FC = () => {
       <div className="max-w-7xl mx-auto px-6">
         {/* Split View: Text Left, Magical Map Right */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-
           {/* Left Column: Text Content */}
           <div className="text-left">
             {/* Headline */}
@@ -35,9 +34,7 @@ export const VisionSection: React.FC = () => {
             </h2>
 
             {/* Vision Content - Subheadline */}
-            <p className="text-lg text-gray-300 leading-relaxed mb-8">
-              {vision.content}
-            </p>
+            <p className="text-lg text-gray-300 leading-relaxed mb-8">{vision.content}</p>
 
             {/* Vision Quote Box */}
             <div className="flex items-start gap-4 p-8 bg-gradient-to-r from-purple-900/30 to-amber-900/30 border border-purple-500/30 rounded-xl backdrop-blur-sm">
@@ -63,14 +60,14 @@ export const VisionSection: React.FC = () => {
               <div className="absolute inset-0 shadow-[0_0_60px_rgba(168,85,247,0.3)]"></div>
             </div>
           </div>
-
         </div>
       </div>
 
       {/* Add float animation */}
       <style jsx>{`
         @keyframes float {
-          0%, 100% {
+          0%,
+          100% {
             transform: translateY(0px);
           }
           50% {

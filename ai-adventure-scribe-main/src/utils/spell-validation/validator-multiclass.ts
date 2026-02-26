@@ -5,9 +5,6 @@ import logger from '@/lib/logger';
 import { getEnhancedSpellcastingInfo } from '@/utils/spell-validation/utils';
 import { validateSpellSelection } from '@/utils/spell-validation/validator-sync';
 
-
-
-
 /**
  * Validate multiclass spell selection for a character
  */

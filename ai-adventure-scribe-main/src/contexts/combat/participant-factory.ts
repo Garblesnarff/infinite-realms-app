@@ -4,10 +4,7 @@
  * Extracted from CombatContext.tsx to reduce duplication
  */
 
-import type {
-  CombatParticipant,
-  FightingStyleName,
-} from '@/types/combat';
+import type { CombatParticipant, FightingStyleName } from '@/types/combat';
 import { rollDie } from '@/utils/diceRolls';
 import { FIGHTING_STYLES } from '@/utils/fightingStyles';
 
@@ -44,7 +41,7 @@ export interface CreateParticipantOptions {
  */
 export function createCombatParticipant(
   partial: Partial<CombatParticipant>,
-  options: CreateParticipantOptions = {}
+  options: CreateParticipantOptions = {},
 ): CombatParticipant {
   const { rollInitiative: shouldRollInitiative = true, characterData } = options;
 
@@ -55,7 +52,7 @@ export function createCombatParticipant(
     characterId: partial.characterId,
     initiative: shouldRollInitiative
       ? rollDie(20) + (partial.initiative || 0)
-      : (partial.initiative || 0),
+      : partial.initiative || 0,
     armorClass: partial.armorClass || 10,
     maxHitPoints: partial.maxHitPoints || 1,
     currentHitPoints: partial.currentHitPoints || partial.maxHitPoints || 1,
@@ -104,7 +101,7 @@ export function createCombatParticipant(
  */
 export function enrichParticipantWithCharacterData(
   participant: CombatParticipant,
-  characterData: CharacterData
+  characterData: CharacterData,
 ): void {
   participant.spellSlots = characterData.spellSlots;
   participant.preparedSpells = characterData.preparedSpells;
@@ -114,10 +111,11 @@ export function enrichParticipantWithCharacterData(
   participant.damageVulnerabilities = characterData.damageVulnerabilities || [];
 
   // Convert fighting style strings to FightingStyle objects
-  participant.fightingStyles = characterData.fightingStyles?.map((style) => {
-    const styleName = style as FightingStyleName;
-    return FIGHTING_STYLES[styleName] || { name: styleName, description: '', effect: {} };
-  }) || [];
+  participant.fightingStyles =
+    characterData.fightingStyles?.map((style) => {
+      const styleName = style as FightingStyleName;
+      return FIGHTING_STYLES[styleName] || { name: styleName, description: '', effect: {} };
+    }) || [];
 
   // Copy vision and stealth properties
   participant.visionTypes = characterData.visionTypes || [];

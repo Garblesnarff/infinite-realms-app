@@ -139,7 +139,8 @@ export class VoiceDirector {
     const segments: AISegment[] = [];
 
     // Regex to find quoted dialogue with optional attribution
-    const dialoguePattern = /(?:(?:(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?[""]([^""]+)[""]\s*(?:,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)?)?)/gi;
+    const dialoguePattern =
+      /(?:(?:(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?[""]([^""]+)[""]\s*(?:,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)?)?)/gi;
 
     let lastIndex = 0;
     let match;
@@ -156,7 +157,7 @@ export class VoiceDirector {
 
       // Extract character name and dialogue
       const preCharacter = match[1]; // Character mentioned before quote
-      const dialogue = match[2];     // The actual dialogue
+      const dialogue = match[2]; // The actual dialogue
       const postCharacter = match[3]; // Character mentioned after quote
 
       // Use whichever character name we found
@@ -185,12 +186,14 @@ export class VoiceDirector {
     }
 
     // If we found no dialogue, return empty to trigger fallback
-    const hasDialogue = segments.some(s => s.type === 'character');
+    const hasDialogue = segments.some((s) => s.type === 'character');
     if (!hasDialogue) {
       return [];
     }
 
-    logger.info(`🎭 Parsed ${segments.length} segments (${segments.filter(s => s.type === 'character').length} dialogue)`);
+    logger.info(
+      `🎭 Parsed ${segments.length} segments (${segments.filter((s) => s.type === 'character').length} dialogue)`,
+    );
     return segments;
   }
 
@@ -200,7 +203,6 @@ export class VoiceDirector {
   static async generateAudio(segment: VoiceSegment, apiKey: string): Promise<VoiceSegment> {
     return VoiceAudioService.generateAudio(segment, apiKey);
   }
-
 
   /**
    * Clean segment text for audio generation

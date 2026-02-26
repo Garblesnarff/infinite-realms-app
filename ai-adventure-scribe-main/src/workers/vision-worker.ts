@@ -231,7 +231,7 @@ self.onmessage = (event: MessageEvent<VisionWorkerMessage>) => {
  * Calculate vision for a single token
  */
 function handleCalculateVision(
-  message: Extract<VisionWorkerMessage, { type: 'CALCULATE_VISION' }>
+  message: Extract<VisionWorkerMessage, { type: 'CALCULATE_VISION' }>,
 ): void {
   const { token, walls: messageWalls, range } = message.payload;
   const effectiveWalls = messageWalls || walls;
@@ -259,7 +259,7 @@ function handleCalculateVision(
  * Calculate vision for multiple tokens (parallel processing)
  */
 function handleCalculateMultiVision(
-  message: Extract<VisionWorkerMessage, { type: 'CALCULATE_MULTI_VISION' }>
+  message: Extract<VisionWorkerMessage, { type: 'CALCULATE_MULTI_VISION' }>,
 ): void {
   const { tokens, walls: messageWalls, range } = message.payload;
   const effectiveWalls = messageWalls || walls;
@@ -297,9 +297,7 @@ function handleCalculateMultiVision(
 /**
  * Update stored walls and clear cache
  */
-function handleUpdateWalls(
-  message: Extract<VisionWorkerMessage, { type: 'UPDATE_WALLS' }>
-): void {
+function handleUpdateWalls(message: Extract<VisionWorkerMessage, { type: 'UPDATE_WALLS' }>): void {
   walls = message.payload.walls;
   cache.clear(); // Wall changes invalidate all cached polygons
 }
@@ -317,7 +315,7 @@ function handleUpdateWalls(
 function calculateVisionPolygonInWorker(
   token: Token,
   walls: VisionBlocker[],
-  range?: number
+  range?: number,
 ): VisionPolygon {
   if (!token.vision.enabled) {
     return {
@@ -345,13 +343,7 @@ function calculateVisionPolygonInWorker(
 
   // Handle vision cone (limited angle)
   if (token.vision.angle < 360) {
-    points = clipPolygonToCone(
-      points,
-      origin,
-      token.rotation,
-      token.vision.angle,
-      visionRange
-    );
+    points = clipPolygonToCone(points, origin, token.rotation, token.vision.angle, visionRange);
   }
 
   // Remove duplicate points
@@ -417,7 +409,7 @@ function filterWallsByVisionType(token: Token, walls: VisionBlocker[]): VisionBl
 function getAllRayIntersections(
   origin: Point2D,
   walls: VisionBlocker[],
-  maxRange: number
+  maxRange: number,
 ): Array<{ point: Point2D; angle: number; distance: number }> {
   const endpoints: Array<{ point: Point2D; angle: number; distance: number }> = [];
   const uniqueAngles = new Set<number>();
@@ -493,7 +485,7 @@ function raycastToWalls(
   origin: Point2D,
   direction: Point2D,
   walls: VisionBlocker[],
-  maxDistance: number
+  maxDistance: number,
 ): { point: Point2D; distance: number } | null {
   let closestIntersection: { point: Point2D; distance: number } | null = null;
   let closestDistance = maxDistance;
@@ -506,7 +498,7 @@ function raycastToWalls(
         origin,
         direction,
         wall.points[i],
-        wall.points[i + 1]
+        wall.points[i + 1],
       );
 
       if (intersection && intersection.distance < closestDistance) {
@@ -520,7 +512,7 @@ function raycastToWalls(
         origin,
         direction,
         wall.points[wall.points.length - 1],
-        wall.points[0]
+        wall.points[0],
       );
 
       if (intersection && intersection.distance < closestDistance) {
@@ -540,7 +532,7 @@ function rayLineSegmentIntersection(
   origin: Point2D,
   direction: Point2D,
   segmentStart: Point2D,
-  segmentEnd: Point2D
+  segmentEnd: Point2D,
 ): { point: Point2D; distance: number } | null {
   const dx = segmentEnd.x - segmentStart.x;
   const dy = segmentEnd.y - segmentStart.y;
@@ -549,8 +541,7 @@ function rayLineSegmentIntersection(
   if (Math.abs(det) < 1e-10) return null;
 
   const u =
-    ((origin.y - segmentStart.y) * direction.x - (origin.x - segmentStart.x) * direction.y) /
-    det;
+    ((origin.y - segmentStart.y) * direction.x - (origin.x - segmentStart.x) * direction.y) / det;
   const t = ((origin.y - segmentStart.y) * dx - (origin.x - segmentStart.x) * dy) / det;
 
   if (u >= 0 && u <= 1 && t >= 0) {
@@ -574,7 +565,7 @@ function clipPolygonToCone(
   origin: Point2D,
   rotation: number,
   angle: number,
-  maxRange: number
+  maxRange: number,
 ): Point2D[] {
   const clipped: Point2D[] = [];
   const halfAngle = (angle / 2) * (Math.PI / 180);
@@ -611,7 +602,7 @@ function isPointInVisionCone(
   origin: Point2D,
   rotation: number,
   angle: number,
-  target: Point2D
+  target: Point2D,
 ): boolean {
   if (angle >= 360) return true;
 

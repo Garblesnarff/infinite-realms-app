@@ -202,7 +202,8 @@ const CharacterFinalization: React.FC = () => {
       if (isQuotaExceededError(error)) {
         toast({
           title: 'Daily Image Limit Reached',
-          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
+          description:
+            "You've used all your image generations for today. Your limit resets at midnight UTC.",
           variant: 'destructive',
         });
         fetchImageQuota();
@@ -303,7 +304,8 @@ const CharacterFinalization: React.FC = () => {
       if (isQuotaExceededError(error)) {
         toast({
           title: 'Daily Image Limit Reached',
-          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
+          description:
+            "You've used all your image generations for today. Your limit resets at midnight UTC.",
           variant: 'destructive',
         });
         fetchImageQuota();
@@ -479,7 +481,9 @@ const CharacterFinalization: React.FC = () => {
 
           {/* Image Generation Quota Tracker */}
           {imageQuota && (
-            <div className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}>
+            <div
+              className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}
+            >
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   {imageQuota.remaining === 0 ? (
@@ -487,7 +491,13 @@ const CharacterFinalization: React.FC = () => {
                   ) : (
                     <ImageIcon className="h-4 w-4 text-muted-foreground" />
                   )}
-                  <span className={imageQuota.remaining === 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}>
+                  <span
+                    className={
+                      imageQuota.remaining === 0
+                        ? 'text-red-600 dark:text-red-400 font-medium'
+                        : 'text-muted-foreground'
+                    }
+                  >
                     {imageQuota.remaining === 0
                       ? 'Daily limit reached'
                       : `${imageQuota.remaining} image generation${imageQuota.remaining === 1 ? '' : 's'} remaining today`}
@@ -514,7 +524,11 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateAvatar}
-                disabled={isGeneratingAvatar || !state.character?.name?.trim() || imageQuota?.remaining === 0}
+                disabled={
+                  isGeneratingAvatar ||
+                  !state.character?.name?.trim() ||
+                  imageQuota?.remaining === 0
+                }
               >
                 {isGeneratingAvatar ? (
                   <>
@@ -556,7 +570,9 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateImage}
-                disabled={isGeneratingImage || !state.character?.name?.trim() || imageQuota?.remaining === 0}
+                disabled={
+                  isGeneratingImage || !state.character?.name?.trim() || imageQuota?.remaining === 0
+                }
               >
                 {isGeneratingImage ? (
                   <>

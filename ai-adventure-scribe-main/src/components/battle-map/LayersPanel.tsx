@@ -186,7 +186,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
       {layerState.visible && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <Label htmlFor={opacityId} className="cursor-pointer">Opacity</Label>
+            <Label htmlFor={opacityId} className="cursor-pointer">
+              Opacity
+            </Label>
             <span>{Math.round(layerState.opacity * 100)}%</span>
           </div>
           <Slider

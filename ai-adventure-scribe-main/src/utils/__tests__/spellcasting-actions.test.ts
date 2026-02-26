@@ -57,7 +57,9 @@ describe('spellcasting-actions', () => {
       expect(updatedAction.spellName).toBe('Fireball');
       expect(updatedAction.description).toContain('Cast Fireball using level 3 slot');
       expect(updatedAction.description).toContain('[Components: V, S, M]');
-      expect(updatedAction.description).toContain('[Material: a tiny ball of bat guano and sulfur]');
+      expect(updatedAction.description).toContain(
+        '[Material: a tiny ball of bat guano and sulfur]',
+      );
     });
 
     it('should set concentration if the spell requires it', async () => {
@@ -68,12 +70,7 @@ describe('spellcasting-actions', () => {
       };
       vi.mocked(spellApi.getSpellById).mockResolvedValue(concentrationSpell as any);
 
-      const { updatedParticipant } = await castSpell(
-        mockAction,
-        mockParticipant,
-        'haste',
-        3,
-      );
+      const { updatedParticipant } = await castSpell(mockAction, mockParticipant, 'haste', 3);
 
       expect(updatedParticipant.activeConcentration).toBe('Haste');
     });
@@ -93,9 +90,9 @@ describe('spellcasting-actions', () => {
         spellSlots: { 3: { current: 0, max: 2 } },
       };
 
-      await expect(castSpell(mockAction, lowSlotsParticipant as any, 'fireball', 3)).rejects.toThrow(
-        'No available spell slots at level 3 for Wizard',
-      );
+      await expect(
+        castSpell(mockAction, lowSlotsParticipant as any, 'fireball', 3),
+      ).rejects.toThrow('No available spell slots at level 3 for Wizard');
     });
 
     it('should throw error if already concentrating', async () => {

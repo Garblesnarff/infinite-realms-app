@@ -18,7 +18,6 @@ export const FounderStorySection: React.FC = () => {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-2xl p-8 md:p-12 border border-purple-500/20 shadow-2xl backdrop-blur-sm">
-
           {/* Decorative Elements */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
@@ -35,11 +34,16 @@ export const FounderStorySection: React.FC = () => {
               </p>
 
               <p>
-                I've worked in manufacturing for 16 years. I love TTRPGs, but working 10-hour shifts meant I could never align schedules with a regular group. The desire to play was there, but the "Real World" kept getting in the way.
+                I've worked in manufacturing for 16 years. I love TTRPGs, but working 10-hour shifts
+                meant I could never align schedules with a regular group. The desire to play was
+                there, but the "Real World" kept getting in the way.
               </p>
 
               <p>
-                I spent the last 3 years teaching AI how to be the Game Master I couldn't find—while still working those factory shifts. I didn't want a chatbot that hallucinates; I wanted a GM that knows the rules, does the voices, and remembers that tavern I burned down three sessions ago.
+                I spent the last 3 years teaching AI how to be the Game Master I couldn't find—while
+                still working those factory shifts. I didn't want a chatbot that hallucinates; I
+                wanted a GM that knows the rules, does the voices, and remembers that tavern I
+                burned down three sessions ago.
               </p>
 
               <p className="text-xl text-white font-medium pt-4">

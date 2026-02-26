@@ -12,9 +12,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 
 // Explicit column lists to avoid over-fetching large vector embeddings
-const CHUNK_COLUMNS = 'id, campaign_id, chunk_type, entity_name, parent_entity, content, summary, metadata, sequence_order';
+const CHUNK_COLUMNS =
+  'id, campaign_id, chunk_type, entity_name, parent_entity, content, summary, metadata, sequence_order';
 const RULE_COLUMNS = 'id, campaign_id, rule_type, condition, effect, reversible, priority';
-const CAMPAIGN_COLUMNS = 'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, cover_image_url';
+const CAMPAIGN_COLUMNS =
+  'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, cover_image_url';
 
 // Types
 export type ChunkType =
@@ -96,7 +98,7 @@ export class LoreKeeperService {
     let query = supabase
       .from('starter_campaigns')
       .select(
-        'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, cover_image_url'
+        'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, cover_image_url',
       )
       .eq('is_published', true)
       .eq('is_complete', true);
@@ -214,7 +216,15 @@ export class LoreKeeperService {
       .from('campaign_chunks')
       .select(CHUNK_COLUMNS)
       .eq('campaign_id', campaignId)
-      .in('chunk_type', ['npc_tier1', 'npc_tier2', 'npc_tier3', 'location', 'faction', 'item', 'monster'])
+      .in('chunk_type', [
+        'npc_tier1',
+        'npc_tier2',
+        'npc_tier3',
+        'location',
+        'faction',
+        'item',
+        'monster',
+      ])
       .order('chunk_type')
       .order('entity_name');
 
@@ -225,7 +235,7 @@ export class LoreKeeperService {
 
     // Deduplicate by entity_name
     const seenNames = new Set<string>();
-    const dedupedData = (data || []).filter(row => {
+    const dedupedData = (data || []).filter((row) => {
       if (!row.entity_name || seenNames.has(row.entity_name)) return false;
       seenNames.add(row.entity_name);
       return true;
@@ -234,11 +244,11 @@ export class LoreKeeperService {
     const chunks = dedupedData.map(this.mapChunkRow);
 
     return {
-      npcs: chunks.filter(c => ['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(c.chunkType)),
-      locations: chunks.filter(c => c.chunkType === 'location'),
-      factions: chunks.filter(c => c.chunkType === 'faction'),
-      items: chunks.filter(c => c.chunkType === 'item'),
-      monsters: chunks.filter(c => c.chunkType === 'monster'),
+      npcs: chunks.filter((c) => ['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(c.chunkType)),
+      locations: chunks.filter((c) => c.chunkType === 'location'),
+      factions: chunks.filter((c) => c.chunkType === 'faction'),
+      items: chunks.filter((c) => c.chunkType === 'item'),
+      monsters: chunks.filter((c) => c.chunkType === 'monster'),
     };
   }
 
@@ -251,7 +261,7 @@ export class LoreKeeperService {
     options?: {
       chunkTypes?: ChunkType[];
       limit?: number;
-    }
+    },
   ): Promise<SearchResult[]> {
     if (!this.googleApiKey) {
       logger.warn('[LoreKeeper] No Google AI API key - semantic search unavailable');
@@ -343,7 +353,7 @@ export class LoreKeeperService {
   private async getEntityByName(
     campaignId: string,
     name: string,
-    chunkTypes: ChunkType[]
+    chunkTypes: ChunkType[],
   ): Promise<CampaignChunk | null> {
     const { data, error } = await supabase
       .from('campaign_chunks')
@@ -379,7 +389,7 @@ export class LoreKeeperService {
           },
           taskType: 'RETRIEVAL_QUERY',
         }),
-      }
+      },
     );
 
     if (!response.ok) {

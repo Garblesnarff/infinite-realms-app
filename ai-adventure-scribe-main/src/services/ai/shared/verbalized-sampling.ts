@@ -40,7 +40,9 @@ export function parseVerbalizedResponse(rawResponse: string): ParseResult {
   // "1. (0.5) Scene content..." or "1. **Option** (prob: 0.5): Content"
   const markdownResult = parseMarkdownFormat(rawResponse);
   if (markdownResult.length > 0) {
-    logger.info(`[Verbalized Sampling] Found ${markdownResult.length} markdown-formatted responses`);
+    logger.info(
+      `[Verbalized Sampling] Found ${markdownResult.length} markdown-formatted responses`,
+    );
     return sampleByProbability(markdownResult, 'markdown');
   }
 
@@ -90,7 +92,8 @@ function parseMarkdownFormat(text: string): ParsedResponse[] {
   const results: ParsedResponse[] = [];
 
   // Pattern: Number followed by probability in parentheses
-  const pattern = /(?:^|\n)\s*(\d+)\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(](?:prob(?:ability)?:?\s*)?([\d.]+)[\])]\s*:?\s*([\s\S]*?)(?=(?:\n\s*\d+\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(])|$)/gi;
+  const pattern =
+    /(?:^|\n)\s*(\d+)\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(](?:prob(?:ability)?:?\s*)?([\d.]+)[\])]\s*:?\s*([\s\S]*?)(?=(?:\n\s*\d+\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(])|$)/gi;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -161,7 +164,7 @@ function sampleByProbability(responses: ParsedResponse[], method: string): Parse
     cumulative += response.probability;
     if (random <= cumulative) {
       logger.info(
-        `[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`
+        `[Verbalized Sampling] Selected response with probability ${response.probability.toFixed(2)}`,
       );
       return {
         text: validateAndCleanResponse(response.text),
@@ -208,7 +211,7 @@ function extractFirstSection(text: string): string {
         const firstScene = cleaned.substring(0, endOfFirstScene).trim();
         if (firstScene.length > 200) {
           logger.info(
-            `[Verbalized Sampling] Extracted first scene (${firstScene.length} chars) from multi-scene response`
+            `[Verbalized Sampling] Extracted first scene (${firstScene.length} chars) from multi-scene response`,
           );
           return firstScene;
         }
@@ -237,7 +240,7 @@ function extractFirstSection(text: string): string {
         }
 
         logger.info(
-          `[Verbalized Sampling] Extracted section ${i + 1} (${result.length} chars) as first scene`
+          `[Verbalized Sampling] Extracted section ${i + 1} (${result.length} chars) as first scene`,
         );
         return result;
       }
@@ -290,7 +293,7 @@ function validateAndCleanResponse(text: string): string {
     const signature = normalized.substring(0, 60);
 
     // Check 1: Exact signature match (same start)
-    let isDuplicate = seen.some(s => s === signature);
+    let isDuplicate = seen.some((s) => s === signature);
 
     // Check 2: This paragraph is a superset containing previous content
     if (!isDuplicate && unique.length >= 1) {
@@ -299,7 +302,9 @@ function validateAndCleanResponse(text: string): string {
         // If this paragraph contains most of a previous paragraph, it's accumulated content
         if (prevNormalized.length > 50 && normalized.includes(prevNormalized.substring(0, 100))) {
           isDuplicate = true;
-          logger.debug('[Verbalized Sampling] Detected paragraph containing previous content, removing');
+          logger.debug(
+            '[Verbalized Sampling] Detected paragraph containing previous content, removing',
+          );
           break;
         }
         // Or if a previous paragraph's significant portion appears in this one

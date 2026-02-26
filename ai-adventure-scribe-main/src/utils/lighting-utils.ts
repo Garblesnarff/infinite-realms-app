@@ -37,7 +37,7 @@ export type LightLevel = 'bright' | 'dim' | 'dark';
 export function getEffectiveLightLevel(
   position: Point2D,
   tokens: Token[],
-  globalLight: boolean = false
+  globalLight: boolean = false,
 ): LightLevel {
   // If global light is enabled, everything is bright
   if (globalLight) {
@@ -52,10 +52,7 @@ export function getEffectiveLightLevel(
       continue;
     }
 
-    const distance = calculateDistance(
-      { x: token.x, y: token.y },
-      position
-    );
+    const distance = calculateDistance({ x: token.x, y: token.y }, position);
 
     // Convert pixels to feet (assuming standard 5ft grid = 100px)
     const distanceInFeet = distance / 20; // 100px / 5ft = 20px per foot
@@ -89,16 +86,13 @@ export function getEffectiveLightLevel(
 export function calculateLightReach(
   lightSource: Token,
   target: Point2D,
-  walls: VisionBlocker[] = []
+  walls: VisionBlocker[] = [],
 ): { reaches: boolean; level: LightLevel; distance: number } {
   if (!lightSource.light.emitsLight) {
     return { reaches: false, level: 'dark', distance: 0 };
   }
 
-  const distance = calculateDistance(
-    { x: lightSource.x, y: lightSource.y },
-    target
-  );
+  const distance = calculateDistance({ x: lightSource.x, y: lightSource.y }, target);
   const distanceInFeet = distance / 20;
 
   const brightRange = lightSource.light.lightRange || 0;
@@ -111,11 +105,7 @@ export function calculateLightReach(
   }
 
   // Check if blocked by walls
-  const isBlocked = isLineBlocked(
-    { x: lightSource.x, y: lightSource.y },
-    target,
-    walls
-  );
+  const isBlocked = isLineBlocked({ x: lightSource.x, y: lightSource.y }, target, walls);
 
   if (isBlocked) {
     return { reaches: false, level: 'dark', distance: distanceInFeet };
@@ -156,7 +146,7 @@ export function stackLightLevels(lightLevels: LightLevel[]): LightLevel {
 export function getLightSourcesAtPosition(
   position: Point2D,
   tokens: Token[],
-  walls: VisionBlocker[] = []
+  walls: VisionBlocker[] = [],
 ): Array<{
   token: Token;
   level: LightLevel;

@@ -36,12 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
@@ -86,21 +81,22 @@ export const BattleMapPage: React.FC = () => {
       onError: (error) => {
         logger.error('Failed to load scene', { sceneId, error });
       },
-    }
+    },
   );
 
   // Fetch campaign data for breadcrumbs
   const { data: campaign } = trpc.campaigns.getById.useQuery(
     { campaignId: campaignId! },
-    { enabled: !!campaignId }
+    { enabled: !!campaignId },
   );
 
-  const isGM = Boolean(user && (
-    (scene as any)?.userId === user.id ||
-    (scene as any)?.user_id === user.id ||
-    (campaign as any)?.userId === user.id ||
-    (campaign as any)?.user_id === user.id
-  ));
+  const isGM = Boolean(
+    user &&
+    ((scene as any)?.userId === user.id ||
+      (scene as any)?.user_id === user.id ||
+      (campaign as any)?.userId === user.id ||
+      (campaign as any)?.user_id === user.id),
+  );
 
   // ===========================
   // Effects
@@ -237,9 +233,10 @@ export const BattleMapPage: React.FC = () => {
 
   if (sceneError || !scene) {
     const errorMessage = sceneError?.message || 'Scene not found';
-    const isPermissionError = errorMessage.toLowerCase().includes('permission') ||
-                              errorMessage.toLowerCase().includes('forbidden') ||
-                              errorMessage.toLowerCase().includes('access');
+    const isPermissionError =
+      errorMessage.toLowerCase().includes('permission') ||
+      errorMessage.toLowerCase().includes('forbidden') ||
+      errorMessage.toLowerCase().includes('access');
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -298,23 +295,23 @@ export const BattleMapPage: React.FC = () => {
             {campaign?.name || 'Campaign'}
           </button>
           <span>/</span>
-          <button
-            onClick={handleBackToScenes}
-            className="hover:text-foreground transition-colors"
-          >
+          <button onClick={handleBackToScenes} className="hover:text-foreground transition-colors">
             Scenes
           </button>
           <span>/</span>
-          <span className="text-foreground font-medium max-w-[200px] truncate">
-            {scene.name}
-          </span>
+          <span className="text-foreground font-medium max-w-[200px] truncate">{scene.name}</span>
         </nav>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
           {/* Mobile: Layers Panel Toggle */}
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={toggleLayersPanel} aria-label="Toggle Layers">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleLayersPanel}
+              aria-label="Toggle Layers"
+            >
               <Menu className="h-4 w-4" />
             </Button>
           )}
@@ -381,20 +378,14 @@ export const BattleMapPage: React.FC = () => {
 
           {/* Tool Options Panel - Positioned below toolbar when active */}
           {(selectedTool === 'wall' || selectedTool === 'fog-brush' || selectedTool === 'draw') && (
-            <div
-              className="absolute left-4 bottom-4"
-              style={{ zIndex: Z_INDEX.STICKY }}
-            >
+            <div className="absolute left-4 bottom-4" style={{ zIndex: Z_INDEX.STICKY }}>
               <ToolOptionsPanel sceneId={sceneId} />
             </div>
           )}
 
           {/* Performance Monitor - Top left corner */}
           {showPerformanceMonitor && (
-            <div
-              className="absolute top-4 left-20"
-              style={{ zIndex: Z_INDEX.STICKY }}
-            >
+            <div className="absolute top-4 left-20" style={{ zIndex: Z_INDEX.STICKY }}>
               <PerformanceMonitor />
             </div>
           )}
@@ -408,7 +399,7 @@ export const BattleMapPage: React.FC = () => {
               aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
               className={cn(
                 'absolute top-4 transition-all',
-                showLayersPanel ? 'right-80' : 'right-4'
+                showLayersPanel ? 'right-80' : 'right-4',
               )}
               style={{ zIndex: Z_INDEX.STICKY }}
             >
@@ -446,12 +437,7 @@ export const BattleMapPage: React.FC = () => {
       <QuickActionMenu sceneId={sceneId} />
 
       {/* Hotkey Guide Modal */}
-      {showHotkeyGuide && (
-        <HotkeyGuide
-          open={showHotkeyGuide}
-          onOpenChange={setShowHotkeyGuide}
-        />
-      )}
+      {showHotkeyGuide && <HotkeyGuide open={showHotkeyGuide} onOpenChange={setShowHotkeyGuide} />}
     </div>
   );
 };

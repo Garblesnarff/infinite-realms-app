@@ -51,15 +51,9 @@ export const FinalCTASection: React.FC = () => {
   };
 
   return (
-    <section
-      ref={sectionRef}
-      className="relative py-40 overflow-hidden"
-    >
+    <section ref={sectionRef} className="relative py-40 overflow-hidden">
       {/* Parallax Background with hero-bg-v2.jpg */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{ transform: `translateY(${scrollY * 0.5}px)` }}
-      >
+      <div className="absolute inset-0 z-0" style={{ transform: `translateY(${scrollY * 0.5}px)` }}>
         <img
           src="/hero-bg-v2.jpg"
           alt="Epic fantasy background"
@@ -101,7 +95,9 @@ export const FinalCTASection: React.FC = () => {
             <div className="max-w-2xl mx-auto">
               <div className="mb-8 text-center">
                 <h3 className="text-3xl font-bold text-white mb-3">Join the Beta Waitlist</h3>
-                <p className="text-gray-300 text-lg">Secure your early access to the AI Dungeon Master</p>
+                <p className="text-gray-300 text-lg">
+                  Secure your early access to the AI Dungeon Master
+                </p>
               </div>
               <WaitlistForm variant="section" />
             </div>
@@ -149,9 +145,12 @@ export const FinalCTASection: React.FC = () => {
 
         {/* Final Urgency Message */}
         <div className="mt-16 text-center p-10 bg-gradient-to-r from-amber-900/30 to-purple-900/30 border border-amber-500/30 rounded-xl backdrop-blur-sm">
-          <p className="text-amber-400 text-2xl font-semibold mb-4">⏰ Limited Beta Spots Available</p>
+          <p className="text-amber-400 text-2xl font-semibold mb-4">
+            ⏰ Limited Beta Spots Available
+          </p>
           <p className="text-gray-200 text-lg leading-relaxed max-w-3xl mx-auto">
-            The earlier you join our waitlist, the sooner you'll get access to the AI Dungeon Master and secure your founding member perks.
+            The earlier you join our waitlist, the sooner you'll get access to the AI Dungeon Master
+            and secure your founding member perks.
           </p>
         </div>
       </div>

@@ -186,9 +186,7 @@ const AccountPage: React.FC = () => {
             <Settings className="h-8 w-8" />
             Account Settings
           </h1>
-          <p className="text-white/80 mt-2">
-            Manage your subscription and account preferences
-          </p>
+          <p className="text-white/80 mt-2">Manage your subscription and account preferences</p>
         </div>
       </div>
 
@@ -301,9 +299,7 @@ const AccountPage: React.FC = () => {
                 <Zap className="h-5 w-5" />
                 Today's Usage
               </CardTitle>
-              <CardDescription>
-                Your AI message quota resets daily at midnight UTC
-              </CardDescription>
+              <CardDescription>Your AI message quota resets daily at midnight UTC</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

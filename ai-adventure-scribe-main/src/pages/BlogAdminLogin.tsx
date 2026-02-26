@@ -88,10 +88,12 @@ const BlogAdminLogin: React.FC = () => {
       });
 
       // Trigger a re-check of blog role in AuthContext
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'blog_admin_token',
-        newValue: data.token,
-      }));
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'blog_admin_token',
+          newValue: data.token,
+        }),
+      );
 
       // Redirect to blog admin
       navigate('/admin/blog');
@@ -111,9 +113,7 @@ const BlogAdminLogin: React.FC = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">Blog Admin</CardTitle>
-          <CardDescription>
-            Sign in to manage the Infinite Realms blog
-          </CardDescription>
+          <CardDescription>Sign in to manage the Infinite Realms blog</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -154,11 +154,7 @@ const BlogAdminLogin: React.FC = () => {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>

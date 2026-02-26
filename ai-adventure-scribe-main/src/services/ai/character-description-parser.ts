@@ -5,10 +5,7 @@
  * Extracted from character-description-generator.ts for modularity.
  */
 
-import type {
-  CharacterData,
-  EnhancedDescription,
-} from './prompts/character-description-prompts';
+import type { CharacterData, EnhancedDescription } from './prompts/character-description-prompts';
 
 import logger from '@/lib/logger';
 

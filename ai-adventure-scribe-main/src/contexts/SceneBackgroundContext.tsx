@@ -59,7 +59,7 @@ export function SceneBackgroundProvider({ children }: SceneBackgroundProviderPro
         }, 500);
       }, 300);
     },
-    [currentBackgroundUrl]
+    [currentBackgroundUrl],
   );
 
   const value = useMemo(
@@ -70,13 +70,11 @@ export function SceneBackgroundProvider({ children }: SceneBackgroundProviderPro
       setSceneBackground,
       isTransitioning,
     }),
-    [currentBackgroundUrl, currentAssetName, currentAssetType, setSceneBackground, isTransitioning]
+    [currentBackgroundUrl, currentAssetName, currentAssetType, setSceneBackground, isTransitioning],
   );
 
   return (
-    <SceneBackgroundContext.Provider value={value}>
-      {children}
-    </SceneBackgroundContext.Provider>
+    <SceneBackgroundContext.Provider value={value}>{children}</SceneBackgroundContext.Provider>
   );
 }
 

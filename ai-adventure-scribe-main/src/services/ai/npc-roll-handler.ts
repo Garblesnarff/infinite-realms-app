@@ -25,7 +25,7 @@ export interface NPCRollContinuationResult {
 export async function continueNarrativeWithNPCRolls(
   rolls: AutoRollResult[],
   aiContext: any,
-  sessionId: string
+  sessionId: string,
 ): Promise<NPCRollContinuationResult> {
   if (rolls.length === 0) {
     return {

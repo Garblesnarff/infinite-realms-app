@@ -10,17 +10,7 @@
  * - Import button with loading state
  */
 
-import {
-  Upload,
-  FileJson,
-  Check,
-  AlertTriangle,
-  X,
-  User,
-  Shield,
-  Sword,
-  Star,
-} from 'lucide-react';
+import { Upload, FileJson, Check, AlertTriangle, X, User, Shield, Sword, Star } from 'lucide-react';
 import React, { useState, useCallback, useRef, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -143,37 +133,40 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
     }
   };
 
-  const handleFileSelect = useCallback((file: File) => {
-    if (!file.type.includes('json') && !file.name.endsWith('.json')) {
-      toast({
-        title: 'Invalid File Type',
-        description: 'Please select a JSON file.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSelectedFile(file);
-
-    // Read file content
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      const parsedData = validateAndParseJSON(content);
-      if (parsedData) {
-        setCharacterData(parsedData);
-        setImportName(parsedData.character.name);
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      if (!file.type.includes('json') && !file.name.endsWith('.json')) {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Please select a JSON file.',
+          variant: 'destructive',
+        });
+        return;
       }
-    };
-    reader.onerror = () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to read file.',
-        variant: 'destructive',
-      });
-    };
-    reader.readAsText(file);
-  }, [toast]);
+
+      setSelectedFile(file);
+
+      // Read file content
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        const parsedData = validateAndParseJSON(content);
+        if (parsedData) {
+          setCharacterData(parsedData);
+          setImportName(parsedData.character.name);
+        }
+      };
+      reader.onerror = () => {
+        toast({
+          title: 'Error',
+          description: 'Failed to read file.',
+          variant: 'destructive',
+        });
+      };
+      reader.readAsText(file);
+    },
+    [toast],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -198,7 +191,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
         handleFileSelect(files[0]);
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   );
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,8 +232,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
             Import Character
           </DialogTitle>
           <DialogDescription>
-            Import a character from a JSON file. You can export characters from the character
-            sheet.
+            Import a character from a JSON file. You can export characters from the character sheet.
           </DialogDescription>
         </DialogHeader>
 
@@ -255,7 +247,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                 'border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 isDragging
                   ? 'border-infinite-purple bg-infinite-purple/10'
-                  : 'border-border hover:border-infinite-purple/50 hover:bg-accent/50'
+                  : 'border-border hover:border-infinite-purple/50 hover:bg-accent/50',
               )}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -277,9 +269,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
               />
 
               <FileJson className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="font-semibold text-lg mb-2">
-                Drop your character file here
-              </h3>
+              <h3 className="font-semibold text-lg mb-2">Drop your character file here</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 or click to browse for a JSON file
               </p>
@@ -409,13 +399,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                       <div className="text-xs text-muted-foreground mb-2">Ability Scores</div>
                       <div className="grid grid-cols-6 gap-2">
                         {Object.entries(characterData.stats).map(([stat, value]) => (
-                          <div
-                            key={stat}
-                            className="text-center p-2 bg-background rounded border"
-                          >
-                            <div className="text-xs font-medium uppercase">
-                              {stat.slice(0, 3)}
-                            </div>
+                          <div key={stat} className="text-center p-2 bg-background rounded border">
+                            <div className="text-xs font-medium uppercase">{stat.slice(0, 3)}</div>
                             <div className="text-sm font-bold">{value || 10}</div>
                           </div>
                         ))}

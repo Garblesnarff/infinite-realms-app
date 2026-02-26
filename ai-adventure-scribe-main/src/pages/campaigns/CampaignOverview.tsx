@@ -33,9 +33,8 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
   const navigate = useNavigate();
   const { userPlan } = useAuth();
 
-  const sessionExpiryMs = userPlan && userPlan !== 'free'
-    ? PAID_SESSION_EXPIRY_MS
-    : FREE_SESSION_EXPIRY_MS;
+  const sessionExpiryMs =
+    userPlan && userPlan !== 'free' ? PAID_SESSION_EXPIRY_MS : FREE_SESSION_EXPIRY_MS;
 
   // Query for most recent active session
   const { data: activeSession, isLoading: isLoadingActiveSession } = useQuery({
@@ -59,7 +58,9 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
       if (!start) return null;
 
       const startTime = new Date(start).getTime();
-      const isExpired = Number.isFinite(startTime) ? Date.now() - startTime > sessionExpiryMs : false;
+      const isExpired = Number.isFinite(startTime)
+        ? Date.now() - startTime > sessionExpiryMs
+        : false;
 
       return isExpired ? null : data;
     },

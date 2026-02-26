@@ -6,7 +6,11 @@ import { type ExtendedGameSession, type SessionState } from '../../types/session
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
-type ToastFn = (options: { title?: React.ReactNode; description?: React.ReactNode; variant?: 'default' | 'destructive' }) => void;
+type ToastFn = (options: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  variant?: 'default' | 'destructive';
+}) => void;
 
 interface UseSessionInitializationProps {
   campaignId?: string;
@@ -55,8 +59,12 @@ export const useSessionInitialization = ({
         if (mountedRef.current) setSessionState('loading');
 
         const { data: existingSessions, error: existingSessionError } = await supabase
-          .from('game_sessions').select('*').eq('campaign_id', campaignId).eq('character_id', characterId)
-          .order('created_at', { ascending: false }).limit(5);
+          .from('game_sessions')
+          .select('*')
+          .eq('campaign_id', campaignId)
+          .eq('character_id', characterId)
+          .order('created_at', { ascending: false })
+          .limit(5);
 
         if (abortSignal.aborted || !mountedRef.current) return;
 
@@ -67,7 +75,9 @@ export const useSessionInitialization = ({
           return;
         }
 
-        let sessionToResume = existingSessions?.find((s) => s.status === 'active') as ExtendedGameSession | undefined;
+        let sessionToResume = existingSessions?.find((s) => s.status === 'active') as
+          | ExtendedGameSession
+          | undefined;
         if (sessionToResume) {
           if (isSessionExpired(sessionToResume)) {
             await cleanupSession(sessionToResume.id);
@@ -85,17 +95,33 @@ export const useSessionInitialization = ({
 
         const lastCompletedSession = existingSessions?.find((s) => s.status === 'completed');
         if (lastCompletedSession) {
-          const sessionNumber = Math.max(...(existingSessions?.map((s) => s.session_number || 1) || [1])) + 1;
-          const { data, error } = await supabase.from('game_sessions').insert([{
-            session_number: sessionNumber, status: 'active', campaign_id: campaignId, character_id: characterId,
-            turn_count: 0, current_scene_description: lastCompletedSession.current_scene_description || 'Continuing your adventure...',
-            session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
-          }]).select().single();
+          const sessionNumber =
+            Math.max(...(existingSessions?.map((s) => s.session_number || 1) || [1])) + 1;
+          const { data, error } = await supabase
+            .from('game_sessions')
+            .insert([
+              {
+                session_number: sessionNumber,
+                status: 'active',
+                campaign_id: campaignId,
+                character_id: characterId,
+                turn_count: 0,
+                current_scene_description:
+                  lastCompletedSession.current_scene_description || 'Continuing your adventure...',
+                session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
+              },
+            ])
+            .select()
+            .single();
 
           if (!mountedRef.current) return;
           if (error) {
             setSessionState('error');
-            toastRef.current({ title: 'Error', description: 'Failed to create continuation session', variant: 'destructive' });
+            toastRef.current({
+              title: 'Error',
+              description: 'Failed to create continuation session',
+              variant: 'destructive',
+            });
             return;
           }
           setSessionData(data as ExtendedGameSession);
@@ -110,7 +136,11 @@ export const useSessionInitialization = ({
         logger.error('[Session Init] Error:', error);
         if (mountedRef.current) {
           setSessionState('error');
-          toastRef.current({ title: 'Error', description: 'Failed to initialize session', variant: 'destructive' });
+          toastRef.current({
+            title: 'Error',
+            description: 'Failed to initialize session',
+            variant: 'destructive',
+          });
         }
         initializingRef.current = false;
         sessionInitializedRef.current = false;
@@ -127,5 +157,14 @@ export const useSessionInitialization = ({
         abortControllerRef.current = null;
       }
     };
-  }, [campaignId, characterId, createGameSession, cleanupSession, mountedRef, setSessionData, setSessionState, toastRef]);
+  }, [
+    campaignId,
+    characterId,
+    createGameSession,
+    cleanupSession,
+    mountedRef,
+    setSessionData,
+    setSessionState,
+    toastRef,
+  ]);
 };

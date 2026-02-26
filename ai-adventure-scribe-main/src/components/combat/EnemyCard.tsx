@@ -87,11 +87,7 @@ const EnemyCard: React.FC<EnemyCardProps> = ({ enemyId, className = '', onAttack
           {/* Portrait thumbnail */}
           {portraitUrl ? (
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-500/50 shadow-lg flex-shrink-0">
-              <img
-                src={portraitUrl}
-                alt={enemy.name}
-                className="w-full h-full object-cover"
-              />
+              <img src={portraitUrl} alt={enemy.name} className="w-full h-full object-cover" />
             </div>
           ) : (
             <div className="w-12 h-12 rounded-full bg-red-900/30 border-2 border-red-500/30 flex items-center justify-center flex-shrink-0">

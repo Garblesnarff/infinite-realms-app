@@ -43,7 +43,7 @@ export function getTokenDimensions(
   tokenSize: TokenSize,
   gridSize: number,
   customWidth?: number,
-  customHeight?: number
+  customHeight?: number,
 ): TokenDimensions {
   // Use custom dimensions if provided, otherwise use size-based defaults
   const gridSquares = tokenSizeToGridSquares[tokenSize];
@@ -101,7 +101,7 @@ export function centerTokenOnGrid(
   gridX: number,
   gridY: number,
   tokenSize: TokenSize,
-  gridSize: number
+  gridSize: number,
 ): { x: number; y: number } {
   const gridSquares = tokenSizeToGridSquares[tokenSize];
 
@@ -132,7 +132,7 @@ export function centerTokenOnGrid(
 export function pixelToGrid(
   pixelX: number,
   pixelY: number,
-  gridSize: number
+  gridSize: number,
 ): { x: number; y: number } {
   return {
     x: Math.floor(pixelX / gridSize),
@@ -159,7 +159,7 @@ export function snapToGrid(
   pixelX: number,
   pixelY: number,
   tokenSize: TokenSize,
-  gridSize: number
+  gridSize: number,
 ): { x: number; y: number } {
   const gridPos = pixelToGrid(pixelX, pixelY, gridSize);
   return centerTokenOnGrid(gridPos.x, gridPos.y, tokenSize, gridSize);
@@ -180,10 +180,7 @@ export function snapToGrid(
  * // Returns: 0.1 (doubled for huge tokens)
  * ```
  */
-export function getBorderWidth(
-  tokenSize: TokenSize,
-  baseBorderWidth: number = 0.05
-): number {
+export function getBorderWidth(tokenSize: TokenSize, baseBorderWidth: number = 0.05): number {
   const scale = getTokenScale(tokenSize);
   // Scale border width proportionally, but not linearly (use sqrt for better visual balance)
   return baseBorderWidth * Math.sqrt(scale);

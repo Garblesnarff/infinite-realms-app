@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
 
-
 /**
  * Predefined options for campaign parameters
  */

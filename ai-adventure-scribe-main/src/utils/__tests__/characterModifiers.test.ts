@@ -81,7 +81,7 @@ describe('characterModifiers', () => {
       const char = {
         abilityScores: {
           strength: { score: 14, modifier: 3 }, // Overridden modifier
-        }
+        },
       } as any;
       expect(getAbilityModifier(char, 'strength')).toBe(3);
     });
@@ -90,7 +90,7 @@ describe('characterModifiers', () => {
       const char = {
         abilityScores: {
           strength: { score: 14 },
-        }
+        },
       } as any;
       expect(getAbilityModifier(char, 'strength')).toBe(2);
     });
@@ -133,7 +133,7 @@ describe('characterModifiers', () => {
         abilityScores: {
           strength: { score: 14, savingThrow: true },
           dexterity: { score: 12, savingThrow: false },
-        }
+        },
       } as any;
       expect(isSaveProficient(char, 'strength')).toBe(true);
       expect(isSaveProficient(char, 'dexterity')).toBe(false);
@@ -196,7 +196,7 @@ describe('characterModifiers', () => {
         abilityScores: {
           ...mockCharacter.abilityScores,
           dexterity: { score: 18, modifier: 4 },
-        }
+        },
       } as any;
       // Dex(4) is higher than Str(2), so uses Dex
       expect(calculateAttackModifier(highDexChar, rapier)).toBe(6); // Dex(4) + Prof(2)
@@ -252,7 +252,9 @@ describe('characterModifiers', () => {
     });
 
     it('should throw error for unknown skill in breakdown', () => {
-      expect(() => calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'UnknownSkill')).toThrow();
+      expect(() =>
+        calculateRollWithBreakdown(mockCharacter, 'skill', undefined, 'UnknownSkill'),
+      ).toThrow();
     });
 
     it('should handle aliased skills (Animal Handling)', () => {

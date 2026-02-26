@@ -1,11 +1,19 @@
 /* eslint-disable max-lines */
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
+import {
+  SPELLCASTING_ABILITY_MAP,
+  FULL_CASTER_SLOTS_MAP,
+  CLASS_SKILL_PROFICIENCIES_MAP,
+  RACE_SKILL_PROFICIENCIES_MAP,
+  SUBRACE_SKILL_PROFICIENCIES_MAP,
+  CLASS_SAVING_THROW_PROFICIENCIES_MAP,
+} from './character-calculations-data';
+
 /**
  * Comprehensive D&D 5e character calculations utility
  * Automates all the math needed for a character sheet
  */
-
 export interface CharacterStats {
   // Core Stats
   proficiencyBonus: number;
@@ -141,7 +149,9 @@ export const calculateSpellSaveDC = (
     spellcastingAbility !== undefined
       ? spellcastingAbility
       : getSpellcastingAbility(character.class);
-  if (!ability) return undefined;
+  if (!ability) {
+    return undefined;
+  }
 
   const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
@@ -162,7 +172,9 @@ export const calculateSpellAttackBonus = (
     spellcastingAbility !== undefined
       ? spellcastingAbility
       : getSpellcastingAbility(character.class);
-  if (!ability) return undefined;
+  if (!ability) {
+    return undefined;
+  }
 
   const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
@@ -176,22 +188,11 @@ export const calculateSpellAttackBonus = (
 export const getSpellcastingAbility = (
   characterClass: CharacterClass | null,
 ): keyof Character['abilityScores'] | null => {
-  if (!characterClass) return null;
+  if (!characterClass) {
+    return null;
+  }
 
-  const spellcastingMap: { [className: string]: keyof Character['abilityScores'] } = {
-    Wizard: 'intelligence',
-    Sorcerer: 'charisma',
-    Warlock: 'charisma',
-    Bard: 'charisma',
-    Cleric: 'wisdom',
-    Druid: 'wisdom',
-    Paladin: 'charisma',
-    Ranger: 'wisdom',
-    'Eldritch Knight': 'intelligence',
-    'Arcane Trickster': 'intelligence',
-  };
-
-  return spellcastingMap[characterClass.name] || null;
+  return SPELLCASTING_ABILITY_MAP[characterClass.name] || null;
 };
 
 /**
@@ -201,36 +202,16 @@ export const calculateSpellSlots = (
   character: Character,
 ): { [level: number]: number } | undefined => {
   const spellcastingAbility = getSpellcastingAbility(character.class);
-  if (!spellcastingAbility) return undefined;
+  if (!spellcastingAbility) {
+    return undefined;
+  }
 
   const level = character.level || 1;
 
-  // Full caster spell slot progression
-  const fullCasterSlots: { [level: number]: number[] } = {
-    1: [2], // 1st level spells
-    2: [3],
-    3: [4, 2], // 1st, 2nd level spells
-    4: [4, 3],
-    5: [4, 3, 2], // 1st, 2nd, 3rd level spells
-    6: [4, 3, 3],
-    7: [4, 3, 3, 1], // 1st, 2nd, 3rd, 4th level spells
-    8: [4, 3, 3, 2],
-    9: [4, 3, 3, 3, 1], // 1st, 2nd, 3rd, 4th, 5th level spells
-    10: [4, 3, 3, 3, 2],
-    11: [4, 3, 3, 3, 2, 1], // 1st-6th level spells
-    12: [4, 3, 3, 3, 2, 1],
-    13: [4, 3, 3, 3, 2, 1, 1], // 1st-7th level spells
-    14: [4, 3, 3, 3, 2, 1, 1],
-    15: [4, 3, 3, 3, 2, 1, 1, 1], // 1st-8th level spells
-    16: [4, 3, 3, 3, 2, 1, 1, 1],
-    17: [4, 3, 3, 3, 2, 1, 1, 1, 1], // 1st-9th level spells
-    18: [4, 3, 3, 3, 3, 1, 1, 1, 1],
-    19: [4, 3, 3, 3, 3, 2, 1, 1, 1],
-    20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
-  };
-
-  const slots = fullCasterSlots[level];
-  if (!slots) return undefined;
+  const slots = FULL_CASTER_SLOTS_MAP[level];
+  if (!slots) {
+    return undefined;
+  }
 
   const spellSlots: { [level: number]: number } = {};
   slots.forEach((count: number, index: number) => {
@@ -279,37 +260,13 @@ export const calculateSkillModifiers = (
  * Get skill proficiencies for a class (simplified)
  */
 export const getClassSkillProficiencies = (characterClass: CharacterClass | null): string[] => {
-  if (!characterClass) return [];
+  if (!characterClass) {
+    return [];
+  }
 
-  const classProficiencies: { [className: string]: string[] } = {
-    Fighter: [
-      'Acrobatics',
-      'Animal Handling',
-      'Athletics',
-      'History',
-      'Insight',
-      'Intimidation',
-      'Perception',
-      'Survival',
-    ],
-    Wizard: ['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion'],
-    Rogue: [
-      'Acrobatics',
-      'Athletics',
-      'Deception',
-      'Insight',
-      'Intimidation',
-      'Investigation',
-      'Perception',
-      'Performance',
-      'Persuasion',
-      'Sleight of Hand',
-      'Stealth',
-    ],
-    Cleric: ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion'],
-  };
-
-  return classProficiencies[characterClass.name] || [];
+  const profs = CLASS_SKILL_PROFICIENCIES_MAP[characterClass.name];
+  // Return a copy to satisfy the mutable return type and prevent accidental mutation of the shared map
+  return profs ? [...profs] : [];
 };
 
 /**
@@ -319,23 +276,14 @@ export const getRaceSkillProficiencies = (
   characterRace: CharacterRace | null,
   characterSubrace: Subrace | null,
 ): string[] => {
-  if (!characterRace) return [];
+  if (!characterRace) {
+    return [];
+  }
 
-  // Base race proficiencies
-  const raceProficiencies: { [raceName: string]: string[] } = {
-    'Half-Elf': ['Deception', 'Persuasion'], // Player choice, simplified
-    'Human (Variant)': ['Insight'], // Player choice, simplified
-  };
-
-  // Subrace-specific proficiencies
-  const subraceProficiencies: { [subraceName: string]: string[] } = {
-    'Wood Elf': ['Stealth'], // Mask of the Wild implies stealth proficiency
-    'Lightfoot Halfling': ['Stealth'], // Naturally Stealthy
-    // Add more as needed for other subraces
-  };
-
-  const baseProfs = raceProficiencies[characterRace.name] || [];
-  const subraceProfs = characterSubrace ? subraceProficiencies[characterSubrace.name] || [] : [];
+  const baseProfs = RACE_SKILL_PROFICIENCIES_MAP[characterRace.name] || [];
+  const subraceProfs = characterSubrace
+    ? SUBRACE_SKILL_PROFICIENCIES_MAP[characterSubrace.name] || []
+    : [];
 
   // Combine and remove duplicates
   return [...new Set([...baseProfs, ...subraceProfs])];
@@ -373,16 +321,13 @@ export const calculateSavingThrowModifiers = (
 export const getClassSavingThrowProficiencies = (
   characterClass: CharacterClass | null,
 ): string[] => {
-  if (!characterClass) return [];
+  if (!characterClass) {
+    return [];
+  }
 
-  const classSavingThrows: { [className: string]: string[] } = {
-    Fighter: ['strength', 'constitution'],
-    Wizard: ['intelligence', 'wisdom'],
-    Rogue: ['dexterity', 'intelligence'],
-    Cleric: ['wisdom', 'charisma'],
-  };
-
-  return classSavingThrows[characterClass.name] || [];
+  const profs = CLASS_SAVING_THROW_PROFICIENCIES_MAP[characterClass.name];
+  // Return a copy to satisfy the mutable return type and prevent accidental mutation of the shared map
+  return profs ? [...profs] : [];
 };
 
 /**

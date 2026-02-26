@@ -33,7 +33,15 @@ vi.mock('../game-session/session-utils', () => ({
   CLEANUP_INTERVAL: 1000,
   isValidSession: vi.fn((s) => !!s && !!s.id),
   sanitizeSessionPatch: vi.fn((p) => {
-    const { id, campaign_id: _, character_id: __, created_at: ___, updated_at: ____, sequence_number: _____, ...rest } = p;
+    const {
+      id,
+      campaign_id: _,
+      character_id: __,
+      created_at: ___,
+      updated_at: ____,
+      sequence_number: _____,
+      ...rest
+    } = p;
     const removed = [];
     if (id) removed.push('id');
     return { sanitized: rest, removed };

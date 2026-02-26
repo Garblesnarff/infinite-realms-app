@@ -149,10 +149,7 @@ const ClassSelection: React.FC = () => {
                 </div>
               )}
 
-              <CardHeader
-                className="relative pb-3"
-                style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
-              >
+              <CardHeader className="relative pb-3" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div

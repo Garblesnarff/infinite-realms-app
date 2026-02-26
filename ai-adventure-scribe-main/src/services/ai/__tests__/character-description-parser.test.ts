@@ -61,7 +61,9 @@ Born in the Ironpeak Mountains, Thrain was exiled after a failed defense of the 
       const result = parseDescriptionResponse(incompleteResponse, mockCharacterData);
       expect(result.description).toBe('Only a description.');
       expect(result.appearance).toContain('A typical Dwarf with Fighter characteristics');
-      expect(result.personality_traits).toBe('Determined and adventurous, ready for any challenge.');
+      expect(result.personality_traits).toBe(
+        'Determined and adventurous, ready for any challenge.',
+      );
       expect(result.backstory_elements).toContain('Thrain has chosen the adventuring life');
     });
   });

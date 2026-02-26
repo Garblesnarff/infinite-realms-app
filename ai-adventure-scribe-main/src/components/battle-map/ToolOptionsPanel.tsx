@@ -34,11 +34,7 @@ import {
 import React, { useState, useEffect, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -144,7 +140,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const toggleWallSnapToGrid = useBattleMapStore((state) => state.toggleWallSnapToGrid);
 
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
-  const [templateType, setTemplateType] = useState<'cone' | 'cube' | 'sphere' | 'line' | 'cylinder'>('cone');
+  const [templateType, setTemplateType] = useState<
+    'cone' | 'cube' | 'sphere' | 'line' | 'cylinder'
+  >('cone');
 
   // Accessibility IDs
   const strokeWidthId = useId();
@@ -204,7 +202,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const renderDrawOptions = () => (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={strokeWidthId} className="text-sm">Stroke Width</Label>
+        <Label htmlFor={strokeWidthId} className="text-sm">
+          Stroke Width
+        </Label>
         <Slider
           id={strokeWidthId}
           value={[drawingTool.state.strokeWidth]}
@@ -232,7 +232,11 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           aria-pressed={drawingTool.state.fillEnabled}
           aria-label="Toggle Fill"
         >
-          {drawingTool.state.fillEnabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {drawingTool.state.fillEnabled ? (
+            <Eye className="h-4 w-4" />
+          ) : (
+            <EyeOff className="h-4 w-4" />
+          )}
           <span className="ml-2">Fill</span>
         </Button>
       </div>
@@ -246,7 +250,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           />
 
           <div className="space-y-2">
-            <Label htmlFor={fillOpacityId} className="text-sm">Fill Opacity</Label>
+            <Label htmlFor={fillOpacityId} className="text-sm">
+              Fill Opacity
+            </Label>
             <Slider
               id={fillOpacityId}
               value={[drawingTool.state.fillOpacity * 100]}
@@ -269,7 +275,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const renderAoEOptions = () => (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={templateTypeId} className="text-sm">Template Type</Label>
+        <Label htmlFor={templateTypeId} className="text-sm">
+          Template Type
+        </Label>
         <Select value={templateType} onValueChange={(value: any) => setTemplateType(value)}>
           <SelectTrigger id={templateTypeId} className="w-full" aria-label="Template type">
             <SelectValue />
@@ -316,7 +324,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       />
 
       <div className="space-y-2">
-        <Label htmlFor={aoeOpacityId} className="text-sm">Opacity</Label>
+        <Label htmlFor={aoeOpacityId} className="text-sm">
+          Opacity
+        </Label>
         <Slider
           id={aoeOpacityId}
           value={[drawingTool.state.fillOpacity * 100]}
@@ -337,7 +347,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const renderWallOptions = () => (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={wallTypeId} className="text-sm">Wall Type</Label>
+        <Label htmlFor={wallTypeId} className="text-sm">
+          Wall Type
+        </Label>
         <Select value={wallType} onValueChange={(value: any) => setWallType(value)}>
           <SelectTrigger id={wallTypeId} className="w-full" aria-label="Wall type">
             <SelectValue />
@@ -365,7 +377,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={wallStrokeWidthId} className="text-sm">Stroke Width</Label>
+        <Label htmlFor={wallStrokeWidthId} className="text-sm">
+          Stroke Width
+        </Label>
         <Slider
           id={wallStrokeWidthId}
           value={[drawingTool.state.strokeWidth]}
@@ -384,7 +398,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const renderFogOptions = () => (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor={brushModeId} className="text-sm">Brush Mode</Label>
+        <Label htmlFor={brushModeId} className="text-sm">
+          Brush Mode
+        </Label>
         <Select value={fogBrushMode} onValueChange={(value: any) => setFogBrushMode(value)}>
           <SelectTrigger id={brushModeId} className="w-full" aria-label="Brush mode">
             <SelectValue />
@@ -407,7 +423,9 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={brushSizeId} className="text-sm">Brush Size</Label>
+        <Label htmlFor={brushSizeId} className="text-sm">
+          Brush Size
+        </Label>
         <Slider
           id={brushSizeId}
           value={[fogBrushSize]}
@@ -425,9 +443,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
 
   const renderMeasureOptions = () => (
     <div className="space-y-3">
-      <div className="text-sm text-muted-foreground">
-        Click and drag to measure distance.
-      </div>
+      <div className="text-sm text-muted-foreground">Click and drag to measure distance.</div>
       <ColorPicker
         label="Line Color"
         value={drawingTool.state.strokeColor}
@@ -478,7 +494,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
         position === 'left' && 'fixed left-20 top-4 w-80',
         position === 'right' && 'fixed right-4 top-4 w-80',
         position === 'floating' && 'absolute w-80',
-        className
+        className,
       )}
       style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
     >
@@ -487,22 +503,16 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           variant="ghost"
           size="sm"
           className="w-full flex items-center justify-between p-3 hover:bg-accent"
-          aria-label={isCollapsed ? "Expand Tool Options" : "Collapse Tool Options"}
+          aria-label={isCollapsed ? 'Expand Tool Options' : 'Collapse Tool Options'}
         >
           <div className="flex items-center gap-2">
             <Paintbrush className="h-4 w-4" />
             <span className="font-medium">Tool Options</span>
             {selectedTool && (
-              <span className="text-xs text-muted-foreground capitalize">
-                ({selectedTool})
-              </span>
+              <span className="text-xs text-muted-foreground capitalize">({selectedTool})</span>
             )}
           </div>
-          {isCollapsed ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
-          )}
+          {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </Button>
       </CollapsibleTrigger>
 

@@ -39,10 +39,15 @@ describe('DMChatBubble Accessibility', () => {
   it('has accessible attributes for voice controls', () => {
     render(
       <BrowserRouter>
-        <SimpleMessageProvider messages={[]} isLoading={false} sendMessage={vi.fn()} queueStatus="idle">
+        <SimpleMessageProvider
+          messages={[]}
+          isLoading={false}
+          sendMessage={vi.fn()}
+          queueStatus="idle"
+        >
           <DMChatBubble message={mockMessage} />
         </SimpleMessageProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     // Play/Pause button

@@ -219,9 +219,7 @@ describe('character-level-utils', () => {
   describe('getAveragePartyLevel', () => {
     it('should work with sessionId', async () => {
       const mockSession = { campaign_id: 'campaign-123' };
-      const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 6 } },
-      ];
+      const mockCharacters = [{ characters: { id: 'char-1', name: 'Hero 1', level: 6 } }];
 
       const fromSpy = vi.mocked(supabase.from);
       fromSpy.mockReturnValueOnce({
@@ -240,9 +238,7 @@ describe('character-level-utils', () => {
     });
 
     it('should work with campaignId', async () => {
-      const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 4 } },
-      ];
+      const mockCharacters = [{ characters: { id: 'char-1', name: 'Hero 1', level: 4 } }];
 
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnThis(),

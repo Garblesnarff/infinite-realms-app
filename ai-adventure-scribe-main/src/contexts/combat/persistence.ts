@@ -21,7 +21,7 @@ export const saveEncounterToDatabase = async (encounter: CombatEncounter): Promi
 
     // Find current turn order index
     const currentTurnOrder = encounter.participants.findIndex(
-      (p) => p.id === encounter.currentTurnParticipantId
+      (p) => p.id === encounter.currentTurnParticipantId,
     );
 
     // Save combat encounter (matches actual schema)

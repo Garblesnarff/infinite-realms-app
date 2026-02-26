@@ -22,8 +22,6 @@ import {
 import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
 
-
-
 /**
  * Component for handling ability score selection in character creation
  * Implements point-buy system, standard array, and 4d6 drop lowest rolling

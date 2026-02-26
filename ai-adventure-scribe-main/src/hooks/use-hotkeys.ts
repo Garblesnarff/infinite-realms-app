@@ -76,7 +76,10 @@ export interface UseHotkeysReturn {
   /** Get all registered hotkeys */
   getHotkeys: () => HotkeyConfig[];
   /** Check if a key combination is registered */
-  isRegistered: (key: string, modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean }) => boolean;
+  isRegistered: (
+    key: string,
+    modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean },
+  ) => boolean;
 }
 
 // ===========================
@@ -100,7 +103,10 @@ function defaultIsInputField(element: HTMLElement | null): boolean {
 /**
  * Generate a unique key for hotkey combination
  */
-function getHotkeyKey(key: string, modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean }): string {
+function getHotkeyKey(
+  key: string,
+  modifiers?: { ctrl?: boolean; alt?: boolean; shift?: boolean },
+): string {
   const parts: string[] = [];
   if (modifiers?.ctrl) parts.push('ctrl');
   if (modifiers?.alt) parts.push('alt');
@@ -199,7 +205,9 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
   }, []);
 
   const unregisterHotkey = useCallback((key: string) => {
-    hotkeysRef.current = hotkeysRef.current.filter((h) => h.key.toLowerCase() !== key.toLowerCase());
+    hotkeysRef.current = hotkeysRef.current.filter(
+      (h) => h.key.toLowerCase() !== key.toLowerCase(),
+    );
     logger.debug(`Unregistered hotkey: ${key}`);
   }, []);
 
@@ -219,7 +227,7 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
         return existingKey === hotkeyKey;
       });
     },
-    []
+    [],
   );
 
   // ===========================
@@ -265,7 +273,7 @@ export function useHotkeys(options: UseHotkeysOptions): UseHotkeysReturn {
         }
       }
     },
-    [enabled, allowInInput, isInputField]
+    [enabled, allowInInput, isInputField],
   );
 
   // ===========================
@@ -334,16 +342,21 @@ export const BATTLE_MAP_HOTKEYS = {
   ROTATE_LEFT: { key: '[', description: 'Rotate token left', category: 'Tokens' },
   ROTATE_RIGHT: { key: ']', description: 'Rotate token right', category: 'Tokens' },
   ELEVATE_UP: { key: 'ArrowUp', alt: true, description: 'Elevate token up', category: 'Tokens' },
-  ELEVATE_DOWN: { key: 'ArrowDown', alt: true, description: 'Elevate token down', category: 'Tokens' },
+  ELEVATE_DOWN: {
+    key: 'ArrowDown',
+    alt: true,
+    description: 'Elevate token down',
+    category: 'Tokens',
+  },
 } as const;
 
 /**
  * Create hotkey config from preset
  */
 export function createHotkeyFromPreset(
-  preset: typeof BATTLE_MAP_HOTKEYS[keyof typeof BATTLE_MAP_HOTKEYS],
+  preset: (typeof BATTLE_MAP_HOTKEYS)[keyof typeof BATTLE_MAP_HOTKEYS],
   callback: (event: KeyboardEvent) => void,
-  options?: Partial<HotkeyConfig>
+  options?: Partial<HotkeyConfig>,
 ): HotkeyConfig {
   return {
     ...preset,

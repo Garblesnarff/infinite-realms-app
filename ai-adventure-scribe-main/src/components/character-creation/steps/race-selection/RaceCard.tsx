@@ -7,7 +7,6 @@
 import { Check, Heart, Star, Users } from 'lucide-react';
 import React from 'react';
 
-
 import type { CharacterRace } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
@@ -41,9 +40,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
 }) => (
   <Card
     className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden ${
-      isSelected
-        ? 'border-primary bg-primary/5 shadow-lg'
-        : 'border-border hover:border-primary/50'
+      isSelected ? 'border-primary bg-primary/5 shadow-lg' : 'border-border hover:border-primary/50'
     }`}
     onClick={() => onSelect(race)}
     role="button"
@@ -62,10 +59,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
     }
   >
     {race.backgroundImage && (
-      <div
-        className="absolute inset-0 bg-black/60"
-        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
-      />
+      <div className="absolute inset-0 bg-black/60" style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }} />
     )}
     <CardContent
       className={`p-4 relative ${race.backgroundImage ? 'text-white' : ''}`}
@@ -100,7 +94,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
               onToggleFavorite(race.id);
             }}
             className="p-1"
-            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             aria-pressed={isFavorite}
           >
             <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
@@ -135,9 +129,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
       >
         <span>Speed: {race.speed}ft</span>
         <span>{race.languages.length} languages</span>
-        {race.subraces && race.subraces.length > 0 && (
-          <span>{race.subraces.length} subraces</span>
-        )}
+        {race.subraces && race.subraces.length > 0 && <span>{race.subraces.length} subraces</span>}
       </div>
     </CardContent>
   </Card>
@@ -146,11 +138,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
 /**
  * Compact view - medium-sized card for dense display
  */
-export const RaceCardCompactView: React.FC<RaceCardProps> = ({
-  race,
-  isSelected,
-  onSelect,
-}) => (
+export const RaceCardCompactView: React.FC<RaceCardProps> = ({ race, isSelected, onSelect }) => (
   <Card
     className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 relative overflow-hidden ${
       isSelected
@@ -174,10 +162,7 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
     }
   >
     {race.backgroundImage && (
-      <div
-        className="absolute inset-0 bg-black/60"
-        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
-      />
+      <div className="absolute inset-0 bg-black/60" style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }} />
     )}
     <div className="p-4">
       <div
@@ -185,7 +170,9 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({
         style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
         <div className="flex items-center gap-2">
-          <Users className={`w-5 h-5 ${race.backgroundImage ? 'text-yellow-400' : 'text-primary'}`} />
+          <Users
+            className={`w-5 h-5 ${race.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
+          />
           <h3 className="font-bold text-lg">{race.name}</h3>
         </div>
         {isSelected && (
@@ -241,9 +228,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
 }) => (
   <Card
     className={`race-card group cursor-pointer transition-all hover:shadow-xl border-2 relative overflow-hidden aspect-square ${
-      isSelected
-        ? 'border-primary shadow-lg'
-        : 'border-border/30 hover:border-infinite-purple/50'
+      isSelected ? 'border-primary shadow-lg' : 'border-border/30 hover:border-infinite-purple/50'
     }`}
     style={{
       padding: 0,
@@ -283,7 +268,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
           onToggleFavorite(race.id);
         }}
         className="p-1 bg-white/10 hover:bg-white/20"
-        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         aria-pressed={isFavorite}
       >
         <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`} />

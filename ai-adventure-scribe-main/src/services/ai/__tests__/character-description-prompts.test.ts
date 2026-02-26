@@ -17,20 +17,29 @@ describe('CharacterDescriptionPrompts', () => {
 
   describe('buildDescriptionPrompt', () => {
     it('should include character basics', () => {
-      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(mockCharacterData, mockOptions);
+      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(
+        mockCharacterData,
+        mockOptions,
+      );
       expect(prompt).toContain('Thrain');
       expect(prompt).toContain('Dwarf');
       expect(prompt).toContain('Fighter');
     });
 
     it('should include enhancement instructions when existing description is provided', () => {
-      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(mockCharacterData, mockOptions);
+      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(
+        mockCharacterData,
+        mockOptions,
+      );
       expect(prompt).toContain('Enhance and expand');
       expect(prompt).toContain('A stout dwarf.');
     });
 
     it('should include verbalized sampling technique', () => {
-      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(mockCharacterData, mockOptions);
+      const prompt = CharacterDescriptionPrompts.buildDescriptionPrompt(
+        mockCharacterData,
+        mockOptions,
+      );
       expect(prompt).toContain('<verbalized_sampling_technique>');
     });
 

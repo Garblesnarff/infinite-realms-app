@@ -12,8 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: vi.fn()
-  }
+    from: vi.fn(),
+  },
 }));
 
 // Mock logger
@@ -23,17 +23,18 @@ vi.mock('@/lib/logger', () => ({
     error: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
-  }
+  },
 }));
 
-const createQueryClient = (): QueryClient => new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      gcTime: 0,
+const createQueryClient = (): QueryClient =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
     },
-  },
-});
+  });
 
 describe('useMessages', () => {
   let queryClient: QueryClient;
@@ -67,9 +68,9 @@ describe('useMessages', () => {
         game_sessions: {
           characters: {
             name: 'Hero',
-            avatar_url: 'hero-url'
-          }
-        }
+            avatar_url: 'hero-url',
+          },
+        },
       },
       {
         id: 'msg-2',
@@ -79,9 +80,9 @@ describe('useMessages', () => {
         sequence_number: 2,
         images: null,
         game_sessions: {
-          characters: null
-        }
-      }
+          characters: null,
+        },
+      },
     ];
 
     const mockFrom = vi.mocked(supabase.from);
@@ -92,8 +93,8 @@ describe('useMessages', () => {
       range: vi.fn().mockResolvedValue({
         data: mockMessages,
         error: null,
-        count: 2
-      })
+        count: 2,
+      }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -120,10 +121,10 @@ describe('useMessages', () => {
         speaker_type: 'player',
         timestamp: new Date(Date.now() + i).toISOString(),
         sequence_number: i,
-        game_sessions: {}
+        game_sessions: {},
       })),
       error: null,
-      count: 100
+      count: 100,
     };
 
     const page1Results = {
@@ -133,10 +134,10 @@ describe('useMessages', () => {
         speaker_type: 'player',
         timestamp: new Date(Date.now() + i + 50).toISOString(),
         sequence_number: i + 50,
-        game_sessions: {}
+        game_sessions: {},
       })),
       error: null,
-      count: 100
+      count: 100,
     };
 
     mockFrom.mockReturnValue({
@@ -146,7 +147,7 @@ describe('useMessages', () => {
       range: vi.fn().mockImplementation((start: number) => {
         if (start === 0) return Promise.resolve(page0Results);
         return Promise.resolve(page1Results);
-      })
+      }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -171,8 +172,8 @@ describe('useMessages', () => {
       range: vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'Database error' },
-        count: 0
-      })
+        count: 0,
+      }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -190,7 +191,7 @@ describe('useMessages', () => {
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       range: vi.fn().mockReturnThis(),
-      insert: mockInsert
+      insert: mockInsert,
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -203,24 +204,26 @@ describe('useMessages', () => {
       context: {
         location: 'Forest',
         emotion: 'Happy',
-        intent: 'Explore'
-      }
+        intent: 'Explore',
+      },
     };
 
     await act(async () => {
       await result.current.addMessage(newMessage);
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'new-msg',
-      message: 'New message',
-      session_id: sessionId,
-      context: {
-        location: 'Forest',
-        emotion: 'Happy',
-        intent: 'Explore'
-      }
-    }));
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'new-msg',
+        message: 'New message',
+        session_id: sessionId,
+        context: {
+          location: 'Forest',
+          emotion: 'Happy',
+          intent: 'Explore',
+        },
+      }),
+    );
   });
 
   it('should handle error when adding a message', async () => {
@@ -232,7 +235,7 @@ describe('useMessages', () => {
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       range: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockResolvedValue({ error: mockError })
+      insert: vi.fn().mockResolvedValue({ error: mockError }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -241,7 +244,7 @@ describe('useMessages', () => {
       id: 'fail-msg',
       text: 'Failed message',
       sender: 'player' as const,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     await expect(result.current.addMessage(newMessage)).rejects.toEqual(mockError);
@@ -254,10 +257,18 @@ describe('useMessages', () => {
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       range: vi.fn().mockResolvedValue({
-        data: [{ id: 'msg-1', message: 'Hello', speaker_type: 'player', timestamp: new Date().toISOString(), sequence_number: 1 }],
+        data: [
+          {
+            id: 'msg-1',
+            message: 'Hello',
+            speaker_type: 'player',
+            timestamp: new Date().toISOString(),
+            sequence_number: 1,
+          },
+        ],
         error: null,
-        count: 1
-      })
+        count: 1,
+      }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -276,20 +287,48 @@ describe('useMessages', () => {
 
     const page0Results = {
       data: [
-        { id: 'msg-1', message: 'M1', speaker_type: 'player', timestamp: new Date(1000).toISOString(), sequence_number: 1, game_sessions: {} },
-        { id: 'msg-2', message: 'M2', speaker_type: 'player', timestamp: new Date(2000).toISOString(), sequence_number: 2, game_sessions: {} }
+        {
+          id: 'msg-1',
+          message: 'M1',
+          speaker_type: 'player',
+          timestamp: new Date(1000).toISOString(),
+          sequence_number: 1,
+          game_sessions: {},
+        },
+        {
+          id: 'msg-2',
+          message: 'M2',
+          speaker_type: 'player',
+          timestamp: new Date(2000).toISOString(),
+          sequence_number: 2,
+          game_sessions: {},
+        },
       ],
       error: null,
-      count: 100
+      count: 100,
     };
 
     const page1Results = {
       data: [
-        { id: 'msg-2', message: 'M2', speaker_type: 'player', timestamp: new Date(2000).toISOString(), sequence_number: 2, game_sessions: {} },
-        { id: 'msg-3', message: 'M3', speaker_type: 'player', timestamp: new Date(3000).toISOString(), sequence_number: 3, game_sessions: {} }
+        {
+          id: 'msg-2',
+          message: 'M2',
+          speaker_type: 'player',
+          timestamp: new Date(2000).toISOString(),
+          sequence_number: 2,
+          game_sessions: {},
+        },
+        {
+          id: 'msg-3',
+          message: 'M3',
+          speaker_type: 'player',
+          timestamp: new Date(3000).toISOString(),
+          sequence_number: 3,
+          game_sessions: {},
+        },
       ],
       error: null,
-      count: 100
+      count: 100,
     };
 
     mockFrom.mockReturnValue({
@@ -299,7 +338,7 @@ describe('useMessages', () => {
       range: vi.fn().mockImplementation((start: number) => {
         if (start === 0) return Promise.resolve(page0Results);
         return Promise.resolve(page1Results);
-      })
+      }),
     } as any);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
@@ -314,9 +353,12 @@ describe('useMessages', () => {
     });
 
     // Should wait for the new data to be merged
-    await waitFor(() => {
-      const ids = result.current.data.map(m => m.id);
-      expect(ids).toEqual(['msg-1', 'msg-2', 'msg-3']);
-    }, { timeout: 4000 });
+    await waitFor(
+      () => {
+        const ids = result.current.data.map((m) => m.id);
+        expect(ids).toEqual(['msg-1', 'msg-2', 'msg-3']);
+      },
+      { timeout: 4000 },
+    );
   });
 });
