@@ -227,6 +227,7 @@ export default tseslint.config(
       'src/integrations/supabase/types.ts',
 
       // Top violators requiring refactoring (1000+ lines)
+      'src/contexts/GameContext.tsx',
       'src/contexts/CombatContext.tsx', // 1199 lines
       'src/contexts/combat/combat-reducer.ts',
       'src/services/ai-service.ts', // 1142 lines

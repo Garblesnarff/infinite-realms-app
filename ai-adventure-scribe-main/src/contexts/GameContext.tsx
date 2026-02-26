@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Game Context
  *
@@ -24,10 +23,10 @@ import React, {
   useRef,
   useMemo,
 } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 
 import { gameReducer, initialGameState } from './game/game-reducer';
 import { useAiRollProcessor, type AiRollRequest } from './game/use-ai-roll-processor';
+import { useDiceRollManagement } from './game/use-dice-roll-management';
 
 import type { GamePhase, GameState, GameAction } from './game/game-reducer';
 import type { DiceRollRequest, DiceRoll } from '@/types/combat';
@@ -121,128 +120,16 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [combatState.isInCombat, combatState.activeEncounter?.currentTurnParticipantId]);
 
-  // Auto-cleanup completed/cancelled rolls after delay
-  // Only clear when ALL rolls are done (no pending rolls remaining)
-  useEffect(() => {
-    const completedOrCancelled = state.diceRollQueue.pendingRolls.filter(
-      (roll) => roll.status === 'completed' || roll.status === 'cancelled',
-    );
-
-    const stillPending = state.diceRollQueue.pendingRolls.filter(
-      (roll) => roll.status === 'pending',
-    );
-
-    // Only clear if we have completed/cancelled rolls AND no pending rolls
-    // This ensures batch rolls display sequentially without being prematurely cleared
-    if (completedOrCancelled.length > 0 && stillPending.length === 0) {
-      const timeoutId = setTimeout(() => {
-        dispatch({
-          type: 'CLEAR_DICE_ROLL_QUEUE',
-        });
-      }, 2000); // Clear after 2 seconds
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [state.diceRollQueue.pendingRolls]);
-
-  /**
-   * Request a new dice roll with automatic deduplication
-   *
-   * Fixed: Properly memoized with useCallback and empty dependencies.
-   * Only uses dispatch (stable) and local variables, so no external dependencies needed.
-   * Dependencies: [] - no external dependencies, uses only dispatch and local scope
-   */
-  const requestDiceRoll = useCallback(
-    (request: Omit<DiceRollRequest, 'id' | 'timestamp' | 'status'>): string => {
-      const rollRequest: DiceRollRequest = {
-        ...request,
-        id: uuidv4(),
-        timestamp: new Date(),
-        status: 'pending',
-      };
-
-      logger.info('🎲 Requesting dice roll:', rollRequest);
-      dispatch({ type: 'ADD_DICE_ROLL_REQUEST', payload: rollRequest });
-
-      return rollRequest.id;
-    },
-    [],
-  ); // No dependencies - only uses dispatch and function parameters
-
-  /**
-   * Complete a dice roll with the result
-   *
-   * Fixed: Properly memoized with useCallback and empty dependencies.
-   * Only uses dispatch (stable) and function parameters.
-   * Dependencies: [] - no external dependencies, uses only dispatch and parameters
-   */
-  const completeDiceRoll = useCallback((rollId: string, result: DiceRoll) => {
-    logger.info('🎯 Completing dice roll:', rollId, result);
-    dispatch({ type: 'COMPLETE_DICE_ROLL', payload: { id: rollId, result } });
-  }, []); // No dependencies - only uses dispatch and function parameters
-
-  /**
-   * Cancel a pending dice roll
-   *
-   * Fixed: Properly memoized with useCallback and empty dependencies.
-   * Only uses dispatch (stable) and function parameters.
-   * Dependencies: [] - no external dependencies, uses only dispatch and parameters
-   */
-  const cancelDiceRoll = useCallback((rollId: string) => {
-    logger.info('❌ Cancelling dice roll:', rollId);
-    dispatch({ type: 'CANCEL_DICE_ROLL', payload: rollId });
-  }, []); // No dependencies - only uses dispatch and function parameters
-
-  /**
-   * Get the current dice roll that should be displayed to the user
-   *
-   * Fixed: Uses stateRef to access latest state without recreating callback on every state change.
-   * This prevents stale closures while maintaining stable function reference.
-   */
-  const getCurrentDiceRoll = useCallback((): DiceRollRequest | null => {
-    const currentState = stateRef.current;
-    if (!currentState.diceRollQueue.currentRollId) return null;
-
-    return (
-      currentState.diceRollQueue.pendingRolls.find(
-        (roll) => roll.id === currentState.diceRollQueue.currentRollId && roll.status === 'pending',
-      ) || null
-    );
-  }, []); // Empty deps - uses stateRef to always get fresh state
-
-  /**
-   * Check if all rolls in the current batch are complete
-   */
-  const isBatchComplete = useCallback((): boolean => {
-    const currentState = stateRef.current;
-    const { currentBatchId, pendingRolls, completedBatchRolls } = currentState.diceRollQueue;
-
-    if (!currentBatchId) return false;
-
-    // Count pending rolls that belong to the current batch
-    const pendingBatchRolls = pendingRolls.filter(
-      (roll) => roll.batchId === currentBatchId && roll.status === 'pending',
-    );
-
-    // Batch is complete when no pending rolls remain with this batchId
-    return pendingBatchRolls.length === 0 && completedBatchRolls.length > 0;
-  }, []);
-
-  /**
-   * Get all completed rolls from the current batch
-   */
-  const getBatchResults = useCallback((): DiceRollRequest[] => {
-    const currentState = stateRef.current;
-    return currentState.diceRollQueue.completedBatchRolls;
-  }, []);
-
-  /**
-   * Clear the current batch state
-   */
-  const clearBatch = useCallback(() => {
-    logger.info('🧹 Clearing batch state');
-    dispatch({ type: 'CLEAR_BATCH' });
-  }, []);
+  // Dice roll management using extracted hook
+  const {
+    requestDiceRoll,
+    completeDiceRoll,
+    cancelDiceRoll,
+    getCurrentDiceRoll,
+    isBatchComplete,
+    getBatchResults,
+    clearBatch,
+  } = useDiceRollManagement(state, dispatch, stateRef);
 
   /**
    * Set the current game phase
@@ -416,7 +303,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 /**
  * Hook to use the Game Context
  */
-export const useGame = () => {
+export const useGame = (): GameContextValue => {
   const context = useContext(GameContext);
   if (context === undefined) {
     throw new Error('useGame must be used within a GameProvider');
