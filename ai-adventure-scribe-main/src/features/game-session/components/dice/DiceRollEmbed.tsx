@@ -30,7 +30,7 @@ interface DiceRollEmbedProps {
 // We allow up to MAX_CONTEXT_LOSS_RECOVERIES recovery attempts before permanently
 // degrading to 2D/text mode for the rest of the session.
 let __dice3dContextLossCount = 0;
-const MAX_CONTEXT_LOSS_RECOVERIES = 2;
+const MAX_CONTEXT_LOSS_RECOVERIES = 1;
 let __dice3dDead = false;
 let __dice3dWarned = false;
 
