@@ -127,3 +127,7 @@
 ## 2026-02-24 - [Combat Pattern Detection Coverage & Bug Fixes]
 **Learning:** Found that `dm-response-patterns.ts` was completely untested and contained several critical bugs: 1) Negative modifiers (e.g., "-1", "-dex") were ignored by regex. 2) Plain number damage (e.g., "10 damage") was missed in favor of only dice formulas. 3) Multi-word skills (e.g., "Sleight of Hand") and parenthesized skills (e.g., "Wisdom (Perception)") caused detection failure. 4) Strict whitespace requirements in AC/DC mentions missed common formats like "AC: 15" or "DC is 12".
 **Action:** When implementing heuristic-based narrative detection, use flexible regex patterns that allow for optional colons, varied whitespace, and common filler words (like "is"). Always test for both positive and negative numeric transitions. Added comprehensive test coverage for `dm-response-patterns.ts` reaching 100% statement and branch coverage.
+
+## 2026-02-24 - [Advanced Spellcasting Hook Coverage]
+**Learning:** Found that `useAdvancedSpellcasting` hook had zero test coverage. Testing revealed that state updates in hooks using `useState` without functional updates (e.g., `setSelectedMetamagic([...selectedMetamagic, optionId])`) can lead to race conditions in tests if multiple updates are triggered within the same `act` block.
+**Action:** In tests, wrap each sequential state-changing call in its own `act` block to ensure React has processed the state transition before the next call. Always verify hook coverage by adding both the test and the source file to `vitest.config.ts`.
