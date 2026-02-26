@@ -184,9 +184,20 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
       {/* Hero / background area */}
       <div
         className="character-hero group flex items-end p-4 cursor-pointer h-full w-full bg-cover bg-center bg-no-repeat filter sepia-[0.1] relative overflow-hidden transition-all duration-700 ease-out group-hover:scale-[1.02] group-hover:brightness-110 rounded-sm"
+        role="link"
+        tabIndex={0}
+        aria-label={`View details for ${character.name}`}
         onClick={() => {
           // Character access is now properly restricted by RLS, so navigation should work
           navigate(`/app/character/${character.id}`);
+        }}
+        onFocus={() => setIsHovered(true)}
+        onBlur={() => setIsHovered(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            navigate(`/app/character/${character.id}`);
+          }
         }}
         style={
           resolvedBackgroundImage
@@ -357,6 +368,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
               <Button
                 size="sm"
                 className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+                aria-label="Play as this character"
+                title="Play as this character"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCampaignModal(true);
@@ -369,6 +382,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
                 size="sm"
                 variant="outline"
                 className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
+                aria-label="View character details"
+                title="View character details"
                 onClick={(e) => {
                   e.stopPropagation();
                   // Character access is now properly restricted by RLS, so navigation should work
