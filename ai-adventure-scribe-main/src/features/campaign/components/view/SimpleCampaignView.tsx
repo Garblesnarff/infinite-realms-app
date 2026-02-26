@@ -17,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { SimpleGameChatWithVoice } from '@/features/game-session/components';
 import { supabase } from '@/integrations/supabase/client';
@@ -199,7 +200,10 @@ export const SimpleCampaignView: React.FC = () => {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 relative z-10 -mt-16">
+      <div
+        className="container mx-auto px-4 py-8 relative -mt-16"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         {!selectedCharacter ? (
           <CampaignCharacterSelection
             campaign={campaign}
