@@ -145,18 +145,31 @@ export const stripSeparatorLines = (content: string): string =>
     .trim();
 
 /**
+ * Strip [ASSET:type:key] tags from content.
+ * These are game-engine directives, not narrative facts — they must not
+ * pollute extracted memories.
+ */
+export const stripAssetTags = (content: string): string =>
+  content
+    .replace(/\[ASSET:[^\]]+\]/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
+/**
  * Full sanitization pass for memory extraction inputs.
  * Chains all scaffolding-stripping passes so only durable narrative reaches
  * the classifier or the LLM extraction prompt.
  *
  * Strips: code blocks, ROLL_REQUESTS_V1, roll scaffolding,
- *         VISUAL PROMPT blocks, A/B/C option menus, separator lines.
+ *         VISUAL PROMPT blocks, A/B/C option menus, separator lines,
+ *         [ASSET:*] tags.
  */
 export const sanitizeForMemoryExtraction = (content: string): string => {
   let text = stripCodeBlocks(content); // existing: ROLL_REQUESTS_V1, code blocks, roll markers
   text = stripVisualPromptBlocks(text);
   text = stripOptionMenus(text);
   text = stripSeparatorLines(text);
+  text = stripAssetTags(text);
   return text;
 };
 

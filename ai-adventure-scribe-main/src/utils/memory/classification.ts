@@ -1,6 +1,6 @@
 import { calculateImportance } from './importance';
 import { CLASSIFICATION_PATTERNS } from './patterns';
-import { splitIntoSegments } from './segmentation';
+import { splitIntoSegments, sanitizeForMemoryExtraction } from './segmentation';
 
 import type { MemoryType } from '@/types/memory';
 
@@ -71,8 +71,9 @@ export const processContent = (content: string): MemorySegment[] => {
 
   if (!content || content.trim().length === 0) return [];
 
-  // Fallback: if nothing met minLength, keep the whole content as a single segment
-  const effectiveSegments = segments.length === 0 ? [content] : segments;
+  // Fallback: if nothing met minLength, use sanitized content as a single segment
+  const effectiveSegments =
+    segments.length === 0 ? [sanitizeForMemoryExtraction(content)] : segments;
 
   const mapToImportanceType = (type: MemoryType): string => {
     switch (type) {

@@ -4,6 +4,7 @@ import {
   stripOptionMenus,
   stripVisualPromptBlocks,
   stripSeparatorLines,
+  stripAssetTags,
   sanitizeForMemoryExtraction,
   splitIntoSegments,
 } from '../segmentation';
@@ -179,6 +180,51 @@ describe('sanitizeForMemoryExtraction', () => {
     const once = sanitizeForMemoryExtraction(input);
     const twice = sanitizeForMemoryExtraction(once);
     expect(once).toBe(twice);
+  });
+});
+
+describe('stripAssetTags', () => {
+  it('strips a well-formed asset tag', () => {
+    const result = stripAssetTags('You see [ASSET:npc:lord-diabolo] standing in the doorway.');
+    expect(result).not.toContain('[ASSET:');
+    expect(result).toContain('You see standing in the doorway.');
+  });
+
+  it('strips multiple asset tags in one string', () => {
+    const input = '[ASSET:character:the-veteran] and [ASSET:location:bone-cathedral] appear.';
+    const result = stripAssetTags(input);
+    expect(result).not.toContain('[ASSET:');
+    expect(result).toContain('and');
+    expect(result).toContain('appear.');
+  });
+
+  it('collapses double spaces left after removal', () => {
+    const result = stripAssetTags('Enter [ASSET:npc:remy] now.');
+    expect(result).not.toMatch(/ {2}/);
+  });
+
+  it('passes through content with no asset tags unchanged', () => {
+    const plain = 'The dragon swoops low.';
+    expect(stripAssetTags(plain)).toBe(plain);
+  });
+});
+
+describe('sanitizeForMemoryExtraction — asset tag stripping (issue #341)', () => {
+  it('strips [ASSET:*] tags from memory extraction input', () => {
+    const input =
+      'Lord Diabolo [ASSET:npc:lord-diabolo] steps forward. The cathedral [ASSET:location:bone-cathedral] looms.';
+    const result = sanitizeForMemoryExtraction(input);
+    expect(result).not.toContain('[ASSET:');
+    expect(result).toContain('Lord Diabolo');
+    expect(result).toContain('steps forward.');
+  });
+
+  it('short content that produces empty segments yields sanitized fallback (no ASSET tags)', () => {
+    // Content shorter than minLength=20 will fall through to the fallback path in classification.ts.
+    // The fallback must sanitize, which includes stripping asset tags.
+    const input = '[ASSET:npc:foo] Hi.';
+    const result = sanitizeForMemoryExtraction(input);
+    expect(result).not.toContain('[ASSET:');
   });
 });
 
