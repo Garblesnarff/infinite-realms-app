@@ -11,6 +11,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { updateGamePhase, clampCombatIntentFlags } from '../game-phase-updater';
+
 import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 describe('game-phase-updater', () => {
@@ -28,14 +29,14 @@ describe('game-phase-updater', () => {
         shouldStartCombat: true,
         shouldEndCombat: false,
         enemies: [],
-        combatActions: []
+        combatActions: [],
       };
 
       updateGamePhase({
         combatDetection,
         currentPhase: 'exploration',
         isInCombat: false,
-        setGamePhase
+        setGamePhase,
       });
 
       expect(setGamePhase).toHaveBeenCalledWith('combat');
@@ -48,14 +49,14 @@ describe('game-phase-updater', () => {
         shouldStartCombat: false,
         shouldEndCombat: true,
         enemies: [],
-        combatActions: []
+        combatActions: [],
       };
 
       updateGamePhase({
         combatDetection,
         currentPhase: 'combat',
         isInCombat: false,
-        setGamePhase
+        setGamePhase,
       });
 
       expect(setGamePhase).toHaveBeenCalledWith('exploration');
@@ -68,14 +69,14 @@ describe('game-phase-updater', () => {
         shouldStartCombat: false,
         shouldEndCombat: true,
         enemies: [],
-        combatActions: []
+        combatActions: [],
       };
 
       updateGamePhase({
         combatDetection,
         currentPhase: 'combat',
         isInCombat: true,
-        setGamePhase
+        setGamePhase,
       });
 
       expect(setGamePhase).not.toHaveBeenCalled();
@@ -86,7 +87,7 @@ describe('game-phase-updater', () => {
         combatDetection: undefined,
         currentPhase: 'exploration',
         isInCombat: false,
-        setGamePhase
+        setGamePhase,
       });
 
       expect(setGamePhase).not.toHaveBeenCalled();
@@ -99,14 +100,14 @@ describe('game-phase-updater', () => {
         shouldStartCombat: false,
         shouldEndCombat: false,
         enemies: [],
-        combatActions: []
+        combatActions: [],
       };
 
       updateGamePhase({
         combatDetection,
         currentPhase: 'combat',
         isInCombat: true,
-        setGamePhase
+        setGamePhase,
       });
 
       expect(setGamePhase).not.toHaveBeenCalled();
@@ -129,11 +130,11 @@ describe('game-phase-updater', () => {
     it('should return original flags if only one is true', () => {
       expect(clampCombatIntentFlags(true, false, false)).toEqual({
         shouldStartCombat: true,
-        shouldEndCombat: false
+        shouldEndCombat: false,
       });
       expect(clampCombatIntentFlags(false, true, true)).toEqual({
         shouldStartCombat: false,
-        shouldEndCombat: true
+        shouldEndCombat: true,
       });
     });
 

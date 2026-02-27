@@ -93,7 +93,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       return groups;
     }, [messages]);
 
-
     return (
       <>
         {/* Loading indicator at top when fetching more */}

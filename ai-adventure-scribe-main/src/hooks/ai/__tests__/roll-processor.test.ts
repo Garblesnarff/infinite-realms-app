@@ -44,13 +44,18 @@ import {
   pruneProcessedSet,
   deduplicateRollRequests,
   parseAndAugmentRollRequests,
-  processRollRequests
+  processRollRequests,
 } from '../roll-processor';
+
+import * as npcRollHandler from '@/services/ai/npc-roll-handler';
+import * as npcAutoRoller from '@/services/combat/npc-auto-roller';
 import { rollStateManager } from '@/services/combat/rollStateManager';
 import { DiceEngine } from '@/services/dice/DiceEngine';
-import * as npcAutoRoller from '@/services/combat/npc-auto-roller';
-import * as npcRollHandler from '@/services/ai/npc-roll-handler';
-import { parseRollRequests, detectsSuccessfulAttack, detectsCriticalHit } from '@/utils/rollRequestParser';
+import {
+  parseRollRequests,
+  detectsSuccessfulAttack,
+  detectsCriticalHit,
+} from '@/utils/rollRequestParser';
 
 describe('roll-processor', () => {
   beforeEach(() => {
@@ -90,7 +95,7 @@ describe('roll-processor', () => {
 
       const requests: any[] = [
         { purpose: 'Attack', formula: '1d20+5', ac: 15 }, // Duplicate
-        { purpose: 'Damage', formula: '1d8+3' },        // New
+        { purpose: 'Damage', formula: '1d8+3' }, // New
       ];
 
       const result = deduplicateRollRequests(requests, set);
@@ -104,7 +109,9 @@ describe('roll-processor', () => {
   describe('parseAndAugmentRollRequests', () => {
     it('should parse from text if existingRequests is empty', () => {
       const responseText = 'Roll for initiative!';
-      (parseRollRequests as any).mockReturnValue([{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }]);
+      (parseRollRequests as any).mockReturnValue([
+        { type: 'initiative', formula: '1d20+2', purpose: 'Initiative' },
+      ]);
 
       const result = parseAndAugmentRollRequests(responseText, []);
 
@@ -118,9 +125,12 @@ describe('roll-processor', () => {
       (detectsCriticalHit as any).mockReturnValue(false);
       (rollStateManager.isAwaitingDamage as any).mockReturnValue(true);
       (rollStateManager.getAwaitingDamageRoll as any).mockReturnValue({ type: 'attack' });
-      (DiceEngine.createDamageRollRequest as any).mockReturnValue({ formula: '1d8+3', purpose: 'Longsword damage' });
+      (DiceEngine.createDamageRollRequest as any).mockReturnValue({
+        formula: '1d8+3',
+        purpose: 'Longsword damage',
+      });
 
-      const result = parseAndAugmentRollRequests(responseText, []);
+      const _result = parseAndAugmentRollRequests(responseText, []);
 
       // One for the parsed hit (if any, mocked here as empty), plus one for auto-damage
       // Actually parseRollRequests is called and we mock it to return nothing
@@ -145,14 +155,16 @@ describe('roll-processor', () => {
         characterId: 'player-1',
       };
 
-      (parseRollRequests as any).mockReturnValue([{ type: 'attack', formula: '1d20+4', purpose: 'Goblin attack', ac: 15 }]);
+      (parseRollRequests as any).mockReturnValue([
+        { type: 'attack', formula: '1d20+4', purpose: 'Goblin attack', ac: 15 },
+      ]);
       (npcAutoRoller.executeAllNPCRolls as any).mockResolvedValue({
         npcRolls: [{ type: 'attack', result: 18, purpose: 'Goblin attack' }],
-        playerRolls: []
+        playerRolls: [],
       });
       (npcRollHandler.continueNarrativeWithNPCRolls as any).mockResolvedValue({
         success: true,
-        narrative: 'The goblin swings and misses!'
+        narrative: 'The goblin swings and misses!',
       });
 
       const result = await processRollRequests(params);
@@ -191,16 +203,18 @@ describe('roll-processor', () => {
 
       (npcAutoRoller.executeAllNPCRolls as any).mockResolvedValue({
         npcRolls: [],
-        playerRolls: params.existingRequests
+        playerRolls: params.existingRequests,
       });
 
       await processRollRequests(params);
 
-      expect(rollStateManager.addPendingRoll).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'attack',
-        targetAC: 14,
-        actorId: 'player-1'
-      }));
+      expect(rollStateManager.addPendingRoll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'attack',
+          targetAC: 14,
+          actorId: 'player-1',
+        }),
+      );
     });
   });
 });

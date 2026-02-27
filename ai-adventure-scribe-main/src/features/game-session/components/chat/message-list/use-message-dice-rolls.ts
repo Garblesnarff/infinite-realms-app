@@ -1,6 +1,5 @@
 import { useMemo, useRef, useCallback } from 'react';
 
-
 import type { DiceRollContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
@@ -11,7 +10,6 @@ import { useGame } from '@/contexts/GameContext';
 import logger from '@/lib/logger';
 import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
-
 
 // Type for last roll metadata
 export type LastRollMeta = {
@@ -46,13 +44,7 @@ export function useMessageDiceRolls({
   handleCancelRoll: () => void;
   lastRollRef: MutableRefObject<LastRollMeta | null>;
 } {
-  const {
-    state,
-    getCurrentDiceRoll,
-    completeDiceRoll,
-    cancelDiceRoll,
-    clearBatch,
-  } = useGame();
+  const { state, getCurrentDiceRoll, completeDiceRoll, cancelDiceRoll, clearBatch } = useGame();
 
   const lastRollRef = useRef<LastRollMeta | null>(null);
 
@@ -185,10 +177,7 @@ export function useMessageDiceRolls({
         let willCompleteBatch = true;
         if (roll.batchId) {
           const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
-            (r) =>
-              r.batchId === roll.batchId &&
-              r.status === 'pending' &&
-              r.id !== roll.id,
+            (r) => r.batchId === roll.batchId && r.status === 'pending' && r.id !== roll.id,
           ).length;
           willCompleteBatch = remainingPendingInBatch === 0;
           logger.info('[useMessageDiceRolls] Batch status check:', {
@@ -303,10 +292,7 @@ export function useMessageDiceRolls({
         let willCompleteBatch = true;
         if (roll.batchId) {
           const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
-            (r) =>
-              r.batchId === roll.batchId &&
-              r.status === 'pending' &&
-              r.id !== roll.id,
+            (r) => r.batchId === roll.batchId && r.status === 'pending' && r.id !== roll.id,
           ).length;
           willCompleteBatch = remainingPendingInBatch === 0;
           logger.info('[useMessageDiceRolls] Manual roll batch status check:', {
