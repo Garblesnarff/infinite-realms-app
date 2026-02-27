@@ -344,7 +344,12 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             {expandedAsset && (
               <div className="relative">
                 {/* Close button */}
-                <DialogPrimitive.Close className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">
+                <DialogPrimitive.Close
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  style={{ zIndex: Z_INDEX.MODAL + 1 }}
+                  aria-label="Close"
+                  title="Close"
+                >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
 
@@ -400,7 +405,12 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             </DialogPrimitive.Description>
             {generatedImage?.url && (
               <div className="relative">
-                <DialogPrimitive.Close className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors">
+                <DialogPrimitive.Close
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  style={{ zIndex: Z_INDEX.MODAL + 1 }}
+                  aria-label="Close"
+                  title="Close"
+                >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
                 <div className="relative aspect-square md:aspect-[4/3] w-full">

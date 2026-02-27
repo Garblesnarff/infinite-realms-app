@@ -296,7 +296,8 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
       {/* Drag Handle for Desktop */}
       <div
         ref={dragHandleRef}
-        className="absolute left-0 top-0 w-1 h-full bg-border hover:bg-primary cursor-col-resize z-10 hidden lg:block"
+        className="absolute left-0 top-0 w-1 h-full bg-border hover:bg-primary cursor-col-resize hidden lg:block"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
         onMouseDown={startDrag}
       />
 

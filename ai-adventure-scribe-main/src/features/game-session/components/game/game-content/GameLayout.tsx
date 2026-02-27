@@ -1,5 +1,7 @@
 import React, { useLayoutEffect, useState } from 'react';
 
+import { Z_INDEX } from '@/constants/z-index';
+
 import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
@@ -89,12 +91,13 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
       {/* Scene background layer */}
       {currentBackgroundUrl && (
         <div
-          className="fixed inset-0 z-0 pointer-events-none transition-opacity duration-1000"
+          className="fixed inset-0 pointer-events-none transition-opacity duration-1000"
           style={{
             backgroundImage: `url(${currentBackgroundUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: isTransitioning ? 0 : 0.15,
+            zIndex: Z_INDEX.BASE,
           }}
         >
           {/* Dark overlay for better readability */}
@@ -102,7 +105,10 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
         </div>
       )}
 
-      <div className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative z-10">
+      <div
+        className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         <div
           key={sessionId}
           className={`grid transition-all duration-300 ease-in-out h-full gap-2 md:gap-3 items-stretch w-full ${
