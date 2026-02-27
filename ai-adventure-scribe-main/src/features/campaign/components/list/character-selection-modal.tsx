@@ -318,7 +318,10 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
         >
           <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95 dark:from-background/60 dark:via-background/80 dark:to-background/95" />
           {template.portrait_url && (
-            <div className="absolute -bottom-8 left-4 z-10">
+            <div
+              className="absolute -bottom-8 left-4"
+              style={{ zIndex: Z_INDEX.DROPDOWN }}
+            >
               <img
                 src={template.portrait_url}
                 alt={`${template.name} portrait`}
@@ -433,7 +436,10 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
         >
           <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95 dark:from-background/60 dark:via-background/80 dark:to-background/95" />
           {character.avatar_url && (
-            <div className="absolute -bottom-8 left-4 z-10">
+            <div
+              className="absolute -bottom-8 left-4"
+              style={{ zIndex: Z_INDEX.DROPDOWN }}
+            >
               <img
                 src={character.avatar_url}
                 alt={`${character.name} avatar`}
