@@ -62,7 +62,7 @@
 
 ## 2026-02-10 - [Local Storage Hooks Coverage]
 **Learning:** `useLocalStorage` handles booleans by storing them as "1" or "0" strings, which needs specific test cases. Cross-tab synchronization via `StorageEvent` and SSR safety are critical logic paths for these hooks.
-**Action:** When testing storage hooks, mock `Storage.prototype.setItem` and `getItem` to simulate errors (like quota exceeded) and verify that the hook state remains consistent even if persistence fails. Always add new hooks to both `include` and `coverage.include` in `vitest.config.ts`.
+**Action:** When testing storage hooks, mock `Storage.prototype.setItem` and `getItem` to simulate errors (like query exceeded) and verify that the hook state remains consistent even if persistence fails. Always add new hooks to both `include` and `coverage.include` in `vitest.config.ts`.
 
 ## 2024-05-24 - [Death Saves Coverage]
 **Learning:** Found that `deathSaves.ts` was completely untested despite containing critical combat state machine logic. Discovered strict `import/order` lint rules in tests that require local modules to be imported before aliased type definitions.
@@ -131,3 +131,7 @@
 ## 2026-02-24 - [Advanced Spellcasting Hook Coverage]
 **Learning:** Found that `useAdvancedSpellcasting` hook had zero test coverage. Testing revealed that state updates in hooks using `useState` without functional updates (e.g., `setSelectedMetamagic([...selectedMetamagic, optionId])`) can lead to race conditions in tests if multiple updates are triggered within the same `act` block.
 **Action:** In tests, wrap each sequential state-changing call in its own `act` block to ensure React has processed the state transition before the next call. Always verify hook coverage by adding both the test and the source file to `vitest.config.ts`.
+
+## 2026-02-25 - [AI Response Logic Coverage]
+**Learning:** The AI response logic was recently refactored into `src/hooks/ai/` but lacks unit tests for the extracted modules. `game-phase-updater.ts` and `roll-processor.ts` contain critical state transition and dice roll parsing logic that impacts the core game loop.
+**Action:** Implement comprehensive unit tests for `game-phase-updater.ts` and `roll-processor.ts`. Ensure `vitest.config.ts` is updated to include these new tests and track their coverage.
