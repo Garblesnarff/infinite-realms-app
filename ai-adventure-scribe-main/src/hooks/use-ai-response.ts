@@ -3,7 +3,6 @@ import { useRef } from 'react';
 
 import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
-import type { Memory } from '@/types/memory';
 import type { RollRequest } from '@/types/roll-request';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
 
@@ -17,9 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
-import { isValidMemoryType, isValidMemorySubcategory } from '@/types/memory';
 import { detectCombatFromText } from '@/utils/combatDetection';
-import { selectRelevantMemories } from '@/utils/memory/selection';
 
 // Voice narration types
 export interface NarrationSegment {
@@ -91,17 +88,25 @@ export const useAIResponse = () => {
    */
   const fetchGameContext = async (
     sessionId: string,
-  ): Promise<{ campaign: Record<string, unknown>; character: Record<string, unknown> } | null> => {
+  ): Promise<{
+    campaign: Record<string, unknown>;
+    character: Record<string, unknown>;
+    starterCampaignId?: string;
+  } | null> => {
     try {
       logger.info('Fetching game session details for:', sessionId);
 
+      // ⚡ Bolt: Explicit column selection to avoid over-fetching and include character stats.
       const { data: sessionData, error: sessionError } = await supabase
         .from('game_sessions')
         .select(
           `
-          *,
-          campaigns:campaign_id (*),
-          characters:character_id (*)
+          id, campaign_id, character_id, starter_campaign_id,
+          campaigns:campaign_id (id, name, description),
+          characters:character_id (
+            id, name, level, race, class, background,
+            character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
+          )
         `,
         )
         .eq('id', sessionId)
@@ -118,8 +123,11 @@ export const useAIResponse = () => {
       }
 
       return {
-        campaign: sessionData.campaigns,
-        character: sessionData.characters,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        campaign: (sessionData.campaigns as any) || {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        character: (sessionData.characters as any) || {},
+        starterCampaignId: sessionData.starter_campaign_id as string,
       };
     } catch (error) {
       logger.error('Error in fetchGameContext:', error);
@@ -167,61 +175,22 @@ export const useAIResponse = () => {
       // Detect if this is the first player message in the session
       const isFirstMessage = messages.filter((m) => m.sender === 'player').length <= 1;
 
-      // Fetch campaign and character context
-      const gameContext = await fetchGameContext(sessionId);
+      // ⚡ Bolt: Parallelize fetching game context and voice context to reduce latency.
+      // Redundant memory fetching removed as AIService.chatWithDM handles it internally.
+      const [gameContext, voiceContext] = await Promise.all([
+        fetchGameContext(sessionId),
+        voiceConsistencyService.getSessionVoiceContext(sessionId),
+      ]);
+
       if (!gameContext) {
         throw new Error('Failed to fetch game context');
       }
-
-      // Get voice context for consistent character voices
-      const voiceContext = await voiceConsistencyService.getSessionVoiceContext(sessionId);
-
-      // Fetch and select relevant memories
-      const { data: memoriesData } = await supabase
-        .from('memories')
-        .select('*')
-        .eq('session_id', sessionId);
-
-      const memories: Memory[] = (memoriesData || [])
-        .filter((memory) => memory.created_at && memory.updated_at)
-        .map((memory): Memory => {
-          if (!isValidMemoryType(memory.type)) {
-            logger.warn(
-              `[Memory] Invalid memory type detected: ${memory.type}, defaulting to 'general'`,
-            );
-            memory.type = 'general';
-          }
-
-          let subcategory: Memory['subcategory'] = undefined;
-          if (memory.subcategory && isValidMemorySubcategory(memory.subcategory)) {
-            subcategory = memory.subcategory;
-          }
-
-          return {
-            id: memory.id,
-            type: isValidMemoryType(memory.type) ? memory.type : 'general',
-            subcategory,
-            content: memory.content,
-            importance: memory.importance ?? 1,
-            embedding: memory.embedding,
-            metadata: memory.metadata,
-            created_at: memory.created_at!,
-            session_id: memory.session_id,
-            updated_at: memory.updated_at!,
-            context_id: memory.context_id || undefined,
-            related_memories: memory.related_memories || undefined,
-            tags: memory.tags || undefined,
-          };
-        });
-
-      const selectedMemories = selectRelevantMemories(memories, latestMessage.context);
 
       // Analyze player message for combat context
       const combatDetection = detectCombatFromText(latestMessage.text);
 
       logger.debug('Calling DM Agent with context:', {
         gameContext,
-        selectedMemories: selectedMemories.length,
         knownCharacters: Object.keys(voiceContext.knownCharacters).length,
         isFirstMessage,
         combatDetected: combatDetection.isCombat,
@@ -243,6 +212,7 @@ export const useAIResponse = () => {
         campaignId: (campaignRecord.id as string) || '',
         characterId: (characterRecord.id as string) || '',
         sessionId,
+        starterCampaignId: gameContext.starterCampaignId,
         campaignDetails: gameContext.campaign,
         characterDetails: gameContext.character,
         gameState: {
