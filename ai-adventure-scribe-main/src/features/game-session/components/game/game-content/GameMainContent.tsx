@@ -12,7 +12,7 @@ import { CombatStatus } from '@/components/combat/CombatStatus';
 import { SafetyBanner } from '@/components/safety/SafetyBanner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-
+import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { usePendingRolls } from '@/hooks/use-pending-rolls';
@@ -29,8 +29,8 @@ interface GameMainContentProps {
   sessionId: string;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
-  sessionData: any;
-  updateGameSessionState: any;
+  sessionData: Record<string, unknown>;
+  updateGameSessionState: (state: unknown) => void;
   showSceneBlurb: boolean;
   setShowSceneBlurb: (v: boolean) => void;
   isLeftCollapsed: boolean;
@@ -41,7 +41,7 @@ interface GameMainContentProps {
   setShowTracker: (v: boolean) => void;
   isCombatDetected: boolean;
   isGeneratingGreeting: boolean;
-  innerHandleAIResponse: (message: any) => Promise<void>;
+  innerHandleAIResponse: (message: unknown) => Promise<void>;
   lastSafetyCommand?: {
     type: 'x_card' | 'veil' | 'pause' | 'resume';
     timestamp: string;
@@ -118,7 +118,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-infinite-purple/8 to-transparent opacity-80"></div>
           <div className="absolute inset-0 bg-gradient-to-b from-purple-900/10 via-transparent to-slate-900/10"></div>
 
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700 gap-4 md:gap-6">
+          <div
+            className="relative flex flex-col lg:flex-row lg:items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700 gap-4 md:gap-6"
+            style={{ zIndex: Z_INDEX.DROPDOWN }}
+          >
             <div className="flex-1">
               <div className="mb-2">
                 <h1 className="text-xl md:text-2xl font-display mb-1 truncate">
@@ -256,7 +259,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
 
                 {/* Enhanced loading indicator for initial greeting */}
                 {isGeneratingGreeting && (
-                  <div className="absolute inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center z-20 animate-in fade-in duration-300">
+                  <div
+                    className="absolute inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300"
+                    style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                  >
                     <div className="bg-card border border-border/60 rounded-xl p-8 shadow-2xl max-w-md mx-4 transform animate-in slide-in-from-bottom-4 duration-500">
                       <div className="flex flex-col items-center text-center space-y-6">
                         <div className="relative">
@@ -287,7 +293,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
 
                 {/* Typing Indicator - shows when AI is responding */}
                 {queueStatus === 'processing' && (
-                  <div className="absolute bottom-24 left-6 z-10 animate-in slide-in-from-left-2 duration-300 md:bottom-20">
+                  <div
+                    className="absolute bottom-24 left-6 animate-in slide-in-from-left-2 duration-300 md:bottom-20"
+                    style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  >
                     <div className="flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full shadow-lg">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-infinite-purple to-infinite-teal flex items-center justify-center">
                         <span className="text-xs font-medium text-white">DM</span>
@@ -319,7 +328,10 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
                 )}
 
                 {/* Input Area at bottom - sticky */}
-                <div className="border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)] sticky bottom-0 left-0 right-0 z-30 shrink-0">
+                <div
+                  className="border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)] sticky bottom-0 left-0 right-0 shrink-0"
+                  style={{ zIndex: Z_INDEX.STICKY }}
+                >
                   <ChatInput
                     onSendMessage={handleSendMessage}
                     isDisabled={isProcessing || hasPendingRolls}
