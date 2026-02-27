@@ -339,6 +339,8 @@ export default tseslint.config(
       'src/features/character/components/sheet/tabs/components/CombatVitals.tsx',
       'src/hooks/use-character-save.ts',
       'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
+      'src/features/game-session/components/chat/message-list/MessageListContainer.tsx',
+      'src/features/game-session/components/chat/message-list/use-message-dice-rolls.ts',
     ],
     rules: {
       'max-lines': 'warn',

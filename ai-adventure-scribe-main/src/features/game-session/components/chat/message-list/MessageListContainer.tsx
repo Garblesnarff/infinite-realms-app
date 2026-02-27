@@ -1,18 +1,13 @@
-/* eslint-disable max-lines */
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 
 import { MessageRenderer } from './MessageRenderer';
+import { useMessageDiceRolls } from './use-message-dice-rolls';
 
 import type { DiceRollContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
-import type { RollRequest } from '@/types/roll-request';
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { Z_INDEX } from '@/constants/z-index';
-import { useGame } from '@/contexts/GameContext';
-import logger from '@/lib/logger';
-import { rollDice } from '@/utils/diceUtils';
-import { handleAsyncError } from '@/utils/error-handler';
 
 interface MessageListContainerProps {
   messages: ChatMessage[];
@@ -31,19 +26,6 @@ interface MessageListContainerProps {
   hasMore?: boolean;
   suppressEmptyState?: boolean;
 }
-
-// Type for last roll metadata
-type LastRollMeta = {
-  kind: 'attack' | 'skill_check' | 'save' | 'damage' | 'initiative' | 'generic';
-  skill?: string;
-  weapon?: string;
-  label?: string;
-  result: number;
-  nat?: number;
-  dc?: number;
-  ac?: number;
-  success?: boolean;
-};
 
 /**
  * MessageListContainer Component
@@ -72,113 +54,14 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     suppressEmptyState = false,
   }) => {
     const {
-      state,
-      getCurrentDiceRoll,
-      completeDiceRoll,
-      cancelDiceRoll,
-      isBatchComplete: _isBatchComplete,
-      getBatchResults: _getBatchResults,
-      clearBatch,
-    } = useGame();
-    const lastRollRef = useRef<LastRollMeta | null>(null);
-
-    /**
-     * Format a single dice roll with enhanced context for both AI and human readability
-     * Returns: "Stealth Check: 15 (nat 13+2) vs DC 13 ✓"
-     */
-    const formatDiceRoll = React.useCallback((roll: DiceRollRequest): string => {
-      if (!roll.result) return `${roll.description}: pending`;
-
-      const { result, rollConfig, requestType, dc, ac } = roll;
-      const total = result.total;
-      const nat = result.naturalRoll ?? total - rollConfig.modifier;
-      const modifier = rollConfig.modifier;
-
-      // Build base format: "Description: Total (nat Natural+Modifier)"
-      let formatted = `${roll.description}: ${total}`;
-
-      // Add natural roll and modifier breakdown if applicable
-      if (modifier !== 0 || nat !== total) {
-        formatted += ` (nat ${nat}`;
-        if (modifier > 0) formatted += `+${modifier}`;
-        else if (modifier < 0) formatted += `${modifier}`;
-        formatted += ')';
-      }
-
-      // Add advantage/disadvantage notation
-      if (rollConfig.advantage) formatted += ' [ADV]';
-      if (rollConfig.disadvantage) formatted += ' [DIS]';
-
-      // Add success/failure indicator (DC/AC hidden from players, but AI DM still receives it)
-      if (dc !== undefined) {
-        formatted += total >= dc ? ' ✓' : ' ✗';
-      } else if (ac !== undefined && requestType === 'attack') {
-        formatted += total >= ac ? ' ✓' : ' ✗';
-      }
-
-      // Add critical indicators
-      if (nat === 20 && requestType === 'attack') {
-        formatted += ' CRITICAL HIT!';
-      } else if (nat === 1 && requestType === 'attack') {
-        formatted += ' Critical Miss';
-      }
-
-      return formatted;
-    }, []);
-
-    // Subscribe to current dice roll from queue state
-    // This will re-compute when state.diceRollQueue changes,
-    // triggering a re-render and showing the next roll in the queue
-    const currentRoll = React.useMemo(() => {
-      if (!state.diceRollQueue.currentRollId) return null;
-
-      return (
-        state.diceRollQueue.pendingRolls.find(
-          (roll) => roll.id === state.diceRollQueue.currentRollId && roll.status === 'pending',
-        ) || null
-      );
-    }, [state.diceRollQueue.currentRollId, state.diceRollQueue.pendingRolls]);
-
-    // Calculate batch progress for multi-roll scenarios
-    const batchProgress = React.useMemo(() => {
-      if (!currentRoll?.batchId) return null;
-
-      const batchRolls = state.diceRollQueue.pendingRolls.filter(
-        (roll) => roll.batchId === currentRoll.batchId,
-      );
-      const completedInBatch = batchRolls.filter((roll) => roll.status === 'completed').length;
-      const currentPosition = completedInBatch + 1;
-      const totalRolls = batchRolls.length;
-
-      return { current: currentPosition, total: totalRolls };
-    }, [currentRoll, state.diceRollQueue.pendingRolls]);
-
-    /**
-     * ⚡ Bolt: Memoize the roll request object to ensure stable props for DiceRollRequest.
-     * This prevents unnecessary re-renders of the DiceRollRequest component when other
-     * props in MessageListContainer change (like expandedMessages).
-     */
-    const rollRequest = useMemo(() => {
-      if (!currentRoll) return null;
-      return {
-        type: currentRoll.requestType as RollRequest['type'],
-        formula: currentRoll.rollConfig.abilityModifier
-          ? `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}+${currentRoll.rollConfig.abilityModifier}`
-          : `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
-        purpose: currentRoll.description,
-        advantage: currentRoll.rollConfig.advantage,
-        disadvantage: currentRoll.rollConfig.disadvantage,
-      };
-    }, [currentRoll]);
-
-    /**
-     * ⚡ Bolt: Memoize the onCancel callback to ensure stable props for DiceRollRequest.
-     */
-    const handleCancelRoll = React.useCallback(() => {
-      if (currentRoll) {
-        cancelDiceRoll(currentRoll.id);
-      }
-    }, [currentRoll, cancelDiceRoll]);
+      currentRoll,
+      batchProgress,
+      rollRequest,
+      handleDiceRoll,
+      handleManualResult,
+      handleCancelRoll,
+      lastRollRef: _lastRollRef,
+    } = useMessageDiceRolls({ onSendMessage, onSendFullMessage });
 
     // Group consecutive messages from the same sender
     const groupedMessages = useMemo(() => {
@@ -210,265 +93,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       return groups;
     }, [messages]);
 
-    // Handle dice roll from queue with batching support
-    const handleDiceRoll = React.useCallback(
-      async (formula: string, advantage?: boolean, disadvantage?: boolean) => {
-        logger.info('[MessageListContainer] Handling dice roll from queue:', {
-          formula,
-          advantage,
-          disadvantage,
-        });
-
-        const currentRoll = getCurrentDiceRoll();
-        if (!currentRoll) {
-          logger.warn('[MessageListContainer] No current dice roll in queue');
-          return;
-        }
-
-        try {
-          const diceMatch = formula.match(/(\d+)d(\d+)([+-]\d+)?/);
-          if (!diceMatch) {
-            logger.error('[MessageListContainer] Invalid dice formula:', formula);
-            return;
-          }
-
-          const count = parseInt(diceMatch[1]);
-          const dieType = parseInt(diceMatch[2]);
-          const modifier = diceMatch[3] ? parseInt(diceMatch[3]) : 0;
-
-          const rollResult = rollDice(dieType, count, modifier, {
-            advantage: advantage || false,
-            disadvantage: disadvantage || false,
-          });
-
-          // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
-          // isBatchComplete() reads from stateRef which is updated in useEffect AFTER render,
-          // so we must calculate it synchronously using current state BEFORE completing the roll
-          let willCompleteBatch = true; // Default for non-batch rolls (single rolls always complete)
-          if (currentRoll.batchId) {
-            // Count remaining pending rolls in this batch (excluding current roll we're about to complete)
-            const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
-              (roll) =>
-                roll.batchId === currentRoll.batchId &&
-                roll.status === 'pending' &&
-                roll.id !== currentRoll.id,
-            ).length;
-            willCompleteBatch = remainingPendingInBatch === 0;
-            logger.info('[MessageListContainer] Batch status check:', {
-              batchId: currentRoll.batchId,
-              remainingPendingInBatch,
-              willCompleteBatch,
-            });
-          }
-
-          // Complete the roll in context (dispatches action - state updates async)
-          completeDiceRoll(currentRoll.id, rollResult);
-
-          // ALWAYS send individual roll result to DM (regardless of batch status)
-          // This ensures DM gets each result immediately, like in real D&D
-          const formattedRoll = formatDiceRoll({ ...currentRoll, result: rollResult });
-
-          const diceRollMessage: ChatMessage = {
-            text: formattedRoll,
-            sender: 'player',
-            timestamp: new Date().toISOString(),
-            context: {
-              intent: 'dice_roll',
-              diceRoll: {
-                formula,
-                count,
-                dieType,
-                modifier,
-                advantage: advantage || false,
-                disadvantage: disadvantage || false,
-                results: rollResult.results,
-                keptResults: rollResult.keptResults,
-                total: rollResult.total,
-                naturalRoll: rollResult.naturalRoll,
-                critical: rollResult.critical,
-                timestamp: new Date().toISOString(),
-              },
-            },
-          };
-
-          // Use pre-calculated willCompleteBatch instead of isBatchComplete() which reads stale state
-          if (currentRoll.batchId && !willCompleteBatch) {
-            // Batch in progress - persist only (no AI trigger)
-            // onSendMessage only persists, does NOT trigger AI
-            await onSendMessage(diceRollMessage);
-            logger.info('[MessageListContainer] Batch roll persisted, waiting for remaining rolls');
-          } else {
-            // Single roll OR last roll in batch - trigger AI (which also persists)
-            // onSendFullMessage persists AND triggers AI response
-            if (onSendFullMessage) {
-              logger.info('[MessageListContainer] Triggering AI response after roll(s) complete');
-              // CRITICAL FIX: Pass dice roll context to preserve intent through message flow
-              // This enables the roll suppression logic in use-ai-response.ts
-              await onSendFullMessage(formattedRoll, {
-                intent: 'dice_roll',
-                diceRoll: diceRollMessage.context?.diceRoll,
-              });
-            } else {
-              // Fallback if onSendFullMessage not available
-              await onSendMessage(diceRollMessage);
-            }
-
-            if (currentRoll.batchId) {
-              logger.info('[MessageListContainer] Batch complete! Clearing batch state');
-              clearBatch();
-            }
-          }
-
-          // Capture last roll meta
-          const mapKind = (t: string): LastRollMeta['kind'] => {
-            if (t === 'attack') return 'attack';
-            if (t === 'damage') return 'damage';
-            if (t === 'initiative') return 'initiative';
-            if (['saving_throw', 'death_save', 'concentration_save'].includes(t)) return 'save';
-            if (['ability_check', 'skill_check'].includes(t)) return 'skill_check';
-            return 'generic';
-          };
-
-          lastRollRef.current = {
-            kind: mapKind(currentRoll.requestType),
-            label: currentRoll.description,
-            result: rollResult.total,
-            nat: rollResult.naturalRoll,
-          };
-        } catch (error) {
-          handleAsyncError(error, {
-            userMessage: 'Failed to process dice roll',
-            context: { location: 'MessageListContainer.handleDiceRoll' },
-          });
-        }
-      },
-      [
-        onSendMessage,
-        onSendFullMessage,
-        getCurrentDiceRoll,
-        completeDiceRoll,
-        clearBatch,
-        formatDiceRoll,
-        state.diceRollQueue.pendingRolls, // Added: needed for synchronous batch completion check
-      ],
-    );
-
-    // Handle manual dice result input with batching support
-    const handleManualResult = React.useCallback(
-      async (result: number) => {
-        const currentRoll = getCurrentDiceRoll();
-        if (!currentRoll) {
-          logger.warn('[MessageListContainer] No current dice roll in queue');
-          return;
-        }
-
-        try {
-          let numericResult: number;
-          if (typeof result === 'number') {
-            numericResult = result;
-          } else if (typeof result === 'object' && result && 'total' in result) {
-            numericResult = (result as { total: number }).total;
-          } else {
-            logger.error('[MessageListContainer] Invalid result type:', result);
-            return;
-          }
-
-          // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
-          // isBatchComplete() reads from stateRef which is updated in useEffect AFTER render,
-          // so we must calculate it synchronously using current state BEFORE completing the roll
-          let willCompleteBatch = true; // Default for non-batch rolls (single rolls always complete)
-          if (currentRoll.batchId) {
-            // Count remaining pending rolls in this batch (excluding current roll we're about to complete)
-            const remainingPendingInBatch = state.diceRollQueue.pendingRolls.filter(
-              (roll) =>
-                roll.batchId === currentRoll.batchId &&
-                roll.status === 'pending' &&
-                roll.id !== currentRoll.id,
-            ).length;
-            willCompleteBatch = remainingPendingInBatch === 0;
-            logger.info('[MessageListContainer] Manual roll batch status check:', {
-              batchId: currentRoll.batchId,
-              remainingPendingInBatch,
-              willCompleteBatch,
-            });
-          }
-
-          // Complete the roll in context (dispatches action - state updates async)
-          completeDiceRoll(currentRoll.id, { total: numericResult });
-
-          // Format the roll result
-          const formattedRoll = formatDiceRoll({
-            ...currentRoll,
-            result: { total: numericResult },
-          });
-
-          // Use pre-calculated willCompleteBatch instead of isBatchComplete() which reads stale state
-          if (currentRoll.batchId && !willCompleteBatch) {
-            // Batch in progress - persist only (no AI trigger)
-            const playerMessage: ChatMessage = {
-              text: formattedRoll,
-              sender: 'player',
-              timestamp: new Date().toISOString(),
-            };
-            await onSendMessage(playerMessage);
-            logger.info(
-              '[MessageListContainer] Manual batch roll persisted, waiting for remaining rolls',
-            );
-          } else {
-            // Single roll OR last roll in batch - trigger AI (which also persists)
-            if (onSendFullMessage) {
-              logger.info(
-                '[MessageListContainer] Triggering AI response after manual roll(s) complete',
-              );
-              // CRITICAL FIX: Pass dice roll context to preserve intent through message flow
-              // This enables the roll suppression logic in use-ai-response.ts
-              await onSendFullMessage(formattedRoll, {
-                intent: 'dice_roll',
-                diceRoll: {
-                  formula: currentRoll.rollConfig.abilityModifier
-                    ? `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}+${currentRoll.rollConfig.abilityModifier}`
-                    : `${currentRoll.rollConfig.count}d${currentRoll.rollConfig.dieType}${currentRoll.rollConfig.modifier >= 0 ? '+' : ''}${currentRoll.rollConfig.modifier}`,
-                  count: currentRoll.rollConfig.count,
-                  dieType: currentRoll.rollConfig.dieType,
-                  modifier: currentRoll.rollConfig.modifier,
-                  advantage: currentRoll.rollConfig.advantage,
-                  disadvantage: currentRoll.rollConfig.disadvantage,
-                  total: numericResult,
-                  timestamp: new Date().toISOString(),
-                },
-              });
-            } else {
-              // Fallback if onSendFullMessage not available
-              const playerMessage: ChatMessage = {
-                text: formattedRoll,
-                sender: 'player',
-                timestamp: new Date().toISOString(),
-              };
-              await onSendMessage(playerMessage);
-            }
-
-            if (currentRoll.batchId) {
-              logger.info('[MessageListContainer] Batch complete (manual)! Clearing batch state');
-              clearBatch();
-            }
-          }
-        } catch (error) {
-          handleAsyncError(error, {
-            userMessage: 'Failed to process dice result',
-            context: { location: 'MessageListContainer.handleManualResult' },
-          });
-        }
-      },
-      [
-        onSendMessage,
-        onSendFullMessage,
-        getCurrentDiceRoll,
-        completeDiceRoll,
-        clearBatch,
-        formatDiceRoll,
-        state.diceRollQueue.pendingRolls, // Added: needed for synchronous batch completion check
-      ],
-    );
 
     return (
       <>
