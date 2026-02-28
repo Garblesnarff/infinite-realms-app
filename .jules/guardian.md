@@ -135,3 +135,7 @@
 ## 2026-02-25 - [AI Response Logic Coverage]
 **Learning:** The AI response logic was recently refactored into `src/hooks/ai/` but lacks unit tests for the extracted modules. `game-phase-updater.ts` and `roll-processor.ts` contain critical state transition and dice roll parsing logic that impacts the core game loop.
 **Action:** Implement comprehensive unit tests for `game-phase-updater.ts` and `roll-processor.ts`. Ensure `vitest.config.ts` is updated to include these new tests and track their coverage.
+
+## 2024-05-24 - [Campaign Assets Hook Coverage & Concurrent Mocks]
+**Learning:** Found that `use-campaign-assets.ts` was completely untested. Testing it required mocking concurrent Supabase calls to multiple tables (`starter_character_templates`, `campaign_chunks`, `starter_campaigns`). Discovered that using `vi.mockImplementation((table: string) => { ... })` is the most effective way to handle diverse chained operations across different tables in a single `Promise.all` block.
+**Action:** When testing hooks that perform concurrent database queries, use a single `mockImplementation` on the `from` method to return specialized mock objects based on the table name. Always verify that normalization logic for keys (like `generateKey`) handles special characters and Unicode quote variants.
