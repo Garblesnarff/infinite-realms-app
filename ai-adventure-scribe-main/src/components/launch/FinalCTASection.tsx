@@ -11,6 +11,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { WaitlistForm } from './WaitlistForm';
 
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const FinalCTASection: React.FC = () => {
@@ -53,7 +54,10 @@ export const FinalCTASection: React.FC = () => {
   return (
     <section ref={sectionRef} className="relative py-40 overflow-hidden">
       {/* Parallax Background with hero-bg-v2.jpg */}
-      <div className="absolute inset-0 z-0" style={{ transform: `translateY(${scrollY * 0.5}px)` }}>
+      <div
+        className="absolute inset-0"
+        style={{ transform: `translateY(${scrollY * 0.5}px)`, zIndex: Z_INDEX.BASE }}
+      >
         <img
           src="/hero-bg-v2.jpg"
           alt="Epic fantasy background"
@@ -63,7 +67,7 @@ export const FinalCTASection: React.FC = () => {
         <div className="absolute inset-0 bg-gray-900/90"></div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 relative z-10">
+      <div className="max-w-5xl mx-auto px-6 relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
         {/* Main CTA Content - Centered */}
         <div className="text-center mb-16">
           <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-8 leading-tight">

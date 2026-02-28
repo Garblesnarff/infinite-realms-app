@@ -8,6 +8,7 @@
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Z_INDEX } from '@/constants/z-index';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const FeaturesSection: React.FC = () => {
@@ -111,14 +112,14 @@ export const FeaturesSection: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
 
                 {/* Status Badge */}
-                <div className="absolute top-4 left-4 z-10">
+                <div className="absolute top-4 left-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
                   <Badge className={`${styling.badge} border`}>
                     {getStatusLabel(feature.status)}
                   </Badge>
                 </div>
 
                 {/* Content - Positioned at Bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
+                <div className="absolute bottom-0 left-0 right-0 p-8" style={{ zIndex: Z_INDEX.DROPDOWN }}>
                   <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">
                     {feature.title}
                   </h3>
