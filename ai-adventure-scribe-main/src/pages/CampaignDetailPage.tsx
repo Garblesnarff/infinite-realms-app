@@ -16,9 +16,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
@@ -223,7 +224,7 @@ const CampaignDetailPage: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/60 to-transparent" />
 
           {/* Back Button */}
-          <div className="absolute top-6 left-6 z-20">
+          <div className="absolute top-6 left-6" style={{ zIndex: Z_INDEX.CARD_HOVER }}>
             <Link
               to="/explore"
               className="flex items-center gap-2 text-white/80 hover:text-white transition-colors bg-black/30 backdrop-blur-sm rounded-full px-4 py-2"
@@ -241,7 +242,7 @@ const CampaignDetailPage: React.FC = () => {
           </div>
 
           {/* Title Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
+          <div className="absolute bottom-0 left-0 right-0 p-8" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <div className="max-w-4xl mx-auto">
               {/* Badges */}
               <div className="flex flex-wrap gap-2 mb-4">

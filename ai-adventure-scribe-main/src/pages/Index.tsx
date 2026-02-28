@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { ErrorBoundary, CampaignErrorFallback } from '@/components/error';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 import { CampaignList } from '@/features/campaign/components';
 
 /**
@@ -57,7 +58,7 @@ const Index = () => {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-12 -mt-12 relative z-10">
+      <div className="container mx-auto px-4 py-12 -mt-12 relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
         {/* Search and Sort Controls */}
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mb-8 bg-background/80 backdrop-blur-sm rounded-2xl p-6 border border-border/30 shadow-lg">
           <div className="flex-1 max-w-md">
