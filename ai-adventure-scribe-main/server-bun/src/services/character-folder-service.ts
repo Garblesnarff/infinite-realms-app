@@ -75,28 +75,31 @@ export class CharacterFolderService {
    * List all folders for a user with nested structure
    */
   static async listFolders(userId: string): Promise<FolderWithChildren[]> {
-    const folders = await db.query.characterFolders.findMany({
-      where: eq(characterFolders.userId, userId),
-      orderBy: [asc(characterFolders.sortOrder)],
-    });
+    // ⚡ Bolt: Parallelize fetching folders and character counts to reduce total latency.
+    // Both operations are independent and can be executed concurrently.
+    const [folders, counts] = await Promise.all([
+      db.query.characterFolders.findMany({
+        where: eq(characterFolders.userId, userId),
+        orderBy: [asc(characterFolders.sortOrder)],
+      }),
+      // ⚡ Bolt: Use SQL aggregation (count/groupBy) instead of fetching all characters to memory.
+      // This significantly reduces data transfer and memory usage as the character list grows.
+      db
+        .select({
+          folderId: characters.folderId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(characters)
+        .where(
+          and(
+            isNotNull(characters.folderId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
+        .groupBy(characters.folderId),
+    ]);
 
-    // ⚡ Bolt: Use SQL aggregation (count/groupBy) instead of fetching all characters to memory.
-    // This significantly reduces data transfer and memory usage as the character list grows.
-    const counts = await db
-      .select({
-        folderId: characters.folderId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(characters)
-      .where(and(
-        isNotNull(characters.folderId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .groupBy(characters.folderId);
-
-    const folderCounts = new Map<string, number>(
-      counts.map(c => [c.folderId as string, c.count])
-    );
+    const folderCounts = new Map<string, number>(counts.map((c) => [c.folderId as string, c.count]));
 
     const foldersWithCounts = folders.map(folder => ({
       ...folder,
@@ -206,21 +209,24 @@ export class CharacterFolderService {
 
     // Prevent moving folder to be its own child
     if (updates.parentFolderId) {
-      const subtree = await this.getFolderSubtree(folderId, userId);
+      // ⚡ Bolt: Parallelize independent validation checks (subtree retrieval and parent existence)
+      // to reduce database round-trip sum during folder movement.
+      const [subtree, parentFolder] = await Promise.all([
+        this.getFolderSubtree(folderId, userId),
+        db.query.characterFolders.findFirst({
+          where: and(
+            eq(characterFolders.id, updates.parentFolderId),
+            eq(characterFolders.userId, userId),
+          ),
+        }),
+      ]);
+
       if (subtree.includes(updates.parentFolderId)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Cannot move folder to be a child of itself',
         });
       }
-
-      // Verify parent folder exists and belongs to user
-      const parentFolder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, updates.parentFolderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
 
       if (!parentFolder) {
         throw new TRPCError({
@@ -268,23 +274,25 @@ export class CharacterFolderService {
       });
     }
 
-    // Move all characters in this folder to the parent folder (or root if no parent)
-    await db
-      .update(characters)
-      .set({ folderId: folder.parentFolderId })
-      .where(and(
-        eq(characters.folderId, folderId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
-
-    // Move all subfolders to the parent folder (or root if no parent)
-    await db
-      .update(characterFolders)
-      .set({ parentFolderId: folder.parentFolderId })
-      .where(and(
-        eq(characterFolders.parentFolderId, folderId),
-        eq(characterFolders.userId, userId)
-      ));
+    // ⚡ Bolt: Parallelize character and subfolder migration to reduce total latency.
+    // These updates are independent and can be executed concurrently.
+    await Promise.all([
+      // Move all characters in this folder to the parent folder (or root if no parent)
+      db
+        .update(characters)
+        .set({ folderId: folder.parentFolderId })
+        .where(
+          and(
+            eq(characters.folderId, folderId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        ),
+      // Move all subfolders to the parent folder (or root if no parent)
+      db
+        .update(characterFolders)
+        .set({ parentFolderId: folder.parentFolderId })
+        .where(and(eq(characterFolders.parentFolderId, folderId), eq(characterFolders.userId, userId))),
+    ]);
 
     // Delete the folder
     const result = await db
