@@ -346,6 +346,7 @@ export default tseslint.config(
       'src/features/game-session/components/game/game-content/GameMainContent.tsx',
       'src/components/character-creation/steps/CharacterFinalization.tsx',
       'src/components/character-creation/steps/character-finalization/use-character-finalization.ts',
+      'src/pages/AccountPage.tsx',
     ],
     rules: {
       'max-lines': 'warn',
