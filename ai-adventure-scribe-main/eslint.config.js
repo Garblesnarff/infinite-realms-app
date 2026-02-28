@@ -308,6 +308,8 @@ export default tseslint.config(
       'src/features/character/components/list/character-card.tsx',
       'src/components/character-sheet/tabs/InventoryTab.tsx',
       'src/features/character/components/sheet/tabs/InventoryTab.tsx',
+      'src/components/blog-admin/blog-posts-list.tsx',
+      'src/components/blog-admin/blog-posts-table.tsx',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',
       'src/components/character-creation/steps/AdvancedSpellcastingSelection.tsx',
