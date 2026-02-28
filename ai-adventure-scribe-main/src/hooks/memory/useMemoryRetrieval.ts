@@ -4,7 +4,7 @@ import type { Memory } from '@/types/memory';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { isValidMemoryType } from '@/types/memory';
+import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
 
 export const useMemoryRetrieval = (sessionId: string | null) => {
   return useQuery({
@@ -14,9 +14,10 @@ export const useMemoryRetrieval = (sessionId: string | null) => {
 
       logger.info('[Memory Retrieval] Fetching memories for session:', sessionId);
 
+      // ⚡ Bolt: Using explicit column list to avoid fetching large vector embeddings (~3KB/row).
       const { data, error } = await supabase
         .from('memories')
-        .select('*')
+        .select(MEMORY_SELECT_COLUMNS)
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false });
 
@@ -43,8 +44,8 @@ export const useMemoryRetrieval = (sessionId: string | null) => {
           type: validatedType,
           content: memory.content,
           importance: memory.importance || 0,
-          embedding:
-            typeof memory.embedding === 'string' ? JSON.parse(memory.embedding) : memory.embedding,
+          // ⚡ Bolt: Embedding is no longer fetched to improve performance.
+          embedding: null,
           metadata: memory.metadata,
           created_at: memory.created_at || new Date().toISOString(),
           session_id: memory.session_id,

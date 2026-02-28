@@ -212,3 +212,10 @@ export interface MemoryQueryOptions {
   query?: string;
   semanticSearch?: boolean;
 }
+
+/**
+ * ⚡ Bolt: Explicit column list for memory retrieval to avoid over-fetching
+ * large vector embeddings (~3KB per row) when not needed for semantic search.
+ */
+export const MEMORY_SELECT_COLUMNS =
+  'id, session_id, campaign_id, type, memory_type, content, importance, metadata, context, created_at, updated_at, tags, subcategory, context_id, related_memories, narrative_weight';
