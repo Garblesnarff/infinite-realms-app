@@ -115,28 +115,32 @@ export const useInitialGreeting = ({
         return;
       }
 
-      // Fetch character data
-      const { data: characterData, error: characterError } = await supabase
-        .from('characters')
-        .select(
-          `
-          *,
-          character_stats(*)
-        `,
-        )
-        .eq('id', characterId as string)
-        .single();
+      // ⚡ Bolt: Parallelize character and campaign data fetching to reduce total latency.
+      // Also used explicit column selection instead of select('*') to minimize data transfer.
+      const [characterResult, campaignResult] = await Promise.all([
+        supabase
+          .from('characters')
+          .select(
+            `
+            id, name, level, race, class, background,
+            character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
+          `,
+          )
+          .eq('id', characterId as string)
+          .single(),
+        supabase
+          .from('campaigns')
+          .select('id, name, description')
+          .eq('id', campaignId as string)
+          .single(),
+      ]);
+
+      const { data: characterData, error: characterError } = characterResult;
+      const { data: campaignData, error: campaignError } = campaignResult;
 
       if (characterError) {
         throw new Error(`Failed to load character: ${characterError.message}`);
       }
-
-      // Fetch campaign data
-      const { data: campaignData, error: campaignError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', campaignId as string)
-        .single();
 
       if (campaignError) {
         throw new Error(`Failed to load campaign: ${campaignError.message}`);
