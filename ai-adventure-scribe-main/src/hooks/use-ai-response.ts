@@ -15,6 +15,7 @@ import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { MemoryManager } from '@/services/memory-manager';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 import { detectCombatFromText } from '@/utils/combatDetection';
 
@@ -175,11 +176,12 @@ export const useAIResponse = () => {
       // Detect if this is the first player message in the session
       const isFirstMessage = messages.filter((m) => m.sender === 'player').length <= 1;
 
-      // ⚡ Bolt: Parallelize fetching game context and voice context to reduce latency.
-      // Redundant memory fetching removed as AIService.chatWithDM handles it internally.
-      const [gameContext, voiceContext] = await Promise.all([
+      // ⚡ Bolt: Parallelize fetching game context, voice context, and relevant memories to reduce latency.
+      // This reduces total request time by executing all context retrieval concurrently.
+      const [gameContext, voiceContext, relevantMemories] = await Promise.all([
         fetchGameContext(sessionId),
         voiceConsistencyService.getSessionVoiceContext(sessionId),
+        MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8),
       ]);
 
       if (!gameContext) {
@@ -237,6 +239,7 @@ export const useAIResponse = () => {
         conversationHistory,
         userPlan: userPlan || undefined,
         turnCount,
+        relevantMemories,
       });
 
       // Extract response data (result type has both snake_case and camelCase variants)

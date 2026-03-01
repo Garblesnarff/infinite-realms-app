@@ -63,6 +63,7 @@ export class AIService {
     onStream?: (chunk: string) => void;
     userPlan?: 'free' | 'pro' | 'enterprise';
     turnCount?: number;
+    relevantMemories?: Memory[];
   }): Promise<{
     text: string;
     narrationSegments?: NarrationSegment[];
@@ -85,9 +86,10 @@ export class AIService {
 
     const p = (async () => {
       try {
-        // Retrieve relevant memories to enhance context
-        let relevantMemories: Memory[] = [];
-        if (params.context.sessionId) {
+        // ⚡ Bolt: Use provided relevant memories if available, otherwise fetch them.
+        // This allows for parallelization in the caller (e.g., use-ai-response.ts).
+        let relevantMemories: Memory[] = params.relevantMemories || [];
+        if (!params.relevantMemories && params.context.sessionId) {
           try {
             relevantMemories = await MemoryManager.getRelevantMemories(
               params.context.sessionId,
