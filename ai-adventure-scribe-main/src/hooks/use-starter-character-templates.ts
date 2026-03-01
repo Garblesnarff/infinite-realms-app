@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StarterCharacterTemplate {
@@ -113,11 +114,13 @@ export function useStarterCharacterTemplates(
       return;
     }
 
-    async function fetchTemplates() {
+    async function fetchTemplates(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_character_templates')
-          .select('*')
+          .select(
+            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
+          )
           .eq('starter_campaign_id', campaignId)
           .order('display_order');
 
@@ -162,11 +165,13 @@ export function useStarterCharacterTemplate(templateId: string | undefined): {
       return;
     }
 
-    async function fetchTemplate() {
+    async function fetchTemplate(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_character_templates')
-          .select('*')
+          .select(
+            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
+          )
           .eq('id', templateId)
           .single();
 

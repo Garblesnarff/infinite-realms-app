@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StarterCampaign {
@@ -75,7 +76,7 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    async function fetchCampaigns() {
+    async function fetchCampaigns(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_campaigns')
@@ -121,11 +122,13 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
       return;
     }
 
-    async function fetchCampaign() {
+    async function fetchCampaign(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_campaigns')
-          .select('*')
+          .select(
+            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
+          )
           .eq('slug', slug)
           .eq('is_published', true)
           .eq('is_complete', true)

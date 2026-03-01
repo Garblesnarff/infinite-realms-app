@@ -6,9 +6,7 @@ import type { Memory } from '@/types/memory';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { Campaign } from '@/types/campaign';
-import { Character } from '@/types/character';
-import { MemoryContext } from '@/types/memory';
+import { MEMORY_SELECT_COLUMNS } from '@/types/memory';
 
 interface ContextParams {
   campaignId: string;
@@ -17,7 +15,7 @@ interface ContextParams {
 }
 
 class GameContextBuilder {
-  private async fetchCampaign(campaignId: string) {
+  private async fetchCampaign(campaignId: string): Promise<CampaignRow | null> {
     const { data, error } = await supabase
       .from('campaigns')
       .select('*, worlds(*), quests(*)')
@@ -27,7 +25,7 @@ class GameContextBuilder {
     return data;
   }
 
-  private async fetchCharacter(characterId: string) {
+  private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
     const { data, error } = await supabase
       .from('characters')
       .select('*, character_stats(*), character_equipment(*), quest_progress(*, quests(title))')
@@ -37,10 +35,10 @@ class GameContextBuilder {
     return data;
   }
 
-  private async fetchMemories(sessionId: string) {
+  private async fetchMemories(sessionId: string): Promise<Memory[] | null> {
     const { data, error } = await supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
       .limit(15);
