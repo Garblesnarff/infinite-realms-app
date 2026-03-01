@@ -345,6 +345,7 @@ export default tseslint.config(
       'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
       'src/features/game-session/components/chat/message-list/MessageListContainer.tsx',
       'src/features/game-session/components/chat/message-list/use-message-dice-rolls.ts',
+      'src/features/game-session/components/game/message/use-message-handler-logic.ts',
       'src/features/game-session/components/game/game-content/GameMainContent.tsx',
       'src/components/character-creation/steps/CharacterFinalization.tsx',
       'src/components/character-creation/steps/character-finalization/use-character-finalization.ts',

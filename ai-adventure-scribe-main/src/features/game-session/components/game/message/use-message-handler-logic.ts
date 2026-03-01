@@ -1,0 +1,568 @@
+import React from 'react';
+
+import { useSessionValidator } from '../session/SessionValidator';
+
+import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
+import type { DiceRollContext } from '../../chat/MessageList';
+import type { ChatMessage } from '@/types/game';
+
+import { useCharacter } from '@/contexts/CharacterContext';
+import { useGame } from '@/contexts/GameContext';
+import { useMemoryContext } from '@/contexts/MemoryContext';
+import { useMessageContext } from '@/contexts/MessageContext';
+import { useAIResponse } from '@/hooks/use-ai-response';
+import { useToast } from '@/hooks/use-toast';
+import logger from '@/lib/logger';
+import { sanitizeDMText } from '@/utils/chatSanitizer';
+import { parseDiceCommand } from '@/utils/diceCommandParser';
+import { rollDice } from '@/utils/diceUtils';
+import { handleAsyncError } from '@/utils/error-handler';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
+import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
+
+interface UseMessageHandlerLogicProps {
+  sessionId: string;
+  campaignId: string | null;
+  characterId: string | null;
+  turnCount: number;
+  updateGameSessionState: (newStateOrUpdater: SessionStateUpdater) => Promise<void>;
+  onAIResponse?: (message: ChatMessage) => Promise<void>;
+}
+
+export const useMessageHandlerLogic = ({
+  sessionId,
+  campaignId,
+  characterId,
+  turnCount,
+  updateGameSessionState,
+  onAIResponse,
+}: UseMessageHandlerLogicProps): {
+  handleSendMessage: (playerInput: string, context?: DiceRollContext) => Promise<void>;
+  isProcessing: boolean;
+} => {
+  const { messages, sendMessage, queueStatus } = useMessageContext();
+  const { extractMemories } = useMemoryContext();
+  const { getAIResponse } = useAIResponse();
+  const { processAiResponse } = useGame();
+  const { toast } = useToast();
+  const { state: characterState } = useCharacter();
+  const character = characterState.character;
+  const headerMode = String(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
+  ).toLowerCase();
+
+  // Refs to track current values for async operations
+  const turnCountRef = React.useRef(turnCount);
+  const messagesRef = React.useRef(messages);
+
+  // Request queue to prevent concurrent message sends
+  const sendQueueRef = React.useRef<
+    Array<{
+      message: string;
+      context?: DiceRollContext;
+      resolve: (value: void | PromiseLike<void>) => void;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      reject: (error: any) => void;
+    }>
+  >([]);
+  const isSendingRef = React.useRef(false);
+
+  // Update refs when values change
+  React.useEffect(() => {
+    turnCountRef.current = turnCount;
+  }, [turnCount]);
+
+  React.useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const toHeaderExcerpt = React.useCallback((raw: string, limit = 220) => {
+    if (!raw) return '';
+    const cleaned = raw
+      .replace(/^VISUAL\s+PROMPT:.*$/gim, '')
+      .replace(/^\s*[A-F]\.\s.*$/gim, '')
+      .replace(/\*\*|__|`/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const sentences = cleaned.split(/(?<=[.!?])\s+/);
+    let out = sentences.slice(0, 2).join(' ');
+    if (out.length > limit) {
+      out = out.slice(0, limit).replace(/[ ,;:]+\S*$/, '') + '…';
+    }
+    return out;
+  }, []);
+
+  // Assuming validateSession is still relevant or adapted
+  const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
+
+  // Ref keeps processSendQueue pointed at the latest actualSendMessage closure,
+  // preventing stale sessionId / extractMemories captures when the session changes.
+  const actualSendMessageRef = React.useRef<
+    (input: string, ctx?: DiceRollContext) => Promise<void>
+  >(async () => {
+    /* populated after actualSendMessage is defined */
+  });
+
+  // Process the send queue one message at a time
+  const processSendQueue = React.useCallback(async () => {
+    // Don't process if already sending or queue is empty
+    if (isSendingRef.current || sendQueueRef.current.length === 0) {
+      return;
+    }
+
+    isSendingRef.current = true;
+    const { message: playerInput, context, resolve, reject } = sendQueueRef.current[0];
+
+    try {
+      await actualSendMessageRef.current(playerInput, context);
+      resolve();
+    } catch (error) {
+      reject(error);
+    } finally {
+      // Remove processed item and continue with next
+      sendQueueRef.current.shift();
+      isSendingRef.current = false;
+
+      // Process next item if any
+      if (sendQueueRef.current.length > 0) {
+        // Recursively process next message
+        processSendQueue();
+      }
+    }
+  }, []); // stable — actualSendMessageRef.current is always the latest closure
+
+  // The actual message sending logic (extracted from handleSendMessage)
+  const actualSendMessage = async (
+    playerInput: string,
+    providedContext?: DiceRollContext,
+  ): Promise<void> => {
+    try {
+      // Check if game is paused and this isn't a resume command
+      const trimmedInput = playerInput.trim().toLowerCase();
+      const _isResumeCommand = trimmedInput === '/resume' || trimmedInput.startsWith('/resume ');
+
+      // Note: We'll need to get the current session state to check if paused
+      // For now, we'll assume we can check a property on the session
+      // This would be enhanced to check actual session_state.is_paused
+      logger.info('[Memory Flow] Starting message handling for:', playerInput);
+
+      // Validate session before proceeding (if still needed)
+      const isValid = await validateSession();
+      if (!isValid) return;
+
+      // Get current session state for context
+      const currentSessionState = { is_paused: false, turn_count: turnCount }; // Would get actual session state
+
+      // Check if this is a safety command
+      const safetyCheck = await checkSafetyCommands(playerInput, sessionId);
+      if (safetyCheck.isSafetyCommand && safetyCheck.command) {
+        logger.info('🛡️ [Safety] Safety command detected:', safetyCheck.command);
+
+        // Send safety command response
+        let safetyResponse: ChatMessage;
+        if (safetyCheck.response) {
+          safetyResponse = safetyCheck.response;
+          await sendMessage(safetyResponse);
+        } else {
+          safetyResponse = await processSafetyCommand(
+            safetyCheck.command,
+            sessionId,
+            playerInput,
+            undefined,
+            currentSessionState,
+          );
+          await sendMessage(safetyResponse);
+        }
+
+        // Store safety event in memory with high importance
+        await extractMemories(
+          `Safety command ${safetyCheck.command.type} activated: ${safetyCheck.command.context}`,
+          {
+            importance: 9, // High importance
+            tags: [
+              'safety',
+              safetyCheck.command.type,
+              safetyCheck.command.autoTriggered ? 'auto-triggered' : 'manual',
+            ],
+            type: 'game_event',
+            context_id: sessionId,
+          },
+        );
+
+        // Handle pause/resume state changes
+        if (safetyCheck.shouldPause) {
+          await updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            is_paused: true,
+          }));
+        } else if (safetyCheck.shouldResume) {
+          await updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            is_paused: false,
+          }));
+        }
+
+        return; // Exit early for safety commands
+      }
+
+      // Check if this is a dice roll command
+      const diceCommand = parseDiceCommand(playerInput);
+      if (diceCommand) {
+        if (!diceCommand.isValid) {
+          // Show error for invalid dice command
+          const errorMessage: ChatMessage = {
+            text: diceCommand.error || 'Invalid dice command',
+            sender: 'system',
+            context: { intent: 'dice_command_error' },
+          };
+          await sendMessage(errorMessage);
+          return;
+        }
+
+        // Execute the dice roll
+        try {
+          const rollResult = rollDice(
+            diceCommand.dieType,
+            diceCommand.count,
+            diceCommand.modifier,
+            {
+              advantage: diceCommand.advantage,
+              disadvantage: diceCommand.disadvantage,
+            },
+          );
+
+          // Create dice roll message
+          const diceRollMessage: ChatMessage = {
+            text: `Rolled ${diceCommand.formula}${diceCommand.label ? ` for ${diceCommand.label}` : ''}`,
+            sender: 'player',
+            characterName: character?.name,
+            characterAvatar: character?.avatar_url,
+            context: {
+              intent: 'dice_roll',
+              diceRoll: {
+                formula: diceCommand.formula,
+                count: diceCommand.count,
+                dieType: diceCommand.dieType,
+                modifier: diceCommand.modifier,
+                advantage: diceCommand.advantage,
+                disadvantage: diceCommand.disadvantage,
+                results: rollResult.results,
+                keptResults: rollResult.keptResults,
+                total: rollResult.total,
+                naturalRoll: rollResult.naturalRoll,
+                critical: rollResult.critical,
+                label: diceCommand.label,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          };
+
+          await sendMessage(diceRollMessage);
+
+          // Also send to AI for context (so DM knows what was rolled)
+          const aiResponseMessage = await getAIResponse(
+            [...messagesRef.current, diceRollMessage],
+            sessionId,
+          );
+
+          await sendMessage(aiResponseMessage);
+
+          // Process AI response for combat detection
+          if (onAIResponse) {
+            try {
+              await onAIResponse(aiResponseMessage);
+            } catch (combatError) {
+              handleAsyncError(combatError, {
+                userMessage: 'Failed to process combat response after dice roll',
+                logLevel: 'warn',
+                showToast: false,
+                context: { location: 'MessageHandler.diceRoll.combatDetection' },
+              });
+            }
+          }
+
+          return; // Exit early for dice commands
+        } catch (rollError) {
+          handleAsyncError(rollError, {
+            userMessage: 'Failed to execute dice roll',
+            context: { location: 'MessageHandler.diceCommand', command: playerInput },
+          });
+          const errorMessage: ChatMessage = {
+            text: 'Failed to execute dice roll. Please try again.',
+            sender: 'system',
+            context: { intent: 'dice_roll_error' },
+          };
+          await sendMessage(errorMessage);
+          return;
+        }
+      }
+
+      // Use ref to get current turn count to avoid stale closure
+      const currentTurnCount = turnCountRef.current;
+      const newTurnCount = currentTurnCount + 1;
+      const currentMessages = messagesRef.current;
+      const isFirstMessage = currentMessages.length === 0;
+
+      // Add player message
+      // CRITICAL FIX: Use provided context if available (for dice roll results)
+      // This preserves the 'dice_roll' intent through the message flow,
+      // enabling the roll suppression logic in use-ai-response.ts
+      const playerMessage: ChatMessage = {
+        text: playerInput,
+        sender: 'player',
+        characterName: character?.name,
+        characterAvatar: character?.avatar_url,
+        context: providedContext ?? {
+          intent: isFirstMessage ? 'first_action' : 'query',
+          isFirstMessage,
+        },
+      };
+      await sendMessage(playerMessage); // This adds to UI and saves to dialogue_history
+
+      // Update turn count immediately after player message is sent using functional form
+      await updateGameSessionState((prev: ExtendedGameSession) => ({
+        ...prev,
+        turn_count: (prev.turn_count || 0) + 1,
+      }));
+
+      // Update the ref to reflect the new turn count
+      turnCountRef.current = newTurnCount;
+
+      logger.info('[Memory Flow] Extracting memories from player input');
+      // Skip extraction for dice roll results — the formatted roll text
+      // (e.g., "Stealth Check: 15 (nat 13+2) vs DC 13 ✓") is transient scaffolding,
+      // not a durable game memory. The AI response that follows the roll IS extracted.
+      if (providedContext?.intent !== 'dice_roll') {
+        await extractMemories(playerInput); // Assuming this is non-critical path for state update
+      }
+
+      // Optional: System acknowledgment (can be removed if AI response is fast)
+      // const systemMessage: ChatMessage = { text: "Processing...", sender: 'system', context: { intent: 'acknowledgment' } };
+      // await sendMessage(systemMessage);
+
+      logger.info('[Memory Flow] Getting AI response for session:', sessionId);
+      // Pass necessary context to getAIResponse. It fetches its own campaign/char details if needed.
+      // Use ref to get current messages to avoid stale closure
+      const aiResponseMessage = await getAIResponse(
+        [...messagesRef.current, playerMessage],
+        sessionId,
+      );
+      // Sanitize the AI response text first
+      let processedText = sanitizeDMText(aiResponseMessage.text);
+
+      // CRITICAL: Truncate at roll request to prevent premature outcome narrative
+      // The AI may generate outcome text AFTER the roll request block - we must NOT display it
+      // The player should only see text BEFORE the roll request; outcome comes in NEW response after roll
+      if (aiResponseMessage.rollRequests && aiResponseMessage.rollRequests.length > 0) {
+        processedText = truncateAtRollRequest(processedText);
+        logger.info('🎲 Truncated AI response at roll request to prevent premature outcome');
+      }
+
+      const sanitizedAiResponseMessage: ChatMessage = {
+        ...aiResponseMessage,
+        text: processedText,
+      };
+
+      // Check for auto-triggered safety commands in AI response
+      const autoSafetyCheck = await checkSafetyCommands(
+        playerInput,
+        sessionId,
+        sanitizedAiResponseMessage.text,
+      );
+      if (autoSafetyCheck.isSafetyCommand && autoSafetyCheck.command) {
+        logger.info('🛡️ [Safety] Auto-triggered safety command detected:', autoSafetyCheck.command);
+
+        // Send safety command response instead of AI response
+        let safetyResponse: ChatMessage;
+        if (autoSafetyCheck.response) {
+          safetyResponse = autoSafetyCheck.response;
+          await sendMessage(safetyResponse);
+        } else {
+          safetyResponse = await processSafetyCommand(
+            autoSafetyCheck.command,
+            sessionId,
+            playerInput,
+            sanitizedAiResponseMessage.text,
+            currentSessionState,
+          );
+          await sendMessage(safetyResponse);
+        }
+
+        // Store safety event in memory with high importance
+        await extractMemories(
+          `Auto-triggered safety command ${autoSafetyCheck.command.type}: ${autoSafetyCheck.command.context}`,
+          {
+            importance: 8, // High but slightly lower than manual
+            tags: ['safety', autoSafetyCheck.command.type, 'auto-triggered', 'ai-response'],
+            type: 'game_event',
+            context_id: sessionId,
+          },
+        );
+
+        // Handle pause state
+        if (autoSafetyCheck.shouldPause) {
+          await updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            is_paused: true,
+          }));
+        }
+
+        return; // Exit early for auto-triggered safety commands
+      }
+
+      // Check if this response contains roll requests
+      const hasRollRequests =
+        sanitizedAiResponseMessage.rollRequests &&
+        sanitizedAiResponseMessage.rollRequests.length > 0;
+
+      if (hasRollRequests) {
+        // DO NOT display AI message - suppress the narrative completely
+        // Only process the roll requests (show the dice popup)
+        // The narrative will come from a NEW AI response after the roll completes
+        logger.info(
+          '🎲 Suppressing AI narrative - roll requested. Showing',
+          sanitizedAiResponseMessage.rollRequests.length,
+          'dice popup(s) only.',
+        );
+        processAiResponse(sanitizedAiResponseMessage.rollRequests);
+      } else {
+        // No roll requests - display the message normally
+        await sendMessage(sanitizedAiResponseMessage);
+      }
+
+      // Only process combat detection, voice, scene updates, and memories
+      // when the message is actually displayed (not when suppressed for roll requests)
+      if (!hasRollRequests) {
+        // Process AI response for combat detection and other features
+        if (onAIResponse) {
+          try {
+            logger.info('[Combat Flow] Processing AI response for combat detection');
+            await onAIResponse(sanitizedAiResponseMessage);
+          } catch (combatError) {
+            handleAsyncError(combatError, {
+              userMessage: 'Failed to process combat response',
+              logLevel: 'warn',
+              showToast: false,
+              context: { location: 'MessageHandler.onAIResponse.combatDetection' },
+            });
+            // Don't throw here - combat processing should not break the message flow
+          }
+        }
+
+        // Check if we have narration segments for voice synthesis
+        if (
+          sanitizedAiResponseMessage.narrationSegments &&
+          sanitizedAiResponseMessage.narrationSegments.length > 0
+        ) {
+          logger.info(
+            '[Voice Flow] AI response contains',
+            sanitizedAiResponseMessage.narrationSegments.length,
+            'narration segments',
+          );
+          // Note: Voice playback will be handled by MultiVoicePlayer component
+          // when it detects the narrationSegments in the message
+        }
+
+        // Update current_scene_description with short blurb (not full reply)
+        if (sanitizedAiResponseMessage.text) {
+          const blurb =
+            headerMode === 'off' ? '' : toHeaderExcerpt(sanitizedAiResponseMessage.text);
+          await updateGameSessionState((prev: ExtendedGameSession) => ({
+            ...prev,
+            current_scene_description: blurb,
+          }));
+          logger.info(
+            '[Memory Flow] Extracting memories from AI response:',
+            sanitizedAiResponseMessage.text,
+          );
+          await extractMemories(sanitizedAiResponseMessage.text); // Non-critical path
+        }
+      }
+    } catch (error) {
+      handleAsyncError(error, {
+        userMessage: 'Failed to process your message',
+        context: {
+          location: 'MessageHandler.actualSendMessage',
+          playerInput,
+          turnCount: turnCountRef.current,
+        },
+      });
+
+      // Provide user feedback and recovery options
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      // Add a system error message to the conversation
+      try {
+        const systemErrorMessage: ChatMessage = {
+          text: 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.',
+          sender: 'system',
+          context: {
+            intent: 'error_recovery',
+            originalError: errorMessage,
+          },
+        };
+        await sendMessage(systemErrorMessage);
+      } catch (systemMessageError) {
+        handleAsyncError(systemMessageError, {
+          userMessage: 'Failed to send error recovery message',
+          logLevel: 'warn',
+          showToast: false,
+          context: { location: 'MessageHandler.errorRecovery' },
+        });
+      }
+
+      // Revert turn count if AI response failed (use original value from when error occurred)
+      try {
+        const revertCount = Math.max(0, turnCountRef.current - 1);
+        await updateGameSessionState((prev: ExtendedGameSession) => ({
+          ...prev,
+          turn_count: Math.max(0, (prev.turn_count || 0) - 1),
+        }));
+        turnCountRef.current = revertCount;
+      } catch (revertError) {
+        handleAsyncError(revertError, {
+          userMessage: 'Failed to revert turn count',
+          logLevel: 'warn',
+          showToast: false,
+          context: { location: 'MessageHandler.revertTurnCount' },
+        });
+      }
+
+      toast({
+        title: 'Processing Error',
+        description:
+          'I had trouble responding to your message. The conversation has been restored and you can try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Keep the ref current so processSendQueue always dispatches to the latest closure.
+  // Synchronous assignment (not useEffect) ensures it's updated before any render-triggered call.
+  actualSendMessageRef.current = actualSendMessage;
+
+  // Public handleSendMessage that queues messages
+  const handleSendMessage = React.useCallback(
+    async (playerInput: string, context?: DiceRollContext): Promise<void> => {
+      return new Promise<void>((resolve, reject) => {
+        // Add to queue with optional context (for dice roll results)
+        sendQueueRef.current.push({
+          message: playerInput,
+          context,
+          resolve,
+          reject,
+        });
+
+        // Start processing if not already processing
+        processSendQueue();
+      });
+    },
+    [processSendQueue],
+  );
+
+  return {
+    handleSendMessage,
+    isProcessing: queueStatus === 'processing' || isSendingRef.current,
+  };
+};
