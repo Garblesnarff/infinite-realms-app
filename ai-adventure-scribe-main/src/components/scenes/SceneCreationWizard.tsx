@@ -230,6 +230,7 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
                 size="icon"
                 onClick={onCancel}
                 aria-label="Close scene creation wizard"
+                title="Close scene creation wizard"
               >
                 <X className="h-4 w-4" />
               </Button>

@@ -169,6 +169,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick, orient
             )}
             aria-label={tool.label}
             aria-pressed={isActive}
+            title={tool.label}
           >
             <Icon className="h-5 w-5" />
           </Button>
@@ -345,7 +346,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <TooltipProvider>
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={onHelpClick} aria-label="Help">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onHelpClick}
+                      aria-label="Help"
+                      title="Help"
+                    >
                       <HelpCircle className="h-5 w-5" />
                     </Button>
                   </TooltipTrigger>
@@ -368,6 +375,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       size="icon"
                       onClick={onSettingsClick}
                       aria-label="Settings"
+                      title="Settings"
                     >
                       <Grid3x3 className="h-5 w-5" />
                     </Button>

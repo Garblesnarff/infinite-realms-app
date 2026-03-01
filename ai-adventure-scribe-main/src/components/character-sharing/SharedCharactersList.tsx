@@ -1,27 +1,7 @@
-/**
- * SharedCharactersList Component
- *
- * Displays characters shared with the current user:
- * - List of shared characters with owner info
- * - Permission level badges
- * - Filter by permission level
- * - Remove self button to stop accessing
- * - Navigate to character sheets
- */
-
 import React, { useState, useMemo } from 'react';
-import { Users, Eye, Edit, Crown, Filter, X, ArrowRight, UserMinus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Users, Eye, Edit, Crown, Filter, X, ArrowRight, UserMinus } from 'lucide-react';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,9 +12,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
+
+/**
+ * SharedCharactersList Component
+ *
+ * Displays characters shared with the current user:
+ * - List of shared characters with owner info
+ * - Permission level badges
+ * - Filter by permission level
+ * - Remove self button to stop accessing
+ * - Navigate to character sheets
+ */
 
 interface SharedCharacter {
   id: string;
@@ -176,6 +177,7 @@ const SharedCharacterCard: React.FC<{
             onClick={() => onRemoveSelf(character.id, character.name)}
             className="text-muted-foreground hover:text-destructive"
             aria-label="Remove access"
+            title="Remove access"
           >
             <UserMinus className="h-4 w-4" />
           </Button>
@@ -230,12 +232,12 @@ export const SharedCharactersList: React.FC = () => {
     return sharedCharacters.filter((char: any) => char.permissionLevel === filterPermission);
   }, [sharedCharacters, filterPermission]);
 
-  const handleRemoveSelf = (characterId: string, characterName: string) => {
+  const handleRemoveSelf = (characterId: string, characterName: string): void => {
     setSelectedCharacter({ id: characterId, name: characterName });
     setRemoveDialogOpen(true);
   };
 
-  const confirmRemoveSelf = () => {
+  const confirmRemoveSelf = (): void => {
     if (!selectedCharacter) return;
 
     // In a real implementation, this would call the revoke endpoint with the current user's ID
@@ -294,6 +296,7 @@ export const SharedCharactersList: React.FC = () => {
               onClick={() => setFilterPermission('all')}
               className="h-8 w-8"
               aria-label="Clear filter"
+              title="Clear filter"
             >
               <X className="h-4 w-4" />
             </Button>
