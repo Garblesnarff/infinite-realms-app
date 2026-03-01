@@ -10,6 +10,7 @@ import { Elysia } from 'elysia';
 
 import { db } from '../../../db/client';
 import { sessionChronicles, gameSessions, campaigns } from '../../../db/schema/game.js';
+import { logger } from '../lib/logger.js';
 import { streamReactResponse } from '../utils/react-stream.js';
 import { ChronicleSharePage } from '../views/chronicle/share.js';
 
@@ -84,7 +85,8 @@ export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
         },
       );
     } catch (error) {
-      console.error('Failed to render chronicle share page', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render chronicle share page', { error });
       set.status = 500;
       return new Response('Failed to render chronicle', {
         status: 500,

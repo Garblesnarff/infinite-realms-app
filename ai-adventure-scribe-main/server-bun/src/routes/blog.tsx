@@ -1,10 +1,12 @@
 import { Elysia } from 'elysia';
-import { BlogService } from '../services/blog-service.js';
+
 import { getSiteConfig } from '../config/site.js';
+import { logger } from '../lib/logger.js';
 import { resolveAssetsForEntries } from '../lib/manifest.js';
+import { BlogService } from '../services/blog-service.js';
+import { streamReactResponse } from '../utils/react-stream.js';
 import { BlogIndexPage } from '../views/blog/index.js';
 import { BlogPostPage } from '../views/blog/post.js';
-import { streamReactResponse } from '../utils/react-stream.js';
 
 /**
  * Check if request accepts Markdown content
@@ -79,7 +81,8 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
         }
       );
     } catch (error) {
-      console.error('Failed to render blog index', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render blog index', { error });
       set.status = 500;
       return new Response('Failed to render blog index', {
         status: 500,
@@ -134,7 +137,8 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
         }
       );
     } catch (error) {
-      console.error('Failed to render blog post', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render blog post', { error });
       set.status = 500;
       return new Response('Failed to render blog post', {
         status: 500,
