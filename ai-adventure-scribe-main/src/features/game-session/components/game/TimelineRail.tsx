@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { Z_INDEX } from '@/constants/z-index';
 import { useMessageContext } from '@/contexts/MessageContext';
 import logger from '@/lib/logger';
 
@@ -182,11 +183,12 @@ export const TimelineRail: React.FC<TimelineRailProps> = ({ rootRef }) => {
       <div className="timeline-track">
         {/* Scroll Position Indicator */}
         <div
-          className="scroll-position-indicator absolute left-[-8px] w-[18px] h-[18px] bg-gradient-to-br from-infinite-gold to-infinite-gold-dark border-2 border-white shadow-lg rounded-full transition-all duration-100 ease-out z-20 pointer-events-none"
+          className="scroll-position-indicator absolute left-[-8px] w-[18px] h-[18px] bg-gradient-to-br from-infinite-gold to-infinite-gold-dark border-2 border-white shadow-lg rounded-full transition-all duration-100 ease-out pointer-events-none"
           style={{
             boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4), 0 1px 3px rgba(0, 0, 0, 0.2)',
             top: '0px',
             transform: 'translateY(0px)',
+            zIndex: Z_INDEX.CARD_HOVER,
           }}
         />
 

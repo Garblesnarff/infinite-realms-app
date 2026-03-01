@@ -21,6 +21,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 
 export const HeroSection: React.FC = () => {
   const navigate = useNavigate();
@@ -83,7 +84,10 @@ export const HeroSection: React.FC = () => {
       </div>
 
       {/* Main Content - Emotion-driven messaging */}
-      <div className="relative z-10 w-full mx-auto px-4 sm:px-6 text-center">
+      <div
+        className="relative w-full mx-auto px-4 sm:px-6 text-center"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         <div className="max-w-5xl mx-auto w-full">
           {/* Badge - Create urgency and exclusivity */}
           <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 bg-purple-900/40 border border-purple-500/30 rounded-full text-amber-400 text-xs sm:text-sm font-medium mb-8 backdrop-blur-sm animate-fade-in max-w-full">

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth, type UserPlan } from '@/contexts/AuthContext';
 
 interface SubscriptionStatus {
@@ -192,7 +193,10 @@ const AccountPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8 -mt-6 relative z-10">
+      <div
+        className="max-w-4xl mx-auto px-4 py-8 -mt-6 relative"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         {/* Current Plan Card */}
         <Card className="mb-8 shadow-lg border-2 border-infinite-purple/20">
           <CardHeader>

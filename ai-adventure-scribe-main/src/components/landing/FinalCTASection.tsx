@@ -20,6 +20,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 
 export const FinalCTASection: React.FC = () => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export const FinalCTASection: React.FC = () => {
           </div>
 
           {/* Content */}
-          <div className="relative z-10 text-center">
+          <div className="relative text-center" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             {/* Badge - FOMO trigger */}
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/30 rounded-full text-amber-400 text-sm font-medium mb-8">
               <Sparkles className="w-4 h-4" />

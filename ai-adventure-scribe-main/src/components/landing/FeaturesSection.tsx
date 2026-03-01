@@ -13,6 +13,7 @@ import {
 import React from 'react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Z_INDEX } from '@/constants/z-index';
 
 interface Feature {
   icon: React.ReactNode;
@@ -118,7 +119,7 @@ export const FeaturesSection: React.FC = () => {
                 className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}
               ></div>
 
-              <CardHeader className="relative z-10">
+              <CardHeader className="relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
                 <div
                   className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.gradient} p-3 mb-4 group-hover:scale-110 transition-transform duration-300`}
                 >
@@ -129,7 +130,7 @@ export const FeaturesSection: React.FC = () => {
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="relative z-10">
+              <CardContent className="relative" style={{ zIndex: Z_INDEX.DROPDOWN }}>
                 <CardDescription className="text-muted-foreground leading-relaxed">
                   {feature.description}
                 </CardDescription>

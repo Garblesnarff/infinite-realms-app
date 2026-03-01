@@ -13,6 +13,8 @@
 import { Sparkles, Zap, Rocket } from 'lucide-react';
 import React from 'react';
 
+import { Z_INDEX } from '@/constants/z-index';
+
 export const HowItWorksSection: React.FC = () => {
   const steps = [
     {
@@ -116,7 +118,10 @@ export const HowItWorksSection: React.FC = () => {
 
                 {/* Arrow connector - desktop only */}
                 {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-24 -right-4 z-10">
+                  <div
+                    className="hidden lg:block absolute top-24 -right-4"
+                    style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  >
                     <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center">
                       <svg
                         className="w-4 h-4 text-purple-400"
