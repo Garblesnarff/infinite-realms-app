@@ -245,6 +245,7 @@ export default tseslint.config(
       'src/__tests__/**/*.test.tsx',
       'src/**/__tests__/**/*.test.ts',
       'src/**/__tests__/**/*.test.tsx',
+      'src/hooks/ai/__tests__/session-logger.test.ts',
 
       // Additional large production files
       'src/hooks/use-game-session.ts', // 797 lines
