@@ -350,6 +350,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/CharacterFinalization.tsx',
       'src/components/character-creation/steps/character-finalization/use-character-finalization.ts',
       'src/pages/AccountPage.tsx',
+      'src/services/world-builders/quest-prompts.ts',
     ],
     rules: {
       'max-lines': 'warn',
