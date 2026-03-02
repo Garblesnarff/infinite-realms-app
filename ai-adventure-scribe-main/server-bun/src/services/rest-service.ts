@@ -278,6 +278,7 @@ export class RestService {
     let remaining = count;
     let totalHpRestored = 0;
     const rolls: number[] = [];
+    const updates: Array<{ id: string; newUsedDice: number }> = [];
 
     for (const hitDie of sortedHitDice) {
       if (remaining === 0) break;
@@ -288,35 +289,54 @@ export class RestService {
       if (toSpend > 0) {
         // Roll hit dice
         for (let i = 0; i < toSpend; i++) {
-          const roll = preRolledValues?.[rolls.length] ?? this.rollHitDie(hitDie.dieType as HitDieType);
+          const roll =
+            preRolledValues?.[rolls.length] ?? this.rollHitDie(hitDie.dieType as HitDieType);
           rolls.push(roll);
           // Minimum 1 HP per die
           const hpGained = Math.max(1, roll + conModifier);
           totalHpRestored += hpGained;
         }
 
-        // Update used dice
-        await db
-          .update(characterHitDice)
-          .set({
-            usedDice: hitDie.usedDice + toSpend,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(characterHitDice.id, hitDie.id),
-            eq(characterHitDice.characterId, characterId),
-            exists(
-              db.select()
-                .from(characters)
-                .where(and(
-                  eq(characters.id, characterHitDice.characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                ))
-            )
-          ));
+        updates.push({
+          id: hitDie.id,
+          newUsedDice: hitDie.usedDice + toSpend,
+        });
 
         remaining -= toSpend;
       }
+    }
+
+    // ⚡ Bolt: Batch update hit dice usage in a single query instead of N updates.
+    // This eliminates the N+1 update pattern for multiclass characters.
+    if (updates.length > 0) {
+      const caseStatements = updates.map((u) => sql`WHEN ${u.id} THEN ${u.newUsedDice}`);
+
+      await db
+        .update(characterHitDice)
+        .set({
+          usedDice: sql`CASE ${characterHitDice.id} ${sql.join(caseStatements, sql` `)} END`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(
+              characterHitDice.id,
+              updates.map((u) => u.id),
+            ),
+            eq(characterHitDice.characterId, characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        );
     }
 
     return {
@@ -362,6 +382,7 @@ export class RestService {
       });
 
     let remaining = toRestore;
+    const updates: Array<{ id: string; newUsedDice: number }> = [];
 
     for (const hitDie of sortedHitDice) {
       if (remaining === 0) break;
@@ -369,27 +390,46 @@ export class RestService {
       const canRestore = Math.min(remaining, hitDie.usedDice);
 
       if (canRestore > 0) {
-        await db
-          .update(characterHitDice)
-          .set({
-            usedDice: hitDie.usedDice - canRestore,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(characterHitDice.id, hitDie.id),
-            eq(characterHitDice.characterId, characterId),
-            exists(
-              db.select()
-                .from(characters)
-                .where(and(
-                  eq(characters.id, characterHitDice.characterId),
-                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-                ))
-            )
-          ));
+        updates.push({
+          id: hitDie.id,
+          newUsedDice: hitDie.usedDice - canRestore,
+        });
 
         remaining -= canRestore;
       }
+    }
+
+    // ⚡ Bolt: Batch update hit dice restoration in a single query instead of N updates.
+    // This eliminates the N+1 update pattern for multiclass characters.
+    if (updates.length > 0) {
+      const caseStatements = updates.map((u) => sql`WHEN ${u.id} THEN ${u.newUsedDice}`);
+
+      await db
+        .update(characterHitDice)
+        .set({
+          usedDice: sql`CASE ${characterHitDice.id} ${sql.join(caseStatements, sql` `)} END`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(
+              characterHitDice.id,
+              updates.map((u) => u.id),
+            ),
+            eq(characterHitDice.characterId, characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        );
     }
 
     return toRestore;
