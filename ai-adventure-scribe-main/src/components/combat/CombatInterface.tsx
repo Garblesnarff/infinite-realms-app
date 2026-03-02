@@ -7,7 +7,7 @@
  */
 
 import { Sword, Shield, Users, X, Play, RefreshCw } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import ActionPanel from './ActionPanel';
 import EnemyCard from './EnemyCard';
@@ -25,6 +25,7 @@ interface CombatInterfaceProps {
 }
 
 const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
+  const trackerId = useId();
   const {
     state,
     activeEncounter,
@@ -52,19 +53,26 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
     handleClassFeature,
     handleReactionOpportunity,
     handleDeathSave,
-    handleConcentrationSave,
+    handleConcentrationSave: _handleConcentrationSave,
     handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,
     nextTurn,
     rollInitiative,
-    showAdvantageModal,
-    setShowAdvantageModal,
-    pendingAttack,
-    setPendingAttack,
+    showAdvantageModal: _showAdvantageModal,
+    setShowAdvantageModal: _setShowAdvantageModal,
+    pendingAttack: _pendingAttack,
+    setPendingAttack: _setPendingAttack,
   } = useCombatActions(isDM);
 
   const { showCombatLog = false } = state;
+
+  const handleEnemyKeyDown = (enemyId: string) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setSelectedEnemy(selectedEnemy === enemyId ? null : enemyId);
+    }
+  };
 
   // Show the pre-combat card only if combat hasn't started
   if (!isInCombat && !showCombatMode) {
@@ -153,6 +161,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
               variant="outline"
               size="sm"
               onClick={() => setLocalShowInitiativeTracker(!localShowInitiativeTracker)}
+              aria-expanded={localShowInitiativeTracker}
+              aria-controls={trackerId}
             >
               {localShowInitiativeTracker ? 'Hide' : 'Show'} Tracker
             </Button>
@@ -169,7 +179,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Initiative Tracker */}
         {localShowInitiativeTracker && (
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1" id={trackerId}>
             <InitiativeTracker />
           </div>
         )}
@@ -243,6 +253,11 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                   {enemyParticipants.map((enemy) => (
                     <div
                       key={enemy.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedEnemy === enemy.id}
+                      aria-label={`Select ${enemy.name}`}
+                      onKeyDown={handleEnemyKeyDown(enemy.id)}
                       className={`cursor-pointer transition-all ${
                         selectedEnemy === enemy.id
                           ? 'ring-2 ring-red-500 ring-opacity-50'
