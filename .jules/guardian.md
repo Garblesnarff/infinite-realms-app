@@ -139,3 +139,7 @@
 ## 2024-05-24 - [Campaign Assets Hook Coverage & Concurrent Mocks]
 **Learning:** Found that `use-campaign-assets.ts` was completely untested. Testing it required mocking concurrent Supabase calls to multiple tables (`starter_character_templates`, `campaign_chunks`, `starter_campaigns`). Discovered that using `vi.mockImplementation((table: string) => { ... })` is the most effective way to handle diverse chained operations across different tables in a single `Promise.all` block.
 **Action:** When testing hooks that perform concurrent database queries, use a single `mockImplementation` on the `from` method to return specialized mock objects based on the table name. Always verify that normalization logic for keys (like `generateKey`) handles special characters and Unicode quote variants.
+
+## 2026-02-26 - [Grid Snapping & Hex Calculation Bug]
+**Learning:** Found that `grid-snapping.ts` was completely untested. Identified a bug in `hexToWorld` for flat-top hexagons where `gridSize` was not applied to the entire $y$ coordinate calculation, leading to incorrect positioning when `gridSize` is not 1.
+**Action:** Always verify coordinate conversion logic with non-unit scale (e.g., `gridSize = 100`) to catch scaling bugs. Ensure parentheses are used correctly to distribute multipliers across all terms in a coordinate formula.

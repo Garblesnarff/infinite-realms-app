@@ -156,7 +156,7 @@ export function hexToWorld(
   } else {
     // Flat-top hexagon
     const x = gridSize * ((3 / 2) * q);
-    const y = gridSize * (Math.sqrt(3) / 2) * q + Math.sqrt(3) * r;
+    const y = gridSize * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
     return { x, y };
   }
 }
