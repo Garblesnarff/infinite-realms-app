@@ -38,7 +38,7 @@ export function useGameData(
   const [isDM, setIsDM] = useState(false);
 
   useEffect(() => {
-    const loadGameData = async () => {
+    const loadGameData = async (): Promise<void> => {
       if (!characterId || !campaignId) {
         setError('Character ID or Campaign ID is missing from URL parameters.');
         setIsLoading(false);
@@ -51,34 +51,26 @@ export function useGameData(
       setError(null);
 
       try {
-        logger.info(`[GameContent] Loading character ${characterId} with spells`);
+        logger.info(`[GameContent] Loading character ${characterId} and campaign ${campaignId}`);
 
-        const loadedCharacter = await characterLoaderService.loadCharacterWithSpells(
-          characterId,
-          user?.id,
-        );
+        // ⚡ Bolt: Parallelize character and campaign data fetching to reduce total loading latency.
+        // This ensures the application starts faster by not waiting for each fetch sequentially.
+        const [loadedCharacter, campaignResult] = await Promise.all([
+          characterLoaderService.loadCharacterWithSpells(characterId, user?.id),
+          supabase
+            .from('campaigns')
+            .select(
+              'id, name, description, genre, difficulty_level, campaign_length, tone, status, art_style, user_id, setting_details, thematic_elements, style_config, rules_config',
+            )
+            .eq('id', campaignId)
+            .single(),
+        ]);
 
         if (!loadedCharacter) {
           throw new Error('Character not found or failed to load.');
         }
 
-        logger.info(`[GameContent] Successfully loaded character with spells:`, {
-          name: loadedCharacter.name,
-          id: loadedCharacter.id,
-          cantrips: loadedCharacter.cantrips?.length || 0,
-          knownSpells: loadedCharacter.knownSpells?.length || 0,
-          preparedSpells: loadedCharacter.preparedSpells?.length || 0,
-          ritualSpells: loadedCharacter.ritualSpells?.length || 0,
-        });
-
-        characterDispatch({ type: 'SET_CHARACTER', payload: loadedCharacter });
-
-        setLoadingPhase('session');
-        const { data: campaignData, error: campaignError } = await supabase
-          .from('campaigns')
-          .select('*')
-          .eq('id', campaignId)
-          .single();
+        const { data: campaignData, error: campaignError } = campaignResult;
 
         if (campaignError) {
           throw new Error(`Failed to load campaign: ${campaignError.message}`);
@@ -87,10 +79,20 @@ export function useGameData(
           throw new Error('Campaign not found.');
         }
 
+        logger.info(`[GameContent] Successfully loaded character and campaign:`, {
+          characterName: loadedCharacter.name,
+          campaignName: campaignData.name,
+          cantrips: loadedCharacter.cantrips?.length || 0,
+          knownSpells: loadedCharacter.knownSpells?.length || 0,
+        });
+
+        characterDispatch({ type: 'SET_CHARACTER', payload: loadedCharacter });
         campaignDispatch({
           type: 'UPDATE_CAMPAIGN',
           payload: campaignData as unknown as Partial<CampaignType>,
         });
+
+        setLoadingPhase('session');
 
         // Derive DM role: env override or campaign owner
         try {
