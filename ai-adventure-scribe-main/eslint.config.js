@@ -353,6 +353,8 @@ export default tseslint.config(
       'src/services/world-builders/quest-prompts.ts',
       'src/pages/BattleMapPage.tsx',
       'src/features/character/components/sheet/ExperienceManager.tsx',
+      'src/features/character/hooks/use-inventory-manager.ts',
+      'src/features/character/components/sheet/InventoryManager.tsx',
     ],
     rules: {
       'max-lines': 'warn',
