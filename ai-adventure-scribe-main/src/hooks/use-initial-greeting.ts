@@ -345,7 +345,10 @@ export const useInitialGreeting = ({
   const extractAtmosphereFromGreeting = (greetingText: string): string | null => {
     // Simple extraction of atmospheric details from the greeting
     // This could be enhanced with more sophisticated parsing
-    const sentences = greetingText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+    const sentences = greetingText
+      .split(/[.!?]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const atmosphericWords = [
       'weather',
       'sun',
