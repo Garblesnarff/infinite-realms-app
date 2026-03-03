@@ -1,20 +1,21 @@
+import { TrendingUp, Plus, Minus, Star, Trophy, Calendar, Target } from 'lucide-react';
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import type { Character } from '@/types/character';
+
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { Character } from '@/types/character';
 import {
   getLevelFromExperience,
   getExperienceForLevel,
   experienceTable,
 } from '@/data/levelProgression';
-import { TrendingUp, Plus, Minus, Star, Trophy, Calendar, Target } from 'lucide-react';
 
 interface ExperienceManagerProps {
   character: Character;
@@ -200,7 +201,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
               <span>Level {currentLevel}</span>
               <span>{currentLevel >= 20 ? 'Max Level Reached' : `Level ${nextLevel}`}</span>
             </div>
-            <Progress value={progressToNextLevel} className="h-3" />
+            <Progress value={progressToNextLevel} className="h-3" aria-label="Experience progress" />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{previousLevelXP.toLocaleString()} XP</span>
               <span>

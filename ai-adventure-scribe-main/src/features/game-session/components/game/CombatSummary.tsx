@@ -44,6 +44,7 @@ const ParticipantListItem = React.memo(
           <Progress
             value={hpPercent}
             className={`h-1 ${hpPercent > 50 ? 'bg-green-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
+            aria-label={`${participant.name} Health percentage`}
           />
         </div>
         {participant.conditions.length > 0 && (

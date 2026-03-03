@@ -39,9 +39,9 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
 import { trpc } from '@/infrastructure/api/trpc-client';
-import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
@@ -311,6 +311,7 @@ export const BattleMapPage: React.FC = () => {
               size="icon"
               onClick={toggleLayersPanel}
               aria-label="Toggle Layers"
+              title="Toggle Layers"
             >
               <Menu className="h-4 w-4" />
             </Button>
@@ -319,7 +320,7 @@ export const BattleMapPage: React.FC = () => {
           {/* Settings Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Open Settings">
+              <Button variant="ghost" size="icon" aria-label="Open Settings" title="Open Settings">
                 <SettingsIcon className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -397,6 +398,7 @@ export const BattleMapPage: React.FC = () => {
               size="icon"
               onClick={toggleLayersPanel}
               aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
+              title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
               className={cn(
                 'absolute top-4 transition-all',
                 showLayersPanel ? 'right-80' : 'right-4',

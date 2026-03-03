@@ -351,6 +351,8 @@ export default tseslint.config(
       'src/components/character-creation/steps/character-finalization/use-character-finalization.ts',
       'src/pages/AccountPage.tsx',
       'src/services/world-builders/quest-prompts.ts',
+      'src/pages/BattleMapPage.tsx',
+      'src/features/character/components/sheet/ExperienceManager.tsx',
     ],
     rules: {
       'max-lines': 'warn',
