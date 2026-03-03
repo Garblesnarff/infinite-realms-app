@@ -1,5 +1,5 @@
 import { Send, Paperclip, Smile, Dice6, Loader2 } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +24,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const suggestionsHeaderId = useId();
 
   /**
    * Auto-resize textarea based on content and handle dice command suggestions
@@ -52,7 +53,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
   /**
    * Handles message submission and clears input
    */
-  const handleSubmit = () => {
+  const handleSubmit = (): void => {
     if (!input.trim() || isDisabled) return;
     onSendMessage(input.trim());
     setInput('');
@@ -63,7 +64,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
   /**
    * Handle clicking on a dice suggestion
    */
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionClick = (suggestion: string): void => {
     setInput(suggestion);
     setShowDiceSuggestions(false);
     textareaRef.current?.focus();
@@ -72,7 +73,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
   /**
    * Add quick dice roll button
    */
-  const handleQuickDiceRoll = () => {
+  const handleQuickDiceRoll = (): void => {
     if (input.trim()) return; // Don't override existing input
     setInput('/roll 1d20');
     textareaRef.current?.focus();
@@ -81,7 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
   /**
    * Handle keyboard shortcuts
    */
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Enter') {
       if (e.shiftKey) {
         // Shift+Enter for new line
@@ -160,10 +161,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
               <div
                 className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto"
                 style={{ zIndex: Z_INDEX.DROPDOWN }}
+                role="listbox"
+                aria-labelledby={suggestionsHeaderId}
               >
                 <div className="p-2">
-                  <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                    <Dice6 className="w-3 h-3" />
+                  <div
+                    id={suggestionsHeaderId}
+                    className="text-xs text-gray-500 mb-2 flex items-center gap-1"
+                  >
+                    <Dice6 className="w-3 h-3" aria-hidden="true" />
                     Dice Roll Suggestions
                   </div>
                   {diceSuggestions.map((suggestion, index) => (
@@ -172,6 +178,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
                       onClick={() => handleSuggestionClick(suggestion)}
                       className="w-full text-left px-2 py-1 text-sm hover:bg-blue-50 rounded font-mono"
                       disabled={isDisabled}
+                      role="option"
+                      aria-selected={false}
                     >
                       {suggestion}
                     </button>
@@ -190,7 +198,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
                 ? 'bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
-            aria-label="Send message"
+            aria-label={isDisabled ? 'Sending message...' : 'Send message'}
+            title={isDisabled ? 'Sending message...' : 'Send message'}
           >
             {!canSend && isDisabled ? (
               <Loader2 className="h-5 w-5 animate-spin" />
