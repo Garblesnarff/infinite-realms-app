@@ -143,3 +143,7 @@
 ## 2026-02-26 - [Grid Snapping & Hex Calculation Bug]
 **Learning:** Found that `grid-snapping.ts` was completely untested. Identified a bug in `hexToWorld` for flat-top hexagons where `gridSize` was not applied to the entire $y$ coordinate calculation, leading to incorrect positioning when `gridSize` is not 1.
 **Action:** Always verify coordinate conversion logic with non-unit scale (e.g., `gridSize = 100`) to catch scaling bugs. Ensure parentheses are used correctly to distribute multipliers across all terms in a coordinate formula.
+
+## 2026-03-04 - [Dice Roll Message Coverage & RTL Disambiguation]
+**Learning:** Found that `DiceRollMessage.tsx` was completely untested. Discovered a testing gotcha where "Natural 1" and "Natural 20" labels appear in both the critical result badge and the special d20 callout badge, causing "multiple elements found" errors in React Testing Library when using `getByText`. Also learned that running the full test suite from the root requires `bun install` in `server-bun/` to resolve backend-only dependencies like `pino`.
+**Action:** Use `getAllByText` and verify length or presence when labels appear in multiple badges within the same component. Always ensure that `vitest.config.ts` includes both the test path and the source path for proper coverage tracking.
