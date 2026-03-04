@@ -297,6 +297,7 @@ export default tseslint.config(
       'src/utils/multiclassing.ts',
       'src/utils/__tests__/multiclassing.test.ts',
       'src/utils/classFeatures.ts',
+      'src/utils/classMechanics.ts',
       'src/hooks/use-combat-actions.ts',
       'src/hooks/useAdvancedSpellcasting.ts',
       'src/hooks/use-combat-mechanics.ts',

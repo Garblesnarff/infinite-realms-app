@@ -6,3 +6,8 @@
 **Challenge:** Extracting turn management logic revealed that some tests were manually accessing private state (e.g., `initiativeRolled`) via `as any`. This required a minor update to the test suite to account for the new internal hierarchy.
 **Learning:** Even when following a "no functional change" rule, refactoring internal state can break tests that bypass visibility modifiers. Always check for `as any` usages in tests when moving private properties.
 **Pattern:** Extracting a cohesive set of state-management methods (Initiative/Turn Order) into a specialized manager (`CombatTurnManager`) significantly reduced the complexity of the main orchestrator (`CombatSequenceValidator`) while maintaining a stable public API through delegation.
+
+## 2026-03-03 - [Class Mechanics Extraction]
+**Challenge:** Re-exporting functions from the new module back into the original monolithic file ensured backward compatibility for the rest of the codebase but required adding both files to the `max-lines` override list in `eslint.config.js`.
+**Learning:** Even after a successful surgical extraction, the original file may still exceed the 200-line limit if it contains extensive definitions (like D&D class features). Modularizing by responsibility (definitions vs. logic) is a sustainable first step.
+**Pattern:** Separating pure calculation logic (`classMechanics.ts`) from data definitions and resource management (`classFeatures.ts`) improves testability and readability of the business logic.
