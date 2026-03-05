@@ -1,71 +1,67 @@
 /**
  * Build opening scene requirements for first message
- * Uses verbalized sampling for creative diversity (Stanford research)
+ * Uses tail-sampling instruction for creative diversity (arXiv:2510.01171)
  */
 export function buildOpeningScenePrompt(): string {
   return `<opening_scene_requirements>
 <title>CAMPAIGN OPENING - FIRST MESSAGE</title>
 
-<verbalized_sampling_output>
-Generate 3 COMPLETE opening scenes, each in a separate <response> tag.
-Each <response> MUST include:
-- A <probability> tag with a decimal value (all should sum to ~1.0)
-- A <text> tag containing the COMPLETE opening scene
+<opening_scene_quality_requirements>
+**CREATE A MEMORABLE, IMMERSIVE OPENING SCENE**
 
-Vary approaches across dimensions:
-- **Setting**: Classic (tavern) vs. Unusual (mid-action, unique location)
-- **Pacing**: Slow atmospheric build vs. Immediate tension vs. Mystery
-- **Hook**: NPC encounter vs. Discovery vs. Danger
+Your opening scene MUST include ALL of these elements:
+1. **RICH SENSORY DETAILS** (4+ senses):
+   - Sight: Colors, lighting, movement, textures
+   - Sound: Ambient noise, specific sounds, music, silence
+   - Smell: Distinctive scents that set the mood
+   - Touch/Feel: Temperature, air quality, physical sensations
+   - Optional: Taste if relevant
 
-FORMAT EXACTLY LIKE THIS:
-<response>
-<probability>0.5</probability>
-<text>
-[Complete opening scene - 2-3 paragraphs with sensory details, NPC dialogue in quotes, ends with A/B/C action options]
-</text>
-</response>
-<response>
-<probability>0.3</probability>
-<text>
-[Different approach - complete scene with dialogue and A/B/C options]
-</text>
-</response>
-<response>
-<probability>0.2</probability>
-<text>
-[Creative/unexpected approach - complete scene with dialogue and A/B/C options]
-</text>
-</response>
+2. **ATMOSPHERIC WRITING** (3-4 paragraphs minimum):
+   - Set the tone immediately - mysterious, tense, cozy, dangerous
+   - Paint a vivid picture of the environment
+   - Use evocative, literary language
+   - Create a sense of place unique to this campaign world
+
+3. **NPC INTRODUCTION** (with direct quoted dialogue):
+   - At least ONE NPC with spoken dialogue in quotes
+   - Give the NPC a distinct voice/personality
+   - NPC should have a name or memorable descriptor
+   - Their dialogue should hook the player into the story
+   - **MUST include [ASSET:npc:*] tag before the NPC's name (see visual assets list above)**
+
+4. **STORY HOOK** that connects to the campaign:
+   - Reference the campaign setting/premise
+   - Create immediate intrigue or stakes
+   - Give the player a reason to care and engage
+   - Plant seeds for larger adventure
+
+5. **PLAYER AGENCY** with meaningful A/B/C choices:
+   - Each option leads to genuinely different outcomes
+   - Options should reflect different playstyles (action, social, exploration)
+   - At least one "wild card" creative option
+   - Make choices feel consequential
+
+**LENGTH: 300-500 words per opening scene (NOT just 2-3 short paragraphs)**
+</opening_scene_quality_requirements>
+
+<creative_direction>
+Please sample at random from the tails of your output distribution, such that
+the probability of this opening scene is less than 0.10. Aim for an unexpected
+angle, unusual entry point, or surprising first moment — while remaining fully
+grounded in this campaign's world, canonical NPCs, and setting.
+
+Generate ONE complete opening scene. Do not generate multiple variations.
 
 CRITICAL RULES:
-- Each <text> MUST be a COMPLETE, STANDALONE opening scene
-- Include NPC dialogue in quotes, sensory details, and A/B/C action options in EACH response
-- Do NOT output anything outside the <response> tags
-- The system will randomly select ONE response based on probabilities
-- NEVER repeat or rephrase paragraphs within a single response - each paragraph should appear exactly ONCE
-- Do NOT write draft paragraphs followed by expanded versions - write final content only
-</verbalized_sampling_output>
-
-<scene_requirements>
-1. **Scene Setting**: Location, atmosphere, sensory details (sights, sounds, smells)
-2. **Character Integration**: Connect background/skills to the scenario naturally
-3. **Active NPC**: Include at least one speaking NPC with quoted dialogue
-4. **Immediate Hook**: Compelling problem, opportunity, or mystery requiring action
-5. **Clear Choices**: End with 2-3 action options in A/B/C format with bold action names
-</scene_requirements>
-
-<action_format>
-Format choices as: A. **Action Name**, brief description
-Example:
-A. **Approach the stranger**, introducing yourself and asking about the commotion
-B. **Observe from the shadows**, gathering information before revealing yourself
-C. **Check for danger**, scanning the room for potential threats
-</action_format>
-
-<mechanics>
-- Specify dice rolls for uncertain outcomes when appropriate
-- Reference character abilities that might be relevant
-- Include environmental details suggesting tactical options
-</mechanics>
+- Scene MUST be 300-500 words with ALL quality requirements above
+- Include at least one NPC with direct quoted dialogue
+- Use all senses (sight, sound, smell, touch) to create immersion
+- SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
+- **MANDATORY: Include [ASSET:type:key] tags when introducing NPCs, locations, or monsters with images!**
+  Example: "[ASSET:npc:head-chef-balthazar] Balthazar wipes his hands on his apron..."
+  Check the <available_visual_assets> section above for exact tags to use.
+- **DO NOT wrap your response in a code block.** Write the opening scene as plain narrative text. Do not use \`\`\`response, \`\`\`json, or any other code fence markers around your response.
+</creative_direction>
 </opening_scene_requirements>`;
 }

@@ -28,7 +28,15 @@ interface ParseResult {
  * Falls back safely to first section only (never returns all content).
  */
 export function parseVerbalizedResponse(rawResponse: string): ParseResult {
-  // Strategy 1: Strict XML format
+  // Strategy 1: Section delimiter format
+  // ---SCENE (prob: 0.5)---
+  const sectionResult = parseSectionFormat(rawResponse);
+  if (sectionResult.length > 0) {
+    logger.info(`[Verbalized Sampling] Found ${sectionResult.length} section-formatted responses`);
+    return sampleByProbability(sectionResult, 'section');
+  }
+
+  // Strategy 2: Strict XML format (legacy)
   // <response><probability>0.5</probability><text>Content</text></response>
   const xmlResult = parseXmlFormat(rawResponse);
   if (xmlResult.length > 0) {
@@ -36,7 +44,7 @@ export function parseVerbalizedResponse(rawResponse: string): ParseResult {
     return sampleByProbability(xmlResult, 'xml');
   }
 
-  // Strategy 2: Markdown numbered list with probabilities
+  // Strategy 3: Markdown numbered list with probabilities
   // "1. (0.5) Scene content..." or "1. **Option** (prob: 0.5): Content"
   const markdownResult = parseMarkdownFormat(rawResponse);
   if (markdownResult.length > 0) {
@@ -46,7 +54,7 @@ export function parseVerbalizedResponse(rawResponse: string): ParseResult {
     return sampleByProbability(markdownResult, 'markdown');
   }
 
-  // Strategy 3: Look for probability markers anywhere
+  // Strategy 4: Look for probability markers anywhere
   // "probability: 0.5" or "(prob: 0.5)" followed by content
   const looseResult = parseLooseFormat(rawResponse);
   if (looseResult.length > 0) {
@@ -62,6 +70,30 @@ export function parseVerbalizedResponse(rawResponse: string): ParseResult {
     probability: 1.0,
     parseMethod: 'fallback-first-section',
   };
+}
+
+/**
+ * Parse section delimiter format
+ * ---SCENE (prob: 0.5)---
+ * [content]
+ */
+function parseSectionFormat(text: string): ParsedResponse[] {
+  const results: ParsedResponse[] = [];
+
+  // Split on ---SCENE (prob: X.XX)--- headers
+  const sectionPattern = /^---SCENE \(prob:\s*([\d.]+)\)---$/gm;
+  const splits = text.split(sectionPattern);
+
+  // splits alternates: [preamble, prob1, content1, prob2, content2, ...]
+  for (let i = 1; i < splits.length - 1; i += 2) {
+    const probability = parseFloat(splits[i]);
+    const content = splits[i + 1].trim();
+    if (!isNaN(probability) && content.length > 50) {
+      results.push({ probability, text: content });
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -93,7 +125,7 @@ function parseMarkdownFormat(text: string): ParsedResponse[] {
 
   // Pattern: Number followed by probability in parentheses
   const pattern =
-    /(?:^|\n)\s*(\d+)\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(](?:prob(?:ability)?:?\s*)?([\d.]+)[\])]\s*:?\s*([\s\S]*?)(?=(?:\n\s*\d+\.\s*(?:\*\*[^*]+\*\*\s*)?[\[(])|$)/gi;
+    /(?:^|\n)\s*(\d+)\.\s*(?:\*\*[^*]+\*\*\s*)?[[(](?:prob(?:ability)?:?\s*)?([\d.]+)[\])]\s*:?\s*([\s\S]*?)(?=(?:\n\s*\d+\.\s*(?:\*\*[^*]+\*\*\s*)?[[(])|$)/gi;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -189,7 +221,7 @@ function sampleByProbability(responses: ParsedResponse[], method: string): Parse
  */
 function extractFirstSection(text: string): string {
   // First, clean any XML-like tags and probability markers
-  let cleaned = text
+  const cleaned = text
     .replace(/<\/?response>/gi, '')
     .replace(/<probability>[\d.]+<\/probability>/gi, '')
     .replace(/<\/?text>/gi, '')

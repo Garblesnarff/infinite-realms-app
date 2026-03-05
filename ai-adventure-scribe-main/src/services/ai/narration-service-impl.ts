@@ -17,17 +17,14 @@ import {
   buildOpeningScenePrompt,
 } from './shared/prompts';
 import { addEquipmentContext } from './shared/utils';
-import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
 
-import { llmApiClient } from '@/services/llm-api-client';
 import type { Memory, MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, GameContext, AIResponse, NarrationSegment } from './shared/types';
+import type { CombatDetectionResult } from '@/utils/combatDetection';
 
+import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
-
-// sampleFromVerbalizedResponse is now imported from ./shared/verbalized-sampling
-// It provides robust multi-strategy parsing with safe fallback to prevent duplicates
 
 /**
  * Generate response using LLM API
@@ -41,7 +38,7 @@ export async function generateGeminiResponse(
   },
   relevantMemories: Memory[],
   voiceContext: SessionVoiceContext | null,
-  combatDetection: any,
+  combatDetection: CombatDetectionResult,
 ): Promise<AIResponse> {
   logger.info('Using llmApiClient for chat...');
 
@@ -150,11 +147,9 @@ You MUST respond with JSON containing both display text AND pre-segmented narrat
 
   let result: AIResponse;
 
-  // Apply verbalized sampling for opening scenes (first message)
-  // ALWAYS use verbalized sampling for opening scenes regardless of voice context
-  // Voice context prompt is already skipped for first messages to avoid conflicting formats
+  // Use raw response for opening scenes (single tail-sampled scene, no parsing needed)
   if (isFirstMessage) {
-    result = { text: sampleFromVerbalizedResponse(rawResponse) };
+    result = { text: rawResponse };
   } else if (voiceContext) {
     // Try to parse structured response if voice context is available
     result = parseStructuredResponse(rawResponse);

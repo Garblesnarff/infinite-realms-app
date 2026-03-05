@@ -358,6 +358,8 @@ export default tseslint.config(
       'src/features/character/hooks/use-inventory-manager.ts',
       'src/features/character/components/sheet/InventoryManager.tsx',
       'src/components/scenes/SceneManager.tsx',
+      'src/services/ai/narration-service-impl.ts',
+      'src/services/ai/shared/verbalized-sampling.ts',
     ],
     rules: {
       'max-lines': 'warn',

@@ -1,5 +1,4 @@
 import { applyAssetPostProcessing, insertAssetTags, getCachedAssets } from './asset-processor';
-import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
 import { parseXMLTagsFromResponse } from './xml-parser';
 import { MemoryManager } from '../memory-manager';
 import { voiceConsistencyService } from '../voice-consistency-service';
@@ -52,7 +51,17 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   // 1. Post-processing logic (Formatting & Parsing)
   if (isFirstMessage) {
     logger.info('[Opening Message] Raw AI response length:', rawResponse.length);
-    const sampledText = sampleFromVerbalizedResponse(rawResponse);
+    // Strip any code-fence wrapper the model adds around the response.
+    // Pattern 1: entire response is wrapped (```response...```) — unwrap it, keep content.
+    // Pattern 2: leading metadata block before narrative — strip just that block.
+    // Preserves mid-response ROLL_REQUESTS_V1 fences in both cases.
+    let sampledText: string;
+    const entirelyWrapped = rawResponse.match(/^```\w*\n([\s\S]*)\n```\s*$/);
+    if (entirelyWrapped) {
+      sampledText = entirelyWrapped[1].trim();
+    } else {
+      sampledText = rawResponse.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
+    }
     logger.info('[Opening Message] Sampled text length:', sampledText.length);
     const processed = applyAssetPostProcessing({ text: sampledText });
     result = { text: processed.text };

@@ -218,4 +218,4 @@ export interface MemoryQueryOptions {
  * large vector embeddings (~3KB per row) when not needed for semantic search.
  */
 export const MEMORY_SELECT_COLUMNS =
-  'id, session_id, campaign_id, type, memory_type, content, importance, metadata, context, created_at, updated_at, tags, subcategory, context_id, related_memories, narrative_weight';
+  'id, session_id, campaign_id, type, memory_type, content, importance, metadata, context, created_at, updated_at, subcategory';

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { GameContextPrompts } from './prompts/game-context-prompts';
-import { OpeningScenePrompts } from './prompts/opening-scene-prompts';
+import { buildOpeningScenePrompt } from './shared/prompts';
 
 import type { Memory } from '../memory-manager';
 import type { GameContext } from './shared/types';
@@ -24,7 +24,7 @@ You are a skilled D&D 5e Dungeon Master who creates immersive, mechanically-soun
   }
 
   static buildOpeningSceneSection(): string {
-    return OpeningScenePrompts.buildSection();
+    return buildOpeningScenePrompt();
   }
 
   static buildVoiceOptimizationSection(): string {

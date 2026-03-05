@@ -40,7 +40,7 @@ export const ASSET_TAG_PATTERN =
  */
 export function normalizeAssetTagKeysInContent(content: string): string {
   const loosePattern = /\[ASSET:(character|npc|location|monster|item|scene|entity):([^\]]+)\]/gi;
-  return content.replace(loosePattern, (_fullMatch, type, rawKey) => {
+  return content.replace(loosePattern, (fullMatch, type, rawKey, offset, wholeString) => {
     const normalized = rawKey
       .toLowerCase()
       .replace(/[""''«»`"']/g, '') // strip quote variants
@@ -48,7 +48,29 @@ export function normalizeAssetTagKeysInContent(content: string): string {
       .replace(/\s+/g, '-') // spaces → hyphens
       .replace(/-+/g, '-') // collapse duplicate hyphens
       .replace(/^-+|-+$/g, ''); // trim surrounding hyphens
-    return `[ASSET:${type}:${normalized}]`;
+
+    const normalizedTag = `[ASSET:${type}:${normalized}]`;
+
+    // If the raw key was malformed (quotes, caps, or other non-standard chars), the AI
+    // may have used the tag as a name placeholder. Prepend a derived display name so it
+    // survives tag stripping — UNLESS the text immediately after the tag already starts
+    // with that name (prevents "Remy the Manager Remy" double-name).
+    const isAlreadyNormalized = /^[a-z0-9-]+$/.test(rawKey);
+    if (!isAlreadyNormalized) {
+      const derivedName = normalized
+        .split('-')
+        .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+        .join(' ');
+      const firstWord = derivedName.split(' ')[0].toLowerCase();
+      // Strip leading non-alpha chars (e.g. markdown bold `**`) before checking
+      const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
+      const nameAlreadyPresent = afterTag.toLowerCase().startsWith(firstWord);
+      if (!nameAlreadyPresent) {
+        return `${derivedName} ${normalizedTag}`;
+      }
+    }
+
+    return normalizedTag;
   });
 }
 

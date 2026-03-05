@@ -99,7 +99,28 @@ export function truncateAtRollRequest(message: string): string {
 export function removeRollRequestsFromMessage(message: string): string {
   if (!message) return message;
 
-  // Use truncation to remove everything at and after the roll request block
-  // This prevents showing the outcome that the AI generated after the roll request
-  return truncateAtRollRequest(message);
+  // Remove the ROLL_REQUESTS_V1 block (internal metadata, not for display)
+  let result = message.replace(/```ROLL_REQUESTS_V1[\s\S]*?```/g, '');
+
+  // Remove VISUAL PROMPT section (image-generation metadata, not player-facing)
+  result = result.replace(/\*\*VISUAL PROMPT:\*\*[\s\S]*$/, '');
+  result = result.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '');
+
+  // Strip A/B/C lettered action options — shown separately in the options panel, not in the bubble.
+  // Handles both `A. **Action**` and `**A.** **Action**` formats.
+  const optionLineIdx = result.search(/(?:^|\n)(?:\*\*)?[A-C]\.(?:\*\*)?\s/m);
+  if (optionLineIdx !== -1) {
+    result = result.substring(0, optionLineIdx);
+  }
+
+  // Strip ** bold markers — the custom renderer converts ** to * which causes orphan * artifacts
+  // when smartSplitParagraph splits long bold spans at sentence boundaries.
+  result = result.replace(/\*\*([^*\n]*)\*\*/g, '$1');
+
+  // Strip leading/trailing --- separators (DM uses these to frame the narrative)
+  result = result.replace(/^---\s*\n+/, '');
+  result = result.replace(/\s*\n+\s*---\s*[\s\S]*$/, '');
+
+  // Collapse runs of 3+ blank lines down to 2, then trim
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }

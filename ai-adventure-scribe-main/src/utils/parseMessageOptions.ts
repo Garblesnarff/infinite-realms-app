@@ -37,13 +37,16 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   }
 
   // Regular expression to match both numbered and lettered options with bold formatting
-  // Matches: 1. **Bold text**, description... OR A. **Bold text**, description...
+  // Matches: 1. **Bold text**, description... OR A. **Bold text**...
+  // Also handles AI format where letter is bolded: **A.** **Bold text**...
   const numberedRegex = /^(\d+)\.\s+\*\*([^*]+)\*\*([^]*?)(?=^\d+\.\s+\*\*|\n\s*$|$)/gm;
-  const letteredRegex = /^([A-Z])\.\s+\*\*([^*]+)\*\*([^]*?)(?=^[A-Z]\.\s+\*\*|\n\s*$|$)/gm;
+  const letteredRegex =
+    /^(?:\*\*)?([A-Z])\.(?:\*\*)?\s+\*\*([^*]+)\*\*([^]*?)(?=^(?:\*\*)?[A-Z]\.(?:\*\*)?\s+\*\*|\n\s*$|$)/gm;
 
   // Fallback patterns for non-bold options (backward compatibility)
   const numberedFallbackRegex = /^(\d+)\.\s+([^]*?)(?=^\d+\.|\n\s*$|$)/gm;
-  const letteredFallbackRegex = /^([A-Z])\.\s+([^]*?)(?=^[A-Z]\.|\n\s*$|$)/gm;
+  const letteredFallbackRegex =
+    /^(?:\*\*)?([A-Z])\.(?:\*\*)?\s+([^]*?)(?=^(?:\*\*)?[A-Z]\.(?:\*\*)?|\n\s*$|$)/gm;
 
   const options: ActionOption[] = [];
   let lastIndex = 0;
@@ -52,7 +55,7 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   let match;
   numberedRegex.lastIndex = 0; // Reset regex
   while ((match = numberedRegex.exec(messageContent)) !== null) {
-    const [fullMatch, numberStr, boldText, description] = match;
+    const [_fullMatch, numberStr, boldText, description] = match;
     const number = parseInt(numberStr, 10);
 
     // Clean up the description text
@@ -76,7 +79,7 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   if (options.length === 0) {
     letteredRegex.lastIndex = 0; // Reset regex
     while ((match = letteredRegex.exec(messageContent)) !== null) {
-      const [fullMatch, letterStr, boldText, description] = match;
+      const [_fullMatch, letterStr, boldText, description] = match;
       const letterCode = letterStr.charCodeAt(0) - 64; // A=1, B=2, C=3, etc.
 
       // Clean up the description text
@@ -102,12 +105,8 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   if (options.length === 0) {
     numberedFallbackRegex.lastIndex = 0;
     while ((match = numberedFallbackRegex.exec(messageContent)) !== null) {
-      const [fullMatch, numberStr, fullText] = match;
+      const [_fullMatch, numberStr, fullText] = match;
       const number = parseInt(numberStr, 10);
-
-      // Extract first sentence or clause as the main action
-      const sentences = fullText.trim().split(/[,.!?]/);
-      const mainAction = sentences[0]?.trim() || fullText.trim();
 
       options.push({
         id: `option-${number}`,
@@ -126,7 +125,7 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   if (options.length === 0) {
     letteredFallbackRegex.lastIndex = 0;
     while ((match = letteredFallbackRegex.exec(messageContent)) !== null) {
-      const [fullMatch, letterStr, fullText] = match;
+      const [_fullMatch, letterStr, fullText] = match;
       const letterCode = letterStr.charCodeAt(0) - 64;
 
       options.push({
@@ -147,6 +146,10 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
   let narrativeContent = messageContent;
   if (options.length > 0 && lastIndex > 0) {
     narrativeContent = messageContent.substring(0, lastIndex).trim();
+
+    // Strip trailing AI formatting artifacts that appear between narrative and options:
+    // "---" horizontal separators and "**What do you do?**" prompt headers.
+    narrativeContent = narrativeContent.replace(/\s*\n\s*---\s*[\s\S]*$/, '').trim();
   }
 
   // Clean up narrative content - remove trailing sentences that might be cut off
@@ -156,8 +159,8 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
     const lastSentence = sentences[sentences.length - 1];
 
     // If last sentence doesn't end with punctuation, remove it
-    // Allow for quotes/asterisks after punctuation (e.g., `."` or `.*`)
-    if (lastSentence && !lastSentence.match(/[.!?]["'*]?\s*$/)) {
+    // Allow for quotes/asterisks after punctuation (e.g., `."` or `.*` or `."*`)
+    if (lastSentence && !lastSentence.match(/[.!?]["'*]*\s*$/)) {
       sentences.pop();
       narrativeContent = sentences.join(' ');
     }
