@@ -236,10 +236,13 @@ export class CharacterFolderService {
       }
     }
 
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, userId: _userId, ...safeUpdates } = updates as any;
+
     const [updated] = await db
       .update(characterFolders)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(and(

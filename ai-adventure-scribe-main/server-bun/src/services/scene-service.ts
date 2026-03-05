@@ -198,12 +198,15 @@ export class SceneService {
     userId: string,
     updates: Partial<Omit<NewScene, 'userId' | 'campaignId'>>
   ): Promise<Scene> {
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, userId: _userId, campaignId: _campaignId, ...safeUpdates } = updates as any;
+
     // ⚡ Bolt: Optimized to perform ownership check atomically in the UPDATE query.
     // This reduces database round-trips from 2 to 1.
     const [updated] = await db
       .update(scenes)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
@@ -309,11 +312,14 @@ export class SceneService {
       return newSettings;
     }
 
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, sceneId: _sceneId, ...safeSettingsUpdates } = settingsUpdates as any;
+
     // Update existing settings
     const [updated] = await db
       .update(sceneSettings)
       .set({
-        ...settingsUpdates,
+        ...safeSettingsUpdates,
         updatedAt: new Date(),
       })
       .where(and(
@@ -344,12 +350,15 @@ export class SceneService {
     userId: string,
     updates: Partial<Omit<NewSceneLayer, 'sceneId'>>
   ): Promise<SceneLayer> {
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, sceneId: _sceneId, ...safeLayerUpdates } = updates as any;
+
     // ⚡ Bolt: Optimized to perform ownership check and layer verification in the UPDATE query.
     // This reduces database round-trips from 3 to 1.
     const [updated] = await db
       .update(sceneLayers)
       .set({
-        ...updates,
+        ...safeLayerUpdates,
         updatedAt: new Date(),
       })
       .where(and(

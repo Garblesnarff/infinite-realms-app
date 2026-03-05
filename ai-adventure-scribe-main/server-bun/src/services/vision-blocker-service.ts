@@ -170,11 +170,14 @@ export class VisionBlockerService {
       }
     }
 
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, sceneId: _sceneId, createdBy: _createdBy, ...safeUpdates } = updates as any;
+
     // 🛡️ Sentinel: Incorporate ownership check directly into the update query (Defense in Depth)
     const [updated] = await db
       .update(visionBlockingShapes)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(

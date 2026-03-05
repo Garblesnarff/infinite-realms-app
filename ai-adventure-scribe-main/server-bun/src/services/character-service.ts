@@ -135,10 +135,19 @@ export class CharacterService {
     userId: string,
     data: Partial<NewCharacter>
   ): Promise<Character | null> {
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const {
+      id: _id,
+      userId: _userId,
+      ownerId: _ownerId,
+      campaignId: _campaignId,
+      ...safeUpdates
+    } = data as any;
+
     const [updated] = await db
       .update(characters)
       .set({
-        ...data,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(and(

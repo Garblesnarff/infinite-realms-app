@@ -87,10 +87,13 @@ export class CampaignService {
     userId: string,
     data: Partial<NewCampaign>
   ): Promise<Campaign> {
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, userId: _userId, ...safeUpdates } = data as any;
+
     const [updated] = await db
       .update(campaigns)
       .set({
-        ...data,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)))
