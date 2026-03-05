@@ -27,15 +27,24 @@ export const blogTaxonomyRouter = router({
   getCategories: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
+      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB metadata and SEO fields
+      // when only basic taxonomy information is needed for lists or navigation.
+      const baseColumns = {
+        id: blogCategories.id,
+        name: blogCategories.name,
+        slug: blogCategories.slug,
+        description: blogCategories.description,
+      };
+
       if (!input.includeCount) {
-        return await ctx.db.select().from(blogCategories).orderBy(blogCategories.name);
+        return await ctx.db.select(baseColumns).from(blogCategories).orderBy(blogCategories.name);
       }
 
       // ⚡ Bolt: Consolidated category list and post counts into a single joined query.
       // This reduces database round-trips from 2 to 1 and improves performance.
       const results = await ctx.db
         .select({
-          category: blogCategories,
+          category: baseColumns,
           postCount: sql<number>`count(${blogPostCategories.postId})::int`,
         })
         .from(blogCategories)
@@ -55,15 +64,24 @@ export const blogTaxonomyRouter = router({
   getTags: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
+      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB metadata
+      // when only basic tag information is needed for lists or navigation.
+      const baseColumns = {
+        id: blogTags.id,
+        name: blogTags.name,
+        slug: blogTags.slug,
+        description: blogTags.description,
+      };
+
       if (!input.includeCount) {
-        return await ctx.db.select().from(blogTags).orderBy(blogTags.name);
+        return await ctx.db.select(baseColumns).from(blogTags).orderBy(blogTags.name);
       }
 
       // ⚡ Bolt: Consolidated tag list and post counts into a single joined query.
       // This reduces database round-trips from 2 to 1 and improves performance.
       const results = await ctx.db
         .select({
-          tag: blogTags,
+          tag: baseColumns,
           postCount: sql<number>`count(${blogPostTags.postId})::int`,
         })
         .from(blogTags)
