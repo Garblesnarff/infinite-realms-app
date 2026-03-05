@@ -159,6 +159,7 @@ export function DMMessageVoiceControls({
             className="h-6 w-6 p-0 rounded-full text-muted-foreground hover:text-primary"
             onClick={handleVolumeToggle}
             aria-label={isMuted ? 'Unmute' : 'Mute'}
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? (
               <VolumeX className="h-3 w-3" aria-hidden="true" />

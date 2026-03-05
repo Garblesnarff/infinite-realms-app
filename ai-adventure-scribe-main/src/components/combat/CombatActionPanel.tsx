@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombat } from '@/contexts/CombatContext';
@@ -46,6 +47,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const { activeEncounter } = state;
 
   const hitDiceInputId = useId();
+  const actionDetailsId = useId();
   const [selectedAction, setSelectedAction] = useState<ActionDefinition | null>(null);
   const [selectedManagement, setSelectedManagement] = useState<string | null>(null);
   const [actionDetails, setActionDetails] = useState('');
@@ -212,6 +214,8 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                 size="sm"
                 onClick={handleCancelAction}
                 disabled={isSubmitting}
+                aria-label="Cancel action"
+                title="Cancel action"
               >
                 <RotateCcw className="w-4 h-4" />
               </Button>
@@ -258,13 +262,19 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                 </div>
               </div>
             ) : (
-              <Textarea
-                placeholder={`Describe your ${selectedAction.name.toLowerCase()}...`}
-                value={actionDetails}
-                onChange={(e) => setActionDetails(e.target.value)}
-                className="min-h-[100px]"
-                disabled={isSubmitting}
-              />
+              <div className="space-y-2">
+                <Label htmlFor={actionDetailsId} className="text-sm font-medium">
+                  Action Details
+                </Label>
+                <Textarea
+                  id={actionDetailsId}
+                  placeholder={`Describe your ${selectedAction.name.toLowerCase()}...`}
+                  value={actionDetails}
+                  onChange={(e) => setActionDetails(e.target.value)}
+                  className="min-h-[100px]"
+                  disabled={isSubmitting}
+                />
+              </div>
             )}
 
             {selectedAction.type !== 'cast_spell' &&
