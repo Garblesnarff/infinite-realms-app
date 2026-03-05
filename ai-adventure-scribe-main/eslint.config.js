@@ -362,6 +362,8 @@ export default tseslint.config(
       'src/services/ai/narration-service-impl.ts',
       'src/services/ai/shared/verbalized-sampling.ts',
       'src/features/game-session/components/game/MemoryPanel.tsx',
+      'src/features/character/hooks/use-enhanced-spellcasting.ts',
+      'src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx',
     ],
     rules: {
       'max-lines': 'warn',
