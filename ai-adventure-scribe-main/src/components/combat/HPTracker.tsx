@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { getHPColor } from '@/utils/hp-utils';
 
 interface HPTrackerProps {
   participant: CombatParticipant;
@@ -54,12 +55,6 @@ const HPTracker: React.FC<HPTrackerProps> = ({
     }
   };
 
-  const getHPColor = (): string => {
-    if (hpPercent <= 25) return 'bg-red-500';
-    if (hpPercent <= 50) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
   return (
     <Card>
       <CardContent className="p-4 space-y-4">
@@ -92,8 +87,10 @@ const HPTracker: React.FC<HPTrackerProps> = ({
           </div>
           <Progress
             value={hpPercent}
-            className={cn('h-2', getHPColor())}
-            aria-label={`${participant.name} health percentage`}
+            className="h-2"
+            indicatorClassName={getHPColor(hpPercent)}
+            aria-label={`${participant.name} health: ${currentHitPoints} / ${maxHitPoints} HP`}
+            title={`${currentHitPoints} / ${maxHitPoints} HP`}
           />
         </div>
 
