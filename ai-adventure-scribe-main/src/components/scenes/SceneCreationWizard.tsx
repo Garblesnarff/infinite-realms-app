@@ -10,7 +10,7 @@
  */
 
 import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { MapUploader } from './MapUploader';
 import { SceneSettings } from './SceneSettings';
@@ -88,6 +88,7 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
   onCancel,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const gridTypeLabelId = useId();
   const [formData, setFormData] = useState<SceneFormData>(DEFAULT_FORM_DATA);
   const { toast } = useToast();
 
@@ -375,10 +376,11 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
           {currentStep === 2 && (
             <div className="space-y-6">
               <div className="space-y-3">
-                <Label>Grid Type *</Label>
+                <Label id={gridTypeLabelId}>Grid Type *</Label>
                 <RadioGroup
                   value={formData.gridType}
                   onValueChange={(value) => updateFormData({ gridType: value as GridType })}
+                  aria-labelledby={gridTypeLabelId}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">

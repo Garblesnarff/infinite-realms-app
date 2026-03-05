@@ -28,7 +28,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -252,6 +251,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                         size="icon"
                         className="h-8 w-8"
                         aria-label="Open scene menu"
+                        title="Open scene menu"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -371,7 +371,12 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                 {/* Actions */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" aria-label="Open scene menu">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Open scene menu"
+                      title="Open scene menu"
+                    >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

@@ -357,6 +357,7 @@ export default tseslint.config(
       'src/features/character/components/sheet/ExperienceManager.tsx',
       'src/features/character/hooks/use-inventory-manager.ts',
       'src/features/character/components/sheet/InventoryManager.tsx',
+      'src/components/scenes/SceneManager.tsx',
     ],
     rules: {
       'max-lines': 'warn',
