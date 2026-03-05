@@ -147,3 +147,7 @@
 ## 2026-03-04 - [Dice Roll Message Coverage & RTL Disambiguation]
 **Learning:** Found that `DiceRollMessage.tsx` was completely untested. Discovered a testing gotcha where "Natural 1" and "Natural 20" labels appear in both the critical result badge and the special d20 callout badge, causing "multiple elements found" errors in React Testing Library when using `getByText`. Also learned that running the full test suite from the root requires `bun install` in `server-bun/` to resolve backend-only dependencies like `pino`.
 **Action:** Use `getAllByText` and verify length or presence when labels appear in multiple badges within the same component. Always ensure that `vitest.config.ts` includes both the test path and the source path for proper coverage tracking.
+
+## 2025-06-26 - [Class Mechanics Logic Bugs]
+**Learning:** Found several bugs in `src/utils/classMechanics.ts`: 1) `canUseSneakAttack` ignored advantage/disadvantage and distance. 2) `deactivateRage` incorrectly removed pre-existing resistances. 3) `getDivineSmiteDamage` exceeded the 5d8 maximum for high-level slots. 4) `isIncapacitated` missed the explicit 'incapacitated' condition.
+**Action:** Always verify D&D 5e RAW (Rules As Written) when testing class features. Use comprehensive tests that cover pre-existing states (like resistances) and cap limits (like Smite damage). Ensure all condition-checkers include the name of the condition they are checking for.

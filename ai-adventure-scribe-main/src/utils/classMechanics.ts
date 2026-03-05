@@ -48,6 +48,21 @@ export function canUseSneakAttack(
     return false;
   }
 
+  // Sneak attack cannot be used if you have disadvantage
+  const hasDisadvantage = attacker.conditions.some((c) =>
+    ['blinded', 'poisoned', 'restrained'].includes(c.name),
+  );
+  if (hasDisadvantage) return false;
+
+  // Check for advantage
+  const hasAdvantage =
+    attacker.conditions.some((c) => c.name === 'invisible') ||
+    target.conditions.some((c) =>
+      ['blinded', 'paralyzed', 'stunned', 'unconscious', 'prone'].includes(c.name),
+    );
+
+  if (hasAdvantage) return true;
+
   // Check if target is within 5 feet of another enemy of the target
   // (not including the attacker or incapacitated allies)
   const nearbyEnemies = encounter.participants.filter(
@@ -59,12 +74,8 @@ export function canUseSneakAttack(
       !isIncapacitated(p),
   );
 
-  // For simplicity, we'll assume there's always an ally nearby in combat
-  // In a real implementation, you'd check actual positioning
   const hasNearbyAlly = nearbyEnemies.length > 0;
 
-  // Sneak attack can be used if there's an ally nearby or if attacker has advantage
-  // For now, we'll just check if there's an ally nearby
   return hasNearbyAlly;
 }
 
@@ -72,7 +83,13 @@ export function canUseSneakAttack(
  * Check if a participant is incapacitated
  */
 export function isIncapacitated(participant: CombatParticipant): boolean {
-  const incapacitatingConditions = ['stunned', 'paralyzed', 'unconscious', 'petrified'];
+  const incapacitatingConditions = [
+    'stunned',
+    'paralyzed',
+    'unconscious',
+    'petrified',
+    'incapacitated',
+  ];
   return participant.conditions.some((c) => incapacitatingConditions.includes(c.name));
 }
 
@@ -93,7 +110,9 @@ export function getDivineSmiteDamage(spellSlotLevel: number, isCritical: boolean
   // Divine Smite adds radiant damage equal to 2d8 + 1d8 for each spell slot level above 1st
   const baseDice = 2; // Base 2d8 for 1st level slot
   const additionalDice = Math.max(0, spellSlotLevel - 1); // Additional 1d8 per level above 1st
-  const totalDice = baseDice + additionalDice;
+
+  // Cap at 5d8 total (which corresponds to a 4th level slot)
+  const totalDice = Math.min(5, baseDice + additionalDice);
 
   // For critical hits, double the dice count
   const finalDice = isCritical ? totalDice * 2 : totalDice;
@@ -222,10 +241,15 @@ export function activateRage(
 /**
  * Deactivate Barbarian rage
  */
-export function deactivateRage(participant: CombatParticipant): CombatParticipant {
-  // Remove damage resistances added by rage
+export function deactivateRage(
+  participant: CombatParticipant,
+  baseResistances: string[] = [],
+): CombatParticipant {
+  // Remove damage resistances added by rage, but keep those that are part of the base character
   const damageResistances = participant.damageResistances.filter(
-    (type) => type !== 'bludgeoning' && type !== 'piercing' && type !== 'slashing',
+    (type) =>
+      baseResistances.includes(type) ||
+      (type !== 'bludgeoning' && type !== 'piercing' && type !== 'slashing'),
   );
 
   return {
