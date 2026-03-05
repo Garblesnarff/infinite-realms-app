@@ -246,7 +246,7 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </span>
               <span className="font-medium">{Math.round(progress)}%</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress value={progress} className="h-2" aria-label="Creation progress" />
           </div>
 
           {/* Step Indicators */}
@@ -269,6 +269,9 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
                     index > currentStep && 'bg-muted text-muted-foreground',
                   )}
                   style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  aria-label={`Step ${index + 1}: ${step.title} - ${
+                    index < currentStep ? 'Completed' : index === currentStep ? 'Current' : 'Upcoming'
+                  }`}
                 >
                   {index < currentStep ? <Check className="h-5 w-5" /> : index + 1}
                 </div>
