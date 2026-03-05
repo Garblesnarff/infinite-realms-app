@@ -361,6 +361,7 @@ export default tseslint.config(
       'src/components/scenes/SceneManager.tsx',
       'src/services/ai/narration-service-impl.ts',
       'src/services/ai/shared/verbalized-sampling.ts',
+      'src/features/game-session/components/game/MemoryPanel.tsx',
     ],
     rules: {
       'max-lines': 'warn',
