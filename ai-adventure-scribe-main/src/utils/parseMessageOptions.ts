@@ -58,14 +58,17 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
     const [_fullMatch, numberStr, boldText, description] = match;
     const number = parseInt(numberStr, 10);
 
-    // Clean up the description text
+    // Clean up the description text; don't add ", " before em-dashes or parentheticals
     const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
-    const fullOptionText = `**${boldText}**${cleanDescription ? `, ${cleanDescription}` : ''}`;
+    const sep =
+      cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
+    const displayText = `${boldText}${sep}${cleanDescription}`.replace(/\*([^*]+)\*/g, '$1');
+    const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
     options.push({
       id: `option-${number}`,
       number,
-      text: `${boldText}${cleanDescription ? `, ${cleanDescription}` : ''}`,
+      text: displayText,
       fullText: fullOptionText,
     });
 
@@ -82,15 +85,18 @@ export function parseMessageOptions(messageContent: string): ParsedMessage {
       const [_fullMatch, letterStr, boldText, description] = match;
       const letterCode = letterStr.charCodeAt(0) - 64; // A=1, B=2, C=3, etc.
 
-      // Clean up the description text
+      // Clean up the description text; don't add ", " before em-dashes or parentheticals
       const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
-      const fullOptionText = `**${boldText}**${cleanDescription ? `, ${cleanDescription}` : ''}`;
+      const sep =
+        cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
+      const displayText = `${boldText}${sep}${cleanDescription}`.replace(/\*([^*]+)\*/g, '$1');
+      const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
       options.push({
         id: `option-${letterStr}`,
         number: letterCode,
         letter: letterStr,
-        text: `${boldText}${cleanDescription ? `, ${cleanDescription}` : ''}`,
+        text: displayText,
         fullText: fullOptionText,
       });
 
