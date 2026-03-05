@@ -27,14 +27,18 @@ import logger from '@/lib/logger';
  * - "A. **Attempt to charm**, using your bardic magic..."
  * - "B. **Unsheathe your rapier**, and prepare to defend..."
  */
-export function parseMessageOptions(messageContent: string): ParsedMessage {
-  if (!messageContent) {
+export function parseMessageOptions(rawContent: string): ParsedMessage {
+  if (!rawContent) {
     return {
       content: '',
       options: [],
       hasOptions: false,
     };
   }
+
+  // Normalize "**A. Bold text**" format (letter inside bold block) → "A. **Bold text**"
+  // so the primary regex can extract boldText and description cleanly.
+  const messageContent = rawContent.replace(/^\*\*([A-C])\.\s+([^*\n]+)\*\*/gm, '$1. **$2**');
 
   // Regular expression to match both numbered and lettered options with bold formatting
   // Matches: 1. **Bold text**, description... OR A. **Bold text**...
