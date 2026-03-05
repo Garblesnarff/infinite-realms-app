@@ -347,21 +347,27 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         <div className="w-16 text-sm font-medium">Level {level}</div>
                         <div className="flex-1">
                           <div className="flex gap-1 mb-1">
-                            {Array.from({ length: slots.total }).map((_, i) => (
-                              <button
-                                key={i}
-                                className={`w-6 h-6 rounded border-2 ${
-                                  i < slots.used
-                                    ? 'bg-gray-300 border-gray-400'
-                                    : 'bg-purple-500 border-purple-600'
-                                }`}
-                                onClick={() =>
-                                  i < slots.used
-                                    ? restoreSpellSlot(parseInt(level))
-                                    : consumeSpellSlot(parseInt(level))
-                                }
-                              />
-                            ))}
+                            {Array.from({ length: slots.total }).map((_, i) => {
+                              const isUsed = i < slots.used;
+                              return (
+                                <button
+                                  key={i}
+                                  className={`w-6 h-6 rounded border-2 ${
+                                    isUsed
+                                      ? 'bg-gray-300 border-gray-400'
+                                      : 'bg-purple-500 border-purple-600'
+                                  }`}
+                                  onClick={() =>
+                                    isUsed
+                                      ? restoreSpellSlot(parseInt(level))
+                                      : consumeSpellSlot(parseInt(level))
+                                  }
+                                  aria-label={`Level ${level} spell slot ${isUsed ? 'expended' : 'available'}`}
+                                  title={isUsed ? 'Restore spell slot' : 'Consume spell slot'}
+                                  aria-pressed={!isUsed}
+                                />
+                              );
+                            })}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {slots.total - slots.used} / {slots.total} remaining
@@ -430,17 +436,23 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <div className="text-sm font-medium">Level {pactSlots.level} Slots</div>
                     <div className="flex-1">
                       <div className="flex gap-1 mb-1">
-                        {Array.from({ length: pactSlots.maximum }).map((_, i) => (
-                          <button
-                            key={i}
-                            className={`w-8 h-8 rounded border-2 ${
-                              i >= pactSlots.current
-                                ? 'bg-gray-300 border-gray-400'
-                                : 'bg-purple-500 border-purple-600'
-                            }`}
-                            onClick={consumePactSlot}
-                          />
-                        ))}
+                        {Array.from({ length: pactSlots.maximum }).map((_, i) => {
+                          const isExpended = i >= pactSlots.current;
+                          return (
+                            <button
+                              key={i}
+                              className={`w-8 h-8 rounded border-2 ${
+                                isExpended
+                                  ? 'bg-gray-300 border-gray-400'
+                                  : 'bg-purple-500 border-purple-600'
+                              }`}
+                              onClick={consumePactSlot}
+                              aria-label={`Pact magic slot ${isExpended ? 'expended' : 'available'}`}
+                              title={isExpended ? 'Expended' : 'Consume pact slot'}
+                              aria-pressed={!isExpended}
+                            />
+                          );
+                        })}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {pactSlots.current} / {pactSlots.maximum} remaining
