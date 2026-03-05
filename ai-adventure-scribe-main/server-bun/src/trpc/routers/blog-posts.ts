@@ -182,16 +182,37 @@ export const blogPostsRouter = router({
    * Get single post by slug (PUBLIC)
    */
   getBySlug: publicProcedure.input(z.object({ slug: z.string().min(1) })).query(async ({ input, ctx }) => {
-    const [post] = await ctx.db
-      .select()
-      .from(blogPosts)
-      .where(and(eq(blogPosts.slug, input.slug), eq(blogPosts.status, 'published')))
-      .limit(1);
+    // ⚡ Bolt: COLLAPSED 3 QUERIES INTO 1.
+    // Use a single relational query to fetch post, author, categories, and tags in one round-trip.
+    const post = await ctx.db.query.blogPosts.findFirst({
+      where: and(eq(blogPosts.slug, input.slug), eq(blogPosts.status, 'published')),
+      with: {
+        author: true,
+        categories: {
+          with: {
+            category: {
+              columns: { id: true, slug: true, name: true },
+            },
+          },
+        },
+        tags: {
+          with: {
+            tag: {
+              columns: { id: true, slug: true, name: true },
+            },
+          },
+        },
+      },
+    });
 
     if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
 
-    const relations = await fetchPostsRelations(ctx, [post.id]);
-    return { ...post, ...relations[post.id] };
+    // Flatten relations to match expected frontend structure and API contract
+    return {
+      ...post,
+      categories: post.categories.map((pc: any) => pc.category).filter(Boolean),
+      tags: post.tags.map((pt: any) => pt.tag).filter(Boolean),
+    };
   }),
 
   /**

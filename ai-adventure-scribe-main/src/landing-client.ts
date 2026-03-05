@@ -8,6 +8,8 @@
  * - FAQ accordion interactions
  */
 
+import logger from '@/lib/logger';
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   initWaitlistForms();
@@ -179,7 +181,7 @@ function trackEvent(eventName: string, params?: Record<string, unknown>) {
 
   // Log in development
   if (import.meta.env.DEV) {
-    console.log('[Analytics]', eventName, params);
+    logger.debug('[Analytics]', { eventName, params });
   }
 }
 

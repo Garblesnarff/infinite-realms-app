@@ -142,6 +142,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/fog-of-war-service.test.ts',
       'server-bun/src/services/__tests__/measurement-security.test.ts',
       'server-bun/src/trpc/routers/__tests__/chronicle-security.test.ts',
+      'server-bun/src/trpc/routers/__tests__/blog-posts.test.ts',
       'server-bun/src/services/__tests__/hp-mechanics.test.ts',
       'server-bun/src/services/__tests__/progression-service.test.ts',
       'src/__tests__/components/spell-selection-component.test.tsx',
