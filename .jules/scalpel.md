@@ -11,3 +11,7 @@
 **Challenge:** Re-exporting functions from the new module back into the original monolithic file ensured backward compatibility for the rest of the codebase but required adding both files to the `max-lines` override list in `eslint.config.js`.
 **Learning:** Even after a successful surgical extraction, the original file may still exceed the 200-line limit if it contains extensive definitions (like D&D class features). Modularizing by responsibility (definitions vs. logic) is a sustainable first step.
 **Pattern:** Separating pure calculation logic (`classMechanics.ts`) from data definitions and resource management (`classFeatures.ts`) improves testability and readability of the business logic.
+## 2026-03-04 - [Message Command Handler Extraction]
+**Challenge:** Extracting safety and dice command logic from a large hook revealed that the original code relied on multiple context hooks and local refs to manage asynchronous state.
+**Learning:** When extracting into a new hook, ensure that all necessary context hooks are duplicated in the new hook and that refs (like `messagesRef`) are maintained to prevent stale closures in async operations.
+**Pattern:** Delegating specialized command processing to a sub-hook (`useMessageCommandHandler`) significantly reduces the cognitive load and line count of the main orchestrator (`useMessageHandlerLogic`) while maintaining a clean, functional interface.

@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { useMessageCommandHandler } from './use-message-command-handler';
 import { useSessionValidator } from '../session/SessionValidator';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
@@ -14,11 +15,8 @@ import { useAIResponse } from '@/hooks/use-ai-response';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { sanitizeDMText } from '@/utils/chatSanitizer';
-import { parseDiceCommand } from '@/utils/diceCommandParser';
-import { rollDice } from '@/utils/diceUtils';
 import { handleAsyncError } from '@/utils/error-handler';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
-import { checkSafetyCommands, processSafetyCommand } from '@/utils/safetyCommands';
 
 interface UseMessageHandlerLogicProps {
   sessionId: string;
@@ -47,6 +45,13 @@ export const useMessageHandlerLogic = ({
   const { toast } = useToast();
   const { state: characterState } = useCharacter();
   const character = characterState.character;
+
+  const { handleSafetyCommand, handleDiceCommand } = useMessageCommandHandler({
+    sessionId,
+    updateGameSessionState,
+    onAIResponse,
+  });
+
   const headerMode = String(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
@@ -138,164 +143,22 @@ export const useMessageHandlerLogic = ({
     providedContext?: DiceRollContext,
   ): Promise<void> => {
     try {
-      // Check if game is paused and this isn't a resume command
-      const trimmedInput = playerInput.trim().toLowerCase();
-      const _isResumeCommand = trimmedInput === '/resume' || trimmedInput.startsWith('/resume ');
-
-      // Note: We'll need to get the current session state to check if paused
-      // For now, we'll assume we can check a property on the session
-      // This would be enhanced to check actual session_state.is_paused
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
 
       // Validate session before proceeding (if still needed)
       const isValid = await validateSession();
       if (!isValid) return;
 
-      // Get current session state for context
-      const currentSessionState = { is_paused: false, turn_count: turnCount }; // Would get actual session state
-
-      // Check if this is a safety command
-      const safetyCheck = await checkSafetyCommands(playerInput, sessionId);
-      if (safetyCheck.isSafetyCommand && safetyCheck.command) {
-        logger.info('🛡️ [Safety] Safety command detected:', safetyCheck.command);
-
-        // Send safety command response
-        let safetyResponse: ChatMessage;
-        if (safetyCheck.response) {
-          safetyResponse = safetyCheck.response;
-          await sendMessage(safetyResponse);
-        } else {
-          safetyResponse = await processSafetyCommand(
-            safetyCheck.command,
-            sessionId,
-            playerInput,
-            undefined,
-            currentSessionState,
-          );
-          await sendMessage(safetyResponse);
-        }
-
-        // Store safety event in memory with high importance
-        await extractMemories(
-          `Safety command ${safetyCheck.command.type} activated: ${safetyCheck.command.context}`,
-          {
-            importance: 9, // High importance
-            tags: [
-              'safety',
-              safetyCheck.command.type,
-              safetyCheck.command.autoTriggered ? 'auto-triggered' : 'manual',
-            ],
-            type: 'game_event',
-            context_id: sessionId,
-          },
-        );
-
-        // Handle pause/resume state changes
-        if (safetyCheck.shouldPause) {
-          await updateGameSessionState((prev: ExtendedGameSession) => ({
-            ...prev,
-            is_paused: true,
-          }));
-        } else if (safetyCheck.shouldResume) {
-          await updateGameSessionState((prev: ExtendedGameSession) => ({
-            ...prev,
-            is_paused: false,
-          }));
-        }
-
-        return; // Exit early for safety commands
+      // Check if this is a manual safety command
+      const manualSafetyResult = await handleSafetyCommand(playerInput);
+      if (manualSafetyResult.isSafetyCommand) {
+        return;
       }
 
       // Check if this is a dice roll command
-      const diceCommand = parseDiceCommand(playerInput);
-      if (diceCommand) {
-        if (!diceCommand.isValid) {
-          // Show error for invalid dice command
-          const errorMessage: ChatMessage = {
-            text: diceCommand.error || 'Invalid dice command',
-            sender: 'system',
-            context: { intent: 'dice_command_error' },
-          };
-          await sendMessage(errorMessage);
-          return;
-        }
-
-        // Execute the dice roll
-        try {
-          const rollResult = rollDice(
-            diceCommand.dieType,
-            diceCommand.count,
-            diceCommand.modifier,
-            {
-              advantage: diceCommand.advantage,
-              disadvantage: diceCommand.disadvantage,
-            },
-          );
-
-          // Create dice roll message
-          const diceRollMessage: ChatMessage = {
-            text: `Rolled ${diceCommand.formula}${diceCommand.label ? ` for ${diceCommand.label}` : ''}`,
-            sender: 'player',
-            characterName: character?.name,
-            characterAvatar: character?.avatar_url,
-            context: {
-              intent: 'dice_roll',
-              diceRoll: {
-                formula: diceCommand.formula,
-                count: diceCommand.count,
-                dieType: diceCommand.dieType,
-                modifier: diceCommand.modifier,
-                advantage: diceCommand.advantage,
-                disadvantage: diceCommand.disadvantage,
-                results: rollResult.results,
-                keptResults: rollResult.keptResults,
-                total: rollResult.total,
-                naturalRoll: rollResult.naturalRoll,
-                critical: rollResult.critical,
-                label: diceCommand.label,
-                timestamp: new Date().toISOString(),
-              },
-            },
-          };
-
-          await sendMessage(diceRollMessage);
-
-          // Also send to AI for context (so DM knows what was rolled)
-          const aiResponseMessage = await getAIResponse(
-            [...messagesRef.current, diceRollMessage],
-            sessionId,
-          );
-
-          await sendMessage(aiResponseMessage);
-
-          // Process AI response for combat detection
-          if (onAIResponse) {
-            try {
-              await onAIResponse(aiResponseMessage);
-            } catch (combatError) {
-              handleAsyncError(combatError, {
-                userMessage: 'Failed to process combat response after dice roll',
-                logLevel: 'warn',
-                showToast: false,
-                context: { location: 'MessageHandler.diceRoll.combatDetection' },
-              });
-            }
-          }
-
-          return; // Exit early for dice commands
-        } catch (rollError) {
-          handleAsyncError(rollError, {
-            userMessage: 'Failed to execute dice roll',
-            context: { location: 'MessageHandler.diceCommand', command: playerInput },
-          });
-          const errorMessage: ChatMessage = {
-            text: 'Failed to execute dice roll. Please try again.',
-            sender: 'system',
-            context: { intent: 'dice_roll_error' },
-          };
-          await sendMessage(errorMessage);
-          return;
-        }
+      const diceCommandResult = await handleDiceCommand(playerInput);
+      if (diceCommandResult.isDiceCommand) {
+        return;
       }
 
       // Use ref to get current turn count to avoid stale closure
@@ -365,50 +228,9 @@ export const useMessageHandlerLogic = ({
       };
 
       // Check for auto-triggered safety commands in AI response
-      const autoSafetyCheck = await checkSafetyCommands(
-        playerInput,
-        sessionId,
-        sanitizedAiResponseMessage.text,
-      );
-      if (autoSafetyCheck.isSafetyCommand && autoSafetyCheck.command) {
-        logger.info('🛡️ [Safety] Auto-triggered safety command detected:', autoSafetyCheck.command);
-
-        // Send safety command response instead of AI response
-        let safetyResponse: ChatMessage;
-        if (autoSafetyCheck.response) {
-          safetyResponse = autoSafetyCheck.response;
-          await sendMessage(safetyResponse);
-        } else {
-          safetyResponse = await processSafetyCommand(
-            autoSafetyCheck.command,
-            sessionId,
-            playerInput,
-            sanitizedAiResponseMessage.text,
-            currentSessionState,
-          );
-          await sendMessage(safetyResponse);
-        }
-
-        // Store safety event in memory with high importance
-        await extractMemories(
-          `Auto-triggered safety command ${autoSafetyCheck.command.type}: ${autoSafetyCheck.command.context}`,
-          {
-            importance: 8, // High but slightly lower than manual
-            tags: ['safety', autoSafetyCheck.command.type, 'auto-triggered', 'ai-response'],
-            type: 'game_event',
-            context_id: sessionId,
-          },
-        );
-
-        // Handle pause state
-        if (autoSafetyCheck.shouldPause) {
-          await updateGameSessionState((prev: ExtendedGameSession) => ({
-            ...prev,
-            is_paused: true,
-          }));
-        }
-
-        return; // Exit early for auto-triggered safety commands
+      const autoSafetyResult = await handleSafetyCommand(playerInput, sanitizedAiResponseMessage.text);
+      if (autoSafetyResult.isSafetyCommand) {
+        return;
       }
 
       // Check if this response contains roll requests
