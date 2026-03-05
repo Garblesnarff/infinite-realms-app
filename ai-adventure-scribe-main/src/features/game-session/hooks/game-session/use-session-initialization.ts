@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import { isSessionExpired } from './session-utils';
-import { type ExtendedGameSession, type SessionState } from '../../types/session';
+import {
+  type ExtendedGameSession,
+  type SessionState,
+  GAME_SESSION_SELECT_COLUMNS,
+} from '../../types/session';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -60,7 +64,7 @@ export const useSessionInitialization = ({
 
         const { data: existingSessions, error: existingSessionError } = await supabase
           .from('game_sessions')
-          .select('*')
+          .select(GAME_SESSION_SELECT_COLUMNS)
           .eq('campaign_id', campaignId)
           .eq('character_id', characterId)
           .order('created_at', { ascending: false })
@@ -111,7 +115,7 @@ export const useSessionInitialization = ({
                 session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
               },
             ])
-            .select()
+            .select(GAME_SESSION_SELECT_COLUMNS)
             .single();
 
           if (!mountedRef.current) return;

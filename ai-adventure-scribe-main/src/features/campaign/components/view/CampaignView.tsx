@@ -5,6 +5,7 @@ import { CampaignCollapsible } from './sections/CampaignCollapsible';
 import { CampaignHeader } from './sections/CampaignHeader';
 import { GameSession } from './sections/GameSession';
 
+import { CAMPAIGN_SELECT_COLUMNS } from '@/types/campaign';
 import type { Campaign } from '@/types/game';
 
 import { Card } from '@/components/ui/card';
@@ -52,7 +53,7 @@ const CampaignView: React.FC = () => {
 
         const { data, error } = await supabase
           .from('campaigns')
-          .select('*')
+          .select(CAMPAIGN_SELECT_COLUMNS)
           .eq('id', id)
           .eq('user_id', user.id)
           .maybeSingle();

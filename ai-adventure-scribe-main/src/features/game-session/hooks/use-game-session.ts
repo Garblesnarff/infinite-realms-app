@@ -17,6 +17,7 @@ import {
   type ExtendedGameSession,
   type SessionState,
   type SessionStateUpdater,
+  GAME_SESSION_SELECT_COLUMNS,
 } from '../types/session';
 
 import { useTelemetry } from '@/hooks/use-telemetry';
@@ -116,7 +117,7 @@ export const useGameSession = (
             session_notes: '',
           },
         ])
-        .select()
+        .select(GAME_SESSION_SELECT_COLUMNS)
         .single();
 
       if (!mountedRef.current) return null;
@@ -205,7 +206,7 @@ export const useGameSession = (
         .from('game_sessions')
         .update(newState)
         .eq('id', sessId)
-        .select()
+        .select(GAME_SESSION_SELECT_COLUMNS)
         .single();
       if (!mountedRef.current) return;
 
