@@ -17,6 +17,11 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
   const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
 
   // Dexterity modifier (simplified - would normally calculate from ability score)
+  // Use stealthCheckBonus if available for custom characters
+  if (participant.stealthCheckBonus !== undefined) {
+    return participant.stealthCheckBonus;
+  }
+
   const dexModifier = 2;
 
   // Racial bonuses

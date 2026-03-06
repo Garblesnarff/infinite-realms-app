@@ -364,6 +364,8 @@ export default tseslint.config(
       'src/features/game-session/components/game/MemoryPanel.tsx',
       'src/features/character/hooks/use-enhanced-spellcasting.ts',
       'src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx',
+      'src/utils/stealthUtils.ts',
+      'src/utils/__tests__/stealthUtils.test.ts',
     ],
     rules: {
       'max-lines': 'warn',
