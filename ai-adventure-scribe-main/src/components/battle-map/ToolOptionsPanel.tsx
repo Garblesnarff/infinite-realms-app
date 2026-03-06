@@ -18,33 +18,18 @@
  * @module components/battle-map/ToolOptionsPanel
  */
 
-import {
-  Paintbrush,
-  Circle,
-  Square,
-  Triangle,
-  Minus,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-} from 'lucide-react';
+import { Paintbrush, ChevronDown, ChevronUp } from 'lucide-react';
 import React, { useState, useEffect, useId } from 'react';
+
+import { AoEOptions } from './tool-options/AoEOptions';
+import { DrawOptions } from './tool-options/DrawOptions';
+import { FogOptions } from './tool-options/FogOptions';
+import { MeasureOptions } from './tool-options/MeasureOptions';
+import { WallOptions } from './tool-options/WallOptions';
 
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
 import { Z_INDEX } from '@/constants/z-index';
 import { useDrawingTool } from '@/hooks/use-drawing-tool';
 import { cn } from '@/lib/utils';
@@ -83,38 +68,6 @@ export interface ToolOptions {
   fogBrushMode?: 'reveal' | 'conceal';
   snapToGrid?: boolean;
 }
-
-// ===========================
-// Color Picker Component
-// ===========================
-
-interface ColorPickerProps {
-  label: string;
-  value: string;
-  onChange: (color: string) => void;
-  className?: string;
-}
-
-const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange, className }) => {
-  const id = React.useId();
-  return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <Label htmlFor={id} className="text-sm flex-shrink-0">
-        {label}
-      </Label>
-      <div className="flex items-center gap-2 flex-1">
-        <input
-          id={id}
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-10 h-8 rounded border cursor-pointer"
-        />
-        <span className="text-xs text-muted-foreground font-mono">{value}</span>
-      </div>
-    </div>
-  );
-};
 
 // ===========================
 // Tool Options Panel Component
@@ -199,271 +152,69 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   // Render Tool-Specific Options
   // ===========================
 
-  const renderDrawOptions = () => (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <Label htmlFor={strokeWidthId} className="text-sm">
-          Stroke Width
-        </Label>
-        <Slider
-          id={strokeWidthId}
-          value={[drawingTool.state.strokeWidth]}
-          onValueChange={([value]) => drawingTool.setStrokeWidth(value)}
-          min={1}
-          max={20}
-          step={1}
-          className="w-full"
-          aria-label="Stroke Width"
-        />
-        <span className="text-xs text-muted-foreground">{drawingTool.state.strokeWidth}px</span>
-      </div>
-
-      <ColorPicker
-        label="Stroke Color"
-        value={drawingTool.state.strokeColor}
-        onChange={drawingTool.setStrokeColor}
-      />
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant={drawingTool.state.fillEnabled ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => drawingTool.setFillEnabled(!drawingTool.state.fillEnabled)}
-          aria-pressed={drawingTool.state.fillEnabled}
-          aria-label="Toggle Fill"
-        >
-          {drawingTool.state.fillEnabled ? (
-            <Eye className="h-4 w-4" />
-          ) : (
-            <EyeOff className="h-4 w-4" />
-          )}
-          <span className="ml-2">Fill</span>
-        </Button>
-      </div>
-
-      {drawingTool.state.fillEnabled && (
-        <>
-          <ColorPicker
-            label="Fill Color"
-            value={drawingTool.state.fillColor}
-            onChange={drawingTool.setFillColor}
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor={fillOpacityId} className="text-sm">
-              Fill Opacity
-            </Label>
-            <Slider
-              id={fillOpacityId}
-              value={[drawingTool.state.fillOpacity * 100]}
-              onValueChange={([value]) => drawingTool.setFillOpacity(value / 100)}
-              min={0}
-              max={100}
-              step={5}
-              className="w-full"
-              aria-label="Fill Opacity"
-            />
-            <span className="text-xs text-muted-foreground">
-              {Math.round(drawingTool.state.fillOpacity * 100)}%
-            </span>
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  const renderAoEOptions = () => (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <Label htmlFor={templateTypeId} className="text-sm">
-          Template Type
-        </Label>
-        <Select value={templateType} onValueChange={(value: any) => setTemplateType(value)}>
-          <SelectTrigger id={templateTypeId} className="w-full" aria-label="Template type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cone">
-              <div className="flex items-center gap-2">
-                <Triangle className="h-4 w-4" />
-                <span>Cone</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="cube">
-              <div className="flex items-center gap-2">
-                <Square className="h-4 w-4" />
-                <span>Cube</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="sphere">
-              <div className="flex items-center gap-2">
-                <Circle className="h-4 w-4" />
-                <span>Sphere</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="line">
-              <div className="flex items-center gap-2">
-                <Minus className="h-4 w-4" />
-                <span>Line</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="cylinder">
-              <div className="flex items-center gap-2">
-                <Circle className="h-4 w-4" />
-                <span>Cylinder</span>
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <ColorPicker
-        label="Template Color"
-        value={drawingTool.state.fillColor}
-        onChange={drawingTool.setFillColor}
-      />
-
-      <div className="space-y-2">
-        <Label htmlFor={aoeOpacityId} className="text-sm">
-          Opacity
-        </Label>
-        <Slider
-          id={aoeOpacityId}
-          value={[drawingTool.state.fillOpacity * 100]}
-          onValueChange={([value]) => drawingTool.setFillOpacity(value / 100)}
-          min={0}
-          max={100}
-          step={5}
-          className="w-full"
-          aria-label="Template Opacity"
-        />
-        <span className="text-xs text-muted-foreground">
-          {Math.round(drawingTool.state.fillOpacity * 100)}%
-        </span>
-      </div>
-    </div>
-  );
-
-  const renderWallOptions = () => (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <Label htmlFor={wallTypeId} className="text-sm">
-          Wall Type
-        </Label>
-        <Select value={wallType} onValueChange={(value: any) => setWallType(value)}>
-          <SelectTrigger id={wallTypeId} className="w-full" aria-label="Wall type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="solid">Solid Wall</SelectItem>
-            <SelectItem value="door">Door</SelectItem>
-            <SelectItem value="window">Window</SelectItem>
-            <SelectItem value="terrain">Terrain</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant={wallSnapToGrid ? 'default' : 'outline'}
-          size="sm"
-          onClick={toggleWallSnapToGrid}
-          aria-pressed={wallSnapToGrid}
-          aria-label="Toggle Snap to Grid"
-        >
-          {wallSnapToGrid ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-          <span className="ml-2">Snap to Grid</span>
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor={wallStrokeWidthId} className="text-sm">
-          Stroke Width
-        </Label>
-        <Slider
-          id={wallStrokeWidthId}
-          value={[drawingTool.state.strokeWidth]}
-          onValueChange={([value]) => drawingTool.setStrokeWidth(value)}
-          min={1}
-          max={10}
-          step={1}
-          className="w-full"
-          aria-label="Stroke Width"
-        />
-        <span className="text-xs text-muted-foreground">{drawingTool.state.strokeWidth}px</span>
-      </div>
-    </div>
-  );
-
-  const renderFogOptions = () => (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <Label htmlFor={brushModeId} className="text-sm">
-          Brush Mode
-        </Label>
-        <Select value={fogBrushMode} onValueChange={(value: any) => setFogBrushMode(value)}>
-          <SelectTrigger id={brushModeId} className="w-full" aria-label="Brush mode">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="reveal">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4" />
-                <span>Reveal</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="conceal">
-              <div className="flex items-center gap-2">
-                <EyeOff className="h-4 w-4" />
-                <span>Conceal</span>
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor={brushSizeId} className="text-sm">
-          Brush Size
-        </Label>
-        <Slider
-          id={brushSizeId}
-          value={[fogBrushSize]}
-          onValueChange={([value]) => setFogBrushSize(value)}
-          min={10}
-          max={200}
-          step={10}
-          className="w-full"
-          aria-label="Brush Size"
-        />
-        <span className="text-xs text-muted-foreground">{fogBrushSize}px</span>
-      </div>
-    </div>
-  );
-
-  const renderMeasureOptions = () => (
-    <div className="space-y-3">
-      <div className="text-sm text-muted-foreground">Click and drag to measure distance.</div>
-      <ColorPicker
-        label="Line Color"
-        value={drawingTool.state.strokeColor}
-        onChange={drawingTool.setStrokeColor}
-      />
-    </div>
-  );
-
   const renderToolOptions = () => {
     switch (selectedTool) {
       case 'draw':
-        return renderDrawOptions();
+        return (
+          <DrawOptions
+            strokeWidth={drawingTool.state.strokeWidth}
+            setStrokeWidth={drawingTool.setStrokeWidth}
+            strokeColor={drawingTool.state.strokeColor}
+            setStrokeColor={drawingTool.setStrokeColor}
+            fillEnabled={drawingTool.state.fillEnabled}
+            setFillEnabled={drawingTool.setFillEnabled}
+            fillColor={drawingTool.state.fillColor}
+            setFillColor={drawingTool.setFillColor}
+            fillOpacity={drawingTool.state.fillOpacity}
+            setFillOpacity={drawingTool.setFillOpacity}
+            strokeWidthId={strokeWidthId}
+            fillOpacityId={fillOpacityId}
+          />
+        );
       case 'move': // AoE tool
-        return renderAoEOptions();
+        return (
+          <AoEOptions
+            templateType={templateType}
+            setTemplateType={setTemplateType}
+            fillColor={drawingTool.state.fillColor}
+            setFillColor={drawingTool.setFillColor}
+            fillOpacity={drawingTool.state.fillOpacity}
+            setFillOpacity={drawingTool.setFillOpacity}
+            templateTypeId={templateTypeId}
+            aoeOpacityId={aoeOpacityId}
+          />
+        );
       case 'wall':
-        return renderWallOptions();
+        return (
+          <WallOptions
+            wallType={wallType}
+            setWallType={setWallType}
+            snapToGrid={wallSnapToGrid}
+            toggleSnapToGrid={toggleWallSnapToGrid}
+            strokeWidth={drawingTool.state.strokeWidth}
+            setStrokeWidth={drawingTool.setStrokeWidth}
+            wallTypeId={wallTypeId}
+            wallStrokeWidthId={wallStrokeWidthId}
+          />
+        );
       case 'fog-brush':
-        return renderFogOptions();
+        return (
+          <FogOptions
+            brushMode={fogBrushMode}
+            setBrushMode={setFogBrushMode}
+            brushSize={fogBrushSize}
+            setBrushSize={setFogBrushSize}
+            brushModeId={brushModeId}
+            brushSizeId={brushSizeId}
+          />
+        );
       case 'measure':
-        return renderMeasureOptions();
+        return (
+          <MeasureOptions
+            strokeColor={drawingTool.state.strokeColor}
+            setStrokeColor={drawingTool.setStrokeColor}
+          />
+        );
       case 'pan':
       case 'select':
       default:
