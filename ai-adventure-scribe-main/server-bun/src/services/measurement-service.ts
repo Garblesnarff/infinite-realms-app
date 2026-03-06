@@ -138,10 +138,20 @@ export class MeasurementService {
     templateId: string,
     userId: string
   ): Promise<AffectedTokensResult> {
-    // 🛡️ Sentinel: Get the template with scene info to check authorization and ownership
+    // ⚡ Bolt: Optimized template retrieval by selecting only the required columns
+    // and using an innerJoin to verify scene ownership in a single round-trip.
     const [existing] = await db
       .select({
-        template: measurementTemplates,
+        template: {
+          id: measurementTemplates.id,
+          templateType: measurementTemplates.templateType,
+          originX: measurementTemplates.originX,
+          originY: measurementTemplates.originY,
+          distance: measurementTemplates.distance,
+          direction: measurementTemplates.direction,
+          width: measurementTemplates.width,
+          sceneId: measurementTemplates.sceneId,
+        },
         sceneOwnerId: scenes.userId,
       })
       .from(measurementTemplates)
@@ -176,13 +186,25 @@ export class MeasurementService {
     const minY = originY - distance;
     const maxY = originY + distance;
 
-    // 🛡️ Sentinel: Get tokens in the same scene, respecting visibility for non-GMs
-    const tokensResult = await db
+    // 🛡️ Sentinel: Get tokens in the same scene, respecting visibility for non-GMs.
+    // ⚡ Bolt: Optimized query by selecting only required columns, using SQL casting (::float)
+    // for coordinates, and joining the characters table only when necessary for non-owners.
+    const tokensResult = await (db as any)
       .select({
-        token: tokens,
+        id: tokens.id,
+        name: tokens.name,
+        positionX: sql<number>`${tokens.positionX}::float`,
+        positionY: sql<number>`${tokens.positionY}::float`,
+        isVisible: tokens.isVisible,
+        isHidden: tokens.isHidden,
+        actorId: tokens.actorId,
+        createdBy: tokens.createdBy,
       })
       .from(tokens)
-      .leftJoin(characters, eq(tokens.actorId, characters.id))
+      .leftJoin(
+        characters,
+        isSceneOwner ? sql`false` : eq(tokens.actorId, characters.id)
+      )
       .where(
         and(
           eq(tokens.sceneId, template.sceneId),
@@ -205,14 +227,14 @@ export class MeasurementService {
         )
       );
 
-    const sceneTokens = tokensResult.map((r) => r.token);
+    const sceneTokens = tokensResult as any[];
 
     // Filter tokens based on template geometry
     // ⚡ Bolt: Pass pre-parsed template values for better performance
     const parsedTemplate = { originX, originY, distance, direction, width };
 
     const affectedTokens = sceneTokens.filter((token) => {
-      return this.isTokenInTemplate(template, token, parsedTemplate);
+      return this.isTokenInTemplate(template as any, token, parsedTemplate);
     });
 
     return {
@@ -221,8 +243,8 @@ export class MeasurementService {
       tokens: affectedTokens.map((t) => ({
         id: t.id,
         name: t.name,
-        positionX: parseFloat(String(t.positionX)),
-        positionY: parseFloat(String(t.positionY)),
+        positionX: t.positionX,
+        positionY: t.positionY,
       })),
     };
   }
@@ -232,12 +254,13 @@ export class MeasurementService {
    */
   private static isTokenInTemplate(
     template: MeasurementTemplate,
-    token: Token,
+    token: any,
     // ⚡ Bolt: Optional pre-parsed values to avoid redundant parsing
     parsedTemplate?: { originX: number; originY: number; distance: number; direction: number; width: number | null }
   ): boolean {
-    const tokenX = parseFloat(String(token.positionX));
-    const tokenY = parseFloat(String(token.positionY));
+    // ⚡ Bolt: Use pre-parsed numeric coordinates from optimized query
+    const tokenX = typeof token.positionX === 'number' ? token.positionX : parseFloat(String(token.positionX));
+    const tokenY = typeof token.positionY === 'number' ? token.positionY : parseFloat(String(token.positionY));
 
     const originX = parsedTemplate?.originX ?? parseFloat(String(template.originX));
     const originY = parsedTemplate?.originY ?? parseFloat(String(template.originY));

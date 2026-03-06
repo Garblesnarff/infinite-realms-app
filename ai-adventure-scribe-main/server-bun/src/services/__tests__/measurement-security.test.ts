@@ -165,8 +165,8 @@ describe('MeasurementService Security', () => {
 
       const qb2 = (db.select() as any);
       qb2._results = [
-        { token: { id: 't1', name: 'Token 1', positionX: 105, positionY: 105, isVisible: true, isHidden: false } },
-        { token: { id: 't2', name: 'Hidden NPC', positionX: 110, positionY: 110, isVisible: false, isHidden: true } }
+        { id: 't1', name: 'Token 1', positionX: 105, positionY: 105, isVisible: true, isHidden: false },
+        { id: 't2', name: 'Hidden NPC', positionX: 110, positionY: 110, isVisible: false, isHidden: true }
       ];
 
       (db.select as any)
@@ -188,7 +188,7 @@ describe('MeasurementService Security', () => {
       const qb2 = (db.select() as any);
       // Query builder for tokens would have filters applied, but we mock the result here
       qb2._results = [
-        { token: { id: 't1', name: 'Token 1', positionX: 105, positionY: 105, isVisible: true, isHidden: false } }
+        { id: 't1', name: 'Token 1', positionX: 105, positionY: 105, isVisible: true, isHidden: false }
         // t2 is hidden and not owned by player, so it wouldn't be returned by the DB query
       ];
 
@@ -210,8 +210,8 @@ describe('MeasurementService Security', () => {
 
       const qb2 = (db.select() as any);
       qb2._results = [
-        { token: { id: 't1', name: 'Visible Token', positionX: 105, positionY: 105, isVisible: true, isHidden: false } },
-        { token: { id: 't-mine', name: 'My Hidden Token', positionX: 110, positionY: 110, isVisible: false, isHidden: true } }
+        { id: 't1', name: 'Visible Token', positionX: 105, positionY: 105, isVisible: true, isHidden: false },
+        { id: 't-mine', name: 'My Hidden Token', positionX: 110, positionY: 110, isVisible: false, isHidden: true }
       ];
 
       (db.select as any)
