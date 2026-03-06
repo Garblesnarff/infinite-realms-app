@@ -400,13 +400,34 @@ export class SessionService {
   ): Promise<GameSession[]> {
     // 🛡️ Sentinel: Combined campaign ownership/access and session retrieval into a single query.
     // This ensures atomic verification and masks resource existence for unauthorized users.
+    // ⚡ Bolt: Optimized to exclude heavy text/JSONB fields (sessionNotes, summary, sceneDescription)
+    // for list view. This reduces data transfer and memory usage.
     return await db.query.gameSessions.findMany({
       where: and(
         eq(gameSessions.campaignId, campaignId),
         this.getOwnershipCondition(userId)
       ),
+      columns: {
+        id: true,
+        campaignId: true,
+        characterId: true,
+        sessionNumber: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        turnCount: true,
+        starterCampaignId: true,
+        campaignVersion: true,
+        ruleset: true,
+        createdAt: true,
+        updatedAt: true,
+        // Exclude heavy fields:
+        sessionNotes: false,
+        currentSceneDescription: false,
+        summary: false,
+      },
       orderBy: desc(gameSessions.sessionNumber),
-    });
+    }) as GameSession[];
   }
 
   /**

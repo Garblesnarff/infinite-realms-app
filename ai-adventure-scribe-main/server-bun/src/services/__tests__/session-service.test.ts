@@ -12,6 +12,7 @@ vi.mock('../../../../db/client', () => ({
     query: {
       gameSessions: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       dialogueHistory: {
         findMany: vi.fn(),
@@ -200,6 +201,30 @@ describe('SessionService', () => {
       expect(result).toEqual(mockSession);
       expect(db.insert).toHaveBeenCalledWith(gameSessions);
       expect(mockSelect).toHaveBeenCalled();
+    });
+  });
+
+  describe('getCampaignSessions', () => {
+    it('should use explicit columns to avoid over-fetching heavy fields', async () => {
+      const campaignId = 'campaign-1';
+      const mockSessions = [{ id: 'session-1', campaignId }];
+
+      // Setup mocks
+      vi.mocked(db.query.gameSessions.findMany).mockResolvedValue(mockSessions as any);
+
+      const result = await SessionService.getCampaignSessions(campaignId, userId);
+
+      expect(result).toEqual(mockSessions);
+      expect(db.query.gameSessions.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          columns: expect.objectContaining({
+            id: true,
+            sessionNotes: false,
+            summary: false,
+            currentSceneDescription: false,
+          }),
+        })
+      );
     });
   });
 });
