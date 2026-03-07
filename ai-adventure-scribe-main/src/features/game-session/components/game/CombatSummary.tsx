@@ -1,13 +1,15 @@
-import { Users, Sword, Zap, Clock } from 'lucide-react';
+import { Sword, Zap, Clock } from 'lucide-react';
 import React from 'react';
 
 import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCombat } from '@/contexts/CombatContext';
+import { getHPColor } from '@/utils/hp-utils';
 
 /**
  * ParticipantListItem - Memoized component for individual combatants
@@ -27,6 +29,7 @@ const ParticipantListItem = React.memo(
               ? 'border-blue-200 bg-blue-50'
               : 'border-red-200 bg-red-50'
         }`}
+        aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}${participant.name}`}
       >
         <div className="flex items-center justify-between text-xs">
           <span className={`font-medium ${isPlayer ? 'text-blue-800' : 'text-red-800'}`}>
@@ -43,7 +46,8 @@ const ParticipantListItem = React.memo(
           </div>
           <Progress
             value={hpPercent}
-            className={`h-1 ${hpPercent > 50 ? 'bg-green-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
+            className="h-1"
+            indicatorClassName={getHPColor(hpPercent)}
             aria-label={`${participant.name} Health percentage`}
           />
         </div>
@@ -62,7 +66,11 @@ const ParticipantListItem = React.memo(
           </div>
         )}
         {isCurrentTurn && (
-          <div className="flex items-center gap-1 mt-1 text-xs text-primary">
+          <div
+            className="flex items-center gap-1 mt-1 text-xs text-primary"
+            role="status"
+            aria-live="polite"
+          >
             <Zap className="w-3 h-3" />
             <span>Current Turn</span>
           </div>
@@ -90,10 +98,13 @@ export const CombatSummary: React.FC = React.memo(() => {
 
   if (!isInCombat || !activeEncounter) {
     return (
-      <Card className="p-4 text-center text-muted-foreground">
-        <Users className="w-8 h-8 mx-auto mb-2" />
-        <p className="text-sm">No active combat</p>
-      </Card>
+      <EmptyState
+        illustration="no-sessions"
+        title="No active combat"
+        description="When combat starts, you'll see the initiative order and participant status here."
+        variant="card"
+        className="p-8"
+      />
     );
   }
 
