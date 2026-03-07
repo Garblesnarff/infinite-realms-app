@@ -12,7 +12,6 @@
 import { Share2, Search, UserPlus, Eye, Edit, Crown, Shield, Trash2 } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -33,7 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
+import { useTRPC } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
 
 interface ShareCharacterDialogProps {
@@ -42,50 +41,6 @@ interface ShareCharacterDialogProps {
   characterId: string;
   characterName?: string;
 }
-
-interface Permission {
-  id: string;
-  userId: string;
-  userName?: string;
-  userEmail?: string;
-  permissionLevel: PermissionLevel;
-  grantedAt: string;
-}
-
-/**
- * Permission level badge with icon
- */
-const PermissionBadge: React.FC<{ level: PermissionLevel }> = ({ level }) => {
-  const config = {
-    viewer: {
-      icon: Eye,
-      label: 'Viewer',
-      variant: 'secondary' as const,
-      color: 'text-blue-500',
-    },
-    editor: {
-      icon: Edit,
-      label: 'Editor',
-      variant: 'purple' as const,
-      color: 'text-purple-500',
-    },
-    owner: {
-      icon: Crown,
-      label: 'Owner',
-      variant: 'gold' as const,
-      color: 'text-amber-500',
-    },
-  };
-
-  const { icon: Icon, label, variant, color } = config[level];
-
-  return (
-    <Badge variant={variant} className="gap-1">
-      <Icon className={`h-3 w-3 ${color}`} />
-      {label}
-    </Badge>
-  );
-};
 
 /**
  * Main ShareCharacterDialog component
@@ -98,9 +53,11 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 }) => {
   const { toast } = useToast();
   const trpc = useTRPC();
-  const utils = useTRPCUtils();
   const tokenControlId = useId();
   const sheetEditId = useId();
+  const userSearchId = useId();
+  const permissionSelectId = useId();
+  const resultsListboxId = useId();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -174,7 +131,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
     },
   });
 
-  const handleShare = () => {
+  const handleShare = (): void => {
     if (!selectedUserId) {
       toast({
         title: 'Validation Error',
@@ -191,14 +148,14 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
     });
   };
 
-  const handleRevoke = (userId: string) => {
+  const handleRevoke = (userId: string): void => {
     revokeMutation.mutate({
       characterId,
       targetUserId: userId,
     });
   };
 
-  const handleUpdatePermission = (userId: string, newPermission: PermissionLevel) => {
+  const handleUpdatePermission = (userId: string, newPermission: PermissionLevel): void => {
     updatePermissionMutation.mutate({
       characterId,
       targetUserId: userId,
@@ -240,21 +197,23 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
             {/* User Search */}
             <div className="space-y-2">
-              <Label>Search Users</Label>
+              <Label htmlFor={userSearchId}>Search Users</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id={userSearchId}
                   placeholder="Search by name or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
-                  aria-label="Search users"
+                  aria-controls={searchQuery ? resultsListboxId : undefined}
                 />
               </div>
 
               {/* User suggestions */}
               {searchQuery && (
                 <div
+                  id={resultsListboxId}
                   className="border rounded-md max-h-48 overflow-auto"
                   role="listbox"
                   aria-label="User suggestions"
@@ -287,12 +246,12 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
             {/* Permission Level */}
             <div className="space-y-2">
-              <Label>Permission Level</Label>
+              <Label id={permissionSelectId}>Permission Level</Label>
               <Select
                 value={permissionLevel}
                 onValueChange={(value) => setPermissionLevel(value as PermissionLevel)}
               >
-                <SelectTrigger aria-label="Select permission level">
+                <SelectTrigger aria-labelledby={permissionSelectId}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,7 +345,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
             ) : permissions && permissions.length > 0 ? (
               <ScrollArea className="max-h-64">
                 <div className="space-y-2">
-                  {permissions.map((permission: any) => (
+                  {permissions.map((permission: { id: string; userId: string; userName?: string; userEmail?: string; permissionLevel: PermissionLevel; grantedAt: string }) => (
                     <div
                       key={permission.id}
                       className="flex items-center justify-between p-3 border rounded-lg bg-card"

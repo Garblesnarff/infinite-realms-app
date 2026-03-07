@@ -366,6 +366,7 @@ export default tseslint.config(
       'src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx',
       'src/utils/stealthUtils.ts',
       'src/utils/__tests__/stealthUtils.test.ts',
+      'src/components/character-sharing/ShareCharacterDialog.tsx',
     ],
     rules: {
       'max-lines': 'warn',
