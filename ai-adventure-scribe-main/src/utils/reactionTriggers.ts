@@ -7,33 +7,53 @@
 
 import type {
   ReactionOpportunity,
-  ReactionTrigger,
-  ActionType,
   CombatParticipant,
   CombatEncounter,
   CombatAction,
 } from '@/types/combat';
 
-/**
- * Create a reaction opportunity
- */
-export function createReactionOpportunity(
-  participantId: string,
-  trigger: ReactionTrigger,
-  triggerDescription: string,
-  availableReactions: ActionType[],
-  triggeredBy?: string,
-): ReactionOpportunity {
-  return {
-    id: `reaction_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    participantId,
-    trigger,
-    triggerDescription,
-    availableReactions,
-    triggeredBy,
-    expiresAtEndOfTurn: true,
-  };
-}
+import {
+  createReactionOpportunity,
+  canMakeOpportunityAttack,
+  canCastCounterspell,
+  canDeflectMissiles,
+  hasUncannyDodge,
+  hasProtectionFightingStyle,
+  hasPolearmMaster,
+  isWithinReach,
+  isWithinCounterspellRange,
+} from './combat/reactions/reactionUtils';
+
+import {
+  checkShieldSpellOpportunities,
+  canCastShieldSpell,
+  checkAbsorbElementsOpportunities,
+  canCastAbsorbElements,
+  checkHellishRebukeOpportunities,
+  canCastHellishRebuke,
+} from './combat/reactions/spellReactions';
+
+// Re-export utilities from modular files to maintain backward compatibility
+export {
+  createReactionOpportunity,
+  canMakeOpportunityAttack,
+  canCastCounterspell,
+  canDeflectMissiles,
+  hasUncannyDodge,
+  hasProtectionFightingStyle,
+  hasPolearmMaster,
+  isWithinReach,
+  isWithinCounterspellRange,
+} from './combat/reactions/reactionUtils';
+
+export {
+  checkShieldSpellOpportunities,
+  canCastShieldSpell,
+  checkAbsorbElementsOpportunities,
+  canCastAbsorbElements,
+  checkHellishRebukeOpportunities,
+  canCastHellishRebuke,
+} from './combat/reactions/spellReactions';
 
 /**
  * Check for opportunity attack triggers when a creature moves
@@ -157,237 +177,6 @@ export function checkUncannyDodgeOpportunities(
   }
 
   return opportunities;
-}
-
-/**
- * Check if a participant can make opportunity attacks
- */
-export function canMakeOpportunityAttack(
-  participant: CombatParticipant,
-  target: CombatParticipant,
-): boolean {
-  // Can't make opportunity attacks if incapacitated
-  const incapacitatingConditions = ['stunned', 'paralyzed', 'unconscious', 'petrified'];
-  const isIncapacitated = participant.conditions.some((c) =>
-    incapacitatingConditions.includes(c.name),
-  );
-
-  if (isIncapacitated) return false;
-
-  // Target must be leaving reach, not teleporting or being moved involuntarily
-  return true;
-}
-
-/**
- * Check if a participant can cast counterspell
- */
-export function canCastCounterspell(participant: CombatParticipant): boolean {
-  // Check if they have counterspell available and spell slots
-  if (!participant.spellSlots) return false;
-
-  // Need at least a 3rd level spell slot for counterspell
-  for (let level = 3; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check if a participant can use deflect missiles
- */
-export function canDeflectMissiles(participant: CombatParticipant): boolean {
-  return participant.classFeatures?.some((f) => f.name === 'deflect_missiles') || false;
-}
-
-/**
- * Check if a participant has uncanny dodge
- */
-export function hasUncannyDodge(participant: CombatParticipant): boolean {
-  return participant.classFeatures?.some((f) => f.name === 'uncanny_dodge') || false;
-}
-
-/**
- * Check if a participant has protection fighting style
- */
-export function hasProtectionFightingStyle(participant: CombatParticipant): boolean {
-  return participant.fightingStyles?.some((style) => style.name === 'protection') || false;
-}
-
-/**
- * Check if a participant has polearm master feat
- */
-export function hasPolearmMaster(participant: CombatParticipant): boolean {
-  return participant.classFeatures?.some((f) => f.name === 'polearm_master') || false;
-}
-
-/**
- * Check for shield spell opportunities when damage is taken
- */
-export function checkShieldSpellOpportunities(
-  target: CombatParticipant,
-  encounter: CombatEncounter,
-): ReactionOpportunity[] {
-  const opportunities: ReactionOpportunity[] = [];
-
-  // Check if target can cast shield spell
-  if (canCastShieldSpell(target) && !target.reactionTaken && target.currentHitPoints > 0) {
-    opportunities.push(
-      createReactionOpportunity(
-        target.id,
-        'damage_taken',
-        `You are hit by an attack`,
-        ['shield_spell'],
-        target.id, // Self-triggered
-      ),
-    );
-  }
-
-  return opportunities;
-}
-
-/**
- * Check if a participant can cast shield spell
- */
-function canCastShieldSpell(participant: CombatParticipant): boolean {
-  // Check if they have shield spell prepared and available spell slots
-  if (!participant.spellSlots || !participant.preparedSpells) return false;
-
-  // Check if shield spell is prepared
-  const hasShieldSpell = participant.preparedSpells.includes('shield');
-  if (!hasShieldSpell) return false;
-
-  // Check for available spell slots (shield is a 1st level spell)
-  for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check for absorb elements opportunities when damage is taken
- */
-export function checkAbsorbElementsOpportunities(
-  target: CombatParticipant,
-  encounter: CombatEncounter,
-  damageType: string,
-): ReactionOpportunity[] {
-  const opportunities: ReactionOpportunity[] = [];
-
-  // Check if target can cast absorb elements
-  if (
-    canCastAbsorbElements(target, damageType) &&
-    !target.reactionTaken &&
-    target.currentHitPoints > 0
-  ) {
-    opportunities.push(
-      createReactionOpportunity(
-        target.id,
-        'damage_taken',
-        `You are hit by ${damageType} damage`,
-        ['absorb_elements'],
-        target.id, // Self-triggered
-      ),
-    );
-  }
-
-  return opportunities;
-}
-
-/**
- * Check if a participant can cast absorb elements
- */
-function canCastAbsorbElements(participant: CombatParticipant, damageType: string): boolean {
-  // Check if they have absorb elements spell prepared and available spell slots
-  if (!participant.spellSlots || !participant.preparedSpells) return false;
-
-  // Check if absorb elements spell is prepared
-  const hasAbsorbElementsSpell = participant.preparedSpells.includes('absorb_elements');
-  if (!hasAbsorbElementsSpell) return false;
-
-  // Check for available spell slots (absorb elements is a 1st level spell)
-  for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Check for hellish rebuke opportunities when damage is taken from an enemy
- */
-export function checkHellishRebukeOpportunities(
-  target: CombatParticipant,
-  attacker: CombatParticipant,
-  encounter: CombatEncounter,
-): ReactionOpportunity[] {
-  const opportunities: ReactionOpportunity[] = [];
-
-  // Check if target can cast hellish rebuke (warlock with appropriate spell slots)
-  if (canCastHellishRebuke(target) && !target.reactionTaken && target.currentHitPoints > 0) {
-    opportunities.push(
-      createReactionOpportunity(
-        target.id,
-        'damage_taken',
-        `You are hit by ${attacker.name}'s attack`,
-        ['hellish_rebuke'],
-        attacker.id,
-      ),
-    );
-  }
-
-  return opportunities;
-}
-
-/**
- * Check if a participant can cast hellish rebuke
- */
-function canCastHellishRebuke(participant: CombatParticipant): boolean {
-  // Check if they have hellish rebuke spell prepared and available spell slots
-  if (!participant.spellSlots || !participant.preparedSpells) return false;
-
-  // Check if hellish rebuke spell is prepared
-  const hasHellishRebukeSpell = participant.preparedSpells.includes('hellish_rebuke');
-  if (!hasHellishRebukeSpell) return false;
-
-  // Check for available spell slots (hellish rebuke is a 1st level spell)
-  for (let level = 1; level <= 9; level++) {
-    if (participant.spellSlots[level]?.current > 0) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Simple range check (in a real implementation, you'd have proper positioning)
- */
-export function isWithinReach(
-  participant: CombatParticipant,
-  target: CombatParticipant,
-  position: string,
-): boolean {
-  // Simplified - assume all melee combatants are within reach unless specified otherwise
-  return position !== 'far' && position !== 'distant';
-}
-
-/**
- * Check if within counterspell range (60 feet)
- */
-export function isWithinCounterspellRange(
-  caster: CombatParticipant,
-  target: CombatParticipant,
-): boolean {
-  // Simplified - assume most combat happens within counterspell range
-  return true;
 }
 
 /**
