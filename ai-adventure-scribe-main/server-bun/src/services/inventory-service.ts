@@ -439,19 +439,38 @@ export class InventoryService {
    * @returns Equip result
    */
   static async equipItem(characterId: string, itemId: string, userId: string): Promise<EquipResult> {
-    const item = await this.getItemById(itemId, characterId, userId);
-
-    if (!item) {
-      return { success: false, error: 'Item not found' };
-    }
-
-    if (item.itemType !== 'weapon' && item.itemType !== 'armor') {
-      return { success: false, error: 'Only weapons and armor can be equipped' };
-    }
-
-    const updated = await this.updateItem(itemId, characterId, userId, { isEquipped: true });
+    // ⚡ Bolt: Optimized to perform update and validation in a single round-trip.
+    // This reduces database round-trips from 2 to 1 for the successful equipment path.
+    const [updated] = await db
+      .update(inventoryItems)
+      .set({ isEquipped: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          inArray(inventoryItems.itemType, ['weapon', 'armor']),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, inventoryItems.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning();
 
     if (!updated) {
+      // Diagnostic check only on failure (keeps happy path O(1))
+      const item = await this.getItemById(itemId, characterId, userId);
+      if (!item) return { success: false, error: 'Item not found' };
+      if (item.itemType !== 'weapon' && item.itemType !== 'armor') {
+        return { success: false, error: 'Only weapons and armor can be equipped' };
+      }
       return { success: false, error: 'Failed to equip item' };
     }
 
@@ -625,10 +644,34 @@ export class InventoryService {
    * @param userId - User ID (for ownership verification)
    * @returns Attunement result
    */
-  static async attuneItem(characterId: string, itemId: string, userId: string): Promise<AttunementResult> {
-    const item = await this.getItemById(itemId, characterId, userId);
+  static async attuneItem(
+    characterId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<AttunementResult> {
+    // ⚡ Bolt: Consolidated item fetch and attuned count check into a single query.
+    // This reduces database round-trips from 3 to 2 for the successful attunement path.
+    const [result] = await (db as any)
+      .select({
+        item: inventoryItems,
+        attunedCount: sql<number>`(
+          SELECT count(*)::int
+          FROM ${inventoryItems}
+          WHERE character_id = ${characterId} AND is_attuned = true
+        )`,
+      })
+      .from(inventoryItems)
+      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
 
-    if (!item) {
+    if (!result) {
       return {
         success: false,
         currentAttunedCount: 0,
@@ -637,10 +680,12 @@ export class InventoryService {
       };
     }
 
+    const { item, attunedCount } = result;
+
     if (!item.requiresAttunement) {
       return {
         success: false,
-        currentAttunedCount: 0,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Item does not require attunement',
       };
@@ -649,19 +694,16 @@ export class InventoryService {
     if (item.isAttuned) {
       return {
         success: false,
-        currentAttunedCount: 0,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Item is already attuned',
       };
     }
 
-    // Check current attuned count
-    const attunedItems = await this.getAttunedItems(characterId, userId);
-
-    if (attunedItems.length >= MAX_ATTUNED_ITEMS) {
+    if (attunedCount >= MAX_ATTUNED_ITEMS) {
       return {
         success: false,
-        currentAttunedCount: attunedItems.length,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: `Cannot attune to more than ${MAX_ATTUNED_ITEMS} items. Unattune from another item first.`,
       };
@@ -673,7 +715,7 @@ export class InventoryService {
     if (!updated) {
       return {
         success: false,
-        currentAttunedCount: attunedItems.length,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Failed to attune to item',
       };
@@ -682,7 +724,7 @@ export class InventoryService {
     return {
       success: true,
       attunedItem: updated,
-      currentAttunedCount: attunedItems.length + 1,
+      currentAttunedCount: attunedCount + 1,
       maxAttunedCount: MAX_ATTUNED_ITEMS,
     };
   }
