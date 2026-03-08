@@ -106,6 +106,44 @@ export class BlogService {
   }
 
   /**
+   * Fetch recent published blog posts with limit and optional exclusion
+   * @param excludeSlug - Slug to exclude from results (e.g. current post)
+   * @param limit - Maximum number of posts to fetch
+   * @returns Array of blog posts
+   */
+  static async fetchRecentBlogPosts(excludeSlug?: string, limit: number = 8): Promise<BlogPost[]> {
+    if (!BlogService.isSupabaseConfigured()) {
+      return [];
+    }
+
+    const nowIso = new Date().toISOString();
+
+    let query = supabase
+      .from(BlogService.BLOG_TABLE)
+      .select(BlogService.BLOG_POST_LIST_SELECT)
+      .eq('status', 'published')
+      .lte('published_at', nowIso)
+      .order('published_at', { ascending: false });
+
+    if (excludeSlug) {
+      query = query.neq('slug', excludeSlug);
+    }
+
+    // ⚡ Bolt: Use SQL LIMIT to avoid over-fetching and reduce database/network overhead.
+    const { data, error } = await query.limit(limit);
+
+    if (error) {
+      logger.error('Failed to fetch recent blog posts', { error });
+      return [];
+    }
+
+    const rows = (data ?? []) as unknown as SupabaseBlogRow[];
+    return rows
+      .map(BlogService.mapRowToBlogPost)
+      .filter((post): post is BlogPost => Boolean(post));
+  }
+
+  /**
    * Fetch a single blog post by slug
    * @param slug - URL-friendly slug of the blog post
    * @returns Blog post if found, null otherwise

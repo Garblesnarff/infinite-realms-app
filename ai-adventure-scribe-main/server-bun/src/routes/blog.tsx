@@ -121,12 +121,10 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
       }
 
       // Standard HTML response for browsers
-      const [allPosts, assets] = await Promise.all([
-        BlogService.fetchPublishedBlogPosts(),
+      const [relatedPosts, assets] = await Promise.all([
+        BlogService.fetchRecentBlogPosts(slug, 8),
         resolveAssetsForEntries(['index.html', 'src/blog-client.ts']),
       ]);
-
-      const relatedPosts = allPosts.filter((candidate) => candidate.slug !== slug).slice(0, 8);
 
       const cacheHeaders = createCacheHeaders({ maxAge: 600, staleWhileRevalidate: 3600 });
 

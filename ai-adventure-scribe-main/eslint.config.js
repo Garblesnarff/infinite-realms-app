@@ -369,6 +369,7 @@ export default tseslint.config(
       'src/components/character-sharing/ShareCharacterDialog.tsx',
       'src/components/blog-admin/blog-post-editor/blog-post-editor.tsx',
       'src/components/blog-admin/blog-post-editor/use-blog-post-editor.ts',
+      'server-bun/src/services/blog-service.ts',
     ],
     rules: {
       'max-lines': 'warn',
