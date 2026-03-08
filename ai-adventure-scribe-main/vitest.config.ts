@@ -204,6 +204,7 @@ export default defineConfig({
       'src/components/ui/__tests__/DialogSheetAccessibility.test.tsx',
       'src/features/game-session/components/chat/chat/__tests__/DMChatBubble.accessibility.test.tsx',
       'src/components/game/__tests__/DiceRollMessage.test.tsx',
+      'src/components/scenes/__tests__/SceneManager.test.tsx',
     ],
     exclude: [
       'node_modules/**',

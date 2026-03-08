@@ -26,7 +26,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -37,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
 import { cn } from '@/lib/utils';
@@ -186,19 +186,18 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
 
       {/* Empty state */}
       {sceneList.length === 0 && (
-        <Card variant="parchment" className="p-12 text-center">
-          <CardContent>
-            <div className="mb-4 text-6xl">🗺️</div>
-            <CardTitle className="mb-2">No Scenes Yet</CardTitle>
-            <CardDescription className="mb-6">
-              Create your first scene to bring your campaign to life with interactive battle maps.
-            </CardDescription>
+        <EmptyState
+          illustration="no-locations"
+          variant="card"
+          title="No Scenes Yet"
+          description="Create your first scene to bring your campaign to life with interactive battle maps."
+          action={
             <Button onClick={onCreateScene} variant="cosmic">
               <Plus className="mr-2 h-4 w-4" />
               Create First Scene
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       {/* Grid View */}
