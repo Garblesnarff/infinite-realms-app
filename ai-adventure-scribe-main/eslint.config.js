@@ -228,7 +228,8 @@ export default tseslint.config(
 
       // Top violators requiring refactoring (1000+ lines)
       'src/contexts/GameContext.tsx',
-      'src/contexts/CombatContext.tsx', // 1199 lines
+      'src/contexts/CombatContext.tsx',
+      'src/contexts/combat/health-handlers.ts',
       'src/contexts/combat/combat-reducer.ts',
       'src/services/ai-service.ts', // 1142 lines
       'src/services/ai/dm-response-processor.ts',
