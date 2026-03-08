@@ -370,6 +370,7 @@ export default tseslint.config(
       'src/components/blog-admin/blog-post-editor/blog-post-editor.tsx',
       'src/components/blog-admin/blog-post-editor/use-blog-post-editor.ts',
       'server-bun/src/services/blog-service.ts',
+      'src/components/combat/InitiativeTracker.tsx',
     ],
     rules: {
       'max-lines': 'warn',

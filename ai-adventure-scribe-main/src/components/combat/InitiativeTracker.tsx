@@ -16,6 +16,7 @@ import type { CombatParticipant, ConditionName } from '@/types/combat';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
@@ -121,11 +122,18 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={`Select ${participant.name}`}
+      aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}Select ${participant.name}`}
     >
       {/* Turn Indicator & Initiative */}
       <div className="flex items-center space-x-3">
-        {isCurrentTurn && <ChevronRight className="w-5 h-5 text-amber-600 animate-pulse" />}
+        {isCurrentTurn && (
+          <ChevronRight
+            className="w-5 h-5 text-amber-600 animate-pulse"
+            role="status"
+            aria-live="polite"
+            aria-label="Current turn indicator"
+          />
+        )}
 
         <div className="flex flex-col items-center">
           <div className="text-lg font-bold text-gray-700 min-w-[2rem] text-center">
@@ -185,7 +193,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
             value={hpPercent}
             className="h-2 flex-1"
             indicatorClassName={getHPColor(hpPercent)}
-            aria-label={`${participant.name} Health`}
+            aria-label={`${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`}
           />
           <span className="min-w-[4rem] text-right text-sm font-medium">
             {participant.currentHitPoints}/{participant.maxHitPoints}
@@ -293,8 +301,13 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          No active combat
+        <CardContent className="py-8">
+          <EmptyState
+            illustration="no-sessions"
+            title="No Active Combat"
+            description="Start a combat encounter to see the initiative order here."
+            variant="minimal"
+          />
         </CardContent>
       </Card>
     );
@@ -355,9 +368,20 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
       <CardContent className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           {activeEncounter.participants.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-              No combatants in the initiative order.
-            </div>
+            <EmptyState
+              illustration="no-characters"
+              title="No Combatants"
+              description="Add participants to the encounter to begin tracking initiative."
+              variant="card"
+              action={
+                onAddParticipant && (
+                  <Button onClick={onAddParticipant} variant="outline" size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Participant
+                  </Button>
+                )
+              }
+            />
           ) : (
             <div className="space-y-3">
               {activeEncounter.participants.map((participant) => (
