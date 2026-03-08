@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,13 +17,16 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
   gridSize,
   onUpdate,
 }) => {
+  const widthId = useId();
+  const heightId = useId();
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label htmlFor="scene-width">Width (squares) *</Label>
+          <Label htmlFor={widthId}>Width (squares) *</Label>
           <Input
-            id="scene-width"
+            id={widthId}
             type="number"
             min="1"
             max="100"
@@ -34,9 +37,9 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="scene-height">Height (squares) *</Label>
+          <Label htmlFor={heightId}>Height (squares) *</Label>
           <Input
-            id="scene-height"
+            id={heightId}
             type="number"
             min="1"
             max="100"
@@ -47,7 +50,7 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
         </div>
       </div>
 
-      <div className="bg-muted/50 p-4 rounded-lg">
+      <div className="bg-muted/50 p-4 rounded-lg" role="status" aria-live="polite">
         <p className="text-sm font-medium mb-2">Preview Dimensions</p>
         <p className="text-muted-foreground">
           Your scene will be{' '}
@@ -61,8 +64,14 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
 
       {/* Common presets */}
       <div className="space-y-2">
-        <Label>Quick Presets</Label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <span className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+          Quick Presets
+        </span>
+        <div
+          className="grid grid-cols-2 md:grid-cols-4 gap-2"
+          role="group"
+          aria-label="Quick dimension presets"
+        >
           {[
             { name: 'Small (15×15)', w: 15, h: 15 },
             { name: 'Medium (20×20)', w: 20, h: 20 },
@@ -73,6 +82,7 @@ export const StepDimensions: React.FC<StepDimensionsProps> = ({
               key={preset.name}
               variant="outline"
               onClick={() => onUpdate({ width: preset.w, height: preset.h })}
+              aria-label={`Set dimensions to ${preset.name}`}
             >
               {preset.name}
             </Button>

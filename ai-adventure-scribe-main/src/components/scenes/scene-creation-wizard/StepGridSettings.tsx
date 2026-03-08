@@ -19,6 +19,12 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
   onUpdate,
 }) => {
   const gridTypeLabelId = useId();
+  const squareId = useId();
+  const hexHId = useId();
+  const hexVId = useId();
+  const gridlessId = useId();
+  const gridSizeId = useId();
+  const gridColorId = useId();
 
   return (
     <div className="space-y-6">
@@ -31,32 +37,32 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-              <RadioGroupItem value={GridType.SQUARE} id="grid-square" />
-              <Label htmlFor="grid-square" className="flex-1 cursor-pointer">
+              <RadioGroupItem value={GridType.SQUARE} id={squareId} />
+              <Label htmlFor={squareId} className="flex-1 cursor-pointer">
                 <div className="font-medium">Square Grid</div>
                 <div className="text-sm text-muted-foreground">Classic D&D grid</div>
               </Label>
             </div>
 
             <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-              <RadioGroupItem value={GridType.HEXAGONAL_HORIZONTAL} id="grid-hex-h" />
-              <Label htmlFor="grid-hex-h" className="flex-1 cursor-pointer">
+              <RadioGroupItem value={GridType.HEXAGONAL_HORIZONTAL} id={hexHId} />
+              <Label htmlFor={hexHId} className="flex-1 cursor-pointer">
                 <div className="font-medium">Hex (Horizontal)</div>
                 <div className="text-sm text-muted-foreground">Flat-topped hexagons</div>
               </Label>
             </div>
 
             <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-              <RadioGroupItem value={GridType.HEXAGONAL_VERTICAL} id="grid-hex-v" />
-              <Label htmlFor="grid-hex-v" className="flex-1 cursor-pointer">
+              <RadioGroupItem value={GridType.HEXAGONAL_VERTICAL} id={hexVId} />
+              <Label htmlFor={hexVId} className="flex-1 cursor-pointer">
                 <div className="font-medium">Hex (Vertical)</div>
                 <div className="text-sm text-muted-foreground">Point-topped hexagons</div>
               </Label>
             </div>
 
             <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-              <RadioGroupItem value={GridType.GRIDLESS} id="grid-none" />
-              <Label htmlFor="grid-none" className="flex-1 cursor-pointer">
+              <RadioGroupItem value={GridType.GRIDLESS} id={gridlessId} />
+              <Label htmlFor={gridlessId} className="flex-1 cursor-pointer">
                 <div className="font-medium">Gridless</div>
                 <div className="text-sm text-muted-foreground">No grid overlay</div>
               </Label>
@@ -66,9 +72,9 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="grid-size">Grid Size (feet per square) *</Label>
+        <Label htmlFor={gridSizeId}>Grid Size (feet per square) *</Label>
         <Input
-          id="grid-size"
+          id={gridSizeId}
           type="number"
           min="1"
           max="50"
@@ -81,14 +87,15 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="grid-color">Grid Color</Label>
+        <Label htmlFor={gridColorId}>Grid Color</Label>
         <div className="flex items-center gap-3">
           <Input
-            id="grid-color"
+            id={gridColorId}
             type="color"
             value={gridColor}
             onChange={(e) => onUpdate({ gridColor: e.target.value })}
             className="w-20 h-10"
+            aria-label="Grid color picker"
           />
           <Input
             type="text"
@@ -96,6 +103,7 @@ export const StepGridSettings: React.FC<StepGridSettingsProps> = ({
             onChange={(e) => onUpdate({ gridColor: e.target.value })}
             placeholder="#000000"
             maxLength={7}
+            aria-label="Grid color hex code"
           />
         </div>
       </div>
