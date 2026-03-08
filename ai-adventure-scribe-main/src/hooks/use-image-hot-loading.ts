@@ -216,11 +216,14 @@ export const useImageHotLoading = ({
         const hasImage = !!imageUrl;
 
         if (isMountedRef.current) {
+          const newlyCreated = isNewlyCreatedCharacter(createdAt);
+          const shouldPoll = !hasImage && newlyCreated;
+
           setState((prev) => ({
             ...prev,
             imageUrl: imageUrl || fallbackImage,
             hasImage,
-            isLoading: !hasImage,
+            isLoading: shouldPoll,
             error: null,
           }));
 
