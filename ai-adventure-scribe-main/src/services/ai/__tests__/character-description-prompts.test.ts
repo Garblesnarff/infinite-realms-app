@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
+
+import { ContextBuilder } from '../context-builder';
 import { CharacterDescriptionPrompts } from '../prompts/character-description-prompts';
+
 import type { CharacterData, DescriptionOptions } from '../prompts/character-description-prompts';
+import type { GameContext } from '../shared/types';
+import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 describe('CharacterDescriptionPrompts', () => {
   const mockCharacterData: CharacterData = {
@@ -58,5 +63,57 @@ describe('CharacterDescriptionPrompts', () => {
       expect(prompt).toContain('Create a brief, engaging description');
       expect(prompt).toContain('Thrain');
     });
+  });
+});
+
+describe('ContextBuilder opening prompt isolation', () => {
+  const minimalContext: GameContext = {
+    campaignId: 'campaign-1',
+    characterId: 'character-1',
+  };
+
+  const noCombat: CombatDetectionResult = {
+    isCombat: false,
+    combatType: 'none',
+    confidence: 0,
+    shouldStartCombat: false,
+    shouldEndCombat: false,
+  };
+
+  it('uses an opening-only prompt contract for the first message', async () => {
+    const prompt = await ContextBuilder.build({
+      context: minimalContext,
+      message: '',
+      conversationHistory: [],
+      relevantMemories: [],
+      combatDetection: noCombat,
+      voiceContext: null,
+      isFirstMessage: true,
+    });
+
+    expect(prompt).toContain('CAMPAIGN OPENING - FIRST MESSAGE');
+    expect(prompt).toContain('OPENING RESPONSE CONTRACT');
+    expect(prompt).toContain('Do NOT request a roll');
+    expect(prompt).not.toContain('CRITICAL: WHEN TO REQUEST DICE ROLLS');
+    expect(prompt).not.toContain('MANDATORY: DICE ROLL FORMAT');
+    expect(prompt).not.toContain('<memory_extraction>');
+    expect(prompt).not.toContain('REMEMBER: Always respond in the JSON format');
+  });
+
+  it('keeps normal roll and memory rules for non-opening responses', async () => {
+    const prompt = await ContextBuilder.build({
+      context: minimalContext,
+      message: 'I search the room.',
+      conversationHistory: [],
+      relevantMemories: [],
+      combatDetection: noCombat,
+      voiceContext: null,
+      isFirstMessage: false,
+    });
+
+    expect(prompt).toContain('CRITICAL: WHEN TO REQUEST DICE ROLLS');
+    expect(prompt).toContain('MANDATORY: DICE ROLL FORMAT');
+    expect(prompt).toContain('<memory_extraction>');
+    expect(prompt).not.toContain('OPENING RESPONSE CONTRACT');
   });
 });

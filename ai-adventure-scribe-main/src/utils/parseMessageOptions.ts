@@ -66,7 +66,9 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
     const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
     const sep =
       cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
-    const displayText = `${boldText}${sep}${cleanDescription}`.replace(/\*([^*]+)\*/g, '$1');
+    const displayText = `${boldText}${sep}${cleanDescription}`
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/\[ASSET:[^\]]+\]\s*/g, ''); // strip asset tags from button text
     const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
     options.push({
@@ -93,7 +95,9 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
       const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
       const sep =
         cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
-      const displayText = `${boldText}${sep}${cleanDescription}`.replace(/\*([^*]+)\*/g, '$1');
+      const displayText = `${boldText}${sep}${cleanDescription}`
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/\[ASSET:[^\]]+\]\s*/g, ''); // strip asset tags from button text
       const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
       options.push({

@@ -4,11 +4,14 @@ import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
 import type { Memory, MemoryType } from '@/types/memory';
+import type { RollRequest } from '@/types/roll-request';
 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
+import { parseRollRequests } from '@/utils/rollRequestParser';
 
 interface InitialGreetingProps {
   sessionId: string | null;
@@ -22,6 +25,7 @@ interface InitialGreetingProps {
   messages: ChatMessage[];
   messagesLoading?: boolean;
   onGreetingGenerated: (message: ChatMessage) => Promise<void>;
+  onRollRequestsDetected?: (requests: RollRequest[]) => void;
   onMemoryCreated?: (memory: Omit<Memory, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
 }
 
@@ -49,6 +53,7 @@ export const useInitialGreeting = ({
   messages,
   messagesLoading = false,
   onGreetingGenerated,
+  onRollRequestsDetected,
   onMemoryCreated,
 }: InitialGreetingProps) => {
   const [state, setState] = useState<InitialGreetingState>({
@@ -186,12 +191,21 @@ export const useInitialGreeting = ({
         },
       });
 
+      // Only parse structured ROLL_REQUESTS_V1 blocks from the opening message.
+      // Regex-based prose detection is intentionally skipped here: option descriptions
+      // often contain informational roll hints like "(Roll for Persuasion if you choose B)"
+      // which are not actual roll requests and would trigger false dice popups.
+      const hasStructuredRollBlock = /```ROLL_REQUESTS_V1[\s\S]*?```/.test(openingText);
+      const openingRollRequests = hasStructuredRollBlock ? parseRollRequests(openingText) : [];
+      const displayText =
+        openingRollRequests.length > 0 ? truncateAtRollRequest(openingText) : openingText;
+
       // Create chat message from AI response (string only; narration is handled elsewhere)
       const greetingMessage: ChatMessage = {
         // Align with ChatMessage shape from '@/types/game'
         id: crypto.randomUUID(),
         sender: 'dm',
-        text: openingText,
+        text: displayText,
         timestamp: new Date().toISOString(),
       };
 
@@ -215,12 +229,20 @@ export const useInitialGreeting = ({
       // 2. Normal DM opening message
       await onGreetingGenerated(greetingMessage);
 
-      // Create initial memories if callback is provided
+      // 3. Trigger dice UI if opening message contains roll requests
+      if (openingRollRequests.length > 0) {
+        logger.info(
+          `[Initial Greeting] Detected ${openingRollRequests.length} roll request(s) in opening message`,
+        );
+        onRollRequestsDetected?.(openingRollRequests);
+      }
+
+      // Create initial memories if callback is provided (use displayText to avoid raw ROLL_REQUESTS blocks)
       if (onMemoryCreated) {
         await createInitialMemories(
           characterData as unknown as Character,
           campaignData as unknown as Campaign,
-          openingText,
+          displayText,
           onMemoryCreated,
         );
       }

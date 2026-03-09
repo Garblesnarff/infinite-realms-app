@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { generateAssetKey } from '@/utils/asset-key';
 
 // Asset type definition for post-processing
 export interface AssetInfo {
@@ -40,6 +41,15 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
     const match = result.match(pattern);
 
     if (match && match.index !== undefined) {
+      // For single-word asset names, only auto-insert when the matched text starts with a
+      // capital letter (proper-noun context). This prevents matching common English words
+      // used as nouns in prose (e.g. "whisper" in "barely above a whisper").
+      const isSingleWord = !asset.name.includes(' ');
+      if (isSingleWord) {
+        const matchedChar = result[match.index];
+        if (matchedChar === matchedChar.toLowerCase()) continue;
+      }
+
       // Check if there's already an asset tag right before this match
       const beforeMatch = result.slice(Math.max(0, match.index - 50), match.index);
       if (beforeMatch.includes('[ASSET:')) continue;
@@ -109,7 +119,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
         if (char.portrait_url) {
           assets.push({
             type: 'character',
-            key: char.template_key || char.name.toLowerCase().replace(/\s+/g, '-'),
+            key: char.template_key || generateAssetKey(char.name),
             name: char.name,
           });
         }
@@ -133,14 +143,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
 
           assets.push({
             type: assetType,
-            // Clean key: must match generateKey() in use-campaign-assets.ts
-            key: chunk.entity_name
-              .toLowerCase()
-              .replace(/[""''«»`]/g, '') // Remove all quote variants (Unicode + ASCII)
-              .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
-              .replace(/\s+/g, '-') // Spaces to hyphens
-              .replace(/-+/g, '-') // Collapse multiple hyphens
-              .trim(),
+            key: generateAssetKey(chunk.entity_name),
             name: chunk.entity_name,
           });
         }

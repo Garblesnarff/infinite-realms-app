@@ -13,6 +13,8 @@
  *   [ASSET:monster:abyssal-horror]
  */
 
+import { generateAssetKey } from '@/utils/asset-key';
+
 export interface AssetTag {
   type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene' | 'entity';
   key: string;
@@ -41,33 +43,29 @@ export const ASSET_TAG_PATTERN =
 export function normalizeAssetTagKeysInContent(content: string): string {
   const loosePattern = /\[ASSET:(character|npc|location|monster|item|scene|entity):([^\]]+)\]/gi;
   return content.replace(loosePattern, (fullMatch, type, rawKey, offset, wholeString) => {
-    const normalized = rawKey
-      .toLowerCase()
-      .replace(/[""''«»`"']/g, '') // strip quote variants
-      .replace(/[^a-z0-9\s-]/g, '') // strip remaining specials
-      .replace(/\s+/g, '-') // spaces → hyphens
-      .replace(/-+/g, '-') // collapse duplicate hyphens
-      .replace(/^-+|-+$/g, ''); // trim surrounding hyphens
+    const normalized = generateAssetKey(rawKey);
 
     const normalizedTag = `[ASSET:${type}:${normalized}]`;
+    const derivedName = normalized
+      .split('-')
+      .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+      .join(' ');
 
-    // If the raw key was malformed (quotes, caps, or other non-standard chars), the AI
-    // may have used the tag as a name placeholder. Prepend a derived display name so it
-    // survives tag stripping — UNLESS the text immediately after the tag already starts
-    // with that name (prevents "Remy the Manager Remy" double-name).
-    const isAlreadyNormalized = /^[a-z0-9-]+$/.test(rawKey);
-    if (!isAlreadyNormalized) {
-      const derivedName = normalized
-        .split('-')
-        .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
-        .join(' ');
-      const firstWord = derivedName.split(' ')[0].toLowerCase();
-      // Strip leading non-alpha chars (e.g. markdown bold `**`) before checking
-      const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
-      const nameAlreadyPresent = afterTag.toLowerCase().startsWith(firstWord);
-      if (!nameAlreadyPresent) {
-        return `${derivedName} ${normalizedTag}`;
-      }
+    if (!derivedName) {
+      return normalizedTag;
+    }
+
+    // If the model used the tag as a placeholder instead of writing the visible name,
+    // prepend a derived display name so tag stripping doesn't leave an empty phrase.
+    const beforeTag = wholeString.slice(0, offset).replace(/[\s"'`*_]+$/, '');
+    const firstWord = derivedName.split(' ')[0].toLowerCase();
+    const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
+    const nameAlreadyPresent = afterTag.toLowerCase().startsWith(firstWord);
+    const nameAlreadyPrepended = beforeTag.toLowerCase().endsWith(derivedName.toLowerCase());
+    const isStandaloneTag = beforeTag.length === 0 && afterTag.length === 0;
+
+    if (!nameAlreadyPresent && !nameAlreadyPrepended && !isStandaloneTag) {
+      return `${derivedName} ${normalizedTag}`;
     }
 
     return normalizedTag;
@@ -102,6 +100,7 @@ export function parseAssetTags(content: string): ParsedAssets {
   const cleanContent = normalizedContent
     .replace(ASSET_TAG_PATTERN, '')
     .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
     .trim();
 
   // Deduplicate assets (same entity may be mentioned multiple times)

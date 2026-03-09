@@ -36,7 +36,7 @@ Your opening scene MUST include ALL of these elements:
    - Give the player a reason to care and engage
    - Plant seeds for larger adventure
 
-5. **PLAYER AGENCY** with meaningful A/B/C choices:
+5. **PLAYER AGENCY** with meaningful 3-5 clickable choices:
    - Each option leads to genuinely different outcomes
    - Options should reflect different playstyles (action, social, exploration)
    - At least one "wild card" creative option
@@ -58,9 +58,16 @@ CRITICAL RULES:
 - Include at least one NPC with direct quoted dialogue
 - Use all senses (sight, sound, smell, touch) to create immersion
 - SHORT, LAZY OPENINGS ARE UNACCEPTABLE - make them memorable!
+- **DO NOT include a \`\`\`ROLL_REQUESTS_V1 block in the first message.** Establish the situation and end with 3-5 clickable options instead of an immediate roll prompt.
+- **DO NOT include XML tags, <memories>, <world_updates>, VISUAL PROMPT, JSON, or code fences in the first message.**
+- **DO NOT end with a prose question before the options.** The final lines must be the option lines themselves.
+- **Every option MUST use this exact format:** A. **Action Name**, short description
 - **MANDATORY: Include [ASSET:type:key] tags when introducing NPCs, locations, or monsters with images!**
   Example: "[ASSET:npc:head-chef-balthazar] Balthazar wipes his hands on his apron..."
   Check the <available_visual_assets> section above for exact tags to use.
+- **After every [ASSET:type:key] tag, you MUST immediately write the visible entity name.**
+  Correct: "[ASSET:npc:head-chef-balthazar] Balthazar wipes his hands..."
+  Incorrect: "[ASSET:npc:head-chef-balthazar] wipes his hands..."
 - **DO NOT wrap your response in a code block.** Write the opening scene as plain narrative text. Do not use \`\`\`response, \`\`\`json, or any other code fence markers around your response.
 </creative_direction>
 </opening_scene_requirements>`;

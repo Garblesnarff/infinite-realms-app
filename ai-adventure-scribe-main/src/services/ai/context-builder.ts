@@ -20,12 +20,16 @@ export class ContextBuilder {
     const { context, combatDetection, voiceContext, isFirstMessage, relevantMemories } = params;
 
     let contextPrompt = ContextBuilderPrompts.buildPersonaSection();
-    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
     contextPrompt += await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
 
     if (isFirstMessage) {
       contextPrompt += ContextBuilderPrompts.buildOpeningSceneSection();
+      contextPrompt += ContextBuilderPrompts.buildOpeningResponseStructureSection();
+      contextPrompt += ContextBuilderPrompts.buildOpeningFinalRemindersSection();
+      return contextPrompt;
     }
+
+    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
 
     if (combatDetection) {
       contextPrompt += CombatRulesPrompts.formatCombatContext(combatDetection);
@@ -34,13 +38,13 @@ export class ContextBuilder {
       }
     }
 
-    if (voiceContext && !isFirstMessage) {
+    if (voiceContext) {
       contextPrompt += ContextBuilderPrompts.buildVoiceOptimizationSection();
     }
 
     contextPrompt += ContextBuilderPrompts.buildResponseStructureSection();
 
-    if (voiceContext && !isFirstMessage) {
+    if (voiceContext) {
       contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
     }
 

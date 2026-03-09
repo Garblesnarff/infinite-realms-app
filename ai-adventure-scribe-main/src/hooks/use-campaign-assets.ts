@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { generateAssetKey } from '@/utils/asset-key';
 
 export interface CampaignAsset {
   type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene';
@@ -35,19 +36,6 @@ interface UseCampaignAssetsResult {
   isLoading: boolean;
   /** Error state */
   error: Error | null;
-}
-
-/**
- * Generate a URL-friendly key from a name
- */
-function generateKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[""''«»`]/g, '') // Remove all quote variants (Unicode + ASCII)
-    .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars
-    .replace(/\s+/g, '-') // Spaces to hyphens
-    .replace(/-+/g, '-') // Collapse multiple hyphens
-    .trim();
 }
 
 /**
@@ -105,7 +93,7 @@ export function useCampaignAssets(
             if (char.portrait_url) {
               loadedAssets.push({
                 type: 'character',
-                key: char.template_key || generateKey(char.name),
+                key: char.template_key || generateAssetKey(char.name),
                 name: char.name,
                 imageUrl: char.portrait_url,
                 description: char.tagline || undefined,
@@ -141,7 +129,7 @@ export function useCampaignAssets(
 
               loadedAssets.push({
                 type: assetType,
-                key: generateKey(chunk.entity_name),
+                key: generateAssetKey(chunk.entity_name),
                 name: chunk.entity_name,
                 imageUrl,
                 description: metadata?.description as string | undefined,
@@ -203,7 +191,9 @@ export function useCampaignAssets(
   // Get asset by type and key — tries exact key first, then normalized key as fallback
   const getAsset = useCallback(
     (type: string, key: string): CampaignAsset | null => {
-      return assetMap.get(`${type}:${key}`) || assetMap.get(`${type}:${generateKey(key)}`) || null;
+      return (
+        assetMap.get(`${type}:${key}`) || assetMap.get(`${type}:${generateAssetKey(key)}`) || null
+      );
     },
     [assetMap],
   );

@@ -43,7 +43,7 @@ describe('parseAssetTags — malformed key handling (issue #339)', () => {
       'You meet [ASSET:npc:remy-"the-manager"] at the door.',
     );
     expect(cleanContent).not.toContain('[ASSET:');
-    expect(cleanContent).toContain('You meet at the door.');
+    expect(cleanContent).toContain('You meet Remy The Manager at the door.');
     expect(assets).toHaveLength(1);
     expect(assets[0].key).toBe('remy-the-manager');
   });
@@ -53,7 +53,16 @@ describe('parseAssetTags — malformed key handling (issue #339)', () => {
       '[ASSET:location:bone-cathedral] and [ASSET:npc:lord-"diabolo"] are present.',
     );
     expect(cleanContent).not.toContain('[ASSET:');
-    expect(cleanContent).toContain('are present.');
+    expect(cleanContent).toContain('Bone Cathedral and Lord Diabolo are present.');
     expect(assets).toHaveLength(2);
+  });
+
+  it('restores a visible display name when a valid tag appears without one', () => {
+    const { cleanContent, assets } = parseAssetTags(
+      'A figure catches your eye: [ASSET:npc:dishwasher-prime], a gelatinous blob with a cheerful grin.',
+    );
+    expect(cleanContent).toContain('Dishwasher Prime, a gelatinous blob with a cheerful grin.');
+    expect(assets).toHaveLength(1);
+    expect(assets[0].key).toBe('dishwasher-prime');
   });
 });

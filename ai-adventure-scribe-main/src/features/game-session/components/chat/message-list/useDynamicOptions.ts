@@ -73,7 +73,10 @@ export const useDynamicOptions = ({
 
     optionsTimerRef.current = window.setTimeout(async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8888';
+        const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? '').trim();
+        const optionsEndpoint = configuredBaseUrl
+          ? `${configuredBaseUrl.replace(/\/+$/, '')}/dm/options`
+          : '/dm/options';
         const lastPlayer = [...messages].reverse().find((m) => m.sender === 'player');
         const history = messages.slice(Math.max(0, messages.length - 8)).map((m) => ({
           role: m.sender === 'player' ? 'user' : m.sender === 'dm' ? 'assistant' : 'system',
@@ -95,7 +98,7 @@ export const useDynamicOptions = ({
           }
         }
 
-        const res = await fetch(`${baseUrl}/dm/options`, {
+        const res = await fetch(optionsEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -34,7 +34,50 @@ Your response will be synthesized into voice. Structure your narration into logi
 </voice_optimization>`;
   }
 
+  static buildOpeningResponseStructureSection(): string {
+    return `<opening_response_structure>
+<title>OPENING RESPONSE CONTRACT</title>
+
+**Return ONLY these two sections, in this exact order:**
+1. **Narrative**: 3-4 paragraphs with a complete opening scene
+2. **Action Options**: 3-5 lettered choices (default to exactly 3 unless a 4th or 5th option is clearly distinct and useful)
+
+<opening_rules>
+- Do NOT include \`\`\`ROLL_REQUESTS_V1
+- Do NOT include XML tags, <memories>, <world_updates>, VISUAL PROMPT, JSON, or code fences
+- Do NOT end with a prose question like "What do you do?" before the options
+- The LAST lines of the response must be the option lines
+- Every option line must use this exact format: A. **Action Name**, short description
+- If you include an [ASSET:type:key] tag, it MUST be immediately followed by the visible entity name
+</opening_rules>
+
+<opening_examples>
+A. **Join the kitchen line**, step in beside Balthazar and prove you can keep pace.
+B. **Introduce yourself to the staff**, learn who matters before the rush hits.
+C. **Survey the dining room**, get your bearings and spot tonight's first problem.
+</opening_examples>
+</opening_response_structure>`;
+  }
+
   static buildResponseStructureSection(): string {
+    const responseOrder = `1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
+2. **ROLL_REQUESTS_V1 block** (if dice roll needed): IMMEDIATELY after narrative, before anything else
+3. **Action Options**: 2-3 lettered choices (A/B/C format)
+4. **Memory/World tags**: XML extraction tags (parsed by engine, hidden from player)
+5. **VISUAL PROMPT** (optional): Single line for image generation`;
+
+    const diceFormat = `<dice_roll_format>
+<title>MANDATORY: DICE ROLL FORMAT</title>
+When the player's action has an uncertain outcome (combat, skill checks, saves, ability checks), you MUST include a ROLL_REQUESTS_V1 code block IMMEDIATELY after your narrative text. DO NOT just say "roll for X" in prose - the game engine parses this structured block to show the dice UI.
+
+\`\`\`ROLL_REQUESTS_V1
+{"rolls":[{"type":"skill_check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14}]}
+\`\`\`
+
+Valid roll types: "attack", "save", "check", "skill_check", "damage", "initiative"
+**If you omit this block, the player CANNOT roll dice and the game stalls!**
+</dice_roll_format>`;
+
     return `<response_structure>
 <title>DM RESPONSE GUIDELINES</title>
 <core_principles>
@@ -47,24 +90,10 @@ Your response will be synthesized into voice. Structure your narration into logi
 
 <response_order>
 **Your response MUST follow this exact order:**
-1. **Narrative** (1-3 paragraphs): Consequences, new information, NPC dialogue, environmental details
-2. **ROLL_REQUESTS_V1 block** (if dice roll needed): IMMEDIATELY after narrative, before anything else
-3. **Action Options**: 2-3 lettered choices (A/B/C format)
-4. **Memory/World tags**: XML extraction tags (parsed by engine, hidden from player)
-5. **VISUAL PROMPT** (optional): Single line for image generation
+${responseOrder}
 </response_order>
 
-<dice_roll_format>
-<title>MANDATORY: DICE ROLL FORMAT</title>
-When the player's action has an uncertain outcome (combat, skill checks, saves, ability checks), you MUST include a ROLL_REQUESTS_V1 code block IMMEDIATELY after your narrative text. DO NOT just say "roll for X" in prose - the game engine parses this structured block to show the dice UI.
-
-\`\`\`ROLL_REQUESTS_V1
-{"rolls":[{"type":"skill_check","formula":"1d20+dex","purpose":"Stealth check to sneak past guards","dc":14}]}
-\`\`\`
-
-Valid roll types: "attack", "save", "check", "skill_check", "damage", "initiative"
-**If you omit this block, the player CANNOT roll dice and the game stalls!**
-</dice_roll_format>
+${diceFormat}
 
 <player_choice_generation>
 <title>ACTION OPTIONS FORMATTING</title>
@@ -79,7 +108,6 @@ Examples:
 - C. **Attempt to negotiate**, using your diplomatic skills to find a peaceful solution.
 
 Include 2-3 options at the end of every response unless resolving a specific combat action.
-
 When brainstorming options internally, vary skill usage (physical/mental/social/magical), risk level, and creativity. Include at least one unconventional option.
 </player_choice_generation>
 
@@ -113,18 +141,35 @@ Keep responses engaging, 1-3 paragraphs, and always end with a clear prompt for 
 </response_structure>`;
   }
 
-  static buildFinalRemindersSection(): string {
+  static buildOpeningFinalRemindersSection(): string {
     return `
-<final_reminders>
-<title>CRITICAL REMINDERS</title>
+<opening_final_reminders>
+<title>OPENING REMINDERS</title>
 
-**RESPONSE ORDER: Narrative → ROLL_REQUESTS_V1 → Options → Memory tags**
+**THIS IS THE FIRST MESSAGE OF A NEW SESSION.**
+
+- Do NOT request a roll
+- Do NOT output XML or metadata blocks
+- End with 3-5 clickable options
+- The response should feel complete before the options begin
+- After every [ASSET:type:key] tag, write the visible entity name immediately
+</opening_final_reminders>`;
+  }
+
+  static buildFinalRemindersSection(): string {
+    const reminderBlock = `**RESPONSE ORDER: Narrative → ROLL_REQUESTS_V1 → Options → Memory tags**
 
 **DICE ROLLS ARE MANDATORY** for uncertain actions (attacks, skill checks, saves, ability checks).
 Place the \`\`\`ROLL_REQUESTS_V1 block RIGHT AFTER your narrative, BEFORE options.
 Without it, the dice UI breaks and the player cannot proceed!
 
-**OPTIONS**: Use A. **Bold Action**, description format for clickable buttons.
+**OPTIONS**: Use A. **Bold Action**, description format for clickable buttons.`;
+
+    return `
+<final_reminders>
+<title>CRITICAL REMINDERS</title>
+
+${reminderBlock}
 
 Stay in character and follow D&D 5e rules.
 </final_reminders>`;
