@@ -130,11 +130,13 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
 
       if (parsed.rolls && Array.isArray(parsed.rolls)) {
         parsed.rolls.forEach((roll: Record<string, unknown>) => {
-          if (roll.type && roll.formula && roll.purpose) {
+          // Accept "purity" as a fallback for "purpose" (AI hallucination typo)
+          const purposeValue = (roll.purpose ?? roll.purity) as string | undefined;
+          if (roll.type && roll.formula && purposeValue) {
             requests.push({
               type: roll.type as RollRequest['type'],
               formula: roll.formula,
-              purpose: roll.purpose,
+              purpose: purposeValue,
               dc: roll.dc,
               ac: roll.ac,
               advantage: roll.advantage,
@@ -142,7 +144,7 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
               // Additional fields for damage_taken type
               target: roll.target,
               damageType: roll.damageType,
-              originalText: `ROLL_REQUESTS_V1: ${roll.purpose}`,
+              originalText: `ROLL_REQUESTS_V1: ${purposeValue}`,
               confidence: 1.0, // Structured data is highest confidence
             });
           }
