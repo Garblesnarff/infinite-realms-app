@@ -3,24 +3,21 @@ import {
   Heart,
   Brain,
   Anchor,
-  Frown,
   Star,
   Plus,
   Trash2,
-  Edit3,
   Calendar,
   Sparkles,
   Target,
   AlertTriangle,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { Character } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
@@ -45,8 +42,12 @@ interface InspirationEntry {
  */
 const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUpdate }) => {
   const { toast } = useToast();
+  const awardInspirationId = useId();
+  const traitId = useId();
+  const idealId = useId();
+  const bondId = useId();
+  const flawId = useId();
 
-  const [editMode, setEditMode] = useState<string | null>(null);
   const [newTrait, setNewTrait] = useState('');
   const [newIdeal, setNewIdeal] = useState('');
   const [newBond, setNewBond] = useState('');
@@ -247,6 +248,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
     newValue: string,
     setNewValue: (value: string) => void,
     placeholder: string,
+    textareaId: string,
   ) => {
     const Icon = getPersonalityIcon(type);
     const colorClass = getPersonalityColor(type);
@@ -274,6 +276,8 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
                   size="sm"
                   onClick={() => removePersonalityElement(type, index)}
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  aria-label={`Remove ${type}`}
+                  title={`Remove ${type}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -281,17 +285,26 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
             ))}
 
             <div className="flex gap-2">
-              <Textarea
-                placeholder={placeholder}
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                className="flex-1"
-                rows={2}
-              />
+              <div className="flex-1 space-y-2">
+                <Label htmlFor={textareaId} className="sr-only">
+                  Add new {type}
+                </Label>
+                <Textarea
+                  id={textareaId}
+                  placeholder={placeholder}
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full"
+                  rows={2}
+                  aria-label={`Add new ${type}`}
+                />
+              </div>
               <Button
                 onClick={() => addPersonalityElement(type, newValue)}
                 disabled={!newValue.trim()}
                 className="mt-auto"
+                aria-label={`Add ${type}`}
+                title={`Add ${type}`}
               >
                 <Plus className="w-4 h-4" />
               </Button>
@@ -314,7 +327,11 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
               />
               Inspiration
             </div>
-            <Switch checked={hasInspiration} onCheckedChange={toggleInspiration} />
+            <Switch
+              checked={hasInspiration}
+              onCheckedChange={toggleInspiration}
+              aria-label="Toggle inspiration"
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -345,9 +362,10 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
 
             {/* Award Inspiration */}
             <div className="space-y-3 border-t pt-4">
-              <Label>Award Inspiration</Label>
+              <Label htmlFor={awardInspirationId}>Award Inspiration</Label>
               <div className="flex gap-2">
                 <Textarea
+                  id={awardInspirationId}
                   placeholder="Reason for inspiration (e.g., 'Acted on bond to protect family')"
                   value={inspirationNotes}
                   onChange={(e) => setInspirationNotes(e.target.value)}
@@ -414,6 +432,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
             newTrait,
             setNewTrait,
             "e.g., I idolize a particular hero of my faith and constantly refer to that person's deeds and example.",
+            traitId,
           )}
         </TabsContent>
 
@@ -424,6 +443,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
             newIdeal,
             setNewIdeal,
             'e.g., Tradition. The ancient traditions of worship and sacrifice must be preserved and upheld.',
+            idealId,
           )}
         </TabsContent>
 
@@ -434,6 +454,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
             newBond,
             setNewBond,
             'e.g., I would die to recover an ancient relic of my faith that was lost long ago.',
+            bondId,
           )}
         </TabsContent>
 
@@ -444,6 +465,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
             newFlaw,
             setNewFlaw,
             'e.g., I judge others harshly, and myself even more severely.',
+            flawId,
           )}
         </TabsContent>
       </Tabs>
