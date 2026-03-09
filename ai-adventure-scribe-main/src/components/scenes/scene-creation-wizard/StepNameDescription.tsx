@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,12 +15,15 @@ export const StepNameDescription: React.FC<StepNameDescriptionProps> = ({
   description,
   onUpdate,
 }) => {
+  const nameId = useId();
+  const descriptionId = useId();
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="scene-name">Scene Name *</Label>
+        <Label htmlFor={nameId}>Scene Name *</Label>
         <Input
-          id="scene-name"
+          id={nameId}
           placeholder="e.g., Goblin Cave Entrance"
           value={name}
           onChange={(e) => onUpdate({ name: e.target.value })}
@@ -29,9 +32,9 @@ export const StepNameDescription: React.FC<StepNameDescriptionProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="scene-description">Description (Optional)</Label>
+        <Label htmlFor={descriptionId}>Description (Optional)</Label>
         <Textarea
-          id="scene-description"
+          id={descriptionId}
           placeholder="Describe the scene, important features, or notes for yourself..."
           value={description}
           onChange={(e) => onUpdate({ description: e.target.value })}
