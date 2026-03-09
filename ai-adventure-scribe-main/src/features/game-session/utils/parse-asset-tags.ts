@@ -13,7 +13,9 @@
  *   [ASSET:monster:abyssal-horror]
  */
 
-import { generateAssetKey } from '@/utils/asset-key';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
+
+export { normalizeAssetTagKeysInContent } from '@/utils/normalize-asset-tags';
 
 export interface AssetTag {
   type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene' | 'entity';
@@ -33,46 +35,6 @@ export const ASSET_TAG_PATTERN =
   /\[ASSET:(character|npc|location|monster|item|scene|entity):([a-z0-9-]+)\]/gi;
 
 /**
- * Normalize asset tag keys that the AI may have generated with quoted or special
- * characters (e.g. [ASSET:npc:remy-"the-manager"]).
- *
- * Uses a loose capture regex so it matches ANY key (not just well-formed ones),
- * then rewrites each tag with a sanitized key so the strict ASSET_TAG_PATTERN
- * can match and strip them in the next pass.
- */
-export function normalizeAssetTagKeysInContent(content: string): string {
-  const loosePattern = /\[ASSET:(character|npc|location|monster|item|scene|entity):([^\]]+)\]/gi;
-  return content.replace(loosePattern, (fullMatch, type, rawKey, offset, wholeString) => {
-    const normalized = generateAssetKey(rawKey);
-
-    const normalizedTag = `[ASSET:${type}:${normalized}]`;
-    const derivedName = normalized
-      .split('-')
-      .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
-      .join(' ');
-
-    if (!derivedName) {
-      return normalizedTag;
-    }
-
-    // If the model used the tag as a placeholder instead of writing the visible name,
-    // prepend a derived display name so tag stripping doesn't leave an empty phrase.
-    const beforeTag = wholeString.slice(0, offset).replace(/[\s"'`*_]+$/, '');
-    const firstWord = derivedName.split(' ')[0].toLowerCase();
-    const afterTag = wholeString.slice(offset + fullMatch.length).replace(/^[^a-zA-Z]+/, '');
-    const nameAlreadyPresent = afterTag.toLowerCase().startsWith(firstWord);
-    const nameAlreadyPrepended = beforeTag.toLowerCase().endsWith(derivedName.toLowerCase());
-    const isStandaloneTag = beforeTag.length === 0 && afterTag.length === 0;
-
-    if (!nameAlreadyPresent && !nameAlreadyPrepended && !isStandaloneTag) {
-      return `${derivedName} ${normalizedTag}`;
-    }
-
-    return normalizedTag;
-  });
-}
-
-/**
  * Parse asset tags from message content
  *
  * @param content - Raw message content that may contain [ASSET:...] tags
@@ -82,7 +44,7 @@ export function parseAssetTags(content: string): ParsedAssets {
   const assets: AssetTag[] = [];
 
   // Normalize malformed keys (e.g. with quotes) before the strict pattern runs
-  const normalizedContent = normalizeAssetTagKeysInContent(content);
+  const normalizedContent = normalizeAssetTagsInContent(content);
 
   // Find all asset tags
   let match: RegExpExecArray | null;

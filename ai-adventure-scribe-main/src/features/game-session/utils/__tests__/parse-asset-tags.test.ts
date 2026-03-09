@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 
 import { normalizeAssetTagKeysInContent, parseAssetTags } from '../parse-asset-tags';
 
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
+
 describe('normalizeAssetTagKeysInContent (issue #339)', () => {
   it('normalizes a key with double-quotes to a valid slug', () => {
     const input = 'Remy [ASSET:npc:remy-"the-manager"] greets you.';
@@ -64,5 +66,13 @@ describe('parseAssetTags — malformed key handling (issue #339)', () => {
     expect(cleanContent).toContain('Dishwasher Prime, a gelatinous blob with a cheerful grin.');
     expect(assets).toHaveLength(1);
     expect(assets[0].key).toBe('dishwasher-prime');
+  });
+
+  it('strips markdown emphasis wrapped around bare asset tags', () => {
+    const normalized = normalizeAssetTagsInContent(
+      '**[ASSET:npc:remy-"the-manager"]** Remy "The Manager" steps forward.',
+    );
+    expect(normalized).toContain('[ASSET:npc:remy-the-manager] Remy "The Manager" steps forward.');
+    expect(normalized).not.toContain('**[ASSET:');
   });
 });

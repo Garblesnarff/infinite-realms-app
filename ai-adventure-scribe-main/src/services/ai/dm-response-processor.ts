@@ -11,6 +11,7 @@ import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import logger from '@/lib/logger';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 interface ProcessDMResponseParams {
   rawResponse: string;
@@ -170,6 +171,15 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     }
   } else {
     result = applyAssetPostProcessing({ text: rawResponse });
+  }
+
+  // Normalize malformed asset tags before persistence, rendering, and memory extraction.
+  result.text = normalizeAssetTagsInContent(result.text);
+  if (result.narrationSegments) {
+    result.narrationSegments = result.narrationSegments.map((segment) => ({
+      ...segment,
+      text: segment.text ? normalizeAssetTagsInContent(segment.text) : segment.text,
+    }));
   }
 
   // 2. Process voice assignments if we have structured data
