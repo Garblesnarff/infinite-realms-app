@@ -445,37 +445,18 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    */
   static async calculateTurnOrder(encounterId: string): Promise<void> {
-    // Get all active participants
-    const participants = await db.query.combatParticipants.findMany({
-      where: (cp, { eq, and }) => and(
-        eq(cp.encounterId, encounterId),
-        eq(cp.isActive, true)
-      ),
-    });
-
-    // Sort by initiative (desc), then by modifier (desc) for ties
-    const sorted = participants.sort((a, b) => {
-      if (b.initiative !== a.initiative) {
-        return b.initiative - a.initiative;
-      }
-      return b.initiativeModifier - a.initiativeModifier;
-    });
-
-    // Skip if no participants to update
-    if (sorted.length === 0) return;
-
-    // Build batch update using SQL CASE statement (single query instead of N queries)
-    const caseStatements = sorted.map((p, i) =>
-      sql`WHEN ${p.id} THEN ${i}`
-    );
-    const participantIds = sorted.map(p => p.id);
-
+    // ⚡ Bolt: Optimized to use a single atomic SQL UPDATE with a window function (ROW_NUMBER()).
+    // This reduces database round-trips from 2 to 1 and avoids loading all participants into memory.
     await db.execute(sql`
+      WITH sorted_participants AS (
+        SELECT id, (ROW_NUMBER() OVER (ORDER BY initiative DESC, initiative_modifier DESC) - 1) as new_turn_order
+        FROM combat_participants
+        WHERE encounter_id = ${encounterId} AND is_active = true
+      )
       UPDATE combat_participants
-      SET turn_order = CASE id
-        ${sql.join(caseStatements, sql` `)}
-      END
-      WHERE id IN ${participantIds}
+      SET turn_order = sorted_participants.new_turn_order
+      FROM sorted_participants
+      WHERE combat_participants.id = sorted_participants.id
     `);
   }
 
