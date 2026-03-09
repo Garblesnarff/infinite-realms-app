@@ -255,6 +255,7 @@ export default tseslint.config(
       'src/hooks/use-voice-audio-control.ts',
       'src/services/voice-director.ts',
       'src/services/voice-routing.ts',
+      'src/services/voice-consistency-service.ts',
       'src/components/combat/CombatActionPanel.tsx', // 773 lines
       'src/components/character-creation/steps/RaceSelection.tsx', // 766 lines
       'src/components/ui/sidebar.tsx', // 761 lines

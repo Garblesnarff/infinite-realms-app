@@ -208,6 +208,8 @@ export default defineConfig({
       'src/components/game/__tests__/DiceRollMessage.test.tsx',
       'src/components/scenes/__tests__/SceneManager.test.tsx',
       'src/components/scenes/__tests__/SceneCreationWizardSteps.test.tsx',
+      'tests/services/voice-profile-service.test.ts',
+      'tests/services/voice-consistency-service.test.ts',
     ],
     exclude: [
       'node_modules/**',
