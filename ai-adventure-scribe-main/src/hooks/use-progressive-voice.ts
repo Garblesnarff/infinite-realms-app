@@ -47,6 +47,51 @@ export const useProgressiveVoice = () => {
     true,
   );
 
+  const onSegmentStart = React.useCallback((index: number) => {
+    setState((prev) => ({
+      ...prev,
+      currentSegmentIndex: index,
+      segments: prev.segments.map((s, idx) => ({
+        ...s,
+        isPlaying: idx === index,
+      })),
+    }));
+  }, []);
+
+  const onSegmentEnd = React.useCallback((_index: number) => {
+    setState((prev) => ({
+      ...prev,
+      segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
+    }));
+  }, []);
+
+  const onPlaybackPause = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      isPaused: true,
+    }));
+  }, []);
+
+  const onPlaybackResume = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: true,
+      isPaused: false,
+    }));
+  }, []);
+
+  const onPlaybackStop = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      currentSegmentIndex: -1,
+      segments: [],
+    }));
+  }, []);
+
   /**
    * Initialize Audio Control Hook
    */
@@ -62,46 +107,11 @@ export const useProgressiveVoice = () => {
     handleSetVolume,
     toggleMute: baseToggleMute,
   } = useVoiceAudioControl({
-    onSegmentStart: (index) => {
-      setState((prev) => ({
-        ...prev,
-        currentSegmentIndex: index,
-        segments: prev.segments.map((s, idx) => ({
-          ...s,
-          isPlaying: idx === index,
-        })),
-      }));
-    },
-    onSegmentEnd: (_index) => {
-      setState((prev) => ({
-        ...prev,
-        segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
-      }));
-    },
-    onPlaybackPause: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: false,
-        isPaused: true,
-      }));
-    },
-    onPlaybackResume: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: true,
-        isPaused: false,
-      }));
-    },
-    onPlaybackStop: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: false,
-        isPaused: false,
-        isProcessing: false,
-        currentSegmentIndex: -1,
-        segments: [],
-      }));
-    },
+    onSegmentStart,
+    onSegmentEnd,
+    onPlaybackPause,
+    onPlaybackResume,
+    onPlaybackStop,
   });
 
   // State
@@ -122,7 +132,13 @@ export const useProgressiveVoice = () => {
   }, [volume, isMuted]);
 
   // ElevenLabs API key management
-  const { apiKey, apiKeyRef, error: apiKeyError, retryApiKeyFetch, waitForApiKey } = useVoiceApiKey();
+  const {
+    apiKey,
+    apiKeyRef,
+    error: apiKeyError,
+    retryApiKeyFetch,
+    waitForApiKey,
+  } = useVoiceApiKey();
 
   // Audio management
   const abortController = React.useRef<AbortController | null>(null);
