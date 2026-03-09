@@ -98,4 +98,27 @@ describe('formatNarrative — JSON escape artifact handling (issue #340)', () =>
     expect(text).not.toContain('\\"');
     expect(text).toContain('"Diabolo"');
   });
+
+  it('keeps curly closing quotes attached to the preceding sentence', () => {
+    const input =
+      '“We’ve been expecting you. Though I’ll admit, we weren’t sure when you’d arrive.” He glances at the door. “The restaurant has a way of finding the right people.”';
+    const { content } = formatNarrative(input);
+    const text = extractText(content);
+
+    expect(text).toContain('when you’d arrive.” He glances at the door.');
+    expect(text).toContain('“The restaurant has a way of finding the right people.”');
+    expect(text).not.toContain('arrive. ”');
+  });
+
+  it('strips broken emphasis markers wrapped around quoted dialogue', () => {
+    const input =
+      'Whisper leans in:** *"You’re late. The Manager doesn’t like late."*** Dishwasher Prime grins.** *"Oh! New staff! I *love* leftovers."*';
+    const { content } = formatNarrative(input);
+    const text = extractText(content);
+
+    expect(text).toContain('Whisper leans in:"You’re late. The Manager doesn’t like late."');
+    expect(text).toContain('Dishwasher Prime grins.');
+    expect(text).toContain('"Oh! New staff! I love leftovers."');
+    expect(text).not.toContain('**');
+  });
 });

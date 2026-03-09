@@ -9,8 +9,13 @@
  * Exported for unit testing.
  */
 export const sanitizeEmphasisDelimiters = (text: string): string => {
+  // Step 0: Strip emphasis markers that wrap quoted dialogue. The renderer already
+  // styles dialogue by its quotes, and nested *"..."* / ** *"..."*** patterns from
+  // the model break our simple emphasis parser.
+  const dequoted = text.replace(/\*+\s*(["“])/g, '$1').replace(/(["”])\s*\*+/g, '$1');
+
   // Step 1: Normalize **bold** → *bold*
-  const s = text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
+  const s = dequoted.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
 
   // Step 2: Process line by line — cross-line emphasis creates orphan markers.
   // For each line: collect valid *...* spans (trimming inner spaces), strip orphan *,

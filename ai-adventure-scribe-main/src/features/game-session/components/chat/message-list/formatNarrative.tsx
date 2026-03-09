@@ -5,7 +5,7 @@ import { sanitizeEmphasisDelimiters } from './sanitize-emphasis';
 
 export { sanitizeEmphasisDelimiters };
 
-const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
+const DIALOGUE_PATTERN = /^["“][\s\S]*["”]$/;
 const BULLET_PATTERN = /^[-•]/;
 
 /**
@@ -41,7 +41,7 @@ const cleanBrainstorming = (text: string): string => {
 
 const splitIntoSentences = (block: string): string[] => {
   const sentences: string[] = [];
-  const regex = /[^.!?]+[.!?]+[""']?\s*/g;
+  const regex = /[^.!?]+[.!?]+["“”'’]?\s*/g;
   let match: RegExpExecArray | null;
   let lastMatchEnd = 0;
 

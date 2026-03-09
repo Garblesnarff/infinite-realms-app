@@ -10,8 +10,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
+import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
+import { extractNarrativeContent } from '@/utils/parseMessageOptions';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { parseRollRequests } from '@/utils/rollRequestParser';
+import { SentenceSegmenter } from '@/utils/sentence-segmenter';
 
 interface InitialGreetingProps {
   sessionId: string | null;
@@ -365,32 +369,51 @@ export const useInitialGreeting = ({
   };
 
   const extractAtmosphereFromGreeting = (greetingText: string): string | null => {
+    const cleanNarrativeText = sanitizeForMemoryExtraction(extractNarrativeContent(greetingText))
+      .replace(/^(?:[-*]{3,}\s*)+/, '')
+      .trim();
+
     // Simple extraction of atmospheric details from the greeting
     // This could be enhanced with more sophisticated parsing
-    const sentences = greetingText
-      .split(/[.!?]+/)
-      .map((s) => s.trim())
+    const sentences = SentenceSegmenter.splitIntoSentences(cleanNarrativeText)
+      .map((sentence) =>
+        cleanupPlainNarrativeText(sentence)
+          .replace(/^[-—–]+\s*/, '')
+          .replace(/^["“”]+|["“”]+$/g, '')
+          .trim(),
+      )
       .filter((s) => s.length > 0);
-    const atmosphericWords = [
-      'weather',
-      'sun',
-      'moon',
-      'wind',
-      'air',
-      'smell',
-      'sound',
-      'feeling',
-      'atmosphere',
-      'mood',
-      'ambiance',
+    const atmosphericPatterns = [
+      /^(?:the\s+)?air\b/i,
+      /^(?:the\s+)?floor(?:boards)?\b/i,
+      /^(?:the\s+)?hallway\b/i,
+      /^(?:the\s+)?room\b/i,
+      /^(?:the\s+)?kitchen\b/i,
+      /^(?:the\s+)?light(?:ing)?\b/i,
+      /^(?:the\s+)?walls?\b/i,
+      /^(?:the\s+)?ceiling\b/i,
+      /^(?:the\s+)?shadows?\b/i,
+      /^(?:the\s+)?heat\b/i,
+      /^(?:the\s+)?steam\b/i,
+      /\bsmells?\b/i,
+      /\bscent\b/i,
+      /\bozone\b/i,
+      /\bhums?\b/i,
+      /\bglow(?:ing)?\b/i,
+      /\bwarm\b/i,
+      /\bcold\b/i,
     ];
+    const characterActionPattern =
+      /\b(?:he|she|they|i|balthazar|remy|whisper|dishwasher prime|lord diabolo|saint celestia)\b/i;
 
-    const atmosphericSentences = sentences.filter((sentence) =>
-      atmosphericWords.some((word) => sentence.toLowerCase().includes(word)),
-    );
+    const atmosphericSentences = sentences
+      .filter((sentence) => atmosphericPatterns.some((pattern) => pattern.test(sentence)))
+      .filter((sentence) => !/["“”]/.test(sentence))
+      .filter((sentence) => !characterActionPattern.test(sentence))
+      .slice(0, 4);
 
     return atmosphericSentences.length > 0
-      ? `Initial atmosphere: ${atmosphericSentences.join('. ').trim()}.`
+      ? `Initial atmosphere: ${atmosphericSentences.join(' ').trim()}`
       : null;
   };
 

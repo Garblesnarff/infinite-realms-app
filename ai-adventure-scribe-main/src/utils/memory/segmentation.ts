@@ -14,6 +14,8 @@ const DEFAULT_OPTIONS: SegmentationOptions = {
 };
 
 // Import the enhanced sentence segmenter
+import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 import { SentenceSegmenter } from '@/utils/sentence-segmenter';
 
 /**
@@ -150,10 +152,13 @@ export const stripSeparatorLines = (content: string): string =>
  * pollute extracted memories.
  */
 export const stripAssetTags = (content: string): string =>
-  content
-    .replace(/\[ASSET:[^\]]+\]/gi, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
+  cleanupPlainNarrativeText(
+    normalizeAssetTagsInContent(content)
+      .replace(/\[ASSET:[^\]]+\]/gi, '')
+      .replace(/[ \t]{2,}/g, ' '),
+  );
+
+const finalizePlainText = (content: string): string => cleanupPlainNarrativeText(content);
 
 /**
  * Full sanitization pass for memory extraction inputs.
@@ -170,7 +175,7 @@ export const sanitizeForMemoryExtraction = (content: string): string => {
   text = stripOptionMenus(text);
   text = stripSeparatorLines(text);
   text = stripAssetTags(text);
-  return text;
+  return finalizePlainText(text);
 };
 
 /**

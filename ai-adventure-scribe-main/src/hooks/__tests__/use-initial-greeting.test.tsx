@@ -80,7 +80,7 @@ describe('useInitialGreeting', () => {
               race: 'Human',
               class: 'Fighter',
               background: 'Soldier',
-              level: 1
+              level: 1,
             },
             error: null,
           }),
@@ -128,10 +128,12 @@ describe('useInitialGreeting', () => {
     await waitFor(() => expect(onMemoryCreated).toHaveBeenCalledTimes(4), { timeout: 2000 });
 
     // Verify character memory
-    expect(onMemoryCreated).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'character_moment',
-      content: expect.stringContaining('Hero'),
-    }));
+    expect(onMemoryCreated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'character_moment',
+        content: expect.stringContaining('Hero'),
+      }),
+    );
   });
 
   it('should handle dialogue_history check error', async () => {
@@ -173,7 +175,7 @@ describe('useInitialGreeting', () => {
     renderHook(() => useInitialGreeting(defaultProps));
 
     // Wait a bit to ensure it doesn't trigger
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(onGreetingGenerated).not.toHaveBeenCalled();
     expect(AIService.generateOpeningMessage).not.toHaveBeenCalled();
   });
@@ -198,14 +200,17 @@ describe('useInitialGreeting', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('chronicles.getPreviouslyOn'),
       expect.objectContaining({
-        headers: { Authorization: 'Bearer fake-token' }
-      })
+        headers: { Authorization: 'Bearer fake-token' },
+      }),
     );
 
-    expect(onGreetingGenerated).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      text: recapText,
-      context: { previouslyOn: true }
-    }));
+    expect(onGreetingGenerated).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: recapText,
+        context: { previouslyOn: true },
+      }),
+    );
   });
 
   it('should handle fetch recap failure gracefully', async () => {
@@ -219,9 +224,11 @@ describe('useInitialGreeting', () => {
     renderHook(() => useInitialGreeting(props));
 
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalledTimes(1), { timeout: 2000 });
-    expect(onGreetingGenerated).toHaveBeenCalledWith(expect.objectContaining({
-      text: 'Opening message'
-    }));
+    expect(onGreetingGenerated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Opening message',
+      }),
+    );
   });
 
   it('should use fallback greeting on AI failure', async () => {
@@ -231,9 +238,11 @@ describe('useInitialGreeting', () => {
 
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalled(), { timeout: 2000 });
 
-    expect(onGreetingGenerated).toHaveBeenCalledWith(expect.objectContaining({
-      text: expect.stringContaining('You find yourself standing at the threshold')
-    }));
+    expect(onGreetingGenerated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('You find yourself standing at the threshold'),
+      }),
+    );
   });
 
   it('should handle fallback greeting failure gracefully', async () => {
@@ -260,20 +269,112 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(defaultProps));
 
-    await waitFor(() => {
-      expect(onGreetingGenerated).toHaveBeenCalled();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        expect(onGreetingGenerated).toHaveBeenCalled();
+      },
+      { timeout: 2000 },
+    );
 
-    await waitFor(() => {
-      const calls = onMemoryCreated.mock.calls;
-      const atmosphereMemoryCall = calls.find(
-        (call: any) => call[0].type === 'atmosphere'
-      );
-      if (!atmosphereMemoryCall) return false;
-      // Note: the bug fix in use-initial-greeting.ts ensures single space joining
-      expect(atmosphereMemoryCall[0].content).toBe('Initial atmosphere: The sun shines brightly. The air smells like pine.');
-      return true;
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const calls = onMemoryCreated.mock.calls;
+        const atmosphereMemoryCall = calls.find((call: any) => call[0].type === 'atmosphere');
+        if (!atmosphereMemoryCall) return false;
+        // Note: the bug fix in use-initial-greeting.ts ensures single space joining
+        expect(atmosphereMemoryCall[0].content).toBe(
+          'Initial atmosphere: The sun shines brightly. The air smells like pine.',
+        );
+        return true;
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('should sanitize markdown, asset tags, and option text before extracting atmosphere', async () => {
+    const greetingText = [
+      '---',
+      '',
+      'The air smells like burnt sugar and old secrets.',
+      '',
+      '**[ASSET:npc:remy-the-manager] Remy "The Manager"** gestures toward the kitchen.',
+      'The air is thick with the scent of roasting garlic.',
+      '',
+      'A. **Step into the kitchen**, get to work.',
+    ].join('\n');
+
+    (AIService.generateOpeningMessage as any).mockResolvedValue(greetingText);
+
+    renderHook(() => useInitialGreeting(defaultProps));
+
+    await waitFor(
+      () => {
+        const calls = onMemoryCreated.mock.calls;
+        const atmosphereMemoryCall = calls.find((call: any) => call[0].type === 'atmosphere');
+        if (!atmosphereMemoryCall) return false;
+
+        expect(atmosphereMemoryCall[0].content).toBe(
+          'Initial atmosphere: The air smells like burnt sugar and old secrets. The air is thick with the scent of roasting garlic.',
+        );
+        return true;
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('should exclude quoted dialogue from atmosphere extraction', async () => {
+    const greetingText = [
+      'The air smells like burnt sugar and old secrets.',
+      'The floorboards creak beneath your boots.',
+      '“Get out of my kitchen. Now.”',
+      'The air is thick with the scent of roasting meats.',
+      '“Who left the damn phoenix eggs unattended?!”',
+    ].join(' ');
+
+    (AIService.generateOpeningMessage as any).mockResolvedValue(greetingText);
+
+    renderHook(() => useInitialGreeting(defaultProps));
+
+    await waitFor(
+      () => {
+        const calls = onMemoryCreated.mock.calls;
+        const atmosphereMemoryCall = calls.find((call: any) => call[0].type === 'atmosphere');
+        if (!atmosphereMemoryCall) return false;
+
+        expect(atmosphereMemoryCall[0].content).toBe(
+          'Initial atmosphere: The air smells like burnt sugar and old secrets. The floorboards creak beneath your boots. The air is thick with the scent of roasting meats.',
+        );
+        return true;
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('should ignore character action sentences that merely mention air or sound', async () => {
+    const greetingText = [
+      'The air hums with static.',
+      'Dishwasher Prime claps their hands together, sending a spray of soapy water into the air.',
+      'The light shifts across the walls.',
+      'He hurls the dish into the sink with a sound like breaking glass.',
+    ].join(' ');
+
+    (AIService.generateOpeningMessage as any).mockResolvedValue(greetingText);
+
+    renderHook(() => useInitialGreeting(defaultProps));
+
+    await waitFor(
+      () => {
+        const calls = onMemoryCreated.mock.calls;
+        const atmosphereMemoryCall = calls.find((call: any) => call[0].type === 'atmosphere');
+        if (!atmosphereMemoryCall) return false;
+
+        expect(atmosphereMemoryCall[0].content).toBe(
+          'Initial atmosphere: The air hums with static. The light shifts across the walls.',
+        );
+        return true;
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('should handle character data load error', async () => {
@@ -296,9 +397,11 @@ describe('useInitialGreeting', () => {
 
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalled(), { timeout: 2000 });
     // Should use fallback due to catch block
-    expect(onGreetingGenerated).toHaveBeenCalledWith(expect.objectContaining({
-      text: expect.stringContaining('You find yourself standing at the threshold')
-    }));
+    expect(onGreetingGenerated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('You find yourself standing at the threshold'),
+      }),
+    );
   });
 
   it('should handle campaign data load error', async () => {
@@ -321,9 +424,11 @@ describe('useInitialGreeting', () => {
 
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalled(), { timeout: 2000 });
     // Should use fallback
-    expect(onGreetingGenerated).toHaveBeenCalledWith(expect.objectContaining({
-      text: expect.stringContaining('You find yourself standing at the threshold')
-    }));
+    expect(onGreetingGenerated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('You find yourself standing at the threshold'),
+      }),
+    );
   });
 
   it('should handle missing onMemoryCreated callback', async () => {
@@ -343,7 +448,7 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(props));
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(onGreetingGenerated).not.toHaveBeenCalled();
   });
 
@@ -355,7 +460,7 @@ describe('useInitialGreeting', () => {
 
     renderHook(() => useInitialGreeting(props));
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(onGreetingGenerated).not.toHaveBeenCalled();
   });
 });

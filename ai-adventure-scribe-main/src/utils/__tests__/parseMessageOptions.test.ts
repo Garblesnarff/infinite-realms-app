@@ -97,6 +97,21 @@ describe('parseMessageOptions', () => {
       const result = parseMessageOptions(content);
       expect(result.content).toBe('This is a complete sentence.');
     });
+
+    it('should clean asset-tagged item options with malformed nested bolding', () => {
+      const content = [
+        'Narrative here.',
+        '',
+        'E. **Steal a **Knife Of Toasting [ASSET:item:knife-of-toasting]** from the utensil rack**, because if you’re going to survive this shift, you’ll need a weapon.',
+      ].join('\n');
+      const result = parseMessageOptions(content);
+
+      expect(result.hasOptions).toBe(true);
+      expect(result.options).toHaveLength(1);
+      expect(result.options[0].text).toBe(
+        'Steal a Knife Of Toasting from the utensil rack, because if you’re going to survive this shift, you’ll need a weapon.',
+      );
+    });
   });
 
   describe('extractNarrativeContent', () => {

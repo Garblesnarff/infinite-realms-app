@@ -75,4 +75,32 @@ describe('parseAssetTags — malformed key handling (issue #339)', () => {
     expect(normalized).toContain('[ASSET:npc:remy-the-manager] Remy "The Manager" steps forward.');
     expect(normalized).not.toContain('**[ASSET:');
   });
+
+  it('normalizes appositive dashes cleanly after stripping asset tags', () => {
+    const { cleanContent } = parseAssetTags(
+      'A fire elemental in a stained apron—[ASSET:npc:balthazar] **Balthazar**—is barking orders.',
+    );
+
+    expect(cleanContent).toBe(
+      'A fire elemental in a stained apron—**Balthazar**—is barking orders.',
+    );
+  });
+
+  it('removes spaces before closing quotes after tag stripping', () => {
+    const { cleanContent } = parseAssetTags(
+      'A gelatinous mass—[ASSET:npc:dishwasher-prime] **Dishwasher Prime**—bounces into view. “Oopsie! ” it giggles.',
+    );
+
+    expect(cleanContent).toContain('—**Dishwasher Prime**—bounces into view.');
+    expect(cleanContent).toContain('“Oopsie!” it giggles.');
+  });
+
+  it('preserves normal spacing around straight-quoted names and dialogue', () => {
+    const { cleanContent } = parseAssetTags(
+      '**[ASSET:npc:remy-the-manager] Remy "The Manager"** says, "Ah, you’re awake," he says.',
+    );
+
+    expect(cleanContent).toContain('Remy "The Manager"');
+    expect(cleanContent).toContain('says, "Ah, you’re awake," he says.');
+  });
 });

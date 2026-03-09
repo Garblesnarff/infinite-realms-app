@@ -13,6 +13,7 @@
  *   [ASSET:monster:abyssal-horror]
  */
 
+import { normalizeNarrativeSpacing } from '@/utils/narrative-text-cleanup';
 import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 export { normalizeAssetTagKeysInContent } from '@/utils/normalize-asset-tags';
@@ -59,11 +60,9 @@ export function parseAssetTags(content: string): ParsedAssets {
   }
 
   // Remove asset tags from content for display, collapsing any resulting double spaces
-  const cleanContent = normalizedContent
-    .replace(ASSET_TAG_PATTERN, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .trim();
+  const cleanContent = normalizedContent.replace(ASSET_TAG_PATTERN, '').replace(/[ \t]{2,}/g, ' ');
+
+  const normalizedCleanContent = normalizeNarrativeSpacing(cleanContent);
 
   // Deduplicate assets (same entity may be mentioned multiple times)
   const uniqueAssets = assets.filter(
@@ -72,7 +71,7 @@ export function parseAssetTags(content: string): ParsedAssets {
   );
 
   return {
-    cleanContent,
+    cleanContent: normalizedCleanContent,
     assets: uniqueAssets,
   };
 }

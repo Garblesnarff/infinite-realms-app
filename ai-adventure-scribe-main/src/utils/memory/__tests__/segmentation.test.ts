@@ -187,7 +187,7 @@ describe('stripAssetTags', () => {
   it('strips a well-formed asset tag', () => {
     const result = stripAssetTags('You see [ASSET:npc:lord-diabolo] standing in the doorway.');
     expect(result).not.toContain('[ASSET:');
-    expect(result).toContain('You see standing in the doorway.');
+    expect(result).toContain('You see Lord Diabolo standing in the doorway.');
   });
 
   it('strips multiple asset tags in one string', () => {
@@ -224,6 +224,22 @@ describe('sanitizeForMemoryExtraction — asset tag stripping (issue #341)', () 
     // The fallback must sanitize, which includes stripping asset tags.
     const input = '[ASSET:npc:foo] Hi.';
     const result = sanitizeForMemoryExtraction(input);
+    expect(result).not.toContain('[ASSET:');
+  });
+
+  it('cleans markdown and quote artifacts left around stripped asset tags', () => {
+    const input = [
+      'A gelatinous mass—[ASSET:npc:dishwasher-prime] **Dishwasher Prime**—bounces into view.',
+      '“Oopsie! ” it giggles.',
+      '*“The first shift starts in ten minutes. ”*',
+    ].join(' ');
+
+    const result = sanitizeForMemoryExtraction(input);
+
+    expect(result).toContain('A gelatinous mass—Dishwasher Prime—bounces into view.');
+    expect(result).toContain('“Oopsie!” it giggles.');
+    expect(result).toContain('“The first shift starts in ten minutes.”');
+    expect(result).not.toContain('*');
     expect(result).not.toContain('[ASSET:');
   });
 });

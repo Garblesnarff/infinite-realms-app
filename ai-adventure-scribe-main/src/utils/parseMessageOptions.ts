@@ -18,7 +18,35 @@ export interface ParsedMessage {
   options: ActionOption[];
   hasOptions: boolean;
 }
+
 import logger from '@/lib/logger';
+import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
+
+const TRAILING_JOINER_PATTERN =
+  /\b(?:a|an|the|to|of|for|with|into|onto|from|under|over|through|your|their|my)\s*$/i;
+
+function buildOptionSeparator(boldText: string, cleanDescription: string): string {
+  if (!cleanDescription) {
+    return '';
+  }
+
+  if (/^[—–(]/.test(cleanDescription)) {
+    return '';
+  }
+
+  if (TRAILING_JOINER_PATTERN.test(boldText)) {
+    return ' ';
+  }
+
+  return ', ';
+}
+
+function sanitizeOptionDisplayText(content: string): string {
+  return cleanupPlainNarrativeText(
+    normalizeAssetTagsInContent(content).replace(/\[ASSET:[^\]]+\]\s*/g, ' '),
+  );
+}
 
 /**
  * Parses DM message content to extract numbered or lettered options
@@ -64,11 +92,8 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
 
     // Clean up the description text; don't add ", " before em-dashes or parentheticals
     const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
-    const sep =
-      cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
-    const displayText = `${boldText}${sep}${cleanDescription}`
-      .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/\[ASSET:[^\]]+\]\s*/g, ''); // strip asset tags from button text
+    const sep = buildOptionSeparator(boldText, cleanDescription);
+    const displayText = sanitizeOptionDisplayText(`${boldText}${sep}${cleanDescription}`);
     const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
     options.push({
@@ -93,11 +118,8 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
 
       // Clean up the description text; don't add ", " before em-dashes or parentheticals
       const cleanDescription = description.replace(/^\s*,\s*/, '').trim();
-      const sep =
-        cleanDescription && /^[—–(]/.test(cleanDescription) ? '' : cleanDescription ? ', ' : '';
-      const displayText = `${boldText}${sep}${cleanDescription}`
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/\[ASSET:[^\]]+\]\s*/g, ''); // strip asset tags from button text
+      const sep = buildOptionSeparator(boldText, cleanDescription);
+      const displayText = sanitizeOptionDisplayText(`${boldText}${sep}${cleanDescription}`);
       const fullOptionText = `**${boldText}**${sep}${cleanDescription}`;
 
       options.push({
@@ -125,7 +147,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
       options.push({
         id: `option-${number}`,
         number,
-        text: fullText.trim(),
+        text: sanitizeOptionDisplayText(fullText.trim()),
         fullText: fullText.trim(),
       });
 
@@ -146,7 +168,7 @@ export function parseMessageOptions(rawContent: string): ParsedMessage {
         id: `option-${letterStr}`,
         number: letterCode,
         letter: letterStr,
-        text: fullText.trim(),
+        text: sanitizeOptionDisplayText(fullText.trim()),
         fullText: fullText.trim(),
       });
 
