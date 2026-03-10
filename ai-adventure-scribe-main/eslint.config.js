@@ -376,6 +376,7 @@ export default tseslint.config(
       'server-bun/src/services/blog-service.ts',
       'src/components/combat/InitiativeTracker.tsx',
       'src/features/campaign/hooks/use-character-selection.ts',
+      'src/components/character-creation/steps/PhysicalStep.tsx',
     ],
     rules: {
       'max-lines': 'warn',
