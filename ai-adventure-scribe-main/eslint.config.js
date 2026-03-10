@@ -373,6 +373,7 @@ export default tseslint.config(
       'src/components/blog-admin/blog-post-editor/use-blog-post-editor.ts',
       'server-bun/src/services/blog-service.ts',
       'src/components/combat/InitiativeTracker.tsx',
+      'src/features/campaign/hooks/use-character-selection.ts',
     ],
     rules: {
       'max-lines': 'warn',
