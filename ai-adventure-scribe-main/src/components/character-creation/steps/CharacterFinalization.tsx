@@ -1,5 +1,5 @@
 import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 
@@ -19,6 +19,9 @@ import { Textarea } from '@/components/ui/textarea';
  * Final step to review character, generate AI description and detailed design sheet
  */
 const CharacterFinalization: React.FC = () => {
+  const descriptionId = useId();
+  const themeId = useId();
+
   const {
     state,
     isGeneratingDescription,
@@ -109,7 +112,7 @@ const CharacterFinalization: React.FC = () => {
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="character-description">Character Description</Label>
+              <Label htmlFor={descriptionId}>Character Description</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -132,7 +135,7 @@ const CharacterFinalization: React.FC = () => {
               </Button>
             </div>
             <Textarea
-              id="character-description"
+              id={descriptionId}
               placeholder="Generate an AI description using all your character choices, or write your own..."
               value={state.character?.description || ''}
               onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -175,9 +178,9 @@ const CharacterFinalization: React.FC = () => {
         <div className="space-y-4">
           {/* Theme Selector */}
           <div className="space-y-2">
-            <Label>Design Sheet Theme</Label>
+            <Label htmlFor={themeId}>Design Sheet Theme</Label>
             <Select value={selectedTheme} onValueChange={setSelectedTheme}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id={themeId} className="w-full" aria-label="Select design sheet theme">
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent>
