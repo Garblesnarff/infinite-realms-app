@@ -440,38 +440,33 @@ export class CharacterService {
    * List all characters shared with a user
    */
   static async listSharedCharacters(userId: string): Promise<Array<Character & { permission: CharacterPermission }>> {
-    const permissions = await db.query.characterPermissions.findMany({
-      where: eq(characterPermissions.userId, userId),
-      with: {
+    // ⚡ Bolt: Consolidated permission check and character retrieval into a single joined query.
+    // This reduces database round-trips from 2 to 1 and improves performance for shared character listings.
+    // We explicitly select only needed columns to avoid fetching heavy fields like backstories or spells.
+    const results = await (db as any)
+      .select({
         character: {
-          columns: {
-            id: true,
-            name: true,
-            race: true,
-            class: true,
-            level: true,
-            imageUrl: true,
-            avatarUrl: true,
-            campaignId: true,
-            createdAt: true,
-            updatedAt: true,
-          },
+          id: characters.id,
+          name: characters.name,
+          race: characters.race,
+          class: characters.class,
+          level: characters.level,
+          imageUrl: characters.imageUrl,
+          avatarUrl: characters.avatarUrl,
+          campaignId: characters.campaignId,
+          createdAt: characters.createdAt,
+          updatedAt: characters.updatedAt,
         },
-      },
-    });
+        permission: characterPermissions,
+      })
+      .from(characterPermissions)
+      .innerJoin(characters, eq(characterPermissions.characterId, characters.id))
+      .where(eq(characterPermissions.userId, userId))
+      .orderBy(desc(characterPermissions.grantedAt));
 
-    return permissions.map((p: any) => ({
-      ...p.character,
-      permission: {
-        id: p.id,
-        characterId: p.characterId,
-        userId: p.userId,
-        permissionLevel: p.permissionLevel,
-        canControlToken: p.canControlToken,
-        canEditSheet: p.canEditSheet,
-        grantedAt: p.grantedAt,
-        grantedBy: p.grantedBy,
-      },
+    return results.map((r: any) => ({
+      ...r.character,
+      permission: r.permission,
     }));
   }
 
