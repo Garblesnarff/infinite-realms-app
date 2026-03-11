@@ -8,16 +8,16 @@ export const normalizeNarrativeSpacing = (content: string): string =>
     // Trim padding around line breaks first
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n[ \t]+/g, '\n')
-    // Remove spaces before punctuation and curly closing quotes
-    .replace(/\s+([,.;:!?])/g, '$1')
+    // Remove spaces before punctuation and curly closing quotes/parens
+    .replace(/\s+([,.;:!?\])])/g, '$1')
     .replace(/\s+([”’])/g, '$1')
-    // Remove spaces immediately after curly opening quotes/parens
-    .replace(/([“‘(])\s+/g, '$1')
+    // Remove spaces immediately after curly opening quotes/parens/brackets
+    .replace(/([“‘(\[{])\s+/g, '$1')
     // Keep em-dash/appositive phrases tight after tag stripping
     .replace(/([—–-])\s+(\*{1,2})/g, '$1$2')
     .replace(/([—–-])\s+([A-Z“'(])/g, '$1$2')
-    // Collapse repeated spacing created by removals
-    .replace(/[ \t]{2,}/g, ' ')
+    // Collapse all horizontal whitespace to a single space
+    .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
