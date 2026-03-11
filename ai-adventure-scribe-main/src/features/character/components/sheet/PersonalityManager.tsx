@@ -11,7 +11,7 @@ import {
   Target,
   AlertTriangle,
 } from 'lucide-react';
-import React, { useState, useId } from 'react';
+import React, { useId } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -23,190 +23,50 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
+import { usePersonalityManager } from '@/features/character/hooks/use-personality-manager';
 
 interface PersonalityManagerProps {
   character: Character;
   onUpdate: (updatedCharacter: Character) => void;
 }
 
-interface InspirationEntry {
-  date: string;
-  trigger: string;
-  source: 'trait' | 'ideal' | 'bond' | 'flaw' | 'dm';
-  description: string;
-}
-
 /**
  * PersonalityManager component for managing character personality and inspiration
  */
 const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUpdate }) => {
-  const { toast } = useToast();
   const awardInspirationId = useId();
   const traitId = useId();
   const idealId = useId();
   const bondId = useId();
   const flawId = useId();
 
-  const [newTrait, setNewTrait] = useState('');
-  const [newIdeal, setNewIdeal] = useState('');
-  const [newBond, setNewBond] = useState('');
-  const [newFlaw, setNewFlaw] = useState('');
-  const [inspirationNotes, setInspirationNotes] = useState('');
-
-  const personalityTraits = character?.personalityTraits || [];
-  const ideals = character?.ideals || [];
-  const bonds = character?.bonds || [];
-  const flaws = character?.flaws || [];
-  const hasInspiration = character?.inspiration || false;
-  const inspirationHistory = character?.personalityIntegration?.inspirationHistory || [];
-
-  /**
-   * Toggle inspiration state
-   */
-  const toggleInspiration = () => {
-    const newInspirationState = !hasInspiration;
-
-    onUpdate({
-      ...character,
-      inspiration: newInspirationState,
-      personalityIntegration: {
-        ...character?.personalityIntegration,
-        activeTraits: character?.personalityIntegration?.activeTraits || [],
-        inspirationTriggers: character?.personalityIntegration?.inspirationTriggers || [],
-        lastInspiration: newInspirationState
-          ? new Date().toISOString()
-          : character?.personalityIntegration?.lastInspiration,
-        inspirationHistory: character?.personalityIntegration?.inspirationHistory || [],
-      },
-    });
-
-    toast({
-      title: newInspirationState ? 'Inspiration Gained!' : 'Inspiration Used',
-      description: newInspirationState ? 'You now have inspiration.' : 'Inspiration has been used.',
-    });
-  };
-
-  /**
-   * Award inspiration with reason
-   */
-  const awardInspiration = (
-    trigger: string,
-    source: InspirationEntry['source'],
-    description: string,
-  ) => {
-    if (hasInspiration) {
-      toast({
-        title: 'Already Have Inspiration',
-        description: 'You already have inspiration. Use it before gaining more.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const newEntry: InspirationEntry = {
-      date: new Date().toISOString(),
-      trigger,
-      source,
-      description,
-    };
-
-    const newHistory = [...inspirationHistory, newEntry];
-
-    onUpdate({
-      ...character,
-      inspiration: true,
-      personalityIntegration: {
-        ...character?.personalityIntegration,
-        activeTraits: character?.personalityIntegration?.activeTraits || [],
-        inspirationTriggers: character?.personalityIntegration?.inspirationTriggers || [],
-        lastInspiration: new Date().toISOString(),
-        inspirationHistory: newHistory,
-      },
-    });
-
-    toast({
-      title: 'Inspiration Awarded!',
-      description: `Gained inspiration for: ${description}`,
-    });
-
-    setInspirationNotes('');
-  };
-
-  /**
-   * Add new personality element
-   */
-  const addPersonalityElement = (type: 'trait' | 'ideal' | 'bond' | 'flaw', value: string) => {
-    if (!value.trim()) return;
-
-    const updates: Partial<Character> = {};
-
-    switch (type) {
-      case 'trait':
-        updates.personalityTraits = [...personalityTraits, value];
-        setNewTrait('');
-        break;
-      case 'ideal':
-        updates.ideals = [...ideals, value];
-        setNewIdeal('');
-        break;
-      case 'bond':
-        updates.bonds = [...bonds, value];
-        setNewBond('');
-        break;
-      case 'flaw':
-        updates.flaws = [...flaws, value];
-        setNewFlaw('');
-        break;
-    }
-
-    onUpdate({
-      ...character,
-      ...updates,
-    });
-
-    toast({
-      title: `${type.charAt(0).toUpperCase() + type.slice(1)} Added`,
-      description: `New ${type} has been added to your character.`,
-    });
-  };
-
-  /**
-   * Remove personality element
-   */
-  const removePersonalityElement = (type: 'trait' | 'ideal' | 'bond' | 'flaw', index: number) => {
-    const updates: Partial<Character> = {};
-
-    switch (type) {
-      case 'trait':
-        updates.personalityTraits = personalityTraits.filter((_, i) => i !== index);
-        break;
-      case 'ideal':
-        updates.ideals = ideals.filter((_, i) => i !== index);
-        break;
-      case 'bond':
-        updates.bonds = bonds.filter((_, i) => i !== index);
-        break;
-      case 'flaw':
-        updates.flaws = flaws.filter((_, i) => i !== index);
-        break;
-    }
-
-    onUpdate({
-      ...character,
-      ...updates,
-    });
-
-    toast({
-      title: `${type.charAt(0).toUpperCase() + type.slice(1)} Removed`,
-      description: `${type.charAt(0).toUpperCase() + type.slice(1)} has been removed.`,
-    });
-  };
+  const {
+    newTrait,
+    setNewTrait,
+    newIdeal,
+    setNewIdeal,
+    newBond,
+    setNewBond,
+    newFlaw,
+    setNewFlaw,
+    inspirationNotes,
+    setInspirationNotes,
+    personalityTraits,
+    ideals,
+    bonds,
+    flaws,
+    hasInspiration,
+    inspirationHistory,
+    toggleInspiration,
+    awardInspiration,
+    addPersonalityElement,
+    removePersonalityElement,
+  } = usePersonalityManager(character, onUpdate);
 
   /**
    * Get icon for personality element type
    */
-  const getPersonalityIcon = (type: string) => {
+  const getPersonalityIcon = (type: string): React.ElementType => {
     switch (type) {
       case 'trait':
         return Heart;
@@ -224,7 +84,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
   /**
    * Get color for personality element type
    */
-  const getPersonalityColor = (type: string) => {
+  const getPersonalityColor = (type: string): string => {
     switch (type) {
       case 'trait':
         return 'text-red-500';
@@ -249,7 +109,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
     setNewValue: (value: string) => void,
     placeholder: string,
     textareaId: string,
-  ) => {
+  ): JSX.Element => {
     const Icon = getPersonalityIcon(type);
     const colorClass = getPersonalityColor(type);
 
