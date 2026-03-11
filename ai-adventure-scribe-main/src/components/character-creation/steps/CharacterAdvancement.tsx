@@ -235,6 +235,7 @@ const CharacterAdvancement: React.FC = () => {
                   : Math.min(100, (currentExperience / experienceNeeded) * 100)
               }
               className="w-full h-3"
+              aria-label="Experience progress"
             />
           </div>
         </CardContent>

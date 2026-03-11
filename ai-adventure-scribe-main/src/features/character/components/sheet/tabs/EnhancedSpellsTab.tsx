@@ -333,6 +333,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                       <Progress
                         value={(sorceryPoints.current / sorceryPoints.maximum) * 100}
                         className="w-full h-4"
+                        aria-label="Sorcery Points remaining"
                       />
                       <div className="text-sm text-muted-foreground mt-1">
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
