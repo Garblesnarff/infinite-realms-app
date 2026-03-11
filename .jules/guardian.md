@@ -151,3 +151,7 @@
 ## 2025-06-26 - [Class Mechanics Logic Bugs]
 **Learning:** Found several bugs in `src/utils/classMechanics.ts`: 1) `canUseSneakAttack` ignored advantage/disadvantage and distance. 2) `deactivateRage` incorrectly removed pre-existing resistances. 3) `getDivineSmiteDamage` exceeded the 5d8 maximum for high-level slots. 4) `isIncapacitated` missed the explicit 'incapacitated' condition.
 **Action:** Always verify D&D 5e RAW (Rules As Written) when testing class features. Use comprehensive tests that cover pre-existing states (like resistances) and cap limits (like Smite damage). Ensure all condition-checkers include the name of the condition they are checking for.
+
+## 2026-03-05 - [Voice Services Coverage & Regex Fixes]
+**Learning:** Found that `detectVoiceCategoryFromNPCType` incorrectly prioritized descriptors like "ancient" (elder) over "dragon" (creature). Also discovered that dialogue parsing regex failed on smart quotes (`“”`) and names with apostrophes (e.g., "Drizzt Do'Urden").
+**Action:** Always check for monstrous/creature keywords before generic descriptors in D&D NPC detection. Use `[\w']` and `["“]` patterns in narrative parsing to handle literary formatting and fantasy names. Use `import * as mod from '...'` with `vi.spyOn` to mock sibling exports in Vitest.

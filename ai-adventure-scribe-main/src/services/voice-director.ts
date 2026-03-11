@@ -139,8 +139,9 @@ export class VoiceDirector {
     const segments: AISegment[] = [];
 
     // Regex to find quoted dialogue with optional attribution
+    // Improved to handle smart quotes and apostrophes in character names
     const dialoguePattern =
-      /(?:(?:(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?[""]([^""]+)[""]\s*(?:,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)?)?)/gi;
+      /(?:(?:(?:the\s+)?([\w']+(?:\s+[\w']+)?)\s+(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?),?\s*)?["“]([^"”]+)["”](?:\s*,?\s*(?:(?:says?|asks?|replies?|exclaims?|mutters?|whispers?|shouts?|growls?|warns?|declares?|announces?|speaks?|responds?)\s+)?(?:the\s+)?([\w']+(?:\s+[\w']+)?))?)/gi;
 
     let lastIndex = 0;
     let match;

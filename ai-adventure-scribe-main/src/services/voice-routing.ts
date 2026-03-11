@@ -360,8 +360,13 @@ export function normalizeCharacterName(character: string): string {
 export function detectVoiceCategoryFromNPCType(character: string): string | undefined {
   const lowerChar = character.toLowerCase();
 
+  // Creature/Monster types -> creature voice (Check first as they may have other keywords like 'ancient')
+  if (/goblin|orc|troll|ogre|beast|creature|monster|dragon|demon|spirit|ghost/.test(lowerChar)) {
+    return 'creature';
+  }
+
   // Guard/Military types -> gruff voice
-  if (/guard|soldier|captain|knight|warrior|mercenary|watchman/.test(lowerChar)) {
+  if (/guard|soldier|captain|knight|warrior|mercenary|watchman|watch/.test(lowerChar)) {
     return 'guard';
   }
 
@@ -395,11 +400,6 @@ export function detectVoiceCategoryFromNPCType(character: string): string | unde
   // Child types -> (use NPC pool for now, could add child voices later)
   if (/child|boy|girl|kid|young|urchin/.test(lowerChar)) {
     return 'merchant'; // Friendly voice for children
-  }
-
-  // Creature/Monster types -> creature voice
-  if (/goblin|orc|troll|ogre|beast|creature|monster|dragon|demon|spirit|ghost/.test(lowerChar)) {
-    return 'creature';
   }
 
   // Villain types -> villain voice
