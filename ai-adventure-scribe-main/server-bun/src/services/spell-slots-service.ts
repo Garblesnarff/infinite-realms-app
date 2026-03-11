@@ -81,46 +81,46 @@ export class SpellSlotsService {
    * @param userId - User ID for ownership check
    * @returns Character's spell slots
    */
-  static async getCharacterSpellSlots(characterId: string, userId: string): Promise<CharacterSpellSlots> {
-    const data = await db.query.characterSpellSlots.findMany({
-      where: and(
-        eq(characterSpellSlots.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-      orderBy: [characterSpellSlots.spellLevel],
-    });
-
-    if (!data || data.length === 0) {
-      // Verify if character exists and is owned by user to distinguish between "not found" and "no slots"
-      const character = await db.query.characters.findFirst({
-        where: and(
+  static async getCharacterSpellSlots(
+    characterId: string,
+    userId: string,
+  ): Promise<CharacterSpellSlots> {
+    // ⚡ Bolt: Consolidated character ownership verification and spell slot retrieval into a single query.
+    // Using a LEFT JOIN from characters ensures we can distinguish between "Character not found" (0 rows)
+    // and "Character found but no spell slots" (1 row with null slot fields).
+    // This reduces database round-trips from 2 to 1 for non-spellcasters.
+    const results = await (db as any)
+      .select({
+        slot: characterSpellSlots,
+        charId: characters.id,
+      })
+      .from(characters)
+      .leftJoin(characterSpellSlots, eq(characterSpellSlots.characterId, characters.id))
+      .where(
+        and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
         ),
-      });
+      )
+      .orderBy(characterSpellSlots.spellLevel);
 
-      if (!character) {
-        throw new NotFoundError('Character', characterId);
-      }
+    if (results.length === 0) {
+      throw new NotFoundError('Character', characterId);
     }
 
-    const slots: SpellSlot[] = data.map((row) => ({
-      id: row.id,
-      characterId: row.characterId,
-      spellLevel: row.spellLevel,
-      totalSlots: row.totalSlots,
-      usedSlots: row.usedSlots,
-      remainingSlots: row.totalSlots - row.usedSlots,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    }));
+    // Filter out null slots (from characters with no spell slot records)
+    const slots: SpellSlot[] = results
+      .filter((r: any) => r.slot !== null)
+      .map((r: any) => ({
+        id: r.slot.id,
+        characterId: r.slot.characterId,
+        spellLevel: r.slot.spellLevel,
+        totalSlots: r.slot.totalSlots,
+        usedSlots: r.slot.usedSlots,
+        remainingSlots: r.slot.totalSlots - r.slot.usedSlots,
+        createdAt: r.slot.createdAt,
+        updatedAt: r.slot.updatedAt,
+      }));
 
     const totalAvailableSlots = slots.reduce((sum, slot) => sum + slot.remainingSlots, 0);
     const totalUsedSlots = slots.reduce((sum, slot) => sum + slot.usedSlots, 0);
@@ -299,44 +299,46 @@ export class SpellSlotsService {
    * @param userId - User ID for ownership check
    * @returns Result of restoration
    */
-  static async restoreSpellSlots(input: RestoreSpellSlotsInput, userId: string): Promise<RestoreSpellSlotsResult> {
+  static async restoreSpellSlots(
+    input: RestoreSpellSlotsInput,
+    userId: string,
+  ): Promise<RestoreSpellSlotsResult> {
     const { characterId, level, amount } = input;
 
-    // Verify ownership and existence
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
+    // ⚡ Bolt: Consolidated character ownership verification and spell slot retrieval into a single query.
+    // Using a LEFT JOIN from characters ensures we can verify ownership and fetch slots in one round-trip.
+    const results = await (db as any)
+      .select({
+        slot: characterSpellSlots,
+        charId: characters.id,
+      })
+      .from(characters)
+      .leftJoin(
+        characterSpellSlots,
+        and(
+          eq(characterSpellSlots.characterId, characters.id),
+          level !== undefined ? eq(characterSpellSlots.spellLevel, level) : undefined,
+        ),
+      )
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      );
 
-    if (!character) {
+    if (results.length === 0) {
       throw new NotFoundError('Character', characterId);
     }
 
-    const whereClauses = [
-      eq(characterSpellSlots.characterId, characterId),
-      exists(
-        db.select()
-          .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      )
-    ];
-
-    // Filter by specific level if provided
-    if (level !== undefined) {
-      if (level < 1 || level > 9) {
-        throw new ValidationError('Spell level must be between 1 and 9', { level });
-      }
-      whereClauses.push(eq(characterSpellSlots.spellLevel, level));
+    if (level !== undefined && (level < 1 || level > 9)) {
+      throw new ValidationError('Spell level must be between 1 and 9', { level });
     }
 
-    const slots = await db.query.characterSpellSlots.findMany({
-      where: and(...whereClauses),
-    });
+    // Filter out null slots (from characters with no spell slot records)
+    const slots = results
+      .map((r: any) => r.slot)
+      .filter((s: any): s is SpellSlot => s !== null);
 
     if (!slots || slots.length === 0) {
       return {
