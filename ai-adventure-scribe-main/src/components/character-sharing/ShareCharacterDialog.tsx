@@ -251,7 +251,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 value={permissionLevel}
                 onValueChange={(value) => setPermissionLevel(value as PermissionLevel)}
               >
-                <SelectTrigger aria-labelledby={permissionSelectId}>
+                <SelectTrigger aria-labelledby={permissionSelectId} aria-label="Select permission level">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -367,7 +367,11 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             handleUpdatePermission(permission.userId, value as PermissionLevel)
                           }
                         >
-                          <SelectTrigger className="w-32" aria-label="Change permission level">
+                          <SelectTrigger
+                            className="w-32"
+                            aria-label="Change permission level"
+                            title="Change permission level"
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

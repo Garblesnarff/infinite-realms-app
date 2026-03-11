@@ -279,7 +279,7 @@ export const SharedCharactersList: React.FC = () => {
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <Select value={filterPermission} onValueChange={setFilterPermission}>
-            <SelectTrigger className="w-40" aria-label="Filter by permission">
+            <SelectTrigger className="w-40" aria-label="Filter shared characters by permission level">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
