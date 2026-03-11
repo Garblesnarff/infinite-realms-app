@@ -7,6 +7,8 @@
  * @module utils/spatial-partitioning
  */
 
+/* eslint-disable max-lines */
+
 import type { Point2D, VisionBlocker } from '@/types/scene';
 
 // ===========================
@@ -132,9 +134,11 @@ export class QuadTree {
    * Call this when walls are added, removed, or modified
    *
    * @param walls - Updated wall list
+   * @param padding - Optional padding if recalculating bounds (default: 100)
    */
-  rebuild(walls: VisionBlocker[]): void {
-    this.root = this.createNode(this.root.bounds, walls, 0);
+  rebuild(walls: VisionBlocker[], padding: number = 100): void {
+    const newBounds = calculateWallBounds(walls, padding);
+    this.root = this.createNode(newBounds, walls, 0);
   }
 
   /**
@@ -232,8 +236,10 @@ export class QuadTree {
     // Add walls from this node
     for (const wall of node.walls) {
       if (!seen.has(wall.id)) {
-        seen.add(wall.id);
-        result.push(wall);
+        if (this.wallIntersectsBounds(wall, queryBounds)) {
+          seen.add(wall.id);
+          result.push(wall);
+        }
       }
     }
 
