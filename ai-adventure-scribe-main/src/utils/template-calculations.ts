@@ -9,6 +9,9 @@ import { Token } from '@/types/token';
 import { MeasurementTemplate, TemplateType } from '@/types/drawing';
 import { Point2D } from '@/types/scene';
 import { GridType } from '@/types/scene';
+import { isPointInPolygon } from '@/utils/polygon-utils';
+
+export { isPointInPolygon };
 
 // ===========================
 // Types
@@ -428,27 +431,6 @@ export function getAffectedGridSquares(
 // ===========================
 // Geometry Utilities
 // ===========================
-
-/**
- * Determines if a point is inside a polygon using ray casting
- */
-export function isPointInPolygon(point: Point2D, polygon: Point2D[]): boolean {
-  let inside = false;
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-
-    const intersect =
-      yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
-
-    if (intersect) inside = !inside;
-  }
-
-  return inside;
-}
 
 /**
  * Snaps a point to the nearest grid intersection

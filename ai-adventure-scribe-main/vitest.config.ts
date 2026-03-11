@@ -396,6 +396,7 @@ export default defineConfig({
         'src/utils/characterTransformations.ts',
         'src/utils/token-sizing.ts',
         'src/utils/fog-calculations.ts',
+        'src/utils/polygon-utils.ts',
         'src/features/campaign/components/creation/steps/CampaignParameters.tsx',
         'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
         'src/features/campaign/components/creation/steps/GenreSelection.tsx',
