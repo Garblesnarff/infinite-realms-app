@@ -73,6 +73,10 @@ describe('voice-routing', () => {
       expect(detectVoiceCategoryFromNPCType('Mercenary Captain')).toBe('guard');
     });
 
+    it('should not classify unrelated watch substrings as guard', () => {
+      expect(detectVoiceCategoryFromNPCType('The Watcher')).toBeUndefined();
+    });
+
     it('should detect merchant category', () => {
       expect(detectVoiceCategoryFromNPCType('Traveling Merchant')).toBe('merchant');
       expect(detectVoiceCategoryFromNPCType('Shopkeep')).toBe('merchant');

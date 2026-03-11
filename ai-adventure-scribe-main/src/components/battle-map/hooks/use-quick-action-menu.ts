@@ -1,7 +1,7 @@
 import { Target, Move, Sword, Heart, Skull, Trash2, Shield, Eye } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-import type { MouseEvent, ComponentType } from 'react';
+import type { ComponentType, MouseEvent as ReactMouseEvent } from 'react';
 
 import { useHotkeys, BATTLE_MAP_HOTKEYS } from '@/hooks/use-hotkeys';
 import logger from '@/lib/logger';
@@ -54,7 +54,7 @@ export interface UseQuickActionMenuReturn {
   /** Close menu */
   closeMenu: () => void;
   /** Context menu event handler */
-  onContextMenu: (event: MouseEvent) => void;
+  onContextMenu: (event: ReactMouseEvent) => void;
 }
 
 /**
@@ -69,7 +69,7 @@ export function useQuickActionMenu(options: UseQuickActionMenuOptions): UseQuick
 
   // Track mouse position
   useEffect((): (() => void) => {
-    const handleMouseMove = (event: MouseEvent): void => {
+    const handleMouseMove = (event: globalThis.MouseEvent): void => {
       lastMousePosRef.current = { x: event.clientX, y: event.clientY };
     };
 
@@ -113,7 +113,7 @@ export function useQuickActionMenu(options: UseQuickActionMenuOptions): UseQuick
 
   // Context menu handler
   const onContextMenu = useCallback(
-    (event: MouseEvent): void => {
+    (event: ReactMouseEvent): void => {
       if (!enableRightClick) return;
 
       event.preventDefault();

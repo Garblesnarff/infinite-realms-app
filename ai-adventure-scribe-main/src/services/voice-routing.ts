@@ -366,7 +366,7 @@ export function detectVoiceCategoryFromNPCType(character: string): string | unde
   }
 
   // Guard/Military types -> gruff voice
-  if (/guard|soldier|captain|knight|warrior|mercenary|watchman|watch/.test(lowerChar)) {
+  if (/guard|soldier|captain|knight|warrior|mercenary|\bwatch(?:man)?\b/.test(lowerChar)) {
     return 'guard';
   }
 
