@@ -99,6 +99,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
 
   const parentFolderSelectId = useId();
   const colorGroupId = useId();
+  const folderNameId = useId();
 
   const { data: folders } = trpc.characterFolders.list.useQuery();
   const createMutation = trpc.characterFolders.create.useMutation({
@@ -149,9 +150,9 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
         <div className="space-y-4 py-4">
           {/* Folder Name */}
           <div className="space-y-2">
-            <Label htmlFor="folder-name">Folder Name</Label>
+            <Label htmlFor={folderNameId}>Folder Name</Label>
             <Input
-              id="folder-name"
+              id={folderNameId}
               placeholder="Enter folder name..."
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -238,6 +239,7 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
   const [name, setName] = useState(currentName);
   const [color, setColor] = useState(currentColor);
   const colorGroupId = useId();
+  const folderNameId = useId();
 
   useEffect(() => {
     setName(currentName);
@@ -294,9 +296,9 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
         <div className="space-y-4 py-4">
           {/* Folder Name */}
           <div className="space-y-2">
-            <Label htmlFor="edit-folder-name">Folder Name</Label>
+            <Label htmlFor={folderNameId}>Folder Name</Label>
             <Input
-              id="edit-folder-name"
+              id={folderNameId}
               placeholder="Enter folder name..."
               value={name}
               onChange={(e) => setName(e.target.value)}

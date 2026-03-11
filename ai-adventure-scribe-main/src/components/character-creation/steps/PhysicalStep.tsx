@@ -1,5 +1,5 @@
 import { Ruler, Weight, User, Eye, Palette, Sparkles } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import { useCharacter } from '@/contexts/CharacterContext';
 const PhysicalStep: React.FC = () => {
   const { state, dispatch } = useCharacter();
   const [useMetric, setUseMetric] = useState(false);
+  const metricSwitchId = useId();
+  const genderLabelId = useId();
 
   const handleGenderChange = (gender: 'male' | 'female') => {
     dispatch({ type: 'SET_GENDER', payload: gender });
@@ -96,11 +98,16 @@ const PhysicalStep: React.FC = () => {
       <Card className="glass rounded-2xl hover-lift">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center space-x-3">
-            <Label htmlFor="metric-switch" className={!useMetric ? 'font-semibold' : ''}>
+            <Label htmlFor={metricSwitchId} className={!useMetric ? 'font-semibold' : ''}>
               Imperial
             </Label>
-            <Switch id="metric-switch" checked={useMetric} onCheckedChange={setUseMetric} />
-            <Label htmlFor="metric-switch" className={useMetric ? 'font-semibold' : ''}>
+            <Switch
+              id={metricSwitchId}
+              checked={useMetric}
+              onCheckedChange={setUseMetric}
+              aria-label="Toggle between Imperial and Metric units"
+            />
+            <Label htmlFor={metricSwitchId} className={useMetric ? 'font-semibold' : ''}>
               Metric
             </Label>
           </div>
@@ -118,11 +125,14 @@ const PhysicalStep: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="text-sm font-medium mb-3 block">Gender</Label>
+              <Label id={genderLabelId} className="text-sm font-medium mb-3 block">
+                Gender
+              </Label>
               <RadioGroup
                 defaultValue={state.character.gender}
                 onValueChange={handleGenderChange}
                 className="flex space-x-4"
+                aria-labelledby={genderLabelId}
               >
                 <div className="flex items-center space-x-2 flex-1">
                   <RadioGroupItem value="male" id="male" />

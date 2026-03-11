@@ -1,5 +1,5 @@
 import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 
@@ -33,6 +33,7 @@ const CharacterFinalization: React.FC = () => {
     handleGenerateAvatar,
     handleGenerateImage,
   } = useCharacterFinalization();
+  const themeSelectId = useId();
 
   return (
     <div className="space-y-6">
@@ -175,9 +176,9 @@ const CharacterFinalization: React.FC = () => {
         <div className="space-y-4">
           {/* Theme Selector */}
           <div className="space-y-2">
-            <Label>Design Sheet Theme</Label>
+            <Label htmlFor={themeSelectId}>Design Sheet Theme</Label>
             <Select value={selectedTheme} onValueChange={setSelectedTheme}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id={themeSelectId} className="w-full">
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent>
