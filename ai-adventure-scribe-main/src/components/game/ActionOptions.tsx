@@ -1,5 +1,5 @@
 import { Sword, MessageCircle, Eye, Zap, User } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
@@ -84,6 +84,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const instructionsId = useId();
 
     // Show options after delay
     useEffect(() => {
@@ -103,7 +104,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     }, [options, delay]);
 
     // Handle option selection
-    const handleOptionClick = (option: ActionOption) => {
+    const handleOptionClick = (option: ActionOption): void => {
       if (disabled || selectedOption) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
       setSelectedOption(option.id);
@@ -131,11 +132,18 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
         {/* Option buttons with fade-in animation */}
         {visible && (
           <div className="space-y-3 animate-in fade-in-0 duration-500">
-            <div className="text-xs text-muted-foreground text-center mb-3">
+            <div
+              id={instructionsId}
+              className="text-xs text-muted-foreground text-center mb-3"
+            >
               What would you like to do?
             </div>
 
-            <div className="grid gap-3">
+            <div
+              className="grid gap-3"
+              role="group"
+              aria-labelledby={instructionsId}
+            >
               {options.map((option, index) => {
                 const IconComponent = getOptionIcon(option.text);
                 const isSelected = selectedOption === option.id;
@@ -144,11 +152,13 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                 return (
                   <Button
                     key={option.id}
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => handleOptionClick(option)}
                     disabled={isDisabled}
                     aria-pressed={isSelected}
+                    title={isSelected ? `Selected: ${option.text}` : `Choose: ${option.text}`}
                     className={`
                     flex items-start gap-3 p-4 h-auto text-left justify-start
                     transition-all duration-200 border-2 rounded-lg
@@ -163,7 +173,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                     }}
                   >
                     <div className="flex-shrink-0 mt-0.5">
-                      <IconComponent className="h-4 w-4" />
+                      <IconComponent className="h-4 w-4" aria-hidden="true" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -175,7 +185,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
                     {isSelected && (
                       <div className="flex-shrink-0 mt-1">
-                        <div className="w-2 h-2 bg-infinite-purple rounded-full animate-pulse"></div>
+                        <div className="w-2 h-2 bg-infinite-purple rounded-full animate-pulse" aria-hidden="true"></div>
                       </div>
                     )}
                   </Button>
@@ -185,7 +195,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
             {/* Help text */}
             {!selectedOption && (
-              <div className="text-xs text-muted-foreground text-center pt-2 opacity-75">
+              <div
+                className="text-xs text-muted-foreground text-center pt-2 opacity-75"
+                title="You can also type your custom action manually"
+              >
                 Or describe your own action in the chat
               </div>
             )}
