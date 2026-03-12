@@ -4,7 +4,17 @@ import logger from '@/lib/logger';
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-export function useAutosave<T>(storageKey: string, value: T, opts?: { delay?: number }) {
+export interface UseAutosaveReturn<T> {
+  status: AutosaveStatus;
+  restore: () => T | null;
+  clear: () => void;
+}
+
+export function useAutosave<T>(
+  storageKey: string,
+  value: T,
+  opts?: { delay?: number },
+): UseAutosaveReturn<T> {
   const { delay = 1000 } = opts || {};
   const timer = useRef<number | null>(null);
   const [status, setStatus] = useState<AutosaveStatus>('idle');
@@ -38,7 +48,7 @@ export function useAutosave<T>(storageKey: string, value: T, opts?: { delay?: nu
     }
   }
 
-  function clear() {
+  function clear(): void {
     try {
       localStorage.removeItem(storageKey);
       setStatus('idle');
