@@ -269,6 +269,7 @@ export default tseslint.config(
       'src/utils/fog-calculations.ts',
       'src/utils/polygon-utils.ts',
       'src/workers/vision-worker.ts',
+      'src/workers/vision-raycasting.ts',
       'src/shaders/light-blend.tsx', // 271 lines - shader with JSX component
       'src/services/prompts/characterPrompts.ts',
       'src/services/prompts/character-prompt-helpers.ts',
