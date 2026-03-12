@@ -71,30 +71,24 @@ class ChronicleGenerator {
   // ── Data fetching ──────────────────────────────────────────────────────────
 
   private async fetchSessionData(sessionId: string): Promise<SessionData> {
-    // Fetch the game session with joined campaign + character in one query.
-    // Note: FK columns (campaignId, characterId) are nullable, so leftJoin is used.
-    // Drizzle requires nullable FK column first in eq() to get the right type.
-    const sessionRows = await db
-      .select({
-        sessionNumber: gameSessions.sessionNumber,
-        currentSceneDescription: gameSessions.currentSceneDescription,
-        campaignName: campaigns.name,
-        characterName: characters.name,
-        characterRace: characters.race,
-        characterClass: characters.class,
-      })
-      .from(gameSessions)
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(eq(gameSessions.id, sessionId))
-      .limit(1);
-
-    const session = sessionRows[0];
-
-    // ⚡ Bolt: Optimized DM message fetching by replacing the full-session scan with targeted
-    // parallel queries for the first and last moments. This reduces O(N) data transfer and
-    // memory pressure to O(1) by only fetching the 6 messages actually used for the summary.
-    const [firstMessages, lastMessages] = await Promise.all([
+    // ⚡ Bolt: Parallelize independent database queries for session data and key dialogue moments.
+    // This reduces sequential database round-trips from 2 to 1, improving total latency
+    // during chronicle generation.
+    const [sessionRows, firstMessages, lastMessages] = await Promise.all([
+      db
+        .select({
+          sessionNumber: gameSessions.sessionNumber,
+          currentSceneDescription: gameSessions.currentSceneDescription,
+          campaignName: campaigns.name,
+          characterName: characters.name,
+          characterRace: characters.race,
+          characterClass: characters.class,
+        })
+        .from(gameSessions)
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(eq(gameSessions.id, sessionId))
+        .limit(1),
       db
         .select({
           message: dialogueHistory.message,
@@ -118,6 +112,8 @@ class ChronicleGenerator {
         .orderBy(desc(dialogueHistory.createdAt))
         .limit(3),
     ]);
+
+    const session = sessionRows[0];
 
     // Combine and re-sort to ensure chronological order for the AI prompt
     const combined = [...firstMessages, ...lastMessages].sort((a, b) => {
