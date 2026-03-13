@@ -101,3 +101,7 @@
 ## 2026-01-29 - Sidebar Accessibility and Z-Index Standardization
 **Learning:** Core layout components like `Sidebar` often use hardcoded Tailwind z-index classes (`z-10`, `z-20`) that conflict with the centralized `Z_INDEX` hierarchy. Icon-only buttons for toggling the sidebar (`SidebarTrigger`) and interactive regions (`SidebarRail`) lack accessible state feedback (`aria-expanded`) and desktop hover tooltips.
 **Action:** Migrate all sidebar z-indices to inline `style={{ zIndex: Z_INDEX.CONSTANT }}`. Add `aria-expanded` and `title` (including keyboard shortcuts like Ctrl+B) to sidebar triggers and interactive rails to improve both accessibility and discoverability.
+
+## 2026-03-05 - Quick Action Menu Accessibility and UX
+**Learning:** Interactive radial menus using raw `<button>` elements should always specify `type="button"` to prevent accidental form submissions when nested. Providing a `title` attribute for the center toggle/close button ensures sighted desktop users have a clear visual cue (tooltip) for its function, complementing the `aria-label` used by screen readers.
+**Action:** Add `type="button"` to all buttons in radial or context menus. Ensure center or primary toggle buttons have both `aria-label` and `title` for dual accessibility and UX benefits.

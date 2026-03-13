@@ -102,6 +102,7 @@ const RadialActionButton: React.FC<RadialActionButtonProps> = ({
 
   return (
     <button
+      type="button"
       onClick={onTrigger}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -248,9 +249,11 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
           }}
         >
           <button
+            type="button"
             onClick={onClose}
             className="flex flex-col items-center justify-center gap-1 p-4 rounded-full bg-background border-2 border-border shadow-xl hover:bg-accent transition-colors"
             aria-label="Close menu"
+            title="Close menu"
           >
             {CenterIcon ? (
               <CenterIcon className="h-6 w-6" />
