@@ -384,6 +384,7 @@ export default tseslint.config(
       'src/components/combat/InitiativeTracker.tsx',
       'src/features/campaign/hooks/use-character-selection.ts',
       'src/components/character-creation/steps/PhysicalStep.tsx',
+      'src/components/battle-map/hotkeys/constants.ts',
     ],
     rules: {
       'max-lines': 'warn',
