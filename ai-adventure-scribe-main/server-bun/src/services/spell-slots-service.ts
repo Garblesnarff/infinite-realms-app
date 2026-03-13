@@ -7,7 +7,7 @@
  * @module server/services/spell-slots-service
  */
 
-import { and, eq, exists, or, count, desc, inArray, sql } from 'drizzle-orm';
+import { and, eq, exists, or, desc, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, characterSpellSlots, spellSlotUsageLog } from '../../../db/schema/index';
@@ -413,57 +413,38 @@ export class SpellSlotsService {
   static async getSpellSlotUsageHistory(query: SpellSlotUsageQuery, userId: string): Promise<SpellSlotUsageHistory> {
     const { characterId, sessionId, limit = 50, offset = 0 } = query;
 
-    // Verify ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    const whereClauses = [
-      eq(spellSlotUsageLog.characterId, characterId),
-      exists(
-        db.select()
-          .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      )
-    ];
-    if (sessionId) {
-      whereClauses.push(eq(spellSlotUsageLog.sessionId, sessionId));
-    }
-
-    const entriesData = await db.query.spellSlotUsageLog.findMany({
-      where: and(...whereClauses),
-      orderBy: [desc(spellSlotUsageLog.timestamp)],
-      limit,
-      offset,
-    });
-
-    const [totalResult] = await db
-      .select({ value: count() })
+    // ⚡ Bolt: Consolidated character ownership verification, usage log retrieval, and total count calculation
+    // into a single query using an innerJoin and PostgreSQL window function count(*) OVER().
+    // This reduces database round-trips from 3 to 1.
+    const results = await (db as any)
+      .select({
+        log: spellSlotUsageLog,
+        totalCount: sql<number>`count(*)::int OVER()`,
+      })
       .from(spellSlotUsageLog)
-      .where(and(...whereClauses));
+      .innerJoin(characters, eq(spellSlotUsageLog.characterId, characters.id))
+      .where(and(
+        eq(spellSlotUsageLog.characterId, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        sessionId ? eq(spellSlotUsageLog.sessionId, sessionId) : undefined
+      ))
+      .orderBy(desc(spellSlotUsageLog.timestamp))
+      .limit(limit)
+      .offset(offset);
 
-    const total = totalResult?.value || 0;
+    if (results.length === 0) {
+      // 🛡️ Sentinel: Verify ownership separately if results are empty to maintain standard error behavior (masking)
+      await this.verifyCharacterOwnership(characterId, userId);
 
-    const entries: SpellSlotUsageLog[] = entriesData.map((row) => ({
-      id: row.id,
-      characterId: row.characterId,
-      sessionId: row.sessionId,
-      spellName: row.spellName,
-      spellLevel: row.spellLevel,
-      slotLevelUsed: row.slotLevelUsed,
-      timestamp: row.timestamp,
-    }));
+      return {
+        entries: [],
+        total: 0,
+        hasMore: false,
+      };
+    }
 
+    const total = results[0]?.totalCount || 0;
+    const entries: SpellSlotUsageLog[] = results.map((r: any) => r.log);
     const hasMore = offset + entries.length < total;
 
     return {

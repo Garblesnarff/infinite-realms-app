@@ -30,6 +30,7 @@ vi.mock('../../../../db/client', () => ({
         where: vi.fn(() => mockChain),
         orderBy: vi.fn(() => mockChain),
         limit: vi.fn(() => mockChain),
+        offset: vi.fn(() => mockChain),
         then: vi.fn((cb) => Promise.resolve(nextSelectResults).then(cb)),
       };
       return mockChain;
@@ -228,11 +229,30 @@ describe('SpellSlotsService', () => {
 
   describe('Security: getSpellSlotUsageHistory', () => {
     it('should throw NotFoundError if character not owned', async () => {
+      nextSelectResults = [];
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
       await expect(SpellSlotsService.getSpellSlotUsageHistory({
         characterId: mockCharacterId,
       }, mockUserId)).rejects.toThrow(NotFoundError);
+    });
+
+    it('should return entries and total if character owned', async () => {
+      const mockLog = { id: 'log-1', characterId: mockCharacterId, spellName: 'Fireball', timestamp: new Date() };
+      nextSelectResults = [
+        {
+          log: mockLog,
+          totalCount: 1
+        }
+      ];
+
+      const result = await SpellSlotsService.getSpellSlotUsageHistory({
+        characterId: mockCharacterId,
+      }, mockUserId);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.entries[0]).toEqual(mockLog);
     });
   });
 
