@@ -7,7 +7,6 @@
  */
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import React from 'react';
 import {
   User,
   MapPin,
@@ -18,12 +17,13 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
-
-import { cn } from '@/lib/utils';
-import { Z_INDEX } from '@/constants/z-index';
+import React from 'react';
 
 import type { AssetTag } from '../../utils/parse-asset-tags';
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
+
+import { Z_INDEX } from '@/constants/z-index';
+import { cn } from '@/lib/utils';
 
 interface GeneratedImageData {
   url?: string;
@@ -102,6 +102,7 @@ const AssetCard: React.FC<{
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
@@ -165,6 +166,7 @@ const GeneratedImageCard: React.FC<{
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
@@ -222,6 +224,7 @@ const GenerateButtonCard: React.FC<{
 }> = ({ isGenerating, error, onGenerate }) => {
   return (
     <button
+      type="button"
       onClick={onGenerate}
       disabled={isGenerating}
       className={cn(
@@ -346,7 +349,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                 {/* Close button */}
                 <DialogPrimitive.Close
                   className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
-                  style={{ zIndex: Z_INDEX.MODAL + 1 }}
+                  style={{ zIndex: Z_INDEX.POPOVER }}
                   aria-label="Close"
                   title="Close"
                 >
@@ -407,7 +410,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
               <div className="relative">
                 <DialogPrimitive.Close
                   className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
-                  style={{ zIndex: Z_INDEX.MODAL + 1 }}
+                  style={{ zIndex: Z_INDEX.POPOVER }}
                   aria-label="Close"
                   title="Close"
                 >
