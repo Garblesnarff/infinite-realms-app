@@ -11,7 +11,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { isValidMemoryType } from '@/types/memory';
+import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
 import type { Memory } from '@/types/memory';
 import { logger } from '../../../lib/logger';
 
@@ -24,9 +24,10 @@ export class MemoryLoader {
    * @returns {Promise<Memory[]>} Array of recent memories
    */
   async loadRecentMemories(sessionId: string, limit = 10): Promise<Memory[]> {
+    // ⚡ Bolt: Use explicit column selection to avoid over-fetching large vector embeddings (~3KB per row).
     const { data } = await supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
       .limit(limit);
