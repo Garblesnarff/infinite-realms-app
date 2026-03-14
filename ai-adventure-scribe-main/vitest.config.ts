@@ -318,6 +318,7 @@ export default defineConfig({
         'src/agents/langgraph/nodes/rules-validator.ts',
         'src/agents/langgraph/nodes/response-generator.ts',
         'src/hooks/useSpellSelection.ts',
+        'src/hooks/useAvailableSpells.ts',
         'src/hooks/use-ai-response.ts',
         'src/hooks/use-memories.ts',
         'src/hooks/use-campaign-assets.ts',

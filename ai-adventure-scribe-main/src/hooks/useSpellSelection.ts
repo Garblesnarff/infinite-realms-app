@@ -5,9 +5,9 @@ import type { Spell, Character } from '@/types/character';
 import type { SpellValidationResult } from '@/utils/spell-validation';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useAvailableSpells } from '@/hooks/useAvailableSpells';
 import logger from '@/lib/logger';
 import { characterSpellService } from '@/services/characterSpellApi';
-import { spellApi } from '@/services/spellApi';
 import {
   validateSpellSelection,
   getSpellcastingInfo,
@@ -73,32 +73,37 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   const { state, dispatch } = useCharacter();
   const character = state.character;
 
+  // Character and spellcasting info
+  const currentClass = character?.class;
+  const isSpellcaster = !!currentClass?.spellcasting;
+  const spellcastingInfo = useMemo(() => {
+    return currentClass ? getSpellcastingInfo(currentClass, character?.level || 1) : null;
+  }, [currentClass, character?.level]);
+
+  // Discover available spells using the extracted hook
+  const {
+    availableCantrips,
+    availableSpells,
+    isLoadingSpells,
+    spellsError,
+    searchTerm,
+    setSearchTerm,
+    filters,
+    setFilters,
+    filteredCantrips,
+    filteredSpells,
+    setSpellsError,
+    refetchSpells,
+  } = useAvailableSpells({
+    isSpellcaster,
+    className: currentClass?.name,
+    level: character?.level || 1,
+  });
+
   // Selection state
   const [selectedCantrips, setSelectedCantrips] = useState<string[]>([]);
   const [selectedSpells, setSelectedSpells] = useState<string[]>([]);
-
-  // Loading state
-  const [isLoadingSpells, setIsLoadingSpells] = useState(false);
-  const [spellsError, setSpellsError] = useState<string | null>(null);
-  const [availableCantrips, setAvailableCantrips] = useState<Spell[]>([]);
-  const [availableSpells, setAvailableSpells] = useState<Spell[]>([]);
   const [isSavingSpells, setIsSavingSpells] = useState(false);
-
-  // Filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<SpellFilters>({
-    schools: [],
-    components: {
-      verbal: false,
-      somatic: false,
-      material: false,
-    },
-    properties: {
-      concentration: false,
-      ritual: false,
-      damage: false,
-    },
-  });
 
   // Initialize from character data
   useEffect(() => {
@@ -113,65 +118,6 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     }
   }, [character?.id]); // Only reset when character changes
 
-  // Character and spellcasting info
-  const currentClass = character?.class;
-  const isSpellcaster = !!currentClass?.spellcasting;
-  const spellcastingInfo = useMemo(() => {
-    return currentClass ? getSpellcastingInfo(currentClass, character?.level || 1) : null;
-  }, [currentClass, character?.level]);
-
-  // Spell fetching function
-  const fetchSpells = async () => {
-    if (!isSpellcaster || !currentClass?.name) {
-      logger.debug(
-        '🚫 [useSpellSelection] Not a spellcaster or no class name, skipping spell fetch',
-      );
-      setAvailableCantrips([]);
-      setAvailableSpells([]);
-      return;
-    }
-
-    setIsLoadingSpells(true);
-    setSpellsError(null);
-
-    logger.debug('🔍 [useSpellSelection] Fetching spells for class:', {
-      className: currentClass.name,
-      characterLevel: character?.level || 1,
-      isSpellcaster,
-      spellcastingInfo,
-    });
-
-    try {
-      const { cantrips, spells } = await spellApi.getClassSpells(
-        currentClass.name,
-        character?.level || 1,
-      );
-
-      logger.debug('✅ [useSpellSelection] Spells fetched successfully:', {
-        className: currentClass.name,
-        cantripsFound: cantrips.length,
-        spellsFound: spells.length,
-        cantripNames: cantrips.slice(0, 3).map((c) => c.name),
-        spellNames: spells.slice(0, 3).map((s) => s.name),
-      });
-
-      setAvailableCantrips(cantrips);
-      setAvailableSpells(spells);
-    } catch (error) {
-      logger.error('Failed to fetch spells:', error);
-      setSpellsError(error instanceof Error ? error.message : 'Failed to load spells');
-      setAvailableCantrips([]);
-      setAvailableSpells([]);
-    } finally {
-      setIsLoadingSpells(false);
-    }
-  };
-
-  // Fetch available spells from API
-  useEffect(() => {
-    fetchSpells();
-  }, [isSpellcaster, currentClass?.name, character?.level]);
-
   // Racial spells
   const racialSpells = useMemo(() => {
     if (!character) {
@@ -181,50 +127,8 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     return getRacialSpells(character.race?.name || '', character.subrace || undefined);
   }, [character?.race?.name, character?.subrace]);
 
-  // Spell filtering function
-  const filterSpells = (spells: Spell[], searchTerm: string, filters: SpellFilters): Spell[] => {
-    return spells.filter((spell) => {
-      // Search term filter
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        const matchesSearch =
-          spell.name.toLowerCase().includes(searchLower) ||
-          spell.description.toLowerCase().includes(searchLower) ||
-          spell.school.toLowerCase().includes(searchLower);
-
-        if (!matchesSearch) return false;
-      }
-
-      // School filter
-      if (filters.schools.length > 0 && !filters.schools.includes(spell.school)) {
-        return false;
-      }
-
-      // Component filters
-      if (filters.components.verbal && !spell.components_verbal) return false;
-      if (filters.components.somatic && !spell.components_somatic) return false;
-      if (filters.components.material && !spell.components_material) return false;
-
-      // Property filters
-      if (filters.properties.concentration && !spell.concentration) return false;
-      if (filters.properties.ritual && !spell.ritual) return false;
-      if (filters.properties.damage && !spell.damage) return false;
-
-      return true;
-    });
-  };
-
-  // Filtered spells
-  const filteredCantrips = useMemo(() => {
-    return filterSpells(availableCantrips, searchTerm, filters);
-  }, [availableCantrips, searchTerm, filters]);
-
-  const filteredSpells = useMemo(() => {
-    return filterSpells(availableSpells, searchTerm, filters);
-  }, [availableSpells, searchTerm, filters]);
-
   // Selection actions
-  const toggleCantrip = (cantripId: string) => {
+  const toggleCantrip = (cantripId: string): void => {
     setSelectedCantrips((prev) => {
       if (prev.includes(cantripId)) {
         return prev.filter((id) => id !== cantripId);
@@ -242,7 +146,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     });
   };
 
-  const toggleSpell = (spellId: string) => {
+  const toggleSpell = (spellId: string): void => {
     logger.debug('🪄 [useSpellSelection] toggleSpell called:', spellId);
     setSelectedSpells((prev) => {
       const isRemoving = prev.includes(spellId);
@@ -272,7 +176,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     });
   };
 
-  const clearSelections = () => {
+  const clearSelections = (): void => {
     setSelectedCantrips([]);
     setSelectedSpells([]);
   };
@@ -289,7 +193,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   useEffect(() => {
     let mounted = true;
 
-    const runValidation = async () => {
+    const runValidation = async (): Promise<void> => {
       if (!character) {
         setValidation({ valid: false, errors: [], warnings: [] });
         return;
@@ -335,7 +239,7 @@ export function useSpellSelection(): UseSpellSelectionReturn {
   const canProceed = validation.valid && !isValidating;
 
   // Save to character and database
-  const updateCharacterSpells = async () => {
+  const updateCharacterSpells = async (): Promise<void> => {
     if (!character || !character.id) {
       return;
     }
@@ -445,6 +349,6 @@ export function useSpellSelection(): UseSpellSelectionReturn {
     isSavingSpells,
 
     // Retry functionality
-    refetchSpells: fetchSpells,
+    refetchSpells,
   };
 }

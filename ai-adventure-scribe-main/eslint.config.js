@@ -385,6 +385,7 @@ export default tseslint.config(
       'src/features/campaign/hooks/use-character-selection.ts',
       'src/components/character-creation/steps/PhysicalStep.tsx',
       'src/components/battle-map/hotkeys/constants.ts',
+      'src/hooks/useSpellSelection.ts',
     ],
     rules: {
       'max-lines': 'warn',
