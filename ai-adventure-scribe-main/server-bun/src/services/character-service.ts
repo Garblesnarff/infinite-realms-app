@@ -512,15 +512,9 @@ export class CharacterService {
    * Export character to JSON
    */
   static async exportCharacter(characterId: string, userId: string): Promise<any> {
-    // Verify access
-    const { hasAccess } = await this.checkPermission(characterId, userId);
-    if (!hasAccess) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Character not found',
-      });
-    }
-
+    // ⚡ Bolt: Removed redundant checkPermission call.
+    // Authorization is verified atomically within the main query's WHERE clause.
+    // This reduces database round-trips from 2 to 1.
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
