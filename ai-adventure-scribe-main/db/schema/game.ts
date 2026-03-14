@@ -19,6 +19,8 @@ import {
   pgEnum,
 } from 'drizzle-orm/pg-core';
 
+import { characterHitDice } from './rest';
+
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
@@ -237,7 +239,7 @@ export type SessionChronicle = InferSelectModel<typeof sessionChronicles>;
 export type NewSessionChronicle = InferInsertModel<typeof sessionChronicles>;
 
 // Define relations
-export const charactersRelations = relations(characters, ({ one, _many }) => ({
+export const charactersRelations = relations(characters, ({ one, many }) => ({
   campaign: one(campaigns, {
     fields: [characters.campaignId],
     references: [campaigns.id],
@@ -246,6 +248,7 @@ export const charactersRelations = relations(characters, ({ one, _many }) => ({
     fields: [characters.id],
     references: [characterStats.characterId],
   }),
+  hitDice: many(characterHitDice),
 }));
 
 export const campaignsRelations = relations(campaigns, ({ many }) => ({

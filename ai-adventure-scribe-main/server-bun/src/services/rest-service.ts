@@ -8,14 +8,17 @@
  */
 
 /* eslint-disable max-lines */
-import { and, desc, eq, exists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
   characterHitDice,
+  characterStats,
   characters,
   restEvents,
+  type Character,
   type CharacterHitDice,
+  type CharacterStats,
   type RestEvent,
 } from '../../../db/schema/index';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../lib/errors.js';
@@ -216,25 +219,22 @@ export class RestService {
     characterId: string,
     userId: string,
     count: number,
-    preRolledValues?: number[]
+    preRolledValues?: number[],
+    preFetchedData?: {
+      character: Character & { stats: CharacterStats | null };
+      hitDice: CharacterHitDice[]
+    }
   ): Promise<SpendHitDiceResult> {
-    await this.verifyCharacterOwnership(characterId, userId);
+    if (!preFetchedData) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     if (count < 0) {
       throw new ValidationError('Cannot spend negative hit dice', { count });
     }
 
-    if (count === 0) {
-      return {
-        hpRestored: 0,
-        hitDiceSpent: 0,
-        rolls: [],
-        hitDiceRemaining: await this.getHitDice(characterId, userId),
-      };
-    }
-
     // Get character and stats
-    const character = await db.query.characters.findFirst({
+    const character = preFetchedData?.character || await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
@@ -242,7 +242,7 @@ export class RestService {
       with: {
         stats: true,
       },
-    });
+    }) as (Character & { stats: CharacterStats | null }) | undefined;
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
@@ -252,10 +252,19 @@ export class RestService {
       throw new BusinessLogicError('Character has no stats', { characterId });
     }
 
-    const conModifier = this.calculateConModifier(character.stats.constitution);
-
     // Get all hit dice
-    const allHitDice = await this.getHitDice(characterId, userId);
+    const allHitDice = preFetchedData?.hitDice || await this.getHitDice(characterId, userId);
+
+    if (count === 0) {
+      return {
+        hpRestored: 0,
+        hitDiceSpent: 0,
+        rolls: [],
+        hitDiceRemaining: allHitDice,
+      };
+    }
+
+    const conModifier = this.calculateConModifier(character.stats.constitution);
     const availableCount = allHitDice.reduce(
       (sum, hd) => sum + (hd.totalDice - hd.usedDice),
       0
@@ -339,11 +348,17 @@ export class RestService {
         );
     }
 
+    // ⚡ Bolt: Return the updated state computed in-memory to avoid a final "refresh" round-trip.
+    const finalHitDice = allHitDice.map(hd => {
+      const update = updates.find(u => u.id === hd.id);
+      return update ? { ...hd, usedDice: update.newUsedDice } : hd;
+    });
+
     return {
       hpRestored: totalHpRestored,
       hitDiceSpent: count,
       rolls,
-      hitDiceRemaining: await this.getHitDice(characterId, userId),
+      hitDiceRemaining: finalHitDice,
     };
   }
 
@@ -354,12 +369,13 @@ export class RestService {
   static async restoreHitDice(
     characterId: string,
     userId: string,
-    count?: number
-  ): Promise<number> {
-    const allHitDice = await this.getHitDice(characterId, userId);
+    count?: number,
+    preFetchedHitDice?: CharacterHitDice[]
+  ): Promise<{ restoredCount: number; updatedHitDice: CharacterHitDice[] }> {
+    const allHitDice = preFetchedHitDice || await this.getHitDice(characterId, userId);
 
     if (allHitDice.length === 0) {
-      return 0;
+      return { restoredCount: 0, updatedHitDice: [] };
     }
 
     // Calculate how many to restore
@@ -369,7 +385,7 @@ export class RestService {
     const toRestore = count !== undefined ? Math.min(count, usedDice, maxRestore) : Math.min(usedDice, maxRestore);
 
     if (toRestore === 0) {
-      return 0;
+      return { restoredCount: 0, updatedHitDice: allHitDice };
     }
 
     // Restore hit dice (prefer largest dice first)
@@ -432,7 +448,13 @@ export class RestService {
         );
     }
 
-    return toRestore;
+    // ⚡ Bolt: Return the updated state computed in-memory to avoid a final "refresh" round-trip.
+    const finalHitDice = allHitDice.map(hd => {
+      const update = updates.find(u => u.id === hd.id);
+      return update ? { ...hd, usedDice: update.newUsedDice } : hd;
+    });
+
+    return { restoredCount: toRestore, updatedHitDice: finalHitDice };
   }
 
   /**
@@ -441,9 +463,12 @@ export class RestService {
   static async getRestorableResources(
     characterId: string,
     userId: string,
-    restType: RestType
+    restType: RestType,
+    preVerified: boolean = false
   ): Promise<RestorableResource[]> {
-    await this.verifyCharacterOwnership(characterId, userId);
+    if (!preVerified) {
+      await this.verifyCharacterOwnership(characterId, userId);
+    }
 
     const resources: RestorableResource[] = [];
 
@@ -498,30 +523,42 @@ export class RestService {
     sessionId?: string,
     notes?: string
   ): Promise<ShortRestResult> {
-    // Get character
+    // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
+    // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId))
       ),
-    });
+      with: {
+        stats: true,
+        hitDice: true,
+      },
+    }) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
     }
 
+    const hitDice = character.hitDice || [];
+
     // Spend hit dice if requested
     let hpRestored = 0;
     let hitDiceSpent = 0;
+    let updatedHitDice = hitDice;
 
     if (hitDiceToSpend > 0) {
-      const result = await this.spendHitDice(characterId, userId, hitDiceToSpend);
+      const result = await this.spendHitDice(characterId, userId, hitDiceToSpend, undefined, {
+        character,
+        hitDice,
+      });
       hpRestored = result.hpRestored;
       hitDiceSpent = result.hitDiceSpent;
+      updatedHitDice = result.hitDiceRemaining;
     }
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short');
+    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short', true);
 
     // Create rest event
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
@@ -558,7 +595,7 @@ export class RestService {
       restType: 'short',
       hpRestored,
       hitDiceSpent,
-      hitDiceRemaining: await this.getHitDice(characterId, userId),
+      hitDiceRemaining: updatedHitDice,
       resourcesRestored,
       restEventId: restEvent.id,
     };
@@ -574,7 +611,8 @@ export class RestService {
     sessionId?: string,
     notes?: string
   ): Promise<LongRestResult> {
-    // Get character
+    // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
+    // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
@@ -582,12 +620,15 @@ export class RestService {
       ),
       with: {
         stats: true,
+        hitDice: true,
       },
-    });
+    }) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
     }
+
+    const hitDice = character.hitDice || [];
 
     // Note: HP restoration would be handled by updating character's current HP
     // This is a placeholder that calculates the theoretical HP restored
@@ -595,10 +636,10 @@ export class RestService {
     const hpRestored = 0; // Would be: maxHP - currentHP
 
     // Restore hit dice (half total, minimum 1)
-    const hitDiceRestored = await this.restoreHitDice(characterId, userId);
+    const { restoredCount: hitDiceRestored, updatedHitDice } = await this.restoreHitDice(characterId, userId, undefined, hitDice);
 
     // Get restorable resources
-    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long');
+    const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long', true);
 
     // Create rest event
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
@@ -635,7 +676,7 @@ export class RestService {
       restType: 'long',
       hpRestored,
       hitDiceRestored,
-      hitDiceRemaining: await this.getHitDice(characterId, userId),
+      hitDiceRemaining: updatedHitDice,
       resourcesRestored,
       restEventId: restEvent.id,
     };
