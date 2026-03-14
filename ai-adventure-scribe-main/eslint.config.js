@@ -378,6 +378,8 @@ export default tseslint.config(
       'src/utils/stealthUtils.ts',
       'src/utils/__tests__/stealthUtils.test.ts',
       'src/components/character-sharing/ShareCharacterDialog.tsx',
+      'src/components/spellcasting/SpellPreparationPanel.tsx',
+      'src/features/character/components/spellcasting/SpellPreparationPanel.tsx',
       'src/components/blog-admin/blog-post-editor/blog-post-editor.tsx',
       'src/components/blog-admin/blog-post-editor/use-blog-post-editor.ts',
       'server-bun/src/services/blog-service.ts',

@@ -105,3 +105,7 @@
 ## 2026-03-05 - Quick Action Menu Accessibility and UX
 **Learning:** Interactive radial menus using raw `<button>` elements should always specify `type="button"` to prevent accidental form submissions when nested. Providing a `title` attribute for the center toggle/close button ensures sighted desktop users have a clear visual cue (tooltip) for its function, complementing the `aria-label` used by screen readers.
 **Action:** Add `type="button"` to all buttons in radial or context menus. Ensure center or primary toggle buttons have both `aria-label` and `title` for dual accessibility and UX benefits.
+
+## 2026-03-06 - Spell Preparation UX and Accessibility
+**Learning:** Browser `alert()` calls are disruptive and don't match the application's aesthetic. Replacing them with `toast` notifications provides a smoother, non-blocking user experience. For checkboxes in lists, providing a dynamic `aria-label` (e.g., "Prepare [Item Name]") ensures screen reader users have clear context without needing to find a separate label.
+**Action:** Replace `alert()` with `toast.error()` or `toast.success()`. Always add descriptive `aria-label` to checkboxes in repetitive lists.
