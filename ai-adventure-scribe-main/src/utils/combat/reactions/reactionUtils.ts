@@ -37,15 +37,20 @@ export function createReactionOpportunity(
  */
 export function canMakeOpportunityAttack(
   participant: CombatParticipant,
-  target: CombatParticipant,
+  _target: CombatParticipant,
 ): boolean {
-  // Can't make opportunity attacks if incapacitated
-  const incapacitatingConditions = ['stunned', 'paralyzed', 'unconscious', 'petrified'];
-  const isIncapacitated = participant.conditions.some((c) =>
-    incapacitatingConditions.includes(c.name),
-  );
+  // Can't make opportunity attacks if incapacitated or blinded (must see the target)
+  const incapacitatingConditions = [
+    'stunned',
+    'paralyzed',
+    'unconscious',
+    'petrified',
+    'incapacitated',
+    'blinded',
+  ];
+  const cannotReact = participant.conditions.some((c) => incapacitatingConditions.includes(c.name));
 
-  if (isIncapacitated) return false;
+  if (cannotReact) return false;
 
   // Target must be leaving reach, not teleporting or being moved involuntarily
   return true;
@@ -55,8 +60,11 @@ export function canMakeOpportunityAttack(
  * Check if a participant can cast counterspell
  */
 export function canCastCounterspell(participant: CombatParticipant): boolean {
-  // Check if they have counterspell available and spell slots
-  if (!participant.spellSlots) return false;
+  // Check if they have counterspell prepared and available spell slots
+  if (!participant.spellSlots || !participant.preparedSpells) return false;
+
+  // Must have counterspell prepared
+  if (!participant.preparedSpells.includes('counterspell')) return false;
 
   // Need at least a 3rd level spell slot for counterspell
   for (let level = 3; level <= 9; level++) {
@@ -112,8 +120,8 @@ export function isWithinReach(
  * Check if within counterspell range (60 feet)
  */
 export function isWithinCounterspellRange(
-  caster: CombatParticipant,
-  target: CombatParticipant,
+  _caster: CombatParticipant,
+  _target: CombatParticipant,
 ): boolean {
   // Simplified - assume most combat happens within counterspell range
   return true;

@@ -112,7 +112,7 @@ describe('reactionSystem', () => {
   });
 
   describe('checkCounterspellOpportunities', () => {
-    it('should trigger counterspell for participants with 3rd level slots', () => {
+    it('should trigger counterspell for participants with 3rd level slots and counterspell prepared', () => {
       const caster: any = { id: 'p1' };
       const encounter: any = {
         participants: [
@@ -120,6 +120,7 @@ describe('reactionSystem', () => {
             id: 'p2',
             currentHitPoints: 10,
             reactionTaken: false,
+            preparedSpells: ['counterspell'],
             spellSlots: { 3: { current: 1 } },
           },
         ],
@@ -354,6 +355,7 @@ describe('reactionSystem', () => {
             id: 'p2',
             currentHitPoints: 10,
             reactionTaken: false,
+            preparedSpells: ['counterspell'],
             spellSlots: { 3: { current: 1 } },
           },
         ],

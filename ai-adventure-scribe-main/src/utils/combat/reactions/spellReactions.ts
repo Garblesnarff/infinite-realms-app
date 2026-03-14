@@ -4,19 +4,20 @@
  * Extracted from reactionTriggers.ts
  */
 
+import { createReactionOpportunity } from './reactionUtils';
+
 import type {
   ReactionOpportunity,
   CombatParticipant,
   CombatEncounter,
 } from '@/types/combat';
-import { createReactionOpportunity } from './reactionUtils';
 
 /**
  * Check for shield spell opportunities when damage is taken
  */
 export function checkShieldSpellOpportunities(
   target: CombatParticipant,
-  encounter: CombatEncounter,
+  _encounter: CombatEncounter,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
 
@@ -62,7 +63,7 @@ export function canCastShieldSpell(participant: CombatParticipant): boolean {
  */
 export function checkAbsorbElementsOpportunities(
   target: CombatParticipant,
-  encounter: CombatEncounter,
+  _encounter: CombatEncounter,
   damageType: string,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
@@ -90,7 +91,7 @@ export function checkAbsorbElementsOpportunities(
 /**
  * Check if a participant can cast absorb elements
  */
-export function canCastAbsorbElements(participant: CombatParticipant, damageType: string): boolean {
+export function canCastAbsorbElements(participant: CombatParticipant, _damageType: string): boolean {
   // Check if they have absorb elements spell prepared and available spell slots
   if (!participant.spellSlots || !participant.preparedSpells) return false;
 
@@ -114,7 +115,7 @@ export function canCastAbsorbElements(participant: CombatParticipant, damageType
 export function checkHellishRebukeOpportunities(
   target: CombatParticipant,
   attacker: CombatParticipant,
-  encounter: CombatEncounter,
+  _encounter: CombatEncounter,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
 
