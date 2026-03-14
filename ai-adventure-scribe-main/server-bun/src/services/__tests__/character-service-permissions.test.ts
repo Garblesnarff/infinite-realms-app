@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CharacterService } from '../character-service.js';
+import { CharacterPermissionService } from '../character-permission-service.js';
 import { db } from '../../../../db/client';
 import { characters, characterPermissions } from '../../../../db/schema/index';
 import { TRPCError } from '@trpc/server';
@@ -47,7 +47,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      const result = await CharacterService.listPermissions(mockCharacterId, mockUserId);
+      const result = await CharacterPermissionService.listPermissions(mockCharacterId, mockUserId);
 
       expect(result).toEqual(mockPermissions);
       expect(db.select).toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      await expect(CharacterService.listPermissions(mockCharacterId, mockUserId))
+      await expect(CharacterPermissionService.listPermissions(mockCharacterId, mockUserId))
         .rejects.toThrow(new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' }));
     });
   });
@@ -81,7 +81,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      await expect(CharacterService.shareCharacter(mockCharacterId, mockUserId, mockTargetUserId, 'viewer'))
+      await expect(CharacterPermissionService.shareCharacter(mockCharacterId, mockUserId, mockTargetUserId, 'viewer'))
         .rejects.toThrow(new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' }));
     });
 
@@ -97,7 +97,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      await expect(CharacterService.shareCharacter(mockCharacterId, mockUserId, mockTargetUserId, 'viewer'))
+      await expect(CharacterPermissionService.shareCharacter(mockCharacterId, mockUserId, mockTargetUserId, 'viewer'))
         .rejects.toThrow(new TRPCError({ code: 'CONFLICT', message: 'Permission already exists for this user' }));
     });
   });
@@ -120,7 +120,7 @@ describe('CharacterService Permissions', () => {
       });
 
       await expect(
-        CharacterService.updatePermission(mockCharacterId, mockUserId, mockTargetUserId, 'editor')
+        CharacterPermissionService.updatePermission(mockCharacterId, mockUserId, mockTargetUserId, 'editor')
       ).rejects.toThrow(new TRPCError({ code: 'NOT_FOUND', message: 'Permission not found' }));
     });
   });
@@ -140,7 +140,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      const result = await CharacterService.revokePermission(
+      const result = await CharacterPermissionService.revokePermission(
         mockCharacterId,
         mockUserId,
         mockTargetUserId
@@ -163,7 +163,7 @@ describe('CharacterService Permissions', () => {
         }),
       });
 
-      const result = await CharacterService.revokePermission(
+      const result = await CharacterPermissionService.revokePermission(
         mockCharacterId,
         mockUserId,
         mockTargetUserId

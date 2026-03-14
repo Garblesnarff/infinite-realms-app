@@ -283,6 +283,7 @@ export default tseslint.config(
       'server-bun/src/services/character-folder-service.ts',
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
+      'server-bun/src/services/character-permission-service.ts',
       'src/components/scenes/SceneCreationWizard.tsx',
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
       'src/features/campaign/components/creation/steps/GenreSelection.tsx',

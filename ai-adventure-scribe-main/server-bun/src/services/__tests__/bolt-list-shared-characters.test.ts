@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CharacterService } from '../character-service.js';
+import { CharacterPermissionService } from '../character-permission-service.js';
 import { db } from '../../../../db/client';
 import { characters, characterPermissions } from '../../../../db/schema/index';
 
@@ -10,7 +10,7 @@ vi.mock('../../../../db/client', () => ({
   },
 }));
 
-describe('CharacterService.listSharedCharacters Optimization', () => {
+describe('CharacterPermissionService.listSharedCharacters Optimization', () => {
   const mockUserId = 'user-123';
 
   beforeEach(() => {
@@ -58,7 +58,7 @@ describe('CharacterService.listSharedCharacters Optimization', () => {
 
     (db.select as any).mockReturnValue(mockSelect);
 
-    const result = await CharacterService.listSharedCharacters(mockUserId);
+    const result = await CharacterPermissionService.listSharedCharacters(mockUserId);
 
     // Verify the result mapping
     expect(result).toHaveLength(1);
