@@ -129,6 +129,7 @@ export default defineConfig({
       'src/hooks/__tests__/use-combat-canvas-sync.test.ts',
       'src/hooks/__tests__/use-drawing-tool.test.tsx',
       'src/hooks/__tests__/useAdvancedSpellcasting.test.tsx',
+      'src/hooks/__tests__/useAvailableSpells.test.ts',
       'src/hooks/__tests__/use-initial-greeting.test.tsx',
       'src/hooks/__tests__/use-image-hot-loading.test.ts',
       'src/hooks/__tests__/use-entity-label.test.ts',
