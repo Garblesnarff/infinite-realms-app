@@ -238,11 +238,20 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             <Card
               key={scene.id}
               variant="parchment"
+              role="button"
+              tabIndex={0}
               className={cn(
-                'overflow-hidden transition-all cursor-pointer',
+                'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 scene.isActive && 'ring-4 ring-electricCyan shadow-lg shadow-electricCyan/50',
               )}
               onClick={() => onViewScene?.(scene.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onViewScene?.(scene.id);
+                }
+              }}
+              aria-label={`View scene: ${scene.name}`}
             >
               {/* Thumbnail */}
               <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
@@ -355,11 +364,20 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             <Card
               key={scene.id}
               variant="parchment"
+              role="button"
+              tabIndex={0}
               className={cn(
-                'overflow-hidden transition-all cursor-pointer',
+                'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 scene.isActive && 'ring-2 ring-electricCyan',
               )}
               onClick={() => onViewScene?.(scene.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onViewScene?.(scene.id);
+                }
+              }}
+              aria-label={`View scene: ${scene.name}`}
             >
               <div className="flex items-center gap-4 p-4">
                 {/* Thumbnail */}

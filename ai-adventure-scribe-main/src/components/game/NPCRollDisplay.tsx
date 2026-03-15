@@ -225,6 +225,7 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                     </h3>
                   </div>
                   <button
+                    type="button"
                     onClick={onDismiss}
                     className="p-1 rounded-full hover:bg-white/10 transition-colors"
                     aria-label="Close Behind the DM Screen popup"

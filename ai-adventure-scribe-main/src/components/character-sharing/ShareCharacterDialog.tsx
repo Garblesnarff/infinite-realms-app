@@ -222,6 +222,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                     filteredUsers.map((user) => (
                       <button
                         key={user.id}
+                        type="button"
                         role="option"
                         className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between"
                         onClick={() => {
