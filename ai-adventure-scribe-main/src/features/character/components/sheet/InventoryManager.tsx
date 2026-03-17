@@ -215,6 +215,7 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
                             checked={item.equipped}
                             onCheckedChange={() => toggleEquipped(item.id)}
                             disabled={item.category === 'consumable'}
+                            aria-label={item.equipped ? `Unequip ${item.name}` : `Equip ${item.name}`}
                           />
                         </div>
                         <div className="flex-1">

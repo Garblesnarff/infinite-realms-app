@@ -236,6 +236,7 @@ export default defineConfig({
       'src/components/scenes/__tests__/SceneCreationWizardSteps.test.tsx',
       'src/components/scenes/__tests__/StepNameDescription.test.tsx',
       'src/components/scenes/__tests__/SceneSettingsAccessibility.test.tsx',
+      'src/features/character/components/sheet/__tests__/InventoryManager.accessibility.test.tsx',
       'tests/services/voice-profile-service.test.ts',
       'tests/services/voice-consistency-service.test.ts',
     ],
@@ -446,6 +447,7 @@ export default defineConfig({
         'src/features/game-session/components/chat/chat/DMChatBubble.tsx',
         'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
         'src/components/game/DiceRollMessage.tsx',
+        'src/features/character/components/sheet/InventoryManager.tsx',
       ],
       exclude: [
         '**/__tests__/**',
