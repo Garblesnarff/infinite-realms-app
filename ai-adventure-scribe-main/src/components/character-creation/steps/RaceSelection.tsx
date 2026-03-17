@@ -1,4 +1,4 @@
-import { Search, Grid, List, Eye } from 'lucide-react';
+import { Search, Grid, List, Eye, X } from 'lucide-react';
 import React from 'react';
 
 import { RaceCardListView, RaceCardCompactView, RaceCardGridView } from './race-selection/RaceCard';
@@ -226,8 +226,10 @@ const RaceSelection: React.FC = () => {
                     size="sm"
                     onClick={() => removeFromComparison(race.id)}
                     className="p-1 h-auto"
+                    aria-label={`Remove ${race.name} from comparison`}
+                    title="Remove from comparison"
                   >
-                    ×
+                    <X className="w-4 h-4" />
                   </Button>
                 </div>
                 <div className="space-y-2 text-xs">

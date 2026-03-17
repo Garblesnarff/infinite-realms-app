@@ -48,6 +48,9 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') onSelect(race);
     }}
+    aria-label={`Select ${race.name} race`}
+    title={`Select ${race.name}`}
+    aria-pressed={isSelected}
     style={
       race.backgroundImage
         ? {
@@ -79,6 +82,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
                 key={ability}
                 variant="secondary"
                 className={`text-xs ${race.backgroundImage ? 'bg-black/60 text-white border-white/20 backdrop-blur-sm' : ''}`}
+                title={`${ability} increase`}
               >
                 {ability.substring(0, 3)} +{bonus}
               </Badge>
@@ -109,6 +113,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
             className="p-1"
             disabled={!canAddToComparison}
             aria-label="Add to comparison"
+            title="Add to comparison"
           >
             <Star className="w-4 h-4" />
           </Button>
@@ -151,6 +156,9 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({ race, isSelected,
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') onSelect(race);
     }}
+    aria-label={`Select ${race.name} race`}
+    title={`Select ${race.name}`}
+    aria-pressed={isSelected}
     style={
       race.backgroundImage
         ? {
@@ -190,6 +198,7 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({ race, isSelected,
             key={ability}
             variant="secondary"
             className={`text-xs font-semibold ${race.backgroundImage ? 'bg-black/60 text-white border-white/20 backdrop-blur-sm' : ''}`}
+            title={`${ability} increase`}
           >
             +{bonus} {ability.substring(0, 3)}
           </Badge>
@@ -230,6 +239,9 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
     className={`race-card group cursor-pointer transition-all hover:shadow-xl border-2 relative overflow-hidden aspect-square ${
       isSelected ? 'border-primary shadow-lg' : 'border-border/30 hover:border-infinite-purple/50'
     }`}
+    aria-label={`Select ${race.name} race`}
+    title={`Select ${race.name}`}
+    aria-pressed={isSelected}
     style={{
       padding: 0,
       ...(race.backgroundImage
@@ -270,6 +282,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
         className="p-1 bg-white/10 hover:bg-white/20"
         aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         aria-pressed={isFavorite}
+        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
       >
         <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`} />
       </Button>
@@ -283,6 +296,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
         className="p-1 bg-white/10 hover:bg-white/20"
         disabled={!canAddToComparison}
         aria-label="Add to comparison"
+        title="Add to comparison"
       >
         <Star className="w-4 h-4 text-white" />
       </Button>
@@ -308,6 +322,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
             key={ability}
             variant="secondary"
             className="text-xs font-semibold bg-black/60 text-white border-white/20 backdrop-blur-sm"
+            title={`${ability} increase`}
           >
             +{bonus} {ability.substring(0, 3)}
           </Badge>

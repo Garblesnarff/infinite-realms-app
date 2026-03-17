@@ -30,6 +30,9 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
           onSelect(subrace);
         }
       }}
+      aria-label={`Select ${subrace.name} subrace`}
+      title={`Select ${subrace.name}`}
+      aria-pressed={isSelected}
       style={
         subrace.backgroundImage
           ? {
@@ -100,6 +103,7 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
                     key={ability}
                     variant="secondary"
                     className={`capitalize ${subrace.backgroundImage ? 'bg-black/60 text-white border-white/20 backdrop-blur-sm' : ''}`}
+                    title={`${ability} increase`}
                   >
                     {ability.substring(0, 3)} +{bonus}
                   </Badge>
