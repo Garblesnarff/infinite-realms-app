@@ -383,6 +383,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         </Select>
 
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           onClick={() => handleRevoke(permission.userId)}

@@ -172,6 +172,7 @@ const SharedCharacterCard: React.FC<{
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => onRemoveSelf(character.id, character.name)}

@@ -339,6 +339,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
             </h3>
             <div className="flex flex-wrap gap-2">
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
@@ -351,6 +352,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                 Show All
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
@@ -363,6 +365,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                 Hide All
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {

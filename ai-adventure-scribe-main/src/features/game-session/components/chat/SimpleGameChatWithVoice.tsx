@@ -235,6 +235,7 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
           </CardHeader>
 
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={handleEndSession}

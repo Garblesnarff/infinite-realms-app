@@ -186,6 +186,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2" role="group" aria-label="View mode">
           <Button
+            type="button"
             variant={viewMode === 'grid' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('grid')}
@@ -196,6 +197,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             <Grid className="h-4 w-4" />
           </Button>
           <Button
+            type="button"
             variant={viewMode === 'list' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('list')}
@@ -209,7 +211,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
           </span>
         </div>
-        <Button onClick={onCreateScene} variant="cosmic">
+        <Button type="button" onClick={onCreateScene} variant="cosmic">
           <Plus className="mr-2 h-4 w-4" />
           Create New Scene
         </Button>
@@ -223,7 +225,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
           title="No Scenes Yet"
           description="Create your first scene to bring your campaign to life with interactive battle maps."
           action={
-            <Button onClick={onCreateScene} variant="cosmic">
+            <Button type="button" onClick={onCreateScene} variant="cosmic">
               <Plus className="mr-2 h-4 w-4" />
               Create First Scene
             </Button>
@@ -286,6 +288,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
@@ -420,6 +423,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button
+                      type="button"
                       variant="ghost"
                       size="icon"
                       aria-label="Open scene menu"

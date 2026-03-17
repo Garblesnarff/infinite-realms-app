@@ -269,6 +269,7 @@ const SidebarTrigger = React.forwardRef<
         toggleSidebar();
       }}
       title="Toggle Sidebar (Ctrl+B)"
+      aria-label="Toggle Sidebar"
       aria-expanded={open}
       {...props}
     >

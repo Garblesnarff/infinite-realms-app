@@ -337,6 +337,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
           </div>
           {onAddParticipant && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={onAddParticipant}
@@ -350,15 +351,23 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={rollInitiative}
             className="flex-1 min-w-[140px] sm:flex-none"
+            title="Roll initiative for all participants"
           >
             <Dices className="mr-2 h-4 w-4" />
             Roll Initiative
           </Button>
-          <Button size="sm" onClick={nextTurn} className="flex-1 min-w-[140px]">
+          <Button
+            type="button"
+            size="sm"
+            onClick={nextTurn}
+            className="flex-1 min-w-[140px]"
+            title="Advance to the next participant's turn"
+          >
             <ChevronRight className="mr-2 h-4 w-4" />
             Next Turn
           </Button>
