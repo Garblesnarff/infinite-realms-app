@@ -80,11 +80,20 @@ const ActionPanel: React.FC<ActionPanelProps> = ({
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+            <div
+              className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"
+              role="status"
+              aria-label="Current turn indicator"
+            ></div>
             <span className="font-semibold">{currentParticipant.name}'s Turn</span>
           </div>
           {showNextTurnButton && (
-            <Button variant="outline" size="sm" onClick={onNextTurn}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onNextTurn}
+              title="End turn and advance to next participant"
+            >
               <Play className="w-4 h-4 mr-2" />
               Next Turn
             </Button>

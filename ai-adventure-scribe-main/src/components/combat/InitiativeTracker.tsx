@@ -101,7 +101,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   };
 
   const rowClasses = cn(
-    'flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer shadow-sm',
+    'flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none',
     isCurrentTurn
       ? 'border-amber-300/70 bg-amber-50 dark:bg-amber-900/30 ring-1 ring-amber-200'
       : 'border-border bg-card hover:bg-muted/60',

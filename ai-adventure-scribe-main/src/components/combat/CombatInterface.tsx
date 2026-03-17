@@ -110,7 +110,12 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
             <div className="flex gap-2 justify-center">
               {isDM ? (
                 <>
-                  <Button onClick={addEnemy} variant="outline" size="sm">
+                <Button
+                  onClick={addEnemy}
+                  variant="outline"
+                  size="sm"
+                  title="Add a new enemy to the encounter"
+                >
                     <Users className="w-4 h-4 mr-2" />
                     Add Enemy
                   </Button>
@@ -149,7 +154,11 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+            <div
+              className="w-3 h-3 bg-red-500 rounded-full animate-pulse"
+              role="status"
+              aria-label="Combat in progress"
+            ></div>
             <CardTitle className="text-xl">COMBAT IN PROGRESS</CardTitle>
             <Badge variant="destructive" className="text-sm">
               Round {activeEncounter?.currentRound || 1}
@@ -161,13 +170,19 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
               variant="outline"
               size="sm"
               onClick={() => setLocalShowInitiativeTracker(!localShowInitiativeTracker)}
+              title="Toggle initiative tracker"
               aria-expanded={localShowInitiativeTracker}
               aria-controls={trackerId}
             >
               {localShowInitiativeTracker ? 'Hide' : 'Show'} Tracker
             </Button>
             {isDM && (
-              <Button variant="destructive" size="sm" onClick={handleEndCombat}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleEndCombat}
+                title="End current combat encounter"
+              >
                 <X className="w-4 h-4 mr-2" />
                 End Combat
               </Button>
@@ -258,7 +273,7 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                       aria-pressed={selectedEnemy === enemy.id}
                       aria-label={`Select ${enemy.name}`}
                       onKeyDown={handleEnemyKeyDown(enemy.id)}
-                      className={`cursor-pointer transition-all ${
+                      className={`cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none focus-visible:ring-offset-2 ${
                         selectedEnemy === enemy.id
                           ? 'ring-2 ring-red-500 ring-opacity-50'
                           : 'hover:ring-1 hover:ring-red-200'
@@ -277,7 +292,13 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                       <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                       <p>No enemies in combat</p>
                       {isDM && (
-                        <Button variant="outline" size="sm" onClick={addEnemy} className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={addEnemy}
+                          className="mt-2"
+                          title="Add a new enemy to the encounter"
+                        >
                           Add Enemy
                         </Button>
                       )}

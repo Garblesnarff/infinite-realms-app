@@ -109,3 +109,7 @@
 ## 2026-03-06 - Spell Preparation UX and Accessibility
 **Learning:** Browser `alert()` calls are disruptive and don't match the application's aesthetic. Replacing them with `toast` notifications provides a smoother, non-blocking user experience. For checkboxes in lists, providing a dynamic `aria-label` (e.g., "Prepare [Item Name]") ensures screen reader users have clear context without needing to find a separate label.
 **Action:** Replace `alert()` with `toast.error()` or `toast.success()`. Always add descriptive `aria-label` to checkboxes in repetitive lists.
+
+## 2026-03-07 - Combat UI Accessibility and Keyboard Navigation
+**Learning:** Purely visual pulsing indicators for "Combat in Progress" and "Current Turn" are invisible to screen readers without a status role. Interactive non-button elements like enemy selection cards and initiative rows require explicit `focus-visible` ring styles and ARIA labels to be usable by keyboard and screen reader users. Descriptive `title` attributes on buttons like "Next Turn" clarify the action (ending the turn) for all users.
+**Action:** Always add `role="status"` and `aria-label` to visual state indicators. Use `focus-visible:ring-2` on interactive cards. Provide descriptive `title` tooltips for functional buttons.
