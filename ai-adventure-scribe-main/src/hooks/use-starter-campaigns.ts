@@ -5,7 +5,7 @@
  * and campaign detail views.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -103,9 +103,12 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
     fetchCampaigns();
   }, []);
 
-  const featuredCampaigns = campaigns.filter((c) => c.isFeatured);
+  const featuredCampaigns = useMemo(() => campaigns.filter((c) => c.isFeatured), [campaigns]);
 
-  return { campaigns, featuredCampaigns, isLoading, error };
+  return useMemo(
+    () => ({ campaigns, featuredCampaigns, isLoading, error }),
+    [campaigns, featuredCampaigns, isLoading, error],
+  );
 }
 
 /**
@@ -154,5 +157,5 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
     fetchCampaign();
   }, [slug]);
 
-  return { campaign, isLoading, error };
+  return useMemo(() => ({ campaign, isLoading, error }), [campaign, isLoading, error]);
 }

@@ -6,7 +6,7 @@
  * that are adapted to fit each campaign's theme and setting.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -140,7 +140,7 @@ export function useStarterCharacterTemplates(
     fetchTemplates();
   }, [campaignId]);
 
-  return { templates, isLoading, error };
+  return useMemo(() => ({ templates, isLoading, error }), [templates, isLoading, error]);
 }
 
 /**
@@ -194,5 +194,5 @@ export function useStarterCharacterTemplate(templateId: string | undefined): {
     fetchTemplate();
   }, [templateId]);
 
-  return { template, isLoading, error };
+  return useMemo(() => ({ template, isLoading, error }), [template, isLoading, error]);
 }
