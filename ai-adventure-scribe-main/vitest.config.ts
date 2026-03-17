@@ -20,6 +20,7 @@ export default defineConfig({
     css: true, // If you have CSS imports in components
     include: [
       'src/lib/logger.test.ts',
+      'src/lib/telemetry.test.ts',
       'src/lib/utils.test.ts',
       'src/utils/diceRolls.test.ts',
       'src/utils/abilityScoreUtils.test.ts',
@@ -122,6 +123,7 @@ export default defineConfig({
       'src/hooks/__tests__/use-ability-score-selection.test.ts',
       'src/hooks/__tests__/use-starter-character-templates.test.ts',
       'src/hooks/__tests__/use-starter-campaigns.test.ts',
+      'src/hooks/__tests__/use-telemetry.test.ts',
       'src/hooks/__tests__/use-token-selection.test.ts',
       'src/hooks/__tests__/use-token-drag.test.ts',
       'src/hooks/__tests__/use-voice-audio-control.test.ts',
@@ -261,6 +263,7 @@ export default defineConfig({
       all: false,
       include: [
         'src/lib/logger.ts',
+        'src/lib/telemetry.ts',
         'src/utils/characterModifiers.ts',
         'src/utils/diceRolls.ts',
         'src/utils/diceUtils.ts',
@@ -323,6 +326,7 @@ export default defineConfig({
         'src/agents/langgraph/nodes/response-generator.ts',
         'src/hooks/useSpellSelection.ts',
         'src/hooks/useAvailableSpells.ts',
+        'src/hooks/use-telemetry.ts',
         'src/hooks/use-ai-response.ts',
         'src/hooks/use-memories.ts',
         'src/hooks/use-campaign-assets.ts',
