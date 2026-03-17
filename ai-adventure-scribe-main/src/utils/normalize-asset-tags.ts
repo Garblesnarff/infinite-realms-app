@@ -47,7 +47,12 @@ export function normalizeAssetTagKeysInContent(content: string): string {
 }
 
 export function normalizeAssetTagsInContent(content: string): string {
-  return normalizeAssetTagKeysInContent(content)
+  // First strip emphasis around bare tags, then normalize keys and prepend names.
+  // This ensures name prepending doesn't accidentally happen "outside" the emphasis
+  // while the tag is "inside" the emphasis.
+  const stripped = content
     .replace(/\*\*\s*(\[ASSET:[^\]]+\])\s*\*\*/gi, '$1')
     .replace(/\*\s*(\[ASSET:[^\]]+\])\s*\*/gi, '$1');
+
+  return normalizeAssetTagKeysInContent(stripped);
 }
