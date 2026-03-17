@@ -108,14 +108,20 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
         async (payload) => {
           logger.info('[CompactCharacterHeader] HP status updated:', payload);
 
-          // Refresh status
-          const status = await getParticipantStatus(participantId);
-          if (status) {
+          if (payload.eventType === 'DELETE') {
+            setCombatHP(null);
+            return;
+          }
+
+          // ⚡ Bolt: Use data from payload directly to avoid redundant network request.
+          // This eliminates one network round-trip per HP update.
+          const newData = payload.new as any;
+          if (newData) {
             setCombatHP({
-              current_hp: status.current_hp,
-              max_hp: status.max_hp,
-              temp_hp: status.temp_hp,
-              is_conscious: status.is_conscious,
+              current_hp: newData.current_hp,
+              max_hp: newData.max_hp,
+              temp_hp: newData.temp_hp,
+              is_conscious: newData.is_conscious,
             });
           }
         },

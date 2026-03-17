@@ -13,7 +13,7 @@ interface CampaignSidePanelProps {
  * Compact campaign info panel for the left sidebar. Collapsible with a fixed
  * width window to mirror Google AI Studio’s left rail.
  */
-export const CampaignSidePanel: React.FC<CampaignSidePanelProps> = ({ isCollapsed, onToggle }) => {
+export const CampaignSidePanel: React.FC<CampaignSidePanelProps> = React.memo(({ isCollapsed, onToggle }) => {
   const { state } = useCampaign();
   const campaign = state.campaign;
 
@@ -97,6 +97,8 @@ export const CampaignSidePanel: React.FC<CampaignSidePanelProps> = ({ isCollapse
       </Card>
     </div>
   );
-};
+});
+
+CampaignSidePanel.displayName = 'CampaignSidePanel';
 
 export default CampaignSidePanel;

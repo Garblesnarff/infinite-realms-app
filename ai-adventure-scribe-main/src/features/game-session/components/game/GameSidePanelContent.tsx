@@ -42,7 +42,7 @@ export interface GameSidePanelContentProps {
  * Extracted from MemoryPanel.tsx
  * Content component for the game side panel, used primarily in mobile drawer
  */
-export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = ({
+export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.memo(({
   sessionData,
   updateGameSessionState,
   combatMode,
@@ -117,4 +117,6 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = ({
       </div>
     </div>
   );
-};
+});
+
+GameSidePanelContent.displayName = 'GameSidePanelContent';

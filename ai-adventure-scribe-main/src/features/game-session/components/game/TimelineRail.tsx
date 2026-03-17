@@ -15,7 +15,7 @@ interface TimelineRailProps {
  * Clicking a marker scrolls the corresponding message into view within the
  * provided scroll container.
  */
-export const TimelineRail: React.FC<TimelineRailProps> = ({ rootRef }) => {
+export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }) => {
   const { messages = [] } = useMessageContext();
   const [currentId, setCurrentId] = React.useState<string | null>(null);
   const railRef = React.useRef<HTMLDivElement>(null);
@@ -206,6 +206,8 @@ export const TimelineRail: React.FC<TimelineRailProps> = ({ rootRef }) => {
       </div>
     </div>
   );
-};
+});
+
+TimelineRail.displayName = 'TimelineRail';
 
 export default TimelineRail;
