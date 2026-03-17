@@ -246,6 +246,7 @@ export default tseslint.config(
       'src/__tests__/**/*.test.tsx',
       'src/**/__tests__/**/*.test.ts',
       'src/**/__tests__/**/*.test.tsx',
+      'src/utils/__tests__/raycasting.test.ts',
       'src/hooks/ai/__tests__/session-logger.test.ts',
 
       // Additional large production files
@@ -263,6 +264,7 @@ export default tseslint.config(
       'src/services/ai/prompts/combat-rules-prompts.ts',
       'src/services/ai/prompts/character-description-prompts.ts',
       'src/utils/character-calculations.ts',
+      'src/utils/raycasting.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
       'src/utils/lighting-integration.ts',

@@ -277,8 +277,8 @@ function rayLineSegmentIntersection(
   }
 
   const u =
-    ((origin.y - segmentStart.y) * direction.x - (origin.x - segmentStart.x) * direction.y) / det;
-  const t = ((origin.y - segmentStart.y) * dx - (origin.x - segmentStart.x) * dy) / det;
+    ((segmentStart.y - origin.y) * direction.x - (segmentStart.x - origin.x) * direction.y) / det;
+  const t = ((segmentStart.y - origin.y) * dx - (segmentStart.x - origin.x) * dy) / det;
 
   // Check if intersection is within segment and ray
   if (u >= 0 && u <= 1 && t >= 0) {
