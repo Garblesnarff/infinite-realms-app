@@ -26,6 +26,10 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
   const beadTimersRef = React.useRef<Map<string, number>>(new Map());
   const indicatorTimerRef = React.useRef<number | null>(null);
 
+  // ⚡ Bolt: Cache DOM references to avoid expensive queries on every scroll frame
+  const indicatorRef = React.useRef<HTMLElement | null>(null);
+  const dotsRef = React.useRef<HTMLButtonElement[]>([]);
+
   // Build anchors from DM messages (assistant)
   const anchors = React.useMemo(() => {
     return messages
@@ -34,11 +38,17 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
       .map((x) => `m-${x.id}`);
   }, [messages]);
 
-  // Debug logging
+  // Debug logging + populate cached DOM refs
   React.useEffect(() => {
     logger.debug('[TimelineRail] Messages:', messages.length);
     logger.debug('[TimelineRail] Anchors:', anchors);
     logger.debug('[TimelineRail] Root ref:', rootRef.current);
+
+    // Populate cached references
+    if (railRef.current) {
+      indicatorRef.current = railRef.current.querySelector('.scroll-position-indicator');
+      dotsRef.current = Array.from(railRef.current.querySelectorAll('.timeline-dot'));
+    }
 
     // Check if elements exist
     if (rootRef.current) {
@@ -69,9 +79,8 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
         const scrollHeight = root.scrollHeight - root.clientHeight;
         const scrollPercentage = scrollHeight > 0 ? scrollTop / scrollHeight : 0;
 
-        const indicator = railRef.current?.querySelector(
-          '.scroll-position-indicator',
-        ) as HTMLElement | null;
+        // ⚡ Bolt: Use cached indicator reference
+        const indicator = indicatorRef.current;
         if (indicator) {
           const railHeight = root.clientHeight - 32;
           const indicatorPosition = Math.max(
@@ -81,9 +90,8 @@ export const TimelineRail: React.FC<TimelineRailProps> = React.memo(({ rootRef }
           indicator.style.transform = `translateY(${indicatorPosition}px)`;
 
           // Absorb effect: detect overlap between indicator and beads
-          const dots = Array.from(
-            railRef.current?.querySelectorAll<HTMLButtonElement>('.timeline-dot') || [],
-          );
+          // ⚡ Bolt: Use cached dots reference
+          const dots = dotsRef.current;
           const indicatorCenter = indicatorPosition + 9; // indicator height ~18px
           const threshold = 10; // px threshold for overlap detection
 
