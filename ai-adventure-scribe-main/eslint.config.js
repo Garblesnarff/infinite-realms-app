@@ -389,6 +389,8 @@ export default tseslint.config(
       'src/components/character-creation/steps/PhysicalStep.tsx',
       'src/components/battle-map/hotkeys/constants.ts',
       'src/hooks/useSpellSelection.ts',
+      'src/components/spells/SpellFilterPanel.tsx',
+      'src/features/character/components/spells/SpellFilterPanel.tsx',
     ],
     rules: {
       'max-lines': 'warn',

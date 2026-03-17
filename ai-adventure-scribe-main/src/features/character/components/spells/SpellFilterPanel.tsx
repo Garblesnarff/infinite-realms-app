@@ -1,5 +1,5 @@
 import { Filter, X, Eye, Hand, Gem, Timer, RotateCcw, Zap } from 'lucide-react';
-import React from 'react';
+import React, { useCallback } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,13 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
   isOpen = true,
   className = '',
 }) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, callback: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      callback();
+    }
+  }, []);
+
   const schoolColors: Record<string, string> = {
     Abjuration: 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200',
     Conjuration:
@@ -147,10 +154,15 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                 <Badge
                   key={school}
                   variant={isSelected ? 'default' : 'outline'}
-                  className={`cursor-pointer transition-colors ${
+                  className={`cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none ${
                     isSelected ? colorClass : 'hover:bg-muted'
                   }`}
                   onClick={() => toggleSchool(school)}
+                  onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
+                  role="checkbox"
+                  aria-checked={isSelected}
+                  tabIndex={0}
+                  title={`Filter by ${school}`}
                 >
                   {school}
                 </Badge>
@@ -257,8 +269,13 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   <Badge
                     key={school}
                     variant="secondary"
-                    className="text-xs cursor-pointer"
+                    className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
                     onClick={() => toggleSchool(school)}
+                    onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
+                    role="button"
+                    aria-label={`Remove ${school} filter`}
+                    tabIndex={0}
+                    title={`Remove ${school} filter`}
                   >
                     {school}
                     <X className="w-3 h-3 ml-1" />
@@ -270,10 +287,19 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                       <Badge
                         key={component}
                         variant="secondary"
-                        className="text-xs cursor-pointer"
+                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
                         onClick={() =>
                           toggleComponent(component as keyof SpellFilters['components'])
                         }
+                        onKeyDown={(e) =>
+                          handleKeyDown(e, () =>
+                            toggleComponent(component as keyof SpellFilters['components']),
+                          )
+                        }
+                        role="button"
+                        aria-label={`Remove ${component} filter`}
+                        tabIndex={0}
+                        title={`Remove ${component} filter`}
                       >
                         {component.charAt(0).toUpperCase()}
                         <X className="w-3 h-3 ml-1" />
@@ -286,8 +312,17 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                       <Badge
                         key={property}
                         variant="secondary"
-                        className="text-xs cursor-pointer"
+                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
                         onClick={() => toggleProperty(property as keyof SpellFilters['properties'])}
+                        onKeyDown={(e) =>
+                          handleKeyDown(e, () =>
+                            toggleProperty(property as keyof SpellFilters['properties']),
+                          )
+                        }
+                        role="button"
+                        aria-label={`Remove ${property} filter`}
+                        tabIndex={0}
+                        title={`Remove ${property} filter`}
                       >
                         {property}
                         <X className="w-3 h-3 ml-1" />
