@@ -527,8 +527,23 @@ export class ConditionsService {
         FROM combat_participant_conditions cpc
         JOIN conditions_library cl ON cl.id = cpc.condition_id
         JOIN combat_participants cp ON cp.id = cpc.participant_id
+        ${
+          userId
+            ? sql`
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        `
+            : sql``
+        }
         WHERE cp.encounter_id = ${encounterId}
           AND cpc.is_active = true
+          ${
+            userId
+              ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+              : sql``
+          }
       `
     );
 
@@ -587,6 +602,25 @@ export class ConditionsService {
             expiredIds.map((id) => sql`${id}`),
             sql`, `
           )})
+            AND participant_id IN (
+              SELECT cp.id FROM combat_participants cp
+              ${
+                userId
+                  ? sql`
+              JOIN combat_encounters ce ON ce.id = cp.encounter_id
+              JOIN game_sessions gs ON gs.id = ce.session_id
+              LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+              LEFT JOIN characters char ON char.id = gs.character_id
+              `
+                  : sql``
+              }
+              WHERE cp.encounter_id = ${encounterId}
+                ${
+                  userId
+                    ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+                    : sql``
+                }
+            )
         `
       );
     }
