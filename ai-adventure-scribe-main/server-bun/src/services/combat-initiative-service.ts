@@ -8,6 +8,7 @@
 
 import { eq, and, sql, or, inArray } from 'drizzle-orm';
 
+import { InitiativeMechanics, rollD20 } from './combat/initiative-mechanics.js';
 import { db } from '../../../db/client';
 import {
   combatEncounters,
@@ -28,13 +29,6 @@ import type {
   TurnOrderEntry,
   AdvanceTurnResult,
 } from '../types/combat.js';
-
-/**
- * Roll a d20 for initiative
- */
-function rollD20(): number {
-  return Math.floor(Math.random() * 20) + 1;
-}
 
 /**
  * Combat Initiative Service
@@ -282,7 +276,7 @@ export class CombatInitiativeService {
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const participantsWithInitiative = participantInputs.map(input => {
         const roll = rollD20();
-        const initiative = roll + input.initiativeModifier;
+        const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
         return {
           encounterId: encounter.id,
           characterId: input.characterId || null,
@@ -295,12 +289,7 @@ export class CombatInitiativeService {
       });
 
       // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
-      const sortedValues = [...participantsWithInitiative].sort((a, b) => {
-        if (b.initiative !== a.initiative) {
-          return b.initiative - a.initiative;
-        }
-        return b.initiativeModifier - a.initiativeModifier;
-      });
+      const sortedValues = InitiativeMechanics.sortParticipants(participantsWithInitiative);
 
       const participantValues = sortedValues.map((p, index) => ({
         ...p,
@@ -318,11 +307,11 @@ export class CombatInitiativeService {
     const activeParticipants = participants.filter(p => p.isActive);
     const currentParticipant = activeParticipants[0] || null;
 
-    const turnOrder: TurnOrderEntry[] = activeParticipants.map((participant, index) => ({
-      participant,
-      isCurrent: index === 0,
-      hasGone: false,
-    }));
+    const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
+      activeParticipants,
+      0,
+      currentParticipant?.id || null
+    );
 
     return {
       encounter: encounter as CombatEncounter,
@@ -353,7 +342,7 @@ export class CombatInitiativeService {
 
     // Roll initiative (d20 + modifier)
     const roll = rollD20();
-    const initiative = roll + input.initiativeModifier;
+    const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
 
     const [participant] = await db
       .insert(combatParticipants)
@@ -409,7 +398,7 @@ export class CombatInitiativeService {
     // Use provided roll or roll d20
     const diceRoll = roll !== undefined ? roll : rollD20();
     const initiativeModifier = modifier !== undefined ? modifier : participant.initiativeModifier;
-    const total = diceRoll + initiativeModifier;
+    const total = InitiativeMechanics.calculateInitiative(diceRoll, initiativeModifier);
 
     // Update participant initiative
     const [updated] = await db
@@ -499,10 +488,11 @@ export class CombatInitiativeService {
     const previousParticipant = participants[encounter.currentTurnOrder] || null;
 
     // Calculate next turn
-    const currentTurnOrder = encounter.currentTurnOrder;
-    const nextTurnOrder = (currentTurnOrder + 1) % participants.length;
-    const newRound = nextTurnOrder === 0 && currentTurnOrder !== 0;
-    const newRoundNumber = newRound ? encounter.currentRound + 1 : encounter.currentRound;
+    const { nextTurnOrder, newRound, newRoundNumber } = InitiativeMechanics.calculateNextTurn(
+      encounter.currentTurnOrder,
+      participants.length,
+      encounter.currentRound
+    );
 
     // Update encounter
     await db
@@ -649,11 +639,11 @@ export class CombatInitiativeService {
     const currentParticipant = activeParticipants[encounter.currentTurnOrder] || null;
 
     // Build turn order entries in-memory
-    const turnOrder: TurnOrderEntry[] = activeParticipants.map((participant, index) => ({
-      participant,
-      isCurrent: currentParticipant?.id === participant.id,
-      hasGone: index < encounter.currentTurnOrder,
-    }));
+    const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
+      activeParticipants,
+      encounter.currentTurnOrder,
+      currentParticipant?.id || null
+    );
 
     return {
       encounter: encounter as CombatEncounter,
