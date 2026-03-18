@@ -75,9 +75,11 @@ export async function saveChatMessage(params: {
  */
 export async function getConversationHistory(sessionId: string): Promise<ChatMessage[]> {
   try {
+    // ⚡ Bolt: Use explicit column selection to avoid over-fetching large JSONB columns (context, images)
+    // that are not needed for the ChatMessage mapping.
     const { data, error } = await supabase
       .from('dialogue_history')
-      .select('*')
+      .select('id, speaker_type, message, created_at')
       .eq('session_id', sessionId)
       .order('sequence_number', { ascending: true });
 
