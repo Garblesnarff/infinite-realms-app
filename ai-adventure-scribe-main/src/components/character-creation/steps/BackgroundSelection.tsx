@@ -93,6 +93,9 @@ const BackgroundSelection: React.FC = () => {
               onClick={() => handleBackgroundSelect(background)}
               role="button"
               tabIndex={0}
+              aria-label={`Select ${background.name} background`}
+              aria-pressed={isSelected}
+              title={`Select ${background.name}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   handleBackgroundSelect(background);

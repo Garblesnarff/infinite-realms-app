@@ -116,6 +116,9 @@ const ClassSelection: React.FC = () => {
               onMouseLeave={() => setHoveredClassId(null)}
               role="button"
               tabIndex={0}
+              aria-label={`Select ${characterClass.name} class`}
+              aria-pressed={isSelected}
+              title={`Select ${characterClass.name}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   handleClassSelect(characterClass);
