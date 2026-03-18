@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -282,20 +283,26 @@ export const BattleMapPage: React.FC = () => {
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-sm text-muted-foreground">
           <button
+            type="button"
             onClick={() => navigate('/app/campaigns')}
-            className="hover:text-foreground transition-colors"
+            className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
           >
             Campaigns
           </button>
           <span>/</span>
           <button
+            type="button"
             onClick={handleBackToCampaign}
-            className="hover:text-foreground transition-colors max-w-[150px] truncate"
+            className="hover:text-foreground transition-colors max-w-[150px] truncate focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
           >
             {campaign?.name || 'Campaign'}
           </button>
           <span>/</span>
-          <button onClick={handleBackToScenes} className="hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onClick={handleBackToScenes}
+            className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+          >
             Scenes
           </button>
           <span>/</span>
@@ -310,8 +317,11 @@ export const BattleMapPage: React.FC = () => {
               variant="ghost"
               size="icon"
               onClick={toggleLayersPanel}
-              aria-label="Toggle Layers"
-              title="Toggle Layers"
+              aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
+              aria-pressed={showLayersPanel}
+              aria-expanded={showLayersPanel}
+              aria-haspopup="dialog"
+              title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
             >
               <Menu className="h-4 w-4" />
             </Button>
@@ -327,16 +337,19 @@ export const BattleMapPage: React.FC = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>View Settings</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}>
-                {showPerformanceMonitor ? 'Hide' : 'Show'} Performance Monitor
-              </DropdownMenuItem>
+              <DropdownMenuCheckboxItem
+                checked={showPerformanceMonitor}
+                onCheckedChange={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+              >
+                Performance Monitor
+              </DropdownMenuCheckboxItem>
               <DropdownMenuItem onClick={() => setShowHotkeyGuide(true)}>
                 Keyboard Shortcuts
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={toggleLayersPanel}>
-                {showLayersPanel ? 'Hide' : 'Show'} Layers Panel
-              </DropdownMenuItem>
+              <DropdownMenuCheckboxItem checked={showLayersPanel} onCheckedChange={toggleLayersPanel}>
+                Layers Panel
+              </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleBackToScenes}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -398,6 +411,8 @@ export const BattleMapPage: React.FC = () => {
               size="icon"
               onClick={toggleLayersPanel}
               aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
+              aria-pressed={showLayersPanel}
+              aria-expanded={showLayersPanel}
               title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
               className={cn(
                 'absolute top-4 transition-all',

@@ -106,6 +106,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
   const wallStrokeWidthId = useId();
   const brushModeId = useId();
   const brushSizeId = useId();
+  const contentId = useId();
 
   // Drawing tool state
   const drawingTool = useDrawingTool({
@@ -255,6 +256,8 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
           size="sm"
           className="w-full flex items-center justify-between p-3 hover:bg-accent"
           aria-label={isCollapsed ? 'Expand Tool Options' : 'Collapse Tool Options'}
+          aria-expanded={!isCollapsed}
+          aria-controls={contentId}
         >
           <div className="flex items-center gap-2">
             <Paintbrush className="h-4 w-4" />
@@ -267,7 +270,7 @@ export const ToolOptionsPanel: React.FC<ToolOptionsPanelProps> = ({
         </Button>
       </CollapsibleTrigger>
 
-      <CollapsibleContent>
+      <CollapsibleContent id={contentId}>
         <Separator />
         <div className="p-4">{renderToolOptions()}</div>
       </CollapsibleContent>
