@@ -11,6 +11,7 @@
 import { eq, and, desc, sql, exists, or, isNull, inArray } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
+import { SubclassService } from './subclass-service.js';
 import {
   classFeaturesLibrary,
   characterFeatures,
@@ -22,7 +23,7 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index';
-import { NotFoundError, ConflictError, ValidationError, BusinessLogicError } from '../lib/errors.js';
+import { NotFoundError, ConflictError, BusinessLogicError } from '../lib/errors.js';
 
 import type {
   GrantFeatureInput,
@@ -37,42 +38,6 @@ import type {
   CharacterFeaturesWithUsage,
   FeatureUsageHistoryParams,
 } from '../types/class-features.js';
-
-/**
- * Subclass choice level mapping
- */
-const SUBCLASS_CHOICE_LEVELS: Record<string, number> = {
-  'Barbarian': 3,
-  'Bard': 3,
-  'Cleric': 1,
-  'Druid': 2,
-  'Fighter': 3,
-  'Monk': 3,
-  'Paladin': 3,
-  'Ranger': 3,
-  'Rogue': 3,
-  'Sorcerer': 1,
-  'Warlock': 1,
-  'Wizard': 2,
-};
-
-/**
- * Available subclasses by class (PHB only)
- */
-const AVAILABLE_SUBCLASSES: Record<string, string[]> = {
-  'Fighter': ['Champion', 'Battle Master', 'Eldritch Knight'],
-  'Rogue': ['Thief', 'Assassin', 'Arcane Trickster'],
-  'Wizard': ['School of Evocation', 'School of Abjuration'],
-  'Cleric': ['Life Domain', 'War Domain'],
-  'Barbarian': ['Path of the Berserker', 'Path of the Totem Warrior'],
-  'Bard': ['College of Lore', 'College of Valor'],
-  'Druid': ['Circle of the Land', 'Circle of the Moon'],
-  'Monk': ['Way of the Open Hand', 'Way of Shadow', 'Way of the Four Elements'],
-  'Paladin': ['Oath of Devotion', 'Oath of the Ancients', 'Oath of Vengeance'],
-  'Ranger': ['Hunter', 'Beast Master'],
-  'Sorcerer': ['Draconic Bloodline', 'Wild Magic'],
-  'Warlock': ['The Archfey', 'The Fiend', 'The Great Old One'],
-};
 
 /**
  * Class Features Service
@@ -143,7 +108,7 @@ export class ClassFeaturesService {
    * Get the level at which a class chooses its subclass
    */
   static getSubclassChoiceLevel(className: string): number {
-    return SUBCLASS_CHOICE_LEVELS[className] || 3;
+    return SubclassService.getSubclassChoiceLevel(className);
   }
 
   /**
@@ -465,97 +430,7 @@ export class ClassFeaturesService {
    * Set a character's subclass
    */
   static async setSubclass(input: SetSubclassInput & { userId: string }): Promise<SetSubclassResult> {
-    const { characterId, className, subclassName, level, userId } = input;
-
-    // Verify character exists and verify ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    // Verify subclass is valid for the class
-    const validSubclasses = AVAILABLE_SUBCLASSES[className];
-    if (!validSubclasses || !validSubclasses.includes(subclassName)) {
-      throw new ValidationError(`${subclassName} is not a valid subclass for ${className}`, {
-        className,
-        subclassName,
-        validSubclasses,
-      });
-    }
-
-    // Check if subclass already set for this class
-    const existing = await db.query.characterSubclasses.findFirst({
-      where: and(
-        eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className)
-      ),
-    });
-
-    if (existing) {
-      throw new ConflictError(
-        `Character already has subclass ${existing.subclassName} for ${className}. Subclass choices are permanent.`,
-        { existingSubclass: existing.subclassName, className }
-      );
-    }
-
-    // Verify level is appropriate for subclass choice
-    const requiredLevel = this.getSubclassChoiceLevel(className);
-    if (level < requiredLevel) {
-      throw new BusinessLogicError(
-        `${className} chooses subclass at level ${requiredLevel}. Character is level ${level}.`,
-        { className, requiredLevel, characterLevel: level }
-      );
-    }
-
-    // Set the subclass
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    await db
-      .insert(characterSubclasses)
-      .select(
-        db
-          .select({
-            characterId: sql`${characterId}`,
-            className: sql`${className}`,
-            subclassName: sql`${subclassName}`,
-            chosenAtLevel: sql`${level}`,
-          })
-          .from(characters)
-          .where(
-            and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      );
-
-    // Get subclass features acquired at the choice level
-    const subclassFeatures = await db.query.classFeaturesLibrary.findMany({
-      where: and(
-        eq(classFeaturesLibrary.className, className),
-        eq(classFeaturesLibrary.subclassName, subclassName),
-        eq(classFeaturesLibrary.levelAcquired, requiredLevel)
-      ),
-    });
-
-    // Grant subclass features
-    // ⚡ Bolt: Optimized to grant all subclass features in a single batch operation.
-    // This reduces database round-trips from O(N) to O(1).
-    const featureIds = subclassFeatures.map(f => f.id);
-    await this.grantFeaturesBatch(characterId, featureIds, level, userId);
-
-    const newFeatures = subclassFeatures;
-
-    return {
-      subclass: subclassName,
-      newFeatures,
-      message: `Subclass ${subclassName} chosen for ${className}. Granted ${newFeatures.length} features.`,
-    };
+    return SubclassService.setSubclass(input);
   }
 
   /**
@@ -566,38 +441,14 @@ export class ClassFeaturesService {
     className: string,
     userId: string
   ): Promise<CharacterSubclass | null> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    const subclass = await db.query.characterSubclasses.findFirst({
-      where: and(
-        eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
-
-    return subclass || null;
+    return SubclassService.getCharacterSubclass(characterId, className, userId);
   }
 
   /**
    * Get available subclasses for a class
    */
   static getAvailableSubclasses(className: string): AvailableSubclasses {
-    const subclasses = AVAILABLE_SUBCLASSES[className] || [];
-
-    return {
-      className,
-      subclasses,
-    };
+    return SubclassService.getAvailableSubclasses(className);
   }
 
   // ============================================================================
@@ -742,7 +593,7 @@ export class ClassFeaturesService {
     }
 
     // Get subclass if character has one
-    const subclass = await this.getCharacterSubclass(characterId, className, userId);
+    const subclass = await SubclassService.getCharacterSubclass(characterId, className, userId);
 
     // Get base class features for this level
     const classFeatures = await this.getFeaturesByLevel(className, level);
