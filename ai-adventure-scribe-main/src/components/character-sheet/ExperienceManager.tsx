@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import {
   getLevelFromExperience,
@@ -171,7 +170,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-gold-500" />
+            <Trophy className="w-5 h-5 text-gold-500" aria-hidden="true" />
             Experience Overview
           </CardTitle>
         </CardHeader>
@@ -201,7 +200,11 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
               <span>Level {currentLevel}</span>
               <span>{currentLevel >= 20 ? 'Max Level Reached' : `Level ${nextLevel}`}</span>
             </div>
-            <Progress value={progressToNextLevel} className="h-3" />
+            <Progress
+              value={progressToNextLevel}
+              className="h-3"
+              aria-label="Experience progress"
+            />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{previousLevelXP.toLocaleString()} XP</span>
               <span>
@@ -217,7 +220,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
           {calculatedLevel > currentLevel && (
             <div className="mt-4 p-3 bg-primary/10 border border-primary rounded-lg">
               <div className="flex items-center gap-2 text-primary font-medium">
-                <Star className="w-4 h-4" />
+              <Star className="w-4 h-4" aria-hidden="true" />
                 Level Up Available!
               </div>
               <div className="text-sm text-muted-foreground mt-1">
@@ -233,7 +236,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <TrendingUp className="w-5 h-5 text-blue-500" aria-hidden="true" />
             Manage Experience
           </CardTitle>
         </CardHeader>
@@ -265,20 +268,22 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
 
             <div className="flex gap-2">
               <Button
+                type="button"
                 onClick={awardExperience}
                 disabled={!experienceAmount || !experienceSource}
                 className="flex-1"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
                 Award XP
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 onClick={removeExperience}
                 disabled={!experienceAmount || !experienceSource}
                 className="flex-1"
               >
-                <Minus className="w-4 h-4 mr-2" />
+                <Minus className="w-4 h-4 mr-2" aria-hidden="true" />
                 Remove XP
               </Button>
             </div>
@@ -290,7 +295,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-purple-500" />
+            <Target className="w-5 h-5 text-purple-500" aria-hidden="true" />
             Quick Level Set
           </CardTitle>
         </CardHeader>
@@ -299,10 +304,12 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
             {Array.from({ length: 20 }, (_, i) => i + 1).map((level) => (
               <Button
                 key={level}
+                type="button"
                 variant={level === currentLevel ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setToLevel(level)}
                 disabled={level === currentLevel}
+                aria-label={`Set experience to level ${level}`}
               >
                 {level}
               </Button>
@@ -318,7 +325,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-gray-500" />
+            <Calendar className="w-5 h-5 text-gray-500" aria-hidden="true" />
             Experience Table
           </CardTitle>
         </CardHeader>
@@ -344,10 +351,17 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-500" />
+              <Calendar className="w-5 h-5 text-indigo-500" aria-hidden="true" />
               Experience History
             </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHistory(!showHistory)}
+              aria-expanded={showHistory}
+              title={showHistory ? 'Hide history' : 'Show history'}
+            >
               {showHistory ? 'Hide' : 'Show'} History
             </Button>
           </div>

@@ -354,6 +354,7 @@ export default tseslint.config(
       'server-bun/src/services/vision-blocker-service.ts',
       'src/features/character/components/sheet/tabs/components/CombatVitals.tsx',
       'src/hooks/use-character-save.ts',
+      'src/components/character-sheet/ExperienceManager.tsx',
       'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
       'src/features/game-session/components/chat/message-list/MessageListContainer.tsx',
       'src/features/game-session/components/chat/message-list/use-message-dice-rolls.ts',
