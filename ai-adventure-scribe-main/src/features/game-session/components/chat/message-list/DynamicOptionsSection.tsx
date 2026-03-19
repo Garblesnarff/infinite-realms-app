@@ -13,8 +13,11 @@ interface DynamicOptionsSectionProps {
  * DynamicOptionsSection Component
  * Displays AI-generated action suggestions from /dm/options endpoint
  * Shows after DYNAMIC_OPTIONS_FETCH_DELAY_MS if no inline options present
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the options
+ * section when unrelated message list state changes.
  */
-export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = ({
+export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React.memo(({
   options,
   onOptionSelect,
   hasDynamicOverlay,
@@ -32,4 +35,4 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = ({
       />
     </div>
   );
-};
+});

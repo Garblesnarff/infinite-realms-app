@@ -16,8 +16,11 @@ interface MessageVoicePlayerProps {
  * MessageVoicePlayer Component
  * Wraps DMMessageVoiceControls with hover effects and positioning
  * Only visible on hover for DM messages
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the voice
+ * controls for all messages when only one message changes.
  */
-export const MessageVoicePlayer: React.FC<MessageVoicePlayerProps> = ({
+export const MessageVoicePlayer: React.FC<MessageVoicePlayerProps> = React.memo(({
   messageId,
   messageText,
   narrationSegments,
@@ -31,4 +34,4 @@ export const MessageVoicePlayer: React.FC<MessageVoicePlayerProps> = ({
       />
     </div>
   );
-};
+});
