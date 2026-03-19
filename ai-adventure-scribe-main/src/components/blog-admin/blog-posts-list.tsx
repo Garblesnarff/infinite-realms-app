@@ -228,7 +228,11 @@ export const BlogPostsList: React.FC = () => {
                   setFilters((prev) => ({ ...prev, status: value as BlogPostStatus | 'all' }))
                 }
               >
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger
+                  className="w-[160px]"
+                  aria-label="Filter by status"
+                  title="Filter by status"
+                >
                   <SelectValue placeholder="Filter status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -249,7 +253,11 @@ export const BlogPostsList: React.FC = () => {
                     }))
                   }
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger
+                    className="w-[180px]"
+                    aria-label="Filter by category"
+                    title="Filter by category"
+                  >
                     <SelectValue placeholder="Filter category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -272,7 +280,11 @@ export const BlogPostsList: React.FC = () => {
                     }))
                   }
                 >
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger
+                    className="w-[160px]"
+                    aria-label="Filter by tag"
+                    title="Filter by tag"
+                  >
                     <SelectValue placeholder="Filter tag" />
                   </SelectTrigger>
                   <SelectContent>
