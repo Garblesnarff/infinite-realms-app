@@ -118,6 +118,8 @@ const FolderItem: React.FC<FolderItemProps> = ({
         role="button"
         tabIndex={0}
         aria-selected={isSelected}
+        aria-label={`Select folder: ${folder.name}`}
+        title={`Select folder: ${folder.name}`}
         className={cn(
           'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           isSelected && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
@@ -352,7 +354,13 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
       <div className="flex items-center justify-between mb-4 px-3">
         <h3 className="text-sm font-semibold text-foreground">Folders</h3>
         {onCreateFolder && (
-          <Button variant="ghost" size="sm" onClick={onCreateFolder} className="h-8 gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCreateFolder}
+            className="h-8 gap-2"
+            title="Create a new character folder"
+          >
             <FolderPlus className="h-4 w-4" />
             New Folder
           </Button>
@@ -364,6 +372,8 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         role="button"
         tabIndex={0}
         aria-selected={selectedFolderId === null}
+        aria-label="Show all characters"
+        title="Show all characters"
         className={cn(
           'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',

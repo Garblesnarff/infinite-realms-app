@@ -120,7 +120,11 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
   const baseContent = (
     <div className={cn('flex items-center gap-2', className)}>
       {displayOnly ? (
-        <div className="flex items-center gap-1 px-2 py-1 border border-border rounded-sm bg-muted/60">
+        <div
+          className="flex items-center gap-1 px-2 py-1 border border-border rounded-sm bg-muted/60"
+          aria-label={label ? `Dice: ${label}` : `Dice: ${dice}`}
+          title={label || dice}
+        >
           <Dice6 className="w-3 h-3" />
           <span className="text-xs font-medium">{label || dice}</span>
           {modifier !== 0 && (
@@ -171,6 +175,8 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
           variant="outline"
           className={cn('text-sm font-mono', getResultColor())}
           aria-live="polite"
+          aria-label={`Last roll total: ${lastRoll.total}`}
+          title="Last roll result"
         >
           {lastRoll.total}
         </Badge>

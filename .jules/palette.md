@@ -113,3 +113,7 @@
 ## 2026-03-07 - Combat UI Accessibility and Keyboard Navigation
 **Learning:** Purely visual pulsing indicators for "Combat in Progress" and "Current Turn" are invisible to screen readers without a status role. Interactive non-button elements like enemy selection cards and initiative rows require explicit `focus-visible` ring styles and ARIA labels to be usable by keyboard and screen reader users. Descriptive `title` attributes on buttons like "Next Turn" clarify the action (ending the turn) for all users.
 **Action:** Always add `role="status"` and `aria-label` to visual state indicators. Use `focus-visible:ring-2` on interactive cards. Provide descriptive `title` tooltips for functional buttons.
+
+## 2026-03-08 - Folder Tree and Dice Roller Accessibility
+**Learning:** Interactive `div` elements and purely informational `Badge` components often lack the semantic metadata required for a high-quality accessible experience. Combining `aria-label` for screen readers and `title` for sighted user tooltips provides a consistent "micro-UX" win across different input methods.
+**Action:** Always provide both `aria-label` and `title` for custom interactive elements and critical status indicators (like dice results) to ensure "invisible" UX that just works for everyone.
