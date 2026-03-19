@@ -17,6 +17,9 @@
  */
 export function generateAssetKey(name: string): string {
   return name
+    .toString()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[""''«»`"']/g, '') // Remove all quote variants (Unicode + ASCII)
     .replace(/[^a-z0-9\s-]/g, '') // Remove remaining special chars

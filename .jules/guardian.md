@@ -88,6 +88,10 @@
 **Learning:** The `useMessages` hook manages chat history with pagination and deduplication. Testing revealed that `vitest.config.ts` requires explicit registration of both the test file and the source file for coverage to work. Also discovered that tests using JSX (like `QueryClientProvider`) must use the `.tsx` extension, or they will fail with a syntax error during SWC transformation.
 **Action:** When testing hooks that use React Query, wrap them in a `QueryClientProvider` and use `.tsx` for the test file. Ensure that overlapping message IDs are tested to verify deduplication logic in the hook's `useEffect`.
 
+## 2026-03-24 - [Asset Key Generation & Accent Normalization]
+**Learning:** Found that `generateAssetKey` in `src/utils/asset-key.ts` was completely untested and lacked normalization for accented characters (e.g., `Faerûn` became `faern`). This would cause failures when matching entities with accents in asset tags.
+**Action:** Always include normalization (`.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')`) in slugging or key generation utilities to ensure robustness with D&D names. Added comprehensive coverage for `asset-key.ts` reaching 100% statement and branch coverage. Verified that it squashes non-alphanumeric special characters consistent with `slugify`.
+
 ## 2026-02-12 - [Combat Actions Hook Coverage & Concentration Mocking]
 **Learning:** The `useCombatActions` hook orchestrates complex combat state transitions and integrates with multiple other hooks (AI, Mechanics, Session). Testing revealed that `checkConcentration` from `@/utils/spell-management` must be explicitly mocked to return `true` in general damage tests, as a default mock returning `undefined` causes `!undefined` to evaluate to `true`, resulting in unintended concentration loss.
 **Action:** When testing hooks that manage concentration, always provide a default successful return value for `checkConcentration` in the `beforeEach` block. Use fake timers to test turn advancement in `handleEnemyAttack` as it uses `setTimeout`. Always verify both `include` and `coverage.include` arrays in `vitest.config.ts` are updated for new hook tests.
