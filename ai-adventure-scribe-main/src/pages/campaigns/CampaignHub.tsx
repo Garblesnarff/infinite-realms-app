@@ -35,9 +35,13 @@ const CampaignHub: React.FC = () => {
         throw new Error('Not authenticated');
       }
 
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
+      // of heavy JSONB columns (setting_details, thematic_elements, etc.) not used in this view.
       const { data, error } = await supabase
         .from('campaigns')
-        .select('*')
+        .select(
+          'id, user_id, name, description, genre, difficulty_level, campaign_length, tone, background_image',
+        )
         .eq('id', campaignId as string)
         .eq('user_id', user.id) // SECURITY: Validate ownership
         .single();

@@ -227,9 +227,11 @@ export const useChatHistory = ({
       logger.info('📚 Loading conversation history for session:', sessionId);
 
       // Load message history from dialogue_history table
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
+      // of the heavy JSONB 'context' column which is not displayed in the chat history.
       const { data: historyData, error: historyError } = await supabase
         .from('dialogue_history')
-        .select('*')
+        .select('id, speaker_type, message, timestamp')
         .eq('session_id', sessionId)
         .order('sequence_number', { ascending: true });
 
