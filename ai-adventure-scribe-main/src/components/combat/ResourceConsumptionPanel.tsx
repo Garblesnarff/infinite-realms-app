@@ -1,5 +1,5 @@
 import { Zap, Heart, Shield } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { CombatParticipant } from '@/types/combat';
 
@@ -31,6 +31,9 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
   onClose,
 }) => {
   const { takeAction } = useCombat();
+  const resourceSelectId = useId();
+  const resourceAmountId = useId();
+
   const [selectedResource, setSelectedResource] = useState<string>('');
   const [resourceAmount, setResourceAmount] = useState<string>('1');
 
@@ -120,9 +123,13 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <Label htmlFor="resource-select">Select Resource</Label>
+          <Label htmlFor={resourceSelectId}>Select Resource</Label>
           <Select value={selectedResource} onValueChange={setSelectedResource}>
-            <SelectTrigger id="resource-select">
+            <SelectTrigger
+              id={resourceSelectId}
+              aria-label="Select resource to consume"
+              title="Choose a resource to use"
+            >
               <SelectValue placeholder="Choose a resource" />
             </SelectTrigger>
             <SelectContent>
@@ -141,9 +148,9 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
           selectedResource !== 'channel-divinity' &&
           selectedResource !== 'action-surge' && (
             <div>
-              <Label htmlFor="resource-amount">Amount</Label>
+              <Label htmlFor={resourceAmountId}>Amount</Label>
               <Input
-                id="resource-amount"
+                id={resourceAmountId}
                 type="number"
                 min="1"
                 value={resourceAmount}

@@ -5,10 +5,11 @@
  */
 
 import { Users, Zap } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ interface GrappleActionPanelProps {
 const GrappleActionPanel: React.FC<GrappleActionPanelProps> = ({ participantId, targets }) => {
   const { state, takeAction, applyCondition, updateParticipant } = useCombat();
   const { activeEncounter } = state;
+  const targetSelectId = useId();
 
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [grappleResult, setGrappleResult] = useState<{
@@ -98,9 +100,13 @@ const GrappleActionPanel: React.FC<GrappleActionPanelProps> = ({ participantId, 
       <CardContent className="space-y-4">
         <div className="flex gap-2 items-end">
           <div className="flex-1">
-            <label className="text-sm font-medium">Target</label>
+            <Label htmlFor={targetSelectId}>Target</Label>
             <Select value={selectedTarget} onValueChange={setSelectedTarget}>
-              <SelectTrigger>
+              <SelectTrigger
+                id={targetSelectId}
+                aria-label="Select grapple target"
+                title="Select a target to grapple"
+              >
                 <SelectValue placeholder="Select target" />
               </SelectTrigger>
               <SelectContent>

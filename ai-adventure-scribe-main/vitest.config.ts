@@ -47,6 +47,7 @@ export default defineConfig({
       'src/utils/__tests__/spatial-partitioning.test.ts',
       'src/utils/__tests__/srd-gate.test.ts',
       'src/utils/__tests__/image-label-generator.test.ts',
+      'src/components/combat/__tests__/CombatActionPanels.accessibility.test.tsx',
       'src/utils/memoryClassification.test.ts',
       'src/utils/__tests__/memory-importance-normalization.test.ts',
       'src/utils/memory/__tests__/segmentation.test.ts',
@@ -480,6 +481,9 @@ export default defineConfig({
         'src/features/game-session/components/chat/message-list/MessageVoicePlayer.tsx',
         'src/features/game-session/components/chat/message-list/DynamicOptionsSection.tsx',
         'src/components/game/DiceRollMessage.tsx',
+        'src/components/combat/GrappleActionPanel.tsx',
+        'src/components/combat/WeaponManagementPanel.tsx',
+        'src/components/combat/ResourceConsumptionPanel.tsx',
         'src/features/character/components/sheet/InventoryManager.tsx',
       ],
       exclude: [
