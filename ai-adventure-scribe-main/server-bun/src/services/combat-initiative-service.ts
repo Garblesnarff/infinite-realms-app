@@ -6,17 +6,22 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, or } from 'drizzle-orm';
 
+import {
+  verifySessionAccess,
+  verifyEncounterAccess,
+  verifyCharacterAccess,
+  verifyCharactersAccessBatch,
+  verifyNPCAccess,
+  verifyNPCsAccessBatch,
+  verifyParticipantOwnership,
+} from './combat/combat-authorization.js';
 import { InitiativeMechanics, rollD20 } from './combat/initiative-mechanics.js';
 import { db } from '../../../db/client';
 import {
   combatEncounters,
   combatParticipants,
-  gameSessions,
-  campaigns,
-  characters,
-  npcs,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../db/schema/index';
@@ -35,188 +40,6 @@ import type {
  * Provides type-safe database operations for combat encounters
  */
 export class CombatInitiativeService {
-  /**
-   * Verify session ownership through campaign/character links.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifySessionAccess(sessionId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: gameSessions.id })
-      .from(gameSessions)
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(gameSessions.id, sessionId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Session', sessionId);
-    }
-  }
-
-  /**
-   * Verify encounter ownership through its session's campaign/character links.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: combatEncounters.id })
-      .from(combatEncounters)
-      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(combatEncounters.id, encounterId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Combat encounter', encounterId);
-    }
-  }
-
-  /**
-   * Verify character ownership through user_id/owner_id.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyCharacterAccess(characterId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Character', characterId);
-    }
-  }
-
-  /**
-   * ⚡ Bolt: Verify multiple characters' ownership in a single batch query.
-   * Prevents N+1 database round-trips during combat initialization.
-   */
-  private static async verifyCharactersAccessBatch(characterIds: string[], userId: string): Promise<void> {
-    if (characterIds.length === 0) return;
-
-    const results = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        inArray(characters.id, characterIds),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ));
-
-    if (results.length !== characterIds.length) {
-      const foundIds = new Set(results.map(r => r.id));
-      for (const id of characterIds) {
-        if (!foundIds.has(id)) {
-          throw new NotFoundError('Character', id);
-        }
-      }
-    }
-  }
-
-  /**
-   * 🛡️ Sentinel: Verify NPC ownership through its campaign's user_id.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyNPCAccess(npcId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: npcs.id })
-      .from(npcs)
-      .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
-      .where(and(
-        eq(npcs.id, npcId),
-        eq(campaigns.userId, userId)
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('NPC', npcId);
-    }
-  }
-
-  /**
-   * 🛡️ Sentinel: Verify multiple NPCs' ownership in a single batch query.
-   * Prevents N+1 database round-trips during combat initialization.
-   */
-  private static async verifyNPCsAccessBatch(npcIds: string[], userId: string): Promise<void> {
-    if (npcIds.length === 0) return;
-
-    const results = await db
-      .select({ id: npcs.id })
-      .from(npcs)
-      .innerJoin(campaigns, eq(npcs.campaignId, campaigns.id))
-      .where(and(
-        inArray(npcs.id, npcIds),
-        eq(campaigns.userId, userId)
-      ));
-
-    if (results.length !== npcIds.length) {
-      const foundIds = new Set(results.map(r => r.id));
-      for (const id of npcIds) {
-        if (!foundIds.has(id)) {
-          throw new NotFoundError('NPC', id);
-        }
-      }
-    }
-  }
-
-  /**
-   * 🛡️ Sentinel: Verify user owns the specific participant.
-   * A user owns a participant if:
-   * 1. They are the DM of the campaign (owns the NPC or any character in the campaign)
-   * 2. They own the specific character linked to the participant.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyParticipantOwnership(
-    participantId: string,
-    encounterId: string,
-    userId: string
-  ): Promise<void> {
-    const [result] = await db
-      .select({ id: combatParticipants.id })
-      .from(combatParticipants)
-      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
-      .where(and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, encounterId),
-        or(
-          eq(campaigns.userId, userId), // DM can act as anyone in the campaign
-          eq(characters.userId, userId), // Player can act as their own character
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Participant', participantId);
-    }
-  }
-
   /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
@@ -248,9 +71,9 @@ export class CombatInitiativeService {
 
       // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
       await Promise.all([
-        this.verifySessionAccess(sessionId, userId),
-        this.verifyCharactersAccessBatch(characterIds, userId),
-        this.verifyNPCsAccessBatch(npcIds, userId),
+        verifySessionAccess(sessionId, userId),
+        verifyCharactersAccessBatch(characterIds, userId),
+        verifyNPCsAccessBatch(npcIds, userId),
       ]);
     }
 
@@ -332,11 +155,9 @@ export class CombatInitiativeService {
     if (userId) {
       // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
       await Promise.all([
-        this.verifyEncounterAccess(encounterId, userId),
-        input.characterId
-          ? this.verifyCharacterAccess(input.characterId, userId)
-          : Promise.resolve(),
-        input.npcId ? this.verifyNPCAccess(input.npcId, userId) : Promise.resolve(),
+        verifyEncounterAccess(encounterId, userId),
+        input.characterId ? verifyCharacterAccess(input.characterId, userId) : Promise.resolve(),
+        input.npcId ? verifyNPCAccess(input.npcId, userId) : Promise.resolve(),
       ]);
     }
 
@@ -383,11 +204,10 @@ export class CombatInitiativeService {
     // ⚡ Bolt: Parallelize ownership verification and participant retrieval to reduce latency
     const [_, participant] = await Promise.all([
       userId
-        ? this.verifyParticipantOwnership(participantId, encounterId, userId)
+        ? verifyParticipantOwnership(participantId, encounterId, userId)
         : Promise.resolve(),
       db.query.combatParticipants.findFirst({
-        where: (cp, { eq, and }) =>
-          and(eq(cp.id, participantId), eq(cp.encounterId, encounterId)),
+        where: (cp, { eq, and }) => and(eq(cp.id, participantId), eq(cp.encounterId, encounterId)),
       }),
     ]);
 
@@ -456,7 +276,7 @@ export class CombatInitiativeService {
    */
   static async advanceTurn(encounterId: string, userId?: string): Promise<AdvanceTurnResult> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     // Single relational query to fetch encounter and active participants
@@ -527,9 +347,12 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Current participant or null
    */
-  static async getCurrentTurn(encounterId: string, userId?: string): Promise<CombatParticipant | null> {
+  static async getCurrentTurn(
+    encounterId: string,
+    userId?: string,
+  ): Promise<CombatParticipant | null> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
@@ -559,12 +382,12 @@ export class CombatInitiativeService {
     encounterId: string,
     participantId: string,
     newInitiative: number,
-    userId?: string
+    userId?: string,
   ): Promise<void> {
     if (userId) {
       // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
       // This prevents unauthorized manual adjustment of initiative for other participants.
-      await this.verifyParticipantOwnership(participantId, encounterId, userId);
+      await verifyParticipantOwnership(participantId, encounterId, userId);
     }
 
     // Update participant initiative
@@ -587,7 +410,7 @@ export class CombatInitiativeService {
    */
   static async endCombat(encounterId: string, userId?: string): Promise<CombatEncounter> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     const [updated] = await db
@@ -614,7 +437,7 @@ export class CombatInitiativeService {
    */
   static async getCombatState(encounterId: string, userId?: string): Promise<CombatState> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     // Single relational query to fetch encounter and all participants
@@ -734,14 +557,16 @@ export class CombatInitiativeService {
         .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
-        .where(and(
-          eq(combatParticipants.id, participantId),
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
+        .where(
+          and(
+            eq(combatParticipants.id, participantId),
+            or(
+              eq(campaigns.userId, userId),
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+            ),
+          ),
+        )
         .limit(1);
 
       if (!scopedParticipant) {

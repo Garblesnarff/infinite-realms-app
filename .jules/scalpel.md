@@ -15,3 +15,8 @@
 **Challenge:** Extracting safety and dice command logic from a large hook revealed that the original code relied on multiple context hooks and local refs to manage asynchronous state.
 **Learning:** When extracting into a new hook, ensure that all necessary context hooks are duplicated in the new hook and that refs (like `messagesRef`) are maintained to prevent stale closures in async operations.
 **Pattern:** Delegating specialized command processing to a sub-hook (`useMessageCommandHandler`) significantly reduces the cognitive load and line count of the main orchestrator (`useMessageHandlerLogic`) while maintaining a clean, functional interface.
+
+## 2026-03-19 - [Authorization Logic Extraction]
+**Challenge:** Extracting authorization logic from a service while leaving some database queries behind resulted in a broken build due to a missing 'or' import in the original file.
+**Learning:** When extracting logic that uses shared library functions (like Drizzle's 'or', 'and', 'sql'), double-check that the original file still has all the imports it needs for its remaining code. Don't assume that if you moved all calls *you saw* that there aren't others.
+**Pattern:** Extracting cohesive, database-heavy verification methods into a standalone module ('combat-authorization.ts') reduces service complexity and allows for easier reuse of authorization patterns across different combat services.
