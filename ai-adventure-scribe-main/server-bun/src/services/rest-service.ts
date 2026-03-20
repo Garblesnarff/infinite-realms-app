@@ -22,6 +22,7 @@ import {
   type RestEvent,
 } from '../../../db/schema/index';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../lib/errors.js';
+import { RestMechanics } from './rest/rest-mechanics.js';
 
 import type {
   HitDieType,
@@ -33,24 +34,6 @@ import type {
 } from '../types/rest.js';
 
 /**
- * Hit dice by class mapping
- */
-const HIT_DICE_MAP: Record<string, HitDieType> = {
-  'Barbarian': 'd12',
-  'Fighter': 'd10',
-  'Paladin': 'd10',
-  'Ranger': 'd10',
-  'Bard': 'd8',
-  'Cleric': 'd8',
-  'Druid': 'd8',
-  'Monk': 'd8',
-  'Rogue': 'd8',
-  'Warlock': 'd8',
-  'Sorcerer': 'd6',
-  'Wizard': 'd6',
-};
-
-/**
  * Rest Service
  */
 export class RestService {
@@ -58,22 +41,21 @@ export class RestService {
    * Calculate Constitution modifier from ability score
    */
   private static calculateConModifier(constitution: number): number {
-    return Math.floor((constitution - 10) / 2);
+    return RestMechanics.calculateConModifier(constitution);
   }
 
   /**
    * Roll a hit die
    */
   private static rollHitDie(dieType: HitDieType): number {
-    const dieSize = parseInt(dieType.substring(1));
-    return Math.floor(Math.random() * dieSize) + 1;
+    return RestMechanics.rollHitDie(dieType);
   }
 
   /**
    * Get hit die type for a class
    */
   static getHitDieType(className: string): HitDieType {
-    return HIT_DICE_MAP[className] || 'd8';
+    return RestMechanics.getHitDieType(className);
   }
 
   /**
@@ -277,43 +259,13 @@ export class RestService {
       );
     }
 
-    // Spend hit dice (prefer largest dice first)
-    const sortedHitDice = [...allHitDice].sort((a, b) => {
-      const aSize = parseInt(a.dieType.substring(1));
-      const bSize = parseInt(b.dieType.substring(1));
-      return bSize - aSize;
-    });
-
-    let remaining = count;
-    let totalHpRestored = 0;
-    const rolls: number[] = [];
-    const updates: Array<{ id: string; newUsedDice: number }> = [];
-
-    for (const hitDie of sortedHitDice) {
-      if (remaining === 0) break;
-
-      const available = hitDie.totalDice - hitDie.usedDice;
-      const toSpend = Math.min(remaining, available);
-
-      if (toSpend > 0) {
-        // Roll hit dice
-        for (let i = 0; i < toSpend; i++) {
-          const roll =
-            preRolledValues?.[rolls.length] ?? this.rollHitDie(hitDie.dieType as HitDieType);
-          rolls.push(roll);
-          // Minimum 1 HP per die
-          const hpGained = Math.max(1, roll + conModifier);
-          totalHpRestored += hpGained;
-        }
-
-        updates.push({
-          id: hitDie.id,
-          newUsedDice: hitDie.usedDice + toSpend,
-        });
-
-        remaining -= toSpend;
-      }
-    }
+    // Spend hit dice (delegated to RestMechanics)
+    const { hpRestored, rolls, updates } = RestMechanics.calculateSpentHitDice(
+      count,
+      conModifier,
+      allHitDice,
+      preRolledValues
+    );
 
     // ⚡ Bolt: Batch update hit dice usage in a single query instead of N updates.
     // This eliminates the N+1 update pattern for multiclass characters.
@@ -355,7 +307,7 @@ export class RestService {
     });
 
     return {
-      hpRestored: totalHpRestored,
+      hpRestored,
       hitDiceSpent: count,
       rolls,
       hitDiceRemaining: finalHitDice,
@@ -378,41 +330,14 @@ export class RestService {
       return { restoredCount: 0, updatedHitDice: [] };
     }
 
-    // Calculate how many to restore
-    const totalDice = allHitDice.reduce((sum, hd) => sum + hd.totalDice, 0);
-    const usedDice = allHitDice.reduce((sum, hd) => sum + hd.usedDice, 0);
-    const maxRestore = Math.max(1, Math.floor(totalDice / 2));
-    const toRestore = count !== undefined ? Math.min(count, usedDice, maxRestore) : Math.min(usedDice, maxRestore);
+    // Calculate hit dice to restore (delegated to RestMechanics)
+    const { restoredCount, updates } = RestMechanics.calculateRestoredHitDice(
+      allHitDice,
+      count
+    );
 
-    if (toRestore === 0) {
+    if (restoredCount === 0) {
       return { restoredCount: 0, updatedHitDice: allHitDice };
-    }
-
-    // Restore hit dice (prefer largest dice first)
-    const sortedHitDice = [...allHitDice]
-      .filter(hd => hd.usedDice > 0)
-      .sort((a, b) => {
-        const aSize = parseInt(a.dieType.substring(1));
-        const bSize = parseInt(b.dieType.substring(1));
-        return bSize - aSize;
-      });
-
-    let remaining = toRestore;
-    const updates: Array<{ id: string; newUsedDice: number }> = [];
-
-    for (const hitDie of sortedHitDice) {
-      if (remaining === 0) break;
-
-      const canRestore = Math.min(remaining, hitDie.usedDice);
-
-      if (canRestore > 0) {
-        updates.push({
-          id: hitDie.id,
-          newUsedDice: hitDie.usedDice - canRestore,
-        });
-
-        remaining -= canRestore;
-      }
     }
 
     // ⚡ Bolt: Batch update hit dice restoration in a single query instead of N updates.
@@ -454,7 +379,7 @@ export class RestService {
       return update ? { ...hd, usedDice: update.newUsedDice } : hd;
     });
 
-    return { restoredCount: toRestore, updatedHitDice: finalHitDice };
+    return { restoredCount, updatedHitDice: finalHitDice };
   }
 
   /**
@@ -470,46 +395,8 @@ export class RestService {
       await this.verifyCharacterOwnership(characterId, userId);
     }
 
-    const resources: RestorableResource[] = [];
-
-    // Note: This is a simplified version. Full implementation would check
-    // character class features, spell slots, etc.
-
-    if (restType === 'short') {
-      // Short rest restores some class features
-      resources.push({
-        resourceType: 'class_feature',
-        resourceName: 'Short Rest Features',
-        amountRestored: 'Various (Fighter Second Wind, Warlock Spell Slots, Monk Ki, etc.)',
-      });
-    } else if (restType === 'long') {
-      // Long rest restores all HP, all spell slots, and half hit dice
-      resources.push({
-        resourceType: 'hp',
-        resourceName: 'Hit Points',
-        amountRestored: 'Full',
-      });
-
-      resources.push({
-        resourceType: 'spell_slot',
-        resourceName: 'All Spell Slots',
-        amountRestored: 'All',
-      });
-
-      resources.push({
-        resourceType: 'hit_dice',
-        resourceName: 'Hit Dice',
-        amountRestored: 'Half (minimum 1)',
-      });
-
-      resources.push({
-        resourceType: 'class_feature',
-        resourceName: 'All Class Features',
-        amountRestored: 'All',
-      });
-    }
-
-    return resources;
+    // Delegated to RestMechanics
+    return RestMechanics.getRestorableResources(restType);
   }
 
   /**
@@ -723,10 +610,6 @@ export class RestService {
     dieType: HitDieType;
     count: number;
   } {
-    const dieType = this.getHitDieType(className);
-    return {
-      dieType,
-      count: level,
-    };
+    return RestMechanics.calculateHitDiceForClass(className, level);
   }
 }
