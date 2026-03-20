@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -41,14 +41,22 @@ export const blogTaxonomyRouter = router({
       }
 
       // ⚡ Bolt: Consolidated category list and post counts into a single joined query.
-      // This reduces database round-trips from 2 to 1 and improves performance.
+      // 🛡️ Sentinel: Filtered counts to only include published posts for public access.
       const results = await ctx.db
         .select({
           category: baseColumns,
-          postCount: sql<number>`count(${blogPostCategories.postId})::int`,
+          postCount: sql<number>`count(${blogPosts.id})::int`,
         })
         .from(blogCategories)
         .leftJoin(blogPostCategories, eq(blogCategories.id, blogPostCategories.categoryId))
+        .leftJoin(
+          blogPosts,
+          and(
+            eq(blogPostCategories.postId, blogPosts.id),
+            eq(blogPosts.status, 'published'),
+            lte(blogPosts.publishedAt, new Date()),
+          ),
+        )
         .groupBy(blogCategories.id)
         .orderBy(blogCategories.name);
 
@@ -78,14 +86,22 @@ export const blogTaxonomyRouter = router({
       }
 
       // ⚡ Bolt: Consolidated tag list and post counts into a single joined query.
-      // This reduces database round-trips from 2 to 1 and improves performance.
+      // 🛡️ Sentinel: Filtered counts to only include published posts for public access.
       const results = await ctx.db
         .select({
           tag: baseColumns,
-          postCount: sql<number>`count(${blogPostTags.postId})::int`,
+          postCount: sql<number>`count(${blogPosts.id})::int`,
         })
         .from(blogTags)
         .leftJoin(blogPostTags, eq(blogTags.id, blogPostTags.tagId))
+        .leftJoin(
+          blogPosts,
+          and(
+            eq(blogPostTags.postId, blogPosts.id),
+            eq(blogPosts.status, 'published'),
+            lte(blogPosts.publishedAt, new Date()),
+          ),
+        )
         .groupBy(blogTags.id)
         .orderBy(blogTags.name);
 
