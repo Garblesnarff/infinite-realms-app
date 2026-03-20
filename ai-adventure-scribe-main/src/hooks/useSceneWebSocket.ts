@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 
 // WebSocket message types matching server
