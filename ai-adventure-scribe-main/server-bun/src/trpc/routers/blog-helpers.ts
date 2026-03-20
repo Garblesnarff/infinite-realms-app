@@ -40,7 +40,7 @@ export async function resolveAuthorId(
       });
     }
 
-    const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
+    const isAdmin = ctx.user.plan === 'admin';
 
     if (isAdmin) {
       const [author] = await ctx.db
@@ -299,7 +299,7 @@ export async function canManagePost(
     return { canManage: false, userAuthorId: null, isAdmin: false };
   }
 
-  const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
+  const isAdmin = ctx.user.plan === 'admin';
 
   // Get current user's author profile
   const [userAuthor] = await ctx.db
