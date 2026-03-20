@@ -1,3 +1,4 @@
+import { Minus, Plus } from 'lucide-react';
 import React from 'react';
 
 import type { Method } from '@/hooks/use-ability-score-selection';
@@ -50,19 +51,24 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
         <div className="flex items-center justify-between">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onDecrease(ability)}
             disabled={method !== 'pointBuy' || baseScore === 8}
-            className="w-8 h-8 p-0"
+            className="h-8 w-8"
             aria-label={`Decrease ${ability}`}
+            title={`Decrease ${ability}`}
           >
-            -
+            <Minus className="h-4 w-4" />
           </Button>
 
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">Base: {baseScore}</div>
             {racialBonus > 0 && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+              <Badge
+                variant="outline"
+                className="bg-green-50 text-green-700 border-green-300"
+                title="Racial ability score bonus"
+              >
                 {formatRacialBonus(racialBonus)} racial
               </Badge>
             )}
@@ -83,13 +89,14 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
 
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onIncrease(ability)}
             disabled={method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost}
-            className="w-8 h-8 p-0"
+            className="h-8 w-8"
             aria-label={`Increase ${ability}`}
+            title={`Increase ${ability}`}
           >
-            +
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
 

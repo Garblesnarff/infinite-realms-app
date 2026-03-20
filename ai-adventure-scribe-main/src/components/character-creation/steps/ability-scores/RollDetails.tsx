@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import type { AbilityScores } from '@/types/character';
@@ -58,8 +59,10 @@ const RollDetails: React.FC<RollDetailsProps> = ({
                 onClick={() => onRerollSingle(index)}
                 variant="ghost"
                 size="sm"
-                className="w-full mt-1 h-6 text-xs"
+                className="w-full mt-1 h-6 text-xs gap-1"
+                title={`Reroll ${ability}`}
               >
+                <RotateCcw className="h-3 w-3" />
                 Reroll
               </Button>
             </div>
