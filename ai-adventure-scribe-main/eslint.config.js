@@ -246,6 +246,7 @@ export default tseslint.config(
       'src/__tests__/**/*.test.tsx',
       'src/**/__tests__/**/*.test.ts',
       'src/**/__tests__/**/*.test.tsx',
+      'src/hooks/__tests__/useFogWebSocket.test.ts',
       'src/utils/__tests__/raycasting.test.ts',
       'src/hooks/ai/__tests__/session-logger.test.ts',
 
