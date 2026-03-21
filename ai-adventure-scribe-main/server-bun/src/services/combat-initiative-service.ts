@@ -22,6 +22,9 @@ import { db } from '../../../db/client';
 import {
   combatEncounters,
   combatParticipants,
+  gameSessions,
+  campaigns,
+  characters,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../db/schema/index';

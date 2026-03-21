@@ -12,8 +12,9 @@
  * @module server/services/inventory-service
  */
 
-import { eq, and, desc, or, sql, exists } from 'drizzle-orm';
+import { eq, and, desc, or, sql, exists, inArray } from 'drizzle-orm';
 
+import { InventoryMechanics } from './inventory/inventory-mechanics.js';
 import { db } from '../../../db/client';
 import {
   inventoryItems,
@@ -27,8 +28,6 @@ import {
 import { NotFoundError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import {
   MAX_ATTUNED_ITEMS,
-  ENCUMBRANCE_THRESHOLDS,
-  SPEED_PENALTIES,
 } from '../types/inventory.js';
 
 import type {
@@ -42,7 +41,6 @@ import type {
   EquipResult,
   GetInventoryOptions,
   GetUsageHistoryInput,
-  EncumbranceLevel,
 } from '../types/inventory.js';
 
 
@@ -448,10 +446,10 @@ export class InventoryService {
         and(
           eq(inventoryItems.id, itemId),
           eq(inventoryItems.characterId, characterId),
-          inArray(inventoryItems.itemType, ['weapon', 'armor']),
+          inArray(inventoryItems.itemType, ['weapon', 'armor'] as ItemType[]),
           exists(
             db
-              .select()
+              .select({ id: characters.id })
               .from(characters)
               .where(
                 and(
@@ -545,9 +543,8 @@ export class InventoryService {
       throw new NotFoundError('Character stats', characterId);
     }
 
-    // Base carrying capacity is STR × 15
-    // Could be modified by size (Tiny = ×0.5, Small/Medium = ×1, Large = ×2, etc.)
-    return stats.strength * 15;
+    // Delegate calculation to mechanics module
+    return InventoryMechanics.calculateCarryingCapacity(stats.strength);
   }
 
   /**
@@ -582,34 +579,8 @@ export class InventoryService {
       throw new NotFoundError('Character or stats', characterId);
     }
 
-    const strength = result.strength;
-    const currentWeight = parseFloat(result.totalWeight);
-    const carryingCapacity = strength * 15;
-
-    // Determine encumbrance level using variant rule
-    let encumbranceLevel: EncumbranceLevel = 'normal';
-    let speedPenalty = SPEED_PENALTIES.NORMAL as number;
-
-    // Heavily Encumbered: weight > STR × 10
-    if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED) {
-      encumbranceLevel = 'heavily_encumbered';
-      speedPenalty = SPEED_PENALTIES.HEAVILY_ENCUMBERED as number;
-    }
-    // Encumbered: weight > STR × 5
-    else if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.ENCUMBERED) {
-      encumbranceLevel = 'encumbered';
-      speedPenalty = SPEED_PENALTIES.ENCUMBERED as number;
-    }
-
-    return {
-      currentWeight: Math.round(currentWeight * 100) / 100,
-      carryingCapacity,
-      encumbranceLevel,
-      isEncumbered: encumbranceLevel === 'encumbered' || encumbranceLevel === 'heavily_encumbered',
-      isHeavilyEncumbered: encumbranceLevel === 'heavily_encumbered',
-      speedPenalty,
-      strengthScore: strength,
-    };
+    // Delegate calculation to mechanics module
+    return InventoryMechanics.calculateEncumbrance(result.strength, parseFloat(result.totalWeight));
   }
 
   // ==========================================
@@ -651,13 +622,13 @@ export class InventoryService {
   ): Promise<AttunementResult> {
     // ⚡ Bolt: Consolidated item fetch and attuned count check into a single query.
     // This reduces database round-trips from 3 to 2 for the successful attunement path.
-    const [result] = await (db as any)
+    const results = await db
       .select({
         item: inventoryItems,
         attunedCount: sql<number>`(
           SELECT count(*)::int
           FROM ${inventoryItems}
-          WHERE character_id = ${characterId} AND is_attuned = true
+          WHERE ${inventoryItems.characterId} = ${characterId} AND ${inventoryItems.isAttuned} = true
         )`,
       })
       .from(inventoryItems)
@@ -670,6 +641,8 @@ export class InventoryService {
         ),
       )
       .limit(1);
+
+    const result = results[0];
 
     if (!result) {
       return {
