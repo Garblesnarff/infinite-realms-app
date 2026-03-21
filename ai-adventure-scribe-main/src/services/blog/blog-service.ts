@@ -153,12 +153,15 @@ const fetchWithAuth = async (path: string, options: RequestInit = {}): Promise<R
 };
 
 export const listBlogPosts = async (filters?: BlogPostListFilters): Promise<BlogPost[]> => {
+  /**
+   * ⚡ Bolt: Optimized to exclude the large 'content' field in list view
+   * to reduce over-fetching and minimize payload size.
+   */
   let query = supabaseClient.from('blog_posts').select(`
       id,
       title,
       slug,
       summary,
-      content,
       featured_image_url,
       status,
       seo_title,
