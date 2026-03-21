@@ -13,7 +13,11 @@ function toast(opts: CompatToastOptions) {
 
   let id: string | number;
   if (variant === 'destructive') {
-    id = sonnerToast.error(description || title || '');
+    if (title && description) {
+      id = sonnerToast.error(String(title), { description: String(description) });
+    } else {
+      id = sonnerToast.error(String(description || title || ''));
+    }
   } else if (title && description) {
     id = sonnerToast(String(title), { description: String(description) });
   } else {
