@@ -139,6 +139,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           size="sm"
           pulse={true}
           className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-[0_0_12px_rgba(6,182,212,0.5)] hover:shadow-[0_0_20px_rgba(6,182,212,0.7)] font-semibold"
+          aria-label="Critical Hit"
         >
           Critical Hit!
         </HexagonalBadge>
@@ -146,7 +147,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
     }
     if (result.naturalRoll === 1) {
       return (
-        <Badge variant="secondary" className="text-xs">
+        <Badge variant="secondary" className="text-xs" aria-label="Critical Miss">
           Critical Miss
         </Badge>
       );
@@ -157,14 +158,18 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const getAdvantageIndicator = (result: DiceRollResult) => {
     if (result.advantage) {
       return (
-        <Badge variant="default" className="text-xs bg-green-600">
+        <Badge variant="default" className="text-xs bg-green-600" aria-label="Rolled with advantage">
           Advantage
         </Badge>
       );
     }
     if (result.disadvantage) {
       return (
-        <Badge variant="outline" className="text-xs border-red-600 text-red-600">
+        <Badge
+          variant="outline"
+          className="text-xs border-red-600 text-red-600"
+          aria-label="Rolled with disadvantage"
+        >
           Disadvantage
         </Badge>
       );
@@ -177,12 +182,19 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       <Card className="p-4 my-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <Dice6 className="w-4 h-4 text-purple-600" />
+            <div
+              className="flex items-center gap-1"
+              title={`Dice formula: ${expression}`}
+            >
+              <Dice6 className="w-4 h-4 text-purple-600" aria-hidden="true" />
               <span className="font-mono text-sm font-semibold text-purple-800">{expression}</span>
             </div>
             {purpose && (
-              <Badge variant="outline" className="text-xs">
+              <Badge
+                variant="outline"
+                className="text-xs"
+                title={`Purpose: ${purpose}`}
+              >
                 {purpose}
               </Badge>
             )}
@@ -194,8 +206,10 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
               disabled={isRolling}
               size="sm"
               className="flex items-center gap-1"
+              aria-label={`Roll ${expression}${purpose ? ` for ${purpose}` : ''}`}
+              title={`Roll ${expression}${purpose ? ` for ${purpose}` : ''}`}
             >
-              <Play className="w-3 h-3" />
+              <Play className="w-3 h-3" aria-hidden="true" />
               Roll
             </Button>
           )}
@@ -226,6 +240,9 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
               animate="visible"
               exit="hidden"
               className="space-y-2"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
             >
               <motion.div
                 variants={pulseSuccess}
@@ -234,13 +251,22 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-purple-800">{result.total}</span>
+                  <span
+                    className="text-2xl font-bold text-purple-800"
+                    aria-label={`Total result: ${result.total}`}
+                  >
+                    {result.total}
+                  </span>
                   {getCriticalityBadge(result)}
                   {getAdvantageIndicator(result)}
                 </div>
 
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <Volume2 className="w-3 h-3" />
+                <div
+                  className="flex items-center gap-1 text-xs text-gray-600"
+                  title={`Dice type: d${result.rolls[0]?.dice || 20}`}
+                  aria-label={`Dice type: d${result.rolls[0]?.dice || 20}`}
+                >
+                  <Volume2 className="w-3 h-3" aria-hidden="true" />
                   <span>d{result.rolls[0]?.dice || 20}</span>
                 </div>
               </motion.div>
@@ -252,6 +278,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                   initial="hidden"
                   animate="visible"
                   className="flex flex-wrap gap-1"
+                  aria-label="Individual die results"
                 >
                   {result.rolls.map((roll, index) => {
                     const DiceIcon = getDiceIcon(Math.min(roll.value, 6));
@@ -264,8 +291,10 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
                             ? 'bg-red-100 text-red-800 border border-red-300'
                             : 'bg-gray-100 text-gray-700'
                         }`}
+                        aria-label={`Die ${index + 1}: ${roll.value}${roll.critical ? ' (Critical)' : ''}`}
+                        title={`Die ${index + 1}: ${roll.value}`}
                       >
-                        <DiceIcon className="w-3 h-3" />
+                        <DiceIcon className="w-3 h-3" aria-hidden="true" />
                         <span>{roll.value}</span>
                       </motion.div>
                     );
@@ -300,8 +329,13 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
               animate="rolling"
               exit="result"
               className="flex items-center justify-center py-4"
+              role="status"
+              aria-live="polite"
             >
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              <div
+                className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"
+                aria-hidden="true"
+              ></div>
               <span className="ml-2 text-sm text-purple-600">Rolling...</span>
             </motion.div>
           )}
