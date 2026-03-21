@@ -285,7 +285,7 @@ export const BlogPostEditor: React.FC<BlogPostEditorProps> = ({ post, onSuccess,
                         <FormLabel>Status *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger aria-label="Select post status">
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                           </FormControl>

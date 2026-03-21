@@ -251,6 +251,8 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
                           variant="outline"
                           size="sm"
                           onClick={() => removeFromInventory(item.id)}
+                          aria-label="Remove from inventory"
+                          title="Remove from inventory"
                         >
                           <Minus className="w-4 h-4" />
                         </Button>
@@ -290,7 +292,7 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
                   />
                 </div>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-48">
+                  <SelectTrigger className="w-48" aria-label="Filter by category" title="Filter by category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
