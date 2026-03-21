@@ -80,7 +80,12 @@ export function validateDMMessage(message: string): MessageValidation {
 }
 
 export function detectsDamageRequestOnly(message: string): boolean {
-  const damagePatterns = [/^roll\s+\d*d\d+/gi, /^roll\s+damage/gi, /^\d*d\d+\s+damage/gi];
+  const damagePatterns = [
+    /roll\s+\d*d\d+(?:[+-]\d+)?/gi,
+    /roll\s+damage/gi,
+    /\d*d\d+(?:[+-]\d+)?\s+damage/gi,
+    /\d+\s+damage/gi,
+  ];
   const hasDamageRequest = damagePatterns.some((pattern) => pattern.test(message.trim()));
   const hasAttackContext = /attack|hit|strike|blade|weapon/gi.test(message);
   return hasDamageRequest && !hasAttackContext;
@@ -91,6 +96,7 @@ export function detectsCombatStart(message: string): boolean {
     /combat\s+begins/gi,
     /battle\s+starts/gi,
     /initiative/gi,
+    /roll\s+(?:for\s+)?initiative/gi,
     /enters?\s+combat/gi,
     /fight\s+begins/gi,
   ];
@@ -98,7 +104,11 @@ export function detectsCombatStart(message: string): boolean {
 }
 
 export function detectsInitiativeRequest(message: string): boolean {
-  const initiativePatterns = [/roll\s+initiative/gi, /initiative\s+roll/gi, /1d20\s*\+\s*dex/gi];
+  const initiativePatterns = [
+    /roll\s+(?:for\s+)?initiative/gi,
+    /initiative\s+roll/gi,
+    /1d20\s*[+-]\s*(?:dex|modifier)/gi,
+  ];
   return initiativePatterns.some((pattern) => pattern.test(message));
 }
 
@@ -107,51 +117,74 @@ export function detectsAttackRequest(message: string): boolean {
     /make\s+an?\s+attack\s+roll/gi,
     /roll\s+(?:to\s+)?attack/gi,
     /attack\s+roll/gi,
-    /1d20.*(?:attack|hit)/gi,
+    /1d20\s*[+-]\s*\w+.*(?:attack|hit)/gi,
   ];
   return attackPatterns.some((pattern) => pattern.test(message));
 }
 
 export function detectsSkillCheckOnly(message: string): boolean {
-  const skillPatterns = [/make\s+a\s+\w+\s+check/gi, /roll\s+a\s+\w+\s+check/gi, /\w+\s+check/gi];
+  const skillPatterns = [
+    /make\s+an?\s+[\w\s()]+\s+check/gi,
+    /roll\s+an?\s+[\w\s()]+\s+check/gi,
+    /(?:[\w()]+\s+){1,3}check/gi,
+  ];
   const hasSkillCheck = skillPatterns.some((pattern) => pattern.test(message));
   const hasAttackContext = /attack|damage|hit/gi.test(message);
   return hasSkillCheck && !hasAttackContext;
 }
 
 export function detectsSavingThrow(message: string): boolean {
-  const savePatterns = [/saving\s+throw/gi, /make\s+a\s+\w+\s+save/gi, /\w+\s+save/gi];
+  const savePatterns = [
+    /saving\s+throw/gi,
+    /make\s+an?\s+[\w\s()]+\s+save/gi,
+    /[\w()]+\s+save/gi,
+  ];
   return savePatterns.some((pattern) => pattern.test(message));
 }
 
 export function detectsDamageRequest(message: string): boolean {
-  const damagePatterns = [/roll.*damage/gi, /damage.*roll/gi, /\d*d\d+.*damage/gi];
+  const damagePatterns = [
+    /roll.*damage/gi,
+    /damage.*roll/gi,
+    /\d*d\d+(?:[+-]\d+)?.*damage/gi,
+    /\d+\s+damage/gi,
+  ];
   return damagePatterns.some((pattern) => pattern.test(message));
 }
 
 export function containsAC(message: string): boolean {
-  return /AC\s+\d+/gi.test(message) || /armor\s+class\s+\d+/gi.test(message);
+  return (
+    /AC\s*[:\s]\s*\d+/gi.test(message) ||
+    /armor\s+class\s*[:\s]\s*\d+/gi.test(message) ||
+    /AC\s+is\s+\d+/gi.test(message)
+  );
 }
 
 export function containsDC(message: string): boolean {
-  return /DC\s+\d+/gi.test(message) || /difficulty\s+class\s+\d+/gi.test(message);
+  return (
+    /DC\s*[:\s]\s*\d+/gi.test(message) ||
+    /difficulty\s+class\s*[:\s]\s*\d+/gi.test(message) ||
+    /DC\s+is\s+\d+/gi.test(message)
+  );
 }
 
 export function containsModifier(message: string): boolean {
   return (
-    /\+\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(message) ||
+    /[+-]\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(message) ||
     /(?:strength|dexterity|constitution|intelligence|wisdom|charisma)\s+modifier/gi.test(message)
   );
 }
 
 export function extractAC(message: string): number | null {
-  const acMatch = message.match(/AC\s+(\d+)/gi) || message.match(/armor\s+class\s+(\d+)/gi);
-  return acMatch ? parseInt(acMatch[1]) : null;
+  const acMatch =
+    /AC\s*[:\s]\s*(\d+)/gi.exec(message) || /armor\s+class\s*[:\s]\s*(\d+)/gi.exec(message);
+  return acMatch ? parseInt(acMatch[1], 10) : null;
 }
 
 export function extractDC(message: string): number | null {
-  const dcMatch = message.match(/DC\s+(\d+)/gi) || message.match(/difficulty\s+class\s+(\d+)/gi);
-  return dcMatch ? parseInt(dcMatch[1]) : null;
+  const dcMatch =
+    /DC\s*[:\s]\s*(\d+)/gi.exec(message) || /difficulty\s+class\s*[:\s]\s*(\d+)/gi.exec(message);
+  return dcMatch ? parseInt(dcMatch[1], 10) : null;
 }
 
 export function suggestCorrection(message: string, validation: MessageValidation): string | null {
