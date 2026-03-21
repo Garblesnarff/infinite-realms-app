@@ -108,11 +108,12 @@ const AssetCard: React.FC<{
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 focus-visible:scale-105 focus-visible:shadow-xl',
         'cursor-pointer',
         getAssetGradient(asset.type),
       )}
       title={`Click to view ${asset.name}`}
+      aria-label={`View ${asset.name}`}
     >
       {/* Image or placeholder - larger size */}
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner">
@@ -133,8 +134,8 @@ const AssetCard: React.FC<{
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
-            {/* Expand indicator on hover */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            {/* Expand indicator on hover/focus */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 flex items-center justify-center">
               <span className="text-white text-xs font-medium">View</span>
             </div>
           </>
@@ -172,11 +173,12 @@ const GeneratedImageCard: React.FC<{
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50 focus-visible:scale-105 focus-visible:shadow-xl',
         'cursor-pointer',
         getAssetGradient('generated'),
       )}
       title="Click to view generated scene"
+      aria-label="View generated scene"
     >
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner">
         {!imageError ? (
@@ -196,7 +198,7 @@ const GeneratedImageCard: React.FC<{
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 flex items-center justify-center">
               <span className="text-white text-xs font-medium">View</span>
             </div>
           </>
@@ -231,18 +233,19 @@ const GenerateButtonCard: React.FC<{
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200',
-        isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
+        isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl focus-visible:scale-105 focus-visible:shadow-xl',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50',
         'cursor-pointer',
         getAssetGradient('generated'),
       )}
       title={isGenerating ? 'Generating...' : 'Generate scene image'}
+      aria-label={isGenerating ? 'Generating scene image' : 'Generate scene image'}
     >
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner flex items-center justify-center">
         {isGenerating ? (
           <Loader2 className="h-8 w-8 text-pink-400 animate-spin" />
         ) : (
-          <Sparkles className="h-8 w-8 text-pink-400 group-hover:scale-110 transition-transform" />
+          <Sparkles className="h-8 w-8 text-pink-400 group-hover:scale-110 group-focus-visible:scale-110 transition-transform" />
         )}
       </div>
       <div className="text-center max-w-[100px]">
