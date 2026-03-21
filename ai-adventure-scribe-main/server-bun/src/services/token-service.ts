@@ -78,6 +78,7 @@ export class TokenService {
   private static async verifySceneAccess(sceneId: string, userId: string): Promise<boolean> {
     const scene = await db.query.scenes.findFirst({
       where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
+      columns: { id: true },
     });
 
     if (!scene) {
@@ -100,6 +101,7 @@ export class TokenService {
         eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
+      columns: { id: true },
     });
 
     if (!character) {

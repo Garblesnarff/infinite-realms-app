@@ -186,6 +186,7 @@ export class SessionService {
           eq(gameSessions.id, sessionId),
           this.getOwnershipCondition(userId)
         ),
+        columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
       }),
       db
         .select({
@@ -354,6 +355,7 @@ export class SessionService {
           eq(gameSessions.id, sessionId),
           this.getOwnershipCondition(userId)
         ),
+        columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
       }),
       db
         .select({
@@ -439,7 +441,17 @@ export class SessionService {
     entry: unknown,
     maxEntries: number = 500
   ): Promise<void> {
-    const session = await this.getSessionById(sessionId, userId);
+    // ⚡ Bolt: Optimized to fetch only the sessionNotes column instead of the entire session record.
+    // This avoids over-fetching large columns like summary or currentSceneDescription.
+    const session = await db.query.gameSessions.findFirst({
+      where: and(
+        eq(gameSessions.id, sessionId),
+        this.getOwnershipCondition(userId)
+      ),
+      columns: { sessionNotes: true },
+    });
+
+    if (!session) throw new NotFoundError('Session', sessionId);
 
     // Parse existing combat log from session notes
     let combatLog: unknown[] = [];
