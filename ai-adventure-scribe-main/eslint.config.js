@@ -397,6 +397,7 @@ export default tseslint.config(
       'src/hooks/useSpellSelection.ts',
       'src/components/spells/SpellFilterPanel.tsx',
       'src/features/character/components/spells/SpellFilterPanel.tsx',
+      'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
     ],
     rules: {
       'max-lines': 'warn',

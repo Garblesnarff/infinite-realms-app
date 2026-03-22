@@ -269,6 +269,7 @@ export default defineConfig({
       'src/features/character/components/sheet/__tests__/InventoryManager.accessibility.test.tsx',
       'tests/services/voice-profile-service.test.ts',
       'tests/services/voice-consistency-service.test.ts',
+      'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -417,6 +418,7 @@ export default defineConfig({
         'src/features/campaign/hooks/use-character-selection.ts',
         'src/hooks/game-session/use-session-initialization.ts',
         'src/hooks/memory/useMemoryCreation.ts',
+        'src/hooks/blog/useBlogTaxonomy.ts',
         'src/hooks/useAutosave.ts',
         'src/hooks/ai/game-phase-updater.ts',
         'src/hooks/ai/roll-processor.ts',
