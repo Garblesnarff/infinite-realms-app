@@ -76,6 +76,22 @@ describe('CharacterService.saveCharacterSpells', () => {
   });
 
   it('should throw NotFoundError if character is not found or not owned by user', async () => {
+    // 1. Class lookup mock (must succeed for validation to reach ownership check)
+    const mockClassSelect = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      then: (onFullfilled: any) => Promise.resolve([{ id: 'class-123' }]).then(onFullfilled),
+    };
+    (db.select as any).mockReturnValueOnce(mockClassSelect);
+
+    // 2. Delete mock returns empty array (no rows affected)
+    (db.delete as any).mockReturnValue({
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([])
+    });
+
+    // 3. Ownership check fallback returns null
     (db.query.characters.findFirst as any).mockResolvedValue(null);
 
     await expect(CharacterService.saveCharacterSpells(mockCharacterId, mockUserId, [], 'Wizard'))
@@ -120,7 +136,8 @@ describe('CharacterService.saveCharacterSpells', () => {
 
     // 4. Delete mock
     (db.delete as any).mockReturnValue({
-      where: vi.fn().mockResolvedValue({})
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([{ id: 'deleted-123' }])
     });
 
     // 5. Insert mock

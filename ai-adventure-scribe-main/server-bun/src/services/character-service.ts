@@ -371,11 +371,9 @@ export class CharacterService {
     spellIds: string[],
     className: string
   ): Promise<{ success: boolean; message: string }> {
-    // 🛡️ Sentinel: Verify ownership first to mask existence
-    const character = await this.getById(characterId, userId);
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
+    // ⚡ Bolt: Removed redundant getById call.
+    // Ownership is verified atomically within DELETE and INSERT queries.
+    // Existence check is deferred to minimize database round-trips in the happy path.
 
     // Get class ID
     const [classData] = await db
@@ -421,7 +419,7 @@ export class CharacterService {
     }
 
     // Clear existing spells with ownership check in WHERE clause for defense-in-depth
-    await db.delete(characterSpells).where(
+    const deleted = await db.delete(characterSpells).where(
       and(
         eq(characterSpells.characterId, characterId),
         eq(characterSpells.sourceClassId, classData.id),
@@ -434,13 +432,15 @@ export class CharacterService {
             ))
         )
       )
-    );
+    ).returning({ id: characterSpells.id });
+
+    let insertedCount = 0;
 
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth
     if (spellIds.length > 0) {
       // ⚡ Bolt: Optimized N+1 query pattern by replacing O(N) UNION ALL loop with a single O(1) joined SELECT.
       // This maintains atomic ownership verification while significantly reducing SQL complexity.
-      await db.insert(characterSpells).select(
+      const inserted = await db.insert(characterSpells).select(
         db.select({
           characterId: sql`${characterId}`,
           spellId: classSpells.spellId,
@@ -457,7 +457,25 @@ export class CharacterService {
           eq(classSpells.classId, classData.id),
           inArray(classSpells.spellId, spellIds)
         ))
-      );
+      ).returning({ id: characterSpells.id });
+
+      insertedCount = inserted.length;
+    }
+
+    // ⚡ Bolt: Verify character existence/ownership only if no rows were affected by DELETE or INSERT.
+    // This maintains the NotFoundError contract while skipping the extra query in most cases.
+    if (deleted.length === 0 && (spellIds.length === 0 || insertedCount === 0)) {
+      const characterExists = await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ),
+        columns: { id: true },
+      });
+
+      if (!characterExists) {
+        throw new NotFoundError('Character', characterId);
+      }
     }
 
     // ⚡ Bolt: Maintain data consistency by syncing with comma-separated columns on characters table.
