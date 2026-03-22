@@ -332,6 +332,8 @@ export default tseslint.config(
       'server-bun/src/services/scene-service.ts',
       'server-bun/src/services/conditions-service.ts',
       'server-bun/src/services/conditions/condition-mechanics.ts',
+      'server-bun/src/services/combat-action-service.ts',
+      'server-bun/src/services/rules-validator-service.ts',
       'src/features/campaign/components/view/SimpleCampaignView.tsx',
       'src/features/campaign/components/view/CampaignCharacterSelection.tsx',
       'server-bun/src/services/combat/combat-attack-service.ts',

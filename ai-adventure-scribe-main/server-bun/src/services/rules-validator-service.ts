@@ -15,7 +15,7 @@
  */
 
 import { CombatActionService, type TurnActionState, type WeaponForTWF } from './combat-action-service.js';
-import { ConditionsService } from './conditions-service.js';
+import { ConditionResolutionService } from './conditions/condition-resolution-service.js';
 import { ExhaustionService, type ExhaustionLevel } from './exhaustion-service.js';
 
 /**
@@ -224,7 +224,7 @@ export class CriticalRulesValidator {
     const warnings: string[] = [];
 
     // Check conditions
-    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId, userId);
+    const { canAct, canReact, reasons } = await ConditionResolutionService.canTakeActions(participantId, userId);
 
     if (proposedAction.type === 'action' || proposedAction.type === 'bonus_action') {
       if (!canAct) {
@@ -432,7 +432,7 @@ export class CriticalRulesValidator {
       }
 
       // Check conditions
-      const { canAct, reasons } = await ConditionsService.canTakeActions(participant.participantId, userId);
+      const { canAct, reasons } = await ConditionResolutionService.canTakeActions(participant.participantId, userId);
       if (!canAct) {
         return { can: false, reason: reasons.join(', ') };
       }

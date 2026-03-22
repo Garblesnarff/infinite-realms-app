@@ -14,6 +14,7 @@ import { db } from '../../../db/client';
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { combatLogger } from '../lib/logger.js';
 import { ConditionMechanics, CONDITION_HIERARCHY, INCOMPATIBLE_CONDITIONS } from './conditions/condition-mechanics.js';
+import { ConditionResolutionService } from './conditions/condition-resolution-service.js';
 
 import type {
   Condition,
@@ -730,19 +731,20 @@ export class ConditionsService {
   /**
    * Get attack roll modifiers for an attacker based on their conditions
    * Returns sources of advantage and disadvantage on the attacker's rolls
+   * @deprecated Use ConditionResolutionService.getAttackerModifiers instead
    */
   static async getAttackerModifiers(attackerId: string, userId?: string): Promise<{
     hasAdvantage: boolean;
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(attackerId, userId);
-    return ConditionMechanics.calculateAttackerModifiers(effects);
+    return ConditionResolutionService.getAttackerModifiers(attackerId, userId);
   }
 
   /**
    * Get attack modifiers against a target based on target's conditions
    * Returns sources of advantage/disadvantage when attacking the target
+   * @deprecated Use ConditionResolutionService.getTargetModifiers instead
    */
   static async getTargetModifiers(
     targetId: string,
@@ -755,13 +757,13 @@ export class ConditionsService {
     isAutoCrit: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(targetId, userId);
-    return ConditionMechanics.calculateTargetModifiers(effects, attackType, distanceInFeet);
+    return ConditionResolutionService.getTargetModifiers(targetId, attackType, distanceInFeet, userId);
   }
 
   /**
    * Get saving throw modifiers for a participant
    * Returns auto-fail or advantage/disadvantage for a specific save type
+   * @deprecated Use ConditionResolutionService.getSaveModifiers instead
    */
   static async getSaveModifiers(
     participantId: string,
@@ -773,23 +775,23 @@ export class ConditionsService {
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateSaveModifiers(effects, saveAbility);
+    return ConditionResolutionService.getSaveModifiers(participantId, saveAbility, userId);
   }
 
   /**
    * Get ability check modifiers for a participant
+   * @deprecated Use ConditionResolutionService.getAbilityCheckModifiers instead
    */
   static async getAbilityCheckModifiers(participantId: string, userId?: string): Promise<{
     hasDisadvantage: boolean;
     reasons: string[];
   }> {
-    const effects = await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateAbilityCheckModifiers(effects);
+    return ConditionResolutionService.getAbilityCheckModifiers(participantId, userId);
   }
 
   /**
    * Check if participant can take actions
+   * @deprecated Use ConditionResolutionService.canTakeActions instead
    */
   static async canTakeActions(
     participantId: string,
@@ -800,13 +802,12 @@ export class ConditionsService {
     canReact: boolean;
     reasons: string[];
   }> {
-    // ⚡ Bolt: Use pre-fetched mechanical effects if available to avoid redundant DB call.
-    const mechanicalEffects = effects || await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateActionRestrictions(mechanicalEffects);
+    return ConditionResolutionService.canTakeActions(participantId, userId, effects);
   }
 
   /**
    * Get speed modifiers for a participant
+   * @deprecated Use ConditionResolutionService.getSpeedModifiers instead
    */
   static async getSpeedModifiers(
     participantId: string,
@@ -817,8 +818,6 @@ export class ConditionsService {
     speedOverride?: number;
     reasons: string[];
   }> {
-    // ⚡ Bolt: Use pre-fetched mechanical effects if available to avoid redundant DB call.
-    const mechanicalEffects = effects || await this.getMechanicalEffects(participantId, userId);
-    return ConditionMechanics.calculateSpeedModifiers(mechanicalEffects);
+    return ConditionResolutionService.getSpeedModifiers(participantId, userId, effects);
   }
 }
