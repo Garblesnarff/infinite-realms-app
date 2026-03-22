@@ -160,6 +160,10 @@
 **Learning:** Found that `detectVoiceCategoryFromNPCType` incorrectly prioritized descriptors like "ancient" (elder) over "dragon" (creature). Also discovered that dialogue parsing regex failed on smart quotes (`“”`) and names with apostrophes (e.g., "Drizzt Do'Urden").
 **Action:** Always check for monstrous/creature keywords before generic descriptors in D&D NPC detection. Use `[\w']` and `["“]` patterns in narrative parsing to handle literary formatting and fantasy names. Use `import * as mod from '...'` with `vi.spyOn` to mock sibling exports in Vitest.
 
+## 2026-03-24 - [Vision Polygon Coverage & Convex Hull Logic]
+**Learning:** Found that `vision-polygon.ts` was already registered in `coverage.include` but had zero tests. Testing revealed that the `mergeVisionPolygons` function uses a convex hull approximation (Graham scan) which is efficient but can over-represent the shared vision area compared to a true polygon union.
+**Action:** When testing geometry-heavy utilities, use mocked dependencies for coordinate-heavy functions like raycasting to focus on the logic of the module under test. Ensure that unused imports in test files are removed to comply with strict `@typescript-eslint/no-unused-vars` rules.
+
 ## 2026-03-15 - [Condition Icons Coverage]
 **Learning:** `condition-icons.ts` provides critical visual mapping for the battle map but had zero test coverage. The logic for sorting conditions by priority and determining the primary condition (lowest priority number) is essential for correct token rendering.
 **Action:** Always verify that visual utility functions are tested for both standard and edge cases (empty arrays, unknown types). Added comprehensive coverage for `condition-icons.ts` and included `condition-definitions.ts` in coverage reports as it's a key dependency for the condition system.
