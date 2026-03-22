@@ -307,6 +307,8 @@ export default tseslint.config(
       'src/utils/condition-definitions.ts',
       'src/utils/combatDetection.ts',
       'src/utils/multiclassing.ts',
+        'src/utils/lighting-integration.ts',
+        'src/utils/__tests__/lighting-integration.test.ts',
       'src/utils/__tests__/multiclassing.test.ts',
       'src/utils/classFeatures.ts',
       'src/utils/classMechanics.ts',

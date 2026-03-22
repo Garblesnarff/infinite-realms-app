@@ -371,25 +371,36 @@ export function calculateAmbientOcclusion(
  * Clip polygon to radius
  */
 function clipPolygonToRadius(points: Point2D[], center: Point2D, radius: number): Point2D[] {
-  return points.filter((point) => {
+  return points.map((point) => {
     const dx = point.x - center.x;
     const dy = point.y - center.y;
-    return Math.sqrt(dx * dx + dy * dy) <= radius;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= radius) {
+      return point;
+    }
+
+    // Project point to radius
+    return {
+      x: center.x + (dx / distance) * radius,
+      y: center.y + (dy / distance) * radius,
+    };
   });
 }
 
 /**
  * Subtract one polygon from another (simplified)
+ *
+ * For dim light calculation, we need to subtract the bright light area from the total light area.
+ * Since both are derived from the same raycast results but clipped to different radii,
+ * we can create a "ring" polygon by combining both sets of points.
  */
 function subtractPolygons(outer: Point2D[], inner: Point2D[]): Point2D[] {
-  // Simplified: just return outer if different from inner
-  if (outer.length !== inner.length) return outer;
+  if (inner.length === 0) return outer;
 
-  // For proper polygon subtraction, use a library like polygon-clipping
-  // This is a placeholder implementation
-  return outer.filter((point) => {
-    return !inner.some((p) => p.x === point.x && p.y === point.y);
-  });
+  // To create a proper ring for rendering, we combine outer points and inner points in reverse
+  // This creates a single polygon path that covers the area between the two radii
+  return [...outer, ...[...inner].reverse()];
 }
 
 // ===========================
@@ -462,7 +473,15 @@ export function isPointInLight(
 
     if (distanceInFeet <= totalRange) {
       // Check if blocked by walls
-      if (!isInShadow(point, { x: source.x, y: source.y }, walls[0])) {
+      let blocked = false;
+      for (const wall of walls) {
+        if (isInShadow(point, { x: source.x, y: source.y }, wall)) {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (!blocked) {
         return true;
       }
     }
