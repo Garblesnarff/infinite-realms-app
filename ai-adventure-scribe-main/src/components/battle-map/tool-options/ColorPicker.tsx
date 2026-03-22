@@ -24,6 +24,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="w-10 h-8 rounded border cursor-pointer"
+          title={label}
+          aria-label={label}
         />
         <span className="text-xs text-muted-foreground font-mono">{value}</span>
       </div>

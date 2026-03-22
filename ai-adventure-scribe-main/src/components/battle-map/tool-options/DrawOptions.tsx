@@ -64,8 +64,13 @@ export const DrawOptions: React.FC<DrawOptionsProps> = ({
           onClick={() => setFillEnabled(!fillEnabled)}
           aria-pressed={fillEnabled}
           aria-label="Toggle Fill"
+          title="Toggle Fill"
         >
-          {fillEnabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {fillEnabled ? (
+            <Eye className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <EyeOff className="h-4 w-4" aria-hidden="true" />
+          )}
           <span className="ml-2">Fill</span>
         </Button>
       </div>

@@ -35,7 +35,12 @@ export const FogOptions: React.FC<FogOptionsProps> = ({
           Brush Mode
         </Label>
         <Select value={brushMode} onValueChange={(value: any) => setBrushMode(value)}>
-          <SelectTrigger id={brushModeId} className="w-full" aria-label="Brush mode">
+          <SelectTrigger
+            id={brushModeId}
+            className="w-full"
+            aria-label="Brush mode"
+            title="Brush mode"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -59,8 +59,13 @@ export const WallOptions: React.FC<WallOptionsProps> = ({
           onClick={toggleSnapToGrid}
           aria-pressed={snapToGrid}
           aria-label="Toggle Snap to Grid"
+          title="Toggle Snap to Grid"
         >
-          {snapToGrid ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+          {snapToGrid ? (
+            <Lock className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Unlock className="h-4 w-4" aria-hidden="true" />
+          )}
           <span className="ml-2">Snap to Grid</span>
         </Button>
       </div>

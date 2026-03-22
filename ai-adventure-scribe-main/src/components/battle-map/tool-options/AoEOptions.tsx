@@ -41,7 +41,12 @@ export const AoEOptions: React.FC<AoEOptionsProps> = ({
           Template Type
         </Label>
         <Select value={templateType} onValueChange={(value: any) => setTemplateType(value)}>
-          <SelectTrigger id={templateTypeId} className="w-full" aria-label="Template type">
+          <SelectTrigger
+            id={templateTypeId}
+            className="w-full"
+            aria-label="Template type"
+            title="Template type"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
