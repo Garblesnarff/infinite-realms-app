@@ -145,33 +145,29 @@ describe('Chronicles Security', () => {
   });
 
   describe('chroniclesRouter scoping', () => {
-    it('getBySessionId should filter by userId', async () => {
+    it('getBySessionId should filter by userId and verify ownership', async () => {
       const caller = chroniclesRouter.createCaller(mockCtx);
 
       const qb = mockCtx.db.select();
       mockCtx.db.select.mockReturnValue(qb);
 
-      let queryCount = 0;
-      qb.then = vi.fn(function (this: any, resolve: any) {
-        queryCount++;
-        if (queryCount === 1) {
-          // verifySessionOwnership call
-          return Promise.resolve([{ sessionId: mockSessionId }]).then(resolve);
-        } else {
-          // getBySessionId call
-          return Promise.resolve([]).then(resolve);
-        }
-      });
+      // Return a mock result with ID to avoid NOT_FOUND error and to signify chronicle existence
+      qb._results = [{ id: 'chronicle-123' }];
 
       await caller.getBySessionId({ sessionId: mockSessionId });
 
-      // The last where call should be for getBySessionId
-      expect(qb.where).toHaveBeenLastCalledWith(
+      // Bolt: The consolidated query includes ownership filters in the WHERE clause
+      expect(qb.where).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'and',
           args: expect.arrayContaining([
             expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockSessionId }),
-            expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
+            expect.objectContaining({
+              type: 'or',
+              args: expect.arrayContaining([
+                expect.objectContaining({ type: 'eq', a: expect.anything(), b: mockUserId }),
+              ]),
+            }),
           ]),
         }),
       );

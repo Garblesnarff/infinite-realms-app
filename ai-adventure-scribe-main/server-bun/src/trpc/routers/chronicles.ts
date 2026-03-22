@@ -84,20 +84,55 @@ export const chroniclesRouter = router({
   getBySessionId: protectedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
-      await verifySessionOwnership(ctx, input.sessionId);
-
+      // ⚡ Bolt: Combined session ownership verification and chronicle lookup into a single joined query.
+      // This reduces database round-trips from 2 to 1 while maintaining existence masking for unauthorized access.
+      // Explicitly select columns to avoid over-fetching and follow performance best practices.
       const rows = await ctx.db
-        .select()
-        .from(sessionChronicles)
+        .select({
+          id: sessionChronicles.id,
+          sessionId: sessionChronicles.sessionId,
+          userId: sessionChronicles.userId,
+          status: sessionChronicles.status,
+          chronicleText: sessionChronicles.chronicleText,
+          chapterTitle: sessionChronicles.chapterTitle,
+          previouslyOn: sessionChronicles.previouslyOn,
+          illustrationUrl: sessionChronicles.illustrationUrl,
+          shareToken: sessionChronicles.shareToken,
+          generatedAt: sessionChronicles.generatedAt,
+          errorMessage: sessionChronicles.errorMessage,
+          createdAt: sessionChronicles.createdAt,
+          updatedAt: sessionChronicles.updatedAt,
+        })
+        .from(gameSessions)
+        .leftJoin(
+          sessionChronicles,
+          and(
+            eq(sessionChronicles.sessionId, gameSessions.id),
+            eq(sessionChronicles.userId, ctx.user.userId),
+          ),
+        )
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
         .where(
           and(
-            eq(sessionChronicles.sessionId, input.sessionId),
-            eq(sessionChronicles.userId, ctx.user.userId),
+            eq(gameSessions.id, input.sessionId),
+            or(
+              eq(campaigns.userId, ctx.user.userId),
+              eq(characters.userId, ctx.user.userId),
+              eq(characters.ownerId, ctx.user.userId),
+            ),
           ),
         )
         .limit(1);
 
-      return rows[0] ?? null;
+      if (rows.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      const row = rows[0];
+      // If the left join resulted in nulls for chronicle columns, then no chronicle exists for this user/session.
+      // We check for the presence of the chronicle ID to determine existence.
+      return row.id ? row : null;
     }),
 
   /**
