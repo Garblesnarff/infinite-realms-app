@@ -2,7 +2,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { isSessionExpired } from '../game-session/session-utils';
+import { isSessionExpired, SESSION_CORE_COLUMNS } from '../game-session/session-utils';
 import { useSessionInitialization } from '../game-session/use-session-initialization';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -23,10 +23,14 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('../game-session/session-utils', () => ({
-  isSessionExpired: vi.fn(),
-  isValidSession: vi.fn().mockReturnValue(true),
-}));
+vi.mock('../game-session/session-utils', async (importOriginal) => {
+  const actual = (await importOriginal()) as any;
+  return {
+    ...actual,
+    isSessionExpired: vi.fn(),
+    isValidSession: vi.fn().mockReturnValue(true),
+  };
+});
 
 describe('useSessionInitialization', () => {
   const mockSetSessionData = vi.fn();
@@ -78,8 +82,9 @@ describe('useSessionInitialization', () => {
 
   it('should load a specific session if specificSessionId is provided', async () => {
     const mockSession = { id: 'spec-session', status: 'active' };
+    const selectSpy = vi.fn().mockReturnThis();
     (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
+      select: selectSpy,
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
     });
@@ -89,6 +94,7 @@ describe('useSessionInitialization', () => {
     );
 
     await waitFor(() => {
+      expect(selectSpy).toHaveBeenCalledWith(SESSION_CORE_COLUMNS);
       expect(mockSetSessionData).toHaveBeenCalledWith(mockSession);
       expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });
@@ -96,8 +102,9 @@ describe('useSessionInitialization', () => {
 
   it('should resume an active session if found and not expired', async () => {
     const mockSession = { id: 'active-session', status: 'active' };
+    const selectSpy = vi.fn().mockReturnThis();
     (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
+      select: selectSpy,
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: [mockSession], error: null }),
@@ -107,6 +114,7 @@ describe('useSessionInitialization', () => {
     renderHook(() => useSessionInitialization(defaultProps));
 
     await waitFor(() => {
+      expect(selectSpy).toHaveBeenCalledWith(SESSION_CORE_COLUMNS);
       expect(mockSetSessionData).toHaveBeenCalledWith(mockSession);
       expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });

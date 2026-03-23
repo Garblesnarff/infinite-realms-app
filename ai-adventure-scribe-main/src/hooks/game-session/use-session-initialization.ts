@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 
-import { type ExtendedGameSession, type SessionState, isSessionExpired } from './session-utils';
+import {
+  type ExtendedGameSession,
+  type SessionState,
+  isSessionExpired,
+  SESSION_CORE_COLUMNS,
+} from './session-utils';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -108,9 +113,10 @@ export const useSessionInitialization = ({
         // Note: We include campaign_id and character_id filtering for extra security (IDOR prevention)
         if (specificSessionId) {
           logger.info('[Session Init] Loading specific session:', specificSessionId);
+          // ⚡ Bolt: Use explicit core columns to avoid over-fetching
           const { data: specificSession, error: specificError } = await supabase
             .from('game_sessions')
-            .select('*')
+            .select(SESSION_CORE_COLUMNS)
             .eq('id', specificSessionId)
             .eq('campaign_id', campaignId)
             .eq('character_id', characterId)
@@ -129,9 +135,10 @@ export const useSessionInitialization = ({
         }
 
         // Find recent sessions
+        // ⚡ Bolt: Use explicit core columns to avoid over-fetching during session lookup
         const { data: existingSessions, error: existingSessionError } = await supabase
           .from('game_sessions')
-          .select('*')
+          .select(SESSION_CORE_COLUMNS)
           .eq('campaign_id', campaignId)
           .eq('character_id', characterId)
           .order('created_at', { ascending: false })

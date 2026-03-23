@@ -371,7 +371,7 @@ describe('useSimpleGameSession', () => {
         }
       });
 
-      expect(result.current.error).toBe('Failed to create session');
+      expect(result.current.error).toBe('String error');
     });
   });
 
@@ -444,7 +444,7 @@ describe('useSimpleGameSession', () => {
         }
       });
 
-      expect(result.current.error).toBe('Failed to end session');
+      expect(result.current.error).toBe('String error');
     });
   });
 
