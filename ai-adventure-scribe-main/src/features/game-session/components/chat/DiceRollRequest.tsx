@@ -12,7 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { DiceRollEmbed } from '@/features/game-session/components';
-import { useDiceRollRequest, type RollRequest } from '@/features/game-session/hooks/use-dice-roll-request';
+import {
+  useDiceRollRequest,
+  type RollRequest,
+} from '@/features/game-session/hooks/use-dice-roll-request';
 import { cn } from '@/lib/utils';
 
 export type { RollRequest };
@@ -139,13 +142,6 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = ({
             <div className="text-lg font-mono font-bold text-slate-800">
               {rollCalculation.formula}
             </div>
-            {/* DC/AC hidden from players - AI DM still receives it in data model */}
-            {/* eslint-disable-next-line no-constant-binary-expression */}
-            {false && (request.dc || request.ac) && (
-              <Badge variant="outline" className="text-sm">
-                {request.dc ? `DC ${request.dc}` : `AC ${request.ac}`}
-              </Badge>
-            )}
           </div>
 
           {/* Modifier Breakdown */}
