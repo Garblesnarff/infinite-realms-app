@@ -281,6 +281,9 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.4, type: 'spring', damping: 15 }}
                   className="relative"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
                 >
                   {/* Dice container */}
                   <div className="relative flex items-center justify-center py-8">
@@ -317,6 +320,7 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                           fontFamily: '"Cinzel", serif',
                           textShadow: '0 2px 8px rgba(0, 0, 0, 0.8)',
                         }}
+                        aria-label={isRolling ? 'Rolling dice...' : `Result: ${result.total}`}
                       >
                         {isRolling ? '?' : result.total}
                       </span>
@@ -331,7 +335,12 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                       transition={{ delay: 0.9 }}
                       className="text-center space-y-1"
                     >
-                      <p className="text-amber-300/60 text-sm font-mono">{request.formula}</p>
+                      <p
+                        className="text-amber-300/60 text-sm font-mono"
+                        aria-label={`Formula: ${request.formula}`}
+                      >
+                        {request.formula}
+                      </p>
                       {result.naturalRoll && (
                         <p className="text-amber-400/70 text-xs">
                           Natural {result.naturalRoll}
@@ -355,6 +364,8 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                       config.color,
                       'shadow-lg',
                     )}
+                    role="status"
+                    aria-live="polite"
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-2xl" aria-hidden="true">
