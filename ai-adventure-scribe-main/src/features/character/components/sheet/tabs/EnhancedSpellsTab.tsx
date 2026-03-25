@@ -47,10 +47,12 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
     shortRest,
   } = useEnhancedSpellcasting(character, onUpdate);
 
+  const activeTabCount = 2 + (hasPactMagic ? 1 : 0) + (hasMetamagic ? 1 : 0) + (canCastRituals ? 1 : 0);
+
   if (isLoadingSpells) {
     return (
       <div className="text-center space-y-4">
-        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground animate-pulse" />
+        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground animate-pulse" aria-hidden="true" />
         <h2 className="text-2xl font-bold">Loading Spells...</h2>
         <p className="text-muted-foreground">Fetching spell data from the library.</p>
       </div>
@@ -60,7 +62,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
   if (!hasSpellcasting) {
     return (
       <div className="text-center space-y-4">
-        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground" />
+        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground" aria-hidden="true" />
         <h2 className="text-2xl font-bold">No Spellcasting</h2>
         <p className="text-muted-foreground">
           This character does not have spellcasting abilities.
@@ -69,8 +71,10 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
     );
   }
 
-  const getSpellCard = (spell: Spell | undefined, showPreparedBadge = false) => {
-    if (!spell) return null;
+  const getSpellCard = (spell: Spell | undefined, showPreparedBadge = false): JSX.Element | null => {
+    if (!spell) {
+      return null;
+    }
 
     return (
       <div key={spell?.id} className="p-3 border rounded-lg">
@@ -115,6 +119,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     : !spellSlots[spell.level] ||
                       spellSlots[spell.level].used >= spellSlots[spell.level].total
                 }
+                aria-label={`Cast ${spell?.name}`}
+                title={`Cast ${spell?.name}`}
               >
                 Cast
               </Button>
@@ -152,7 +158,10 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
       </div>
 
       <Tabs defaultValue={hasPactMagic ? 'pact' : 'spells'}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList
+          className="grid w-full"
+          style={{ gridTemplateColumns: `repeat(${activeTabCount}, minmax(0, 1fr))` }}
+        >
           <TabsTrigger value="spells">Spells</TabsTrigger>
           <TabsTrigger value="cantrips">Cantrips</TabsTrigger>
           {hasPactMagic && <TabsTrigger value="pact">Pact Magic</TabsTrigger>}
@@ -168,7 +177,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Circle className="w-5 h-5 text-purple-500" />
+                    <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Spell Slots
                   </CardTitle>
                   <Button size="sm" onClick={longRest}>
@@ -187,7 +196,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                               return (
                                 <button
                                   key={i}
-                                  className={`w-6 h-6 rounded border-2 ${
+                                  type="button"
+                                  className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
                                     isUsed
                                       ? 'bg-gray-300 border-gray-400'
                                       : 'bg-purple-500 border-purple-600'
@@ -219,7 +229,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-blue-500" />
+                  <BookOpen className="w-5 h-5 text-blue-500" aria-hidden="true" />
                   {preparedSpells.length > 0 ? 'Prepared Spells' : 'Known Spells'}
                 </CardTitle>
               </CardHeader>
@@ -239,7 +249,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-blue-500" />
+                <Wand2 className="w-5 h-5 text-blue-500" aria-hidden="true" />
                 Cantrips
               </CardTitle>
             </CardHeader>
@@ -259,7 +269,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-purple-500" />
+                    <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Slots
                   </CardTitle>
                   <Button size="sm" onClick={shortRest}>
@@ -276,7 +286,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                           return (
                             <button
                               key={i}
-                              className={`w-8 h-8 rounded border-2 ${
+                              type="button"
+                              className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
                                 isExpended
                                   ? 'bg-gray-300 border-gray-400'
                                   : 'bg-purple-500 border-purple-600'
@@ -301,7 +312,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-purple-500" />
+                    <Crown className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Spells
                   </CardTitle>
                 </CardHeader>
@@ -323,7 +334,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Star className="w-5 h-5 text-gold-500" />
+                    <Star className="w-5 h-5 text-gold-500" aria-hidden="true" />
                     Sorcery Points
                   </CardTitle>
                 </CardHeader>
@@ -333,7 +344,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                       <Progress
                         value={(sorceryPoints.current / sorceryPoints.maximum) * 100}
                         className="w-full h-4"
-                        aria-label="Sorcery Points remaining"
+                        aria-label={`Sorcery Points: ${sorceryPoints.current} of ${sorceryPoints.maximum} remaining`}
                       />
                       <div className="text-sm text-muted-foreground mt-1">
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
@@ -370,6 +381,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                             variant="outline"
                             onClick={() => spendSorceryPoints(option.sorceryPointCost)}
                             disabled={sorceryPoints.current < option.sorceryPointCost}
+                            aria-label={`Use ${option.name} metamagic`}
+                            title={`Use ${option.name} metamagic`}
                           >
                             Use
                           </Button>
@@ -389,7 +402,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-indigo-500" />
+                  <Clock className="w-5 h-5 text-indigo-500" aria-hidden="true" />
                   Ritual Spells
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -416,7 +429,12 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                           </p>
                           <p className="text-sm">{spell.description}</p>
                         </div>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Cast ${spell.name} as ritual`}
+                          title={`Cast ${spell.name} as ritual`}
+                        >
                           Cast as Ritual
                         </Button>
                       </div>
