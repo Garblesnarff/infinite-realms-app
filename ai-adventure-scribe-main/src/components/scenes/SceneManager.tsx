@@ -207,7 +207,11 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
           >
             <List className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-muted-foreground ml-2">
+          <span
+            className="text-sm text-muted-foreground ml-2"
+            role="status"
+            aria-live="polite"
+          >
             {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
           </span>
         </div>
@@ -292,8 +296,8 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        aria-label="Open scene menu"
-                        title="Open scene menu"
+                        aria-label={`Open menu for ${scene.name}`}
+                        title={`Open menu for ${scene.name}`}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -426,8 +430,8 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label="Open scene menu"
-                      title="Open scene menu"
+                      aria-label={`Open menu for ${scene.name}`}
+                      title={`Open menu for ${scene.name}`}
                     >
                       <MoreVertical className="h-4 w-4" />
                     </Button>

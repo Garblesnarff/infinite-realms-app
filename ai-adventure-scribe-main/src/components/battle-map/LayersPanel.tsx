@@ -152,9 +152,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
             size="icon"
             className="h-8 w-8"
             onClick={handleVisibilityToggle}
-            aria-label={layerState.visible ? 'Hide layer' : 'Show layer'}
+            aria-label={layerState.visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
             aria-pressed={layerState.visible}
-            title={layerState.visible ? 'Hide layer' : 'Show layer'}
+            title={layerState.visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
           >
             {layerState.visible ? (
               <Eye className="h-4 w-4" />
@@ -169,9 +169,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, lay
             size="icon"
             className="h-8 w-8"
             onClick={handleLockToggle}
-            aria-label={layerState.locked ? 'Unlock layer' : 'Lock layer'}
+            aria-label={layerState.locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
             aria-pressed={layerState.locked}
-            title={layerState.locked ? 'Unlock layer' : 'Lock layer'}
+            title={layerState.locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
           >
             {layerState.locked ? (
               <Lock className="h-4 w-4" />
