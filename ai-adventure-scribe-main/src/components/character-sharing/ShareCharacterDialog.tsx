@@ -9,7 +9,7 @@
  * - Current permissions list with manage options
  */
 
-import { Share2, Search, UserPlus, Eye, Edit, Crown, Shield, Trash2 } from 'lucide-react';
+import { Share2, Search, UserPlus, Eye, Edit, Crown, Shield, Trash2, Check } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
+import { cn } from '@/lib/utils';
 import { PermissionLevel } from '@/types/character';
 
 interface ShareCharacterDialogProps {
@@ -207,6 +208,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                   aria-controls={searchQuery ? resultsListboxId : undefined}
+                  aria-haspopup="listbox"
+                  aria-expanded={Boolean(searchQuery)}
                 />
               </div>
 
@@ -224,15 +227,24 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         key={user.id}
                         type="button"
                         role="option"
-                        className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between"
+                        aria-selected={selectedUserId === user.id}
+                        className={cn(
+                          'w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between',
+                          selectedUserId === user.id && 'bg-accent/50',
+                        )}
                         onClick={() => {
                           setSelectedUserId(user.id);
                           setSearchQuery(user.name);
                         }}
                       >
-                        <div>
-                          <div className="font-medium text-sm">{user.name}</div>
-                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                        <div className="flex items-center justify-between w-full">
+                          <div>
+                            <div className="font-medium text-sm">{user.name}</div>
+                            <div className="text-xs text-muted-foreground">{user.email}</div>
+                          </div>
+                          {selectedUserId === user.id && (
+                            <Check className="h-4 w-4 text-infinite-teal" />
+                          )}
                         </div>
                       </button>
                     ))
