@@ -252,6 +252,7 @@ export default tseslint.config(
 
       // Additional large production files
       'src/hooks/use-game-session.ts', // 797 lines
+      'src/hooks/game-session/use-session-management.ts',
       'src/hooks/use-ability-score-selection.ts',
       'src/hooks/use-progressive-voice.ts',
       'src/hooks/use-voice-audio-control.ts',
