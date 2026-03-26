@@ -336,6 +336,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/AdvancedSpellcastingSelection.tsx',
       'server-bun/src/services/scene-service.ts',
       'server-bun/src/services/conditions-service.ts',
+      'server-bun/src/services/conditions/condition-query-service.ts',
       'server-bun/src/services/conditions/condition-mechanics.ts',
       'server-bun/src/services/combat-action-service.ts',
       'server-bun/src/services/rules-validator-service.ts',

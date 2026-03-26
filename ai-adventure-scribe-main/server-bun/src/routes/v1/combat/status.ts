@@ -10,6 +10,7 @@ import {
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
+import { ConditionQueryService } from '../../../services/conditions/condition-query-service.js';
 import { ConditionsService } from '../../../services/conditions-service.js';
 
 
@@ -273,7 +274,7 @@ export const statusRoutes = new Elysia()
     }
 
     try {
-      const conditions = await ConditionsService.getConditionsLibrary();
+      const conditions = await ConditionQueryService.getConditionsLibrary();
       return { conditions };
     } catch (e) {
       logger.error({ msg: 'Get conditions library error', error: e });
@@ -295,7 +296,7 @@ export const statusRoutes = new Elysia()
     try {
       // 🛡️ Sentinel: Use updated service methods that incorporate ownership checks
       // and prevent existence leakage by throwing NotFoundError instead of Access Denied.
-      const conditions = await ConditionsService.getActiveConditions(
+      const conditions = await ConditionQueryService.getActiveConditions(
         params.participantId,
         user.userId
       );
