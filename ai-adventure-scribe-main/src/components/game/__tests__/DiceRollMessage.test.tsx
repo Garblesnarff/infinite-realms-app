@@ -18,13 +18,21 @@ describe('DiceRollMessage', () => {
     timestamp: new Date().toISOString(),
   };
 
-  it('renders basic roll information correctly', () => {
-    render(<DiceRollMessage data={defaultData} />);
+  it('renders basic roll information correctly with accessibility attributes', () => {
+    const { container } = render(<DiceRollMessage data={defaultData} />);
+
+    // Check for status role and live region
+    const card = container.firstChild as HTMLElement;
+    expect(card).toHaveAttribute('role', 'status');
+    expect(card).toHaveAttribute('aria-live', 'polite');
+    expect(card).toHaveAttribute('aria-atomic', 'true');
+
+    // Check for formula and total labels
+    expect(screen.getByLabelText('Formula: 1d20+4')).toBeInTheDocument();
+    expect(screen.getByLabelText('Total result: 19')).toBeInTheDocument();
 
     expect(screen.getByText('1d20+4')).toBeInTheDocument();
     expect(screen.getByText('19')).toBeInTheDocument();
-    expect(screen.getByText('Formula')).toBeInTheDocument();
-    expect(screen.getByText('Total')).toBeInTheDocument();
   });
 
   it('renders player name and label when provided', () => {
@@ -33,7 +41,7 @@ describe('DiceRollMessage', () => {
     expect(screen.getByText(/Grog rolled: Initiative/)).toBeInTheDocument();
   });
 
-  it('renders advantage badge and kept/dropped rolls', () => {
+  it('renders advantage badge and kept/dropped rolls with accessibility labels', () => {
     const advantageData = {
       ...defaultData,
       formula: '2d20kh1+4',
@@ -46,7 +54,9 @@ describe('DiceRollMessage', () => {
 
     render(<DiceRollMessage data={advantageData} />);
 
-    expect(screen.getByText(/Advantage/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Roll modifiers')).toBeInTheDocument();
+    expect(screen.getByLabelText('Advantage')).toBeInTheDocument();
+    expect(screen.getByLabelText('Individual roll breakdown')).toBeInTheDocument();
     expect(screen.getByText(/Kept: \[18\]/)).toBeInTheDocument();
     expect(screen.getByText(/Dropped: \[5\]/)).toBeInTheDocument();
   });

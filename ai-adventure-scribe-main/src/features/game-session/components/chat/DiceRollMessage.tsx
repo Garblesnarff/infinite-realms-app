@@ -96,11 +96,16 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = ({
   };
 
   return (
-    <Card className={cn('w-full max-w-sm bg-slate-50 border-slate-200', className)}>
+    <Card
+      className={cn('w-full max-w-sm bg-slate-50 border-slate-200', className)}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <div className="p-4">
         {/* Header */}
         <div className="flex items-center gap-2 mb-3">
-          <Dice6 className="w-4 h-4 text-slate-600" />
+          <Dice6 className="w-4 h-4 text-slate-600" aria-hidden="true" />
           <span className="text-sm font-medium text-slate-700">
             {playerName ? `${playerName} rolled` : 'Dice Roll'}
             {label && `: ${label}`}
@@ -109,16 +114,24 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = ({
 
         {/* Advantage/Disadvantage Badges */}
         {(advantage || disadvantage) && (
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-3" aria-label="Roll modifiers">
             {advantage && (
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                <ArrowUp className="w-2 h-2 mr-1" />
+              <Badge
+                variant="secondary"
+                className="text-xs bg-green-100 text-green-800"
+                aria-label="Advantage"
+              >
+                <ArrowUp className="w-2 h-2 mr-1" aria-hidden="true" />
                 Advantage
               </Badge>
             )}
             {disadvantage && (
-              <Badge variant="secondary" className="text-xs bg-red-100 text-red-800">
-                <ArrowDown className="w-2 h-2 mr-1" />
+              <Badge
+                variant="secondary"
+                className="text-xs bg-red-100 text-red-800"
+                aria-label="Disadvantage"
+              >
+                <ArrowDown className="w-2 h-2 mr-1" aria-hidden="true" />
                 Disadvantage
               </Badge>
             )}
@@ -127,21 +140,36 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = ({
 
         {/* Formula Display */}
         <div className="flex items-center justify-center gap-2 mb-3">
-          <div className="text-center">
-            <div className="text-lg font-mono font-medium text-slate-700">{formula}</div>
-            <div className="text-xs text-muted-foreground">Formula</div>
+          <div className="text-center" aria-label={`Formula: ${formula}`}>
+            <div className="text-lg font-mono font-medium text-slate-700" aria-hidden="true">
+              {formula}
+            </div>
+            <div className="text-xs text-muted-foreground" aria-hidden="true">
+              Formula
+            </div>
           </div>
 
-          <div className="text-xl text-slate-400">=</div>
+          <div className="text-xl text-slate-400" aria-hidden="true">
+            =
+          </div>
 
-          <div className="text-center">
-            <div className={cn('text-2xl font-bold', getResultColor())}>{total}</div>
-            <div className="text-xs text-muted-foreground">Total</div>
+          <div className="text-center" aria-label={`Total result: ${total}`}>
+            <div
+              className={cn('text-2xl font-bold', getResultColor())}
+              aria-hidden="true"
+            >
+              {total}
+            </div>
+            <div className="text-xs text-muted-foreground" aria-hidden="true">
+              Total
+            </div>
           </div>
         </div>
 
         {/* Individual Roll Results */}
-        {formatIndividualRolls()}
+        {formatIndividualRolls() && (
+          <div aria-label="Individual roll breakdown">{formatIndividualRolls()}</div>
+        )}
 
         {/* Critical Hit/Miss Indicator */}
         {critical !== undefined && naturalRoll && (

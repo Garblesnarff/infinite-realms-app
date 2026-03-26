@@ -117,3 +117,7 @@
 ## 2026-03-08 - Folder Tree and Dice Roller Accessibility
 **Learning:** Interactive `div` elements and purely informational `Badge` components often lack the semantic metadata required for a high-quality accessible experience. Combining `aria-label` for screen readers and `title` for sighted user tooltips provides a consistent "micro-UX" win across different input methods.
 **Action:** Always provide both `aria-label` and `title` for custom interactive elements and critical status indicators (like dice results) to ensure "invisible" UX that just works for everyone.
+
+## 2026-03-23 - Dice Roll Message Accessibility
+**Learning:** Dice roll messages in chat are high-frequency game events that must be announced immediately to screen reader users. Components like `DiceRollMessage` that are duplicated across the codebase (e.g., `src/components/game/` and `src/features/game-session/components/chat/`) must be updated in tandem to maintain UX consistency.
+**Action:** Use `role="status"`, `aria-live="polite"`, and `aria-atomic="true"` for event-driven message components. Use `aria-label` to provide semantic context for formula and result values (e.g., "Formula: 1d20+4") rather than relying on raw text.
