@@ -358,7 +358,7 @@ describe('useSimpleGameSession', () => {
     it('should handle createGameSession when err is not an Error object', async () => {
        const mockFrom = vi.spyOn(supabase, 'from');
       (mockFrom as any).mockImplementationOnce(() => {
-        throw new Error('String error');
+        throw 'String error';
       });
 
       const { result } = renderHook(() => useSimpleGameSession());
@@ -431,7 +431,7 @@ describe('useSimpleGameSession', () => {
     it('should handle endSession when err is not an Error object', async () => {
        const mockFrom = vi.spyOn(supabase, 'from');
       (mockFrom as any).mockImplementationOnce(() => {
-        throw new Error('String error');
+        throw 'String error';
       });
 
       const { result } = renderHook(() => useSimpleGameSession());

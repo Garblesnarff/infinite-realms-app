@@ -1,5 +1,5 @@
 // External/SDK Imports
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 
 import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
@@ -66,6 +66,61 @@ export interface EnhancedChatMessage extends ChatMessage {
 export type { RollRequest } from '@/types/roll-request';
 
 /**
+ * Fetches campaign and character details for the DM Agent context.
+ *
+ * ⚡ Bolt: Extracted from hook to stabilize identity and prevent redundant
+ * re-creations during component re-renders.
+ */
+const fetchGameContext = async (
+  sessionId: string,
+): Promise<{
+  campaign: Record<string, unknown>;
+  character: Record<string, unknown>;
+  starterCampaignId?: string;
+} | null> => {
+  try {
+    logger.info('Fetching game session details for:', sessionId);
+
+    // ⚡ Bolt: Explicit column selection to avoid over-fetching and include character stats.
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('game_sessions')
+      .select(
+        `
+        id, campaign_id, character_id, starter_campaign_id,
+        campaigns:campaign_id (id, name, description),
+        characters:character_id (
+          id, name, level, race, class, background,
+          character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
+        )
+      `,
+      )
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError) {
+      logger.error('Error fetching session:', sessionError);
+      return null;
+    }
+
+    if (!sessionData?.campaign_id || !sessionData?.character_id) {
+      logger.error('No campaign or character IDs found in session');
+      return null;
+    }
+
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      campaign: (sessionData.campaigns as any) || {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      character: (sessionData.characters as any) || {},
+      starterCampaignId: sessionData.starter_campaign_id as string,
+    };
+  } catch (error) {
+    logger.error('Error in fetchGameContext:', error);
+    return null;
+  }
+};
+
+/**
  * useAIResponse Hook
  *
  * Handles AI response generation with memory context window.
@@ -85,252 +140,213 @@ export const useAIResponse = () => {
   const processedRollRequestsRef = useRef<Set<string>>(new Set());
 
   /**
-   * Fetches campaign and character details for the DM Agent context.
-   */
-  const fetchGameContext = async (
-    sessionId: string,
-  ): Promise<{
-    campaign: Record<string, unknown>;
-    character: Record<string, unknown>;
-    starterCampaignId?: string;
-  } | null> => {
-    try {
-      logger.info('Fetching game session details for:', sessionId);
-
-      // ⚡ Bolt: Explicit column selection to avoid over-fetching and include character stats.
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('game_sessions')
-        .select(
-          `
-          id, campaign_id, character_id, starter_campaign_id,
-          campaigns:campaign_id (id, name, description),
-          characters:character_id (
-            id, name, level, race, class, background,
-            character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
-          )
-        `,
-        )
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionError) {
-        logger.error('Error fetching session:', sessionError);
-        return null;
-      }
-
-      if (!sessionData?.campaign_id || !sessionData?.character_id) {
-        logger.error('No campaign or character IDs found in session');
-        return null;
-      }
-
-      return {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        campaign: (sessionData.campaigns as any) || {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        character: (sessionData.characters as any) || {},
-        starterCampaignId: sessionData.starter_campaign_id as string,
-      };
-    } catch (error) {
-      logger.error('Error in fetchGameContext:', error);
-      return null;
-    }
-  };
-
-  /**
    * Calls the DM Agent to generate a response based on chat history and game context.
    * Handles structured responses with narration segments for voice synthesis.
+   *
+   * ⚡ Bolt: Memoized response generation to prevent downstream re-renders of
+   * components consuming this hook when the parent component re-renders.
    */
-  const getAIResponse = async (
-    messages: ChatMessage[],
-    sessionId: string,
-    turnCount?: number,
-  ): Promise<EnhancedChatMessage> => {
-    try {
-      logger.info('Getting AI response for session:', sessionId);
+  const getAIResponse = useCallback(
+    async (
+      messages: ChatMessage[],
+      sessionId: string,
+      turnCount?: number,
+    ): Promise<EnhancedChatMessage> => {
+      try {
+        logger.info('Getting AI response for session:', sessionId);
 
-      const latestMessage = messages[messages.length - 1];
+        const latestMessage = messages[messages.length - 1];
 
-      // Guard against repeated message processing
-      const sig = `${sessionId}|${latestMessage.text}|${messages.length}`;
-      if (lastSigRef.current === sig) {
-        logger.debug('[useAIResponse] Skipping duplicate message processing for signature:', sig);
-        return {
-          text: '',
-          sender: 'dm',
-          timestamp: new Date().toISOString(),
-          context: { emotion: 'neutral', intent: 'response' },
+        // Guard against repeated message processing
+        const sig = `${sessionId}|${latestMessage.text}|${messages.length}`;
+        if (lastSigRef.current === sig) {
+          logger.debug('[useAIResponse] Skipping duplicate message processing for signature:', sig);
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+          };
+        }
+        lastSigRef.current = sig;
+
+        // Clear processed roll requests on new player ACTION (not dice roll)
+        const isDiceRollMessage = latestMessage.context?.intent === 'dice_roll';
+        if (!isDiceRollMessage) {
+          logger.debug('[useAIResponse] New player action - clearing processed roll requests');
+          processedRollRequestsRef.current.clear();
+        }
+
+        // Log incoming dice roll results (delegated to session-logger)
+        await logIncomingRolls(sessionId, latestMessage);
+
+        // Detect if this is the first player message in the session
+        const isFirstMessage = messages.filter((m) => m.sender === 'player').length <= 1;
+
+        // ⚡ Bolt: Parallelize fetching game context, voice context, and relevant memories to reduce latency.
+        // This reduces total request time by executing all context retrieval concurrently.
+        const [gameContext, voiceContext, relevantMemories] = await Promise.all([
+          fetchGameContext(sessionId),
+          voiceConsistencyService.getSessionVoiceContext(sessionId),
+          MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8),
+        ]);
+
+        if (!gameContext) {
+          throw new Error('Failed to fetch game context');
+        }
+
+        // Analyze player message for combat context
+        const combatDetection = detectCombatFromText(latestMessage.text);
+
+        logger.debug('Calling DM Agent with context:', {
+          gameContext,
+          knownCharacters: Object.keys(voiceContext.knownCharacters).length,
+          isFirstMessage,
+          combatDetected: combatDetection.isCombat,
+        });
+
+        // Build conversation history for AIService
+        const conversationHistory = messages.slice(0, -1).map((msg) => ({
+          id: `msg_${Date.now()}_${Math.random()}`,
+          role: msg.sender === 'player' ? ('user' as const) : ('assistant' as const),
+          content: msg.text,
+          timestamp: new Date(),
+          narrationSegments: msg.narrationSegments,
+        }));
+
+        // Create AI context with combat awareness
+        const campaignRecord = gameContext.campaign as Record<string, unknown>;
+        const characterRecord = gameContext.character as Record<string, unknown>;
+        const aiContext = {
+          campaignId: (campaignRecord.id as string) || '',
+          characterId: (characterRecord.id as string) || '',
+          sessionId,
+          starterCampaignId: gameContext.starterCampaignId,
+          campaignDetails: gameContext.campaign,
+          characterDetails: gameContext.character,
+          gameState: {
+            currentPhase: gameState.currentPhase,
+            isInCombat: combatState.isInCombat,
+            currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
+            pendingRolls: gameState.diceRollQueue.pendingRolls.length,
+          },
         };
-      }
-      lastSigRef.current = sig;
 
-      // Clear processed roll requests on new player ACTION (not dice roll)
-      const isDiceRollMessage = latestMessage.context?.intent === 'dice_roll';
-      if (!isDiceRollMessage) {
-        logger.debug('[useAIResponse] New player action - clearing processed roll requests');
-        processedRollRequestsRef.current.clear();
-      }
+        logger.debug('AI Context with combat awareness:', {
+          phase: gameState.currentPhase,
+          inCombat: combatState.isInCombat,
+          pendingRolls: gameState.diceRollQueue.pendingRolls.length,
+          currentTurn: combatState.activeEncounter?.currentTurnParticipantId,
+        });
 
-      // Log incoming dice roll results (delegated to session-logger)
-      await logIncomingRolls(sessionId, latestMessage);
+        // Call AIService
+        const result = await AIService.chatWithDM({
+          message: latestMessage.text,
+          context: aiContext,
+          conversationHistory,
+          userPlan: userPlan || undefined,
+          turnCount,
+          relevantMemories,
+        });
 
-      // Detect if this is the first player message in the session
-      const isFirstMessage = messages.filter((m) => m.sender === 'player').length <= 1;
+        // Extract response data (result type has both snake_case and camelCase variants)
+        const responseText = result.text;
+        const narrationSegments = result.narrationSegments;
+        const diceRolls = (result.dice_rolls || []) as DiceRoll[];
+        const imageRequests: ImageRequest[] | undefined = undefined;
 
-      // ⚡ Bolt: Parallelize fetching game context, voice context, and relevant memories to reduce latency.
-      // This reduces total request time by executing all context retrieval concurrently.
-      const [gameContext, voiceContext, relevantMemories] = await Promise.all([
-        fetchGameContext(sessionId),
-        voiceConsistencyService.getSessionVoiceContext(sessionId),
-        MemoryManager.getRelevantMemories(sessionId, latestMessage.text, 8),
-      ]);
+        // Process roll requests (parse, deduplicate, execute NPC rolls)
+        const processedRolls = await processRollRequests({
+          responseText,
+          existingRequests: result.roll_requests || [],
+          isDiceRollMessage: !!isDiceRollMessage,
+          processedSet: processedRollRequestsRef.current,
+          aiContext,
+          sessionId,
+          characterId: (characterRecord.id as string) || 'player',
+        });
 
-      if (!gameContext) {
-        throw new Error('Failed to fetch game context');
-      }
+        // Log outgoing roll requests (delegated to session-logger)
+        await logRollRequests(sessionId, processedRolls.playerRollRequests);
 
-      // Analyze player message for combat context
-      const combatDetection = detectCombatFromText(latestMessage.text);
-
-      logger.debug('Calling DM Agent with context:', {
-        gameContext,
-        knownCharacters: Object.keys(voiceContext.knownCharacters).length,
-        isFirstMessage,
-        combatDetected: combatDetection.isCombat,
-      });
-
-      // Build conversation history for AIService
-      const conversationHistory = messages.slice(0, -1).map((msg) => ({
-        id: `msg_${Date.now()}_${Math.random()}`,
-        role: msg.sender === 'player' ? ('user' as const) : ('assistant' as const),
-        content: msg.text,
-        timestamp: new Date(),
-        narrationSegments: msg.narrationSegments,
-      }));
-
-      // Create AI context with combat awareness
-      const campaignRecord = gameContext.campaign as Record<string, unknown>;
-      const characterRecord = gameContext.character as Record<string, unknown>;
-      const aiContext = {
-        campaignId: (campaignRecord.id as string) || '',
-        characterId: (characterRecord.id as string) || '',
-        sessionId,
-        starterCampaignId: gameContext.starterCampaignId,
-        campaignDetails: gameContext.campaign,
-        characterDetails: gameContext.character,
-        gameState: {
+        // Update game phase based on combat detection (delegated to game-phase-updater)
+        updateGamePhase({
+          combatDetection: result.combatDetection,
           currentPhase: gameState.currentPhase,
           isInCombat: combatState.isInCombat,
-          currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
-          pendingRolls: gameState.diceRollQueue.pendingRolls.length,
-        },
-      };
+          setGamePhase,
+        });
 
-      logger.debug('AI Context with combat awareness:', {
-        phase: gameState.currentPhase,
-        inCombat: combatState.isInCombat,
-        pendingRolls: gameState.diceRollQueue.pendingRolls.length,
-        currentTurn: combatState.activeEncounter?.currentTurnParticipantId,
-      });
-
-      // Call AIService
-      const result = await AIService.chatWithDM({
-        message: latestMessage.text,
-        context: aiContext,
-        conversationHistory,
-        userPlan: userPlan || undefined,
-        turnCount,
-        relevantMemories,
-      });
-
-      // Extract response data (result type has both snake_case and camelCase variants)
-      const responseText = result.text;
-      const narrationSegments = result.narrationSegments;
-      const diceRolls = (result.dice_rolls || []) as DiceRoll[];
-      const imageRequests: ImageRequest[] | undefined = undefined;
-
-      // Process roll requests (parse, deduplicate, execute NPC rolls)
-      const processedRolls = await processRollRequests({
-        responseText,
-        existingRequests: result.roll_requests || [],
-        isDiceRollMessage: !!isDiceRollMessage,
-        processedSet: processedRollRequestsRef.current,
-        aiContext,
-        sessionId,
-        characterId: (characterRecord.id as string) || 'player',
-      });
-
-      // Log outgoing roll requests (delegated to session-logger)
-      await logRollRequests(sessionId, processedRolls.playerRollRequests);
-
-      // Update game phase based on combat detection (delegated to game-phase-updater)
-      updateGamePhase({
-        combatDetection: result.combatDetection,
-        currentPhase: gameState.currentPhase,
-        isInCombat: combatState.isInCombat,
-        setGamePhase,
-      });
-
-      // Process voice assignments if we have narration segments
-      if (narrationSegments && narrationSegments.length > 0) {
-        logger.info(
-          'Received structured response with',
-          narrationSegments.length,
-          'narration segments',
-        );
-        try {
-          await voiceConsistencyService.processVoiceAssignments(sessionId, narrationSegments);
-          logger.info('Processed voice assignments successfully');
-        } catch (voiceError) {
-          logger.warn('Warning: Failed to process voice assignments:', voiceError);
+        // Process voice assignments if we have narration segments
+        if (narrationSegments && narrationSegments.length > 0) {
+          logger.info(
+            'Received structured response with',
+            narrationSegments.length,
+            'narration segments',
+          );
+          try {
+            await voiceConsistencyService.processVoiceAssignments(sessionId, narrationSegments);
+            logger.info('Processed voice assignments successfully');
+          } catch (voiceError) {
+            logger.warn('Warning: Failed to process voice assignments:', voiceError);
+          }
+        } else {
+          logger.info('Received text-only response');
         }
-      } else {
-        logger.info('Received text-only response');
+
+        // Clamp combat intent flags (delegated to game-phase-updater)
+        const { shouldStartCombat, shouldEndCombat } = clampCombatIntentFlags(
+          !!combatDetection.shouldStartCombat,
+          !!combatDetection.shouldEndCombat,
+          combatState.isInCombat,
+        );
+
+        // Append NPC roll continuation to response text
+        let finalResponseText = responseText;
+        if (processedRolls.npcRollContinuationText) {
+          finalResponseText = `${responseText}\n\n${processedRolls.npcRollContinuationText}`;
+          logger.info('Appended NPC roll continuation to response');
+        }
+
+        // Format the response as an EnhancedChatMessage
+        return {
+          text: finalResponseText,
+          sender: 'dm',
+          timestamp: new Date().toISOString(),
+          context: {
+            emotion: 'neutral',
+            intent: 'response',
+            npcRollResults:
+              processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
+          },
+          narrationSegments,
+          diceRolls,
+          rollRequests: processedRolls.playerRollRequests,
+          imageRequests,
+          combatDetection: {
+            isCombat: combatDetection.isCombat,
+            confidence: combatDetection.confidence,
+            combatType: combatDetection.combatType,
+            shouldStartCombat,
+            shouldEndCombat,
+            enemies: combatDetection.enemies || [],
+            combatActions: combatDetection.combatActions || [],
+          },
+        };
+      } catch (error) {
+        logger.error('Error in getAIResponse:', error);
+        throw error;
       }
-
-      // Clamp combat intent flags (delegated to game-phase-updater)
-      const { shouldStartCombat, shouldEndCombat } = clampCombatIntentFlags(
-        !!combatDetection.shouldStartCombat,
-        !!combatDetection.shouldEndCombat,
-        combatState.isInCombat,
-      );
-
-      // Append NPC roll continuation to response text
-      let finalResponseText = responseText;
-      if (processedRolls.npcRollContinuationText) {
-        finalResponseText = `${responseText}\n\n${processedRolls.npcRollContinuationText}`;
-        logger.info('Appended NPC roll continuation to response');
-      }
-
-      // Format the response as an EnhancedChatMessage
-      return {
-        text: finalResponseText,
-        sender: 'dm',
-        timestamp: new Date().toISOString(),
-        context: {
-          emotion: 'neutral',
-          intent: 'response',
-          npcRollResults:
-            processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
-        },
-        narrationSegments,
-        diceRolls,
-        rollRequests: processedRolls.playerRollRequests,
-        imageRequests,
-        combatDetection: {
-          isCombat: combatDetection.isCombat,
-          confidence: combatDetection.confidence,
-          combatType: combatDetection.combatType,
-          shouldStartCombat,
-          shouldEndCombat,
-          enemies: combatDetection.enemies || [],
-          combatActions: combatDetection.combatActions || [],
-        },
-      };
-    } catch (error) {
-      logger.error('Error in getAIResponse:', error);
-      throw error;
-    }
-  };
+    },
+    [
+      gameState.currentPhase,
+      gameState.diceRollQueue.pendingRolls.length,
+      combatState.isInCombat,
+      combatState.activeEncounter?.currentTurnParticipantId,
+      userPlan,
+      setGamePhase,
+    ],
+  );
 
   return { getAIResponse };
 };
