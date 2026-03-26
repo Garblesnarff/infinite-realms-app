@@ -134,6 +134,9 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
           className="fixed inset-0 flex items-center justify-center p-4"
           style={{ zIndex: Z_INDEX.MODAL }}
           onClick={onDismiss}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           aria-label="Behind the DM Screen popup"
         >
           {/* Backdrop with mystical atmosphere */}
@@ -160,7 +163,7 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
             className="relative w-full max-w-md"
           >
             {/* Decorative magical particles */}
-            <div className="absolute -inset-4 opacity-30">
+            <div className="absolute -inset-4 opacity-30" aria-hidden="true">
               {[...Array(6)].map((_, i) => (
                 <motion.div
                   key={i}
@@ -201,19 +204,23 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
               {/* Texture overlay */}
               <div
                 className="absolute inset-0 opacity-20 mix-blend-overlay pointer-events-none"
+                aria-hidden="true"
                 style={{
                   backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.3'/%3E%3C/svg%3E")`,
                 }}
               />
 
               {/* Gradient accent line */}
-              <div className={cn('h-1 w-full bg-gradient-to-r', config.color)} />
+              <div
+                className={cn('h-1 w-full bg-gradient-to-r', config.color)}
+                aria-hidden="true"
+              />
 
               {/* Header */}
               <div className="relative px-6 pt-5 pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Scroll className="w-5 h-5 text-amber-600" />
+                    <Scroll className="w-5 h-5 text-amber-600" aria-hidden="true" />
                     <h3
                       className="text-lg font-bold tracking-wider text-amber-100"
                       style={{
@@ -231,7 +238,10 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                     aria-label="Close Behind the DM Screen popup"
                     title="Close"
                   >
-                    <X className="w-4 h-4 text-amber-600/70 hover:text-amber-600" />
+                    <X
+                      className="w-4 h-4 text-amber-600/70 hover:text-amber-600"
+                      aria-hidden="true"
+                    />
                   </button>
                 </div>
               </div>
@@ -347,7 +357,9 @@ export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
                     )}
                   >
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-2xl">{config.icon}</span>
+                      <span className="text-2xl" aria-hidden="true">
+                        {config.icon}
+                      </span>
                       <span
                         className="text-white font-bold text-lg tracking-wide"
                         style={{

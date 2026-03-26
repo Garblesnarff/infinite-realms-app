@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import React from 'react';
 import { NPCRollDisplay } from '../NPCRollDisplay';
 
@@ -19,11 +19,15 @@ const mockRoll = {
 };
 
 test('NPCRollDisplay has accessible attributes', () => {
-  render(<NPCRollDisplay roll={mockRoll as any} onDismiss={() => {}} />);
+  const onDismiss = vi.fn();
+  render(<NPCRollDisplay roll={mockRoll as any} onDismiss={onDismiss} />);
 
-  // Check for the main container aria-label
+  // Check for the main container aria-label and role="status"
   const container = screen.getByLabelText('Behind the DM Screen popup');
   expect(container).toBeDefined();
+  expect(container.getAttribute('role')).toBe('status');
+  expect(container.getAttribute('aria-live')).toBe('polite');
+  expect(container.getAttribute('aria-atomic')).toBe('true');
 
   // Check for the close button title and aria-label
   const closeButton = screen.getByRole('button', { name: /close behind the dm screen popup/i });
