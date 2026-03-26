@@ -204,6 +204,30 @@ describe('SessionService', () => {
     });
   });
 
+  describe('getActiveSession', () => {
+    it('should use explicit columns to avoid over-fetching heavy fields', async () => {
+      const campaignId = 'campaign-1';
+      const mockSession = { id: 'session-1', campaignId };
+
+      // Setup mocks
+      vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as any);
+
+      const result = await SessionService.getActiveSession({ campaignId }, userId);
+
+      expect(result).toEqual(mockSession);
+      expect(db.query.gameSessions.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          columns: expect.objectContaining({
+            id: true,
+            sessionNotes: false,
+            summary: false,
+            currentSceneDescription: false,
+          }),
+        })
+      );
+    });
+  });
+
   describe('getCampaignSessions', () => {
     it('should use explicit columns to avoid over-fetching heavy fields', async () => {
       const campaignId = 'campaign-1';

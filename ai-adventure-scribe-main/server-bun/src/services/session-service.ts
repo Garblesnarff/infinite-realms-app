@@ -243,6 +243,25 @@ export class SessionService {
 
     const session = await db.query.gameSessions.findFirst({
       where: and(...conditions),
+      columns: {
+        id: true,
+        campaignId: true,
+        characterId: true,
+        sessionNumber: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        turnCount: true,
+        starterCampaignId: true,
+        campaignVersion: true,
+        ruleset: true,
+        createdAt: true,
+        updatedAt: true,
+        // Exclude heavy fields:
+        sessionNotes: false,
+        currentSceneDescription: false,
+        summary: false,
+      },
     });
 
     return session || null;
