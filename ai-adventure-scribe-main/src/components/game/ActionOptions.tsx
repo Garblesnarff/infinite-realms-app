@@ -120,7 +120,11 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
       <div className={`transition-all duration-500 ${className}`}>
         {/* Show loading dots before options appear */}
         {!visible && (
-          <div className="flex items-center justify-center py-4">
+          <div
+            className="flex items-center justify-center py-4"
+            role="status"
+            aria-label="Loading suggested actions"
+          >
             <div className="flex items-center gap-1">
               <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
               <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
