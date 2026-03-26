@@ -288,6 +288,7 @@ export default tseslint.config(
       'server-bun/src/services/character-folder-service.ts',
       'server-bun/src/services/progression-service.ts',
       'server-bun/src/services/character-service.ts',
+      'server-bun/src/services/chronicle-generator.ts',
       'server-bun/src/services/character-permission-service.ts',
       'server-bun/src/services/progression/level-up-service.ts',
       'server-bun/src/services/combat-initiative-service.ts',

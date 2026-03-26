@@ -209,7 +209,10 @@ export const chroniclesRouter = router({
       (async () => {
         try {
           if (userPlan === 'pro' || userPlan === 'enterprise') {
-            const content = await chronicleGenerator.generateProChronicle(capturedSessionId);
+            const content = await chronicleGenerator.generateProChronicle(
+              capturedSessionId,
+              capturedUserId,
+            );
             const illustrationUrl = await chronicleGenerator.generateIllustration(
               content.illustrationPrompt,
             );
@@ -235,7 +238,10 @@ export const chroniclesRouter = router({
               );
           } else {
             // Free tier: plain summary, no illustration, no shareToken
-            const content = await chronicleGenerator.generateFreeChronicle(capturedSessionId);
+            const content = await chronicleGenerator.generateFreeChronicle(
+              capturedSessionId,
+              capturedUserId,
+            );
 
             await db
               .update(sessionChronicles)

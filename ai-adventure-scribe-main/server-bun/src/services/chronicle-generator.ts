@@ -2,10 +2,11 @@
 /* eslint-disable import/order */
 import OpenAI from 'openai';
 import { randomBytes } from 'crypto';
-import { and, eq, asc, desc } from 'drizzle-orm';
+import { and, eq, asc, desc, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { dialogueHistory, gameSessions, campaigns, characters } from '../../../db/schema/index';
+import { NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -70,10 +71,10 @@ class ChronicleGenerator {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
-  private async fetchSessionData(sessionId: string): Promise<SessionData> {
+  private async fetchSessionData(sessionId: string, userId: string): Promise<SessionData> {
+    // 🛡️ Sentinel: Incorporate ownership check directly into the query for defense-in-depth.
+    // We join with campaigns and characters to verify the user owns the session.
     // ⚡ Bolt: Parallelize independent database queries for session data and key dialogue moments.
-    // This reduces sequential database round-trips from 2 to 1, improving total latency
-    // during chronicle generation.
     const [sessionRows, firstMessages, lastMessages] = await Promise.all([
       db
         .select({
@@ -87,7 +88,16 @@ class ChronicleGenerator {
         .from(gameSessions)
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
         .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(eq(gameSessions.id, sessionId))
+        .where(
+          and(
+            eq(gameSessions.id, sessionId),
+            or(
+              eq(campaigns.userId, userId),
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+            ),
+          ),
+        )
         .limit(1),
       db
         .select({
@@ -96,7 +106,28 @@ class ChronicleGenerator {
         })
         .from(dialogueHistory)
         .where(
-          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm'))
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'dm'),
+            // 🛡️ Sentinel: Defense-in-depth ownership check
+            exists(
+              db
+                .select()
+                .from(gameSessions)
+                .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                .where(
+                  and(
+                    eq(gameSessions.id, dialogueHistory.sessionId),
+                    or(
+                      eq(campaigns.userId, userId),
+                      eq(characters.userId, userId),
+                      eq(characters.ownerId, userId),
+                    ),
+                  ),
+                ),
+            ),
+          ),
         )
         .orderBy(asc(dialogueHistory.createdAt))
         .limit(3),
@@ -107,13 +138,39 @@ class ChronicleGenerator {
         })
         .from(dialogueHistory)
         .where(
-          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm'))
+          and(
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'dm'),
+            // 🛡️ Sentinel: Defense-in-depth ownership check
+            exists(
+              db
+                .select()
+                .from(gameSessions)
+                .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                .where(
+                  and(
+                    eq(gameSessions.id, dialogueHistory.sessionId),
+                    or(
+                      eq(campaigns.userId, userId),
+                      eq(characters.userId, userId),
+                      eq(characters.ownerId, userId),
+                    ),
+                  ),
+                ),
+            ),
+          ),
         )
         .orderBy(desc(dialogueHistory.createdAt))
         .limit(3),
     ]);
 
     const session = sessionRows[0];
+
+    if (!session) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Session', sessionId);
+    }
 
     // Combine and re-sort to ensure chronological order for the AI prompt
     const combined = [...firstMessages, ...lastMessages].sort((a, b) => {
@@ -144,8 +201,8 @@ class ChronicleGenerator {
 
   // ── Pro chronicle ──────────────────────────────────────────────────────────
 
-  async generateProChronicle(sessionId: string): Promise<ProChronicleContent> {
-    const data = await this.fetchSessionData(sessionId);
+  async generateProChronicle(sessionId: string, userId: string): Promise<ProChronicleContent> {
+    const data = await this.fetchSessionData(sessionId, userId);
     const client = this.getClient();
 
     const sessionLabel = data.sessionNumber ? `Session ${data.sessionNumber}` : 'Latest Session';
@@ -190,8 +247,8 @@ Respond ONLY as JSON with exactly these fields:
 
   // ── Free chronicle ─────────────────────────────────────────────────────────
 
-  async generateFreeChronicle(sessionId: string): Promise<FreeChronicleContent> {
-    const data = await this.fetchSessionData(sessionId);
+  async generateFreeChronicle(sessionId: string, userId: string): Promise<FreeChronicleContent> {
+    const data = await this.fetchSessionData(sessionId, userId);
     const client = this.getClient();
 
     const sessionLabel = data.sessionNumber ? `Session ${data.sessionNumber}` : 'Latest Session';
