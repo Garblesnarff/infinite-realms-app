@@ -67,7 +67,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Heart className="w-5 h-5 text-red-500" />
+          <Heart className="w-5 h-5 text-red-500" aria-hidden="true" />
           Combat Vitals
         </CardTitle>
       </CardHeader>
@@ -86,7 +86,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             value={(combatState.currentHp / maxHp) * 100}
             className="h-3"
             indicatorClassName={getHPColor((combatState.currentHp / maxHp) * 100)}
-            aria-label={`${character.name}'s hit points`}
+            aria-label={`Hit Points: ${combatState.currentHp} of ${maxHp} remaining`}
           />
 
           {/* Temp HP */}
@@ -110,7 +110,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Resistances */}
             {character.damageResistances?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <ShieldCheck className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Resistances:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -127,7 +127,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Immunities */}
             {character.damageImmunities?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Immunities:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -144,7 +144,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Vulnerabilities */}
             {character.damageVulnerabilities?.length > 0 && (
               <div className="flex items-start gap-2">
-                <ShieldX className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <ShieldX className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Vulnerabilities:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -170,7 +170,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Vision Types */}
             {character.visionTypes?.length > 0 && (
               <div className="flex items-start gap-2 mb-2">
-                <Target className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                <Target className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Vision:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -192,7 +192,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Obscurement */}
             {character.obscurement && character.obscurement !== 'clear' && (
               <div className="flex items-start gap-2 mb-2">
-                <ShieldAlert className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                <ShieldAlert className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Environment:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -212,7 +212,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
             {/* Hidden Status */}
             {character.isHidden && (
               <div className="flex items-start gap-2">
-                <Eye className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                <Eye className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <span className="text-xs text-muted-foreground">Stealth:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -281,7 +281,7 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
                 aria-label="Reset death saves"
                 title="Reset death saves"
               >
-                <RotateCcw className="w-3 h-3" />
+                <RotateCcw className="w-3 h-3" aria-hidden="true" />
               </Button>
             </div>
 
@@ -342,8 +342,8 @@ const CombatVitals: React.FC<CombatVitalsProps> = ({
         )}
 
         {isDead && (
-          <div className="text-center p-4 border border-red-200 bg-red-50 rounded">
-            <Skull className="w-8 h-8 text-red-600 mx-auto mb-2" />
+          <div className="text-center p-4 border border-red-200 bg-red-50 rounded" role="status">
+            <Skull className="w-8 h-8 text-red-600 mx-auto mb-2" aria-hidden="true" />
             <p className="text-red-800 font-medium">Dead</p>
           </div>
         )}
