@@ -24,7 +24,8 @@ export const createFade = (
   distance = 20,
 ): Variants => {
   const axis = direction === 'left' || direction === 'right' ? 'x' : 'y';
-  const multiplier = direction === 'up' || direction === 'left' ? -1 : 1;
+  // "up" or "left" starts on the positive side of the axis to animate "towards" negative
+  const multiplier = direction === 'up' || direction === 'left' ? 1 : -1;
   const offset = direction === 'none' ? 0 : distance * multiplier;
 
   return {
