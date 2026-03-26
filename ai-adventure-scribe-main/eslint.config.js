@@ -323,6 +323,7 @@ export default tseslint.config(
       'src/components/character-sheet/character-sheet-tabs.tsx',
       'src/features/character/components/list/character-card.tsx',
       'src/components/character-sheet/tabs/InventoryTab.tsx',
+      'src/components/character-sheet/tabs/EnhancedSpellsTab.tsx',
       'src/features/character/components/sheet/tabs/InventoryTab.tsx',
       'src/components/blog-admin/blog-posts-list.tsx',
       'src/components/blog-admin/blog-posts-table.tsx',
