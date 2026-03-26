@@ -279,6 +279,7 @@ export default defineConfig({
       'tests/services/voice-profile-service.test.ts',
       'tests/services/voice-consistency-service.test.ts',
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
+      'src/components/blog-admin/blog-post-editor/__tests__/multi-select.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -532,6 +533,7 @@ export default defineConfig({
         'src/components/combat/WeaponManagementPanel.tsx',
         'src/components/combat/ResourceConsumptionPanel.tsx',
         'src/features/character/components/sheet/InventoryManager.tsx',
+        'src/components/blog-admin/blog-post-editor/multi-select.tsx',
       ],
       exclude: [
         '**/__tests__/**',
