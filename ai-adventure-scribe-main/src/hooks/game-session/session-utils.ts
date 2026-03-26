@@ -37,6 +37,14 @@ export const SESSION_EXPIRY_TIME = 1000 * 60 * 60 * 24 * 7; // 7 days for free t
 export const CLEANUP_INTERVAL = 1000 * 60 * 15; // Check every 15 minutes
 
 /**
+ * ⚡ Bolt: Core columns for session discovery to avoid over-fetching heavy JSONB/TEXT fields.
+ * Includes enough metadata to identify, resume, or branch a session.
+ * Explicitly excludes 'session_notes' (combat logs) and 'summary'.
+ */
+export const SESSION_CORE_COLUMNS =
+  'id, campaign_id, character_id, session_number, status, start_time, end_time, starter_campaign_id, campaign_version, turn_count, current_scene_description, created_at, updated_at';
+
+/**
  * Fields that cannot be updated via session patches
  */
 export const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | string>([
@@ -215,9 +223,10 @@ export async function fetchExistingSessions(
   characterId: string,
   limit: number = 5,
 ): Promise<ExtendedGameSession[]> {
+  // ⚡ Bolt: Use explicit core columns to avoid fetching heavy JSONB fields during list view
   const { data, error } = await supabase
     .from('game_sessions')
-    .select('*')
+    .select(SESSION_CORE_COLUMNS)
     .eq('campaign_id', campaignId)
     .eq('character_id', characterId)
     .order('created_at', { ascending: false })
@@ -235,9 +244,10 @@ export async function fetchExistingSessions(
  * Fetches a specific session by ID.
  */
 export async function fetchSessionById(sessionId: string): Promise<ExtendedGameSession | null> {
+  // ⚡ Bolt: Use explicit core columns to avoid fetching heavy JSONB fields
   const { data, error } = await supabase
     .from('game_sessions')
-    .select('*')
+    .select(SESSION_CORE_COLUMNS)
     .eq('id', sessionId)
     .single();
 
