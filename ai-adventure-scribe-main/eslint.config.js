@@ -391,6 +391,8 @@ export default tseslint.config(
       'src/features/game-session/components/game/MemoryPanel.tsx',
       'src/features/character/hooks/use-enhanced-spellcasting.ts',
       'src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx',
+      'src/features/game-session/hooks/use-dice-roll-request.ts',
+      'src/features/game-session/components/chat/DiceRollRequest.tsx',
       'src/features/character/hooks/use-personality-manager.ts',
       'src/features/character/components/sheet/PersonalityManager.tsx',
       'src/components/character-sheet/PersonalityManager.tsx',
