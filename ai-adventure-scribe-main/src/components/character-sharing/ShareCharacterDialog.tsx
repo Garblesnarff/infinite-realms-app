@@ -59,6 +59,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
   const userSearchId = useId();
   const permissionSelectId = useId();
   const resultsListboxId = useId();
+  const peopleHeadingId = useId();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -228,9 +229,11 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         type="button"
                         role="option"
                         aria-selected={selectedUserId === user.id}
+                        title={`Select ${user.name}`}
+                        aria-label={`Select ${user.name}`}
                         className={cn(
-                          'w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between',
-                          selectedUserId === user.id && 'bg-accent/50',
+                          'w-full px-3 py-2 text-left transition-colors flex items-center justify-between outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
+                          selectedUserId === user.id ? 'bg-accent' : 'hover:bg-accent',
                         )}
                         onClick={() => {
                           setSelectedUserId(user.id);
@@ -246,6 +249,9 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             <Check className="h-4 w-4 text-infinite-teal" />
                           )}
                         </div>
+                        {selectedUserId === user.id && (
+                          <Check className="h-4 w-4 text-infinite-purple" />
+                        )}
                       </button>
                     ))
                   ) : (
@@ -264,7 +270,10 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 value={permissionLevel}
                 onValueChange={(value) => setPermissionLevel(value as PermissionLevel)}
               >
-                <SelectTrigger aria-labelledby={permissionSelectId} aria-label="Select permission level">
+                <SelectTrigger
+                  aria-labelledby={permissionSelectId}
+                  aria-label="Select permission level"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -344,7 +353,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
           {/* Current Permissions List */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
+            <h4 id={peopleHeadingId} className="font-semibold text-sm flex items-center gap-2">
               <Shield className="h-4 w-4" />
               People with Access
             </h4>
@@ -356,59 +365,68 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 ))}
               </div>
             ) : permissions && permissions.length > 0 ? (
-              <ScrollArea className="max-h-64">
+              <ScrollArea className="max-h-64" aria-labelledby={peopleHeadingId}>
                 <div className="space-y-2">
-                  {permissions.map((permission: { id: string; userId: string; userName?: string; userEmail?: string; permissionLevel: PermissionLevel; grantedAt: string }) => (
-                    <div
-                      key={permission.id}
-                      className="flex items-center justify-between p-3 border rounded-lg bg-card"
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">
-                          {permission.userName || permission.userId}
+                  {permissions.map(
+                    (permission: {
+                      id: string;
+                      userId: string;
+                      userName?: string;
+                      userEmail?: string;
+                      permissionLevel: PermissionLevel;
+                      grantedAt: string;
+                    }) => (
+                      <div
+                        key={permission.id}
+                        className="flex items-center justify-between p-3 border rounded-lg bg-card"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {permission.userName || permission.userId}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {permission.userEmail ||
+                              `Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {permission.userEmail ||
-                            `Shared ${new Date(permission.grantedAt).toLocaleDateString()}`}
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={permission.permissionLevel}
-                          onValueChange={(value) =>
-                            handleUpdatePermission(permission.userId, value as PermissionLevel)
-                          }
-                        >
-                          <SelectTrigger
-                            className="w-32"
-                            aria-label="Change permission level"
-                            title="Change permission level"
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={permission.permissionLevel}
+                            onValueChange={(value) =>
+                              handleUpdatePermission(permission.userId, value as PermissionLevel)
+                            }
                           >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={PermissionLevel.VIEWER}>Viewer</SelectItem>
-                            <SelectItem value={PermissionLevel.EDITOR}>Editor</SelectItem>
-                            <SelectItem value={PermissionLevel.OWNER}>Owner</SelectItem>
-                          </SelectContent>
-                        </Select>
+                            <SelectTrigger
+                              className="w-32"
+                              aria-label="Change permission level"
+                              title="Change permission level"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={PermissionLevel.VIEWER}>Viewer</SelectItem>
+                              <SelectItem value={PermissionLevel.EDITOR}>Editor</SelectItem>
+                              <SelectItem value={PermissionLevel.OWNER}>Owner</SelectItem>
+                            </SelectContent>
+                          </Select>
 
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRevoke(permission.userId)}
-                          disabled={revokeMutation.isPending}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          aria-label="Revoke access"
-                          title="Revoke access"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRevoke(permission.userId)}
+                            disabled={revokeMutation.isPending}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            aria-label="Revoke access"
+                            title="Revoke access"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               </ScrollArea>
             ) : (

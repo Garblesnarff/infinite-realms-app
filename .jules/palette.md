@@ -121,3 +121,7 @@
 ## 2026-03-23 - Dice Roll Message Accessibility
 **Learning:** Dice roll messages in chat are high-frequency game events that must be announced immediately to screen reader users. Components like `DiceRollMessage` that are duplicated across the codebase (e.g., `src/components/game/` and `src/features/game-session/components/chat/`) must be updated in tandem to maintain UX consistency.
 **Action:** Use `role="status"`, `aria-live="polite"`, and `aria-atomic="true"` for event-driven message components. Use `aria-label` to provide semantic context for formula and result values (e.g., "Formula: 1d20+4") rather than relying on raw text.
+
+## 2026-03-09 - Searchable Listbox and Scroll Area Accessibility
+**Learning:** Standardizing selection feedback in listboxes (`role="option"`) by adding `aria-selected` and visual cues like a `Check` icon improves both accessibility and visual clarity. Semantically linking `ScrollArea` containers to their section headings using `aria-labelledby` provides better context for screen reader users when navigating complex dialogs.
+**Action:** For searchable listbox implementations, always include `aria-selected` on options and a visual selection indicator (like a `Check` icon). Link scrollable lists to their headers via `aria-labelledby` using `useId`.
