@@ -14,16 +14,18 @@ import {
 } from 'lucide-react';
 import React from 'react';
 
+import { VoicePlaybackStatus } from './VoicePlaybackStatus';
+import { VoiceSegmentsPreview } from './VoiceSegmentsPreview';
+import { VoiceStatusAlerts } from './VoiceStatusAlerts';
+
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 import type { AISegment } from '@/services/voice-routing';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -235,7 +237,7 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
               {error && (
                 <Badge variant="destructive" className="text-xs">
                   <AlertCircle className="h-3 w-3 mr-1" />
-                  Error
+                  <span>Error</span>
                 </Badge>
               )}
               {isVoiceEnabled && !isPlaying && !isProcessing && !error && (
@@ -393,176 +395,32 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             </Collapsible>
           </div>
 
-          {/* Error Alert */}
-          {error && !isProcessing && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {error}{' '}
-                {error.includes('API Key') && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={retryApiKeyFetch}
-                    className="h-auto p-0 text-destructive underline"
-                  >
-                    Retry API key fetch
-                  </Button>
-                )}
-                {!error.includes('API Key') && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={handleRetry}
-                    className="h-auto p-0 text-destructive underline"
-                  >
-                    Click to retry
-                  </Button>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
+          <VoiceStatusAlerts
+            error={error}
+            isProcessing={isProcessing}
+            apiKey={apiKey}
+            hasUserInteracted={hasUserInteracted}
+            isPlaying={isPlaying}
+            retryApiKeyFetch={retryApiKeyFetch}
+            handleRetry={handleRetry}
+          />
 
-          {/* API Key Status Alert */}
-          {!apiKey && !error && (
-            <Alert variant="default">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                🔑 <strong>Retrieving API key...</strong>
-                <br />
-                ElevenLabs API key is being loaded. If this persists, click the 🔄 button to retry.
-              </AlertDescription>
-            </Alert>
-          )}
+          <VoicePlaybackStatus
+            isPlaying={isPlaying}
+            isProcessing={isProcessing}
+            segments={segments}
+            currentSegmentIndex={currentSegmentIndex}
+            calculateProgress={calculateProgress}
+            getSegmentTypeIcon={getSegmentTypeIcon}
+          />
 
-          {/* First Time User Help */}
-          {!hasUserInteracted && !isPlaying && !isProcessing && !error && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                🎙️ <strong>Welcome to Voice Narration!</strong>
-                <br />
-                Click the ▶ Play button or the 🧪 Test button to start audio. Once you interact,
-                future AI responses will auto-play (if enabled).
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Progress Bar */}
-          {(isPlaying || isProcessing) && (
-            <div className="space-y-2">
-              <Progress value={calculateProgress()} className="h-2" />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>
-                  {currentSegmentIndex >= 0
-                    ? `Segment ${currentSegmentIndex + 1} of ${segments.length}`
-                    : 'Starting...'}
-                </span>
-                <span>{segments[currentSegmentIndex]?.character || 'DM'}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Current Playing Segment */}
-          {isPlaying && currentSegmentIndex >= 0 && segments[currentSegmentIndex] && (
-            <Card className="bg-primary/5 border-primary/30">
-              <CardContent className="p-3">
-                <div className="flex items-start gap-3">
-                  <span
-                    className="text-lg"
-                    role="img"
-                    aria-label={segments[currentSegmentIndex].type}
-                  >
-                    {getSegmentTypeIcon(segments[currentSegmentIndex].type)}
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">
-                        {segments[currentSegmentIndex].character}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        {segments[currentSegmentIndex].voiceName}
-                      </Badge>
-                    </div>
-                    <p className="text-sm leading-relaxed">{segments[currentSegmentIndex].text}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Segments Preview */}
-          <Collapsible open={showSegments} onOpenChange={setShowSegments}>
-            <CollapsibleContent className="space-y-2">
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Voice Segments
-                </h4>
-
-                {segments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No segments to display</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {segments.map((segment, index) => (
-                      <div
-                        key={segment.id}
-                        className={`p-2 rounded-lg border transition-colors ${
-                          index === currentSegmentIndex
-                            ? 'bg-primary/10 border-primary/30'
-                            : segment.error
-                              ? 'bg-destructive/10 border-destructive/30'
-                              : 'bg-muted/30 border-muted'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm" role="img" aria-label={segment.type}>
-                            {segment.error ? '⚠️' : getSegmentTypeIcon(segment.type)}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 mb-1">
-                              <Badge variant="outline" className="text-xs">
-                                {segment.character}
-                              </Badge>
-                              <Badge variant="secondary" className="text-xs">
-                                {segment.voiceName}
-                              </Badge>
-                              {segment.error && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Error
-                                </Badge>
-                              )}
-                              {segment.isGenerating && (
-                                <Badge variant="outline" className="text-xs animate-pulse">
-                                  Generating...
-                                </Badge>
-                              )}
-                              {segment.isPlaying && (
-                                <Badge variant="default" className="text-xs">
-                                  Playing
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {segment.error || segment.text}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Voice Mappings Debug Info */}
-                <div className="mt-4 p-2 bg-muted/30 rounded text-xs">
-                  <strong>Character Voice Mappings:</strong>
-                  <pre className="mt-1 text-xs overflow-auto">
-                    {JSON.stringify(getCharacterVoiceMappings(), null, 2)}
-                  </pre>
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <VoiceSegmentsPreview
+            showSegments={showSegments}
+            segments={segments}
+            currentSegmentIndex={currentSegmentIndex}
+            getSegmentTypeIcon={getSegmentTypeIcon}
+            getCharacterVoiceMappings={getCharacterVoiceMappings}
+          />
         </CardContent>
       </Card>
     </TooltipProvider>
