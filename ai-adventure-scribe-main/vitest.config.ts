@@ -280,6 +280,7 @@ export default defineConfig({
       'tests/services/voice-consistency-service.test.ts',
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
       'src/components/blog-admin/blog-post-editor/__tests__/multi-select.test.tsx',
+      'src/services/ai/__tests__/xml-parser.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -361,6 +362,7 @@ export default defineConfig({
         'src/utils/memory/classification.ts',
         'src/utils/memory/segmentation.ts',
         'src/services/ai-service.ts',
+        'src/services/ai/xml-parser.ts',
         'src/components/spells/SpellCard.tsx',
         'src/features/character/components/spells/SpellCard.tsx',
         'src/agents/services/intent/PlayerIntentDetector.ts',
