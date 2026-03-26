@@ -59,9 +59,7 @@ describe('SessionService', () => {
   describe('getSessionWithMessages', () => {
     it('should parallelize session fetch and combined message/count query', async () => {
       const mockSession = { id: sessionId, userId };
-      const mockMessagesWithCount = [
-        { message: { id: 'msg-1', message: 'hello' }, totalCount: 1 },
-      ];
+      const mockMessagesWithCount = [{ message: { id: 'msg-1', message: 'hello' }, totalCount: 1 }];
 
       // Setup mocks
       vi.mocked(db.query.gameSessions.findFirst).mockResolvedValue(mockSession as unknown as any);
@@ -94,7 +92,7 @@ describe('SessionService', () => {
       vi.mocked(db.select).mockReturnValue({ from: mockFrom } as any);
 
       await expect(SessionService.getSessionWithMessages(sessionId, userId)).rejects.toThrow(
-        NotFoundError
+        NotFoundError,
       );
     });
   });
@@ -149,8 +147,9 @@ describe('SessionService', () => {
       const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
       vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as any);
 
-      await expect(SessionService.completeSession(sessionId, userId))
-        .rejects.toThrow(NotFoundError);
+      await expect(SessionService.completeSession(sessionId, userId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
   });
 
@@ -164,10 +163,14 @@ describe('SessionService', () => {
 
       // Verify that no values() insert is called
       const mockValues = vi.fn();
-      vi.mocked(db.insert).mockReturnValue({ select: mockSelect, values: mockValues } as unknown as any);
+      vi.mocked(db.insert).mockReturnValue({
+        select: mockSelect,
+        values: mockValues,
+      } as unknown as any);
 
-      await expect(SessionService.createSession({ campaignId }, userId))
-        .rejects.toThrow(NotFoundError);
+      await expect(SessionService.createSession({ campaignId }, userId)).rejects.toThrow(
+        NotFoundError,
+      );
 
       expect(db.insert).toHaveBeenCalledWith(gameSessions);
       expect(mockSelect).toHaveBeenCalled();
@@ -181,8 +184,9 @@ describe('SessionService', () => {
       const mockSelect = vi.fn().mockReturnValue({ returning: mockReturning });
       vi.mocked(db.insert).mockReturnValue({ select: mockSelect } as unknown as any);
 
-      await expect(SessionService.createSession({ characterId }, userId))
-        .rejects.toThrow(NotFoundError);
+      await expect(SessionService.createSession({ characterId }, userId)).rejects.toThrow(
+        NotFoundError,
+      );
 
       expect(db.insert).toHaveBeenCalledWith(gameSessions);
       expect(mockSelect).toHaveBeenCalled();
@@ -223,7 +227,7 @@ describe('SessionService', () => {
             summary: false,
             currentSceneDescription: false,
           }),
-        })
+        }),
       );
     });
   });
@@ -247,7 +251,7 @@ describe('SessionService', () => {
             summary: false,
             currentSceneDescription: false,
           }),
-        })
+        }),
       );
     });
   });
