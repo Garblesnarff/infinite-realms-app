@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../../../db/client';
@@ -96,10 +96,15 @@ export const authRouter = router({
    * Get current authenticated user
    */
   me: protectedProcedure.query(async ({ ctx }) => {
-    // User is already verified in context
-    // Fetch additional user data from database
-    const userData = await db.query.users.findFirst({
-      where: eq(users.id, ctx.user.userId),
+    // ⚡ Bolt: Use explicit column selection to avoid over-fetching Stripe IDs and timestamps.
+    // This reduces data transfer for a high-frequency procedure.
+    const userData = await (db.query as any).users.findFirst({
+      where: (fields: any, { eq }: any) => eq(fields.id, ctx.user.userId),
+      columns: {
+        plan: true,
+        firstName: true,
+        lastName: true,
+      },
     });
 
     return {
