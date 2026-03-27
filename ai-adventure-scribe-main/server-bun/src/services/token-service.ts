@@ -363,18 +363,35 @@ export class TokenService {
     characterId: string,
     userId: string,
   ): Promise<boolean> {
-    // Verify character ownership first
-    await this.verifyCharacterOwnership(characterId, userId);
+    // 🛡️ Sentinel: Refactored to incorporate ownership checks directly into queries.
+    // This prevents separate check-then-act vulnerabilities and masks existence.
+    // We require both scene ownership and character ownership for unlinking,
+    // maintaining consistency with the linkToCharacter pattern.
 
     // ⚡ Bolt: Parallelize independent database operations to reduce aggregate latency.
-    await Promise.all([
-      // Remove character-token link
+    const [deletedResults, updatedResults] = await Promise.all([
+      // Remove character-token link with atomic ownership check
       db
         .delete(characterTokens)
         .where(
-          and(eq(characterTokens.characterId, characterId), eq(characterTokens.tokenId, tokenId)),
-        ),
-      // 🛡️ Sentinel: Clear actorId with atomic ownership check
+          and(
+            eq(characterTokens.characterId, characterId),
+            eq(characterTokens.tokenId, tokenId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .returning({ characterId: characterTokens.characterId }),
+      // Clear actorId with atomic ownership check
       db
         .update(tokens)
         .set({ actorId: null, updatedAt: new Date() })
@@ -388,9 +405,27 @@ export class TokenService {
                 .from(scenes)
                 .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
             ),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
           ),
-        ),
+        )
+        .returning({ id: tokens.id }),
     ]);
+
+    if (deletedResults.length === 0 || updatedResults.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND if either operation failed to affect rows
+      // (likely due to missing ownership or record not existing).
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token or character not found' });
+    }
 
     return true;
   }
@@ -540,6 +575,7 @@ export class TokenService {
 
     if (existing) {
       // Update existing config
+      // 🛡️ Sentinel: Atomic update with ownership check (characterId ownership)
       const [updated] = await db
         .update(tokenConfigurations)
         .set({
@@ -549,33 +585,81 @@ export class TokenService {
         .where(
           and(
             eq(tokenConfigurations.id, existing.id),
-            eq(tokenConfigurations.characterId, characterId)
+            eq(tokenConfigurations.characterId, characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
           )
         )
         .returning();
 
       if (!updated) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update token configuration',
+          code: 'NOT_FOUND',
+          message: 'Character or token configuration not found',
         });
       }
 
       return updated;
     } else {
       // Create new config
+      // 🛡️ Sentinel: Atomic insert with ownership check (characterId ownership)
       const [created] = await db
         .insert(tokenConfigurations)
-        .values({
-          characterId,
-          ...config,
-        })
+        .select(
+          db
+            .select({
+              characterId: characters.id,
+              imageUrl: sql`${config.imageUrl ?? null}`,
+              avatarUrl: sql`${config.avatarUrl ?? null}`,
+              sizeWidth: sql`${config.sizeWidth ?? '1.0'}`,
+              sizeHeight: sql`${config.sizeHeight ?? '1.0'}`,
+              gridSize: sql`${config.gridSize ?? 'medium'}`,
+              tintColor: sql`${config.tintColor ?? null}`,
+              scale: sql`${config.scale ?? '1.0'}`,
+              opacity: sql`${config.opacity ?? '1.0'}`,
+              borderColor: sql`${config.borderColor ?? null}`,
+              borderWidth: sql`${config.borderWidth ?? 2}`,
+              showNameplate: sql`${config.showNameplate ?? true}`,
+              nameplatePosition: sql`${config.nameplatePosition ?? 'bottom'}`,
+              visionEnabled: sql`${config.visionEnabled ?? false}`,
+              visionRange: sql`${config.visionRange ?? null}`,
+              visionAngle: sql`${config.visionAngle ?? null}`,
+              nightVision: sql`${config.nightVision ?? false}`,
+              darkvisionRange: sql`${config.darkvisionRange ?? null}`,
+              emitsLight: sql`${config.emitsLight ?? false}`,
+              lightRange: sql`${config.lightRange ?? null}`,
+              lightAngle: sql`${config.lightAngle ?? null}`,
+              lightColor: sql`${config.lightColor ?? null}`,
+              lightIntensity: sql`${config.lightIntensity ?? null}`,
+              dimLightRange: sql`${config.dimLightRange ?? null}`,
+              brightLightRange: sql`${config.brightLightRange ?? null}`,
+              movementSpeed: sql`${config.movementSpeed ?? null}`,
+              hasFlying: sql`${config.hasFlying ?? false}`,
+              hasSwimming: sql`${config.hasSwimming ?? false}`,
+            })
+            .from(characters)
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        )
         .returning();
 
       if (!created) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create token configuration',
+          code: 'NOT_FOUND',
+          message: 'Character not found',
         });
       }
 
