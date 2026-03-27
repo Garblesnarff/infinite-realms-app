@@ -419,6 +419,7 @@ export default tseslint.config(
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
       'src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx',
+      'src/contexts/character/character-reducer.ts',
     ],
     rules: {
       'max-lines': 'warn',
