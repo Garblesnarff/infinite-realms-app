@@ -229,6 +229,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         type="button"
                         role="option"
                         aria-selected={selectedUserId === user.id}
+                        aria-pressed={selectedUserId === user.id}
                         title={`Select ${user.name}`}
                         aria-label={`Select ${user.name}`}
                         className={cn(
@@ -246,16 +247,17 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             <div className="text-xs text-muted-foreground">{user.email}</div>
                           </div>
                           {selectedUserId === user.id && (
-                            <Check className="h-4 w-4 text-infinite-teal" />
+                            <Check className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
                           )}
                         </div>
-                        {selectedUserId === user.id && (
-                          <Check className="h-4 w-4 text-infinite-purple" />
-                        )}
                       </button>
                     ))
                   ) : (
-                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    <div
+                      className="px-3 py-6 text-center text-sm text-muted-foreground"
+                      role="status"
+                      aria-live="polite"
+                    >
                       No users found
                     </div>
                   )}
@@ -430,7 +432,11 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 </div>
               </ScrollArea>
             ) : (
-              <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-accent/10">
+              <div
+                className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-accent/10"
+                role="status"
+                aria-live="polite"
+              >
                 No one has access yet. Share this character to collaborate.
               </div>
             )}

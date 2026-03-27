@@ -399,7 +399,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
           ))}
         </div>
       ) : folderTree.length === 0 ? (
-        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+        <div
+          className="px-3 py-8 text-center text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
           No folders yet. Create one to organize your characters.
         </div>
       ) : (
