@@ -205,7 +205,7 @@ export class PersonalityService {
       ],
     };
 
-    const items = fallbackData[type];
+    const items = fallbackData[type] || fallbackData.traits;
     const randomItem = items[Math.floor(Math.random() * items.length)];
 
     // Return with the correct field name based on type

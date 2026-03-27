@@ -284,6 +284,7 @@ export default defineConfig({
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
       'src/components/blog-admin/blog-post-editor/__tests__/multi-select.test.tsx',
       'src/services/ai/__tests__/xml-parser.test.ts',
+      'src/services/__tests__/personalityService.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -542,6 +543,7 @@ export default defineConfig({
         'src/components/combat/ResourceConsumptionPanel.tsx',
         'src/features/character/components/sheet/InventoryManager.tsx',
         'src/components/blog-admin/blog-post-editor/multi-select.tsx',
+        'src/services/personalityService.ts',
       ],
       exclude: [
         '**/__tests__/**',
