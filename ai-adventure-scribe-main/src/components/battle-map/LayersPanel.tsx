@@ -348,6 +348,8 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                   });
                   toast.success('All layers shown');
                 }}
+                title="Show all map layers"
+                aria-label="Show all map layers"
               >
                 Show All
               </Button>
@@ -361,6 +363,8 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                   });
                   toast.success('All layers hidden');
                 }}
+                title="Hide all map layers"
+                aria-label="Hide all map layers"
               >
                 Hide All
               </Button>
@@ -372,6 +376,8 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                   useBattleMapStore.getState().resetLayers();
                   toast.success('Layers reset to defaults');
                 }}
+                title="Reset layers to default visibility and opacity"
+                aria-label="Reset layers to default visibility and opacity"
               >
                 Reset
               </Button>

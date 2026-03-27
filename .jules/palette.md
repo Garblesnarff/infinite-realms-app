@@ -82,6 +82,10 @@
 **Learning:** Shadcn `RadioGroup` components in complex forms (like campaign creation steps) often lack clear associations with their section titles, making navigation difficult for screen reader users.
 **Action:** Use `useId` to link section labels to `RadioGroup` components via `aria-labelledby`. Always wrap icon-only view toggles in a `role="group"` container with a descriptive `aria-label`.
 
+## 2026-03-24 - Quick Action Button Accessibility in Panels
+**Learning:** Functional text buttons in complex side panels (like the Layers Panel) can be ambiguous if they only use short labels like "Reset". Providing more descriptive `aria-label` and `title` attributes (e.g., "Reset layers to default visibility and opacity") significantly improves the experience for both screen reader users and sighted users via tooltips.
+**Action:** Always provide descriptive `aria-label` and `title` attributes for functional buttons in utility panels, even if they have text labels, to clarify the scope of the action.
+
 ## 2026-01-25 - Combat UI Accessibility
 **Learning:** Core combat components like `HPTracker` and `CombatActionPanel` often lack basic accessibility, making them difficult for screen reader users. Icon-only buttons for critical actions (damage/healing) need explicit labels.
 **Action:** Always use `useId` to link labels to inputs. Provide `aria-label` and `title` for icon-only buttons. Add `aria-label` to `Progress` bars to provide context for health status.
