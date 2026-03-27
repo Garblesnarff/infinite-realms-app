@@ -417,6 +417,7 @@ export default tseslint.config(
       'src/components/spells/SpellFilterPanel.tsx',
       'src/features/character/components/spells/SpellFilterPanel.tsx',
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
+      'src/components/game/__tests__/NPCRollDisplay.test.tsx',
     ],
     rules: {
       'max-lines': 'warn',
