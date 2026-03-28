@@ -1,5 +1,5 @@
 import { Filter, X, Eye, Hand, Gem, Timer, RotateCcw, Zap } from 'lucide-react';
-import React, { useCallback } from 'react';
+import React, { useCallback, useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,18 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
   isOpen = true,
   className = '',
 }) => {
+  const schoolsLabelId = useId();
+  const componentsLabelId = useId();
+  const propertiesLabelId = useId();
+  const activeFiltersLabelId = useId();
+
+  const verbalId = useId();
+  const somaticId = useId();
+  const materialId = useId();
+  const concentrationId = useId();
+  const ritualId = useId();
+  const damageId = useId();
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent, callback: () => void) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -143,8 +155,8 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* School Filters */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Schools of Magic</Label>
+        <div className="space-y-2" role="group" aria-labelledby={schoolsLabelId}>
+          <Label id={schoolsLabelId} className="text-sm font-medium">Schools of Magic</Label>
           <div className="flex flex-wrap gap-2">
             {availableSchools.map((school) => {
               const isSelected = filters.schools.includes(school);
@@ -174,38 +186,38 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
         <Separator />
 
         {/* Component Filters */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Components Required</Label>
+        <div className="space-y-3" role="group" aria-labelledby={componentsLabelId}>
+          <Label id={componentsLabelId} className="text-sm font-medium">Components Required</Label>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="verbal"
+                id={verbalId}
                 checked={filters.components.verbal}
                 onCheckedChange={() => toggleComponent('verbal')}
               />
-              <Label htmlFor="verbal" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Label htmlFor={verbalId} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Eye className="w-4 h-4 text-blue-500" />
                 Verbal (V)
               </Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="somatic"
+                id={somaticId}
                 checked={filters.components.somatic}
                 onCheckedChange={() => toggleComponent('somatic')}
               />
-              <Label htmlFor="somatic" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Label htmlFor={somaticId} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Hand className="w-4 h-4 text-green-500" />
                 Somatic (S)
               </Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="material"
+                id={materialId}
                 checked={filters.components.material}
                 onCheckedChange={() => toggleComponent('material')}
               />
-              <Label htmlFor="material" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Label htmlFor={materialId} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Gem className="w-4 h-4 text-purple-500" />
                 Material (M)
               </Label>
@@ -216,17 +228,17 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
         <Separator />
 
         {/* Property Filters */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Special Properties</Label>
+        <div className="space-y-3" role="group" aria-labelledby={propertiesLabelId}>
+          <Label id={propertiesLabelId} className="text-sm font-medium">Special Properties</Label>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="concentration"
+                id={concentrationId}
                 checked={filters.properties.concentration}
                 onCheckedChange={() => toggleProperty('concentration')}
               />
               <Label
-                htmlFor="concentration"
+                htmlFor={concentrationId}
                 className="flex items-center gap-2 text-sm cursor-pointer"
               >
                 <Timer className="w-4 h-4 text-orange-500" />
@@ -235,22 +247,22 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="ritual"
+                id={ritualId}
                 checked={filters.properties.ritual}
                 onCheckedChange={() => toggleProperty('ritual')}
               />
-              <Label htmlFor="ritual" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Label htmlFor={ritualId} className="flex items-center gap-2 text-sm cursor-pointer">
                 <RotateCcw className="w-4 h-4 text-indigo-500" />
                 Ritual
               </Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="damage"
+                id={damageId}
                 checked={filters.properties.damage}
                 onCheckedChange={() => toggleProperty('damage')}
               />
-              <Label htmlFor="damage" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Label htmlFor={damageId} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Zap className="w-4 h-4 text-red-500" />
                 Deals Damage
               </Label>
@@ -262,8 +274,8 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
         {hasActiveFilters && (
           <>
             <Separator />
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Active Filters</Label>
+            <div className="space-y-2" role="group" aria-labelledby={activeFiltersLabelId}>
+              <Label id={activeFiltersLabelId} className="text-sm font-medium">Active Filters</Label>
               <div className="flex flex-wrap gap-1">
                 {filters.schools.map((school) => (
                   <Badge
