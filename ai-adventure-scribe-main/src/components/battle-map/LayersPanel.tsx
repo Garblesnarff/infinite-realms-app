@@ -14,7 +14,7 @@
  */
 
 import { Eye, EyeOff, Lock, Unlock, Layers } from 'lucide-react';
-import React, { useId } from 'react';
+import React, { useId, useCallback } from 'react';
 import { toast } from 'sonner';
 
 import { LAYER_CONFIGS, type LayerConfig } from './LayerManager';
@@ -64,190 +64,230 @@ interface LayerControlItemProps {
   layerId: string;
 }
 
-const LayerControlItem: React.FC<LayerControlItemProps> = ({ layer, sceneId, layerId }) => {
-  const opacityId = useId();
-  const getLayerState = useBattleMapStore((state) => state.getLayerState);
-  const toggleLayerVisibility = useBattleMapStore((state) => state.toggleLayerVisibility);
-  const toggleLayerLock = useBattleMapStore((state) => state.toggleLayerLock);
-  const setLayerOpacity = useBattleMapStore((state) => state.setLayerOpacity);
+const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
+  ({ layer, sceneId, layerId }) => {
+    const opacityId = useId();
 
-  const layerState = getLayerState(layer.id);
-  const utils = trpc.useUtils();
+    // ⚡ Bolt: Targeted selectors ensure this component only re-renders when
+    // its specific layer state changes, rather than on any store update.
+    const visible = useBattleMapStore((state) => state.layerVisibility[layer.id] ?? true);
+    const opacity = useBattleMapStore((state) => state.layerOpacity[layer.id] ?? 1);
+    const locked = useBattleMapStore((state) => state.layerLocked[layer.id] ?? false);
 
-  // tRPC mutation for updating layer on backend
-  const updateLayer = trpc.scenes.updateLayer.useMutation({
-    onSuccess: () => {
-      // Invalidate scene query to refresh data
-      utils.scenes.getById.invalidate({ sceneId });
-    },
-    onError: (error) => {
-      toast.error(`Failed to update layer: ${error.message}`);
-    },
-  });
+    const toggleLayerVisibility = useBattleMapStore((state) => state.toggleLayerVisibility);
+    const toggleLayerLock = useBattleMapStore((state) => state.toggleLayerLock);
+    const setLayerOpacity = useBattleMapStore((state) => state.setLayerOpacity);
 
-  const handleVisibilityToggle = () => {
-    const newVisibility = !layerState.visible;
-    toggleLayerVisibility(layer.id);
+    const utils = trpc.useUtils();
 
-    // Update backend
-    updateLayer.mutate({
-      sceneId,
-      layerId,
-      updates: {
-        isVisible: newVisibility,
+    // tRPC mutation for updating layer on backend
+    const updateLayer = trpc.scenes.updateLayer.useMutation({
+      onSuccess: () => {
+        // Invalidate scene query to refresh data
+        utils.scenes.getById.invalidate({ sceneId });
+      },
+      onError: (error) => {
+        toast.error(`Failed to update layer: ${error.message}`);
       },
     });
-  };
 
-  const handleLockToggle = () => {
-    const newLocked = !layerState.locked;
-    toggleLayerLock(layer.id);
+    const handleVisibilityToggle = useCallback(() => {
+      const newVisibility = !visible;
+      toggleLayerVisibility(layer.id);
 
-    // Update backend
-    updateLayer.mutate({
-      sceneId,
-      layerId,
-      updates: {
-        locked: newLocked,
+      // Update backend
+      updateLayer.mutate({
+        sceneId,
+        layerId,
+        updates: {
+          isVisible: newVisibility,
+        },
+      });
+    }, [visible, toggleLayerVisibility, layer.id, updateLayer, sceneId, layerId]);
+
+    const handleLockToggle = useCallback(() => {
+      const newLocked = !locked;
+      toggleLayerLock(layer.id);
+
+      // Update backend
+      updateLayer.mutate({
+        sceneId,
+        layerId,
+        updates: {
+          locked: newLocked,
+        },
+      });
+    }, [locked, toggleLayerLock, layer.id, updateLayer, sceneId, layerId]);
+
+    const handleOpacityChange = useCallback(
+      (values: number[]) => {
+        const newOpacity = values[0] ?? 1;
+        setLayerOpacity(layer.id, newOpacity);
       },
-    });
-  };
+      [setLayerOpacity, layer.id],
+    );
 
-  const handleOpacityChange = (values: number[]) => {
-    const newOpacity = values[0] ?? 1;
-    setLayerOpacity(layer.id, newOpacity);
-  };
+    const handleOpacityCommit = useCallback(
+      (values: number[]) => {
+        const newOpacity = values[0] ?? 1;
 
-  const handleOpacityCommit = (values: number[]) => {
-    const newOpacity = values[0] ?? 1;
-
-    // Update backend when user releases slider
-    updateLayer.mutate({
-      sceneId,
-      layerId,
-      updates: {
-        opacity: newOpacity.toFixed(2),
+        // Update backend when user releases slider
+        updateLayer.mutate({
+          sceneId,
+          layerId,
+          updates: {
+            opacity: newOpacity.toFixed(2),
+          },
+        });
       },
-    });
-  };
+      [updateLayer, sceneId, layerId],
+    );
 
-  return (
-    <div className="space-y-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-      {/* Layer Name and Controls */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div
-            className="w-3 h-3 rounded-sm shrink-0"
-            style={{
-              backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.7)`,
-            }}
-          />
-          <span className="font-medium text-sm truncate">{layer.name}</span>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Visibility Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleVisibilityToggle}
-            aria-label={layerState.visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
-            aria-pressed={layerState.visible}
-            title={layerState.visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
-          >
-            {layerState.visible ? (
-              <Eye className="h-4 w-4" />
-            ) : (
-              <EyeOff className="h-4 w-4 text-muted-foreground" />
-            )}
-          </Button>
-
-          {/* Lock Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleLockToggle}
-            aria-label={layerState.locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
-            aria-pressed={layerState.locked}
-            title={layerState.locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
-          >
-            {layerState.locked ? (
-              <Lock className="h-4 w-4" />
-            ) : (
-              <Unlock className="h-4 w-4 text-muted-foreground" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Opacity Slider */}
-      {layerState.visible && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <Label htmlFor={opacityId} className="cursor-pointer">
-              Opacity
-            </Label>
-            <span>{Math.round(layerState.opacity * 100)}%</span>
+    return (
+      <div className="space-y-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+        {/* Layer Name and Controls */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div
+              className="w-3 h-3 rounded-sm shrink-0"
+              style={{
+                backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.7)`,
+              }}
+            />
+            <span className="font-medium text-sm truncate">{layer.name}</span>
           </div>
-          <Slider
-            id={opacityId}
-            value={[layerState.opacity]}
-            min={0}
-            max={1}
-            step={0.05}
-            onValueChange={handleOpacityChange}
-            onValueCommit={handleOpacityCommit}
-            className="w-full"
-            disabled={!layerState.visible}
-          />
+
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Visibility Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleVisibilityToggle}
+              aria-label={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
+              aria-pressed={visible}
+              title={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
+            >
+              {visible ? (
+                <Eye className="h-4 w-4" />
+              ) : (
+                <EyeOff className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+
+            {/* Lock Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleLockToggle}
+              aria-label={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
+              aria-pressed={locked}
+              title={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
+            >
+              {locked ? (
+                <Lock className="h-4 w-4" />
+              ) : (
+                <Unlock className="h-4 w-4 text-muted-foreground" />
+              )}
+            </Button>
+          </div>
         </div>
-      )}
-    </div>
-  );
-};
+
+        {/* Opacity Slider */}
+        {visible && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <Label htmlFor={opacityId} className="cursor-pointer">
+                Opacity
+              </Label>
+              <span>{Math.round(opacity * 100)}%</span>
+            </div>
+            <Slider
+              id={opacityId}
+              value={[opacity]}
+              min={0}
+              max={1}
+              step={0.05}
+              onValueChange={handleOpacityChange}
+              onValueCommit={handleOpacityCommit}
+              className="w-full"
+              disabled={!visible}
+            />
+          </div>
+        )}
+      </div>
+    );
+  },
+);
 
 // ===========================
 // Main LayersPanel Component
 // ===========================
 
-export const LayersPanel: React.FC<LayersPanelProps> = ({
-  sceneId,
-  side = 'right',
-  open,
-  onOpenChange,
-}) => {
-  const [isOpen, setIsOpen] = React.useState(false);
+export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
+  ({ sceneId, side = 'right', open, onOpenChange }) => {
+    const [isOpen, setIsOpen] = React.useState(false);
 
-  // Use controlled or uncontrolled mode
-  const actualOpen = open !== undefined ? open : isOpen;
-  const actualOnOpenChange = onOpenChange !== undefined ? onOpenChange : setIsOpen;
+    // Use controlled or uncontrolled mode
+    const actualOpen = open !== undefined ? open : isOpen;
 
-  // Fetch scene data to get layer IDs
-  const { data: sceneData } = trpc.scenes.getById.useQuery(
-    { sceneId },
-    {
-      enabled: !!sceneId,
-    },
-  );
+    // ⚡ Bolt: Stable handler for open state changes
+    const actualOnOpenChange = useCallback(
+      (val: boolean) => {
+        if (onOpenChange) {
+          onOpenChange(val);
+        } else {
+          setIsOpen(val);
+        }
+      },
+      [onOpenChange],
+    );
 
-  // Create a map of layer type to layer ID
-  const layerIdMap = React.useMemo(() => {
-    if (!sceneData?.layers) return {};
+    // Fetch scene data to get layer IDs
+    const { data: sceneData } = trpc.scenes.getById.useQuery(
+      { sceneId },
+      {
+        enabled: !!sceneId,
+      },
+    );
 
-    const map: Record<string, string> = {};
-    sceneData.layers.forEach((layer: { id: string; layerType?: string | null }) => {
-      if (layer.layerType) {
-        map[layer.layerType] = layer.id;
-      }
-    });
-    return map;
-  }, [sceneData]);
+    // Create a map of layer type to layer ID
+    const layerIdMap = React.useMemo(() => {
+      if (!sceneData?.layers) return {};
 
-  return (
-    <Sheet open={actualOpen} onOpenChange={actualOnOpenChange}>
-      <SheetTrigger asChild>
+      const map: Record<string, string> = {};
+      sceneData.layers.forEach((layer: { id: string; layerType?: string | null }) => {
+        if (layer.layerType) {
+          map[layer.layerType] = layer.id;
+        }
+      });
+      return map;
+    }, [sceneData]);
+
+    // ⚡ Bolt: Memoized quick actions to prevent re-creation on every render
+    const handleShowAll = useCallback(() => {
+      LAYER_CONFIGS.forEach((layer) => {
+        useBattleMapStore.getState().setLayerVisibility(layer.id, true);
+      });
+      toast.success('All layers shown');
+    }, []);
+
+    const handleHideAll = useCallback(() => {
+      LAYER_CONFIGS.forEach((layer) => {
+        useBattleMapStore.getState().setLayerVisibility(layer.id, false);
+      });
+      toast.success('All layers hidden');
+    }, []);
+
+    const handleReset = useCallback(() => {
+      useBattleMapStore.getState().resetLayers();
+      toast.success('Layers reset to defaults');
+    }, []);
+
+    return (
+      <Sheet open={actualOpen} onOpenChange={actualOnOpenChange}>
+        <SheetTrigger asChild>
         <Button
           variant="outline"
           size="icon"
@@ -342,12 +382,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  LAYER_CONFIGS.forEach((layer) => {
-                    useBattleMapStore.getState().setLayerVisibility(layer.id, true);
-                  });
-                  toast.success('All layers shown');
-                }}
+                onClick={handleShowAll}
                 title="Show all map layers"
                 aria-label="Show all map layers"
               >
@@ -357,12 +392,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  LAYER_CONFIGS.forEach((layer) => {
-                    useBattleMapStore.getState().setLayerVisibility(layer.id, false);
-                  });
-                  toast.success('All layers hidden');
-                }}
+                onClick={handleHideAll}
                 title="Hide all map layers"
                 aria-label="Hide all map layers"
               >
@@ -372,10 +402,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  useBattleMapStore.getState().resetLayers();
-                  toast.success('Layers reset to defaults');
-                }}
+                onClick={handleReset}
                 title="Reset layers to default visibility and opacity"
                 aria-label="Reset layers to default visibility and opacity"
               >
@@ -387,6 +414,6 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
       </SheetContent>
     </Sheet>
   );
-};
+});
 
 export default LayersPanel;
