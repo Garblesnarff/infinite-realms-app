@@ -355,6 +355,15 @@ export interface CombatParticipant {
   obscurement?: ObscurementLevel;
   isHidden?: boolean;
   stealthCheckBonus?: number;
+
+  // Monster data for detected enemies
+  monsterData?: {
+    type: string;
+    challengeRating: string;
+    alignment: string;
+    specialAbilities: any[];
+    attacks: MonsterAttack[];
+  };
 }
 
 export interface MonsterAttack {
