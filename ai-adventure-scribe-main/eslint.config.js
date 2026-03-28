@@ -422,6 +422,7 @@ export default tseslint.config(
       'src/contexts/character/character-reducer.ts',
       'src/components/game/DiceRollRequest.tsx',
       'src/hooks/game/use-dice-roll-request.ts',
+      'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
     ],
     rules: {
       'max-lines': 'warn',
