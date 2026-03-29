@@ -29,7 +29,7 @@ const ATTACK_PATTERNS = [
 
 /** Weapon hint pattern used around attack phrases */
 const WEAPON_HINT_PATTERN =
-  /\b(?:with|using|wielding|firing|shooting|from)\s+(?:your|my|the)?\s*([A-Za-z][\w' -]{2,40})/i;
+  /\b(?:with|using|wielding|firing|shooting|from)\s+(?:your|my|the)?\s*([A-Za-z][\w' -]{2,40})/gi;
 
 /** AC pattern used around attack phrases */
 const AC_TAIL_PATTERN = /(ac|armor\s*class)\s*[:=]?\s*(\d{1,2})/i;
@@ -66,7 +66,7 @@ const INITIATIVE_PATTERNS = [/roll\s+initiative.*?\(([^)]+)\)/gi, /roll\s+initia
 
 /** Skill/Ability checks and saves with explicit dice */
 const CHECK_EXPLICIT_PATTERN =
-  /make\s+an?\s+(constitution|dexterity|strength|intelligence|wisdom|charisma|[\w\s]+)\s+(check|save|saving\s+throw).*?\((?!\s*DC\s*\d+\s*\))([^)]+)(?:,\s*DC\s+(\d+))?\)/gi;
+  /make\s+an?\s+(constitution|dexterity|strength|intelligence|wisdom|charisma|[\w\s]+)\s+(check|save|saving\s+throw).*?\((?!\s*DC\s*\d+\s*\))([^,)]+)(?:,\s*DC\s+(\d+))?\)/gi;
 
 /** "Roll for <skill> (DC 14)" without explicit dice */
 const ROLL_FOR_SKILL_PATTERN = new RegExp(
@@ -111,7 +111,7 @@ const DAMAGE_PATTERNS = [
 
 /** Generic roll requests with explicit dice */
 const GENERIC_ROLL_PATTERN =
-  /(?:please\s+)?roll\s+([\dd+\s-]+)(?:\s+for\s+(.+?))?(?:\s+\((?:[^)]*?\b(?:dc|DC)\s*(\d+)|[^)]*?\bAC\s*(\d+))\))?/gi;
+  /(?:please\s+)?roll\s+([\dd+\s-]+)(?:\s+for\s+([^(\n.]+?))?(?:\s+\((?:[^)]*?\b(?:dc|DC)\s*(\d+)|[^)]*?\bAC\s*(\d+))\))?(?:\s|$|\.)/gi;
 
 /**
  * Parse a DM message for dice roll requests
@@ -180,8 +180,12 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
       const end = Math.min(text.length, match.index + (match[0]?.length || 0) + 200);
       const windowText = text.slice(start, end);
 
+      WEAPON_HINT_PATTERN.lastIndex = 0;
       const weaponMatch = WEAPON_HINT_PATTERN.exec(windowText);
-      const weaponName = weaponMatch ? weaponMatch[1].trim() : undefined;
+      const rawWeaponName = weaponMatch ? weaponMatch[1].trim() : undefined;
+      const weaponName = rawWeaponName
+        ? rawWeaponName.charAt(0).toUpperCase() + rawWeaponName.slice(1)
+        : undefined;
       const acMatch = AC_TAIL_PATTERN.exec(windowText);
       const ac = acMatch ? parseInt(acMatch[2], 10) : undefined;
 
@@ -291,7 +295,7 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
   while ((match = SKILL_CHECK_STRICT_PATTERN.exec(text)) !== null) {
     const skill = match[1].toLowerCase();
     // Try to capture nearby DC (e.g., "(target DC 14)") in the trailing window
-    const tail = text.slice(match.index, Math.min(match.index + 200, text.length));
+    const tail = text.slice(match.index);
     const dcMatch = DC_CONTEXT_PATTERN.exec(tail);
     const dc = dcMatch ? parseInt(dcMatch[1], 10) : undefined;
 
@@ -391,7 +395,8 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
     if (requests.some((r) => r.originalText.includes(match[0]))) continue;
 
     const formula = match[1].trim();
-    const purpose = match[2] || 'Dice roll';
+    const rawPurpose = match[2]?.trim();
+    const purpose = rawPurpose ? rawPurpose.charAt(0).toUpperCase() + rawPurpose.slice(1) : 'Dice roll';
     const dc = match[3] ? parseInt(match[3]) : undefined;
     const ac = match[4] ? parseInt(match[4]) : undefined;
 

@@ -1,9 +1,86 @@
 import { describe, expect, it } from 'vitest';
 
-import { findLastSentenceBoundary, truncateAtRollRequest } from '../validate';
+import {
+  findLastSentenceBoundary,
+  truncateAtRollRequest,
+  containsRollRequest,
+  detectsSuccessfulAttack,
+  detectsCriticalHit,
+  extractPrimaryRollRequest,
+  removeRollRequestsFromMessage,
+} from '../validate';
 
 const ROLL_BLOCK =
   '```ROLL_REQUESTS_V1\n{"rolls":[{"type":"check","formula":"1d20+3","purpose":"Perception","dc":14}]}\n```';
+
+describe('validate helpers', () => {
+  it('containsRollRequest returns true when requests are present', () => {
+    expect(containsRollRequest('Roll for Stealth')).toBe(true);
+    expect(containsRollRequest('The weather is nice')).toBe(false);
+  });
+
+  it('detectsSuccessfulAttack identifies hit keywords', () => {
+    expect(detectsSuccessfulAttack('That hits!')).toBe(true);
+    expect(detectsSuccessfulAttack('You hit the orc')).toBe(true);
+    expect(detectsSuccessfulAttack('A natural 20!')).toBe(true);
+    expect(detectsSuccessfulAttack('Your sword strikes true')).toBe(true);
+    expect(detectsSuccessfulAttack('You miss miserably')).toBe(false);
+  });
+
+  it('detectsCriticalHit identifies crit keywords', () => {
+    expect(detectsCriticalHit('Critical hit!')).toBe(true);
+    expect(detectsCriticalHit('Nat 20')).toBe(true);
+    expect(detectsCriticalHit('It is a crit')).toBe(true);
+    expect(detectsCriticalHit('Regular hit')).toBe(false);
+  });
+
+  it('extractPrimaryRollRequest gets the first request', () => {
+    const msg = 'Roll initiative! Also make a Perception check.';
+    const rr = extractPrimaryRollRequest(msg);
+    expect(rr).toBeTruthy();
+    expect(rr!.type).toBe('initiative');
+  });
+
+  it('extractPrimaryRollRequest returns null if no requests', () => {
+    expect(extractPrimaryRollRequest('Just text')).toBe(null);
+  });
+});
+
+describe('removeRollRequestsFromMessage', () => {
+  it('removes roll block and metadata', () => {
+    const msg = [
+      'Narrative text.',
+      '',
+      ROLL_BLOCK,
+      '',
+      '**VISUAL PROMPT:** An orc.',
+      '---',
+      'Footer text'
+    ].join('\n');
+    const cleaned = removeRollRequestsFromMessage(msg);
+    expect(cleaned).toContain('Narrative text.');
+    expect(cleaned).not.toContain('ROLL_REQUESTS_V1');
+    expect(cleaned).not.toContain('VISUAL PROMPT');
+    expect(cleaned).not.toContain('---');
+  });
+
+  it('strips A/B/C options', () => {
+    const msg = 'Decide:\nA. Attack\nB. Run';
+    const cleaned = removeRollRequestsFromMessage(msg);
+    expect(cleaned).toBe('Decide:');
+  });
+
+  it('strips bold markers', () => {
+    const msg = 'The **big** bad wolf';
+    const cleaned = removeRollRequestsFromMessage(msg);
+    expect(cleaned).toBe('The big bad wolf');
+  });
+
+  it('handles empty or null message', () => {
+    expect(removeRollRequestsFromMessage('')).toBe('');
+    expect(removeRollRequestsFromMessage(null as any)).toBe(null as any);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // findLastSentenceBoundary
