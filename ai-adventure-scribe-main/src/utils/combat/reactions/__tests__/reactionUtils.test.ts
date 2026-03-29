@@ -38,7 +38,6 @@ describe('reactionUtils', () => {
 
     it('should return false if blinded', () => {
       const p: any = { conditions: [{ name: 'blinded' }] };
-      // This is currently a bug, it should be false
       expect(canMakeOpportunityAttack(p, target)).toBe(false);
     });
   });
@@ -54,7 +53,6 @@ describe('reactionUtils', () => {
         preparedSpells: ['counterspell'],
         spellSlots: { 3: { current: 1 } }
       };
-      // Currently fails because counterspell preparation is not checked
       expect(canCastCounterspell(p)).toBe(true);
     });
 
