@@ -15,10 +15,13 @@ interface ChatInputProps {
  * ChatInput Component
  * Enhanced input component with multi-line support and better UX
  *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the input area
+ * when unrelated game state (like messages or combat status) updates.
+ *
  * @param onSendMessage - Callback function to handle message submission
  * @param isDisabled - Boolean to disable input during message processing
  */
-export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled }) => {
+export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, isDisabled }) => {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
@@ -228,4 +231,4 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isDisabled 
       </div>
     </div>
   );
-};
+});
