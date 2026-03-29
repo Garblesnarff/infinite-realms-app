@@ -423,6 +423,8 @@ export default tseslint.config(
       'src/components/game/DiceRollRequest.tsx',
       'src/hooks/game/use-dice-roll-request.ts',
       'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
+      'server-bun/src/services/inventory/inventory-consumable-service.ts',
+      'server-bun/src/services/inventory/__tests__/inventory-consumable-service.test.ts',
     ],
     rules: {
       'max-lines': 'warn',

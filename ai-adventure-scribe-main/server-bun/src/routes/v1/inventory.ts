@@ -18,6 +18,7 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { InventoryService } from '../../services/inventory-service.js';
+import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
 
 import type { GetInventoryOptions, ItemType } from '../../types/inventory.js';
 
@@ -236,7 +237,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
           }
         }
 
-        const result = await InventoryService.useConsumable(
+        const result = await InventoryConsumableService.useConsumable(
           {
             characterId: params.id,
             itemId: params.itemId,
@@ -409,7 +410,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         }
       }
 
-      const history = await InventoryService.getUsageHistory({
+      const history = await InventoryConsumableService.getUsageHistory({
         characterId: params.id,
         itemId: query.itemId as string | undefined,
         sessionId,

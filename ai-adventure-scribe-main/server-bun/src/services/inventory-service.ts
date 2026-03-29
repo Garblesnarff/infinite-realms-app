@@ -15,6 +15,7 @@
 import { eq, and, desc, or, sql, exists, inArray } from 'drizzle-orm';
 
 import { InventoryMechanics } from './inventory/inventory-mechanics.js';
+import { InventoryConsumableService } from './inventory/inventory-consumable-service.js';
 import { db } from '../../../db/client';
 import {
   inventoryItems,
@@ -256,89 +257,19 @@ export class InventoryService {
 
   /**
    * Use consumable or ammunition
-   * Decrements quantity and logs usage
-   * @param input - Usage input data
-   * @param userId - User ID (for ownership verification)
-   * @param preFetchedItem - Optional pre-fetched item to avoid redundant DB call
-   * @returns Usage result with remaining quantity
+   * @deprecated Use InventoryConsumableService.useConsumable directly
    */
   static async useConsumable(
     input: UseConsumableInput,
     userId: string,
     preFetchedItem?: InventoryItem
   ): Promise<UseConsumableResult> {
-    // ⚡ Bolt: Use pre-fetched item if available to avoid redundant database lookup.
-    const item = preFetchedItem || await this.getItemById(input.itemId, input.characterId, userId);
-
-    if (!item) {
-      throw new NotFoundError('Inventory item', input.itemId);
-    }
-
-    const quantityToUse = input.quantity ?? 1;
-
-    if (item.quantity < quantityToUse) {
-      throw new BusinessLogicError(
-        `Insufficient quantity. Available: ${item.quantity}, Requested: ${quantityToUse}`,
-        { available: item.quantity, requested: quantityToUse, itemId: input.itemId }
-      );
-    }
-
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    // This ensures that usage logs can only be created for items and characters the user is authorized to access.
-    const [usageLog] = await db
-      .insert(consumableUsageLog)
-      .select(
-        db
-          .select({
-            characterId: sql`${input.characterId}`,
-            itemId: sql`${input.itemId}`,
-            quantityUsed: sql`${quantityToUse}`,
-            sessionId: sql`${input.sessionId ?? null}`,
-            context: sql`${input.context ?? null}`,
-          })
-          .from(inventoryItems)
-          .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-          .where(
-            and(
-              eq(inventoryItems.id, input.itemId),
-              eq(inventoryItems.characterId, input.characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            )
-          )
-      )
-      .returning();
-
-    if (!usageLog) {
-      throw new InternalServerError('Failed to log consumable usage');
-    }
-
-    const newQuantity = item.quantity - quantityToUse;
-    let itemDeleted = false;
-
-    // Update or delete item based on remaining quantity
-    // ⚡ Bolt: Calls to optimized removeItem/updateItem now perform atomic ownership checks.
-    if (newQuantity <= 0) {
-      await this.removeItem(input.itemId, input.characterId, userId);
-      itemDeleted = true;
-    } else {
-      await this.updateItem(input.itemId, input.characterId, userId, { quantity: newQuantity });
-    }
-
-    return {
-      success: true,
-      remainingQuantity: Math.max(0, newQuantity),
-      itemDeleted,
-      usageLog,
-    };
+    return InventoryConsumableService.useConsumable(input, userId, preFetchedItem);
   }
 
   /**
    * Use ammunition (convenience method for ranged attacks)
-   * @param characterId - Character ID
-   * @param userId - User ID (for ownership verification)
-   * @param ammoType - Ammunition type/name
-   * @param count - Number to use (default 1)
-   * @returns Usage result
+   * @deprecated Use InventoryConsumableService.useAmmunition directly
    */
   static async useAmmunition(
     characterId: string,
@@ -346,43 +277,12 @@ export class InventoryService {
     ammoType: string,
     count: number = 1
   ): Promise<UseConsumableResult> {
-    // Find ammunition by name
-    const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
-
-    if (results.length === 0) {
-      throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
-    }
-
-    const item = results[0]?.item;
-    if (!item) {
-      throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
-    }
-
-    // ⚡ Bolt: Pass pre-fetched ammunition item to useConsumable to avoid redundant DB lookup.
-    return this.useConsumable({
-      characterId,
-      itemId: item.id,
-      quantity: count,
-      context: 'Ranged attack',
-    }, userId, item);
+    return InventoryConsumableService.useAmmunition(characterId, userId, ammoType, count);
   }
 
   /**
    * Recover ammunition after combat
-   * @param characterId - Character ID
-   * @param userId - User ID (for ownership verification)
-   * @param ammoType - Ammunition type/name
-   * @param count - Number to recover
-   * @returns Updated item
+   * @deprecated Use InventoryConsumableService.recoverAmmunition directly
    */
   static async recoverAmmunition(
     characterId: string,
@@ -390,39 +290,7 @@ export class InventoryService {
     ammoType: string,
     count: number
   ): Promise<InventoryItem> {
-    // Find or create ammunition
-    const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
-
-    if (results.length > 0) {
-      // Add to existing
-      const item = results[0]?.item;
-      if (!item) {
-        throw new InternalServerError('Failed to find ammunition item');
-      }
-      const updated = await this.updateItem(item.id, characterId, userId, {
-        quantity: item.quantity + count,
-      });
-      if (!updated) throw new InternalServerError('Failed to update ammunition');
-      return updated;
-    } else {
-      // Create new ammunition entry
-      return this.addItem({
-        characterId,
-        name: ammoType,
-        itemType: 'ammunition',
-        quantity: count,
-        weight: 0.05, // Default weight per arrow/bolt
-      }, userId);
-    }
+    return InventoryConsumableService.recoverAmmunition(characterId, userId, ammoType, count);
   }
 
   // ==========================================
@@ -719,24 +587,9 @@ export class InventoryService {
 
   /**
    * Get consumable usage history
-   * @param input - Query parameters
-   * @param userId - User ID (for ownership verification)
-   * @returns Array of usage log entries
+   * @deprecated Use InventoryConsumableService.getUsageHistory directly
    */
   static async getUsageHistory(input: GetUsageHistoryInput, userId: string): Promise<ConsumableUsageLog[]> {
-    const results = await db
-      .select({ log: consumableUsageLog })
-      .from(consumableUsageLog)
-      .innerJoin(characters, eq(consumableUsageLog.characterId, characters.id))
-      .where(and(
-        eq(consumableUsageLog.characterId, input.characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        input.itemId ? eq(consumableUsageLog.itemId, input.itemId) : undefined,
-        input.sessionId ? eq(consumableUsageLog.sessionId, input.sessionId) : undefined
-      ))
-      .orderBy(desc(consumableUsageLog.timestamp))
-      .limit(input.limit ?? 100);
-
-    return results.map(r => r.log);
+    return InventoryConsumableService.getUsageHistory(input, userId);
   }
 }
