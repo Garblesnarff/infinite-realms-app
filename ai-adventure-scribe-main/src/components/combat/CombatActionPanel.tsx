@@ -179,8 +179,10 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
               size="sm"
               onClick={() => handleManagementSelect(action.type)}
               className="text-purple-600"
+              title={action.description}
+              aria-label={action.name}
             >
-              <action.icon className="w-4 h-4 mr-1" />
+              <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
               {action.name.replace('Manage ', '')}
             </Button>
           ))}
@@ -235,9 +237,9 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
             ) : selectedAction.type === 'short_rest' || selectedAction.type === 'long_rest' ? (
               <div className="space-y-3">
                 <div>
-                  <label htmlFor={hitDiceInputId} className="text-sm font-medium">
+                  <Label htmlFor={hitDiceInputId} className="text-sm font-medium">
                     Hit dice to roll:
-                  </label>
+                  </Label>
                   <Input
                     id={hitDiceInputId}
                     type="number"
@@ -256,6 +258,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                     }}
                     disabled={isSubmitting}
                     className="flex-1"
+                    title={`Submit ${selectedAction.name} and roll ${hitDiceToRoll} hit dice`}
                   >
                     Take {selectedAction.name}
                   </Button>
@@ -285,12 +288,18 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                     onClick={handleDetailedAction}
                     disabled={!actionDetails.trim() || isSubmitting}
                     className="flex-1"
+                    title={`Submit ${selectedAction.name} action`}
                   >
-                    <MessageSquare className="w-4 h-4 mr-2" />
+                    <MessageSquare className="w-4 h-4 mr-2" aria-hidden="true" />
                     {isSubmitting ? 'Submitting...' : `Take ${selectedAction.name}`}
                   </Button>
 
-                  <Button variant="outline" onClick={handleCancelAction} disabled={isSubmitting}>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelAction}
+                    disabled={isSubmitting}
+                    title="Cancel and return to action list"
+                  >
                     Cancel
                   </Button>
                 </div>
