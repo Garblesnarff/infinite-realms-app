@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRepository } from '../MemoryRepository';
 import * as featureFlags from '@/config/featureFlags';
-import type { Memory } from '@/types/memory';
+import { MEMORY_SELECT_COLUMNS, type Memory } from '@/types/memory';
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => {
@@ -208,7 +208,7 @@ describe('Memory Repository', () => {
         const results = await repository.loadRecentMemories('session-123');
 
         expect(results).toEqual(mockMemories);
-        expect(mockSelect).toHaveBeenCalledWith('*');
+        expect(mockSelect).toHaveBeenCalledWith(MEMORY_SELECT_COLUMNS);
         expect(mockEq).toHaveBeenCalledWith('session_id', 'session-123');
         expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false });
         expect(mockLimit).toHaveBeenCalledWith(5);
@@ -700,7 +700,7 @@ describe('Memory Repository', () => {
         },
       };
 
-      const enhanced = await repository.transformDatabaseMemory(dbMemory);
+      const enhanced = repository.transformDatabaseMemory(dbMemory);
 
       expect(enhanced).toEqual({
         id: 'mem-123',
@@ -723,7 +723,7 @@ describe('Memory Repository', () => {
       });
     });
 
-    it('should handle missing metadata gracefully', async () => {
+    it('should handle missing metadata gracefully', () => {
       const dbMemory = {
         id: 'mem-123',
         type: 'event',
@@ -733,14 +733,14 @@ describe('Memory Repository', () => {
         metadata: null,
       };
 
-      const enhanced = await repository.transformDatabaseMemory(dbMemory);
+      const enhanced = repository.transformDatabaseMemory(dbMemory);
 
       expect(enhanced.category).toBe('general');
       expect(enhanced.context).toEqual({});
       expect(enhanced.metadata).toEqual({});
     });
 
-    it('should handle missing importance', async () => {
+    it('should handle missing importance', () => {
       const dbMemory = {
         id: 'mem-123',
         type: 'event',
@@ -749,12 +749,12 @@ describe('Memory Repository', () => {
         metadata: null,
       };
 
-      const enhanced = await repository.transformDatabaseMemory(dbMemory);
+      const enhanced = repository.transformDatabaseMemory(dbMemory);
 
       expect(enhanced.importance).toBe(0);
     });
 
-    it('should handle malformed context JSON', async () => {
+    it('should handle malformed context JSON', () => {
       const dbMemory = {
         id: 'mem-123',
         type: 'event',
@@ -768,7 +768,7 @@ describe('Memory Repository', () => {
       };
 
       // Current implementation throws on invalid JSON
-      await expect(repository.transformDatabaseMemory(dbMemory)).rejects.toThrow();
+      expect(() => repository.transformDatabaseMemory(dbMemory)).toThrow();
     });
   });
 

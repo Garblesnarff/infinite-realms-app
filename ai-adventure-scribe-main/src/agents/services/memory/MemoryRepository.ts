@@ -153,7 +153,7 @@ export class MemoryRepository {
     return (data as any).embedding ?? null;
   }
 
-  async transformDatabaseMemory(dbMemory: any): Promise<EnhancedMemory> {
+  transformDatabaseMemory(dbMemory: any): EnhancedMemory {
     const metadata = dbMemory.metadata || {};
     const context = metadata.context ? JSON.parse(metadata.context) : {};
     return {

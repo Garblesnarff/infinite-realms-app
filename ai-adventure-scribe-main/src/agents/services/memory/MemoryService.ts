@@ -202,7 +202,7 @@ Extract 1-4 key memories in this JSON format:
       return this.semanticSearch(options.query, options);
     }
     const data = await repository.fetchMemories(this.sessionId, options);
-    return Promise.all(data.map((item) => repository.transformDatabaseMemory(item)));
+    return data.map((item) => repository.transformDatabaseMemory(item));
   }
 
   private async semanticSearch(
@@ -219,6 +219,6 @@ Extract 1-4 key memories in this JSON format:
       options.limit || 10,
       0.7,
     );
-    return Promise.all(data.map((item: any) => repository.transformDatabaseMemory(item)));
+    return data.map((item: any) => repository.transformDatabaseMemory(item));
   }
 }
