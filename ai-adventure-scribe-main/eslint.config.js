@@ -389,6 +389,8 @@ export default tseslint.config(
       'src/features/character/hooks/use-inventory-manager.ts',
       'src/features/character/components/sheet/InventoryManager.tsx',
       'src/components/scenes/SceneManager.tsx',
+      'src/components/scenes/SceneCard.tsx',
+      'src/components/scenes/SceneListItem.tsx',
       'src/services/ai/narration-service-impl.ts',
       'src/services/ai/shared/verbalized-sampling.ts',
       'src/features/game-session/components/game/MemoryPanel.tsx',

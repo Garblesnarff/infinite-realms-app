@@ -281,6 +281,7 @@ export default defineConfig({
       'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
       'src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx',
       'src/components/scenes/__tests__/SceneManager.test.tsx',
+      'src/components/scenes/__tests__/SceneManagerRefactored.test.tsx',
       'src/components/scenes/__tests__/SceneCreationWizardSteps.test.tsx',
       'src/components/scenes/__tests__/StepNameDescription.test.tsx',
       'src/components/scenes/__tests__/SceneSettingsAccessibility.test.tsx',
