@@ -165,5 +165,9 @@
 **Action:** When testing geometry-heavy utilities, use mocked dependencies for coordinate-heavy functions like raycasting to focus on the logic of the module under test. Ensure that unused imports in test files are removed to comply with strict `@typescript-eslint/no-unused-vars` rules.
 
 ## 2026-03-15 - [Condition Icons Coverage]
-**Learning:** `condition-icons.ts` provides critical visual mapping for the battle map but had zero test coverage. The logic for sorting conditions by priority and determining the primary condition (lowest priority number) is essential for correct token rendering.
+**Learning:** `condition-icons.ts` provides critical visual mapping for the battle map but had zero test coverage. The logic for sorting conditions by priority and determining the primary condition (lowest priority number) is offensive for correct token rendering.
 **Action:** Always verify that visual utility functions are tested for both standard and edge cases (empty arrays, unknown types). Added comprehensive coverage for `condition-icons.ts` and included `condition-definitions.ts` in coverage reports as it's a key dependency for the condition system.
+
+## 2026-02-27 - [Blog Hooks & Cache Management Coverage]
+**Learning:** The blog system hooks (`useBlogPosts`, `useBlogMedia`) manage complex state via React Query. Testing revealed the importance of verifying manual cache updates (`setQueryData`) and invalidations (`invalidateQueries`) after mutations to ensure UI consistency. Also learned that `useDeleteBlogMedia` uses optimistic updates with a rollback mechanism that must be verified by mocking service failures.
+**Action:** When testing hooks that use React Query, always provide a fresh `QueryClient` per test and spy on its methods (`invalidateQueries`, `setQueryData`, `removeQueries`) to verify side effects. Ensure that `vitest.config.ts` is updated to include both the test file and the source module for accurate coverage reporting.
