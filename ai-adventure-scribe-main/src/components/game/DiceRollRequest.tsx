@@ -163,6 +163,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   size="sm"
                   onClick={toggleAdvantage}
                   aria-pressed={hasAdvantage}
+                  title={hasAdvantage ? 'Disable Advantage' : 'Enable Advantage'}
                   className={cn(
                     'text-xs',
                     hasAdvantage
@@ -178,6 +179,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   size="sm"
                   onClick={toggleDisadvantage}
                   aria-pressed={hasDisadvantage}
+                  title={hasDisadvantage ? 'Disable Disadvantage' : 'Enable Disadvantage'}
                   className={cn(
                     'text-xs',
                     hasDisadvantage
@@ -222,6 +224,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                     disabled={isRolling}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
                     size="lg"
+                    title={`Roll ${rollCalculation.formula} for ${request.purpose}`}
+                    aria-label={`Roll ${rollCalculation.formula} for ${request.purpose}`}
                   >
                     <Dice6 className="w-4 h-4 mr-2" />
                     {isRolling ? 'Rolling...' : 'Roll Dice'}
@@ -234,6 +238,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                       disabled={isRolling}
                       className="flex-1 text-xs"
                       size="sm"
+                      title="Roll physical dice and enter result manually"
                     >
                       Enter Manually
                     </Button>
@@ -244,6 +249,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                         disabled={isRolling}
                         className="flex-1 text-xs"
                         size="sm"
+                        title="Dismiss roll request"
                       >
                         Cancel
                       </Button>

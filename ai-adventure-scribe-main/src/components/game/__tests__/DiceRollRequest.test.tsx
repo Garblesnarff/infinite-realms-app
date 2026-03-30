@@ -131,23 +131,30 @@ describe('DiceRollRequest', () => {
     const advButton = screen.getByRole('button', { name: /^advantage$/i });
     const disButton = screen.getByRole('button', { name: /^disadvantage$/i });
 
+    expect(advButton).toHaveAttribute('title', 'Enable Advantage');
+    expect(disButton).toHaveAttribute('title', 'Enable Disadvantage');
+
     fireEvent.click(advButton);
-    expect(advButton).toHaveAttribute('aria-pressed', 'true');
-    expect(disButton).toHaveAttribute('aria-pressed', 'false');
+    expect(advButton).toHaveAttribute('title', 'Disable Advantage');
 
     fireEvent.click(disButton);
+    expect(disButton).toHaveAttribute('title', 'Disable Disadvantage');
     expect(advButton).toHaveAttribute('aria-pressed', 'false');
     expect(disButton).toHaveAttribute('aria-pressed', 'true');
 
     // Toggle off
     fireEvent.click(disButton);
     expect(disButton).toHaveAttribute('aria-pressed', 'false');
+    expect(disButton).toHaveAttribute('title', 'Enable Disadvantage');
 
-    // Toggle advantage off
+    // Toggle advantage on
     fireEvent.click(advButton);
     expect(advButton).toHaveAttribute('aria-pressed', 'true');
+    expect(advButton).toHaveAttribute('title', 'Disable Advantage');
+    // Toggle advantage off
     fireEvent.click(advButton);
     expect(advButton).toHaveAttribute('aria-pressed', 'false');
+    expect(advButton).toHaveAttribute('title', 'Enable Advantage');
   });
 
   it('switches to manual mode, goes back, and submits a result', () => {
@@ -185,7 +192,7 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
 
     expect(screen.getByTestId('dice-roll-embed')).toBeInTheDocument();
 
@@ -202,7 +209,7 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
     fireEvent.click(screen.getByTestId('mock-roll-number-button'));
     expect(mockOnManualResult).toHaveBeenCalledWith(20);
   });
@@ -216,7 +223,7 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Roll Dice/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll 1d20\+2 for Test purpose/i }));
     fireEvent.click(screen.getByTestId('mock-roll-invalid-button'));
     expect(mockOnManualResult).toHaveBeenCalledWith(0);
   });
@@ -427,7 +434,7 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
-    expect(screen.getByRole('button', { name: /roll dice/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /roll 1d20\+3 for A general charisma test/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/roll formula could not be resolved/i)).not.toBeInTheDocument();
     // Must be called with 'check' rollType (not 'skill' which would throw with no skillName)
     expect(calculateRollWithBreakdown).toHaveBeenCalledWith(
@@ -451,7 +458,7 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
-    const rollButton = screen.getByRole('button', { name: /roll dice/i });
+    const rollButton = screen.getByRole('button', { name: /roll 1d20-1 for Arcana check/i });
     expect(rollButton).not.toBeDisabled();
     expect(screen.getByText('1d20-1')).toBeInTheDocument();
   });
@@ -469,7 +476,7 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={request} onRoll={mockOnRoll} onManualResult={mockOnManualResult} />,
     );
 
-    const rollButton = screen.getByRole('button', { name: /roll dice/i });
+    const rollButton = screen.getByRole('button', { name: /roll 1d20\+2 for Perception check/i });
     expect(rollButton).not.toBeDisabled();
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
   });
