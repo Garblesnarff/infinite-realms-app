@@ -3,15 +3,17 @@ import { describe, it, expect } from 'vitest';
 
 import {
   raycastToWalls,
-  getAllRayIntersections,
   lineSegmentIntersection,
-  sortPointsByAngle,
-  sortEndpointsByAngle,
-  removeDuplicatePoints,
   raycastCone,
   isInShadow,
   calculateReflection,
 } from '../raycasting';
+import {
+  getAllRayIntersections,
+  sortPointsByAngle,
+  sortEndpointsByAngle,
+  removeDuplicatePoints,
+} from '../vision-polygon-generator';
 
 import type { VisionBlocker } from '@/types/scene';
 

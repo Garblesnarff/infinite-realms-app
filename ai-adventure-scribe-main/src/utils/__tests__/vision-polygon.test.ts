@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import * as geometry from '../geometry';
-import * as raycasting from '../raycasting';
 import * as visionCalculations from '../vision-calculations';
 import { calculateVisionPolygon, hasLineOfSight, mergeVisionPolygons } from '../vision-polygon';
+import * as polygonGenerator from '../vision-polygon-generator';
 
 import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
@@ -15,7 +15,7 @@ vi.mock('../geometry', () => ({
   isPointInVisionCone: vi.fn(),
 }));
 
-vi.mock('../raycasting', () => ({
+vi.mock('../vision-polygon-generator', () => ({
   getAllRayIntersections: vi.fn(),
   removeDuplicatePoints: vi.fn((points) => points),
   sortEndpointsByAngle: vi.fn((endpoints) => endpoints),
@@ -63,8 +63,8 @@ describe('vision-polygon', () => {
       ];
 
       vi.mocked(visionCalculations.calculateVisionRadius).mockReturnValue(60);
-      vi.mocked(raycasting.getAllRayIntersections).mockReturnValue(mockPoints as any);
-      vi.mocked(raycasting.sortEndpointsByAngle).mockReturnValue(mockPoints as any);
+      vi.mocked(polygonGenerator.getAllRayIntersections).mockReturnValue(mockPoints as any);
+      vi.mocked(polygonGenerator.sortEndpointsByAngle).mockReturnValue(mockPoints as any);
 
       const result = calculateVisionPolygon(token, []);
 
@@ -86,7 +86,7 @@ describe('vision-polygon', () => {
       ];
 
       vi.mocked(visionCalculations.calculateVisionRadius).mockReturnValue(60);
-      vi.mocked(raycasting.getAllRayIntersections).mockReturnValue(mockPoints as any);
+      vi.mocked(polygonGenerator.getAllRayIntersections).mockReturnValue(mockPoints as any);
       vi.mocked(geometry.isPointInVisionCone).mockImplementation((origin, rot, angle, pt) => pt.x > 100);
 
       const result = calculateVisionPolygon(token, []);
@@ -109,12 +109,12 @@ describe('vision-polygon', () => {
 
       calculateVisionPolygon(token, walls);
 
-      expect(raycasting.getAllRayIntersections).toHaveBeenCalledWith(
+      expect(polygonGenerator.getAllRayIntersections).toHaveBeenCalledWith(
         expect.anything(),
         expect.arrayContaining([expect.objectContaining({ id: 'w2' })]),
         expect.anything()
       );
-      const filteredWalls = vi.mocked(raycasting.getAllRayIntersections).mock.calls[0][1];
+      const filteredWalls = vi.mocked(polygonGenerator.getAllRayIntersections).mock.calls[0][1];
       expect(filteredWalls).toHaveLength(1);
       expect(filteredWalls[0].id).toBe('w2');
     });
@@ -127,7 +127,7 @@ describe('vision-polygon', () => {
 
       calculateVisionPolygon(token, walls);
 
-      expect(raycasting.getAllRayIntersections).toHaveBeenCalledWith(
+      expect(polygonGenerator.getAllRayIntersections).toHaveBeenCalledWith(
         expect.anything(),
         [],
         expect.anything()

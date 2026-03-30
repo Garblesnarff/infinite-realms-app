@@ -10,8 +10,12 @@
  */
 
 import { isLineBlocked, isPointInVisionCone } from './geometry';
-import { getAllRayIntersections, removeDuplicatePoints, sortEndpointsByAngle } from './raycasting';
 import { calculateVisionRadius } from './vision-calculations';
+import {
+  getAllRayIntersections,
+  removeDuplicatePoints,
+  sortEndpointsByAngle,
+} from './vision-polygon-generator';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token, TokenVisionConfig } from '@/types/token';

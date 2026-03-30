@@ -60,23 +60,26 @@ export {
 export {
   // Raycasting
   raycastToWalls,
-  getAllRayIntersections,
   lineSegmentIntersection,
-  sortPointsByAngle,
-  sortEndpointsByAngle,
-  removeDuplicatePoints,
-
   // Advanced raycasting
   raycastCone,
   isInShadow,
   calculateReflection,
-
   // Types
   type Ray,
   type LineSegment,
   type RayIntersection,
-  type VisionEndpoint,
 } from './raycasting';
+
+export {
+  // Vision polygon generation
+  getAllRayIntersections,
+  sortPointsByAngle,
+  sortEndpointsByAngle,
+  removeDuplicatePoints,
+  // Types
+  type VisionEndpoint,
+} from './vision-polygon-generator';
 
 // ===========================
 // Spatial Partitioning
