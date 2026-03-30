@@ -9,7 +9,9 @@ import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { DiceRollRequest, type RollRequest } from '../DiceRollRequest';
+import { type RollRequest } from '../DiceRollRequest';
+
+import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 
 import type { Character } from '@/types/character';
 

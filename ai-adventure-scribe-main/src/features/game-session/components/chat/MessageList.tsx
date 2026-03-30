@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { MessageListContainer } from './message-list';
+import { MessageListContainer } from './message-list/MessageListContainer';
 import { useDynamicOptions } from './message-list/useDynamicOptions';
 import { useImageGeneration } from './message-list/useImageGeneration';
 import { useScrollBehavior } from './message-list/useScrollBehavior';
