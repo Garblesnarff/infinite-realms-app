@@ -72,7 +72,7 @@ const RaceSelection: React.FC = () => {
           {/* Category Filters & View Controls */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             {/* Category Filters */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter races by category">
               {raceCategories.map((category) => (
                 <Button
                   key={category.id}
@@ -80,6 +80,7 @@ const RaceSelection: React.FC = () => {
                   size="sm"
                   onClick={() => setSelectedCategory(category.id)}
                   className="text-xs"
+                  aria-pressed={selectedCategory === category.id}
                 >
                   {category.name} ({category.count})
                 </Button>
