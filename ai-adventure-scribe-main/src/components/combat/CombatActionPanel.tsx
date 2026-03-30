@@ -58,7 +58,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
 
   // Handle management panel selection
   const handleManagementSelect = (managementType: string): void => {
-    setSelectedManagement(managementType);
+    setSelectedManagement((prev) => (prev === managementType ? null : managementType));
   };
 
   const handleApplyCondition = async (condition: Condition, targetId: string): Promise<void> => {
@@ -172,20 +172,24 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
 
         {/* Management Actions */}
         <div className="flex justify-end space-x-2">
-          {MANAGEMENT_ACTIONS.map((action) => (
-            <Button
-              key={action.type}
-              variant="outline"
-              size="sm"
-              onClick={() => handleManagementSelect(action.type)}
-              className="text-purple-600"
-              title={action.description}
-              aria-label={action.name}
-            >
-              <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
-              {action.name.replace('Manage ', '')}
-            </Button>
-          ))}
+          {MANAGEMENT_ACTIONS.map((action) => {
+            const isActive = selectedManagement === action.type;
+            return (
+              <Button
+                key={action.type}
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleManagementSelect(action.type)}
+                className={isActive ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-purple-600'}
+                title={action.description}
+                aria-label={action.name}
+                aria-pressed={isActive}
+              >
+                <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
+                {action.name.replace('Manage ', '')}
+              </Button>
+            );
+          })}
         </div>
       </CardHeader>
 
