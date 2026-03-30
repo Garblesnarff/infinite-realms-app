@@ -332,6 +332,7 @@ export default tseslint.config(
       'src/features/character/components/sheet/tabs/InventoryTab.tsx',
       'src/components/blog-admin/blog-posts-list.tsx',
       'src/components/blog-admin/blog-posts-table.tsx',
+      'src/services/blog/blog-media-service.ts',
       'src/components/character-creation/steps/race-selection/RaceCard.tsx',
       'src/components/character-creation/steps/race-selection/use-race-selection.ts',
       'src/components/character-creation/steps/RaceSelection.tsx',
