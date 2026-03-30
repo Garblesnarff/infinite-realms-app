@@ -5,7 +5,7 @@ import { WorldBuilderRepository } from './world-builder-repository';
 import { MemoryManager } from '../memory-manager';
 
 import type { LocationRequest, GeneratedLocation } from './location-generator';
-import type { NPCRequest, GeneratedNPC } from './npc-generator';
+import type { NPCRequest, GeneratedNPC } from './npc-types';
 import type { QuestRequest, GeneratedQuest } from './quest-generator';
 import type { WorldBuildingContext, WorldExpansionResult, WorldBuildingTrigger } from './types';
 
