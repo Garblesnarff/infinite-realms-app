@@ -82,6 +82,10 @@
 **Learning:** Shadcn `RadioGroup` components in complex forms (like campaign creation steps) often lack clear associations with their section titles, making navigation difficult for screen reader users.
 **Action:** Use `useId` to link section labels to `RadioGroup` components via `aria-labelledby`. Always wrap icon-only view toggles in a `role="group"` container with a descriptive `aria-label`.
 
+### Click-to-Edit Accessibility Pattern
+**Learning:** Interactive display elements that trigger edit modes (like in `EditableDescription.tsx`) are often implemented as static `div`s, making them invisible to keyboard users and screen readers.
+**Action:** Add `role="button"`, `tabIndex={0}`, and an `onKeyDown` handler for Enter/Space to ensure keyboard navigation parity. Always provide a descriptive `aria-label` for the trigger and `title`/`aria-label` for action buttons like Save/Cancel.
+
 ## 2026-03-24 - Quick Action Button Accessibility in Panels
 **Learning:** Functional text buttons in complex side panels (like the Layers Panel) can be ambiguous if they only use short labels like "Reset". Providing more descriptive `aria-label` and `title` attributes (e.g., "Reset layers to default visibility and opacity") significantly improves the experience for both screen reader users and sighted users via tooltips.
 **Action:** Always provide descriptive `aria-label` and `title` attributes for functional buttons in utility panels, even if they have text labels, to clarify the scope of the action.
