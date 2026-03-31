@@ -38,10 +38,11 @@ export class ChatPersistence {
    */
   static async getConversationHistory(sessionId: string): Promise<ChatMessage[]> {
     try {
-      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB columns (context, images) not used for history mapping.
+      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB columns (context, images)
+      // that are not needed for initial history mapping. This reduces data transfer.
       const { data, error } = await supabase
         .from('dialogue_history')
-        .select('id, speaker_type, message, created_at')
+        .select('id, speaker_type, message, created_at, sequence_number')
         .eq('session_id', sessionId)
         .order('sequence_number', { ascending: true });
 

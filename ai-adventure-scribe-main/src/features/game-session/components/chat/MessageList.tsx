@@ -61,8 +61,12 @@ type LastRollMeta = {
  * MessageList Component
  * Displays a list of chat messages with styling based on sender type
  * Refactored to use sub-components and custom hooks for better maintainability
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the entire message list
+ * when parent components update. Sub-components (MessageListContainer) are already
+ * memoized or optimized via custom hooks.
  */
-export const MessageList: React.FC<MessageListProps> = ({
+export const MessageList: React.FC<MessageListProps> = React.memo(({
   onSendFullMessage,
   sessionId,
   containerRef,
@@ -160,4 +164,4 @@ export const MessageList: React.FC<MessageListProps> = ({
       </div>
     </div>
   );
-};
+});
