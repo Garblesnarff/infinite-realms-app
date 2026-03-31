@@ -11,33 +11,12 @@ import type { CombatParticipant, CombatAction, DamageType, DiceRoll } from '@/ty
 
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollAttack, rollDamage, calculateDamage } from '@/utils/diceUtils';
+import { createCombatActionFromAttack, generateAttackDescription } from '@/utils/combat/attack-narration';
+import type { AttackResolution, DamageCalculation, FullAttackResult } from '@/utils/combat/attack-types';
 
-export interface AttackResolution {
-  hit: boolean;
-  roll: DiceRoll;
-  acHit: number; // The AC that was targeted/achieved
-  criticalHit: boolean;
-  criticalFail: boolean;
-  advantage: boolean;
-  disadvantage: boolean;
-}
-
-export interface DamageCalculation {
-  rolls: DiceRoll[];
-  totalBeforeResistance: number;
-  totalAfterResistance: number;
-  damageType: DamageType;
-  resistances: DamageType[];
-  vulnerabilities: DamageType[];
-  immunities: DamageType[];
-}
-
-export interface FullAttackResult {
-  resolution: AttackResolution;
-  damage: DamageCalculation | null; // null if attack missed
-  targetReducedHp?: number; // HP after damage applied
-  totalDamageDealt?: number;
-}
+// Re-export extracted types and functions for backward compatibility
+export type { AttackResolution, DamageCalculation, FullAttackResult };
+export { createCombatActionFromAttack, generateAttackDescription };
 
 /**
  * Resolve an attack: roll attack dice and check against target AC
@@ -448,61 +427,4 @@ function getSpellcastingAbility(attacker: CombatParticipant): number {
 function getSneakAttackDice(level: number): string {
   const dice = Math.ceil((level + 1) / 2); // 1d6 at lvl 1-2, 2d6 at 3-4, etc.
   return `${dice}d6`;
-}
-
-/**
- * Create combat action from attack result
- */
-export function createCombatActionFromAttack(
-  attacker: CombatParticipant,
-  target: CombatParticipant,
-  weapon: Equipment | null,
-  result: FullAttackResult,
-): CombatAction {
-  const isSpellAttack = !!(
-    weapon &&
-    typeof weapon === 'object' &&
-    'isSpell' in (weapon as Record<string, unknown>) &&
-    (weapon as Record<string, unknown>).isSpell === true
-  );
-  const attackType = isSpellAttack ? 'cast_spell' : 'attack';
-
-  return {
-    id: crypto.randomUUID(),
-    encounterId: '', // Will be set by caller
-    participantId: attacker.id,
-    targetParticipantId: target.id,
-    round: 0, // Will be set by caller
-    turnOrder: 0, // Will be set by caller
-    actionType: attackType,
-    description: generateAttackDescription(attacker, target, weapon, result),
-    attackRoll: result.resolution.roll,
-    damageRolls: result.damage?.rolls || [],
-    hit: result.resolution.hit,
-    damageDealt: result.totalDamageDealt || 0,
-    damageType: result.damage?.damageType || 'piercing',
-    timestamp: new Date(),
-  };
-}
-
-/**
- * Generate attack description
- */
-function generateAttackDescription(
-  attacker: CombatParticipant,
-  target: CombatParticipant,
-  weapon: Equipment | null,
-  result: FullAttackResult,
-): string {
-  const weaponName = weapon?.name || 'unarmed strike';
-
-  if (!result.resolution.hit && !result.resolution.criticalHit) {
-    return `${attacker.name} misses ${target.name} with ${weaponName}.`;
-  }
-
-  if (result.resolution.criticalHit) {
-    return `${attacker.name} scores a critical hit on ${target.name} with ${weaponName} for ${result.totalDamageDealt} damage!`;
-  }
-
-  return `${attacker.name} hits ${target.name} with ${weaponName} for ${result.totalDamageDealt} damage.`;
 }

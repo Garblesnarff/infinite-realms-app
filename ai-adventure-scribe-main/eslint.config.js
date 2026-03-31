@@ -268,6 +268,7 @@ export default tseslint.config(
       'src/services/ai/prompts/combat-rules-prompts.ts',
       'src/services/ai/prompts/character-description-prompts.ts',
       'src/utils/character-calculations.ts',
+      'src/utils/attackUtils.ts',
       'src/utils/raycasting.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
