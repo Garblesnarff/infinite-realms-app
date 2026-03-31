@@ -301,6 +301,7 @@ export default defineConfig({
       'src/services/ai/__tests__/xml-parser.test.ts',
       'src/services/__tests__/personalityService.test.ts',
       'src/hooks/ai/__tests__/ai-utils.test.ts',
+      'src/utils/multiclass/__tests__/spellcasting.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -579,6 +580,7 @@ export default defineConfig({
         'src/hooks/ai/ai-utils.ts',
         'src/services/blog/blog-service.ts',
         'src/services/blog/blog-media-service.ts',
+        'src/utils/multiclass/spellcasting.ts',
       ],
       exclude: [
         '**/__tests__/**',

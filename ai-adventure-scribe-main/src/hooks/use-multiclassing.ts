@@ -7,6 +7,8 @@
 import { useState, useCallback } from 'react';
 
 import type { Character, CharacterClass } from '@/types/character';
+import { calculateMulticlassSpellcasting } from '@/utils/multiclass/spellcasting';
+import type { MulticlassSpellcastingResult } from '@/utils/multiclass/spellcasting';
 import type { MulticlassValidationResult } from '@/utils/multiclassing';
 
 import logger from '@/lib/logger';
@@ -14,7 +16,6 @@ import {
   validateMulticlass,
   calculateMulticlassProficiencies,
   calculateMulticlassHitPoints,
-  calculateMulticlassSpellcasting,
   getMulticlassFeatures,
   addMulticlass,
   levelUpClass,

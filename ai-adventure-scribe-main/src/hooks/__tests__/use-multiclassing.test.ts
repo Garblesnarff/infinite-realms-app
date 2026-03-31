@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useMulticlassing } from '../use-multiclassing';
 import type { Character, CharacterClass } from '@/types/character';
 import * as multiclassUtils from '@/utils/multiclassing';
+import * as spellcastingUtils from '@/utils/multiclass/spellcasting';
 
 // Mock the utilities
 vi.mock('@/utils/multiclassing', () => ({
@@ -14,6 +15,11 @@ vi.mock('@/utils/multiclassing', () => ({
   getMulticlassFeatures: vi.fn(),
   addMulticlass: vi.fn(),
   levelUpClass: vi.fn(),
+}));
+
+// Mock the spellcasting utility specifically
+vi.mock('@/utils/multiclass/spellcasting', () => ({
+  calculateMulticlassSpellcasting: vi.fn(),
 }));
 
 // Mock logger
@@ -271,7 +277,7 @@ describe('useMulticlassing', () => {
       expect(multiclassUtils.calculateMulticlassHitPoints).toHaveBeenCalledWith(mockCharacter);
 
       result.current.getSpellcasting();
-      expect(multiclassUtils.calculateMulticlassSpellcasting).toHaveBeenCalledWith(mockCharacter);
+      expect(spellcastingUtils.calculateMulticlassSpellcasting).toHaveBeenCalledWith(mockCharacter);
 
       result.current.getFeatures();
       expect(multiclassUtils.getMulticlassFeatures).toHaveBeenCalledWith(mockCharacter);
