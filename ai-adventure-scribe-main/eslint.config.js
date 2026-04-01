@@ -250,6 +250,7 @@ export default tseslint.config(
       'src/hooks/__tests__/useFogWebSocket.test.ts',
       'src/utils/__tests__/raycasting.test.ts',
       'src/hooks/ai/__tests__/session-logger.test.ts',
+      'src/utils/combat/__tests__/attack-narration.test.ts',
 
       // Additional large production files
       'src/hooks/use-game-session.ts', // 797 lines
