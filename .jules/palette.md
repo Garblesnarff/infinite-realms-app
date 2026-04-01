@@ -133,3 +133,7 @@
 ## 2026-03-09 - Searchable Listbox and Scroll Area Accessibility
 **Learning:** Standardizing selection feedback in listboxes (`role="option"`) by adding `aria-selected` and visual cues like a `Check` icon improves both accessibility and visual clarity. Semantically linking `ScrollArea` containers to their section headings using `aria-labelledby` provides better context for screen reader users when navigating complex dialogs.
 **Action:** For searchable listbox implementations, always include `aria-selected` on options and a visual selection indicator (like a `Check` icon). Link scrollable lists to their headers via `aria-labelledby` using `useId`.
+
+## 2026-04-01 - SelectTrigger Accessibility Redundancy
+**Learning:** Providing an `aria-label` on a `SelectTrigger` that is already correctly associated with a `Label` (via `id` and `htmlFor`) or an `aria-labelledby` causes screen readers to announce the label twice. Removing the redundant attribute ensures a cleaner, more professional experience for assistive technology users.
+**Action:** Avoid redundant `aria-label` attributes on `SelectTrigger` components if they have an associated `Label`. Update unit tests to check for accessible names via role/name instead of targeting the specific attribute.

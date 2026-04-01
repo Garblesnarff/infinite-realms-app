@@ -56,6 +56,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         }
       }}
       aria-label={`View scene: ${scene.name}`}
+      title={`View scene: ${scene.name}`}
     >
       {/* Thumbnail */}
       <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">

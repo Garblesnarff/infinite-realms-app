@@ -243,6 +243,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
               role="button"
               tabIndex={0}
               aria-label="Upload character file"
+              title="Upload character file"
               className={cn(
                 'border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 isDragging

@@ -40,7 +40,8 @@ test('CreateFolderDialog links parent folder label to select trigger', () => {
   render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   const label = screen.getByText(/parent folder/i);
-  const selectTrigger = screen.getByLabelText(/select parent folder/i);
+  // Using role and checking name because aria-label was removed in favor of direct association
+  const selectTrigger = screen.getByRole('combobox', { name: /parent folder/i });
 
   expect(label.getAttribute('for')).toBe(selectTrigger.getAttribute('id'));
 });

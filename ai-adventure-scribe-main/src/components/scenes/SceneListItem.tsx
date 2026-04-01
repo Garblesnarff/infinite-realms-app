@@ -50,6 +50,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         }
       }}
       aria-label={`View scene: ${scene.name}`}
+      title={`View scene: ${scene.name}`}
     >
       <div className="flex items-center gap-4 p-4">
         {/* Thumbnail */}

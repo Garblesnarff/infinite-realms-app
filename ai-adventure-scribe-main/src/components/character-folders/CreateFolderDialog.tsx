@@ -149,7 +149,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
               value={selectedParentId || 'none'}
               onValueChange={(value) => setSelectedParentId(value === 'none' ? null : value)}
             >
-              <SelectTrigger id={parentFolderSelectId} aria-label="Select parent folder">
+              <SelectTrigger id={parentFolderSelectId}>
                 <SelectValue placeholder="No parent (root level)" />
               </SelectTrigger>
               <SelectContent>

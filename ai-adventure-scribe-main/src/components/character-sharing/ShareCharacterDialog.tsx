@@ -272,10 +272,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                 value={permissionLevel}
                 onValueChange={(value) => setPermissionLevel(value as PermissionLevel)}
               >
-                <SelectTrigger
-                  aria-labelledby={permissionSelectId}
-                  aria-label="Select permission level"
-                >
+                <SelectTrigger aria-labelledby={permissionSelectId}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
