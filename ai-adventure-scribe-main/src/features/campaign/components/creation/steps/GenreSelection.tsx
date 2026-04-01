@@ -11,7 +11,7 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -97,6 +97,7 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
   const { state, dispatch } = useCampaign();
   const { toast } = useToast();
   const { scrollToNavigation } = useAutoScroll();
+  const genreHeaderId = useId();
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [viewMode, setViewMode] = React.useState<'grid' | 'list' | 'compact'>('compact');
@@ -148,7 +149,10 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
   return (
     <div className="space-y-8 parchment animate-fade-in-up">
       <div className="text-center mb-6">
-        <Label className="text-xl font-serif font-semibold flex items-center justify-center">
+        <Label
+          id={genreHeaderId}
+          className="text-xl font-serif font-semibold flex items-center justify-center"
+        >
           <BookOpen className="h-5 w-5 mr-2 text-blue-600" />
           Choose Your Campaign Genre
         </Label>
@@ -212,6 +216,7 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
       </div>
 
       <RadioGroup
+        aria-labelledby={genreHeaderId}
         value={state.campaign?.genre || ''}
         onValueChange={handleGenreChange}
         className={
