@@ -104,6 +104,10 @@
 **Learning:** The `useMagicItemAttunement` hook manages the state of magic item attunement for a character. Testing revealed that it correctly enforces D&D 5e RAW for the 3-item attunement limit and requirement validation (class, race, alignment) via the `magicItemEffects` utility.
 **Action:** When testing hooks that manage character state, always provide a mock `onCharacterUpdate` callback and verify it is called with the expected deep-copied and updated character object. Ensure new hook tests are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
 
+## 2026-02-27 - [Voice Mapper Service Coverage & Heuristics]
+**Learning:** `VoiceMapper` uses a keyword-based matching system where the priority is determined by the order of keys in `CHARACTER_KEYWORDS`. For example, 'monster' is checked before 'guard', so 'dragon captain' matches 'monster'. Also, the `debugAndClearCharacter` method deletes a mapping but immediately re-saves it by calling `getVoiceForCharacter`.
+**Action:** When testing priority-based matching, verify the expected override behavior based on the defined keyword order. Use spies to verify that deletion from `localStorage` actually occurs if the subsequent re-save is the intended side effect of the debug method.
+
 ## 2026-02-19 - [Session Utilities Coverage & Strict Predicates]
 **Learning:** Found that `isValidSession` was returning `null` instead of `false` when passed `null`, due to the behavior of the `&&` operator in JavaScript. While technically falsy, this violated the expected boolean return type of the predicate.
 **Action:** Use the double-bang operator (`!!`) for type predicates that rely on logical AND chains to ensure a strict boolean return. Always verify hook and utility coverage by adding both the test file and source file to `vitest.config.ts`.
