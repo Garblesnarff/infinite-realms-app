@@ -28,6 +28,54 @@ interface DiceRollRequestProps {
 }
 
 /**
+ * ⚡ Bolt: Static roll type configuration moved outside the component to avoid
+ * re-allocation and redundant logic execution on every render.
+ */
+const ROLL_TYPE_CONFIG: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
+  attack: {
+    color: 'border-red-200 bg-red-50',
+    icon: <Target className="w-4 h-4" />,
+    label: 'Attack Roll',
+  },
+  save: {
+    color: 'border-orange-200 bg-orange-50',
+    icon: <AlertCircle className="w-4 h-4" />,
+    label: 'Saving Throw',
+  },
+  check: {
+    color: 'border-blue-200 bg-blue-50',
+    icon: <Dice6 className="w-4 h-4" />,
+    label: 'Ability Check',
+  },
+  skill_check: {
+    color: 'border-blue-200 bg-blue-50',
+    icon: <Dice6 className="w-4 h-4" />,
+    label: 'Skill Check',
+  },
+  damage: {
+    color: 'border-purple-200 bg-purple-50',
+    icon: <Dice6 className="w-4 h-4" />,
+    label: 'Damage Roll',
+  },
+  damage_taken: {
+    color: 'border-red-300 bg-red-100',
+    icon: <AlertCircle className="w-4 h-4 text-red-600" />,
+    label: 'Incoming Damage',
+  },
+  initiative: {
+    color: 'border-green-200 bg-green-50',
+    icon: <Zap className="w-4 h-4" />,
+    label: 'Initiative',
+  },
+};
+
+const DEFAULT_TYPE_CONFIG = {
+  color: 'border-gray-200 bg-gray-50',
+  icon: <Dice6 className="w-4 h-4" />,
+  label: 'Dice Roll',
+};
+
+/**
  * Interactive Dice Roll Request Component
  * Shows when DM requests a roll, allows player to roll or input manually
  */
@@ -54,71 +102,18 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onManualResult });
 
-    const getTypeColor = () => {
-      switch (request.type) {
-        case 'attack':
-          return 'border-red-200 bg-red-50';
-        case 'save':
-          return 'border-orange-200 bg-orange-50';
-        case 'check':
-          return 'border-blue-200 bg-blue-50';
-        case 'skill_check':
-          return 'border-blue-200 bg-blue-50';
-        case 'damage':
-          return 'border-purple-200 bg-purple-50';
-        case 'damage_taken':
-          return 'border-red-300 bg-red-100'; // More intense red for incoming damage
-        case 'initiative':
-          return 'border-green-200 bg-green-50';
-        default:
-          return 'border-gray-200 bg-gray-50';
-      }
-    };
-
-    const getTypeIcon = () => {
-      switch (request.type) {
-        case 'attack':
-          return <Target className="w-4 h-4" />;
-        case 'save':
-          return <AlertCircle className="w-4 h-4" />;
-        case 'initiative':
-          return <Zap className="w-4 h-4" />;
-        case 'damage_taken':
-          return <AlertCircle className="w-4 h-4 text-red-600" />;
-        default:
-          return <Dice6 className="w-4 h-4" />;
-      }
-    };
-
-    const getTypeLabel = () => {
-      switch (request.type) {
-        case 'attack':
-          return 'Attack Roll';
-        case 'save':
-          return 'Saving Throw';
-        case 'check':
-          return 'Ability Check';
-        case 'skill_check':
-          return 'Skill Check';
-        case 'damage':
-          return 'Damage Roll';
-        case 'damage_taken':
-          return 'Incoming Damage';
-        case 'initiative':
-          return 'Initiative';
-        default:
-          return 'Dice Roll';
-      }
-    };
+    const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
 
     return (
-      <Card className={cn('w-full max-w-md mx-auto border-2 shadow-lg', getTypeColor(), className)}>
+      <Card
+        className={cn('w-full max-w-md mx-auto border-2 shadow-lg', config.color, className)}
+      >
         <div className="p-4">
           {/* Header */}
           <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center gap-2">
-              {getTypeIcon()}
-              <span className="font-semibold text-slate-700">{getTypeLabel()} Requested</span>
+              {config.icon}
+              <span className="font-semibold text-slate-700">{config.label} Requested</span>
             </div>
           </div>
 
