@@ -247,6 +247,7 @@ export default tseslint.config(
       'src/**/__tests__/**/*.test.ts',
       'src/**/__tests__/**/*.test.tsx',
       'src/hooks/game-session/__tests__/use-session-management.test.ts',
+      'src/hooks/game-session/__tests__/use-session-initialization.test.ts',
       'src/hooks/__tests__/useFogWebSocket.test.ts',
       'src/utils/__tests__/raycasting.test.ts',
       'src/hooks/ai/__tests__/session-logger.test.ts',
@@ -255,6 +256,7 @@ export default tseslint.config(
       // Additional large production files
       'src/hooks/use-game-session.ts', // 797 lines
       'src/hooks/game-session/use-session-management.ts',
+      'src/hooks/game-session/use-session-initialization.ts',
       'src/hooks/use-ability-score-selection.ts',
       'src/hooks/use-progressive-voice.ts',
       'src/hooks/use-voice-audio-control.ts',

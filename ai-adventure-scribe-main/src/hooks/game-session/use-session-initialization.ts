@@ -20,7 +20,9 @@ interface UseSessionInitializationProps {
   setSessionState: (state: SessionState) => void;
   createGameSession: (campId: string, charId: string) => Promise<string | null>;
   cleanupSession: (sessionIdToClean: string) => Promise<string>;
-  toast: any;
+  toast: {
+    (props: { title?: string; description?: string; variant?: 'default' | 'destructive' }): void;
+  };
   mountedRef: React.MutableRefObject<boolean>;
 }
 
@@ -40,7 +42,7 @@ export const useSessionInitialization = ({
   cleanupSession,
   toast,
   mountedRef,
-}: UseSessionInitializationProps) => {
+}: UseSessionInitializationProps): void => {
   // Race condition prevention: track initialization status
   const initializingRef = useRef(false);
   const sessionInitializedRef = useRef(false);
@@ -88,7 +90,7 @@ export const useSessionInitialization = ({
     abortControllerRef.current = new AbortController();
     const abortSignal = abortControllerRef.current.signal;
 
-    const initSession = async () => {
+    const initSession = async (): Promise<void> => {
       try {
         if (abortSignal.aborted) {
           logger.info('[Session Init] Aborted before starting');
