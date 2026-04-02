@@ -387,6 +387,7 @@ export default defineConfig({
         'src/utils/network.ts',
         'src/utils/analytics.ts',
         'src/utils/spatial-partitioning.ts',
+        'src/utils/spatial/aabb.ts',
         'src/utils/spell-validation.ts',
         'src/utils/memory/classification.ts',
         'src/utils/memory/segmentation.ts',

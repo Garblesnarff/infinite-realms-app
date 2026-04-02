@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 
+import { buildQuadTree } from '../spatial-partitioning';
 import {
-  buildQuadTree,
   calculateWallBounds,
   createBoundsFromRadius,
   expandBounds,
   boundsContainsPoint,
   mergeBounds,
-} from '../spatial-partitioning';
+} from '../spatial/aabb';
 
 import type { VisionBlocker } from '@/types/scene';
 

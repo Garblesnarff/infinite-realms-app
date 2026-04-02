@@ -90,6 +90,12 @@ export {
   QuadTree,
   buildQuadTree,
 
+  // Types
+  type QuadTreeNode,
+  type QuadTreeConfig,
+} from './spatial-partitioning';
+
+export {
   // Utilities
   calculateWallBounds,
   createBoundsFromRadius,
@@ -99,9 +105,7 @@ export {
 
   // Types
   type AABB,
-  type QuadTreeNode,
-  type QuadTreeConfig,
-} from './spatial-partitioning';
+} from './spatial/aabb';
 
 // ===========================
 // Web Worker Manager
