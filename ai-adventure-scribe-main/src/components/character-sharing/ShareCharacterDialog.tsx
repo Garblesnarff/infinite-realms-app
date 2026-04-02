@@ -229,7 +229,6 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         type="button"
                         role="option"
                         aria-selected={selectedUserId === user.id}
-                        aria-pressed={selectedUserId === user.id}
                         title={`Select ${user.name}`}
                         aria-label={`Select ${user.name}`}
                         className={cn(
@@ -398,8 +397,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                           >
                             <SelectTrigger
                               className="w-32"
-                              aria-label="Change permission level"
-                              title="Change permission level"
+                              aria-label={`Change permission level for ${permission.userName || permission.userId}`}
+                              title={`Change permission level for ${permission.userName || permission.userId}`}
                             >
                               <SelectValue />
                             </SelectTrigger>
@@ -417,8 +416,8 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             onClick={() => handleRevoke(permission.userId)}
                             disabled={revokeMutation.isPending}
                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            aria-label="Revoke access"
-                            title="Revoke access"
+                            aria-label={`Revoke access for ${permission.userName || permission.userId}`}
+                            title={`Revoke access for ${permission.userName || permission.userId}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

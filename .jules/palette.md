@@ -137,3 +137,7 @@
 ## 2026-04-01 - SelectTrigger Accessibility Redundancy
 **Learning:** Providing an `aria-label` on a `SelectTrigger` that is already correctly associated with a `Label` (via `id` and `htmlFor`) or an `aria-labelledby` causes screen readers to announce the label twice. Removing the redundant attribute ensures a cleaner, more professional experience for assistive technology users.
 **Action:** Avoid redundant `aria-label` attributes on `SelectTrigger` components if they have an associated `Label`. Update unit tests to check for accessible names via role/name instead of targeting the specific attribute.
+
+## 2026-04-15 - Descriptive ARIA Labels in Lists
+**Learning:** Generic `aria-label` and `title` attributes (e.g., "Revoke access") in repetitive lists can be ambiguous for screen reader users and confusing in multi-item views. Including the item's name or a unique identifier in the label (e.g., "Revoke access for [User Name]") provides immediate context and improves navigation.
+**Action:** Always use template literals to include contextually relevant identifiers in `aria-label` and `title` attributes for per-item actions in lists or grids.

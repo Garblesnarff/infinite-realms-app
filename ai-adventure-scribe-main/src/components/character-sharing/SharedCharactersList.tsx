@@ -177,8 +177,8 @@ const SharedCharacterCard: React.FC<{
             size="sm"
             onClick={() => onRemoveSelf(character.id, character.name)}
             className="text-muted-foreground hover:text-destructive"
-            aria-label="Remove access"
-            title="Remove access"
+            aria-label={`Remove my access to ${character.name}`}
+            title={`Remove my access to ${character.name}`}
           >
             <UserMinus className="h-4 w-4" />
           </Button>
