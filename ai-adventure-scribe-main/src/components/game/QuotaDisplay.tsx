@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -12,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 export function QuotaDisplay() {
   const { session } = useAuth();
+  const navigate = useNavigate();
 
   const { data: quota, isLoading } = useQuery({
     queryKey: ['llm-quota', session?.access_token],
@@ -71,20 +73,13 @@ export function QuotaDisplay() {
         🎲 Daily Credits: {quota.remaining}/{quota.limits.daily.llm}
       </span>
       {isLow && (
-        <a
-          href="/upgrade"
+        <button
+          onClick={() => navigate('/account')}
           className="text-xs underline text-infinite-gold hover:text-infinite-gold/80 transition-colors flex items-center gap-1"
-          onClick={(e) => {
-            e.preventDefault();
-            // TODO: Navigate to upgrade page when it exists
-            alert(
-              'Upgrade to Pro for unlimited adventures! Visit https://infiniterealms.app/pricing',
-            );
-          }}
         >
           <Sparkles className="w-3 h-3" />
           Upgrade
-        </a>
+        </button>
       )}
     </div>
   );

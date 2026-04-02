@@ -24,14 +24,14 @@ export const PricingSection: React.FC = () => {
   const [hoveredTier, setHoveredTier] = useState<string | null>(null);
 
   const handleGetStarted = (tier: string) => {
-    navigate('/app');
-
     if (window.gtag) {
       window.gtag('event', 'pricing_tier_selected', {
         event_category: 'conversion',
         event_label: tier,
       });
     }
+
+    navigate(tier === 'legend' ? '/account' : '/app');
   };
 
   return (
