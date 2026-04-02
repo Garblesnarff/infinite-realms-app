@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 import CampaignCard from './campaign-card';
 
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -106,7 +107,11 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
         </DialogHeader>
         <div className="py-2">
           {isLoading ? (
-            <p>Loading campaigns...</p>
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
           ) : campaigns?.length ? (
             <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
               {campaigns.map((campaign) => (
@@ -114,7 +119,13 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground">No available campaigns found</p>
+            <EmptyState
+              illustration="no-campaigns"
+              title="No Campaigns Available"
+              description="There are no active campaigns available for your character at the moment."
+              variant="minimal"
+              className="py-12"
+            />
           )}
         </div>
       </DialogContent>
