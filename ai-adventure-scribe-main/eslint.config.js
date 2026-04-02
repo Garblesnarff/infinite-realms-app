@@ -362,6 +362,8 @@ export default tseslint.config(
       'src/hooks/use-initial-greeting.ts',
       'src/services/combat/CombatSequenceValidator.ts',
       'src/services/combat/CombatResponseValidator.ts',
+      'src/services/dice/DiceEngine.ts',
+      'src/services/dice/__tests__/DiceEngine.test.ts',
       'src/utils/memory/patterns.ts',
       'server-bun/src/trpc/routers/blog-taxonomy.ts',
       'src/components/blog-admin/blog-post-editor/media-manager.tsx',

@@ -1,5 +1,7 @@
 import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 
+import type { Character } from '@/types/character';
+
 export interface DiceRollResult {
   expression: string;
   total: number;
@@ -41,7 +43,6 @@ export class DiceEngine {
       const d20Match = expression.match(/(\d*)d20([+-]\d+)?/);
       if (d20Match) {
         const count = d20Match[1] || '1';
-        const modifier = d20Match[2] || '';
 
         if (advantage && !disadvantage) {
           finalExpression = expression.replace(/(\d*)d20/, `${count}d20kh1`);
@@ -72,15 +73,14 @@ export class DiceEngine {
 
     // Determine if this is a critical hit/miss for d20 rolls
     const isCritical = naturalRoll === 20;
-    const isCriticalMiss = naturalRoll === 1;
 
     return {
       expression: finalExpression,
       total: roll.total,
       rolls,
       modifiers: roll.total - rolls.reduce((sum, r) => sum + r.value, 0),
-      advantage: advantage && !disadvantage,
-      disadvantage: disadvantage && !advantage,
+      advantage: (advantage && !disadvantage) || false,
+      disadvantage: (disadvantage && !advantage) || false,
       critical: isCritical,
       naturalRoll,
       timestamp: Date.now(),
@@ -139,7 +139,7 @@ export class DiceEngine {
    */
   static getWeaponDamageFormula(
     weaponName: string,
-    character?: import('@/types/character').Character,
+    character?: Character,
     preferredAbility?: 'str' | 'dex',
   ): string {
     const weaponData: Record<
@@ -215,7 +215,7 @@ export class DiceEngine {
    */
   static createAttackRollRequest(
     weaponName: string,
-    character?: import('@/types/character').Character,
+    character?: Character,
     preferredAbility?: 'str' | 'dex',
   ): {
     formula: string;
@@ -268,7 +268,7 @@ export class DiceEngine {
   static createDamageRollRequest(
     weaponName: string,
     critical: boolean = false,
-    character?: import('@/types/character').Character,
+    character?: Character,
     preferredAbility?: 'str' | 'dex',
   ): {
     formula: string;
