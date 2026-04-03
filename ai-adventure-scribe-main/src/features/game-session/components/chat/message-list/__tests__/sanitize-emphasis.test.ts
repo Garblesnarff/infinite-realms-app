@@ -63,6 +63,26 @@ describe('sanitizeEmphasisDelimiters', () => {
     const plain = 'The dungeon was dark and silent.';
     expect(sanitizeEmphasisDelimiters(plain)).toBe(plain);
   });
+
+  it('collapses *** runs — playtest regression', () => {
+    const result = sanitizeEmphasisDelimiters('The *** and **** markers broke.');
+    expect(result).not.toContain('***');
+    expect(result).not.toContain('****');
+    // *** collapses to ** then bold normalizes to *, yielding valid *and* emphasis
+    expect(result).toBe('The *and* markers broke.');
+  });
+
+  it('handles ***bold*** (triple asterisks around text)', () => {
+    const result = sanitizeEmphasisDelimiters('A ***dragon*** appears!');
+    expect(result).toBe('A *dragon* appears!');
+  });
+
+  it('strips emphasis around asset-tag-adjacent text', () => {
+    // After asset tag removal, emphasis markers can end up orphaned
+    const result = sanitizeEmphasisDelimiters('The *ancient tome glows.');
+    expect(result).not.toContain('*');
+    expect(result).toContain('The ancient tome glows.');
+  });
 });
 
 describe('formatNarrative — JSON escape artifact handling (issue #340)', () => {
