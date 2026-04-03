@@ -265,7 +265,7 @@ const SidebarTrigger = React.forwardRef<
         toggleSidebar();
       }}
       title="Toggle Sidebar (Ctrl+B)"
-      aria-label="Toggle Sidebar"
+      aria-label="Toggle Sidebar (Ctrl+B)"
       aria-expanded={open}
       {...props}
     >
@@ -278,13 +278,14 @@ SidebarTrigger.displayName = 'SidebarTrigger';
 
 const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'button'>>(
   ({ className, ...props }, ref) => {
-    const { toggleSidebar } = useSidebar();
+    const { toggleSidebar, open } = useSidebar();
 
     return (
       <button
         ref={ref}
         data-sidebar="rail"
         aria-label="Toggle Sidebar (Ctrl+B)"
+        aria-expanded={open}
         tabIndex={-1}
         onClick={toggleSidebar}
         title="Toggle Sidebar (Ctrl+B)"
