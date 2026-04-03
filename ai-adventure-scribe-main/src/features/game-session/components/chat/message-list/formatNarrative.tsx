@@ -4,6 +4,13 @@ const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
 const BULLET_PATTERN = /^[-•]/;
 
 /**
+ * Unescapes JSON literal characters like `\"` to `"` within the text.
+ */
+const unescapeJsonLiteralChars = (text: string): string => {
+  return text.replace(/\\"/g, '"');
+};
+
+/**
  * Remove leaked verbalized sampling brainstorming patterns from AI response.
  * Safety filter to catch any internal reasoning that slips through.
  */
@@ -150,8 +157,11 @@ export const formatNarrative = (
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
+  // Unescape JSON literal characters first
+  const unescapedText = unescapeJsonLiteralChars(rawText);
+
   // Clean any leaked brainstorming patterns before processing
-  const trimmed = cleanBrainstorming(rawText);
+  const trimmed = cleanBrainstorming(unescapedText);
 
   if (!trimmed) {
     return { content: null, charCount: 0, paragraphCount: 0 };

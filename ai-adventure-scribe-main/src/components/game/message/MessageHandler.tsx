@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { useSessionValidator } from '../session/SessionValidator';
+import type { SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -22,7 +23,7 @@ interface MessageHandlerProps {
   campaignId: string | null;
   characterId: string | null;
   turnCount: number;
-  updateGameSessionState: (newState: Partial<any>) => Promise<void>; // Replace 'any' with ExtendedGameSession if possible
+  updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
   onAIResponse?: (message: ChatMessage) => Promise<void>; // Callback for processing AI responses (e.g., combat detection)
   children: (props: {
     handleSendMessage: (message: string) => Promise<void>;
@@ -62,6 +63,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
     }>
   >([]);
   const isSendingRef = React.useRef(false);
+  const actualSendMessageRef = React.useRef<(message: string) => Promise<void>>(async () => {});
 
   // Update refs when values change
   React.useEffect(() => {
@@ -111,7 +113,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
     const { message: playerInput, resolve, reject } = sendQueueRef.current[0];
 
     try {
-      await actualSendMessage(playerInput);
+      await actualSendMessageRef.current(playerInput);
       resolve();
     } catch (error) {
       reject(error);
@@ -126,7 +128,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
         processSendQueue();
       }
     }
-  }, []); // actualSendMessage uses refs so no deps needed
+  }, []);
 
   // The actual message sending logic (extracted from handleSendMessage)
   const actualSendMessage = async (playerInput: string) => {
@@ -145,7 +147,7 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       if (!isValid) return;
 
       // Get current session state for context
-      const currentSessionState = { is_paused: false, turn_count: turnCount }; // Would get actual session state
+      const currentSessionState = { is_paused: false, turn_count: turnCountRef.current }; // Would get actual session state
 
       // Check if this is a safety command
       const safetyCheck = await checkSafetyCommands(playerInput, sessionId);
@@ -494,6 +496,10 @@ export const MessageHandler: React.FC<MessageHandlerProps> = ({
       });
     }
   };
+
+  React.useEffect(() => {
+    actualSendMessageRef.current = actualSendMessage;
+  }, [actualSendMessage]);
 
   // Public handleSendMessage that queues messages
   const handleSendMessage = React.useCallback(

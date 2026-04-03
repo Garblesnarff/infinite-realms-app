@@ -15,6 +15,7 @@ const DEFAULT_OPTIONS: SegmentationOptions = {
 
 // Import the enhanced sentence segmenter
 import { SentenceSegmenter } from '@/utils/sentence-segmenter';
+import { stripAssetTags } from '@/lib/utils'; // Import stripAssetTags
 
 /**
  * Strip code blocks and JSON-like structures from content before segmentation.
@@ -49,9 +50,12 @@ export const splitIntoSegments = (
 ): string[] => {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
+  // Strip asset tags first
+  const contentWithoutAssetTags = stripAssetTags(content);
+
   // Strip code blocks and JSON before segmentation to prevent
   // technical content from being classified as memories
-  const cleanedContent = stripCodeBlocks(content);
+  const cleanedContent = stripCodeBlocks(contentWithoutAssetTags);
 
   // Use enhanced sentence splitting instead of basic regex
   const sentences = SentenceSegmenter.splitIntoSentences(cleanedContent);

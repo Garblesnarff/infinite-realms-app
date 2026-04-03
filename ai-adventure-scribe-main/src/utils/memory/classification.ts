@@ -1,6 +1,7 @@
 import { calculateImportance } from './importance';
 import { CLASSIFICATION_PATTERNS } from './patterns';
 import { splitIntoSegments } from './segmentation';
+import { stripAssetTags } from '@/lib/utils'; // Import stripAssetTags
 
 import type { MemoryType } from '@/components/game/memory/types';
 
@@ -63,16 +64,16 @@ export const classifySegment = (content: string): MemoryType => {
  * Processes content into classified memory segments
  */
 export const processContent = (content: string): MemorySegment[] => {
+  if (!content || content.trim().length === 0) return [];
+
   const segments = splitIntoSegments(content, {
     maxLength: 100,
     minLength: 20,
     preserveQuotes: true,
   });
 
-  if (!content || content.trim().length === 0) return [];
-
-  // Fallback: if nothing met minLength, keep the whole content as a single segment
-  const effectiveSegments = segments.length === 0 ? [content] : segments;
+  // Fallback: if nothing met minLength, keep the whole content as a single segment, but strip asset tags
+  const effectiveSegments = segments.length === 0 ? [stripAssetTags(content)] : segments;
 
   const mapToImportanceType = (type: MemoryType): string => {
     switch (type) {
@@ -87,8 +88,7 @@ export const processContent = (content: string): MemorySegment[] => {
         return 'dialogue';
       case 'world_detail':
       case 'atmosphere':
-        return 'description';
-      case 'quest':
+      case 'quest': // Quests can also be considered events for importance calculation
         return 'event';
       default:
         return type;

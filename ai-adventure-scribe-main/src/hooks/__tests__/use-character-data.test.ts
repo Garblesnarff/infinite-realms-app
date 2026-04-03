@@ -55,6 +55,7 @@ vi.mock('../lib/logger', () => ({
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { isValidUUID } from '@/utils/validation';
 
 import { useCharacterData } from '../use-character-data';
@@ -230,5 +231,70 @@ describe('useCharacterData', () => {
     expect(result.current.character?.name).toBe('Minimal Hero');
     expect(result.current.character?.abilityScores.strength.score).toBe(10);
     expect(result.current.character?.equipment).toEqual([]);
+  });
+
+  it('should parse spell lists stored as JSON arrays', async () => {
+    const mockCharacterData = {
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'JSON Hero',
+      race: 'Elf',
+      class: 'Wizard',
+      level: 3,
+      cantrips: '["mage-hand", "light"]',
+      known_spells: '["magic-missile", "shield"]',
+      prepared_spells: '["shield"]',
+      ritual_spells: '["detect-magic"]',
+      character_stats: null,
+      character_equipment: [],
+    };
+
+    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
+    (supabase.from as any).mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: mockMaybeSingle,
+    });
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.character?.cantrips).toEqual(['mage-hand', 'light']);
+    expect(result.current.character?.knownSpells).toEqual(['magic-missile', 'shield']);
+    expect(result.current.character?.preparedSpells).toEqual(['shield']);
+    expect(result.current.character?.ritualSpells).toEqual(['detect-magic']);
+  });
+
+  it('should keep supporting legacy comma-separated spell lists without warning', async () => {
+    const mockCharacterData = {
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'Legacy Hero',
+      race: 'Human',
+      class: 'Bard',
+      level: 2,
+      cantrips: 'mage-hand, light',
+      known_spells: 'magic-missile, shield',
+      prepared_spells: 'shield',
+      ritual_spells: 'detect-magic',
+      character_stats: null,
+      character_equipment: [],
+    };
+
+    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
+    (supabase.from as any).mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: mockMaybeSingle,
+    });
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.character?.cantrips).toEqual(['mage-hand', 'light']);
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'Failed to parse character JSON field',
+      expect.anything(),
+    );
   });
 });
