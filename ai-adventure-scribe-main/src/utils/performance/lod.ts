@@ -14,7 +14,7 @@
  * @module utils/performance/lod
  */
 
-import * as THREE from 'three';
+import type * as THREE from 'three';
 
 /**
  * LOD levels for rendering optimization

@@ -119,6 +119,10 @@ export class FrustumCuller {
     this.viewMatrix.copy(viewMatrix);
     this.combinedMatrix.multiplyMatrices(this.projectionMatrix, this.viewMatrix);
     this.frustum.setFromProjectionMatrix(this.combinedMatrix);
+
+    // Extract camera position from view matrix (inverse of world matrix)
+    const worldMatrix = new THREE.Matrix4().copy(viewMatrix).invert();
+    this.cameraPosition.setFromMatrixPosition(worldMatrix);
   }
 
   /**

@@ -278,6 +278,7 @@ export default tseslint.config(
       'src/utils/raycasting.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
+      'src/utils/performance/culling.ts',
       'src/utils/lighting-integration.ts',
       'src/utils/fog-calculations.ts',
       'src/utils/polygon-utils.ts',

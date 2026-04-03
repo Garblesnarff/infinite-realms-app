@@ -312,6 +312,8 @@ export default defineConfig({
       'src/hooks/ai/__tests__/ai-utils.test.ts',
       'src/utils/multiclass/__tests__/spellcasting.test.ts',
       'src/services/ai-execution/__tests__/LocalFallbackStrategy.test.ts',
+      'src/utils/performance/__tests__/lod.test.ts',
+      'src/utils/performance/__tests__/culling.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -483,6 +485,8 @@ export default defineConfig({
         'src/services/ai-execution/AIExecutionManager.ts',
         'src/services/ai-execution/EdgeFunctionStrategy.ts',
         'src/services/ai-execution/LocalFallbackStrategy.ts',
+        'src/utils/performance/lod.ts',
+        'src/utils/performance/culling.ts',
         'src/utils/roll-request/__tests__/parse.test.ts',
         'src/hooks/ai/game-phase-updater.ts',
         'src/hooks/ai/roll-processor.ts',
