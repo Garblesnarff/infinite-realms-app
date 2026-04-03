@@ -101,21 +101,15 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
       // Apply asset post-processing to structured response
       const assets = getCachedAssets();
-      // Replicating original behavior: getCachedAssets() returns array, so .assets is undefined
-      // but original code used getCachedAssets()?.assets.
-      // To match EXACTLY we would use (getCachedAssets() as any).assets
-      // However, if we want it to actually WORK, we use assets directly.
-      // Given the review, I will use the "potentially buggy" original check to be safe.
-      const legacyAssets = (assets as unknown as { assets: AssetInfo[] }).assets;
 
-      if (legacyAssets && legacyAssets.length) {
+      if (assets.length > 0) {
         if (structuredResponse.text) {
-          structuredResponse.text = insertAssetTags(structuredResponse.text, legacyAssets);
+          structuredResponse.text = insertAssetTags(structuredResponse.text, assets);
         }
         if (narrationSegments) {
           for (const segment of narrationSegments) {
             if (segment.text) {
-              segment.text = insertAssetTags(segment.text, legacyAssets);
+              segment.text = insertAssetTags(segment.text, assets);
             }
           }
         }
