@@ -1,21 +1,29 @@
 /**
  * Sanitize markdown emphasis delimiters to prevent orphan * artifacts in rendered text.
  *
- * Fixes three AI output patterns that break rendering:
+ * Fixes AI output patterns that break rendering:
  * 1. **bold** → normalized to *bold* (formatInline only handles single-*)
  * 2. * spaced emphasis * → trimmed to *emphasis*
  * 3. Orphan * with no closing pair → stripped entirely
+ * 4. Runs of 3+ asterisks (***) → collapsed before processing
+ * 5. Quote-wrapped emphasis (*”...”*) → dequoted
  *
  * Exported for unit testing.
  */
 export const sanitizeEmphasisDelimiters = (text: string): string => {
   // Step 0: Strip emphasis markers that wrap quoted dialogue. The renderer already
-  // styles dialogue by its quotes, and nested *"..."* / ** *"..."*** patterns from
+  // styles dialogue by its quotes, and nested *”...”* / ** *”...”*** patterns from
   // the model break our simple emphasis parser.
-  const dequoted = text.replace(/\*+\s*(["“])/g, '$1').replace(/(["”])\s*\*+/g, '$1');
+  const quoteClass = /[\u0022\u201C\u201D]/;
+  const dequoteBefore = new RegExp('\\*+\\s*(' + quoteClass.source + ')', 'g');
+  const dequoteAfter = new RegExp('(' + quoteClass.source + ')\\s*\\*+', 'g');
+  const dequoted = text.replace(dequoteBefore, '$1').replace(dequoteAfter, '$1');
 
-  // Step 1: Normalize **bold** → *bold*
-  const s = dequoted.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
+  // Step 1a: Collapse runs of 3+ asterisks to ** (prevents *** from breaking bold normalization)
+  const collapsed = dequoted.replace(/\*{3,}/g, '**');
+
+  // Step 1b: Normalize **bold** → *bold*
+  const s = collapsed.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
 
   // Step 2: Process line by line — cross-line emphasis creates orphan markers.
   // For each line: collect valid *...* spans (trimming inner spaces), strip orphan *,
@@ -31,7 +39,7 @@ export const sanitizeEmphasisDelimiters = (text: string): string => {
       while ((m = re.exec(line)) !== null) {
         // Text before this match — strip orphan * characters
         parts.push(line.slice(lastEnd, m.index).replace(/\*/g, ''));
-        // Valid emphasis span with internal spaces trimmed ("* text*" → "*text*")
+        // Valid emphasis span with internal spaces trimmed (“* text*” → “*text*”)
         parts.push(`*${m[1].trim()}*`);
         lastEnd = m.index + m[0].length;
       }
