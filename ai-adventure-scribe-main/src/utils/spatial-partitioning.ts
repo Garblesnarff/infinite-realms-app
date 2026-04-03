@@ -7,21 +7,32 @@
  * @module utils/spatial-partitioning
  */
 
+/* eslint-disable max-lines */
+
 import type { Point2D, VisionBlocker } from '@/types/scene';
+
+import {
+  type AABB,
+  calculateWallBounds,
+  createBoundsFromRadius,
+  expandBounds,
+  boundsContainsPoint,
+  mergeBounds,
+} from './spatial/aabb';
+
+// Re-export for backward compatibility
+export {
+  type AABB,
+  calculateWallBounds,
+  createBoundsFromRadius,
+  expandBounds,
+  boundsContainsPoint,
+  mergeBounds,
+};
 
 // ===========================
 // Types
 // ===========================
-
-/**
- * Axis-aligned bounding box
- */
-export interface AABB {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
 
 /**
  * Quadtree node
@@ -71,11 +82,7 @@ export class QuadTree {
   private root: QuadTreeNode;
   private config: QuadTreeConfig;
 
-  constructor(
-    bounds: AABB,
-    walls: VisionBlocker[],
-    config: Partial<QuadTreeConfig> = {}
-  ) {
+  constructor(bounds: AABB, walls: VisionBlocker[], config: Partial<QuadTreeConfig> = {}) {
     this.config = { ...DEFAULT_QUADTREE_CONFIG, ...config };
     this.root = this.createNode(bounds, walls, 0);
   }
@@ -136,9 +143,11 @@ export class QuadTree {
    * Call this when walls are added, removed, or modified
    *
    * @param walls - Updated wall list
+   * @param padding - Optional padding if recalculating bounds (default: 100)
    */
-  rebuild(walls: VisionBlocker[]): void {
-    this.root = this.createNode(this.root.bounds, walls, 0);
+  rebuild(walls: VisionBlocker[], padding: number = 100): void {
+    const newBounds = calculateWallBounds(walls, padding);
+    this.root = this.createNode(newBounds, walls, 0);
   }
 
   /**
@@ -176,11 +185,7 @@ export class QuadTree {
   // Private Methods
   // ===========================
 
-  private createNode(
-    bounds: AABB,
-    walls: VisionBlocker[],
-    level: number
-  ): QuadTreeNode {
+  private createNode(bounds: AABB, walls: VisionBlocker[], level: number): QuadTreeNode {
     const node: QuadTreeNode = {
       bounds,
       walls: [],
@@ -196,10 +201,7 @@ export class QuadTree {
     }
 
     // Split if we have too many walls and haven't reached max depth
-    if (
-      node.walls.length > this.config.maxWalls &&
-      level < this.config.maxLevel
-    ) {
+    if (node.walls.length > this.config.maxWalls && level < this.config.maxLevel) {
       this.split(node);
     }
 
@@ -223,9 +225,7 @@ export class QuadTree {
       { minX: midX, minY: midY, maxX: bounds.maxX, maxY: bounds.maxY },
     ];
 
-    node.children = childBounds.map((childBound) =>
-      this.createNode(childBound, walls, level + 1)
-    );
+    node.children = childBounds.map((childBound) => this.createNode(childBound, walls, level + 1));
 
     // Clear walls from parent node (they're now in children)
     // Keep reference to avoid recreating for query optimization
@@ -235,7 +235,7 @@ export class QuadTree {
     node: QuadTreeNode,
     queryBounds: AABB,
     result: VisionBlocker[],
-    seen: Set<string>
+    seen: Set<string>,
   ): void {
     // Check if query bounds intersect this node
     if (!this.boundsIntersect(node.bounds, queryBounds)) {
@@ -245,8 +245,10 @@ export class QuadTree {
     // Add walls from this node
     for (const wall of node.walls) {
       if (!seen.has(wall.id)) {
-        seen.add(wall.id);
-        result.push(wall);
+        if (this.wallIntersectsBounds(wall, queryBounds)) {
+          seen.add(wall.id);
+          result.push(wall);
+        }
       }
     }
 
@@ -266,7 +268,7 @@ export class QuadTree {
       totalWalls: number;
       leafNodes: number;
       wallsInLeaves: number;
-    }
+    },
   ): void {
     stats.totalNodes++;
     stats.maxDepth = Math.max(stats.maxDepth, node.level);
@@ -304,13 +306,7 @@ export class QuadTree {
 
     // Check closing segment for polygons
     if (wall.points.length > 2) {
-      if (
-        this.lineIntersectsBounds(
-          wall.points[wall.points.length - 1],
-          wall.points[0],
-          bounds
-        )
-      ) {
+      if (this.lineIntersectsBounds(wall.points[wall.points.length - 1], wall.points[0], bounds)) {
         return true;
       }
     }
@@ -327,11 +323,7 @@ export class QuadTree {
     );
   }
 
-  private lineIntersectsBounds(
-    p1: Point2D,
-    p2: Point2D,
-    bounds: AABB
-  ): boolean {
+  private lineIntersectsBounds(p1: Point2D, p2: Point2D, bounds: AABB): boolean {
     // Check if line segment intersects AABB
     // Uses Liang-Barsky algorithm for efficiency
 
@@ -366,12 +358,7 @@ export class QuadTree {
   }
 
   private boundsIntersect(a: AABB, b: AABB): boolean {
-    return !(
-      a.maxX < b.minX ||
-      a.minX > b.maxX ||
-      a.maxY < b.minY ||
-      a.minY > b.maxY
-    );
+    return !(a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY);
   }
 }
 
@@ -397,124 +384,8 @@ export class QuadTree {
 export function buildQuadTree(
   walls: VisionBlocker[],
   padding: number = 100,
-  config?: Partial<QuadTreeConfig>
+  config?: Partial<QuadTreeConfig>,
 ): QuadTree {
   const bounds = calculateWallBounds(walls, padding);
   return new QuadTree(bounds, walls, config);
-}
-
-/**
- * Calculate bounding box encompassing all walls
- *
- * @param walls - Walls to bound
- * @param padding - Extra padding
- * @returns Bounding box
- */
-export function calculateWallBounds(
-  walls: VisionBlocker[],
-  padding: number = 0
-): AABB {
-  if (walls.length === 0) {
-    return {
-      minX: -padding,
-      minY: -padding,
-      maxX: padding,
-      maxY: padding,
-    };
-  }
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const wall of walls) {
-    for (const point of wall.points) {
-      minX = Math.min(minX, point.x);
-      minY = Math.min(minY, point.y);
-      maxX = Math.max(maxX, point.x);
-      maxY = Math.max(maxY, point.y);
-    }
-  }
-
-  return {
-    minX: minX - padding,
-    minY: minY - padding,
-    maxX: maxX + padding,
-    maxY: maxY + padding,
-  };
-}
-
-/**
- * Create bounding box from point and radius
- *
- * @param center - Center point
- * @param radius - Radius in pixels
- * @returns Bounding box
- */
-export function createBoundsFromRadius(center: Point2D, radius: number): AABB {
-  return {
-    minX: center.x - radius,
-    minY: center.y - radius,
-    maxX: center.x + radius,
-    maxY: center.y + radius,
-  };
-}
-
-/**
- * Expand bounding box by amount
- *
- * @param bounds - Original bounds
- * @param amount - Amount to expand
- * @returns Expanded bounds
- */
-export function expandBounds(bounds: AABB, amount: number): AABB {
-  return {
-    minX: bounds.minX - amount,
-    minY: bounds.minY - amount,
-    maxX: bounds.maxX + amount,
-    maxY: bounds.maxY + amount,
-  };
-}
-
-/**
- * Check if bounds contains a point
- *
- * @param bounds - Bounding box
- * @param point - Point to test
- * @returns Whether point is inside bounds
- */
-export function boundsContainsPoint(bounds: AABB, point: Point2D): boolean {
-  return (
-    point.x >= bounds.minX &&
-    point.x <= bounds.maxX &&
-    point.y >= bounds.minY &&
-    point.y <= bounds.maxY
-  );
-}
-
-/**
- * Merge multiple bounding boxes
- *
- * @param boundsList - Array of bounding boxes
- * @returns Merged bounding box
- */
-export function mergeBounds(boundsList: AABB[]): AABB {
-  if (boundsList.length === 0) {
-    return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  }
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const bounds of boundsList) {
-    minX = Math.min(minX, bounds.minX);
-    minY = Math.min(minY, bounds.minY);
-    maxX = Math.max(maxX, bounds.maxX);
-    maxY = Math.max(maxY, bounds.maxY);
-  }
-
-  return { minX, minY, maxX, maxY };
 }

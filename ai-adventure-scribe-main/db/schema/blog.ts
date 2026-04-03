@@ -5,6 +5,7 @@
  * Includes authors, categories, tags, and posts with many-to-many relationships.
  */
 
+import { relations } from 'drizzle-orm';
 import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
@@ -133,6 +134,50 @@ export const blogPostTags = pgTable(
     tagIdIdx: index('idx_blog_post_tags_tag_id').on(table.tagId),
   })
 );
+
+// Define relations for relational queries
+export const blogAuthorsRelations = relations(blogAuthors, ({ many }) => ({
+  posts: many(blogPosts),
+}));
+
+export const blogPostsRelations = relations(blogPosts, ({ one, many }) => ({
+  author: one(blogAuthors, {
+    fields: [blogPosts.authorId],
+    references: [blogAuthors.id],
+  }),
+  categories: many(blogPostCategories),
+  tags: many(blogPostTags),
+}));
+
+export const blogCategoriesRelations = relations(blogCategories, ({ many }) => ({
+  posts: many(blogPostCategories),
+}));
+
+export const blogPostCategoriesRelations = relations(blogPostCategories, ({ one }) => ({
+  post: one(blogPosts, {
+    fields: [blogPostCategories.postId],
+    references: [blogPosts.id],
+  }),
+  category: one(blogCategories, {
+    fields: [blogPostCategories.categoryId],
+    references: [blogCategories.id],
+  }),
+}));
+
+export const blogTagsRelations = relations(blogTags, ({ many }) => ({
+  posts: many(blogPostTags),
+}));
+
+export const blogPostTagsRelations = relations(blogPostTags, ({ one }) => ({
+  post: one(blogPosts, {
+    fields: [blogPostTags.postId],
+    references: [blogPosts.id],
+  }),
+  tag: one(blogTags, {
+    fields: [blogPostTags.tagId],
+    references: [blogTags.id],
+  }),
+}));
 
 // Type exports for TypeScript inference
 export type BlogAuthor = InferSelectModel<typeof blogAuthors>;

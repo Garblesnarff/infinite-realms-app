@@ -127,10 +127,7 @@ const UILayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
 // Layer Component Map
 // ===========================
 
-const LAYER_COMPONENTS: Record<
-  LayerConfig['type'],
-  React.FC<{ sceneId: string }>
-> = {
+const LAYER_COMPONENTS: Record<LayerConfig['type'], React.FC<{ sceneId: string }>> = {
   background: BackgroundLayer,
   grid: GridLayer,
   tokens: TokensLayer,

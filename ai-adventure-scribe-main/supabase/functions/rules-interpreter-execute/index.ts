@@ -1,10 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://infiniterealms.app',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
-}
+import { corsHeaders, handleCors } from '../_shared/cors.ts'
 
 interface RuleValidationRequest {
   task: {
@@ -35,9 +31,8 @@ interface ValidationResult {
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   const requestId = req.headers.get('x-request-id') || (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 

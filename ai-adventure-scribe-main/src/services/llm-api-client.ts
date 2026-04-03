@@ -1,5 +1,6 @@
-import { waitForAuth } from '@/lib/auth-gate';
 import { supabase } from '@/integrations/supabase/client';
+import { waitForAuth } from '@/lib/auth-gate';
+import logger from '@/lib/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -46,7 +47,10 @@ class LlmApiClient {
 
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
     // Auto-reset offline fallback after 30 seconds
-    if (this.useOfflineFallback && Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS) {
+    if (
+      this.useOfflineFallback &&
+      Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS
+    ) {
       this.useOfflineFallback = false;
     }
 
@@ -100,7 +104,7 @@ class LlmApiClient {
           temperature: params.temperature,
           history: params.history,
           provider,
-          requestType: params.requestType || 'user',  // Default to 'user' for backwards compatibility
+          requestType: params.requestType || 'user', // Default to 'user' for backwards compatibility
         }),
       });
 
@@ -127,27 +131,27 @@ class LlmApiClient {
       // Rate limit - try multiple free fallback models
       if (isRateLimitErr) {
         const fallbackModels = [
-          'arcee-ai/trinity-large-preview:free',   // First fallback (free)
-          'stepfun/step-3.5-flash:free',           // Second fallback (free)
-          'nvidia/nemotron-3-nano-30b-a3b:free',   // Third fallback (free)
+          'arcee-ai/trinity-large-preview:free', // First fallback (free)
+          'stepfun/step-3.5-flash:free', // Second fallback (free)
+          'nvidia/nemotron-3-nano-30b-a3b:free', // Third fallback (free)
         ];
-        console.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
+        logger.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
 
         for (const fallbackModel of fallbackModels) {
           try {
-            console.info(`[LLMApiClient] Trying fallback: ${fallbackModel}`);
+            logger.info(`[LLMApiClient] Trying fallback: ${fallbackModel}`);
             const res = await makeReq('openrouter', fallbackModel);
             const data = await res.json();
             if (data?.text) {
-              console.info(`[LLMApiClient] Fallback succeeded: ${fallbackModel}`);
+              logger.info(`[LLMApiClient] Fallback succeeded: ${fallbackModel}`);
               return data.text;
             }
           } catch (fallbackErr) {
-            console.warn(`[LLMApiClient] Fallback ${fallbackModel} failed:`, fallbackErr);
+            logger.warn(`[LLMApiClient] Fallback ${fallbackModel} failed:`, fallbackErr);
             // Continue to next fallback
           }
         }
-        console.error('[LLMApiClient] All fallback models failed');
+        logger.error('[LLMApiClient] All fallback models failed');
         throw err; // Throw original error if all fallbacks fail
       }
       throw err;
@@ -195,7 +199,9 @@ class LlmApiClient {
           if (is404 && attempt < maxRetries - 1) {
             // Retry on 404 errors (message might not be committed yet)
             const delay = initialDelay * Math.pow(2, attempt); // 200ms, 400ms, 800ms, 1600ms, 3200ms
-            console.warn(`[LLMApiClient] 404 on image attachment, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            logger.warn(
+              `[LLMApiClient] 404 on image attachment, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`,
+            );
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue; // Retry
           }
@@ -207,7 +213,9 @@ class LlmApiClient {
         // Success
         await res.json().catch(() => ({}));
         if (attempt > 0) {
-          console.log(`[LLMApiClient] ✅ Image attachment succeeded on retry attempt ${attempt + 1}`);
+          logger.info(
+            `[LLMApiClient] ✅ Image attachment succeeded on retry attempt ${attempt + 1}`,
+          );
         }
         return;
       } catch (error) {
@@ -245,7 +253,7 @@ class LlmApiClient {
       const data = await res.json();
       return data?.text ?? '';
     } catch (err) {
-      console.warn('[LLMApiClient] Memory extraction failed:', err);
+      logger.warn('[LLMApiClient] Memory extraction failed:', err);
       return '';
     }
   }

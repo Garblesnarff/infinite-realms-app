@@ -117,16 +117,16 @@ You can derive this from your existing Supabase credentials:
 
 ```bash
 # Generate TypeScript types from schema
-npm run db:generate
+bun run db:generate
 
 # Run migrations
-npm run db:migrate
+bun run db:migrate
 
 # Push schema changes directly to database (dev only)
-npm run db:push
+bun run db:push
 
 # Open Drizzle Studio (visual database browser)
-npm run db:studio
+bun run db:studio
 ```
 
 ## Type Safety Benefits

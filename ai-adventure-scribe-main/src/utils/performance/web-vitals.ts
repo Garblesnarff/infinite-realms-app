@@ -13,6 +13,8 @@ import { onCLS, onINP, onFCP, onLCP, onTTFB } from 'web-vitals';
 
 import type { Metric } from 'web-vitals';
 
+import logger from '@/lib/logger';
+
 /**
  * Performance metric thresholds (in milliseconds or score)
  */
@@ -84,10 +86,9 @@ function logMetric(metric: Metric): void {
   const color = colors[rating];
   const reset = '\x1b[0m';
 
-  console.log(
-    `${color}[Performance] ${metric.name}: ${formattedValue} (${rating})${reset}`,
+  logger.debug(`${color}[Performance] ${metric.name}: ${formattedValue} (${rating})${reset}`, {
     metric,
-  );
+  });
 }
 
 /**

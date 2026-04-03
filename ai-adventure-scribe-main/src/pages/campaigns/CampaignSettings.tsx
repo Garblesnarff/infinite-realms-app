@@ -64,13 +64,13 @@ const CampaignSettings: React.FC = () => {
                 className={cn(
                   'relative inline-flex h-8 w-14 items-center rounded-full transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  showNPCRolls ? 'bg-primary' : 'bg-muted'
+                  showNPCRolls ? 'bg-primary' : 'bg-muted',
                 )}
               >
                 <span
                   className={cn(
                     'inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform',
-                    showNPCRolls ? 'translate-x-7' : 'translate-x-1'
+                    showNPCRolls ? 'translate-x-7' : 'translate-x-1',
                   )}
                 />
               </button>
@@ -89,7 +89,9 @@ const CampaignSettings: React.FC = () => {
 
       {/* Future settings sections can go here */}
       <Card className="p-6 bg-muted/20">
-        <h3 className="text-lg font-semibold mb-2 text-muted-foreground">More Settings Coming Soon</h3>
+        <h3 className="text-lg font-semibold mb-2 text-muted-foreground">
+          More Settings Coming Soon
+        </h3>
         <p className="text-sm text-muted-foreground">
           Additional campaign and gameplay settings will be added here in future updates.
         </p>

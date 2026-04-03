@@ -12,11 +12,14 @@
  * @module components/battle-map/PerformanceMonitor
  */
 
-import React, { useEffect, useState, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Z_INDEX } from '@/constants/z-index';
+import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 // ===========================
@@ -176,11 +179,8 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
 
   return (
     <div
-      className={cn(
-        'fixed z-50 pointer-events-auto',
-        positionClasses[position],
-        className
-      )}
+      className={cn('fixed pointer-events-auto', positionClasses[position], className)}
+      style={{ zIndex: Z_INDEX.TOAST }}
     >
       <Card className="w-64 shadow-lg">
         <CardHeader className="pb-2">
@@ -238,8 +238,7 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Memory:</span>
                   <span className="font-mono">
-                    {metrics.memoryUsed.toFixed(0)} /{' '}
-                    {metrics.memoryLimit?.toFixed(0) ?? '?'} MB
+                    {metrics.memoryUsed.toFixed(0)} / {metrics.memoryLimit?.toFixed(0) ?? '?'} MB
                   </span>
                 </div>
               )}
@@ -291,11 +290,12 @@ export const FPSCounter: React.FC<{
   return (
     <div
       className={cn(
-        'fixed z-50 pointer-events-none font-mono text-sm font-bold',
+        'fixed pointer-events-none font-mono text-sm font-bold',
         positionClasses[position],
         getFPSColor(metrics.fps),
-        className
+        className,
       )}
+      style={{ zIndex: Z_INDEX.TOAST }}
     >
       {metrics.fps} FPS
     </div>
@@ -315,19 +315,16 @@ export function usePerformanceLogger(enabled: boolean = false, interval: number 
     const now = Date.now();
     if (now - lastLogRef.current >= interval) {
       lastLogRef.current = now;
-      console.group('⚡ Performance Metrics');
-      console.log(`FPS: ${metrics.fps}`);
-      console.log(`Render Time: ${metrics.renderTime.toFixed(2)}ms`);
-      console.log(`Draw Calls: ${metrics.drawCalls}`);
-      console.log(`Triangles: ${metrics.triangles.toLocaleString()}`);
-      console.log(`Geometries: ${metrics.geometries}`);
-      console.log(`Textures: ${metrics.textures}`);
-      if (metrics.memoryUsed) {
-        console.log(
-          `Memory: ${metrics.memoryUsed.toFixed(0)}MB / ${metrics.memoryLimit?.toFixed(0)}MB`
-        );
-      }
-      console.groupEnd();
+      logger.debug('⚡ Performance Metrics', {
+        fps: metrics.fps,
+        renderTimeMs: metrics.renderTime.toFixed(2),
+        drawCalls: metrics.drawCalls,
+        triangles: metrics.triangles,
+        geometries: metrics.geometries,
+        textures: metrics.textures,
+        memoryUsedMB: metrics.memoryUsed?.toFixed(0),
+        memoryLimitMB: metrics.memoryLimit?.toFixed(0),
+      });
     }
   }, [enabled, interval, metrics]);
 }

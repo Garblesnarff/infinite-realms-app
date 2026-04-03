@@ -909,6 +909,8 @@ export interface DamageResult {
   wasVulnerable: boolean;
   wasImmune: boolean;
   massiveDamage: boolean;
+  deathSaveFailuresAdded: number;
+  newDeathSavesFailures: number;
 }
 
 /**
@@ -950,4 +952,19 @@ export interface ApplyDamageOptions {
   sourceDescription?: string;
   ignoreResistances?: boolean;
   ignoreImmunities?: boolean;
+  isCriticalHit?: boolean;
+}
+
+/**
+ * Result of a stabilization attempt
+ */
+export interface StabilizationResult {
+  participantId: string;
+  success: boolean;
+  dc: number;
+  roll: number;
+  modifier: number;
+  total: number;
+  isStabilized: boolean;
+  message: string;
 }

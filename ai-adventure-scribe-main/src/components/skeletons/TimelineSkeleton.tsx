@@ -8,6 +8,7 @@
 import React from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { Z_INDEX } from '@/constants/z-index';
 
 /**
  * TimelineSkeleton - Skeleton loader for timeline views
@@ -24,7 +25,10 @@ export const TimelineSkeleton: React.FC = () => {
       {[...Array(5)].map((_, i) => (
         <div key={i} className="flex gap-4 relative">
           {/* Timeline dot */}
-          <Skeleton className="h-8 w-8 rounded-full flex-shrink-0 z-10" />
+          <Skeleton
+            className="h-8 w-8 rounded-full flex-shrink-0"
+            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+          />
 
           {/* Event content */}
           <div className="flex-1 space-y-2 pb-4">

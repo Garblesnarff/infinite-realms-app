@@ -7,7 +7,7 @@
  * Dependencies:
  * - Supabase client (src/integrations/supabase/client.ts)
  * - DMResponse and CampaignContext types (src/types/dm.ts)
- * - Memory type (src/components/game/memory/types.ts)
+ * - Memory type (src/types/memory.ts)
  * - CampaignContextLoader (src/agents/services/campaign/CampaignContextLoader.ts)
  * - MemoryManager (src/agents/services/memory/MemoryManager.ts)
  * - EnvironmentGenerator (src/agents/services/response/EnvironmentGenerator.ts)
@@ -37,7 +37,7 @@ import { OpportunityGenerator } from './response/opportunity-generator';
 // ============================
 // Project Types
 // ============================
-import { Memory } from '@/components/game/memory/types';
+import type { Memory } from '@/types/memory';
 import { Character, CharacterBackground, CharacterClass, CharacterRace } from '@/types/character';
 import { CampaignContext, DMResponse } from '@/types/dm';
 

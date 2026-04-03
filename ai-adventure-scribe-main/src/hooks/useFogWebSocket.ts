@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-function-return-type */
 /**
  * Fog of War WebSocket Hook
  *
@@ -7,8 +8,11 @@
  * @module hooks/useFogWebSocket
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+
 import type { RevealedArea } from '@/types/fog-of-war';
+
+import logger from '@/lib/logger';
 
 /**
  * Fog WebSocket message types
@@ -75,17 +79,20 @@ export interface WebSocketOptions {
  * );
  * ```
  */
-export function useFogWebSocket(
-  options: WebSocketOptions,
-  callbacks: FogWebSocketCallbacks
-) {
+export const useFogWebSocket = function(options: WebSocketOptions, callbacks: FogWebSocketCallbacks) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isConnectedRef = useRef(false);
+  const [isConnected, setIsConnected] = useState(false);
   const messageQueueRef = useRef<any[]>([]);
 
+  // Store callbacks in ref to avoid unnecessary re-connections
+  const callbacksRef = useRef(callbacks);
+  useEffect(function() {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
   const {
-    url = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8888/ws',
+    url = import.meta.env.VITE_WS_URL || 'ws://localhost:8888/ws',
     token,
     sceneId,
     autoConnect = true,
@@ -94,7 +101,7 @@ export function useFogWebSocket(
   /**
    * Send a WebSocket message
    */
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback(function(message: any) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
@@ -106,7 +113,7 @@ export function useFogWebSocket(
   /**
    * Flush queued messages
    */
-  const flushMessageQueue = useCallback(() => {
+  const flushMessageQueue = useCallback(function() {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       while (messageQueueRef.current.length > 0) {
         const message = messageQueueRef.current.shift();
@@ -119,14 +126,14 @@ export function useFogWebSocket(
    * Handle incoming WebSocket messages
    */
   const handleMessage = useCallback(
-    (event: MessageEvent) => {
+    function(event: MessageEvent) {
       try {
         const message = JSON.parse(event.data);
 
         // Handle welcome message
         if (message.type === 'welcome') {
-          console.log('WebSocket connected:', message);
-          isConnectedRef.current = true;
+          logger.info('WebSocket connected', { message });
+          setIsConnected(true);
 
           // Join scene room if sceneId provided
           if (sceneId) {
@@ -145,8 +152,8 @@ export function useFogWebSocket(
         // Handle fog reveal
         if (message.type === 'fog:reveal') {
           const fogMessage = message as FogWebSocketMessage;
-          if (callbacks.onReveal && fogMessage.data?.areas) {
-            callbacks.onReveal(fogMessage.data.areas as RevealedArea[], fogMessage.data.userId);
+          if (callbacksRef.current.onReveal && fogMessage.data?.areas) {
+            callbacksRef.current.onReveal(fogMessage.data.areas as RevealedArea[], fogMessage.data.userId);
           }
           return;
         }
@@ -154,24 +161,24 @@ export function useFogWebSocket(
         // Handle fog conceal
         if (message.type === 'fog:conceal') {
           const fogMessage = message as FogWebSocketMessage;
-          if (callbacks.onConceal && fogMessage.data?.areas) {
-            callbacks.onConceal(fogMessage.data.areas as RevealedArea[], fogMessage.data.userId);
+          if (callbacksRef.current.onConceal && fogMessage.data?.areas) {
+            callbacksRef.current.onConceal(fogMessage.data.areas as RevealedArea[], fogMessage.data.userId);
           }
           return;
         }
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        logger.error('Error parsing WebSocket message', { error });
       }
     },
-    [sceneId, callbacks, sendMessage, flushMessageQueue]
+    [sceneId, sendMessage, flushMessageQueue],
   );
 
   /**
    * Connect to WebSocket
    */
-  const connect = useCallback(() => {
+  const connect = useCallback(function() {
     if (!token) {
-      console.warn('Cannot connect to WebSocket: no token provided');
+      logger.warn('Cannot connect to WebSocket: no token provided');
       return;
     }
 
@@ -185,25 +192,25 @@ export function useFogWebSocket(
       const wsUrl = `${url}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        console.log('WebSocket opened');
+      ws.onopen = function onopen() {
+        logger.debug('WebSocket opened');
       };
 
       ws.onmessage = handleMessage;
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+      ws.onerror = function onerror(error) {
+        logger.error('WebSocket error', { error });
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-        isConnectedRef.current = false;
+      ws.onclose = function onclose() {
+        logger.debug('WebSocket closed');
+        setIsConnected(false);
         wsRef.current = null;
 
         // Attempt to reconnect after 3 seconds
         if (autoConnect) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('Attempting to reconnect WebSocket...');
+          reconnectTimeoutRef.current = setTimeout(function() {
+            logger.info('Attempting to reconnect WebSocket...');
             connect();
           }, 3000);
         }
@@ -211,14 +218,14 @@ export function useFogWebSocket(
 
       wsRef.current = ws;
     } catch (error) {
-      console.error('Error creating WebSocket:', error);
+      logger.error('Error creating WebSocket', { error });
     }
   }, [url, token, autoConnect, handleMessage]);
 
   /**
    * Disconnect from WebSocket
    */
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback(function() {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -226,7 +233,7 @@ export function useFogWebSocket(
 
     if (wsRef.current) {
       // Leave scene before disconnecting
-      if (sceneId && isConnectedRef.current) {
+      if (sceneId && wsRef.current.readyState === WebSocket.OPEN) {
         sendMessage({
           type: 'scene:leave',
           sceneId,
@@ -236,7 +243,7 @@ export function useFogWebSocket(
 
       wsRef.current.close();
       wsRef.current = null;
-      isConnectedRef.current = false;
+      setIsConnected(false);
     }
 
     // Clear message queue
@@ -247,7 +254,7 @@ export function useFogWebSocket(
    * Send fog reveal update
    */
   const sendReveal = useCallback(
-    (areas: RevealedArea[], targetUserId: string) => {
+    function(areas: RevealedArea[], targetUserId: string) {
       if (!sceneId) return;
 
       sendMessage({
@@ -259,14 +266,14 @@ export function useFogWebSocket(
         },
       });
     },
-    [sceneId, sendMessage]
+    [sceneId, sendMessage],
   );
 
   /**
    * Send fog conceal update
    */
   const sendConceal = useCallback(
-    (areas: RevealedArea[], targetUserId: string) => {
+    function(areas: RevealedArea[], targetUserId: string) {
       if (!sceneId) return;
 
       sendMessage({
@@ -278,22 +285,22 @@ export function useFogWebSocket(
         },
       });
     },
-    [sceneId, sendMessage]
+    [sceneId, sendMessage],
   );
 
   // Connect on mount if autoConnect is true
-  useEffect(() => {
+  useEffect(function onmount() {
     if (autoConnect && token) {
       connect();
     }
 
-    return () => {
+    return function onunmount() {
       disconnect();
     };
   }, [autoConnect, token, connect, disconnect]);
 
   return {
-    isConnected: isConnectedRef.current,
+    isConnected,
     connect,
     disconnect,
     sendReveal,

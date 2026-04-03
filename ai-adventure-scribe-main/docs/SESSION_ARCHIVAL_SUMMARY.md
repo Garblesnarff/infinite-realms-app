@@ -61,7 +61,7 @@ Quick reference for:
 - Performance expectations
 
 ### 5. Test Script
-**File**: `scripts/test-archival.sql`
+**File**: `docs/examples/sql/test-archival.sql`
 
 Comprehensive test suite covering:
 - Test data creation
@@ -169,7 +169,7 @@ jobs:
 
 2. **Run Test Script**
    ```sql
-   \i scripts/test-archival.sql
+   \i docs/examples/sql/test-archival.sql
    ```
 
 3. **Verify Results**
@@ -267,7 +267,7 @@ Potential improvements for future consideration:
 
 1. Check main documentation: `docs/SESSION_ARCHIVAL.md`
 2. Review migration README: `supabase/migrations/README_SESSION_ARCHIVAL.md`
-3. Run test script: `scripts/test-archival.sql`
+3. Run test script: `docs/examples/sql/test-archival.sql`
 4. Check Supabase logs for errors
 5. Verify migration was applied: `SELECT * FROM game_sessions_archive LIMIT 1;`
 

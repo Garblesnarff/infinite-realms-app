@@ -277,9 +277,9 @@ export function calculateRollWithBreakdown(
 
     case 'skill': {
       if (!skillName) throw new Error('Skill name required for skill check');
-      const skillAbility =
-        SKILL_ABILITIES[skillName.toLowerCase()] ||
-        SKILL_ALIASES[SKILL_ALIASES[skillName.toLowerCase()]];
+      const normalizedSkill = skillName.toLowerCase();
+      const actualSkill = SKILL_ALIASES[normalizedSkill] || normalizedSkill;
+      const skillAbility = SKILL_ABILITIES[actualSkill];
       if (!skillAbility) throw new Error(`Unknown skill: ${skillName}`);
 
       usedAbility = skillAbility;

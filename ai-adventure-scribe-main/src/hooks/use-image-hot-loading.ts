@@ -31,7 +31,7 @@ interface ImageHotLoadingState {
  */
 function isNewlyCreatedCharacter(
   createdAt: string | undefined,
-  currentTime: number = Date.now()
+  currentTime: number = Date.now(),
 ): boolean {
   if (!createdAt) return false;
 
@@ -83,23 +83,26 @@ export const useImageHotLoading = ({
   const isMountedRef = useRef(true);
 
   // Callback for realtime updates
-  const handleImageUpdate = useCallback((newImageUrl: string | null) => {
-    setState((prev) => ({
-      ...prev,
-      imageUrl: newImageUrl || fallbackImage,
-      hasImage: !!newImageUrl,
-      isLoading: false,
-      error: null,
-      pollingActive: false,
-    }));
+  const handleImageUpdate = useCallback(
+    (newImageUrl: string | null) => {
+      setState((prev) => ({
+        ...prev,
+        imageUrl: newImageUrl || fallbackImage,
+        hasImage: !!newImageUrl,
+        isLoading: false,
+        error: null,
+        pollingActive: false,
+      }));
 
-    // Clear polling if active
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-      logger.info('Polling stopped: image received via realtime');
-    }
-  }, [fallbackImage]);
+      // Clear polling if active
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+        logger.info('Polling stopped: image received via realtime');
+      }
+    },
+    [fallbackImage],
+  );
 
   // Polling function: query Supabase directly
   const pollForImage = useCallback(async () => {
@@ -141,42 +144,47 @@ export const useImageHotLoading = ({
   }, [tableName, recordId, imageField]);
 
   // Start polling if conditions are met
-  const startPollingIfNeeded = useCallback((hasImage: boolean) => {
-    if (hasImage ||
+  const startPollingIfNeeded = useCallback(
+    (hasImage: boolean) => {
+      if (
+        hasImage ||
         pollingIntervalRef.current !== null ||
         !createdAt ||
-        !isNewlyCreatedCharacter(createdAt)) {
-      return;
-    }
-
-    logger.info(`Starting polling for ${tableName} ${recordId}`);
-    pollingStartTimeRef.current = Date.now();
-
-    setState((prev) => ({ ...prev, pollingActive: true }));
-
-    pollingIntervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - (pollingStartTimeRef.current || 0);
-
-      if (elapsed >= POLLING_TIMEOUT_MS) {
-        logger.info(`Polling timeout reached for ${tableName} ${recordId}`);
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          pollingActive: false,
-        }));
+        !isNewlyCreatedCharacter(createdAt)
+      ) {
         return;
       }
 
-      pollForImage();
-    }, POLLING_INTERVAL_MS);
+      logger.info(`Starting polling for ${tableName} ${recordId}`);
+      pollingStartTimeRef.current = Date.now();
 
-    // Immediate first poll
-    pollForImage();
-  }, [createdAt, tableName, recordId, pollForImage]);
+      setState((prev) => ({ ...prev, pollingActive: true }));
+
+      pollingIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - (pollingStartTimeRef.current || 0);
+
+        if (elapsed >= POLLING_TIMEOUT_MS) {
+          logger.info(`Polling timeout reached for ${tableName} ${recordId}`);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          setState((prev) => ({
+            ...prev,
+            isLoading: false,
+            pollingActive: false,
+          }));
+          return;
+        }
+
+        pollForImage();
+      }, POLLING_INTERVAL_MS);
+
+      // Immediate first poll
+      pollForImage();
+    },
+    [createdAt, tableName, recordId, pollForImage],
+  );
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -208,11 +216,14 @@ export const useImageHotLoading = ({
         const hasImage = !!imageUrl;
 
         if (isMountedRef.current) {
+          const newlyCreated = isNewlyCreatedCharacter(createdAt);
+          const shouldPoll = !hasImage && newlyCreated;
+
           setState((prev) => ({
             ...prev,
             imageUrl: imageUrl || fallbackImage,
             hasImage,
-            isLoading: !hasImage,
+            isLoading: shouldPoll,
             error: null,
           }));
 
@@ -266,10 +277,7 @@ export const useImageHotLoading = ({
 /**
  * Convenience hooks for specific use cases
  */
-export const useCampaignImageHotLoading = (
-  campaignId: string,
-  createdAt?: string
-) => {
+export const useCampaignImageHotLoading = (campaignId: string, createdAt?: string) => {
   return useImageHotLoading({
     tableName: 'campaigns',
     recordId: campaignId,
@@ -279,10 +287,7 @@ export const useCampaignImageHotLoading = (
   });
 };
 
-export const useCharacterImageHotLoading = (
-  characterId: string,
-  createdAt?: string
-) => {
+export const useCharacterImageHotLoading = (characterId: string, createdAt?: string) => {
   return useImageHotLoading({
     tableName: 'characters',
     recordId: characterId,

@@ -9,7 +9,7 @@
 
 2. **Generate types**:
    ```bash
-   npm run db:generate
+   bun run db:generate
    ```
 
 ## Basic Usage
@@ -85,9 +85,9 @@ const postsWithAuthors = await db
 
 ## Commands
 
-- `npm run db:generate` - Generate types from schema
-- `npm run db:push` - Push schema to database (dev)
-- `npm run db:studio` - Open visual database browser
+- `bun run db:generate` - Generate types from schema
+- `bun run db:push` - Push schema to database (dev)
+- `bun run db:studio` - Open visual database browser
 
 ## Type Safety
 
@@ -107,7 +107,7 @@ const post: NewBlogPost = {
 
 ## More Examples
 
-See `/db/example-queries.ts` for 10 comprehensive examples including:
+See `/docs/examples/db/example-queries.ts` for comprehensive examples including:
 - Transactions
 - Aggregates
 - Full-text search

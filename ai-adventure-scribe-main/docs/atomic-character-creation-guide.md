@@ -169,7 +169,7 @@ try {
 ### Running Tests
 
 ```bash
-npm test tests/character-creation-atomic.test.ts
+bun test tests/character-creation-atomic.test.ts
 ```
 
 ### Test Coverage

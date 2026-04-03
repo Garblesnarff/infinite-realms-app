@@ -2,15 +2,12 @@
  * Admin Middleware for Elysia
  *
  * Provides admin-only access control.
- * Checks user plan, email, or user ID against admin lists.
+ * Checks email or user ID against explicit admin allowlists.
  *
  * Ported from /server/src/middleware/admin.ts
  */
 
 import { Elysia } from 'elysia';
-import { logger } from '../lib/logger.js';
-
-const ADMIN_PLANS = new Set(['enterprise', 'admin']);
 
 function parseList(value: string | undefined): Set<string> {
   return new Set(
@@ -30,15 +27,13 @@ const ADMIN_USER_IDS = parseList(process.env.ADMIN_USER_IDS);
 export function isAdmin(user: { plan?: string; email?: string; userId?: string } | null): boolean {
   if (!user) return false;
 
-  const plan = user.plan?.toLowerCase();
   const email = user.email?.toLowerCase();
   const userId = user.userId?.toLowerCase();
 
-  const allowedByPlan = plan ? ADMIN_PLANS.has(plan) : false;
   const allowedByEmail = email ? ADMIN_EMAILS.has(email) : false;
   const allowedById = userId ? ADMIN_USER_IDS.has(userId) : false;
 
-  return allowedByPlan || allowedByEmail || allowedById;
+  return allowedByEmail || allowedById;
 }
 
 /**

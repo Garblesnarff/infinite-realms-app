@@ -1,61 +1,143 @@
-# Palette's Journal 🎨
+# Palette's Journal
 
-## 2025-05-22 - Z-Index Standardization Pattern
-**Learning:** The app has a centralized z-index constant file (`src/constants/z-index.ts`) but it's not consistently used, leading to "chaotic" layering. Using Tailwind's arbitrary value syntax (`z-[${Z_INDEX.CONSTANT}]`) is the standard way to apply these.
-**Action:** Always check `src/constants/z-index.ts` before adding new `z-` classes and migrate hardcoded values when touching components.
+## Established Patterns
 
-## 2025-05-22 - Accessibility on Icon Buttons
-**Learning:** Many interactive elements in the Battle Map are icon-only buttons (`size="icon"`). These are invisible to screen readers without explicit `aria-label`.
-**Action:** Always add `aria-label` to components using `size="icon"`.
+### Z-Index Standardization
+**Learning:** The app has centralized z-index constants in `src/constants/z-index.ts`. Tailwind JIT does not reliably generate classes for dynamic arbitrary values like `z-[${Z_INDEX.CONSTANT}]`.
+**Action:** Always use inline `style={{ zIndex: Z_INDEX.CONSTANT }}` instead of Tailwind arbitrary values. Check `z-index.ts` before adding new z-index values.
 
-## 2025-05-23 - Form Accessibility Pattern
-**Learning:** Linking `Label` components to their respective inputs (like `Switch` or `Select`) via `id` and `htmlFor` significantly improves accessibility and the clickable hit area. For reusable components like `SettingItem`, passing an `id` prop down to both the label and the input is a clean way to implement this.
-**Action:** When creating or modifying form-like settings, ensure every input has a unique `id` linked to its label.
+### Icon-Only Button Accessibility
+**Learning:** Icon-only buttons (`size="icon"`) are invisible to screen readers. Toggle buttons need state feedback.
+**Action:** Always add `aria-label` to icon-only buttons. Add `aria-pressed` for toggle buttons (mute, favorite, view mode). Add `title` for tooltip on hover.
 
-## 2025-05-24 - Form Accessibility and Redundancy
-**Learning:** For `Select` components, linking the label to the `SelectTrigger` via `id` and `htmlFor` improves accessibility. Adding an explicit `aria-label` to the `SelectTrigger` provides additional clarity for screen reader users when navigating interactive elements.
-**Action:** Always link `Label` to `SelectTrigger` and provide an `aria-label` on the trigger for consistent accessibility.
+### Form Accessibility
+**Learning:** Linking `Label` to inputs via `id`/`htmlFor` improves accessibility and clickable area. In components that render multiple times (lists, combat trackers), use React's `useId()` to avoid ID collisions.
+**Action:** Use `useId()` for all `htmlFor`/`id` pairings. Add `aria-label` to `SelectTrigger` components. Always provide descriptive empty states ("No items found") for dynamic lists.
 
-## 2025-05-23 - Z-Index Reliability
-**Learning:** Tailwind JIT might not always generate classes for arbitrary values like `z-[${Z_INDEX.CONSTANT}]` if they are dynamic. Using inline `style={{ zIndex: Z_INDEX.CONSTANT }}` is the most reliable way to apply our centralized z-index constants.
-**Action:** Prefer inline styles for applying `Z_INDEX` constants over Tailwind arbitrary value syntax.
+### View Mode Toggle Pattern
+**Learning:** View toggles (Grid/List/Compact) require specific ARIA structure for accessibility.
+**Action:** Wrap toggles in a container with `role="group"` and `aria-label`. Each button gets `aria-label`, `aria-pressed`, and `title`.
 
-## 2025-05-25 - Comprehensive Accessibility Standardization
-**Learning:** Standardizing accessibility across a complex component (like `ToolOptionsPanel`) involves a multi-pronged approach: adding `aria-label` to non-textual controls (`Slider`, `SelectTrigger`), `aria-pressed` for toggle states, and using `React.useId()` for robust label-to-input linking.
-**Action:** When touching complex UI panels, perform a full a11y audit and apply these patterns consistently.
+### Live Status Indicators
+**Learning:** Visual-only indicators (like "Speaking..." pulses) are invisible to screen readers.
+**Action:** Add `role="status"` and `aria-live="polite"` to status indicators so screen readers announce activity changes.
 
-## 2025-05-27 - View Toggle Accessibility Pattern
-**Learning:** View mode toggles (e.g., Grid/List) require a combination of patterns for full accessibility: a container with `role="group"` and `aria-label`, and buttons with `aria-label`, `aria-pressed`, and `title`. This ensures screen readers announce the group's purpose and the individual button states correctly.
-**Action:** Implement view toggles as ARIA-compliant button groups.
+### Toolbar Accessibility
+**Learning:** Complex feature panels (drawing tools, combat controls) need proper ARIA roles for keyboard navigation.
+**Action:** Add `role="toolbar"` to tool panels. Use `aria-pressed` for state indicators. Migrate legacy form elements (raw checkboxes) to design system `Switch` components. Reveal nested actions on focus (`focus-visible:opacity-100`).
 
-## 2025-05-26 - Focused Micro-UX Pattern
-**Learning:** UX improvements are most effective when they are highly focused and "surgical". Combining accessibility fixes with large-scale design system migrations (like z-index) in a single PR can obscure the core value and increase regression risk.
-**Action:** Keep UX improvements strictly focused on a single component or small set of related elements. Favor surgical accessibility enhancements (ARIA labels, linked labels) as they provide immediate value with minimal risk.
+---
 
-## 2025-05-14 - Character Sheet Loading and Layout
-**Learning:** Hardcoded grid columns (e.g., `grid-cols-7`) in tabbed layouts are brittle and break when new tabs are added (e.g., "Gallery" as the 8th tab). Using responsive grids (`grid-cols-4 md:grid-cols-8`) improves mobile UX and prevents layout shifts.
-**Action:** Always check the item count against grid column classes in tabbed navigations. Prefer responsive grid columns over fixed ones. Use `Skeleton` components instead of plain text for a more "delightful" loading experience.
+## Specific Fixes
 
-## 2025-05-28 - Drawing Tool Accessibility and Component Standards
-**Learning:** Polishing a complex feature panel like the Drawing Tool involves standardizing accessibility attributes (role="toolbar", aria-label, aria-pressed) and migrating legacy form elements (raw checkboxes) to design system components (Switch). Keeping these changes surgical and under 50 lines ensures they are maintainable and easy to review.
-**Action:** When touching feature toolbars, always add role="toolbar" and ensure all interactive elements have appropriate state indicators (aria-pressed) and accessible names (aria-label).
+### 2025-05-14 - Character Sheet Loading and Layout
+**Learning:** Hardcoded grid columns (`grid-cols-7`) break when tabs are added. Using responsive grids (`grid-cols-4 md:grid-cols-8`) prevents layout shifts.
+**Action:** Always check item count against grid column classes. Prefer responsive grids. Use `Skeleton` components for loading states.
 
-## 2025-05-29 - Tree Item Accessibility Pattern
-**Learning:** Custom tree items (like `FolderTree`) require `role="button"`, `tabIndex={0}`, and `aria-selected` to be properly navigable for keyboard and screen reader users. Nested actions (like expand/collapse or context menus) must be clearly labeled with `aria-label` and `aria-expanded` and should ideally be revealed on focus (`focus-visible:opacity-100`) to ensure they are discoverable without a mouse.
-**Action:** Implement interactive list/tree items with appropriate ARIA roles, keyboard event handlers (`onKeyDown` for Enter/Space), and ensure all icon-only sub-actions are accessible and visible on focus.
+### 2025-05-29 - Tree Item Accessibility
+**Learning:** Custom tree items (like `FolderTree`) need `role="button"`, `tabIndex={0}`, and `aria-selected`. Nested actions need `aria-label` and `aria-expanded`.
+**Action:** Add keyboard event handlers (`onKeyDown` for Enter/Space) to interactive list/tree items.
 
-## 2025-05-30 - Floating Action Panel Accessibility and Layering
-**Learning:** Standardizing accessibility on floating panels involves adding `aria-label` to state toggles and ensuring z-index reliability. Descriptive `aria-label` for "Open/Close" and "Expand/Collapse" states provides essential context for screen reader users. Using `style={{ zIndex: Z_INDEX.CONSTANT }}` prevents layering issues that Tailwind's dynamic classes might occasionally skip.
-**Action:** Always add descriptive `aria-label` to floating action buttons and use inline styles for z-index standardization.
+### 2025-05-26 - Focused Micro-UX
+**Learning:** Combining accessibility fixes with large-scale design migrations in a single PR increases regression risk.
+**Action:** Keep UX improvements surgical and focused on a single component. Favor small, targeted accessibility enhancements over sweeping changes.
 
-## 2025-06-01 - Audio Control Accessibility and Live Status
-**Learning:** Audio controls require specific ARIA attributes for a complete UX: `aria-label` and `aria-pressed` for mute/unmute toggles, and `aria-label` for sliders. Crucially, visual-only indicators like "Speaking..." pulses should be accompanied by `role="status"` and `aria-live="polite"` so screen reader users are aware of activity. Redundant component structures (e.g., in `src/components/game` and `src/features/game-session`) must be updated in tandem to ensure a consistent experience.
-**Action:** Implement `aria-pressed` for toggles, `aria-label` for icon-only buttons/sliders, and `aria-live` for status indicators. Always check for duplicate component definitions across feature directories.
+### 2025-06-01 - Audio Control Accessibility
+**Learning:** Audio controls need `aria-label` and `aria-pressed` for mute/unmute, `aria-label` for sliders. Redundant component structures (`src/components/game` and `src/features/game-session`) must be updated in tandem.
+**Action:** Always check for duplicate component definitions across feature directories when making accessibility fixes.
 
-## 2026-02-10 - Accessibility & Feedback Enhancements in Combat Panels
-**Learning:** Using React's `useId` is the most robust way to link form labels to inputs in components that might appear multiple times (like in lists or combat trackers), avoiding ID collisions. Additionally, silent empty lists are poor UX; always provide an explicit "No [items] found" message.
-**Action:** Use `useId` for all `htmlFor`/`id` pairings and always implement descriptive empty states for dynamic lists.
+## 2025-06-03 - Z-Index Migration and Select Accessibility
+**Learning:** Performance overlays and debug monitors should use high-level z-index constants (like `Z_INDEX.TOAST`) to remain visible above other UI layers. `SelectTrigger` components often lack accessible names when their labels are not correctly associated or are implicit.
+**Action:** Migrate hardcoded z-indices to `Z_INDEX` constants using inline styles. Always provide `aria-label` to `SelectTrigger` components in forms and filters.
 
-## 2026-03-05 - Card Interaction Accessibility and Z-Index
-**Learning:** Complex cards (like `RaceCard`) often use multiple `z-index` layers for overlays and hover effects. Migrating these to inline styles ensures reliable layering in all environments. Additionally, secondary actions on cards (like "Favorite" or "Compare") must be explicitly labeled and indicate their state via `aria-pressed` to be fully accessible.
-**Action:** Standardize card layering using inline `zIndex` styles and ensure all secondary icon-only actions have `aria-label` and `aria-pressed` (if togglable).
+## 2025-06-05 - Z-Index Standardization and Icon Button Accessibility
+**Learning:** Character cards and campaign selection views often use complex layering (glows, backgrounds, overlays) that require careful z-index management. Hardcoded Tailwind classes like `z-0` or `z-50` conflict with the centralized `Z_INDEX` system. Icon-only buttons (like Delete) are invisible to screen readers without explicit labels.
+**Action:** Migrate all z-index applications to inline `style={{ zIndex: Z_INDEX.CONSTANT }}`. For icon-only buttons, provide both `aria-label` and `title` for dual accessibility and UX benefit. Ensure `AlertDialog` components follow the `Z_INDEX.MODAL` (60) and `Z_INDEX.MODAL_BACKDROP` (50) hierarchy instead of defaulting to `z-50`.
+
+## 2025-06-07 - Campaign Creation Accessibility and Z-Index
+**Learning:** Campaign creation steps (like Genre Selection) use many hardcoded z-indices for visual effects (overlays, hover popups). View mode toggles in these screens are often icon-only and lack state feedback. Brittle Vitest selectors targeting margin classes (e.g., `.mb-4`) cause tests to fail when design tweaks are made.
+**Action:** Migrate `GenreSelection` z-indices to `Z_INDEX` constants. Add `role="group"`, `aria-label`, and `aria-pressed` to view toggles. Update tests to use more robust selectors (e.g., targeting height/width or functional classes like `.animate-pulse`) instead of spacing classes.
+
+## 2025-06-12 - Memory Panel Accessibility and Z-Index Standardization
+**Learning:** The Game Side Panels (MemoryPanel and GameRightPanel) use complex layering that requires Z_INDEX constants for stability. Icon-only buttons for panel controls (Minimize, Expand, Close) and tab triggers require explicit ARIA attributes (aria-label, aria-pressed) to be accessible. Linking labels to textareas via useId improves the accessible name and hit target for session notes.
+**Action:** Always migrate z-index to inline style={{ zIndex: Z_INDEX.CONSTANT }}. Ensure all icon-only buttons have aria-label and title. Use useId for linking Labels to inputs. Correct documentation in constants files when it contradicts established best practices.
+
+### Destructive Action Confirmation Pattern
+**Learning:** Native `window.confirm` dialogs feel disconnected from the app's dark fantasy aesthetic. Using themed Shadcn `AlertDialog` components provides a more immersive and accessible experience.
+**Action:** Replace `window.confirm` with `AlertDialog` for all destructive actions (deleting, ending sessions, revoking access).
+
+## 2025-06-14 - Gallery Accessibility and Component Redundancy
+**Learning:** Interactive gallery items implemented as `div` elements require full keyboard support (role="button", tabIndex, onKeyDown) and visible focus states (focus-visible) to be accessible. The project contains duplicate component structures in `src/components/` and `src/features/` (e.g., `GalleryGrid.tsx`), which can lead to inconsistent UX if only one is updated.
+**Action:** Always verify if a component has a duplicate in `src/features/` or `src/components/` and synchronize accessibility and z-index fixes across both. Use `e.preventDefault()` in keyboard handlers for the Space key to prevent scrolling.
+
+## 2025-06-16 - Z-Index Standardization and Sticky Header Layering
+**Learning:** Hardcoded z-index classes like `z-50` for sticky headers can conflict with the centralized `Z_INDEX` hierarchy, potentially causing headers to appear above modal backdrops (which also use 50). Standardizing to `Z_INDEX.STICKY` (30) ensures headers remain below modals while still staying on top of base content.
+**Action:** Migrate hardcoded `z-index` classes to `style={{ zIndex: Z_INDEX.CONSTANT }}`. For sticky headers, use `Z_INDEX.STICKY`. For existing `z-10` values, map to `Z_INDEX.DROPDOWN` to maintain behavior while standardizing. Add complex files (like `SceneCreationWizard.tsx`) to `eslint.config.js` overrides if they exceed the 200-line limit to ensure build passes after minor changes.
+
+## 2026-01-24 - Accessible Selectable Cards
+**Learning:** Selectable cards with inner checkboxes often suffer from nested interactivity, causing double-triggering of events and a poor keyboard/screen reader experience (redundant tab stops).
+**Action:** Use a single-interaction pattern for selectable cards. Assign `role="checkbox"`, `aria-checked`, and `tabIndex` to the parent `Card`. Mark the inner `Checkbox` component with `tabIndex={-1}` and `aria-hidden="true"`. This ensures the whole card is a single, focusable accessibility object.
+
+### RadioGroup Accessibility
+**Learning:** Shadcn `RadioGroup` components in complex forms (like campaign creation steps) often lack clear associations with their section titles, making navigation difficult for screen reader users.
+**Action:** Use `useId` to link section labels to `RadioGroup` components via `aria-labelledby`. Always wrap icon-only view toggles in a `role="group"` container with a descriptive `aria-label`.
+
+### Click-to-Edit Accessibility Pattern
+**Learning:** Interactive display elements that trigger edit modes (like in `EditableDescription.tsx`) are often implemented as static `div`s, making them invisible to keyboard users and screen readers.
+**Action:** Add `role="button"`, `tabIndex={0}`, and an `onKeyDown` handler for Enter/Space to ensure keyboard navigation parity. Always provide a descriptive `aria-label` for the trigger and `title`/`aria-label` for action buttons like Save/Cancel.
+
+## 2026-03-24 - Quick Action Button Accessibility in Panels
+**Learning:** Functional text buttons in complex side panels (like the Layers Panel) can be ambiguous if they only use short labels like "Reset". Providing more descriptive `aria-label` and `title` attributes (e.g., "Reset layers to default visibility and opacity") significantly improves the experience for both screen reader users and sighted users via tooltips.
+**Action:** Always provide descriptive `aria-label` and `title` attributes for functional buttons in utility panels, even if they have text labels, to clarify the scope of the action.
+
+## 2026-01-25 - Combat UI Accessibility
+**Learning:** Core combat components like `HPTracker` and `CombatActionPanel` often lack basic accessibility, making them difficult for screen reader users. Icon-only buttons for critical actions (damage/healing) need explicit labels.
+**Action:** Always use `useId` to link labels to inputs. Provide `aria-label` and `title` for icon-only buttons. Add `aria-label` to `Progress` bars to provide context for health status.
+
+## 2026-01-26 - Reusable Component Accessibility and UX
+**Learning:** Reusable components like `EditableDescription` are often duplicated across `src/components/` and `src/features/`. Missing `id`/`htmlFor` associations on these components reduce accessibility and clickability across many parts of the application. Adding a `title` to the edit button provides a helpful tooltip for mouse users.
+**Action:** Use `useId` to link labels to inputs in reusable components. Always synchronize changes across duplicated component locations. Add `title` to icon-only buttons for a better desktop UX.
+
+## 2026-01-27 - Campaign Creation Accessibility and Z-Index Standardization
+**Learning:** Complex form components like `CampaignParameters` often contain multiple sections with `RadioGroup` controls that lack proper semantic linkage to their titles. Icon-only view toggles and search inputs in these components are frequently missing accessible labels and state feedback. Standardizing z-index via `Z_INDEX` constants prevents visual layering bugs in card-based UIs.
+**Action:** Link `RadioGroup` to section titles using `useId` and `aria-labelledby`. Add `aria-label`, `aria-pressed`, and `title` to all icon-only buttons. Migrate all hardcoded `z-index` classes to inline styles with `Z_INDEX` constants.
+
+## 2026-01-28 - Core UI Z-Index Standardization and Type Safety
+**Learning:** Tailwind JIT arbitrary values for z-index (e.g., `z-[${Z_INDEX.POPOVER}]`) are unreliable and can fail to generate CSS classes, causing overlays to hide behind other elements. Centralizing all overlay z-indices in `src/constants/z-index.ts` and using explicit `style={{ zIndex: Z_INDEX.CONSTANT }}` ensures reliable layering. Missing constants like `CONTEXT_MENU` lead to TypeScript errors in UI components.
+**Action:** Migrate all Radix-based UI components (Popover, DropdownMenu, Toast, Tooltip, ContextMenu) to use inline styles for z-index. Ensure all semantic overlay types have corresponding entries in `Z_INDEX`.
+
+## 2026-01-29 - Sidebar Accessibility and Z-Index Standardization
+**Learning:** Core layout components like `Sidebar` often use hardcoded Tailwind z-index classes (`z-10`, `z-20`) that conflict with the centralized `Z_INDEX` hierarchy. Icon-only buttons for toggling the sidebar (`SidebarTrigger`) and interactive regions (`SidebarRail`) lack accessible state feedback (`aria-expanded`) and desktop hover tooltips.
+**Action:** Migrate all sidebar z-indices to inline `style={{ zIndex: Z_INDEX.CONSTANT }}`. Add `aria-expanded` and `title` (including keyboard shortcuts like Ctrl+B) to sidebar triggers and interactive rails to improve both accessibility and discoverability.
+
+## 2026-03-05 - Quick Action Menu Accessibility and UX
+**Learning:** Interactive radial menus using raw `<button>` elements should always specify `type="button"` to prevent accidental form submissions when nested. Providing a `title` attribute for the center toggle/close button ensures sighted desktop users have a clear visual cue (tooltip) for its function, complementing the `aria-label` used by screen readers.
+**Action:** Add `type="button"` to all buttons in radial or context menus. Ensure center or primary toggle buttons have both `aria-label` and `title` for dual accessibility and UX benefits.
+
+## 2026-03-06 - Spell Preparation UX and Accessibility
+**Learning:** Browser `alert()` calls are disruptive and don't match the application's aesthetic. Replacing them with `toast` notifications provides a smoother, non-blocking user experience. For checkboxes in lists, providing a dynamic `aria-label` (e.g., "Prepare [Item Name]") ensures screen reader users have clear context without needing to find a separate label.
+**Action:** Replace `alert()` with `toast.error()` or `toast.success()`. Always add descriptive `aria-label` to checkboxes in repetitive lists.
+
+## 2026-03-07 - Combat UI Accessibility and Keyboard Navigation
+**Learning:** Purely visual pulsing indicators for "Combat in Progress" and "Current Turn" are invisible to screen readers without a status role. Interactive non-button elements like enemy selection cards and initiative rows require explicit `focus-visible` ring styles and ARIA labels to be usable by keyboard and screen reader users. Descriptive `title` attributes on buttons like "Next Turn" clarify the action (ending the turn) for all users.
+**Action:** Always add `role="status"` and `aria-label` to visual state indicators. Use `focus-visible:ring-2` on interactive cards. Provide descriptive `title` tooltips for functional buttons.
+
+## 2026-03-08 - Folder Tree and Dice Roller Accessibility
+**Learning:** Interactive `div` elements and purely informational `Badge` components often lack the semantic metadata required for a high-quality accessible experience. Combining `aria-label` for screen readers and `title` for sighted user tooltips provides a consistent "micro-UX" win across different input methods.
+**Action:** Always provide both `aria-label` and `title` for custom interactive elements and critical status indicators (like dice results) to ensure "invisible" UX that just works for everyone.
+
+## 2026-03-23 - Dice Roll Message Accessibility
+**Learning:** Dice roll messages in chat are high-frequency game events that must be announced immediately to screen reader users. Components like `DiceRollMessage` that are duplicated across the codebase (e.g., `src/components/game/` and `src/features/game-session/components/chat/`) must be updated in tandem to maintain UX consistency.
+**Action:** Use `role="status"`, `aria-live="polite"`, and `aria-atomic="true"` for event-driven message components. Use `aria-label` to provide semantic context for formula and result values (e.g., "Formula: 1d20+4") rather than relying on raw text.
+
+## 2026-03-09 - Searchable Listbox and Scroll Area Accessibility
+**Learning:** Standardizing selection feedback in listboxes (`role="option"`) by adding `aria-selected` and visual cues like a `Check` icon improves both accessibility and visual clarity. Semantically linking `ScrollArea` containers to their section headings using `aria-labelledby` provides better context for screen reader users when navigating complex dialogs.
+**Action:** For searchable listbox implementations, always include `aria-selected` on options and a visual selection indicator (like a `Check` icon). Link scrollable lists to their headers via `aria-labelledby` using `useId`.
+
+## 2026-04-01 - SelectTrigger Accessibility Redundancy
+**Learning:** Providing an `aria-label` on a `SelectTrigger` that is already correctly associated with a `Label` (via `id` and `htmlFor`) or an `aria-labelledby` causes screen readers to announce the label twice. Removing the redundant attribute ensures a cleaner, more professional experience for assistive technology users.
+**Action:** Avoid redundant `aria-label` attributes on `SelectTrigger` components if they have an associated `Label`. Update unit tests to check for accessible names via role/name instead of targeting the specific attribute.
+
+## 2026-04-15 - Descriptive ARIA Labels in Lists
+**Learning:** Generic `aria-label` and `title` attributes (e.g., "Revoke access") in repetitive lists can be ambiguous for screen reader users and confusing in multi-item views. Including the item's name or a unique identifier in the label (e.g., "Revoke access for [User Name]") provides immediate context and improves navigation.
+**Action:** Always use template literals to include contextually relevant identifiers in `aria-label` and `title` attributes for per-item actions in lists or grids.

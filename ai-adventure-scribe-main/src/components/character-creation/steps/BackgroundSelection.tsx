@@ -93,6 +93,9 @@ const BackgroundSelection: React.FC = () => {
               onClick={() => handleBackgroundSelect(background)}
               role="button"
               tabIndex={0}
+              aria-label={`Select ${background.name} background`}
+              aria-pressed={isSelected}
+              title={`Select ${background.name}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   handleBackgroundSelect(background);
@@ -102,7 +105,8 @@ const BackgroundSelection: React.FC = () => {
               {/* Selected Indicator */}
               {isSelected && (
                 <div
-                  className={`absolute top-4 right-4 z-[${Z_INDEX.DROPDOWN}] bg-infinite-teal text-white rounded-full p-2 shadow-lg`}
+                  className="absolute top-4 right-4 bg-infinite-teal text-white rounded-full p-2 shadow-lg"
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
                 >
                   <Check className="w-5 h-5" />
                 </div>

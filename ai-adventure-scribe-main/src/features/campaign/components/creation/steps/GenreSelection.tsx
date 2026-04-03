@@ -11,7 +11,7 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 
@@ -96,6 +97,7 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
   const { state, dispatch } = useCampaign();
   const { toast } = useToast();
   const { scrollToNavigation } = useAutoScroll();
+  const genreHeaderId = useId();
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [viewMode, setViewMode] = React.useState<'grid' | 'list' | 'compact'>('compact');
@@ -147,7 +149,10 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
   return (
     <div className="space-y-8 parchment animate-fade-in-up">
       <div className="text-center mb-6">
-        <Label className="text-xl font-serif font-semibold flex items-center justify-center">
+        <Label
+          id={genreHeaderId}
+          className="text-xl font-serif font-semibold flex items-center justify-center"
+        >
           <BookOpen className="h-5 w-5 mr-2 text-blue-600" />
           Choose Your Campaign Genre
         </Label>
@@ -169,12 +174,15 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">View:</span>
-          <div className="flex border rounded-md">
+          <div className="flex border rounded-md" role="group" aria-label="View mode">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('grid')}
               className="rounded-r-none"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+              title="Grid view"
             >
               <Grid className="w-4 h-4" />
             </Button>
@@ -183,6 +191,9 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
               size="sm"
               onClick={() => setViewMode('list')}
               className="rounded-none border-x"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+              title="List view"
             >
               <List className="w-4 h-4" />
             </Button>
@@ -191,6 +202,9 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
               size="sm"
               onClick={() => setViewMode('compact')}
               className="rounded-l-none"
+              aria-label="Compact view"
+              aria-pressed={viewMode === 'compact'}
+              title="Compact view"
             >
               <Eye className="w-4 h-4" />
             </Button>
@@ -202,6 +216,7 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
       </div>
 
       <RadioGroup
+        aria-labelledby={genreHeaderId}
         value={state.campaign?.genre || ''}
         onValueChange={handleGenreChange}
         className={
@@ -240,8 +255,16 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
                     : undefined
                 }
               >
-                {genre.backgroundImage && <div className="absolute inset-0 bg-black/70 z-0" />}
-                <div className={`p-4 relative z-10 ${genre.backgroundImage ? 'text-white' : ''}`}>
+                {genre.backgroundImage && (
+                  <div
+                    className="absolute inset-0 bg-black/70"
+                    style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+                  />
+                )}
+                <div
+                  className={`p-4 relative ${genre.backgroundImage ? 'text-white' : ''}`}
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <RadioGroupItem
@@ -313,9 +336,15 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
                     : undefined
                 }
               >
-                {genre.backgroundImage && <div className="absolute inset-0 bg-black/70 z-0" />}
+                {genre.backgroundImage && (
+                  <div
+                    className="absolute inset-0 bg-black/70"
+                    style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+                  />
+                )}
                 <div
-                  className={`flex items-center justify-between mb-2 relative z-10 ${genre.backgroundImage ? 'text-white' : ''}`}
+                  className={`flex items-center justify-between mb-2 relative ${genre.backgroundImage ? 'text-white' : ''}`}
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
                 >
                   <div className="flex items-center gap-2">
                     <RadioGroupItem
@@ -339,7 +368,10 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1 mb-1 relative z-10">
+                <div
+                  className="flex flex-wrap gap-1 mb-1 relative"
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
+                >
                   {genre.themes.map((t) => (
                     <Badge
                       key={t}
@@ -351,7 +383,8 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
                   ))}
                 </div>
                 <p
-                  className={`text-xs line-clamp-2 relative z-10 ${genre.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
+                  className={`text-xs line-clamp-2 relative ${genre.backgroundImage ? 'text-gray-200' : 'text-muted-foreground'}`}
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
                 >
                   {genre.description}
                 </p>
@@ -393,20 +426,25 @@ const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }
               />
 
               {isSelected && (
-                <div className="absolute top-3 right-3 z-20 bg-primary text-primary-foreground rounded-full p-1">
+                <div
+                  className="absolute top-3 right-3 bg-primary text-primary-foreground rounded-full p-1"
+                  style={{ zIndex: Z_INDEX.CARD_HOVER }}
+                >
                   <Check className="w-4 h-4" />
                 </div>
               )}
 
               <div
-                className={`absolute bottom-3 left-3 z-10 flex items-center gap-2 ${isSelected ? 'text-white' : 'text-white'}`}
+                className={`absolute bottom-3 left-3 flex items-center gap-2 ${isSelected ? 'text-white' : 'text-white'}`}
+                style={{ zIndex: Z_INDEX.DROPDOWN }}
               >
                 {genre.icon}
                 <span className="font-bold text-lg drop-shadow">{genre.label}</span>
               </div>
 
               <div
-                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ${hovered === genre.value ? 'opacity-100 scale-100' : 'opacity-0 scale-95'} z-20`}
+                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ${hovered === genre.value ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+                style={{ zIndex: Z_INDEX.CARD_HOVER }}
               >
                 <div className="bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-xl border border-border w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto">
                   <div className="flex items-center gap-2 mb-2">

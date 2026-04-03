@@ -1,4 +1,4 @@
-import { ArrowRight, Play, Trash2, User, Sword, Shield, Star, AlertTriangle } from 'lucide-react';
+import { Play, Trash2, Sword, Shield, Star, AlertTriangle } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCharacterImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +45,7 @@ interface CharacterCardProps {
 const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -96,7 +98,13 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
    */
   const handleDelete = useCallback(async () => {
     try {
-      const { error } = await supabase.from('characters').delete().eq('id', character.id);
+      if (!user?.id) throw new Error('No authenticated user');
+
+      const { error } = await supabase
+        .from('characters')
+        .delete()
+        .eq('id', character.id)
+        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`);
 
       if (error) throw error;
 
@@ -120,29 +128,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
       });
       setShowDeleteDialog(false);
     }
-  }, [character.id, toast, onDelete]);
-
-  // Generate avatar background color based on name
-  const getAvatarColor = useMemo(
-    () => (name: string) => {
-      const colors = [
-        'bg-infinite-purple',
-        'bg-infinite-gold',
-        'bg-infinite-teal',
-        'bg-destructive',
-        'bg-secondary',
-      ];
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return colors[Math.abs(hash) % colors.length];
-    },
-    [],
-  );
-
-  // Get first initial
-  const getInitial = useMemo(() => (name: string) => name.charAt(0).toUpperCase(), []);
+  }, [character.id, toast, onDelete, user?.id]);
 
   // Calculate ability score modifier
   const getModifier = (score: number) => {
@@ -189,7 +175,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
     >
       {/* Glow effect on hover - uses OVERLAY_EFFECT for visual effects */}
       <div
-        className={`absolute inset-0 z-[${Z_INDEX.OVERLAY_EFFECT}] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
         <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
       </div>
@@ -197,9 +184,20 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
       {/* Hero / background area */}
       <div
         className="character-hero group flex items-end p-4 cursor-pointer h-full w-full bg-cover bg-center bg-no-repeat filter sepia-[0.1] relative overflow-hidden transition-all duration-700 ease-out group-hover:scale-[1.02] group-hover:brightness-110 rounded-sm"
+        role="link"
+        tabIndex={0}
+        aria-label={`View details for ${character.name}`}
         onClick={() => {
           // Character access is now properly restricted by RLS, so navigation should work
           navigate(`/app/character/${character.id}`);
+        }}
+        onFocus={() => setIsHovered(true)}
+        onBlur={() => setIsHovered(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            navigate(`/app/character/${character.id}`);
+          }
         }}
         style={
           resolvedBackgroundImage
@@ -244,7 +242,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
         {/* Overlay and popup for character details */}
         <div className="character-overlay bg-gradient-to-b from-infinite-purple/80 via-transparent to-infinite-dark/90" />
         <div
-          className={`hover-popup ${isHovered ? `opacity-100 scale-100 pointer-events-auto z-[${Z_INDEX.CARD_HOVER}]` : 'opacity-0 scale-95 pointer-events-none'} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out`}
+          className={`hover-popup ${isHovered ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out`}
+          style={isHovered ? { zIndex: Z_INDEX.CARD_HOVER } : undefined}
         >
           <div className="bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-xl border border-border max-w-xs">
             {/* Avatar Display */}
@@ -369,6 +368,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
               <Button
                 size="sm"
                 className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+                aria-label="Play as this character"
+                title="Play as this character"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCampaignModal(true);
@@ -381,6 +382,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
                 size="sm"
                 variant="outline"
                 className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
+                aria-label="View character details"
+                title="View character details"
                 onClick={(e) => {
                   e.stopPropagation();
                   // Character access is now properly restricted by RLS, so navigation should work
@@ -397,6 +400,8 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
                   e.stopPropagation();
                   handleDeleteClick();
                 }}
+                aria-label="Delete character"
+                title="Delete character"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -413,8 +418,14 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps) => 
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogPortal>
-          <AlertDialogOverlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <AlertDialogContent className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border !bg-white dark:!bg-slate-100 rounded-lg border-infinite-purple/30 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg dark:border-gray-300 text-foreground">
+          <AlertDialogOverlay
+            className="fixed inset-0 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+            style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
+          />
+          <AlertDialogContent
+            className="fixed left-[50%] top-[50%] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border !bg-white dark:!bg-slate-100 rounded-lg border-infinite-purple/30 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg dark:border-gray-300 text-foreground"
+            style={{ zIndex: Z_INDEX.MODAL }}
+          >
             <AlertDialogHeader className="flex flex-col space-y-2 text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <AlertTriangle className="h-5 w-5 text-destructive" />

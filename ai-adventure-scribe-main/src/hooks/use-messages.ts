@@ -35,11 +35,18 @@ export const useMessages = (sessionId: string | null) => {
       // Single JOIN query to get messages with character data
       // Order by sequence_number ascending for chronological display (oldest first)
       // Sequence numbers ensure proper ordering even with concurrent multi-tab inserts
+      // ⚡ Bolt: Use explicit column list to avoid over-fetching and improve performance.
       const { data, error, count } = await supabase
         .from('dialogue_history')
         .select(
           `
-          *,
+          id,
+          message,
+          speaker_type,
+          timestamp,
+          context,
+          images,
+          sequence_number,
           game_sessions!inner(
             id,
             character_id,

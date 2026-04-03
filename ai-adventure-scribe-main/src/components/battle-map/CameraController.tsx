@@ -204,8 +204,8 @@ export function CameraController({
 
       // Pan to clicked position
       setTargetPanOffset({
-        x: -x * (size.width / 2) / targetZoom,
-        y: -y * (size.height / 2) / targetZoom,
+        x: (-x * (size.width / 2)) / targetZoom,
+        y: (-y * (size.height / 2)) / targetZoom,
       });
     };
 
@@ -221,7 +221,17 @@ export function CameraController({
       canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('dblclick', handleDoubleClick);
     };
-  }, [gl, isPanning, isSpacePressed, panStart, panStartOffset, targetPanOffset, targetZoom, size, enablePan]);
+  }, [
+    gl,
+    isPanning,
+    isSpacePressed,
+    panStart,
+    panStartOffset,
+    targetPanOffset,
+    targetZoom,
+    size,
+    enablePan,
+  ]);
 
   /**
    * Handle touch events for mobile
@@ -247,7 +257,7 @@ export function CameraController({
 
         lastTouchDistance = Math.hypot(
           touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
+          touch2.clientY - touch1.clientY,
         );
 
         lastTouchCenter = {
@@ -279,7 +289,7 @@ export function CameraController({
 
         const distance = Math.hypot(
           touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
+          touch2.clientY - touch1.clientY,
         );
 
         if (lastTouchDistance > 0) {
@@ -306,7 +316,18 @@ export function CameraController({
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [gl, isPanning, panStart, panStartOffset, targetPanOffset, targetZoom, minZoom, maxZoom, enablePan, enableZoom]);
+  }, [
+    gl,
+    isPanning,
+    panStart,
+    panStartOffset,
+    targetPanOffset,
+    targetZoom,
+    minZoom,
+    maxZoom,
+    enablePan,
+    enableZoom,
+  ]);
 
   /**
    * Smooth camera transitions each frame

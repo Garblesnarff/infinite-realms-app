@@ -7,18 +7,19 @@
  * @module server/services/progression-service
  */
 
-import { eq, and, desc, or, exists } from 'drizzle-orm';
+import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   experienceEvents,
   levelProgression,
   characters,
-  characterStats,
-} from '../../../db/schema/index.js';
-import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
+} from '../../../db/schema/index';
+import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { LevelUpService } from './progression/level-up-service.js';
+import { ProgressionMechanics } from './progression/progression-mechanics.js';
 
-import type { ExperienceEvent, LevelProgression } from '../../../db/schema/index.js';
+import type { ExperienceEvent, LevelProgression } from '../../../db/schema/index';
 import type {
   XPSource,
   AwardXPResult,
@@ -26,69 +27,7 @@ import type {
   LevelUpOptions,
   LevelUpInput,
   LevelUpResult,
-  HitPointIncrease,
-  ClassFeature,
 } from '../types/progression.js';
-
-/**
- * D&D 5E XP thresholds by level (PHB pg. 15)
- */
-const XP_THRESHOLDS: Record<number, number> = {
-  1: 0,
-  2: 300,
-  3: 900,
-  4: 2700,
-  5: 6500,
-  6: 14000,
-  7: 23000,
-  8: 34000,
-  9: 48000,
-  10: 64000,
-  11: 85000,
-  12: 100000,
-  13: 120000,
-  14: 140000,
-  15: 165000,
-  16: 195000,
-  17: 225000,
-  18: 265000,
-  19: 305000,
-  20: 355000,
-};
-
-/**
- * Proficiency bonus by level (PHB pg. 15)
- */
-const PROFICIENCY_BONUSES: Record<number, number> = {
-  1: 2, 2: 2, 3: 2, 4: 2,
-  5: 3, 6: 3, 7: 3, 8: 3,
-  9: 4, 10: 4, 11: 4, 12: 4,
-  13: 5, 14: 5, 15: 5, 16: 5,
-  17: 6, 18: 6, 19: 6, 20: 6,
-};
-
-/**
- * Levels that grant Ability Score Improvement (PHB pg. 12)
- */
-const ASI_LEVEL_LIST = [4, 8, 12, 16, 19];
-
-/**
- * Hit dice by class
- */
-const HIT_DICE_BY_CLASS: Record<string, string> = {
-  'Barbarian': 'd12',
-  'Fighter': 'd10',
-  'Paladin': 'd10',
-  'Ranger': 'd10',
-  'Bard': 'd8',
-  'Cleric': 'd8',
-  'Druid': 'd8',
-  'Monk': 'd8',
-  'Rogue': 'd8',
-  'Warlock': 'd8',
-  'Sorcerer': 'd6',
-  'Wizard': 'd6',
-};
 
 /**
  * Progression Service
@@ -99,113 +38,104 @@ export class ProgressionService {
    * PHB pg. 15: +2 (levels 1-4), +3 (5-8), +4 (9-12), +5 (13-16), +6 (17-20)
    */
   static calculateProficiencyBonus(level: number): number {
-    if (level < 1) return 2;
-    if (level > 20) return 6;
-    return PROFICIENCY_BONUSES[level] || 2;
+    return ProgressionMechanics.calculateProficiencyBonus(level);
   }
 
   /**
    * Get XP threshold for a specific level
    */
   static getXPForLevel(level: number): number {
-    if (level < 1) return 0;
-    if (level > 20) return XP_THRESHOLDS[20] ?? 0;
-    return XP_THRESHOLDS[level] ?? 0;
+    return ProgressionMechanics.getXPForLevel(level);
   }
 
   /**
    * Calculate level from total XP
    */
   static calculateLevelFromXP(totalXp: number): number {
-    for (let level = 20; level >= 1; level--) {
-      const threshold = XP_THRESHOLDS[level];
-      if (threshold !== undefined && totalXp >= threshold) {
-        return level;
-      }
-    }
-    return 1;
+    return ProgressionMechanics.calculateLevelFromXP(totalXp);
   }
 
   /**
    * Calculate XP needed for next level
    */
   static calculateXPToNextLevel(currentLevel: number, currentXp: number): number {
-    if (currentLevel >= 20) return 0;
-    const nextLevelXP = this.getXPForLevel(currentLevel + 1);
-    return nextLevelXP - currentXp;
+    return ProgressionMechanics.calculateXPToNextLevel(currentLevel, currentXp);
   }
 
   /**
    * Check if a level grants ASI
    */
   static grantsAbilityScoreImprovement(level: number): boolean {
-    return ASI_LEVEL_LIST.includes(level);
+    return ProgressionMechanics.grantsAbilityScoreImprovement(level);
   }
 
   /**
    * Calculate Constitution modifier
    */
   private static calculateConModifier(constitution: number): number {
-    return Math.floor((constitution - 10) / 2);
+    return ProgressionMechanics.calculateConModifier(constitution);
   }
 
   /**
    * Get hit die type for a class
    */
   private static getHitDieType(className: string): string {
-    return HIT_DICE_BY_CLASS[className] || 'd8';
+    return ProgressionMechanics.getHitDieType(className);
   }
 
   /**
    * Roll a hit die or use average
    */
   private static rollHitDie(dieType: string, useAverage: boolean = false): number {
-    const dieSize = parseInt(dieType.substring(1));
-    if (useAverage) {
-      return Math.floor(dieSize / 2) + 1;
-    }
-    return Math.floor(Math.random() * dieSize) + 1;
+    return ProgressionMechanics.rollHitDie(dieType, useAverage);
   }
 
   /**
    * Initialize progression for a new character
    */
   static async initializeProgression(characterId: string, userId: string): Promise<LevelProgression> {
-    // Verify character ownership first
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
     // Check if progression already exists
     const existing = await db.query.levelProgression.findFirst({
-      where: eq(levelProgression.characterId, characterId),
+      where: and(
+        eq(levelProgression.characterId, characterId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
+      ),
     });
 
     if (existing) {
       return existing;
     }
 
-    // Create new progression
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that progression can only be initialized for characters the user is authorized to access.
     const [progression] = await db
       .insert(levelProgression)
-      .values({
-        characterId,
-        currentLevel: 1,
-        currentXp: 0,
-        xpToNextLevel: XP_THRESHOLDS[2] ?? 300, // 300 XP to level 2
-        totalXp: 0,
-      })
+      .select(
+        db.select({
+          characterId: sql`${characterId}`,
+          currentLevel: sql`1`,
+          currentXp: sql`0`,
+          xpToNextLevel: sql`${ProgressionMechanics.getXPForLevel(2) || 300}`,
+          totalXp: sql`0`,
+        })
+        .from(characters)
+        .where(and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        ))
+      )
       .returning();
 
     if (!progression) {
-      throw new Error('Failed to create progression');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Character', characterId);
     }
 
     return progression;
@@ -306,8 +236,9 @@ export class ProgressionService {
     const newLevel = this.calculateLevelFromXP(newTotalXp);
     const levelsGained = newLevel - oldLevel;
 
-    // Update progression
-    const [updatedProgression] = await db
+    // ⚡ Bolt: Parallelize database updates to reduce round-trip latency.
+    // Progression update, character level update, and event logging are independent operations.
+    const progressionUpdate = db
       .update(levelProgression)
       .set({
         currentLevel: newLevel,
@@ -330,32 +261,41 @@ export class ProgressionService {
       ))
       .returning();
 
+    const charUpdate = levelsGained > 0
+      ? db
+          .update(characters)
+          .set({
+            level: newLevel,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+      : Promise.resolve();
+
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    const eventLog = db.insert(experienceEvents).select(
+      db.select({
+        characterId: sql`${characterId}`,
+        sessionId: sql`${sessionId || null}`,
+        xpGained: sql`${xp}`,
+        source: sql`${source}`,
+        description: sql`${description || null}`,
+      })
+      .from(characters)
+      .where(and(
+        eq(characters.id, characterId),
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+    );
+
+    const [updatedRows] = await Promise.all([progressionUpdate, charUpdate, eventLog]);
+    const updatedProgression = (updatedRows as LevelProgression[])[0];
+
     if (!updatedProgression) {
       throw new Error('Failed to update progression');
     }
-
-    // Also update character level
-    if (levelsGained > 0) {
-      await db
-        .update(characters)
-        .set({
-          level: newLevel,
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ));
-    }
-
-    // Log XP event
-    await db.insert(experienceEvents).values({
-      characterId,
-      sessionId: sessionId || null,
-      xpGained: xp,
-      source,
-      description: description || null,
-    });
 
     return {
       newXp: updatedProgression.currentXp,
@@ -399,226 +339,14 @@ export class ProgressionService {
     newLevel: number,
     userId: string
   ): Promise<LevelUpOptions> {
-    // Get character
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-      with: {
-        stats: true,
-      },
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    if (!character.stats) {
-      throw new BusinessLogicError('Character has no stats', { characterId });
-    }
-
-    const className = character.class || 'Fighter';
-    const dieType = this.getHitDieType(className);
-    const dieSize = parseInt(dieType.substring(1));
-    const conModifier = this.calculateConModifier(character.stats.constitution);
-    const averageRoll = Math.floor(dieSize / 2) + 1;
-
-    const hasASI = this.grantsAbilityScoreImprovement(newLevel);
-
-    // Placeholder class features (would be expanded with full class data)
-    const classFeatures: ClassFeature[] = [];
-    if (newLevel === 2) {
-      classFeatures.push({
-        name: 'Class Feature (Level 2)',
-        level: 2,
-        description: 'Gain your level 2 class feature',
-      });
-    }
-
-    return {
-      newLevel,
-      hpIncrease: {
-        dieType,
-        conModifier,
-        averageRoll,
-      },
-      hasAbilityScoreImprovement: hasASI,
-      abilityScoreOptions: hasASI ? {
-        maxIncrease: 2,
-        canTakeFeat: true,
-      } : undefined,
-      classFeatures,
-      proficiencyBonus: this.calculateProficiencyBonus(newLevel),
-    };
+    return LevelUpService.getLevelUpOptions(characterId, newLevel, userId);
   }
 
   /**
    * Perform a level-up for a character
    */
   static async levelUp(input: LevelUpInput, userId: string): Promise<LevelUpResult> {
-    const { characterId, hpRoll, abilityScoreImprovements, featSelected, spellsLearned } = input;
-
-    // Get character
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-      with: {
-        stats: true,
-      },
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    if (!character.stats) {
-      throw new BusinessLogicError('Character has no stats', { characterId });
-    }
-
-    const results = await db
-      .select({ progression: levelProgression })
-      .from(levelProgression)
-      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .limit(1);
-
-    const progression = results[0]?.progression;
-
-    if (!progression) {
-      throw new NotFoundError('Progression for character', characterId);
-    }
-
-    const oldLevel = progression.currentLevel;
-    const newLevel = oldLevel + 1;
-
-    if (newLevel > 20) {
-      throw new BusinessLogicError('Character is already at maximum level (20)', {
-        characterId,
-        currentLevel: oldLevel,
-      });
-    }
-
-    // Calculate HP increase
-    const className = character.class || 'Fighter';
-    const dieType = this.getHitDieType(className);
-    const conModifier = this.calculateConModifier(character.stats.constitution);
-    const roll = hpRoll || this.rollHitDie(dieType, true);
-    const hpGained = Math.max(1, roll + conModifier);
-
-    const hpIncrease: HitPointIncrease = {
-      roll,
-      conModifier,
-      totalGained: hpGained,
-    };
-
-    // Apply ability score improvements
-    const updatedStats = { ...character.stats };
-    if (abilityScoreImprovements && abilityScoreImprovements.length > 0) {
-      const totalIncrease = abilityScoreImprovements.reduce((sum, asi) => sum + asi.increase, 0);
-      if (totalIncrease > 2) {
-        throw new ValidationError('Total ability score increase cannot exceed +2', {
-          totalIncrease,
-          abilityScoreImprovements,
-        });
-      }
-
-      for (const asi of abilityScoreImprovements) {
-        const currentValue = updatedStats[asi.ability];
-        const newValue = Math.min(20, currentValue + asi.increase);
-        updatedStats[asi.ability] = newValue;
-      }
-
-      // Update stats in database
-      await db
-        .update(characterStats)
-        .set({
-          strength: updatedStats.strength,
-          dexterity: updatedStats.dexterity,
-          constitution: updatedStats.constitution,
-          intelligence: updatedStats.intelligence,
-          wisdom: updatedStats.wisdom,
-          charisma: updatedStats.charisma,
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(characterStats.id, character.stats.id),
-          eq(characterStats.characterId, characterId),
-          exists(
-            db.select()
-              .from(characters)
-              .where(and(
-                eq(characters.id, characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        ));
-    }
-
-    // Update character level and XP
-    const newTotalXp = this.getXPForLevel(newLevel);
-    await db
-      .update(characters)
-      .set({
-        level: newLevel,
-        experiencePoints: newTotalXp,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
-
-    // Update progression
-    await db
-      .update(levelProgression)
-      .set({
-        currentLevel: newLevel,
-        currentXp: newTotalXp,
-        totalXp: newTotalXp,
-        xpToNextLevel: this.calculateXPToNextLevel(newLevel, newTotalXp),
-        lastLevelUp: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ));
-
-    // Get class features for this level (placeholder)
-    const newClassFeatures: ClassFeature[] = [];
-    if (this.grantsAbilityScoreImprovement(newLevel)) {
-      newClassFeatures.push({
-        name: 'Ability Score Improvement',
-        level: newLevel,
-        description: 'Increase one ability score by 2, or two ability scores by 1 each',
-      });
-    }
-
-    return {
-      characterId,
-      oldLevel,
-      newLevel,
-      hpIncrease,
-      abilityScoreImprovements,
-      featSelected,
-      newClassFeatures,
-      newSpells: spellsLearned,
-      proficiencyBonus: this.calculateProficiencyBonus(newLevel),
-      timestamp: new Date(),
-    };
+    return LevelUpService.levelUp(input, userId);
   }
 
   /**
@@ -630,81 +358,13 @@ export class ProgressionService {
     userId: string,
     reason?: string
   ): Promise<{ oldLevel: number; newLevel: number }> {
-    if (level < 1 || level > 20) {
-      throw new ValidationError('Level must be between 1 and 20', { level });
-    }
-
-    // Get current progression
-    const results = await db
-      .select({ progression: levelProgression })
-      .from(levelProgression)
-      .innerJoin(characters, eq(levelProgression.characterId, characters.id))
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .limit(1);
-
-    let progression = results[0]?.progression;
-
-    if (!progression) {
-      progression = await this.initializeProgression(characterId, userId);
-    }
-
-    const oldLevel = progression.currentLevel;
-    const newTotalXp = this.getXPForLevel(level);
-
-    // Update progression
-    await db
-      .update(levelProgression)
-      .set({
-        currentLevel: level,
-        currentXp: newTotalXp,
-        totalXp: newTotalXp,
-        xpToNextLevel: this.calculateXPToNextLevel(level, newTotalXp),
-        lastLevelUp: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(levelProgression.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ));
-
-    // Update character
-    await db
-      .update(characters)
-      .set({
-        level,
-        experiencePoints: newTotalXp,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
-
-    // Log milestone event
-    await db.insert(experienceEvents).values({
-      characterId,
-      xpGained: 0,
-      source: 'milestone',
-      description: reason || `Milestone level set to ${level}`,
-    });
-
-    return { oldLevel, newLevel: level };
+    return LevelUpService.setLevel(characterId, level, userId, reason);
   }
 
   /**
    * Get XP table
    */
   static getXPTable(): Record<number, number> {
-    return { ...XP_THRESHOLDS };
+    return ProgressionMechanics.getXPTable();
   }
 }

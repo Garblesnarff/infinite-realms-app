@@ -1,10 +1,12 @@
 import { Elysia } from 'elysia';
-import { BlogService } from '../services/blog-service.js';
+
 import { getSiteConfig } from '../config/site.js';
+import { logger } from '../lib/logger.js';
 import { resolveAssetsForEntries } from '../lib/manifest.js';
+import { BlogService } from '../services/blog-service.js';
+import { streamReactResponse } from '../utils/react-stream.js';
 import { BlogIndexPage } from '../views/blog/index.js';
 import { BlogPostPage } from '../views/blog/post.js';
-import { streamReactResponse } from '../utils/react-stream.js';
 
 /**
  * Check if request accepts Markdown content
@@ -79,7 +81,8 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
         }
       );
     } catch (error) {
-      console.error('Failed to render blog index', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render blog index', { error });
       set.status = 500;
       return new Response('Failed to render blog index', {
         status: 500,
@@ -118,12 +121,10 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
       }
 
       // Standard HTML response for browsers
-      const [allPosts, assets] = await Promise.all([
-        BlogService.fetchPublishedBlogPosts(),
+      const [relatedPosts, assets] = await Promise.all([
+        BlogService.fetchRecentBlogPosts(slug, 8),
         resolveAssetsForEntries(['index.html', 'src/blog-client.ts']),
       ]);
-
-      const relatedPosts = allPosts.filter((candidate) => candidate.slug !== slug).slice(0, 8);
 
       const cacheHeaders = createCacheHeaders({ maxAge: 600, staleWhileRevalidate: 3600 });
 
@@ -134,7 +135,8 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
         }
       );
     } catch (error) {
-      console.error('Failed to render blog post', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render blog post', { error });
       set.status = 500;
       return new Response('Failed to render blog post', {
         status: 500,

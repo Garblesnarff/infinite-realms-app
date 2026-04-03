@@ -9,20 +9,23 @@
  * Route: /explore/:slug/choose-character
  */
 
+import { Sparkles, User, ChevronRight, Sword, Heart, BookOpen, Wand2 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Sparkles, User, ChevronRight, Sword, Heart, BookOpen, Wand2 } from 'lucide-react';
+
+import type {
+  StarterCharacterTemplate} from '@/hooks/use-starter-character-templates';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import {
-  useStarterCharacterTemplates,
-  StarterCharacterTemplate,
+  useStarterCharacterTemplates
 } from '@/hooks/use-starter-character-templates';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
@@ -321,7 +324,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
       // Navigate to game with correct URL format
       // GameContent expects: /app/game/{campaignId}?character={characterId}&starterCampaign={starterCampaignId}
       navigate(
-        `/app/game/${campaignId}?character=${character.id}&starterCampaign=${campaign.id}&new=true`
+        `/app/game/${campaignId}?character=${character.id}&starterCampaign=${campaign.id}&new=true`,
       );
     } catch (err) {
       logger.error('Error starting with character:', err);
@@ -378,7 +381,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">
         {/* Header */}
-        <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-20">
+        <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0" style={{ zIndex: Z_INDEX.STICKY }}>
           <div className="max-w-6xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div>

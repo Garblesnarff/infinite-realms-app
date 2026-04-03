@@ -4,10 +4,7 @@
  * Extracted from CombatContext.tsx for modularity
  */
 
-import type {
-  CombatParticipant,
-  CombatAction as CombatActionType,
-} from '@/types/combat';
+import type { CombatParticipant, CombatAction as CombatActionType } from '@/types/combat';
 import type { SpellSlotLevel } from '@/utils/spell-management';
 
 import logger from '@/lib/logger';
@@ -35,7 +32,7 @@ export interface ActionHandlerResult {
  */
 export function handleSpellCast(
   action: Partial<CombatActionType>,
-  participant: CombatParticipant
+  participant: CombatParticipant,
 ): ActionHandlerResult {
   try {
     const spellLevel = (action.spellLevel as SpellSlotLevel) || 1;
@@ -74,7 +71,7 @@ export function handleSpellCast(
  */
 export function handleDivineSmite(
   action: Partial<CombatActionType>,
-  participant: CombatParticipant
+  participant: CombatParticipant,
 ): ActionHandlerResult {
   try {
     // Validate paladin class
@@ -130,7 +127,7 @@ export function handleDivineSmite(
  */
 export function handleRageActivation(
   action: Partial<CombatActionType>,
-  participant: CombatParticipant
+  participant: CombatParticipant,
 ): ActionHandlerResult {
   try {
     if (!participant.resources) {
@@ -169,9 +166,7 @@ export function handleRageActivation(
 /**
  * Handle Rage deactivation
  */
-export function handleRageDeactivation(
-  participant: CombatParticipant
-): ActionHandlerResult {
+export function handleRageDeactivation(participant: CombatParticipant): ActionHandlerResult {
   try {
     const updatedParticipant = deactivateRage(participant);
 
@@ -203,7 +198,7 @@ export function handleRageDeactivation(
  */
 export function handleShortRest(
   participant: CombatParticipant,
-  hitDiceToRoll: number = 1
+  hitDiceToRoll: number = 1,
 ): ActionHandlerResult {
   const updatedParticipant = processShortRestCombat(participant, hitDiceToRoll);
 
@@ -222,9 +217,7 @@ export function handleShortRest(
 /**
  * Handle Long Rest action
  */
-export function handleLongRest(
-  participant: CombatParticipant
-): ActionHandlerResult {
+export function handleLongRest(participant: CombatParticipant): ActionHandlerResult {
   const updatedParticipant = processLongRestCombat(participant);
 
   return {
@@ -242,9 +235,7 @@ export function handleLongRest(
 /**
  * Handle Hide action
  */
-export function handleHideAction(
-  participant: CombatParticipant
-): ActionHandlerResult {
+export function handleHideAction(participant: CombatParticipant): ActionHandlerResult {
   try {
     const hideResult = attemptHide(participant);
 

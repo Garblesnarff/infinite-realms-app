@@ -33,11 +33,15 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js (for version extraction)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure Git
         run: |
@@ -45,7 +49,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Get current version
         id: current_version
@@ -58,13 +62,13 @@ jobs:
         id: release
         run: |
           if [ "${{ github.event.inputs.release_type }}" = "patch" ]; then
-            npm run release:patch
+            bun run release:patch
           elif [ "${{ github.event.inputs.release_type }}" = "minor" ]; then
-            npm run release:minor
+            bun run release:minor
           elif [ "${{ github.event.inputs.release_type }}" = "major" ]; then
-            npm run release:major
+            bun run release:major
           else
-            npm run release
+            bun run release
           fi
 
           # Get the new version

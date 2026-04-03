@@ -1,16 +1,12 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { format } from 'date-fns';
 import { Save, Eye, Send, Calendar, Image as ImageIcon, Loader2 } from 'lucide-react';
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
-import { z } from 'zod';
 
 import { MarkdownEditor } from './markdown-editor';
 import { MediaManager } from './media-manager';
 import { MultiSelect } from './multi-select';
+import { useBlogPostEditor } from './use-blog-post-editor';
 
-import type { BlogPost, BlogPostStatus } from '@/types/blog';
+import type { BlogPost } from '@/types/blog';
 
 import {
   AlertDialog,
@@ -45,33 +41,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateBlogPost, useUpdateBlogPost } from '@/hooks/blog/useBlogPosts';
-import { useBlogCategories, useBlogTags } from '@/hooks/blog/useBlogTaxonomy';
-import { slugify } from '@/utils/slug';
-import { generateExcerpt } from '@/utils/text-helpers';
-
-export const blogPostSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or less'),
-  slug: z
-    .string()
-    .min(1, 'Slug is required')
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase with hyphens'),
-  excerpt: z.string().max(500, 'Excerpt must be 500 characters or less').optional(),
-  content: z.string().min(1, 'Content is required'),
-  coverImageUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  status: z.enum(['draft', 'scheduled', 'published']),
-  scheduledFor: z.string().optional(),
-  categoryIds: z.array(z.string()).optional(),
-  tagIds: z.array(z.string()).optional(),
-  seoTitle: z.string().max(60, 'SEO title should be 60 characters or less').optional(),
-  seoDescription: z
-    .string()
-    .max(160, 'SEO description should be 160 characters or less')
-    .optional(),
-  allowComments: z.boolean().default(true),
-});
-
-type BlogPostFormValues = z.infer<typeof blogPostSchema>;
 
 interface BlogPostEditorProps {
   post?: BlogPost;
@@ -80,139 +49,27 @@ interface BlogPostEditorProps {
 }
 
 export const BlogPostEditor: React.FC<BlogPostEditorProps> = ({ post, onSuccess, onCancel }) => {
-  const isEditMode = !!post;
-  const [mediaManagerOpen, setMediaManagerOpen] = React.useState(false);
-  const [unsavedChanges, setUnsavedChanges] = React.useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = React.useState(false);
-  const [previewUrl, setPreviewUrl] = React.useState<string>('');
-
-  const { data: categories = [] } = useBlogCategories();
-  const { data: tags = [] } = useBlogTags();
-  const createMutation = useCreateBlogPost();
-  const updateMutation = useUpdateBlogPost(post?.id);
-
-  const form = useForm<BlogPostFormValues>({
-    resolver: zodResolver(blogPostSchema),
-    defaultValues: {
-      title: post?.title || '',
-      slug: post?.slug || '',
-      excerpt: post?.excerpt || '',
-      content: post?.content || '',
-      coverImageUrl: post?.coverImageUrl || '',
-      status: (post?.status as BlogPostStatus) || 'draft',
-      scheduledFor: post?.scheduledFor || '',
-      categoryIds: post?.categoryIds || [],
-      tagIds: post?.tagIds || [],
-      seoTitle: post?.seoTitle || '',
-      seoDescription: post?.seoDescription || '',
-      allowComments: post?.allowComments ?? true,
-    },
-  });
-
-  const titleValue = form.watch('title');
-  const contentValue = form.watch('content');
-  const statusValue = form.watch('status');
-
-  React.useEffect(() => {
-    if (!titleValue || form.formState.dirtyFields.slug) return;
-    form.setValue('slug', slugify(titleValue), { shouldDirty: false });
-  }, [titleValue, form]);
-
-  React.useEffect(() => {
-    const subscription = form.watch(() => {
-      setUnsavedChanges(true);
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
-  const handleAutoGenerateExcerpt = () => {
-    const excerpt = generateExcerpt(contentValue, 200);
-    form.setValue('excerpt', excerpt, { shouldDirty: true, shouldValidate: true });
-    toast.success('Excerpt generated from content');
-  };
-
-  const handleAutoGenerateSEO = () => {
-    const title = form.getValues('title');
-    const excerpt = form.getValues('excerpt') || generateExcerpt(contentValue, 160);
-
-    if (!form.getValues('seoTitle')) {
-      form.setValue('seoTitle', title.substring(0, 60), { shouldDirty: true });
-    }
-    if (!form.getValues('seoDescription')) {
-      form.setValue('seoDescription', excerpt.substring(0, 160), { shouldDirty: true });
-    }
-
-    toast.success('SEO fields populated');
-  };
-
-  const handleSelectMedia = (url: string) => {
-    form.setValue('coverImageUrl', url, { shouldDirty: true, shouldValidate: true });
-  };
-
-  const onSubmit = async (values: BlogPostFormValues) => {
-    try {
-      const payload = {
-        title: values.title,
-        slug: values.slug,
-        content: values.content,
-        excerpt: values.excerpt || null,
-        coverImageUrl: values.coverImageUrl || null,
-        status: values.status,
-        seoTitle: values.seoTitle || null,
-        seoDescription: values.seoDescription || null,
-        scheduledFor: values.scheduledFor || null,
-        publishedAt: values.status === 'published' ? new Date().toISOString() : null,
-        categoryIds: values.categoryIds || [],
-        tagIds: values.tagIds || [],
-        allowComments: values.allowComments,
-      };
-
-      if (isEditMode) {
-        const updated = await updateMutation.mutateAsync(payload);
-        toast.success('Blog post updated successfully');
-        setUnsavedChanges(false);
-        onSuccess?.(updated);
-      } else {
-        const created = await createMutation.mutateAsync(payload);
-        toast.success('Blog post created successfully');
-        setUnsavedChanges(false);
-        onSuccess?.(created);
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save blog post');
-    }
-  };
-
-  const handleCancel = () => {
-    if (unsavedChanges) {
-      setShowUnsavedDialog(true);
-    } else {
-      onCancel?.();
-    }
-  };
-
-  const handlePreview = () => {
-    const previewData = form.getValues();
-    const queryParams = new URLSearchParams({
-      title: previewData.title,
-      content: previewData.content,
-      excerpt: previewData.excerpt || '',
-      coverImageUrl: previewData.coverImageUrl || '',
-    });
-    setPreviewUrl(`/admin/blog/preview?${queryParams.toString()}`);
-  };
-
-  const categoryOptions = categories.map((cat) => ({
-    value: cat.id,
-    label: cat.title || cat.name || cat.slug,
-  }));
-
-  const tagOptions = tags.map((tag) => ({
-    value: tag.id,
-    label: tag.name,
-  }));
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const {
+    form,
+    isEditMode,
+    mediaManagerOpen,
+    setMediaManagerOpen,
+    setUnsavedChanges,
+    showUnsavedDialog,
+    setShowUnsavedDialog,
+    previewUrl,
+    setPreviewUrl,
+    statusValue,
+    categoryOptions,
+    tagOptions,
+    isPending,
+    handleAutoGenerateExcerpt,
+    handleAutoGenerateSEO,
+    handleSelectMedia,
+    onSubmit,
+    handleCancel,
+    handlePreview,
+  } = useBlogPostEditor({ post, onSuccess, onCancel });
 
   return (
     <>
@@ -428,7 +285,7 @@ export const BlogPostEditor: React.FC<BlogPostEditorProps> = ({ post, onSuccess,
                         <FormLabel>Status *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger aria-label="Select post status">
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                           </FormControl>

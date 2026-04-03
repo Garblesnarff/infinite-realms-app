@@ -5,7 +5,7 @@ This document shows example output from the automated migration testing script.
 ## Successful Test Run
 
 ```bash
-$ npm run test:migrations
+$ bun run test:migrations
 
 ╔════════════════════════════════════════════╗
 ║   DATABASE MIGRATION TEST SUITE            ║
@@ -285,7 +285,7 @@ LINE 28:   session_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCA
 In CI/CD environments, the script runs non-interactively:
 
 ```bash
-$ CI=true npm run test:migrations
+$ CI=true bun run test:migrations
 
 ╔════════════════════════════════════════════╗
 ║   DATABASE MIGRATION TEST SUITE            ║

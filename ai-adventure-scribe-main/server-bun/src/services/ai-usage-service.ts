@@ -34,6 +34,9 @@ export class AIUsageService {
   // In-memory fallback store for development/tests
   private static readonly memTotals = new Map<string, { units: number; period: string }>();
 
+  // Track if DB table has been initialized in this process
+  private static dbInitialized = false;
+
   /**
    * Get quota configuration for a plan
    */
@@ -82,20 +85,49 @@ export class AIUsageService {
 
     // Try Postgres
     try {
-      // Ensure table exists (idempotent)
-      await sql`
-        CREATE TABLE IF NOT EXISTS ai_usage (
-          org_id TEXT,
-          user_id TEXT,
-          plan TEXT,
-          type TEXT,
-          units INTEGER NOT NULL,
-          period_start DATE NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
+      // ⚡ Bolt: Only run CREATE TABLE once per process lifetime to remove redundant round-trip overhead.
+      if (!AIUsageService.dbInitialized) {
+        await sql`
+          CREATE TABLE IF NOT EXISTS ai_usage (
+            org_id TEXT,
+            user_id TEXT,
+            plan TEXT,
+            type TEXT,
+            units INTEGER NOT NULL,
+            period_start DATE NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        AIUsageService.dbInitialized = true;
+      }
+
+      // ⚡ Bolt: Consolidated SELECT and INSERT into a single atomic query to reduce round-trips from 2 to 1.
+      // This uses a subquery to verify quota availability before inserting, returning the new total on success.
+      const result = await sql`
+        INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
+        SELECT ${orgId || null}, ${userId}, ${plan}, ${type}, ${units}, ${pkey}
+        WHERE (
+          SELECT COALESCE(SUM(units), 0)
+          FROM ai_usage
+          WHERE (org_id = ${orgId || null} OR user_id = ${userId})
+            AND type = ${type}
+            AND period_start = ${pkey}
+        ) + ${units} <= ${limit}
+        RETURNING (
+          SELECT COALESCE(SUM(units), 0)
+          FROM ai_usage
+          WHERE (org_id = ${orgId || null} OR user_id = ${userId})
+            AND type = ${type}
+            AND period_start = ${pkey}
+        ) AS total
       `;
 
-      // Count used units in current period
+      if (result.length > 0) {
+        const usedAfter = Number(result[0].total || 0);
+        return { allowed: true, remaining: Math.max(0, limit - usedAfter), resetAt };
+      }
+
+      // Quota exceeded: Fall back to a simple SELECT to get the current usage for the response
       const rows = await sql`
         SELECT COALESCE(SUM(units), 0) AS total
         FROM ai_usage
@@ -104,19 +136,7 @@ export class AIUsageService {
           AND period_start = ${pkey}
       `;
       const used = Number(rows?.[0]?.total || 0);
-
-      if (used + units > limit) {
-        return { allowed: false, remaining: Math.max(0, limit - used), resetAt };
-      }
-
-      // Consume
-      await sql`
-        INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
-        VALUES (${orgId || null}, ${userId}, ${plan}, ${type}, ${units}, ${pkey})
-      `;
-
-      const remaining = Math.max(0, limit - (used + units));
-      return { allowed: true, remaining, resetAt };
+      return { allowed: false, remaining: Math.max(0, limit - used), resetAt };
     } catch (error) {
       logger.error({ msg: 'AI_USAGE_DB_ERROR', error, fallback: 'memory' });
     }

@@ -144,7 +144,7 @@ export class LODManager {
    */
   calculateDistance(
     positionA: THREE.Vector3 | { x: number; y: number; z?: number },
-    positionB: THREE.Vector3 | { x: number; y: number; z?: number }
+    positionB: THREE.Vector3 | { x: number; y: number; z?: number },
   ): number {
     const ax = positionA.x;
     const ay = positionA.y;
@@ -169,7 +169,7 @@ export class LODManager {
    */
   getLODSettings(
     objectPosition: THREE.Vector3 | { x: number; y: number; z?: number },
-    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number }
+    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number },
   ): LODSettings {
     const distance = this.calculateDistance(objectPosition, cameraPosition);
     const level = this.calculateLODLevel(distance);
@@ -245,7 +245,7 @@ export class LODManager {
    */
   shouldRender(
     objectPosition: THREE.Vector3 | { x: number; y: number; z?: number },
-    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number }
+    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number },
   ): boolean {
     const distance = this.calculateDistance(objectPosition, cameraPosition);
     return distance < this.config.hiddenThreshold;
@@ -281,7 +281,7 @@ export class LODManager {
    */
   batchCalculateLOD(
     objects: Array<THREE.Vector3 | { x: number; y: number; z?: number }>,
-    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number }
+    cameraPosition: THREE.Vector3 | { x: number; y: number; z?: number },
   ): Map<number, LODLevel> {
     const results = new Map<number, LODLevel>();
 

@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { SceneService } from '../scene-service.js';
 import { NotFoundError } from '../../lib/errors.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => {
+vi.mock('../../../../db/client', () => {
   const mockDb = {
     query: {
       campaigns: {
@@ -33,6 +33,7 @@ vi.mock('../../../../db/client.js', () => {
 
   const createQueryBuilderMock = (): any => {
     const mock: any = {
+      select: vi.fn(() => mock),
       from: vi.fn(() => mock),
       innerJoin: vi.fn(() => mock),
       leftJoin: vi.fn(() => mock),
@@ -43,6 +44,12 @@ vi.mock('../../../../db/client.js', () => {
       values: vi.fn(() => mock),
       set: vi.fn(() => mock),
       groupBy: vi.fn(() => mock),
+      then: vi.fn((onFulfilled) => {
+        if (typeof onFulfilled === 'function') {
+          return Promise.resolve([]).then(onFulfilled);
+        }
+        return Promise.resolve([]);
+      }),
     };
     return mock;
   };
@@ -172,6 +179,83 @@ describe('SceneService', () => {
       expect(db.update).toHaveBeenCalled();
       expect(result).toEqual(mockUpdatedLayer);
       expect(db.query.sceneLayers.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listScenesForCampaign', () => {
+    it('should list scenes with joined ownership verification', async () => {
+      const mockScenes = [{ id: 'scene-1' }, { id: 'scene-2' }];
+      const mockResults = [
+        { scene: mockScenes[0] },
+        { scene: mockScenes[1] }
+      ];
+
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.from.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.leftJoin.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.where.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.orderBy.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.returning.mockResolvedValue(mockResults);
+      // For select().from().leftJoin() returning a promise
+      mockSelectBuilder.then = vi.fn().mockImplementation((onFulfilled) => {
+        return Promise.resolve(mockResults).then(onFulfilled);
+      });
+      (db as any).select.mockReturnValue(mockSelectBuilder);
+
+      const result = await SceneService.listScenesForCampaign(mockCampaignId, mockUserId);
+
+      expect(db.select).toHaveBeenCalled();
+      expect(result).toEqual(mockScenes);
+      expect(db.query.campaigns.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundError if campaign not found during list', async () => {
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.from.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.leftJoin.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.where.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.orderBy.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.then = vi.fn().mockImplementation((onFulfilled) => {
+        return Promise.resolve([]).then(onFulfilled);
+      });
+
+      await expect(SceneService.listScenesForCampaign(mockCampaignId, mockUserId))
+        .rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('createScene', () => {
+    it('should create scene with atomic ownership verification', async () => {
+      const mockNewScene = { id: mockSceneId, name: 'New Scene' };
+      const mockData = { name: 'New Scene', campaignId: mockCampaignId };
+
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([mockNewScene]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
+
+      // Mock the inner select
+      const mockSelectBuilder = (db as any).select();
+      mockSelectBuilder.from.mockReturnValue(mockSelectBuilder);
+      mockSelectBuilder.where.mockReturnValue(mockSelectBuilder);
+
+      const result = await SceneService.createScene(mockUserId, mockData);
+
+      expect(db.insert).toHaveBeenCalled();
+      expect(result).toEqual(mockNewScene);
+      expect(db.query.campaigns.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundError if campaign not authorized for scene creation', async () => {
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
+
+      const mockData = { name: 'Fail', campaignId: mockCampaignId };
+
+      await expect(SceneService.createScene(mockUserId, mockData))
+        .rejects.toThrow(NotFoundError);
     });
   });
 });

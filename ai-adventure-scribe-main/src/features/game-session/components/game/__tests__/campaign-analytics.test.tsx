@@ -3,7 +3,10 @@ import React from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { GameSidePanel } from '@/components/game/MemoryPanel';
+import { GameSidePanel } from '../MemoryPanel';
+
+import type { ExtendedGameSession } from '@/types/game';
+
 import * as AnalyticsModule from '@/services/analytics';
 
 // Mock contexts used inside GameSidePanel so we don't need full providers
@@ -39,7 +42,7 @@ describe('Campaign hub tab analytics', () => {
             path="/app/game/:id"
             element={
               <GameSidePanel
-                sessionData={{ session_notes: '' } as any}
+                sessionData={{ session_notes: '' } as unknown as ExtendedGameSession}
                 updateGameSessionState={async () => {}}
                 combatMode={false}
                 isCollapsed={false}

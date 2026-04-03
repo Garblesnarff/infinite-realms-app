@@ -8,6 +8,7 @@
  */
 
 import postgres from 'postgres';
+
 import { env } from './env.js';
 
 /**
@@ -17,8 +18,11 @@ import { env } from './env.js';
  * - max: Maximum number of connections in the pool
  * - ssl: SSL configuration (disabled for local development)
  */
-const config: postgres.Options<{}> = {
-  max: Number(env.PGPOOL_MAX || 10),
+const config: postgres.Options<Record<string, never>> = {
+  max: Number(env.PGPOOL_MAX || 25),
+  idle_timeout: 20,
+  connect_timeout: 10,
+  max_lifetime: 60 * 30,
 };
 
 // Add SSL configuration if enabled
@@ -29,7 +33,8 @@ const config: postgres.Options<{}> = {
 if (env.PGSSL === 'true') {
   // For local Docker: self-signed cert, can't validate
   // For cloud Supabase: cert is trusted, should validate
-  const isLocalSupabase = env.DATABASE_URL?.includes('localhost') || env.DATABASE_URL?.includes('127.0.0.1');
+  const isLocalSupabase =
+    env.DATABASE_URL?.includes('localhost') || env.DATABASE_URL?.includes('127.0.0.1');
   config.ssl = { rejectUnauthorized: !isLocalSupabase };
 }
 

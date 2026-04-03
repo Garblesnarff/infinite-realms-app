@@ -146,21 +146,21 @@ export async function isSpellValidForClass(spellId: string, characterClass: Char
 
 ```bash
 # Run all spell validation tests
-npx vitest run src/__tests__/
+bunx vitest run src/__tests__/
 
 # Run specific test categories
-npx vitest run src/__tests__/unit/
-npx vitest run src/__tests__/api/
-npx vitest run src/__tests__/components/
-npx vitest run src/__tests__/edge-cases/
-npx vitest run src/__tests__/performance/
-npx vitest run src/__tests__/accessibility/
+bunx vitest run src/__tests__/unit/
+bunx vitest run src/__tests__/api/
+bunx vitest run src/__tests__/components/
+bunx vitest run src/__tests__/edge-cases/
+bunx vitest run src/__tests__/performance/
+bunx vitest run src/__tests__/accessibility/
 
 # Run comprehensive summary
-npx vitest run src/__tests__/summary/
+bunx vitest run src/__tests__/summary/
 
 # Watch mode for development
-npx vitest watch src/__tests__/unit/spell-class-restrictions-current.test.ts
+bunx vitest watch src/__tests__/unit/spell-class-restrictions-current.test.ts
 ```
 
 ## 📊 Test Coverage Goals

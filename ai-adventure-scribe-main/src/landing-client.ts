@@ -8,6 +8,8 @@
  * - FAQ accordion interactions
  */
 
+import logger from '@/lib/logger';
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   initWaitlistForms();
@@ -127,7 +129,7 @@ function initAnalytics() {
     'scroll',
     throttle(() => {
       const scrollPercent = Math.round(
-        ((window.scrollY + window.innerHeight) / document.body.scrollHeight) * 100
+        ((window.scrollY + window.innerHeight) / document.body.scrollHeight) * 100,
       );
 
       if (scrollPercent > maxScroll) {
@@ -140,7 +142,7 @@ function initAnalytics() {
           }
         });
       }
-    }, 250)
+    }, 250),
   );
 
   // Track CTA clicks
@@ -179,7 +181,7 @@ function trackEvent(eventName: string, params?: Record<string, unknown>) {
 
   // Log in development
   if (import.meta.env.DEV) {
-    console.log('[Analytics]', eventName, params);
+    logger.debug('[Analytics]', { eventName, params });
   }
 }
 

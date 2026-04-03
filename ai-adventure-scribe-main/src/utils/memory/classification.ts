@@ -1,9 +1,8 @@
 import { calculateImportance } from './importance';
 import { CLASSIFICATION_PATTERNS } from './patterns';
-import { splitIntoSegments } from './segmentation';
-import { stripAssetTags } from '@/lib/utils'; // Import stripAssetTags
+import { splitIntoSegments, sanitizeForMemoryExtraction } from './segmentation';
 
-import type { MemoryType } from '@/components/game/memory/types';
+import type { MemoryType } from '@/types/memory';
 
 /**
  * Interface for classified memory segment
@@ -72,8 +71,9 @@ export const processContent = (content: string): MemorySegment[] => {
     preserveQuotes: true,
   });
 
-  // Fallback: if nothing met minLength, keep the whole content as a single segment, but strip asset tags
-  const effectiveSegments = segments.length === 0 ? [stripAssetTags(content)] : segments;
+  // Fallback: if nothing met minLength, use sanitized content as a single segment
+  const effectiveSegments =
+    segments.length === 0 ? [sanitizeForMemoryExtraction(content)] : segments;
 
   const mapToImportanceType = (type: MemoryType): string => {
     switch (type) {

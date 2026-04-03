@@ -10,15 +10,41 @@
  * Ported from /server/src/routes/v1/class-features.ts
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
+import { verifySessionOwnership } from './combat/helpers.js';
+import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
-// Import service from Bun server
-import { CharacterService } from '../../services/character-service.js';
 import { ClassFeaturesService } from '../../services/class-features-service.js';
+
+/**
+ * Helper to map and mask error responses
+ */
+function mapClassFeaturesError(
+  set: { status: number | string },
+  error: unknown,
+  fallbackMessage: string,
+  notFoundMessage: string = 'Not found'
+): { error: string } {
+  if (error instanceof AppError) {
+    if (error.statusCode === 404 || error.statusCode === 403) {
+      set.status = 404;
+      return { error: notFoundMessage };
+    }
+
+    set.status = error.statusCode;
+    if (error.statusCode >= 500) {
+      return { error: fallbackMessage };
+    }
+
+    return { error: error.message };
+  }
+
+  set.status = 500;
+  return { error: fallbackMessage };
+}
 
 export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
   /**
@@ -26,7 +52,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .derive(async ({ request }) => {
     const { user, error: authError } = await authenticateRequest(request);
-    return { user, authError };
+    return { user: user as AuthUser | null, authError };
   })
   .onBeforeHandle(async ({ user, authError, params, set }) => {
     if (authError || !user) {
@@ -50,7 +76,6 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    * Get features from the library
    */
   .get('/', async ({ query, set }) => {
-
     try {
       const { className, subclass, level } = query as {
         className?: string;
@@ -61,7 +86,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       const features = await ClassFeaturesService.getFeaturesLibrary({
         className,
         subclass,
-        level: level ? parseInt(level) : undefined,
+        level: level ? parseInt(level, 10) : undefined,
       });
 
       return { features };
@@ -93,7 +118,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
     try {
       const result = await ClassFeaturesService.getCharacterFeaturesWithUsage(
         params.id,
-        (user as { userId: string }).userId
+        user!.userId
       );
       return result;
     } catch (error) {
@@ -119,7 +144,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         characterId: params.id,
         featureId: params.featureId,
         acquiredAtLevel,
-        userId: (user as { userId: string }).userId,
+        userId: user!.userId,
       });
 
       set.status = 201;
@@ -142,7 +167,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       };
 
       if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, user.userId);
+        const verification = await verifySessionOwnership(sessionId, user!.userId);
         if (!verification.success) {
           set.status = verification.error!.status;
           return { error: verification.error!.message };
@@ -154,7 +179,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         featureId: params.featureId,
         context,
         sessionId,
-        userId: (user as { userId: string }).userId,
+        userId: user!.userId,
       });
 
       if (!result.success) {
@@ -185,7 +210,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       const result = await ClassFeaturesService.restoreFeatures({
         characterId: params.id,
         restType,
-        userId: (user as { userId: string }).userId,
+        userId: user!.userId,
       });
 
       return result;
@@ -222,7 +247,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         className,
         subclassName,
         level,
-        userId: (user as { userId: string }).userId,
+        userId: user!.userId,
       });
 
       set.status = 201;
@@ -242,7 +267,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       const subclass = await ClassFeaturesService.getCharacterSubclass(
         params.id,
         params.className,
-        (user as { userId: string }).userId
+        user!.userId
       );
 
       if (!subclass) {
@@ -270,7 +295,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       };
 
       if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, user.userId);
+        const verification = await verifySessionOwnership(sessionId, user!.userId);
         if (!verification.success) {
           set.status = verification.error!.status;
           return { error: verification.error!.message };
@@ -281,8 +306,8 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
         characterId: params.id,
         featureId,
         sessionId,
-        limit: limit ? parseInt(limit) : 50,
-        userId: (user as { userId: string }).userId,
+        limit: limit ? parseInt(limit, 10) : 50,
+        userId: user!.userId,
       });
 
       return { history };

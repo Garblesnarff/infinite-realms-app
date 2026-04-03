@@ -1,17 +1,5 @@
-import {
-  Wand2,
-  Heart,
-  Sparkles,
-  BookOpen,
-  Clock,
-  Zap,
-  Star,
-  Crown,
-  Scroll,
-  Circle,
-  Target,
-} from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { Wand2, BookOpen, Clock, Zap, Star, Crown, Circle } from 'lucide-react';
+import React from 'react';
 
 import type { Character, Spell } from '@/types/character';
 
@@ -20,202 +8,51 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { metamagicOptions } from '@/data/spellcastingFeatures';
-import logger from '@/lib/logger';
-import { spellApi } from '@/services/spellApi';
+import { useEnhancedSpellcasting } from '@/features/character/hooks/use-enhanced-spellcasting';
 
 interface EnhancedSpellsTabProps {
   character: Character;
   onUpdate: (updatedCharacter: Character) => void;
 }
 
-interface SpellSlots {
-  [key: number]: { total: number; used: number };
-}
-
 /**
  * Enhanced Spells tab with advanced spellcasting features
  * Supports metamagic, pact magic, spell preparation, ritual casting
  */
-const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpdate }) => {
-  // State for fetched spells
-  const [allSpells, setAllSpells] = useState<Spell[]>([]);
-  const [isLoadingSpells, setIsLoadingSpells] = useState(true);
+const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpdate }): JSX.Element => {
+  const {
+    isLoadingSpells,
+    spellAttackBonus,
+    spellSaveDC,
+    spellcastingAbility,
+    spellSlots,
+    pactSlots,
+    sorceryPoints,
+    hasSpellcasting,
+    hasPactMagic,
+    hasMetamagic,
+    canCastRituals,
+    knownCantrips,
+    knownSpells,
+    preparedSpells,
+    pactMagicSpells,
+    ritualSpells,
+    availableMetamagic,
+    consumeSpellSlot,
+    restoreSpellSlot,
+    consumePactSlot,
+    spendSorceryPoints,
+    longRest,
+    shortRest,
+  } = useEnhancedSpellcasting(character, onUpdate);
 
-  // Fetch all spells on component mount
-  useEffect(() => {
-    const fetchSpells = async () => {
-      try {
-        const spells = await spellApi.getAllSpells();
-        setAllSpells(spells);
-      } catch (error) {
-        logger.error('Failed to fetch spells:', error);
-      } finally {
-        setIsLoadingSpells(false);
-      }
-    };
-
-    fetchSpells();
-  }, []);
-
-  // Calculate spellcasting info
-  const characterClass = character?.class;
-  const level = character?.level || 1;
-  const spellcastingAbility = characterClass?.spellcasting?.ability;
-  const spellcastingMod = spellcastingAbility
-    ? character?.abilityScores?.[spellcastingAbility]?.modifier || 0
-    : 0;
-  const proficiencyBonus = Math.floor((level - 1) / 4) + 2;
-  const spellAttackBonus = spellcastingMod + proficiencyBonus;
-  const spellSaveDC = 8 + spellcastingMod + proficiencyBonus;
-
-  // Spell slot management
-  const [spellSlots, setSpellSlots] = useState<SpellSlots>({
-    1: { total: 4, used: 1 },
-    2: { total: 3, used: 0 },
-    3: { total: 3, used: 2 },
-    4: { total: 1, used: 0 },
-    5: { total: 1, used: 1 },
-  });
-
-  // Pact magic management
-  const [pactSlots, setPactSlots] = useState({
-    current: character?.pactSlots?.current || 0,
-    maximum: character?.pactSlots?.maximum || 0,
-    level: character?.pactSlots?.level || 1,
-  });
-
-  // Sorcery points management
-  const [sorceryPoints, setSorceryPoints] = useState({
-    current: character?.sorceryPoints?.current || 0,
-    maximum: character?.sorceryPoints?.maximum || 0,
-  });
-
-  // Check for spellcasting features
-  const hasSpellcasting = characterClass?.spellcasting !== undefined;
-  const hasPactMagic = characterClass?.spellcasting?.pactMagic || false;
-  const hasMetamagic = character?.metamagicOptions && character.metamagicOptions.length > 0;
-  const canCastRituals = characterClass?.spellcasting?.ritualCasting || false;
-
-  // Get spells (only if not loading)
-  const knownCantrips = !isLoadingSpells
-    ? (character?.cantrips || [])
-        .map((cantripId) => allSpells.find((spell: Spell) => spell.id === cantripId))
-        .filter(Boolean)
-    : [];
-
-  const knownSpells = !isLoadingSpells
-    ? (character?.knownSpells || [])
-        .map((spellId) => allSpells.find((spell: Spell) => spell.id === spellId))
-        .filter(Boolean)
-    : [];
-
-  const preparedSpells = !isLoadingSpells
-    ? (character?.preparedSpells || [])
-        .map((spellId) => allSpells.find((spell: Spell) => spell.id === spellId))
-        .filter(Boolean)
-    : [];
-
-  const pactMagicSpells = !isLoadingSpells
-    ? (character?.pactMagicSpells || [])
-        .map((spellId) => allSpells.find((spell: Spell) => spell.id === spellId))
-        .filter(Boolean)
-    : [];
-
-  const ritualSpells = !isLoadingSpells
-    ? allSpells.filter(
-        (spell: Spell) =>
-          spell.ritual &&
-          (character?.ritualSpells?.includes(spell.id) ||
-            preparedSpells.some((p) => p?.id === spell.id)),
-      )
-    : [];
-
-  const availableMetamagic = metamagicOptions.filter((option) =>
-    character?.metamagicOptions?.includes(option.id),
-  );
-
-  /**
-   * Spell slot management functions
-   */
-  const consumeSpellSlot = (level: number) => {
-    if (spellSlots[level] && spellSlots[level].used < spellSlots[level].total) {
-      setSpellSlots((prev) => ({
-        ...prev,
-        [level]: {
-          ...prev[level],
-          used: prev[level].used + 1,
-        },
-      }));
-    }
-  };
-
-  const restoreSpellSlot = (level: number) => {
-    if (spellSlots[level] && spellSlots[level].used > 0) {
-      setSpellSlots((prev) => ({
-        ...prev,
-        [level]: {
-          ...prev[level],
-          used: prev[level].used - 1,
-        },
-      }));
-    }
-  };
-
-  const longRest = () => {
-    setSpellSlots((prev) => {
-      const restored = { ...prev };
-      Object.keys(restored).forEach((level) => {
-        restored[parseInt(level)].used = 0;
-      });
-      return restored;
-    });
-
-    setSorceryPoints((prev) => ({
-      ...prev,
-      current: prev.maximum,
-    }));
-  };
-
-  const shortRest = () => {
-    if (hasPactMagic) {
-      setPactSlots((prev) => ({
-        ...prev,
-        current: prev.maximum,
-      }));
-    }
-  };
-
-  /**
-   * Pact magic functions
-   */
-  const consumePactSlot = () => {
-    if (pactSlots.current > 0) {
-      setPactSlots((prev) => ({
-        ...prev,
-        current: prev.current - 1,
-      }));
-    }
-  };
-
-  /**
-   * Sorcery point functions
-   */
-  const spendSorceryPoints = (amount: number) => {
-    if (sorceryPoints.current >= amount) {
-      setSorceryPoints((prev) => ({
-        ...prev,
-        current: prev.current - amount,
-      }));
-    }
-  };
+  const activeTabCount = 2 + (hasPactMagic ? 1 : 0) + (hasMetamagic ? 1 : 0) + (canCastRituals ? 1 : 0);
 
   if (isLoadingSpells) {
     return (
       <div className="text-center space-y-4">
-        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground animate-pulse" />
+        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground animate-pulse" aria-hidden="true" />
         <h2 className="text-2xl font-bold">Loading Spells...</h2>
         <p className="text-muted-foreground">Fetching spell data from the library.</p>
       </div>
@@ -225,7 +62,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
   if (!hasSpellcasting) {
     return (
       <div className="text-center space-y-4">
-        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground" />
+        <Wand2 className="w-16 h-16 mx-auto text-muted-foreground" aria-hidden="true" />
         <h2 className="text-2xl font-bold">No Spellcasting</h2>
         <p className="text-muted-foreground">
           This character does not have spellcasting abilities.
@@ -234,8 +71,10 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
     );
   }
 
-  const getSpellCard = (spell: Spell | undefined, showPreparedBadge = false) => {
-    if (!spell) return null;
+  const getSpellCard = (spell: Spell | undefined, showPreparedBadge = false): JSX.Element | null => {
+    if (!spell) {
+      return null;
+    }
 
     return (
       <div key={spell?.id} className="p-3 border rounded-lg">
@@ -280,6 +119,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     : !spellSlots[spell.level] ||
                       spellSlots[spell.level].used >= spellSlots[spell.level].total
                 }
+                aria-label={`Cast ${spell?.name}`}
+                title={`Cast ${spell?.name}`}
               >
                 Cast
               </Button>
@@ -317,7 +158,10 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
       </div>
 
       <Tabs defaultValue={hasPactMagic ? 'pact' : 'spells'}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList
+          className="grid w-full"
+          style={{ gridTemplateColumns: `repeat(${activeTabCount}, minmax(0, 1fr))` }}
+        >
           <TabsTrigger value="spells">Spells</TabsTrigger>
           <TabsTrigger value="cantrips">Cantrips</TabsTrigger>
           {hasPactMagic && <TabsTrigger value="pact">Pact Magic</TabsTrigger>}
@@ -333,7 +177,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Circle className="w-5 h-5 text-purple-500" />
+                    <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Spell Slots
                   </CardTitle>
                   <Button size="sm" onClick={longRest}>
@@ -347,21 +191,28 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         <div className="w-16 text-sm font-medium">Level {level}</div>
                         <div className="flex-1">
                           <div className="flex gap-1 mb-1">
-                            {Array.from({ length: slots.total }).map((_, i) => (
-                              <button
-                                key={i}
-                                className={`w-6 h-6 rounded border-2 ${
-                                  i < slots.used
-                                    ? 'bg-gray-300 border-gray-400'
-                                    : 'bg-purple-500 border-purple-600'
-                                }`}
-                                onClick={() =>
-                                  i < slots.used
-                                    ? restoreSpellSlot(parseInt(level))
-                                    : consumeSpellSlot(parseInt(level))
-                                }
-                              />
-                            ))}
+                            {Array.from({ length: slots.total }).map((_, i) => {
+                              const isUsed = i < slots.used;
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                                    isUsed
+                                      ? 'bg-gray-300 border-gray-400'
+                                      : 'bg-purple-500 border-purple-600'
+                                  }`}
+                                  onClick={() =>
+                                    isUsed
+                                      ? restoreSpellSlot(parseInt(level))
+                                      : consumeSpellSlot(parseInt(level))
+                                  }
+                                  aria-label={`Level ${level} spell slot ${isUsed ? 'expended' : 'available'}`}
+                                  title={isUsed ? 'Restore spell slot' : 'Consume spell slot'}
+                                  aria-pressed={!isUsed}
+                                />
+                              );
+                            })}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {slots.total - slots.used} / {slots.total} remaining
@@ -378,7 +229,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-blue-500" />
+                  <BookOpen className="w-5 h-5 text-blue-500" aria-hidden="true" />
                   {preparedSpells.length > 0 ? 'Prepared Spells' : 'Known Spells'}
                 </CardTitle>
               </CardHeader>
@@ -398,7 +249,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-blue-500" />
+                <Wand2 className="w-5 h-5 text-blue-500" aria-hidden="true" />
                 Cantrips
               </CardTitle>
             </CardHeader>
@@ -418,7 +269,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-purple-500" />
+                    <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Slots
                   </CardTitle>
                   <Button size="sm" onClick={shortRest}>
@@ -430,17 +281,24 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <div className="text-sm font-medium">Level {pactSlots.level} Slots</div>
                     <div className="flex-1">
                       <div className="flex gap-1 mb-1">
-                        {Array.from({ length: pactSlots.maximum }).map((_, i) => (
-                          <button
-                            key={i}
-                            className={`w-8 h-8 rounded border-2 ${
-                              i >= pactSlots.current
-                                ? 'bg-gray-300 border-gray-400'
-                                : 'bg-purple-500 border-purple-600'
-                            }`}
-                            onClick={consumePactSlot}
-                          />
-                        ))}
+                        {Array.from({ length: pactSlots.maximum }).map((_, i) => {
+                          const isExpended = i >= pactSlots.current;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                                isExpended
+                                  ? 'bg-gray-300 border-gray-400'
+                                  : 'bg-purple-500 border-purple-600'
+                              }`}
+                              onClick={consumePactSlot}
+                              aria-label={`Pact magic slot ${isExpended ? 'expended' : 'available'}`}
+                              title={isExpended ? 'Expended' : 'Consume pact slot'}
+                              aria-pressed={!isExpended}
+                            />
+                          );
+                        })}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {pactSlots.current} / {pactSlots.maximum} remaining
@@ -454,7 +312,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-purple-500" />
+                    <Crown className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Spells
                   </CardTitle>
                 </CardHeader>
@@ -476,7 +334,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Star className="w-5 h-5 text-gold-500" />
+                    <Star className="w-5 h-5 text-gold-500" aria-hidden="true" />
                     Sorcery Points
                   </CardTitle>
                 </CardHeader>
@@ -486,6 +344,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                       <Progress
                         value={(sorceryPoints.current / sorceryPoints.maximum) * 100}
                         className="w-full h-4"
+                        aria-label={`Sorcery Points: ${sorceryPoints.current} of ${sorceryPoints.maximum} remaining`}
                       />
                       <div className="text-sm text-muted-foreground mt-1">
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
@@ -522,6 +381,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                             variant="outline"
                             onClick={() => spendSorceryPoints(option.sorceryPointCost)}
                             disabled={sorceryPoints.current < option.sorceryPointCost}
+                            aria-label={`Use ${option.name} metamagic`}
+                            title={`Use ${option.name} metamagic`}
                           >
                             Use
                           </Button>
@@ -541,7 +402,7 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-indigo-500" />
+                  <Clock className="w-5 h-5 text-indigo-500" aria-hidden="true" />
                   Ritual Spells
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -568,7 +429,12 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                           </p>
                           <p className="text-sm">{spell.description}</p>
                         </div>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Cast ${spell.name} as ritual`}
+                          title={`Cast ${spell.name} as ritual`}
+                        >
                           Cast as Ritual
                         </Button>
                       </div>

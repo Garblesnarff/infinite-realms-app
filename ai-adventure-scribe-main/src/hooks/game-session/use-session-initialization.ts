@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'react';
 import {
   type ExtendedGameSession,
   type SessionState,
-  isSessionExpired
+  isSessionExpired,
+  SESSION_CORE_COLUMNS,
 } from './session-utils';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +20,9 @@ interface UseSessionInitializationProps {
   setSessionState: (state: SessionState) => void;
   createGameSession: (campId: string, charId: string) => Promise<string | null>;
   cleanupSession: (sessionIdToClean: string) => Promise<string>;
-  toast: any;
+  toast: {
+    (props: { title?: string; description?: string; variant?: 'default' | 'destructive' }): void;
+  };
   mountedRef: React.MutableRefObject<boolean>;
 }
 
@@ -39,7 +42,7 @@ export const useSessionInitialization = ({
   cleanupSession,
   toast,
   mountedRef,
-}: UseSessionInitializationProps) => {
+}: UseSessionInitializationProps): void => {
   // Race condition prevention: track initialization status
   const initializingRef = useRef(false);
   const sessionInitializedRef = useRef(false);
@@ -101,7 +104,7 @@ export const useSessionInitialization = ({
     abortControllerRef.current = new AbortController();
     const abortSignal = abortControllerRef.current.signal;
 
-    const initSession = async () => {
+    const initSession = async (): Promise<void> => {
       try {
         if (abortSignal.aborted) {
           logger.info('[Session Init] Aborted before starting');
@@ -141,9 +144,10 @@ export const useSessionInitialization = ({
         // Note: We include campaign_id and character_id filtering for extra security (IDOR prevention)
         if (specificSessionId) {
           logger.info('[Session Init] Loading specific session:', specificSessionId);
+          // ⚡ Bolt: Use explicit core columns to avoid over-fetching
           const { data: specificSession, error: specificError } = await supabase
             .from('game_sessions')
-            .select('*')
+            .select(SESSION_CORE_COLUMNS)
             .eq('id', specificSessionId)
             .eq('campaign_id', campaignId)
             .eq('character_id', characterId)
@@ -167,9 +171,10 @@ export const useSessionInitialization = ({
         }
 
         // Find recent sessions
+        // ⚡ Bolt: Use explicit core columns to avoid over-fetching during session lookup
         const { data: existingSessions, error: existingSessionError } = await supabase
           .from('game_sessions')
-          .select('*')
+          .select(SESSION_CORE_COLUMNS)
           .eq('campaign_id', campaignId)
           .eq('character_id', characterId)
           .order('created_at', { ascending: false })
@@ -307,5 +312,16 @@ export const useSessionInitialization = ({
         abortControllerRef.current = null;
       }
     };
-  }, [campaignId, characterId, createGameSession, cleanupSession, forceNew, specificSessionId, starterCampaignId, setSessionData, setSessionState, mountedRef]);
+  }, [
+    campaignId,
+    characterId,
+    createGameSession,
+    cleanupSession,
+    forceNew,
+    specificSessionId,
+    starterCampaignId,
+    setSessionData,
+    setSessionState,
+    mountedRef,
+  ]);
 };

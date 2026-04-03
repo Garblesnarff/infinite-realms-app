@@ -5,8 +5,17 @@
  */
 
 import { combatAuditSystem } from '../combat-audit';
+import {
+  CombatResponseValidator,
+  type CombatValidationError,
+  type CombatValidationResult,
+  type CombatStateProvider,
+} from './CombatResponseValidator';
+import { CombatTurnManager, type InitiativeEntry, type TurnOrder } from './CombatTurnManager';
 
 import logger from '@/lib/logger';
+
+export type { InitiativeEntry, TurnOrder, CombatValidationError, CombatValidationResult };
 
 export interface CombatPhase {
   phase: 'pre-combat' | 'initiative' | 'attack' | 'damage' | 'resolution';
@@ -15,50 +24,17 @@ export interface CombatPhase {
   context: string;
 }
 
-export interface CombatValidationError {
-  type:
-    | 'missing_initiative'
-    | 'missing_attack_roll'
-    | 'missing_damage_roll'
-    | 'missing_ac'
-    | 'missing_dc'
-    | 'missing_modifier'
-    | 'wrong_sequence';
-  message: string;
-  suggestion: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-}
+// TTL for combat state cleanup (4 hours)
+const COMBAT_STATE_TTL_MS = 4 * 60 * 60 * 1000;
+// Minimum interval between cleanup sweeps (5 minutes)
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
-export interface CombatValidationResult {
-  isValid: boolean;
-  errors: CombatValidationError[];
-  warnings: CombatValidationError[];
-  requiredNextAction?: string;
-  suggestedResponse?: string;
-}
-
-export interface InitiativeEntry {
-  actorId: string;
-  actorName: string;
-  initiative: number;
-  dexModifier: number;
-  isPlayer: boolean;
-  hasActed: boolean;
-}
-
-export interface TurnOrder {
-  combatId: string;
-  entries: InitiativeEntry[];
-  currentTurnIndex: number;
-  round: number;
-  isInitiativeComplete: boolean;
-}
-
-export class CombatSequenceValidator {
+export class CombatSequenceValidator implements CombatStateProvider {
   private static instance: CombatSequenceValidator;
+  private turnManager: CombatTurnManager = new CombatTurnManager();
+  private responseValidator: CombatResponseValidator;
   private combatPhases: Map<string, CombatPhase[]> = new Map();
   private activeCombats: Set<string> = new Set();
-  private initiativeRolled: Set<string> = new Set();
   private pendingAttacks: Map<
     string,
     { weaponName: string; targetAC?: number; timestamp: number }
@@ -67,8 +43,12 @@ export class CombatSequenceValidator {
     string,
     { attackRollId: string; isCritical: boolean; weaponName: string }
   > = new Map();
-  private turnOrders: Map<string, TurnOrder> = new Map();
-  private initiativeEntries: Map<string, InitiativeEntry[]> = new Map();
+  private lastActivityTimestamp: Map<string, number> = new Map();
+  private lastCleanupAt = 0;
+
+  private constructor() {
+    this.responseValidator = new CombatResponseValidator(this);
+  }
 
   static getInstance(): CombatSequenceValidator {
     if (!CombatSequenceValidator.instance) {
@@ -83,7 +63,8 @@ export class CombatSequenceValidator {
   startCombat(combatId: string): void {
     this.activeCombats.add(combatId);
     this.combatPhases.set(combatId, []);
-    this.initiativeRolled.delete(combatId);
+    this.turnManager.clearEncounterState(combatId);
+    this.lastActivityTimestamp.set(combatId, Date.now());
     logger.info(`🗡️ Combat ${combatId} started - initiative required`);
   }
 
@@ -100,139 +81,52 @@ export class CombatSequenceValidator {
   ): void {
     // Mark combat as active when first initiative entry is added
     this.activeCombats.add(combatId);
+    this.lastActivityTimestamp.set(combatId, Date.now());
 
-    // Start audit for this combat if not already started
-    if (!this.initiativeEntries.has(combatId)) {
-      combatAuditSystem.startCombatAudit(combatId);
-      this.initiativeEntries.set(combatId, []);
-    }
-
-    const entries = this.initiativeEntries.get(combatId)!;
-
-    // Remove existing entry for this actor (in case of re-roll)
-    const filteredEntries = entries.filter((e) => e.actorId !== actorId);
-
-    filteredEntries.push({
+    this.turnManager.addInitiativeEntry(
+      combatId,
       actorId,
       actorName,
       initiative,
       dexModifier,
       isPlayer,
-      hasActed: false,
-    });
-
-    this.initiativeEntries.set(combatId, filteredEntries);
+    );
     this.addPhase(combatId, 'initiative', actorId, `Initiative: ${initiative}`);
-
-    // Record initiative action for audit
-    combatAuditSystem.recordAction({
-      combatId,
-      actorId,
-      actorName,
-      actionType: 'initiative',
-      phase: 'initiative',
-      data: {
-        formula: `1d20+${dexModifier}`,
-        result: initiative,
-        description: `Initiative roll: ${initiative} (dex modifier: ${dexModifier > 0 ? '+' : ''}${dexModifier})`,
-      },
-    });
-
-    logger.info(`🎲 Initiative recorded for ${actorName}: ${initiative}`);
   }
 
   /**
    * Mark initiative as rolled and complete the initiative phase
    */
   completeInitiativePhase(combatId: string): TurnOrder | null {
-    const entries = this.initiativeEntries.get(combatId);
-    if (!entries || entries.length === 0) {
-      return null;
-    }
-
-    // Sort by initiative (highest first), use dex modifier as tiebreaker
-    const sortedEntries = [...entries].sort((a, b) => {
-      if (a.initiative !== b.initiative) {
-        return b.initiative - a.initiative; // Higher initiative goes first
-      }
-      return b.dexModifier - a.dexModifier; // Higher dex modifier wins ties
-    });
-
-    const turnOrder: TurnOrder = {
-      combatId,
-      entries: sortedEntries,
-      currentTurnIndex: 0,
-      round: 1,
-      isInitiativeComplete: true,
-    };
-
-    this.turnOrders.set(combatId, turnOrder);
-    this.initiativeRolled.add(combatId);
-    logger.info(`⚔️ Turn order established for combat ${combatId}`);
-
-    return turnOrder;
+    return this.turnManager.completeInitiativePhase(combatId);
   }
 
   /**
    * Get current turn order for a combat
    */
   getTurnOrder(combatId: string): TurnOrder | null {
-    return this.turnOrders.get(combatId) || null;
+    return this.turnManager.getTurnOrder(combatId);
   }
 
   /**
    * Get whose turn it is currently
    */
   getCurrentActor(combatId: string): InitiativeEntry | null {
-    const turnOrder = this.turnOrders.get(combatId);
-    if (!turnOrder || !turnOrder.isInitiativeComplete) {
-      return null;
-    }
-
-    return turnOrder.entries[turnOrder.currentTurnIndex] || null;
+    return this.turnManager.getCurrentActor(combatId);
   }
 
   /**
    * Advance to the next turn
    */
   nextTurn(combatId: string): InitiativeEntry | null {
-    const turnOrder = this.turnOrders.get(combatId);
-    if (!turnOrder) return null;
-
-    // Mark current actor as having acted
-    if (turnOrder.entries[turnOrder.currentTurnIndex]) {
-      turnOrder.entries[turnOrder.currentTurnIndex].hasActed = true;
-    }
-
-    // Move to next actor
-    turnOrder.currentTurnIndex++;
-
-    // If we've gone through everyone, start new round
-    if (turnOrder.currentTurnIndex >= turnOrder.entries.length) {
-      turnOrder.currentTurnIndex = 0;
-      turnOrder.round++;
-
-      // Reset hasActed for new round
-      turnOrder.entries.forEach((entry) => (entry.hasActed = false));
-
-      logger.info(`🔄 Round ${turnOrder.round} begins`);
-    }
-
-    const currentActor = turnOrder.entries[turnOrder.currentTurnIndex];
-    logger.info(`👤 ${currentActor.actorName}'s turn (Round ${turnOrder.round})`);
-
-    return currentActor;
+    return this.turnManager.nextTurn(combatId);
   }
 
   /**
    * Check if all required initiative rolls are complete
    */
   isInitiativeComplete(combatId: string, expectedActors: string[]): boolean {
-    const entries = this.initiativeEntries.get(combatId);
-    if (!entries) return false;
-
-    const rolledActors = new Set(entries.map((e) => e.actorId));
-    return expectedActors.every((actorId) => rolledActors.has(actorId));
+    return this.turnManager.isInitiativeComplete(combatId, expectedActors);
   }
 
   /**
@@ -341,85 +235,13 @@ export class CombatSequenceValidator {
    * Validate a DM response for combat rule compliance
    */
   validateDMResponse(response: string, combatId?: string): CombatValidationResult {
-    const errors: CombatValidationError[] = [];
-    const warnings: CombatValidationError[] = [];
+    this.cleanupStaleState();
 
-    // Check for direct damage without attack roll
-    if (this.detectsDirectDamage(response) && !this.hasPendingAttack(combatId)) {
-      errors.push({
-        type: 'missing_attack_roll',
-        message: 'Damage roll requested without preceding attack roll',
-        suggestion:
-          'Request attack roll first: "Make an attack roll with your [weapon] (1d20+bonus) against AC [number]"',
-        severity: 'critical',
-      });
+    if (combatId) {
+      this.lastActivityTimestamp.set(combatId, Date.now());
     }
 
-    // Check for combat start without initiative
-    if (this.detectsCombatStart(response) && combatId && !this.initiativeRolled.has(combatId)) {
-      errors.push({
-        type: 'missing_initiative',
-        message: 'Combat started without initiative roll',
-        suggestion:
-          'Request initiative first: "Combat begins! Roll initiative (1d20+dex modifier)"',
-        severity: 'critical',
-      });
-    }
-
-    // Check for actions attempted before turn order is established
-    if (combatId && this.activeCombats.has(combatId)) {
-      const turnOrder = this.turnOrders.get(combatId);
-      if (
-        !turnOrder?.isInitiativeComplete &&
-        (this.detectsAttackRequest(response) || this.detectsSkillCheck(response))
-      ) {
-        errors.push({
-          type: 'wrong_sequence',
-          message: 'Action attempted before initiative order is established',
-          suggestion:
-            'Complete initiative phase first: "Roll initiative (1d20+dex modifier) to determine turn order"',
-          severity: 'critical',
-        });
-      }
-    }
-
-    // Check for attack without AC
-    if (this.detectsAttackRequest(response) && !this.containsAC(response)) {
-      errors.push({
-        type: 'missing_ac',
-        message: 'Attack roll requested without target AC',
-        suggestion: 'Include target AC: "Make an attack roll against AC [number]"',
-        severity: 'high',
-      });
-    }
-
-    // Check for skill check without DC
-    if (this.detectsSkillCheck(response) && !this.containsDC(response)) {
-      errors.push({
-        type: 'missing_dc',
-        message: 'Skill check requested without DC',
-        suggestion: 'Include DC: "Make a [skill] check (DC [number])"',
-        severity: 'high',
-      });
-    }
-
-    // Check for damage roll without modifier
-    if (this.detectsDamageRequest(response) && !this.containsModifier(response)) {
-      warnings.push({
-        type: 'missing_modifier',
-        message: 'Damage roll missing ability modifier',
-        suggestion: 'Include modifier: "Roll 1d8+STR modifier" or "Roll 1d6+3"',
-        severity: 'medium',
-      });
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      warnings,
-      requiredNextAction: this.determineNextAction(combatId),
-      suggestedResponse: this.generateSuggestedResponse(errors),
-    };
+    return this.responseValidator.validate(response, combatId);
   }
 
   /**
@@ -460,6 +282,25 @@ export class CombatSequenceValidator {
     return null;
   }
 
+  // CombatStateProvider implementation
+  hasPendingAttack(combatId?: string): boolean {
+    if (!combatId) return this.pendingAttacks.size > 0;
+
+    for (const [attackId] of this.pendingAttacks) {
+      if (attackId.startsWith(combatId)) return true;
+    }
+    return false;
+  }
+
+  hasInitiativeBeenRolled(combatId: string): boolean {
+    return this.turnManager.hasInitiativeBeenRolled(combatId);
+  }
+
+  isInitiativePhaseComplete(combatId: string): boolean {
+    const turnOrder = this.turnManager.getTurnOrder(combatId);
+    return !!turnOrder?.isInitiativeComplete;
+  }
+
   // Private helper methods
   private addPhase(
     combatId: string,
@@ -477,91 +318,48 @@ export class CombatSequenceValidator {
     this.combatPhases.set(combatId, phases);
   }
 
-  private detectsDirectDamage(response: string): boolean {
-    const damagePatterns = [
-      /roll\s+\d*d\d+(?:\+\d+)?\s+(?:for\s+)?damage/gi,
-      /roll\s+damage/gi,
-      /\d*d\d+(?:\+\d+)?\s+damage/gi,
-    ];
-    return damagePatterns.some((pattern) => pattern.test(response));
-  }
+  /**
+   * Remove state for combats that have been inactive longer than COMBAT_STATE_TTL_MS.
+   * Called periodically from validateDMResponse to prevent unbounded memory growth.
+   */
+  private cleanupStaleState(): void {
+    const now = Date.now();
 
-  private detectsCombatStart(response: string): boolean {
-    const combatPatterns = [
-      /combat\s+begins/gi,
-      /initiative/gi,
-      /roll\s+for\s+initiative/gi,
-      /battle\s+starts/gi,
-    ];
-    return combatPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsAttackRequest(response: string): boolean {
-    const attackPatterns = [
-      /make\s+an?\s+attack\s+roll/gi,
-      /roll\s+(?:to\s+)?attack/gi,
-      /attack\s+roll/gi,
-    ];
-    return attackPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsSkillCheck(response: string): boolean {
-    const skillPatterns = [/make\s+a\s+\w+\s+check/gi, /roll\s+a\s+\w+\s+check/gi, /\w+\s+check/gi];
-    return skillPatterns.some((pattern) => pattern.test(response));
-  }
-
-  private detectsDamageRequest(response: string): boolean {
-    return /roll.*damage/gi.test(response);
-  }
-
-  private containsAC(response: string): boolean {
-    return /AC\s+\d+/gi.test(response) || /armor\s+class\s+\d+/gi.test(response);
-  }
-
-  private containsDC(response: string): boolean {
-    return /DC\s+\d+/gi.test(response) || /difficulty\s+class\s+\d+/gi.test(response);
-  }
-
-  private containsModifier(response: string): boolean {
-    return /\+\s*(?:str|dex|con|int|wis|cha|\d+)/gi.test(response);
-  }
-
-  private hasPendingAttack(combatId?: string): boolean {
-    if (!combatId) return this.pendingAttacks.size > 0;
-
-    for (const [attackId] of this.pendingAttacks) {
-      if (attackId.startsWith(combatId)) return true;
+    // Throttle cleanup to avoid running on every call
+    if (now - this.lastCleanupAt < CLEANUP_INTERVAL_MS) {
+      return;
     }
-    return false;
-  }
+    this.lastCleanupAt = now;
 
-  private determineNextAction(combatId?: string): string | undefined {
-    if (combatId && this.activeCombats.has(combatId)) {
-      if (!this.initiativeRolled.has(combatId)) {
-        return 'request_initiative';
-      }
-      if (this.isAwaitingDamage(combatId)) {
-        return 'request_damage';
+    let cleanedCount = 0;
+
+    for (const [combatId, lastActivity] of this.lastActivityTimestamp) {
+      if (now - lastActivity > COMBAT_STATE_TTL_MS) {
+        this.activeCombats.delete(combatId);
+        this.turnManager.clearEncounterState(combatId);
+        this.combatPhases.delete(combatId);
+        this.lastActivityTimestamp.delete(combatId);
+
+        // Clean up pending attacks for this combat
+        for (const [attackId] of this.pendingAttacks) {
+          if (attackId.startsWith(combatId)) {
+            this.pendingAttacks.delete(attackId);
+          }
+        }
+
+        // Clean up awaiting damage for this combat
+        for (const [attackId] of this.awaitingDamage) {
+          if (attackId.startsWith(combatId)) {
+            this.awaitingDamage.delete(attackId);
+          }
+        }
+
+        cleanedCount++;
       }
     }
-    return undefined;
-  }
 
-  private generateSuggestedResponse(errors: CombatValidationError[]): string | undefined {
-    if (errors.length === 0) return undefined;
-
-    const primaryError = errors[0];
-    switch (primaryError.type) {
-      case 'missing_attack_roll':
-        return 'Make an attack roll with your weapon (1d20+attack bonus) against AC [number]';
-      case 'missing_initiative':
-        return 'Combat begins! Roll initiative (1d20+dex modifier)';
-      case 'missing_ac':
-        return 'Make an attack roll with your weapon (1d20+bonus) against AC [target number]';
-      case 'missing_dc':
-        return 'Make a [skill] check (1d20+modifier, DC [number])';
-      default:
-        return primaryError.suggestion;
+    if (cleanedCount > 0) {
+      logger.info(`🧹 Cleaned up ${cleanedCount} stale combat state(s)`);
     }
   }
 
@@ -571,11 +369,10 @@ export class CombatSequenceValidator {
   clearAllState(): void {
     this.combatPhases.clear();
     this.activeCombats.clear();
-    this.initiativeRolled.clear();
+    this.turnManager.clearAllState();
     this.pendingAttacks.clear();
     this.awaitingDamage.clear();
-    this.turnOrders.clear();
-    this.initiativeEntries.clear();
+    this.lastActivityTimestamp.clear();
     combatAuditSystem.clearAuditData();
   }
 
@@ -587,10 +384,9 @@ export class CombatSequenceValidator {
     const auditReport = combatAuditSystem.endCombatAudit(combatId);
 
     this.activeCombats.delete(combatId);
-    this.initiativeRolled.delete(combatId);
+    this.turnManager.clearEncounterState(combatId);
     this.combatPhases.delete(combatId);
-    this.turnOrders.delete(combatId);
-    this.initiativeEntries.delete(combatId);
+    this.lastActivityTimestamp.delete(combatId);
 
     // Clean up any pending attacks for this combat
     for (const [attackId] of this.pendingAttacks) {
@@ -630,17 +426,17 @@ export class CombatSequenceValidator {
    */
   validateCombatState(
     combatId: string,
-    action: 'attack' | 'damage' | 'save',
+    _action: 'attack' | 'damage' | 'save',
   ): { valid: boolean; reason?: string } {
     if (!this.activeCombats.has(combatId)) {
       return { valid: false, reason: 'Combat not active' };
     }
 
-    if (!this.initiativeRolled.has(combatId)) {
+    if (!this.turnManager.hasInitiativeBeenRolled(combatId)) {
       return { valid: false, reason: 'Initiative phase not complete' };
     }
 
-    const turnOrder = this.turnOrders.get(combatId);
+    const turnOrder = this.turnManager.getTurnOrder(combatId);
     if (!turnOrder || !turnOrder.isInitiativeComplete) {
       return { valid: false, reason: 'Initiative phase not complete' };
     }

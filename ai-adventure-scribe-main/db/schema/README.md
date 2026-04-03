@@ -314,14 +314,14 @@ When making schema changes:
 
 1. **Create migration file:**
    ```bash
-   npx drizzle-kit generate:pg
+   bunx drizzle-kit generate:pg
    ```
 
 2. **Review generated SQL** in `drizzle/` directory
 
 3. **Apply migration:**
    ```bash
-   npx drizzle-kit push:pg
+   bunx drizzle-kit push:pg
    ```
 
 4. **Update TypeScript types** (automatic with Drizzle)

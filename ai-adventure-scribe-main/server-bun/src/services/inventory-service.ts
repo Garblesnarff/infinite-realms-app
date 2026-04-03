@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Inventory Service
  *
@@ -11,9 +12,11 @@
  * @module server/services/inventory-service
  */
 
-import { eq, and, desc, or, sql, exists } from 'drizzle-orm';
+import { eq, and, desc, or, sql, exists, inArray } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { InventoryMechanics } from './inventory/inventory-mechanics.js';
+import { InventoryConsumableService } from './inventory/inventory-consumable-service.js';
+import { db } from '../../../db/client';
 import {
   inventoryItems,
   consumableUsageLog,
@@ -22,12 +25,10 @@ import {
   type InventoryItem,
   type NewInventoryItem,
   type ConsumableUsageLog,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
 import {
   MAX_ATTUNED_ITEMS,
-  ENCUMBRANCE_THRESHOLDS,
-  SPEED_PENALTIES,
 } from '../types/inventory.js';
 
 import type {
@@ -41,7 +42,6 @@ import type {
   EquipResult,
   GetInventoryOptions,
   GetUsageHistoryInput,
-  EncumbranceLevel,
 } from '../types/inventory.js';
 
 
@@ -62,20 +62,40 @@ export class InventoryService {
     userId: string,
     options: GetInventoryOptions = {}
   ): Promise<InventorySummary> {
+    // ⚡ Bolt: Consolidated character existence/ownership check and item retrieval into a single query.
+    // Using a LEFT JOIN from characters ensures we can distinguish between "Character not found" (0 rows)
+    // and "Character found but no items" (1 row with null item).
     const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        options.itemType ? eq(inventoryItems.itemType, options.itemType) : undefined,
-        options.equipped !== undefined ? eq(inventoryItems.isEquipped, options.equipped) : undefined,
-        options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined
-      ))
+      .select({
+        item: inventoryItems,
+        characterId: characters.id,
+      })
+      .from(characters)
+      .leftJoin(
+        inventoryItems,
+        and(
+          eq(inventoryItems.characterId, characters.id),
+          options.itemType ? eq(inventoryItems.itemType, options.itemType) : undefined,
+          options.equipped !== undefined ? eq(inventoryItems.isEquipped, options.equipped) : undefined,
+          options.attuned !== undefined ? eq(inventoryItems.isAttuned, options.attuned) : undefined
+        )
+      )
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        )
+      )
       .orderBy(desc(inventoryItems.createdAt));
 
-    const items = results.map(r => r.item);
+    if (results.length === 0) {
+      throw new NotFoundError('Character', characterId);
+    }
+
+    // Filter out null items (from characters with no matching inventory items)
+    const items = results
+      .map((r) => r.item)
+      .filter((item): item is InventoryItem => item !== null);
 
     const totalWeight = items.reduce((sum, item) => {
       const weight = parseFloat(item.weight || '0');
@@ -96,35 +116,36 @@ export class InventoryService {
    * @returns Created inventory item
    */
   static async addItem(input: CreateInventoryItemInput, userId: string): Promise<InventoryItem> {
-    // Verify character ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, input.characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', input.characterId);
-    }
-
-    const itemData: NewInventoryItem = {
-      characterId: input.characterId,
-      name: input.name,
-      itemType: input.itemType,
-      quantity: input.quantity ?? 1,
-      weight: input.weight?.toString() ?? '0',
-      description: input.description ?? null,
-      properties: input.properties ? JSON.stringify(input.properties) : null,
-      isEquipped: input.isEquipped ?? false,
-      isAttuned: input.isAttuned ?? false,
-      requiresAttunement: input.requiresAttunement ?? false,
-    };
-
-    const [item] = await db.insert(inventoryItems).values(itemData).returning();
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that items can only be added to characters the user is authorized to access.
+    const [item] = await db
+      .insert(inventoryItems)
+      .select(
+        db
+          .select({
+            characterId: sql`${input.characterId}`,
+            name: sql`${input.name}`,
+            itemType: sql`${input.itemType}`,
+            quantity: sql`${input.quantity ?? 1}`,
+            weight: sql`${input.weight?.toString() ?? '0'}`,
+            description: sql`${input.description ?? null}`,
+            properties: sql`${input.properties ? JSON.stringify(input.properties) : null}`,
+            isEquipped: sql`${input.isEquipped ?? false}`,
+            isAttuned: sql`${input.isAttuned ?? false}`,
+            requiresAttunement: sql`${input.requiresAttunement ?? false}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, input.characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
+      .returning();
 
     if (!item) {
-      throw new InternalServerError('Failed to create inventory item');
+      throw new NotFoundError('Character', input.characterId);
     }
 
     return item;
@@ -236,76 +257,19 @@ export class InventoryService {
 
   /**
    * Use consumable or ammunition
-   * Decrements quantity and logs usage
-   * @param input - Usage input data
-   * @param userId - User ID (for ownership verification)
-   * @param preFetchedItem - Optional pre-fetched item to avoid redundant DB call
-   * @returns Usage result with remaining quantity
+   * @deprecated Use InventoryConsumableService.useConsumable directly
    */
   static async useConsumable(
     input: UseConsumableInput,
     userId: string,
     preFetchedItem?: InventoryItem
   ): Promise<UseConsumableResult> {
-    // ⚡ Bolt: Use pre-fetched item if available to avoid redundant database lookup.
-    const item = preFetchedItem || await this.getItemById(input.itemId, input.characterId, userId);
-
-    if (!item) {
-      throw new NotFoundError('Inventory item', input.itemId);
-    }
-
-    const quantityToUse = input.quantity ?? 1;
-
-    if (item.quantity < quantityToUse) {
-      throw new BusinessLogicError(
-        `Insufficient quantity. Available: ${item.quantity}, Requested: ${quantityToUse}`,
-        { available: item.quantity, requested: quantityToUse, itemId: input.itemId }
-      );
-    }
-
-    // Log the usage
-    const [usageLog] = await db
-      .insert(consumableUsageLog)
-      .values({
-        characterId: input.characterId,
-        itemId: input.itemId,
-        quantityUsed: quantityToUse,
-        sessionId: input.sessionId ?? null,
-        context: input.context ?? null,
-      })
-      .returning();
-
-    if (!usageLog) {
-      throw new InternalServerError('Failed to log consumable usage');
-    }
-
-    const newQuantity = item.quantity - quantityToUse;
-    let itemDeleted = false;
-
-    // Update or delete item based on remaining quantity
-    // ⚡ Bolt: Calls to optimized removeItem/updateItem now perform atomic ownership checks.
-    if (newQuantity <= 0) {
-      await this.removeItem(input.itemId, input.characterId, userId);
-      itemDeleted = true;
-    } else {
-      await this.updateItem(input.itemId, input.characterId, userId, { quantity: newQuantity });
-    }
-
-    return {
-      success: true,
-      remainingQuantity: Math.max(0, newQuantity),
-      itemDeleted,
-      usageLog,
-    };
+    return InventoryConsumableService.useConsumable(input, userId, preFetchedItem);
   }
 
   /**
    * Use ammunition (convenience method for ranged attacks)
-   * @param characterId - Character ID
-   * @param userId - User ID (for ownership verification)
-   * @param ammoType - Ammunition type/name
-   * @param count - Number to use (default 1)
-   * @returns Usage result
+   * @deprecated Use InventoryConsumableService.useAmmunition directly
    */
   static async useAmmunition(
     characterId: string,
@@ -313,43 +277,12 @@ export class InventoryService {
     ammoType: string,
     count: number = 1
   ): Promise<UseConsumableResult> {
-    // Find ammunition by name
-    const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
-
-    if (results.length === 0) {
-      throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
-    }
-
-    const item = results[0]?.item;
-    if (!item) {
-      throw new NotFoundError(`Ammunition "${ammoType}"`, characterId);
-    }
-
-    // ⚡ Bolt: Pass pre-fetched ammunition item to useConsumable to avoid redundant DB lookup.
-    return this.useConsumable({
-      characterId,
-      itemId: item.id,
-      quantity: count,
-      context: 'Ranged attack',
-    }, userId, item);
+    return InventoryConsumableService.useAmmunition(characterId, userId, ammoType, count);
   }
 
   /**
    * Recover ammunition after combat
-   * @param characterId - Character ID
-   * @param userId - User ID (for ownership verification)
-   * @param ammoType - Ammunition type/name
-   * @param count - Number to recover
-   * @returns Updated item
+   * @deprecated Use InventoryConsumableService.recoverAmmunition directly
    */
   static async recoverAmmunition(
     characterId: string,
@@ -357,39 +290,7 @@ export class InventoryService {
     ammoType: string,
     count: number
   ): Promise<InventoryItem> {
-    // Find or create ammunition
-    const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.itemType, 'ammunition'),
-        eq(inventoryItems.name, ammoType)
-      ));
-
-    if (results.length > 0) {
-      // Add to existing
-      const item = results[0]?.item;
-      if (!item) {
-        throw new InternalServerError('Failed to find ammunition item');
-      }
-      const updated = await this.updateItem(item.id, characterId, userId, {
-        quantity: item.quantity + count,
-      });
-      if (!updated) throw new InternalServerError('Failed to update ammunition');
-      return updated;
-    } else {
-      // Create new ammunition entry
-      return this.addItem({
-        characterId,
-        name: ammoType,
-        itemType: 'ammunition',
-        quantity: count,
-        weight: 0.05, // Default weight per arrow/bolt
-      }, userId);
-    }
+    return InventoryConsumableService.recoverAmmunition(characterId, userId, ammoType, count);
   }
 
   // ==========================================
@@ -404,19 +305,38 @@ export class InventoryService {
    * @returns Equip result
    */
   static async equipItem(characterId: string, itemId: string, userId: string): Promise<EquipResult> {
-    const item = await this.getItemById(itemId, characterId, userId);
-
-    if (!item) {
-      return { success: false, error: 'Item not found' };
-    }
-
-    if (item.itemType !== 'weapon' && item.itemType !== 'armor') {
-      return { success: false, error: 'Only weapons and armor can be equipped' };
-    }
-
-    const updated = await this.updateItem(itemId, characterId, userId, { isEquipped: true });
+    // ⚡ Bolt: Optimized to perform update and validation in a single round-trip.
+    // This reduces database round-trips from 2 to 1 for the successful equipment path.
+    const [updated] = await db
+      .update(inventoryItems)
+      .set({ isEquipped: true, updatedAt: new Date() })
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          inArray(inventoryItems.itemType, ['weapon', 'armor'] as ItemType[]),
+          exists(
+            db
+              .select({ id: characters.id })
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.id, inventoryItems.characterId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning();
 
     if (!updated) {
+      // Diagnostic check only on failure (keeps happy path O(1))
+      const item = await this.getItemById(itemId, characterId, userId);
+      if (!item) return { success: false, error: 'Item not found' };
+      if (item.itemType !== 'weapon' && item.itemType !== 'armor') {
+        return { success: false, error: 'Only weapons and armor can be equipped' };
+      }
       return { success: false, error: 'Failed to equip item' };
     }
 
@@ -491,9 +411,8 @@ export class InventoryService {
       throw new NotFoundError('Character stats', characterId);
     }
 
-    // Base carrying capacity is STR × 15
-    // Could be modified by size (Tiny = ×0.5, Small/Medium = ×1, Large = ×2, etc.)
-    return stats.strength * 15;
+    // Delegate calculation to mechanics module
+    return InventoryMechanics.calculateCarryingCapacity(stats.strength);
   }
 
   /**
@@ -528,34 +447,8 @@ export class InventoryService {
       throw new NotFoundError('Character or stats', characterId);
     }
 
-    const strength = result.strength;
-    const currentWeight = parseFloat(result.totalWeight);
-    const carryingCapacity = strength * 15;
-
-    // Determine encumbrance level using variant rule
-    let encumbranceLevel: EncumbranceLevel = 'normal';
-    let speedPenalty = SPEED_PENALTIES.NORMAL as number;
-
-    // Heavily Encumbered: weight > STR × 10
-    if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.HEAVILY_ENCUMBERED) {
-      encumbranceLevel = 'heavily_encumbered';
-      speedPenalty = SPEED_PENALTIES.HEAVILY_ENCUMBERED as number;
-    }
-    // Encumbered: weight > STR × 5
-    else if (currentWeight > strength * ENCUMBRANCE_THRESHOLDS.ENCUMBERED) {
-      encumbranceLevel = 'encumbered';
-      speedPenalty = SPEED_PENALTIES.ENCUMBERED as number;
-    }
-
-    return {
-      currentWeight: Math.round(currentWeight * 100) / 100,
-      carryingCapacity,
-      encumbranceLevel,
-      isEncumbered: encumbranceLevel === 'encumbered' || encumbranceLevel === 'heavily_encumbered',
-      isHeavilyEncumbered: encumbranceLevel === 'heavily_encumbered',
-      speedPenalty,
-      strengthScore: strength,
-    };
+    // Delegate calculation to mechanics module
+    return InventoryMechanics.calculateEncumbrance(result.strength, parseFloat(result.totalWeight));
   }
 
   // ==========================================
@@ -590,10 +483,36 @@ export class InventoryService {
    * @param userId - User ID (for ownership verification)
    * @returns Attunement result
    */
-  static async attuneItem(characterId: string, itemId: string, userId: string): Promise<AttunementResult> {
-    const item = await this.getItemById(itemId, characterId, userId);
+  static async attuneItem(
+    characterId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<AttunementResult> {
+    // ⚡ Bolt: Consolidated item fetch and attuned count check into a single query.
+    // This reduces database round-trips from 3 to 2 for the successful attunement path.
+    const results = await db
+      .select({
+        item: inventoryItems,
+        attunedCount: sql<number>`(
+          SELECT count(*)::int
+          FROM ${inventoryItems}
+          WHERE ${inventoryItems.characterId} = ${characterId} AND ${inventoryItems.isAttuned} = true
+        )`,
+      })
+      .from(inventoryItems)
+      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
+      .where(
+        and(
+          eq(inventoryItems.id, itemId),
+          eq(inventoryItems.characterId, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      )
+      .limit(1);
 
-    if (!item) {
+    const result = results[0];
+
+    if (!result) {
       return {
         success: false,
         currentAttunedCount: 0,
@@ -602,10 +521,12 @@ export class InventoryService {
       };
     }
 
+    const { item, attunedCount } = result;
+
     if (!item.requiresAttunement) {
       return {
         success: false,
-        currentAttunedCount: 0,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Item does not require attunement',
       };
@@ -614,19 +535,16 @@ export class InventoryService {
     if (item.isAttuned) {
       return {
         success: false,
-        currentAttunedCount: 0,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Item is already attuned',
       };
     }
 
-    // Check current attuned count
-    const attunedItems = await this.getAttunedItems(characterId, userId);
-
-    if (attunedItems.length >= MAX_ATTUNED_ITEMS) {
+    if (attunedCount >= MAX_ATTUNED_ITEMS) {
       return {
         success: false,
-        currentAttunedCount: attunedItems.length,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: `Cannot attune to more than ${MAX_ATTUNED_ITEMS} items. Unattune from another item first.`,
       };
@@ -638,7 +556,7 @@ export class InventoryService {
     if (!updated) {
       return {
         success: false,
-        currentAttunedCount: attunedItems.length,
+        currentAttunedCount: attunedCount,
         maxAttunedCount: MAX_ATTUNED_ITEMS,
         error: 'Failed to attune to item',
       };
@@ -647,7 +565,7 @@ export class InventoryService {
     return {
       success: true,
       attunedItem: updated,
-      currentAttunedCount: attunedItems.length + 1,
+      currentAttunedCount: attunedCount + 1,
       maxAttunedCount: MAX_ATTUNED_ITEMS,
     };
   }
@@ -669,24 +587,9 @@ export class InventoryService {
 
   /**
    * Get consumable usage history
-   * @param input - Query parameters
-   * @param userId - User ID (for ownership verification)
-   * @returns Array of usage log entries
+   * @deprecated Use InventoryConsumableService.getUsageHistory directly
    */
   static async getUsageHistory(input: GetUsageHistoryInput, userId: string): Promise<ConsumableUsageLog[]> {
-    const results = await db
-      .select({ log: consumableUsageLog })
-      .from(consumableUsageLog)
-      .innerJoin(characters, eq(consumableUsageLog.characterId, characters.id))
-      .where(and(
-        eq(consumableUsageLog.characterId, input.characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        input.itemId ? eq(consumableUsageLog.itemId, input.itemId) : undefined,
-        input.sessionId ? eq(consumableUsageLog.sessionId, input.sessionId) : undefined
-      ))
-      .orderBy(desc(consumableUsageLog.timestamp))
-      .limit(input.limit ?? 100);
-
-    return results.map(r => r.log);
+    return InventoryConsumableService.getUsageHistory(input, userId);
   }
 }

@@ -1,6 +1,7 @@
 import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
-import React, { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useId } from 'react';
+
+import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,314 +13,29 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
-import { useCampaign } from '@/contexts/CampaignContext';
-import { useCharacter } from '@/contexts/CharacterContext';
-import logger from '@/lib/logger';
-import { analytics } from '@/services/analytics';
-import { characterDescriptionGenerator } from '@/services/character-description-generator';
-import { characterImageGenerator } from '@/services/character-image-generator';
-import { llmApiClient, type ImageQuotaStatus } from '@/services/llm-api-client';
-import { openRouterService } from '@/services/openrouter-service';
-import { toCharacterPromptData } from '@/services/prompts/characterPrompts';
 
 /**
  * CharacterFinalization component for character creation
  * Final step to review character, generate AI description and detailed design sheet
  */
 const CharacterFinalization: React.FC = () => {
-  const { state, dispatch } = useCharacter();
-  const { state: campaignState } = useCampaign();
-  const { toast } = useToast();
-  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
-  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState('fantasy');
-  const [generationStep, setGenerationStep] = useState<'idle' | 'avatar' | 'sheet' | 'background'>(
-    'idle',
-  );
-  const [searchParams] = useSearchParams();
-  const [imageQuota, setImageQuota] = useState<ImageQuotaStatus | null>(null);
+  const descriptionId = useId();
+  const themeId = useId();
 
-  // Fetch image quota status
-  const fetchImageQuota = useCallback(async () => {
-    const quota = await llmApiClient.getImageQuotaStatus();
-    setImageQuota(quota);
-  }, []);
-
-  // Fetch quota on mount and after generations
-  useEffect(() => {
-    fetchImageQuota();
-  }, [fetchImageQuota]);
-
-  // Initialize theme from campaign defaults when available
-  useEffect(() => {
-    if (campaignState.campaign?.defaultArtStyle && !state.character?.theme) {
-      setSelectedTheme(campaignState.campaign.defaultArtStyle);
-    }
-  }, [campaignState.campaign?.defaultArtStyle, state.character?.theme]);
-
-  /**
-   * Check if an error is a quota exceeded error
-   */
-  const isQuotaExceededError = (error: unknown): boolean => {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes('402') || message.toLowerCase().includes('quota exceeded');
-  };
-
-  /**
-   * Updates character description in context
-   * @param description - New character description
-   */
-  const handleDescriptionChange = (description: string) => {
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { description },
-    });
-  };
-
-  /**
-   * Generate enhanced character description using AI with full character context
-   */
-  const handleGenerateDescription = async () => {
-    if (!state.character?.name?.trim()) {
-      toast({
-        title: 'Character Incomplete',
-        description: 'Character name is required for description generation.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const campaignId = searchParams.get('campaign') || undefined;
-      const artStyle = analytics.detectArtStyle({ characterTheme: state.character?.theme });
-      analytics.aiRegenerateClicked('description', { campaignId, artStyle });
-    } catch (e) {
-      // ignore analytics errors
-    }
-
-    setIsGeneratingDescription(true);
-    try {
-      const characterData = toCharacterPromptData(state.character);
-
-      const enhancedDescription = await characterDescriptionGenerator.generateDescription(
-        characterData,
-        {
-          enhanceExisting: Boolean(state.character.description?.trim()),
-          includeBackstory: true,
-          includePersonality: true,
-          includeAppearance: true,
-          tone: 'heroic',
-        },
-      );
-
-      dispatch({
-        type: 'UPDATE_CHARACTER',
-        payload: {
-          description: enhancedDescription.description,
-          appearance: enhancedDescription.appearance,
-          personality_traits: enhancedDescription.personality_traits,
-          backstory_elements: enhancedDescription.backstory_elements,
-        },
-      });
-
-      toast({
-        title: 'Description Generated',
-        description:
-          "Your character's description has been enhanced with AI using all your character choices!",
-      });
-    } catch (error) {
-      logger.error('Failed to generate description:', error);
-      toast({
-        title: 'Generation Failed',
-        description: 'Failed to generate character description. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsGeneratingDescription(false);
-    }
-  };
-
-  /**
-   * Generate character avatar portrait
-   */
-  const handleGenerateAvatar = async () => {
-    if (!state.character?.name?.trim()) {
-      toast({
-        title: 'Character Incomplete',
-        description: 'Character name is required for avatar generation.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const campaignId = searchParams.get('campaign') || undefined;
-      const artStyle = analytics.detectArtStyle({ characterTheme: state.character?.theme });
-      analytics.aiRegenerateClicked('avatar', { campaignId, artStyle });
-    } catch (e) {
-      // ignore analytics errors
-    }
-
-    setIsGeneratingAvatar(true);
-    setGenerationStep('avatar');
-    try {
-      const characterData = {
-        ...toCharacterPromptData(state.character),
-        theme: selectedTheme,
-      };
-
-      logger.info('Generating avatar with theme:', selectedTheme);
-
-      const avatarBase64 = await characterImageGenerator.generateAvatarImage(characterData, {
-        artStyle: 'fantasy-art',
-        theme: selectedTheme,
-      });
-
-      // Upload avatar to get URL
-      const avatarUrl = await openRouterService.uploadImage(avatarBase64, { label: 'avatar' });
-
-      dispatch({
-        type: 'UPDATE_CHARACTER',
-        payload: {
-          avatar_url: avatarUrl,
-          theme: selectedTheme,
-        },
-      });
-
-      toast({
-        title: 'Avatar Generated',
-        description: 'Your character avatar portrait has been created!',
-      });
-
-      // Refresh quota after successful generation
-      fetchImageQuota();
-      setGenerationStep('idle');
-    } catch (error) {
-      logger.error('Failed to generate avatar:', error);
-
-      if (isQuotaExceededError(error)) {
-        toast({
-          title: 'Daily Image Limit Reached',
-          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
-          variant: 'destructive',
-        });
-        fetchImageQuota();
-      } else {
-        toast({
-          title: 'Avatar Generation Failed',
-          description: 'Failed to generate character avatar. Please try again.',
-          variant: 'destructive',
-        });
-      }
-      setGenerationStep('idle');
-    } finally {
-      setIsGeneratingAvatar(false);
-    }
-  };
-
-  /**
-   * Generate detailed character design sheet using AI with full character context
-   */
-  const handleGenerateImage = async () => {
-    if (!state.character?.name?.trim()) {
-      toast({
-        title: 'Character Incomplete',
-        description: 'Character name is required for image generation.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const campaignId = searchParams.get('campaign') || undefined;
-      const artStyle = analytics.detectArtStyle({ characterTheme: state.character?.theme });
-      analytics.aiRegenerateClicked('design_sheet', { campaignId, artStyle });
-    } catch (e) {
-      // ignore analytics errors
-    }
-
-    setIsGeneratingImage(true);
-    setGenerationStep('sheet');
-    try {
-      const characterData = {
-        ...toCharacterPromptData(state.character),
-        theme: selectedTheme,
-      };
-
-      logger.info('Generating design sheet with theme:', selectedTheme);
-      logger.info('Character data for generation:', characterData);
-
-      // Get avatar base64 if it exists for reference
-      let avatarReference: string | undefined;
-      if (state.character.avatar_url) {
-        try {
-          const response = await fetch(state.character.avatar_url);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          avatarReference = await new Promise<string>((resolve) => {
-            reader.onloadend = () => {
-              const base64 = reader.result as string;
-              resolve(base64.split(',')[1]); // Remove data:image/png;base64, prefix
-            };
-            reader.readAsDataURL(blob);
-          });
-        } catch (error) {
-          logger.warn('Could not fetch avatar for reference:', error);
-        }
-      }
-
-      const imageUrl = await characterImageGenerator.generateCharacterImage(
-        characterData,
-        {
-          style: 'character-sheet',
-          artStyle: 'fantasy-art',
-          theme: selectedTheme,
-          storage: { label: 'design-sheet' },
-        },
-        avatarReference,
-      );
-
-      dispatch({
-        type: 'UPDATE_CHARACTER',
-        payload: {
-          image_url: imageUrl,
-          theme: selectedTheme,
-        },
-      });
-
-      toast({
-        title: 'Character Design Sheet Generated',
-        description: `Your detailed character design sheet in ${selectedTheme} theme has been created${avatarReference ? ' using your avatar as reference' : ''}!`,
-      });
-
-      // Refresh quota after successful generation
-      fetchImageQuota();
-      setGenerationStep('idle');
-    } catch (error) {
-      logger.error('Failed to generate character design sheet:', error);
-
-      if (isQuotaExceededError(error)) {
-        toast({
-          title: 'Daily Image Limit Reached',
-          description: 'You\'ve used all your image generations for today. Your limit resets at midnight UTC.',
-          variant: 'destructive',
-        });
-        fetchImageQuota();
-      } else {
-        toast({
-          title: 'Design Sheet Generation Failed',
-          description: 'Failed to generate character design sheet. Please try again.',
-          variant: 'destructive',
-        });
-      }
-      setGenerationStep('idle');
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
-
+  const {
+    state,
+    isGeneratingDescription,
+    isGeneratingAvatar,
+    isGeneratingImage,
+    selectedTheme,
+    setSelectedTheme,
+    generationStep,
+    imageQuota,
+    handleDescriptionChange,
+    handleGenerateDescription,
+    handleGenerateAvatar,
+    handleGenerateImage,
+  } = useCharacterFinalization();
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center mb-6">Finalize Your Character</h2>
@@ -395,7 +111,7 @@ const CharacterFinalization: React.FC = () => {
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="character-description">Character Description</Label>
+              <Label htmlFor={descriptionId}>Character Description</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -418,7 +134,7 @@ const CharacterFinalization: React.FC = () => {
               </Button>
             </div>
             <Textarea
-              id="character-description"
+              id={descriptionId}
               placeholder="Generate an AI description using all your character choices, or write your own..."
               value={state.character?.description || ''}
               onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -461,9 +177,9 @@ const CharacterFinalization: React.FC = () => {
         <div className="space-y-4">
           {/* Theme Selector */}
           <div className="space-y-2">
-            <Label>Design Sheet Theme</Label>
+            <Label htmlFor={themeId}>Design Sheet Theme</Label>
             <Select value={selectedTheme} onValueChange={setSelectedTheme}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id={themeId} className="w-full" aria-label="Select design sheet theme">
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent>
@@ -479,7 +195,9 @@ const CharacterFinalization: React.FC = () => {
 
           {/* Image Generation Quota Tracker */}
           {imageQuota && (
-            <div className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}>
+            <div
+              className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}
+            >
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   {imageQuota.remaining === 0 ? (
@@ -487,7 +205,13 @@ const CharacterFinalization: React.FC = () => {
                   ) : (
                     <ImageIcon className="h-4 w-4 text-muted-foreground" />
                   )}
-                  <span className={imageQuota.remaining === 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}>
+                  <span
+                    className={
+                      imageQuota.remaining === 0
+                        ? 'text-red-600 dark:text-red-400 font-medium'
+                        : 'text-muted-foreground'
+                    }
+                  >
                     {imageQuota.remaining === 0
                       ? 'Daily limit reached'
                       : `${imageQuota.remaining} image generation${imageQuota.remaining === 1 ? '' : 's'} remaining today`}
@@ -514,7 +238,11 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateAvatar}
-                disabled={isGeneratingAvatar || !state.character?.name?.trim() || imageQuota?.remaining === 0}
+                disabled={
+                  isGeneratingAvatar ||
+                  !state.character?.name?.trim() ||
+                  imageQuota?.remaining === 0
+                }
               >
                 {isGeneratingAvatar ? (
                   <>
@@ -556,7 +284,9 @@ const CharacterFinalization: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleGenerateImage}
-                disabled={isGeneratingImage || !state.character?.name?.trim() || imageQuota?.remaining === 0}
+                disabled={
+                  isGeneratingImage || !state.character?.name?.trim() || imageQuota?.remaining === 0
+                }
               >
                 {isGeneratingImage ? (
                   <>

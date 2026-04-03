@@ -109,7 +109,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
         onCharacterDrop(characterId, folder.id);
       }
     },
-    [folder.id, onCharacterDrop]
+    [folder.id, onCharacterDrop],
   );
 
   return (
@@ -118,11 +118,13 @@ const FolderItem: React.FC<FolderItemProps> = ({
         role="button"
         tabIndex={0}
         aria-selected={isSelected}
+        aria-label={`Select folder: ${folder.name}`}
+        title={`Select folder: ${folder.name}`}
         className={cn(
           'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           isSelected && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
           isDragOver && 'bg-infinite-gold/20 border-2 border-dashed border-infinite-gold',
-          !isSelected && !isDragOver && 'hover:bg-accent'
+          !isSelected && !isDragOver && 'hover:bg-accent',
         )}
         style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
         onClick={() => onSelect(folder.id)}
@@ -143,6 +145,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
             size="icon"
             className="h-4 w-4 p-0 hover:bg-accent rounded"
             aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+            title={isExpanded ? 'Collapse folder' : 'Expand folder'}
             aria-expanded={isExpanded}
             onClick={(e) => {
               e.stopPropagation();
@@ -159,10 +162,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
         {!hasChildren && <div className="w-4" />}
 
         {/* Folder Icon with Color */}
-        <div
-          className="flex-shrink-0"
-          style={{ color: folder.color || undefined }}
-        >
+        <div className="flex-shrink-0" style={{ color: folder.color || undefined }}>
           {isExpanded && hasChildren ? (
             <FolderOpen className="h-5 w-5" />
           ) : (
@@ -192,6 +192,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
               size="icon"
               className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
               aria-label="Folder actions"
+              title="Folder actions"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -311,7 +312,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onFolderSelect(folderId);
       }
     },
-    [onFolderSelect]
+    [onFolderSelect],
   );
 
   const handleEdit = useCallback(
@@ -320,7 +321,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onEditFolder(folderId);
       }
     },
-    [onEditFolder]
+    [onEditFolder],
   );
 
   const handleDelete = useCallback(
@@ -329,7 +330,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onDeleteFolder(folderId);
       }
     },
-    [onDeleteFolder]
+    [onDeleteFolder],
   );
 
   const handleChangeColor = useCallback(
@@ -338,14 +339,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         onChangeColor(folderId);
       }
     },
-    [onChangeColor]
+    [onChangeColor],
   );
 
   if (error) {
     return (
-      <div className="p-4 text-sm text-destructive">
-        Failed to load folders. Please try again.
-      </div>
+      <div className="p-4 text-sm text-destructive">Failed to load folders. Please try again.</div>
     );
   }
 
@@ -360,6 +359,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
             size="sm"
             onClick={onCreateFolder}
             className="h-8 gap-2"
+            title="Create a new character folder"
           >
             <FolderPlus className="h-4 w-4" />
             New Folder
@@ -372,10 +372,12 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         role="button"
         tabIndex={0}
         aria-selected={selectedFolderId === null}
+        aria-label="Show all characters"
+        title="Show all characters"
         className={cn(
           'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
-          selectedFolderId !== null && 'hover:bg-accent'
+          selectedFolderId !== null && 'hover:bg-accent',
         )}
         onClick={() => handleSelect(null)}
         onKeyDown={(e) => {
@@ -397,7 +399,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
           ))}
         </div>
       ) : folderTree.length === 0 ? (
-        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+        <div
+          className="px-3 py-8 text-center text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
           No folders yet. Create one to organize your characters.
         </div>
       ) : (

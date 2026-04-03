@@ -43,7 +43,7 @@ export class EdgeFunctionStrategy implements AIExecutionStrategy {
     return true;
   }
 
-  async execute(functionName: string, payload?: Record<string, unknown>): Promise<any> {
+  async execute(functionName: string, payload?: Record<string, unknown>): Promise<unknown> {
     logger.debug(`[EdgeFunctionStrategy] Calling ${functionName}`, payload);
 
     // Serialize payload to handle Date objects and other non-JSON-safe values

@@ -50,10 +50,17 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
   onSave,
   isSaving = false,
 }) => {
+  const fogOfWarId = useId();
+  const dynamicLightingId = useId();
+  const snapToGridId = useId();
   const gridOpacityId = useId();
   const ambientLightId = useId();
   const darknessId = useId();
   const timeOfDayId = useId();
+  const timeDawnId = useId();
+  const timeDayId = useId();
+  const timeDuskId = useId();
+  const timeNightId = useId();
   const weatherId = useId();
 
   const updateSetting = (
@@ -107,13 +114,11 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="fog-of-war">Fog of War</Label>
-              <p className="text-xs text-muted-foreground">
-                Hide unexplored areas from players
-              </p>
+              <Label htmlFor={fogOfWarId}>Fog of War</Label>
+              <p className="text-xs text-muted-foreground">Hide unexplored areas from players</p>
             </div>
             <Switch
-              id="fog-of-war"
+              id={fogOfWarId}
               checked={settings.enableFogOfWar ?? true}
               onCheckedChange={(checked) => updateSetting('enableFogOfWar', checked)}
             />
@@ -123,13 +128,13 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="dynamic-lighting">Dynamic Lighting</Label>
+              <Label htmlFor={dynamicLightingId}>Dynamic Lighting</Label>
               <p className="text-xs text-muted-foreground">
                 Enable token-based vision and light sources
               </p>
             </div>
             <Switch
-              id="dynamic-lighting"
+              id={dynamicLightingId}
               checked={settings.enableDynamicLighting ?? false}
               onCheckedChange={(checked) => updateSetting('enableDynamicLighting', checked)}
             />
@@ -144,20 +149,16 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
             <Grid className="h-5 w-5" />
             Grid Settings
           </CardTitle>
-          <CardDescription>
-            Configure grid appearance and behavior
-          </CardDescription>
+          <CardDescription>Configure grid appearance and behavior</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="snap-to-grid">Snap to Grid</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically align tokens to grid
-              </p>
+              <Label htmlFor={snapToGridId}>Snap to Grid</Label>
+              <p className="text-xs text-muted-foreground">Automatically align tokens to grid</p>
             </div>
             <Switch
-              id="snap-to-grid"
+              id={snapToGridId}
               checked={settings.snapToGrid ?? true}
               onCheckedChange={(checked) => updateSetting('snapToGrid', checked)}
             />
@@ -190,9 +191,7 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
             <Lightbulb className="h-5 w-5" />
             Lighting
           </CardTitle>
-          <CardDescription>
-            Adjust ambient light and darkness levels
-          </CardDescription>
+          <CardDescription>Adjust ambient light and darkness levels</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -244,9 +243,7 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
             <Cloud className="h-5 w-5" />
             Environment
           </CardTitle>
-          <CardDescription>
-            Set time of day and weather conditions
-          </CardDescription>
+          <CardDescription>Set time of day and weather conditions</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
@@ -258,32 +255,44 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
             >
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="dawn" id="time-dawn" />
-                  <Label htmlFor="time-dawn" className="flex-1 cursor-pointer flex items-center gap-2">
+                  <RadioGroupItem value="dawn" id={timeDawnId} />
+                  <Label
+                    htmlFor={timeDawnId}
+                    className="flex-1 cursor-pointer flex items-center gap-2"
+                  >
                     <Sun className="h-4 w-4 text-orange-400" />
                     Dawn
                   </Label>
                 </div>
 
                 <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="day" id="time-day" />
-                  <Label htmlFor="time-day" className="flex-1 cursor-pointer flex items-center gap-2">
+                  <RadioGroupItem value="day" id={timeDayId} />
+                  <Label
+                    htmlFor={timeDayId}
+                    className="flex-1 cursor-pointer flex items-center gap-2"
+                  >
                     <Sun className="h-4 w-4 text-yellow-400" />
                     Day
                   </Label>
                 </div>
 
                 <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="dusk" id="time-dusk" />
-                  <Label htmlFor="time-dusk" className="flex-1 cursor-pointer flex items-center gap-2">
+                  <RadioGroupItem value="dusk" id={timeDuskId} />
+                  <Label
+                    htmlFor={timeDuskId}
+                    className="flex-1 cursor-pointer flex items-center gap-2"
+                  >
                     <Sun className="h-4 w-4 text-orange-600" />
                     Dusk
                   </Label>
                 </div>
 
                 <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="night" id="time-night" />
-                  <Label htmlFor="time-night" className="flex-1 cursor-pointer flex items-center gap-2">
+                  <RadioGroupItem value="night" id={timeNightId} />
+                  <Label
+                    htmlFor={timeNightId}
+                    className="flex-1 cursor-pointer flex items-center gap-2"
+                  >
                     <Moon className="h-4 w-4 text-blue-300" />
                     Night
                   </Label>
@@ -319,7 +328,9 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
             </div>
             <div>
               <p className="text-muted-foreground mb-1">Dynamic Lighting</p>
-              <p className="font-medium">{settings.enableDynamicLighting ? 'Enabled' : 'Disabled'}</p>
+              <p className="font-medium">
+                {settings.enableDynamicLighting ? 'Enabled' : 'Disabled'}
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground mb-1">Grid Snap</p>
@@ -335,12 +346,7 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
 
       {/* Save Button */}
       {showSaveButton && (
-        <Button
-          variant="cosmic"
-          className="w-full"
-          onClick={onSave}
-          disabled={isSaving}
-        >
+        <Button variant="cosmic" className="w-full" onClick={onSave} disabled={isSaving}>
           {isSaving ? 'Saving...' : 'Save Settings'}
         </Button>
       )}

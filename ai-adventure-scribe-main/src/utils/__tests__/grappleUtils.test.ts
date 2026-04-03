@@ -9,13 +9,13 @@ import {
   canBeGrappled,
   canMaintainGrapple,
   escapeGrapple,
-  getGrappleActionDescription
+  getGrappleActionDescription,
 } from '../grappleUtils';
 
 import * as diceUtils from '@/utils/diceUtils';
 
 vi.mock('@/utils/diceUtils', () => ({
-  rollDice: vi.fn()
+  rollDice: vi.fn(),
 }));
 
 describe('grappleUtils', () => {
@@ -31,15 +31,15 @@ describe('grappleUtils', () => {
       conditions: [],
       mainHandWeapon: {
         properties: {
-          twoHanded: false
-        }
-      }
+          twoHanded: false,
+        },
+      },
     };
     mockTarget = {
       id: 't1',
       name: 'Target',
       level: 5,
-      conditions: []
+      conditions: [],
     };
   });
 

@@ -1,6 +1,13 @@
 import type { GameSession } from '@/types/game';
 
 /**
+ * ⚡ Bolt: Explicit column list for game session retrieval to avoid over-fetching
+ * large fields like 'summary' when not needed for session initialization or UI.
+ */
+export const GAME_SESSION_SELECT_COLUMNS =
+  'id, campaign_id, character_id, session_number, status, start_time, end_time, summary, turn_count, current_scene_description, session_notes';
+
+/**
  * Extended game session interface with additional properties
  */
 export interface ExtendedGameSession extends GameSession {

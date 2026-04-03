@@ -12,9 +12,9 @@ export { ChatInput } from './chat/ChatInput';
 export { ChatImage } from './chat/ChatImage';
 export { TypingIndicator } from './chat/TypingIndicator';
 export { DMChatBubble } from './chat/chat/DMChatBubble';
-export { ActionOptions } from './chat/ActionOptions';
-export { DiceRollMessage } from './chat/DiceRollMessage';
-export { DiceRollRequest } from './chat/DiceRollRequest';
+export { ActionOptions } from '@/components/game/ActionOptions';
+export { DiceRollMessage } from '@/components/game/DiceRollMessage';
+export { DiceRollRequest } from '@/components/game/DiceRollRequest';
 
 // Message list components
 export * from './chat/message-list';

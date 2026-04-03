@@ -1,7 +1,7 @@
-import type { ReactElement } from 'react';
-// Use browser version for Web Streams API (renderToReadableStream)
-// The .node version only has renderToPipeableStream
 import { renderToReadableStream } from 'react-dom/server.browser';
+import type { ReactElement } from 'react';
+
+import { logger } from '../lib/logger.js';
 
 interface StreamOptions {
   status?: number;
@@ -109,6 +109,6 @@ function concatenateStreams(
 }
 
 function handleError(error: unknown, onError?: (error: unknown) => void) {
-  console.error('SSR render error', error);
+  logger.error({ msg: 'SSR render error', error });
   onError?.(error);
 }

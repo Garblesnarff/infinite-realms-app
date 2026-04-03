@@ -49,10 +49,20 @@ const GalleryGrid: React.FC<GalleryGridProps> = ({ title, images, emptyMessage }
         {images.map((img, index) => (
           <div
             key={img.name || `${img.url}-${index}`}
-            className="relative group cursor-pointer"
+            className="relative group cursor-pointer focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:outline-none rounded-xl"
+            role="button"
+            tabIndex={0}
+            aria-label={`View ${img.label || img.name || 'image'}`}
             onClick={() => {
               setActive(img);
               setOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setActive(img);
+                setOpen(true);
+              }
             }}
             style={{
               animationDelay: `${index * 100}ms`,
@@ -90,7 +100,7 @@ const GalleryGrid: React.FC<GalleryGridProps> = ({ title, images, emptyMessage }
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-auto bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 border-infinite-purple/30">
-          <DialogHeader className={`relative z-[${Z_INDEX.DROPDOWN}] pb-4`}>
+          <DialogHeader className="relative pb-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-infinite-gold to-infinite-purple bg-clip-text text-transparent">
               {active?.label || active?.name || 'Gallery Preview'}
             </DialogTitle>

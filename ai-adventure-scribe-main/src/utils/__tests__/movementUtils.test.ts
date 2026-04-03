@@ -5,13 +5,13 @@ import {
   calculateMovementCost,
   canMoveToPosition,
   doesMovementProvokeOpportunityAttacks,
-  processMovementAction
+  processMovementAction,
 } from '../movementUtils';
 
 import { checkMovementOpportunityAttacks } from '@/utils/reactionTriggers';
 
 vi.mock('@/utils/reactionTriggers', () => ({
-  checkMovementOpportunityAttacks: vi.fn()
+  checkMovementOpportunityAttacks: vi.fn(),
 }));
 
 describe('movementUtils', () => {
@@ -47,7 +47,7 @@ describe('movementUtils', () => {
 
   describe('canMoveToPosition', () => {
     const mockParticipant: any = {
-      id: 'p1'
+      id: 'p1',
     };
 
     it('should return true if available movement is enough', () => {
@@ -64,16 +64,20 @@ describe('movementUtils', () => {
     const baseParticipant: any = {
       classFeatures: [],
       speed: { fly: 0 },
-      bonusActionTaken: false
+      bonusActionTaken: false,
     };
 
     it('should provoke OA when leaving reach', () => {
       expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'melee', 'ranged')).toBe(true);
-      expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'adjacent', 'ranged')).toBe(true);
+      expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'adjacent', 'ranged')).toBe(
+        true,
+      );
     });
 
     it('should NOT provoke OA when staying within reach', () => {
-      expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'melee', 'adjacent')).toBe(false);
+      expect(doesMovementProvokeOpportunityAttacks(baseParticipant, 'melee', 'adjacent')).toBe(
+        false,
+      );
     });
 
     it('should NOT provoke OA when not moving', () => {
@@ -83,26 +87,32 @@ describe('movementUtils', () => {
     it('should NOT provoke OA if participant has mobile feature', () => {
       const mobileParticipant = {
         ...baseParticipant,
-        classFeatures: [{ name: 'mobile' }]
+        classFeatures: [{ name: 'mobile' }],
       };
-      expect(doesMovementProvokeOpportunityAttacks(mobileParticipant, 'melee', 'ranged')).toBe(false);
+      expect(doesMovementProvokeOpportunityAttacks(mobileParticipant, 'melee', 'ranged')).toBe(
+        false,
+      );
     });
 
     it('should NOT provoke OA if participant is using disengage (mocked as bonusActionTaken)', () => {
       const disengagedParticipant = {
         ...baseParticipant,
-        bonusActionTaken: true
+        bonusActionTaken: true,
       };
-      expect(doesMovementProvokeOpportunityAttacks(disengagedParticipant, 'melee', 'ranged')).toBe(false);
+      expect(doesMovementProvokeOpportunityAttacks(disengagedParticipant, 'melee', 'ranged')).toBe(
+        false,
+      );
     });
 
     it('should provoke OA even if flying', () => {
       const flyingParticipant = {
         ...baseParticipant,
-        speed: { fly: 30 }
+        speed: { fly: 30 },
       };
       // Fixed: Flying creatures now correctly provoke OA when leaving reach
-      expect(doesMovementProvokeOpportunityAttacks(flyingParticipant, 'melee', 'ranged')).toBe(true);
+      expect(doesMovementProvokeOpportunityAttacks(flyingParticipant, 'melee', 'ranged')).toBe(
+        true,
+      );
     });
   });
 
@@ -110,8 +120,8 @@ describe('movementUtils', () => {
     const mockEncounter: any = {
       participants: [
         { id: 'p1', name: 'Player' },
-        { id: 'p2', name: 'Enemy' }
-      ]
+        { id: 'p2', name: 'Enemy' },
+      ],
     };
 
     it('should return empty if participant not found', () => {
@@ -130,7 +140,7 @@ describe('movementUtils', () => {
         mockEncounter.participants[0],
         mockEncounter,
         'melee',
-        'ranged'
+        'ranged',
       );
       expect(result).toBe(mockOpportunities);
     });

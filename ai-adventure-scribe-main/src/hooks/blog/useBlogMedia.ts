@@ -10,7 +10,7 @@ import {
   listBlogMedia,
   requestSignedUpload,
   uploadWithSignedUrl,
-} from '@/services/blog/blog-service';
+} from '@/services/blog/blog-media-service';
 
 export const BLOG_MEDIA_QUERY_KEY = 'blog-media';
 

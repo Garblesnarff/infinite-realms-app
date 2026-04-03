@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import React from 'react';
-import { CreateFolderDialog } from '../CharacterFolderDialog';
+import { CreateFolderDialog } from '../CreateFolderDialog';
 
 // Mock TRPC and other hooks
 vi.mock('@/infrastructure/api/trpc-hooks', () => ({
@@ -21,9 +21,7 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 test('CreateFolderDialog has accessible color buttons', () => {
-  render(
-    <CreateFolderDialog open={true} onOpenChange={() => {}} />
-  );
+  render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   // Find the color picker group
   const group = screen.getByRole('group', { name: /folder color/i });
@@ -39,12 +37,11 @@ test('CreateFolderDialog has accessible color buttons', () => {
 });
 
 test('CreateFolderDialog links parent folder label to select trigger', () => {
-  render(
-    <CreateFolderDialog open={true} onOpenChange={() => {}} />
-  );
+  render(<CreateFolderDialog open={true} onOpenChange={() => {}} />);
 
   const label = screen.getByText(/parent folder/i);
-  const selectTrigger = screen.getByLabelText(/select parent folder/i);
+  // Using role and checking name because aria-label was removed in favor of direct association
+  const selectTrigger = screen.getByRole('combobox', { name: /parent folder/i });
 
   expect(label.getAttribute('for')).toBe(selectTrigger.getAttribute('id'));
 });

@@ -20,7 +20,7 @@ import { personalityService, PersonalityElement } from '@/services/personalitySe
  */
 const extractPersonalityText = (
   element: PersonalityElement,
-  fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws'
+  fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws',
 ): string => {
   switch (fieldType) {
     case 'traits':

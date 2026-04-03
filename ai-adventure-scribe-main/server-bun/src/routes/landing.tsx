@@ -1,8 +1,12 @@
 import { Elysia } from 'elysia';
+
 import { getSiteConfig } from '../config/site.js';
+import { logger } from '../lib/logger.js';
 import { resolveAssetsForEntries } from '../lib/manifest.js';
 import { streamReactResponse } from '../utils/react-stream.js';
 import { LandingDocument } from '../views/landing/document.js';
+import { AIGameMasterPage } from '../views/landing/pages/ai-game-master.js';
+import { SoloTabletopRPGPage } from '../views/landing/pages/solo-tabletop-rpg.js';
 import {
   createFAQSchema,
   createWebPageSchema,
@@ -10,8 +14,6 @@ import {
   combineSchemas,
   type FAQItem,
 } from '../views/landing/schema.js';
-import { AIGameMasterPage } from '../views/landing/pages/ai-game-master.js';
-import { SoloTabletopRPGPage } from '../views/landing/pages/solo-tabletop-rpg.js';
 
 /**
  * Create cache control headers for SSR pages
@@ -117,7 +119,8 @@ export const landingRoutes = new Elysia()
         }
       );
     } catch (error) {
-      console.error('Failed to render AI Game Master page', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render AI Game Master page', { error });
       return new Response('Failed to render landing page', {
         status: 500,
         headers: { 'Content-Type': 'text/plain' },
@@ -198,7 +201,8 @@ export const landingRoutes = new Elysia()
         }
       );
     } catch (error) {
-      console.error('Failed to render Solo Tabletop RPG page', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.error('Failed to render Solo Tabletop RPG page', { error });
       return new Response('Failed to render landing page', {
         status: 500,
         headers: { 'Content-Type': 'text/plain' },

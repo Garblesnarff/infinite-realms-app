@@ -96,13 +96,15 @@ export interface BlogUserRole {
   role: BlogRole;
 }
 
+export type SortField = 'updatedAt' | 'createdAt' | 'title' | 'status' | 'publishedAt';
+
 export interface BlogPostListFilters {
   status?: BlogPostStatus | 'all';
   search?: string;
   scheduledOnly?: boolean;
   categoryId?: string;
   tagId?: string;
-  sortBy?: 'updatedAt' | 'createdAt' | 'title' | 'status' | 'publishedAt';
+  sortBy?: SortField;
   sortDirection?: 'asc' | 'desc';
 }
 

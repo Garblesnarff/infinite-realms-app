@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { RestService } from '../rest-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       characters: {
@@ -20,16 +20,24 @@ vi.mock('../../../../db/client.js', () => ({
         findMany: vi.fn(),
       },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(),
-      })),
-    })),
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
+    select: vi.fn(() => {
+      const mock = {
+        from: vi.fn(() => mock),
+        where: vi.fn(() => mock),
+        limit: vi.fn(() => mock),
+        orderBy: vi.fn(() => mock),
         returning: vi.fn(),
-      })),
-    })),
+      };
+      return mock;
+    }),
+    insert: vi.fn(() => {
+      const mock = {
+        values: vi.fn(() => mock),
+        select: vi.fn(() => mock),
+        returning: vi.fn(),
+      };
+      return mock;
+    }),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(),
@@ -56,7 +64,7 @@ describe('RestService Security', () => {
 
   describe('takeShortRest', () => {
     it('should throw NotFoundError if character is not found or not owned by user', async () => {
-      // Mock character NOT found or NOT owned (which returns null in our implementation)
+      // Mock character NOT found or NOT owned
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
       await expect(RestService.takeShortRest(mockCharacterId, mockUserId))
@@ -72,7 +80,7 @@ describe('RestService Security', () => {
 
       // Mock rest event insertion
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'event-123' }])
         })
       });
@@ -100,7 +108,7 @@ describe('RestService Security', () => {
 
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'event-456' }])
         })
       });
@@ -108,6 +116,30 @@ describe('RestService Security', () => {
       const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
       expect(result).toBeDefined();
       expect(result.restEventId).toBe('event-456');
+    });
+  });
+
+  describe('initializeHitDice', () => {
+    it('should throw NotFoundError if character is not found or not owned by user', async () => {
+      (db.query.characters.findFirst as any).mockResolvedValue(null);
+
+      await expect(RestService.initializeHitDice(mockCharacterId, mockUserId, 'Wizard', 1))
+        .rejects.toThrow(NotFoundError);
+    });
+
+    it('should succeed and return new hit dice if owned by user', async () => {
+      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
+      (db.query.characterHitDice.findFirst as any).mockResolvedValue(null);
+
+      (db.insert as any).mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'hd-123', characterId: mockCharacterId }])
+        })
+      });
+
+      const result = await RestService.initializeHitDice(mockCharacterId, mockUserId, 'Wizard', 1);
+      expect(result).toBeDefined();
+      expect(result.id).toBe('hd-123');
     });
   });
 

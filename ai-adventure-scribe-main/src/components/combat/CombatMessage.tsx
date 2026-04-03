@@ -1,30 +1,15 @@
+import { Sword, Shield, Zap, Heart, Skull, Target, Dice6 } from 'lucide-react';
 import React from 'react';
-import { Card } from '@/components/ui/card';
+
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Separator } from '@/components/ui/separator';
-import { DiceRoll } from '@/utils/diceUtils';
-import { DetectedCombatAction } from '@/utils/combatDetection';
-import { Sword, Shield, Zap, Heart, Skull, Target, Dice6 } from 'lucide-react';
+import { type CombatMessageData } from '@/utils/combat/ai-narration-utils';
+import { type DiceRoll } from '@/utils/diceUtils';
 
-export interface CombatMessageData {
-  type:
-    | 'attack_roll'
-    | 'damage_roll'
-    | 'saving_throw'
-    | 'skill_check'
-    | 'initiative'
-    | 'death_save'
-    | 'concentration_save';
-  actor: string;
-  target?: string;
-  roll: DiceRoll;
-  dc?: number;
-  success?: boolean;
-  critical?: boolean;
-  action?: DetectedCombatAction;
-  description: string;
-}
+// Re-export type for backward compatibility
+export type { CombatMessageData };
 
 interface CombatMessageProps {
   data: CombatMessageData;
@@ -34,8 +19,9 @@ interface CombatMessageProps {
 /**
  * Combat Message Component
  * Displays combat-specific dice rolls and actions in the chat
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of combat rolls
  */
-export const CombatMessage: React.FC<CombatMessageProps> = ({ data, timestamp }) => {
+export const CombatMessage: React.FC<CombatMessageProps> = React.memo(({ data, timestamp }) => {
   const getTypeIcon = () => {
     switch (data.type) {
       case 'attack_roll':
@@ -293,22 +279,21 @@ export const CombatMessage: React.FC<CombatMessageProps> = ({ data, timestamp })
       </div>
     </Card>
   );
-};
+});
 
 /**
  * Initiative Roll Message Component
  * Special component for initiative rolls showing turn order
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of initiative lists
  */
 interface InitiativeMessageProps {
   participants: Array<{ name: string; initiative: number; roll: DiceRoll }>;
   timestamp?: string;
 }
 
-export const InitiativeMessage: React.FC<InitiativeMessageProps> = ({
-  participants,
-  timestamp,
-}) => {
-  const sortedParticipants = [...participants].sort((a, b) => b.initiative - a.initiative);
+export const InitiativeMessage: React.FC<InitiativeMessageProps> = React.memo(
+  ({ participants, timestamp }) => {
+    const sortedParticipants = [...participants].sort((a, b) => b.initiative - a.initiative);
 
   return (
     <Card className="p-4 mb-2 bg-yellow-50 border-l-4 border-l-yellow-500">
@@ -346,11 +331,12 @@ export const InitiativeMessage: React.FC<InitiativeMessageProps> = ({
       </div>
     </Card>
   );
-};
+});
 
 /**
  * Combat Summary Message Component
  * Displays end-of-combat summary with damage dealt, rounds, etc.
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of combat summaries
  */
 interface CombatSummaryProps {
   summary: {
@@ -362,8 +348,9 @@ interface CombatSummaryProps {
   timestamp?: string;
 }
 
-export const CombatSummaryMessage: React.FC<CombatSummaryProps> = ({ summary, timestamp }) => {
-  return (
+export const CombatSummaryMessage: React.FC<CombatSummaryProps> = React.memo(
+  ({ summary, timestamp }) => {
+    return (
     <Card className="p-4 mb-2 bg-slate-50 border-l-4 border-l-slate-500">
       <div className="flex items-center gap-2 mb-3">
         <div className="p-2 rounded-full text-white bg-slate-500">
@@ -409,4 +396,4 @@ export const CombatSummaryMessage: React.FC<CombatSummaryProps> = ({ summary, ti
       </div>
     </Card>
   );
-};
+});

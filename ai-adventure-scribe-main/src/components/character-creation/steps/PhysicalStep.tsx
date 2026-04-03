@@ -1,5 +1,5 @@
 import { Ruler, Weight, User, Eye, Palette, Sparkles } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,12 @@ import { useCharacter } from '@/contexts/CharacterContext';
 const PhysicalStep: React.FC = () => {
   const { state, dispatch } = useCharacter();
   const [useMetric, setUseMetric] = useState(false);
+  const metricSwitchId = useId();
+  const genderLabelId = useId();
+  const ageId = useId();
+  const eyesId = useId();
+  const skinId = useId();
+  const hairId = useId();
 
   const handleGenderChange = (gender: 'male' | 'female') => {
     dispatch({ type: 'SET_GENDER', payload: gender });
@@ -96,11 +102,16 @@ const PhysicalStep: React.FC = () => {
       <Card className="glass rounded-2xl hover-lift">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center space-x-3">
-            <Label htmlFor="metric-switch" className={!useMetric ? 'font-semibold' : ''}>
+            <Label htmlFor={metricSwitchId} className={!useMetric ? 'font-semibold' : ''}>
               Imperial
             </Label>
-            <Switch id="metric-switch" checked={useMetric} onCheckedChange={setUseMetric} />
-            <Label htmlFor="metric-switch" className={useMetric ? 'font-semibold' : ''}>
+            <Switch
+              id={metricSwitchId}
+              checked={useMetric}
+              onCheckedChange={setUseMetric}
+              aria-label="Toggle between Imperial and Metric units"
+            />
+            <Label htmlFor={metricSwitchId} className={useMetric ? 'font-semibold' : ''}>
               Metric
             </Label>
           </div>
@@ -118,11 +129,12 @@ const PhysicalStep: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="text-sm font-medium mb-3 block">Gender</Label>
+              <Label id={genderLabelId} className="text-sm font-medium mb-3 block">Gender</Label>
               <RadioGroup
                 defaultValue={state.character.gender}
                 onValueChange={handleGenderChange}
                 className="flex space-x-4"
+                aria-labelledby={genderLabelId}
               >
                 <div className="flex items-center space-x-2 flex-1">
                   <RadioGroupItem value="male" id="male" />
@@ -140,11 +152,11 @@ const PhysicalStep: React.FC = () => {
             </div>
 
             <div>
-              <Label htmlFor="age" className="text-sm font-medium mb-2 block">
+              <Label htmlFor={ageId} className="text-sm font-medium mb-2 block">
                 Age (years)
               </Label>
               <Input
-                id="age"
+                id={ageId}
                 type="number"
                 value={state.character.age || ''}
                 onChange={handleAgeChange}
@@ -176,6 +188,7 @@ const PhysicalStep: React.FC = () => {
               value={[state.character.height || heightRange[0]]}
               onValueChange={handleHeightChange}
               className="py-4"
+              aria-label="Height"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Min: {formatHeight(heightRange[0])}</span>
@@ -205,6 +218,7 @@ const PhysicalStep: React.FC = () => {
               value={[state.character.weight || weightRange[0]]}
               onValueChange={handleWeightChange}
               className="py-4"
+              aria-label="Weight"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Min: {formatWeight(weightRange[0])}</span>
@@ -223,12 +237,12 @@ const PhysicalStep: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="eyes" className="flex items-center gap-2 text-sm font-medium">
+              <Label htmlFor={eyesId} className="flex items-center gap-2 text-sm font-medium">
                 <Eye className="w-4 h-4" />
                 Eye Color
               </Label>
               <Input
-                id="eyes"
+                id={eyesId}
                 value={state.character.eyes || ''}
                 onChange={handleEyesChange}
                 placeholder="e.g., Blue, Green, Brown"
@@ -236,12 +250,12 @@ const PhysicalStep: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="skin" className="flex items-center gap-2 text-sm font-medium">
+              <Label htmlFor={skinId} className="flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="w-4 h-4" />
                 Skin Color
               </Label>
               <Input
-                id="skin"
+                id={skinId}
                 value={state.character.skin || ''}
                 onChange={handleSkinChange}
                 placeholder="e.g., Pale, Tan, Dark"
@@ -249,12 +263,12 @@ const PhysicalStep: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hair" className="flex items-center gap-2 text-sm font-medium">
+              <Label htmlFor={hairId} className="flex items-center gap-2 text-sm font-medium">
                 <Palette className="w-4 h-4" />
                 Hair Color
               </Label>
               <Input
-                id="hair"
+                id={hairId}
                 value={state.character.hair || ''}
                 onChange={handleHairChange}
                 placeholder="e.g., Black, Blonde, Red"

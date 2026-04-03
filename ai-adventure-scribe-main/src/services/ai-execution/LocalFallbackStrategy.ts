@@ -6,14 +6,14 @@ import { AIService } from '@/services/ai-service';
 interface DMRunPayload {
   task?: { description?: string };
   agentContext?: {
-    campaignDetails?: any;
-    characterDetails?: any;
-    narrativeResponse?: any;
+    campaignDetails?: Record<string, unknown>;
+    characterDetails?: Record<string, unknown>;
+    narrativeResponse?: Record<string, unknown>;
   };
 }
 
 // Per-session cooldown for combat DM narration (5s)
-const lastNarrationAt = new Map<string, number>();
+let lastGlobalNarrationAt = 0;
 const NARRATION_COOLDOWN_MS = 5000;
 
 export class LocalFallbackStrategy implements AIExecutionStrategy {
@@ -28,7 +28,7 @@ export class LocalFallbackStrategy implements AIExecutionStrategy {
     return functionName === 'dm-agent-execute' || functionName === 'rules-interpreter-execute';
   }
 
-  async execute(functionName: string, payload?: Record<string, unknown>): Promise<any> {
+  async execute(functionName: string, payload?: Record<string, unknown>): Promise<unknown> {
     if (functionName === 'rules-interpreter-execute') {
       return this.executeRulesInterpreter();
     }
@@ -58,11 +58,9 @@ export class LocalFallbackStrategy implements AIExecutionStrategy {
 
     // Apply cooldown for combat events
     if (isCombatEvent) {
-      const sessionId = 'global'; // Could be enhanced to use actual session ID
       const now = Date.now();
-      const lastTime = lastNarrationAt.get(sessionId) || 0;
 
-      if (now - lastTime < NARRATION_COOLDOWN_MS) {
+      if (now - lastGlobalNarrationAt < NARRATION_COOLDOWN_MS) {
         logger.info(
           '[LocalFallbackStrategy] Combat DM narration throttled by cooldown, returning stub',
         );
@@ -74,7 +72,7 @@ export class LocalFallbackStrategy implements AIExecutionStrategy {
         };
       }
 
-      lastNarrationAt.set(sessionId, now);
+      lastGlobalNarrationAt = now;
     }
 
     logger.info('[LocalFallbackStrategy] Using local AIService for DM agent');

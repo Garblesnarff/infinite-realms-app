@@ -7,14 +7,11 @@ import {
   useEffectiveAbilityScores,
   useLevelProgression,
   useCharacterStatValue,
-  useIsSpellcaster
+  useIsSpellcaster,
 } from '../use-character-stats';
 
 import type { Character } from '@/types/character';
-import {
-  applyRacialBonuses,
-  formatRacialBonus
-} from '@/utils/racialAbilityBonuses';
+import { applyRacialBonuses, formatRacialBonus } from '@/utils/racialAbilityBonuses';
 
 // Mock logger to avoid console noise
 vi.mock('@/lib/logger', () => ({
@@ -204,7 +201,7 @@ describe('use-character-stats hooks', () => {
     it('should return false for non-spellcaster', () => {
       const fighter: Character = {
         ...mockCharacter,
-        class: { name: 'Fighter' } as any
+        class: { name: 'Fighter' } as any,
       };
       const { result } = renderHook(() => useIsSpellcaster(fighter));
       expect(result.current).toBe(false);
@@ -250,7 +247,14 @@ describe('use-character-stats hooks', () => {
 
   describe('racialAbilityBonuses utils', () => {
     it('applyRacialBonuses should cap scores at 20', () => {
-      const baseScores = { strength: 19, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+      const baseScores = {
+        strength: 19,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      };
       const bonuses = [{ ability: 'strength' as any, bonus: 2 }];
       const final = applyRacialBonuses(baseScores, bonuses);
       expect(final.strength).toBe(20);

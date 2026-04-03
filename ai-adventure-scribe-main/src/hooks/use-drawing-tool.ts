@@ -15,20 +15,20 @@
  * @module hooks/use-drawing-tool
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { trpc } from '@/infrastructure/api';
-import logger from '@/lib/logger';
+/* eslint-disable max-lines */
+import { useState, useCallback, useEffect } from 'react';
+
 import type {
-  DrawingType,
   SceneDrawing,
   CreateDrawingData,
-  UpdateDrawingData,
   StrokeConfig,
   FillConfig,
-  TextConfig,
-  FillType,
-} from '@/types/drawing';
+ DrawingType} from '@/types/drawing';
 import type { Point2D } from '@/types/scene';
+
+import { trpc } from '@/infrastructure/api';
+import logger from '@/lib/logger';
+import { FillType } from '@/types/drawing';
 
 // ===========================
 // Types
@@ -108,11 +108,6 @@ const DEFAULT_STATE: DrawingToolState = {
   selectedLayer: 'drawings',
 };
 
-const FONT_SIZES = {
-  small: 16,
-  medium: 24,
-  large: 36,
-};
 
 // ===========================
 // Hook Implementation
@@ -130,7 +125,6 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
 
   // tRPC mutations
   const createDrawingMutation = trpc.drawings?.create.useMutation();
-  const updateDrawingMutation = trpc.drawings?.update.useMutation();
   const deleteDrawingMutation = trpc.drawings?.delete.useMutation();
 
   // ===========================
@@ -140,6 +134,67 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   const setActiveTool = useCallback((tool: DrawingType | null) => {
     setState((prev) => ({ ...prev, activeTool: tool, currentDrawing: null }));
   }, []);
+
+  // ===========================
+  // Database Operations
+  // ===========================
+
+  const saveDrawing = useCallback(
+    async (drawing: Partial<SceneDrawing>): Promise<SceneDrawing | null> => {
+      try {
+        if (!createDrawingMutation) {
+          logger.warn('Drawing API not available');
+          return null;
+        }
+
+        const drawingData: CreateDrawingData = {
+          sceneId: drawing.sceneId || sceneId,
+          drawingType: drawing.drawingType!,
+          x: drawing.x || 0,
+          y: drawing.y || 0,
+          width: drawing.width,
+          height: drawing.height,
+          radius: drawing.radius,
+          points: drawing.points,
+          stroke: drawing.stroke,
+          fill: drawing.fill,
+          text: drawing.text,
+          gmOnly: drawing.gmOnly || false,
+          label: drawing.label,
+        };
+
+        const result = await createDrawingMutation.mutateAsync(drawingData);
+        logger.info('Drawing saved', { drawingId: result.id });
+
+        return result as SceneDrawing;
+      } catch (error) {
+        logger.error('Failed to save drawing', { error });
+        return null;
+      }
+    },
+    [sceneId, createDrawingMutation],
+  );
+
+  const deleteDrawing = useCallback(
+    async (drawingId: string): Promise<void> => {
+      try {
+        if (!deleteDrawingMutation) {
+          logger.warn('Drawing API not available');
+          return;
+        }
+
+        await deleteDrawingMutation.mutateAsync({ drawingId });
+        logger.info('Drawing deleted', { drawingId });
+
+        if (onDrawingDeleted) {
+          onDrawingDeleted(drawingId);
+        }
+      } catch (error) {
+        logger.error('Failed to delete drawing', { error });
+      }
+    },
+    [deleteDrawingMutation, onDrawingDeleted],
+  );
 
   // ===========================
   // Drawing Management
@@ -181,7 +236,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
 
       setState((prev) => ({ ...prev, currentDrawing: newDrawing }));
     },
-    [state, sceneId, userId]
+    [state, sceneId, userId],
   );
 
   const updateDrawing = useCallback((data: Partial<SceneDrawing>) => {
@@ -214,7 +269,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
     } catch (error) {
       logger.error('Failed to finish drawing', { error });
     }
-  }, [state, onDrawingCreated]);
+  }, [state, onDrawingCreated, saveDrawing]);
 
   const cancelDrawing = useCallback(() => {
     setState((prev) => ({ ...prev, currentDrawing: null }));
@@ -275,7 +330,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
     } catch (error) {
       logger.error('Failed to undo drawing', { error });
     }
-  }, [undoStack]);
+  }, [undoStack, deleteDrawing]);
 
   const redo = useCallback(async () => {
     if (redoStack.length === 0) return;
@@ -294,68 +349,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
     } catch (error) {
       logger.error('Failed to redo drawing', { error });
     }
-  }, [redoStack]);
-
-  // ===========================
-  // Database Operations
-  // ===========================
-
-  const saveDrawing = useCallback(
-    async (drawing: Partial<SceneDrawing>): Promise<SceneDrawing | null> => {
-      try {
-        if (!createDrawingMutation) {
-          logger.warn('Drawing API not available');
-          return null;
-        }
-
-        const drawingData: CreateDrawingData = {
-          sceneId: drawing.sceneId || sceneId,
-          drawingType: drawing.drawingType!,
-          x: drawing.x || 0,
-          y: drawing.y || 0,
-          width: drawing.width,
-          height: drawing.height,
-          radius: drawing.radius,
-          points: drawing.points,
-          stroke: drawing.stroke,
-          fill: drawing.fill,
-          text: drawing.text,
-          gmOnly: drawing.gmOnly || false,
-          label: drawing.label,
-        };
-
-        const result = await createDrawingMutation.mutateAsync(drawingData);
-        logger.info('Drawing saved', { drawingId: result.id });
-
-        return result as SceneDrawing;
-      } catch (error) {
-        logger.error('Failed to save drawing', { error });
-        return null;
-      }
-    },
-    [sceneId, createDrawingMutation]
-  );
-
-  const deleteDrawing = useCallback(
-    async (drawingId: string): Promise<void> => {
-      try {
-        if (!deleteDrawingMutation) {
-          logger.warn('Drawing API not available');
-          return;
-        }
-
-        await deleteDrawingMutation.mutateAsync({ drawingId });
-        logger.info('Drawing deleted', { drawingId });
-
-        if (onDrawingDeleted) {
-          onDrawingDeleted(drawingId);
-        }
-      } catch (error) {
-        logger.error('Failed to delete drawing', { error });
-      }
-    },
-    [deleteDrawingMutation, onDrawingDeleted]
-  );
+  }, [redoStack, saveDrawing]);
 
   // ===========================
   // Keyboard Shortcuts

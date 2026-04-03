@@ -8,7 +8,11 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useCombatStore, useParticipants, useCurrentTurnParticipantId } from '@/stores/useCombatStore';
+import {
+  useCombatStore,
+  useParticipants,
+  useCurrentTurnParticipantId,
+} from '@/stores/useCombatStore';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
 import type { CombatParticipant } from '@/types/combat';
 import type { Token, UpdateTokenData } from '@/types/token';
@@ -59,10 +63,7 @@ export interface CombatCanvasSyncOptions {
  * });
  * ```
  */
-export function useCombatCanvasSync(
-  tokens: Token[],
-  options: CombatCanvasSyncOptions = {},
-) {
+export function useCombatCanvasSync(tokens: Token[], options: CombatCanvasSyncOptions = {}) {
   const {
     autoSelectOnTurn = true,
     syncHealthBars = true,
@@ -175,13 +176,7 @@ export function useCombatCanvasSync(
         onTokenUpdate(token.id, updates);
       }
     },
-    [
-      findTokenForParticipant,
-      onTokenUpdate,
-      syncHealthBars,
-      syncConditions,
-      showDefeatedState,
-    ],
+    [findTokenForParticipant, onTokenUpdate, syncHealthBars, syncConditions, showDefeatedState],
   );
 
   // ===========================
@@ -199,7 +194,10 @@ export function useCombatCanvasSync(
       const updates: Partial<CombatParticipant> = {};
 
       // Sync position
-      if (onPositionSync && (token.x !== participant.position?.x || token.y !== participant.position?.y)) {
+      if (
+        onPositionSync &&
+        (token.x !== participant.position?.x || token.y !== participant.position?.y)
+      ) {
         updates.position = {
           x: token.x,
           y: token.y,

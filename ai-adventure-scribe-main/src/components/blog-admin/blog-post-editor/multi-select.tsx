@@ -78,6 +78,8 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                 {label}
                 <button
                   className="ml-1 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  aria-label={`Remove ${label}`}
+                  title={`Remove ${label}`}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       const option = options.find((opt) => opt.label === label);

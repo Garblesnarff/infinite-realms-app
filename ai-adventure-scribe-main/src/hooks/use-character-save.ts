@@ -35,7 +35,10 @@ const LOCAL_USER_ID = '00000000-0000-0000-0000-000000000000';
  * Custom hook for handling character data persistence
  * Provides methods and state for saving character data to Supabase
  */
-export const useCharacterSave = () => {
+export const useCharacterSave = (): {
+  saveCharacter: (character: Character) => Promise<Character | null>;
+  isSaving: boolean;
+} => {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -68,6 +71,41 @@ export const useCharacterSave = () => {
       };
 
       logger.info('Saving character data:', characterData);
+
+      // ⚡ Bolt: Define internal spell save helper to allow parallelization
+      const saveSpells = async (id: string): Promise<void> => {
+        if (
+          (!character.cantrips || character.cantrips.length === 0) &&
+          (!character.knownSpells || character.knownSpells.length === 0)
+        ) {
+          return;
+        }
+
+        try {
+          const frontendSpellIds = [
+            ...(character.cantrips || []),
+            ...(character.knownSpells || []),
+          ];
+          const databaseSpellIds = convertSpellIdsToDatabase(frontendSpellIds);
+
+          if (databaseSpellIds.length > 0) {
+            await characterSpellService.saveCharacterSpells(id, {
+              spells: databaseSpellIds,
+              className: character.class?.name || '',
+            });
+            logger.info(`✅ Successfully saved spells for character ${id}`);
+          }
+        } catch (spellError) {
+          logger.warn('❌ Spell save failed but continuing:', spellError);
+          if (!character.id) {
+            toast({
+              title: 'Partial Save Success',
+              description: 'Character created but spell assignment failed.',
+              variant: 'destructive',
+            });
+          }
+        }
+      };
 
       // For new characters, use atomic RPC function
       let savedCharacter: Character;
@@ -123,98 +161,54 @@ export const useCharacterSave = () => {
         if (rpcError) throw rpcError;
         characterData.id = newCharacterId;
         savedCharacter = { ...character, id: newCharacterId, campaign_id: effectiveCampaignId };
+
+        // Save spells after creation (needs the new ID)
+        await saveSpells(newCharacterId);
       } else {
-        // For existing characters, use traditional update approach
-        const { error: updateError } = await supabase
-          .from('characters')
-          .update(characterData)
-          .eq('id', characterData.id);
-
-        if (updateError) throw updateError;
-
-        // Transform and save character stats
-        const statsData = {
-          ...transformAbilityScoresForStorage(character.abilityScores!, characterData.id),
-        };
-
-        const { error: statsError } = await supabase.from('character_stats').upsert(statsData, {
-          onConflict: 'character_id',
-        });
-
-        if (statsError) {
-          logger.warn('Stats save failed but continuing:', statsError);
-          // Don't throw - character core data saved
+        // Check authentication for updates
+        if (!user) {
+          throw new Error('Authentication required for updating characters');
         }
 
-        // Save equipment if present (non-blocking)
+        // ⚡ Bolt: Parallelize all database operations for existing characters.
+        // This reduces database round-trips and improves save performance.
+        const statsData = transformAbilityScoresForStorage(
+          character.abilityScores!,
+          characterData.id,
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const promises: Promise<any>[] = [
+          supabase
+            .from('characters')
+            .update(characterData)
+            .eq('id', characterData.id)
+            .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`),
+          supabase.from('character_stats').upsert(statsData, { onConflict: 'character_id' }),
+          saveSpells(characterData.id),
+        ];
+
         if (character.inventory && character.inventory.length > 0) {
           const equipmentData = transformEquipmentForStorage(character, characterData.id);
-
-          const { error: equipmentError } = await supabase
-            .from('character_equipment')
-            .upsert(equipmentData, {
+          promises.push(
+            supabase.from('character_equipment').upsert(equipmentData, {
               onConflict: 'character_id,item_name',
-            });
-
-          if (equipmentError) {
-            logger.warn('Equipment save failed but continuing:', equipmentError);
-            // Don't throw - character core data saved
-          }
+            }),
+          );
         }
+
+        const results = await Promise.all(promises);
+
+        // Check for core character update error (first promise)
+        const updateResult = results[0];
+        if (updateResult.error) throw updateResult.error;
+
+        // Log warnings for other potential failures but don't fail the entire operation
+        if (results[1].error) logger.warn('Stats save failed but continuing:', results[1].error);
+        if (results[3]?.error)
+          logger.warn('Equipment save failed but continuing:', results[3].error);
 
         savedCharacter = { ...character, campaign_id: effectiveCampaignId };
-      }
-
-      // Save spells if present (handled separately from atomic creation)
-      // Note: Spell saving happens AFTER character creation to maintain separation of concerns
-      // If spell saving fails for a NEW character, we should consider cleanup
-      if (
-        (character.cantrips && character.cantrips.length > 0) ||
-        (character.knownSpells && character.knownSpells.length > 0)
-      ) {
-        try {
-          const frontendSpellIds = [
-            ...(character.cantrips || []),
-            ...(character.knownSpells || []),
-          ];
-          logger.info('🔄 Frontend spell IDs:', frontendSpellIds);
-
-          // Convert frontend kebab-case IDs to database UUIDs
-          const databaseSpellIds = convertSpellIdsToDatabase(frontendSpellIds);
-          logger.info('🔄 Converted to database UUIDs:', databaseSpellIds);
-
-          if (databaseSpellIds.length === 0) {
-            logger.warn('⚠️ No valid spell mappings found, skipping spell save');
-            return savedCharacter;
-          }
-
-          await characterSpellService.saveCharacterSpells(characterData.id, {
-            spells: databaseSpellIds,
-            className: character.class?.name || '',
-          });
-          logger.info(
-            `✅ Successfully saved ${databaseSpellIds.length}/${frontendSpellIds.length} spells for character ${characterData.id}`,
-          );
-        } catch (spellError) {
-          // For NEW characters, spell save failures are more critical
-          // because the character might be in an inconsistent state
-          if (!character.id) {
-            logger.error(
-              '❌ Critical: Spell save failed for new character. Character data saved but spells missing:',
-              spellError,
-            );
-            toast({
-              title: 'Partial Save Success',
-              description:
-                'Character created but spell assignment failed. You can add spells manually later.',
-              variant: 'destructive',
-            });
-          } else {
-            // For existing characters, spell failures are less critical
-            logger.warn('❌ Spell save failed but continuing:', spellError);
-          }
-          // Don't throw - character core data saved
-        }
       }
 
       // Generate background image asynchronously for new characters
@@ -251,7 +245,10 @@ export const useCharacterSave = () => {
    * Generate background image for the character
    * This runs asynchronously after character creation
    */
-  const generateBackgroundImage = async (characterId: string, character: Character) => {
+  const generateBackgroundImage = async (
+    characterId: string,
+    character: Character,
+  ): Promise<void> => {
     try {
       logger.info(`Generating background image for character ${characterId}`);
 
@@ -279,7 +276,8 @@ export const useCharacterSave = () => {
           background_image: imageUrl,
           updated_at: new Date().toISOString(), // Ensure updated_at triggers realtime
         })
-        .eq('id', characterId);
+        .eq('id', characterId)
+        .or(`user_id.eq.${user?.id},owner_id.eq.${user?.id}`);
 
       if (error) {
         logger.error('Error updating character with background image:', error);

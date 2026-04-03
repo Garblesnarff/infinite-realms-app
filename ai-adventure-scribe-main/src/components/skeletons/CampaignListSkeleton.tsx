@@ -10,7 +10,7 @@
 
 import React from 'react';
 
-import CampaignSkeleton from '@/components/campaign-list/campaign-skeleton';
+import { CampaignSkeleton } from '@/features/campaign/components';
 
 /**
  * CampaignListSkeleton - Skeleton loader for campaign grid

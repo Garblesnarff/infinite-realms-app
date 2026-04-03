@@ -77,12 +77,12 @@ VITE_TRPC_API_URL=/api/trpc
 
 1. Start the backend server:
    ```bash
-   npm run server:dev
+   bun run server:dev
    ```
 
 2. Start the frontend:
    ```bash
-   npm run dev:frontend
+   bun run dev:frontend
    ```
 
 3. Navigate to the example component:
@@ -123,7 +123,7 @@ VITE_TRPC_API_URL=/api/trpc
 **Solution:**
 1. Restart TypeScript server in your IDE
 2. Clear TypeScript cache: `rm -rf node_modules/.cache`
-3. Rebuild backend: `npm run server:build`
+3. Rebuild backend: `bun run server:build`
 4. Restart dev server
 
 ### CORS Errors

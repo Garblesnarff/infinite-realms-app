@@ -4,6 +4,8 @@
  * Functions for handling mass combat calculations, army management, and battle resolution
  */
 
+/* eslint-disable max-lines */
+
 import type {
   Army,
   ArmyUnit,
@@ -85,13 +87,6 @@ export function resolveArmyAttack(
 
   // Calculate casualties
   const casualties = Math.floor(damage / defender.hitPoints);
-  const survivingUnits = Math.max(0, defender.size - casualties);
-
-  // Update defender
-  const updatedDefender = {
-    ...defender,
-    size: survivingUnits,
-  };
 
   return {
     damage,
@@ -144,11 +139,6 @@ export function moveArmy(army: Army, newX: number, newY: number, battlefield: Ba
   if (!withinBounds) {
     return army; // No movement if outside bounds
   }
-
-  // Calculate distance
-  const dx = newX - army.position.x;
-  const dy = newY - army.position.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
 
   // Update army position
   return {
@@ -294,7 +284,7 @@ export function calculateCasualties(army: Army, initialArmy: Army): CasualtyRepo
 export function executeTacticalManeuver(
   maneuver: TacticalManeuver,
   commander: ArmyCommander,
-  army: Army,
+  _army: Army,
 ): { success: boolean; effect: string; description: string } {
   // Check if commander has required level
   if (commander.level < maneuver.requiredCommanderLevel) {

@@ -8,7 +8,6 @@
  * - Agent interfaces and types (src/agents/types.ts)
  * - Edge function caller (src/utils/edgeFunctionHandler.ts)
  * - Messaging service (src/agents/messaging/agent-messaging-service.ts)
- * - CrewAI communication types (src/agents/crewai/types/communication.ts)
  * - Error handling services (src/agents/error/services/ErrorHandlingService.ts)
  * - Validation services (src/agents/rules/services/ValidationService.ts)
  * - Validation results processor (src/agents/rules/services/ValidationResultsProcessor.ts)

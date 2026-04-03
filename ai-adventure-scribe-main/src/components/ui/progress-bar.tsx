@@ -61,7 +61,8 @@ const progressFillVariants = cva(
 );
 
 export interface ProgressBarProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'value'>,
+  extends
+    Omit<React.HTMLAttributes<HTMLDivElement>, 'value'>,
     VariantProps<typeof progressBarVariants> {
   /** Current value */
   value: number;

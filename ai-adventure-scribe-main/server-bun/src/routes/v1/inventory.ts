@@ -11,24 +11,45 @@
  * Ported from /server/src/routes/v1/inventory.ts
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
-import { CharacterService } from '../../services/character-service.js';
-// Import service from Bun server
 import { InventoryService } from '../../services/inventory-service.js';
+import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
 
-import type {
-  CreateInventoryItemInput,
-  UpdateInventoryItemInput,
-  UseConsumableInput,
-  GetInventoryOptions,
-  ItemType,
-} from '../../types/inventory.js';
+import type { GetInventoryOptions, ItemType } from '../../types/inventory.js';
+
+const itemTypeSchema = t.Union([
+  t.Literal('weapon'),
+  t.Literal('armor'),
+  t.Literal('consumable'),
+  t.Literal('ammunition'),
+  t.Literal('equipment'),
+  t.Literal('treasure'),
+]);
+
+const createInventoryItemSchema = t.Object({
+  name: t.String({ minLength: 1 }),
+  itemType: itemTypeSchema,
+  quantity: t.Optional(t.Number({ minimum: 1 })),
+  weight: t.Optional(t.Number({ minimum: 0 })),
+  description: t.Optional(t.Nullable(t.String())),
+  properties: t.Optional(t.Nullable(t.Any())),
+  isEquipped: t.Optional(t.Boolean()),
+  isAttuned: t.Optional(t.Boolean()),
+  requiresAttunement: t.Optional(t.Boolean()),
+});
+
+const updateInventoryItemSchema = t.Partial(createInventoryItemSchema);
+
+const useConsumableSchema = t.Object({
+  quantity: t.Optional(t.Number({ minimum: 1 })),
+  sessionId: t.Optional(t.String()),
+  context: t.Optional(t.String()),
+});
 
 function mapInventoryError(
   set: any,
@@ -62,19 +83,13 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
     const { user, error: authError } = await authenticateRequest(request);
     return { user, authError };
   })
-  .onBeforeHandle(async ({ user, authError, params, set }) => {
+  .onBeforeHandle(async ({ user, authError, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
     }
-
-    if (params.id) {
-      const character = await CharacterService.getById(params.id, user.userId);
-      if (!character) {
-        set.status = 404;
-        return { error: 'Character not found' };
-      }
-    }
+    // ⚡ Bolt: Removed redundant CharacterService.getById call.
+    // InventoryService methods already perform atomic ownership verification and existence masking.
   })
 
   // ==========================================
@@ -85,91 +100,96 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters/:id/inventory
    * Get character inventory with optional filters
    */
-  .get('/:id/inventory', async ({ params, query, set, user }) => {
-    try {
-      const options: GetInventoryOptions = {};
+  .get(
+    '/:id/inventory',
+    async ({ params, query, set, user }) => {
+      try {
+        const options: GetInventoryOptions = {};
 
-      if (query.itemType && typeof query.itemType === 'string') {
-        options.itemType = query.itemType as ItemType;
-      }
-      if (query.equipped !== undefined) {
-        options.equipped = query.equipped === 'true';
-      }
+        if (query.itemType && typeof query.itemType === 'string') {
+          options.itemType = query.itemType as ItemType;
+        }
+        if (query.equipped !== undefined) {
+          options.equipped = query.equipped === 'true';
+        }
 
-      const inventory = await InventoryService.getInventory(params.id, (user as any).userId, options);
-      return inventory;
-    } catch (error) {
-      logger.error({ msg: 'INVENTORY_GET error', error });
-      return mapInventoryError(set, error, 'Failed to fetch inventory', 'Character not found');
+        const inventory = await InventoryService.getInventory(
+          params.id,
+          (user as any).userId,
+          options
+        );
+        return inventory;
+      } catch (error) {
+        logger.error({ msg: 'INVENTORY_GET error', error });
+        return mapInventoryError(set, error, 'Failed to fetch inventory', 'Character not found');
+      }
+    },
+    {
+      query: t.Object({
+        itemType: t.Optional(t.String()),
+        equipped: t.Optional(t.String()),
+      }),
     }
-  })
+  )
 
   /**
    * POST /v1/characters/:id/inventory
    * Add item to character inventory
    */
-  .post('/:id/inventory', async ({ params, body, set, user }) => {
-    try {
-      const itemData = body as CreateInventoryItemInput;
+  .post(
+    '/:id/inventory',
+    async ({ params, body, set, user }) => {
+      try {
+        const item = await InventoryService.addItem(
+          {
+            ...body,
+            characterId: params.id,
+          },
+          (user as any).userId
+        );
 
-      if (!itemData.name || !itemData.itemType) {
-        set.status = 400;
-        return { error: 'Missing required fields: name and itemType' };
+        set.status = 201;
+        return { item };
+      } catch (error) {
+        logger.error({ msg: 'INVENTORY_ADD error', error });
+        return mapInventoryError(set, error, 'Failed to add item', 'Character not found');
       }
-
-      const input: CreateInventoryItemInput = {
-        characterId: params.id,
-        name: itemData.name,
-        itemType: itemData.itemType,
-        quantity: itemData.quantity,
-        weight: itemData.weight,
-        description: itemData.description,
-        properties: itemData.properties,
-        isEquipped: itemData.isEquipped,
-        isAttuned: itemData.isAttuned,
-        requiresAttunement: itemData.requiresAttunement,
-      };
-
-      const item = await InventoryService.addItem(input, (user as any).userId);
-
-      set.status = 201;
-      return { item };
-    } catch (error) {
-      logger.error({ msg: 'INVENTORY_ADD error', error });
-      return mapInventoryError(set, error, 'Failed to add item', 'Character not found');
+    },
+    {
+      body: createInventoryItemSchema,
     }
-  })
+  )
 
   /**
    * PATCH /v1/characters/:id/inventory/:itemId
    * Update inventory item
    */
-  .patch('/:id/inventory/:itemId', async ({ params, body, set, user }) => {
-    try {
-      const updates = body as UpdateInventoryItemInput;
-      const input: UpdateInventoryItemInput = {};
+  .patch(
+    '/:id/inventory/:itemId',
+    async ({ params, body, set, user }) => {
+      try {
+        const item = await InventoryService.updateItem(
+          params.itemId,
+          params.id,
+          (user as any).userId,
+          body
+        );
 
-      if (updates.name !== undefined) input.name = updates.name;
-      if (updates.quantity !== undefined) input.quantity = updates.quantity;
-      if (updates.weight !== undefined) input.weight = updates.weight;
-      if (updates.description !== undefined) input.description = updates.description;
-      if (updates.properties !== undefined) input.properties = updates.properties;
-      if (updates.isEquipped !== undefined) input.isEquipped = updates.isEquipped;
-      if (updates.isAttuned !== undefined) input.isAttuned = updates.isAttuned;
+        if (!item) {
+          set.status = 404;
+          return { error: 'Item not found' };
+        }
 
-      const item = await InventoryService.updateItem(params.itemId, params.id, (user as any).userId, input);
-
-      if (!item) {
-        set.status = 404;
-        return { error: 'Item not found' };
+        return { item };
+      } catch (error) {
+        logger.error({ msg: 'INVENTORY_UPDATE error', error });
+        return mapInventoryError(set, error, 'Failed to update item', 'Item not found');
       }
-
-      return { item };
-    } catch (error) {
-      logger.error({ msg: 'INVENTORY_UPDATE error', error });
-      return mapInventoryError(set, error, 'Failed to update item', 'Item not found');
+    },
+    {
+      body: updateInventoryItemSchema,
     }
-  })
+  )
 
   /**
    * DELETE /v1/characters/:id/inventory/:itemId
@@ -177,7 +197,11 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .delete('/:id/inventory/:itemId', async ({ params, set, user }) => {
     try {
-      const deleted = await InventoryService.removeItem(params.itemId, params.id, (user as any).userId);
+      const deleted = await InventoryService.removeItem(
+        params.itemId,
+        params.id,
+        (user as any).userId
+      );
 
       if (!deleted) {
         set.status = 404;
@@ -199,41 +223,44 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    * POST /v1/characters/:id/inventory/:itemId/use
    * Use consumable or ammunition
    */
-  .post('/:id/inventory/:itemId/use', async ({ params, body, set, user }) => {
-    try {
-      const { quantity, sessionId, context } = body as {
-        quantity?: number;
-        sessionId?: string;
-        context?: string;
-      };
+  .post(
+    '/:id/inventory/:itemId/use',
+    async ({ params, body, set, user }) => {
+      try {
+        const { quantity, sessionId, context } = body;
 
-      if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, (user as any).userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
+        if (sessionId) {
+          const verification = await verifySessionOwnership(sessionId, (user as any).userId);
+          if (!verification.success) {
+            set.status = verification.error!.status;
+            return { error: verification.error!.message };
+          }
         }
+
+        const result = await InventoryConsumableService.useConsumable(
+          {
+            characterId: params.id,
+            itemId: params.itemId,
+            quantity,
+            sessionId,
+            context,
+          },
+          (user as any).userId
+        );
+
+        return {
+          remainingQuantity: result.remainingQuantity,
+          itemDeleted: result.itemDeleted,
+        };
+      } catch (error) {
+        logger.error({ msg: 'INVENTORY_USE error', error });
+        return mapInventoryError(set, error, 'Failed to use item', 'Item not found');
       }
-
-      const input: UseConsumableInput = {
-        characterId: params.id,
-        itemId: params.itemId,
-        quantity,
-        sessionId,
-        context,
-      };
-
-      const result = await InventoryService.useConsumable(input, (user as any).userId);
-
-      return {
-        remainingQuantity: result.remainingQuantity,
-        itemDeleted: result.itemDeleted,
-      };
-    } catch (error) {
-      logger.error({ msg: 'INVENTORY_USE error', error });
-      return mapInventoryError(set, error, 'Failed to use item', 'Item not found');
+    },
+    {
+      body: useConsumableSchema,
     }
-  })
+  )
 
   // ==========================================
   // Weight & Encumbrance (1 endpoint)
@@ -383,7 +410,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
         }
       }
 
-      const history = await InventoryService.getUsageHistory({
+      const history = await InventoryConsumableService.getUsageHistory({
         characterId: params.id,
         itemId: query.itemId as string | undefined,
         sessionId,

@@ -34,8 +34,8 @@ Key areas improved:
 
 **Actions Taken**:
 ```bash
-npm run lint:fix  # Fixed auto-fixable ESLint violations
-npm run format    # Applied Prettier formatting
+bun run lint:fix  # Fixed auto-fixable ESLint violations
+bun run format    # Applied Prettier formatting
 ```
 
 **Violations Fixed**:

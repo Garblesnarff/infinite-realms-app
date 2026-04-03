@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * useCharacterData Hook
  *
@@ -29,13 +30,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Project Imports
-import { logger } from '../lib/logger';
 
 import type { Character, AbilityScores } from '@/types/character';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
 
 // Project Types
@@ -342,7 +343,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         `,
         )
         .eq('id', characterId!)
-        .eq('user_id', user.id) // CRITICAL: Add ownership check
+        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`) // CRITICAL: Dual ownership check
         .maybeSingle();
 
       if (characterError) throw characterError;

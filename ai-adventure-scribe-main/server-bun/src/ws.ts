@@ -9,8 +9,8 @@
 import { Elysia, t } from 'elysia';
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../db/client.js';
-import { scenes } from '../../db/schema/index.js';
+import { db } from '../../db/client';
+import { scenes } from '../../db/schema/index';
 import { logger } from './lib/logger';
 import { verifyWorkOSToken } from './services/workos';
 

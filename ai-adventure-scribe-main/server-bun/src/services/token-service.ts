@@ -10,9 +10,9 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, and, desc, or, exists } from 'drizzle-orm';
+import { eq, and, desc, or, exists, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   tokens,
   tokenConfigurations,
@@ -23,7 +23,7 @@ import {
   type NewToken,
   type TokenConfiguration,
   type NewTokenConfiguration,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 
 /**
  * Token creation data interface
@@ -78,6 +78,7 @@ export class TokenService {
   private static async verifySceneAccess(sceneId: string, userId: string): Promise<boolean> {
     const scene = await db.query.scenes.findFirst({
       where: and(eq(scenes.id, sceneId), eq(scenes.userId, userId)),
+      columns: { id: true },
     });
 
     if (!scene) {
@@ -100,6 +101,7 @@ export class TokenService {
         eq(characters.id, characterId),
         or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
+      columns: { id: true },
     });
 
     if (!character) {
@@ -147,38 +149,57 @@ export class TokenService {
    * Create a new token
    */
   static async createToken(sceneId: string, userId: string, data: CreateTokenData): Promise<Token> {
-    // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
-    await Promise.all([
-      this.verifySceneAccess(sceneId, userId),
-      data.actorId ? this.verifyCharacterOwnership(data.actorId, userId) : Promise.resolve(),
-    ]);
-
-    // Create token
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that tokens can only be added to scenes the user is authorized to access,
+    // and if an actorId is provided, that the user owns that character.
     const [token] = await db
       .insert(tokens)
-      .values({
-        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
-        sceneId,
-        actorId: data.actorId || null,
-        createdBy: userId,
-        name: data.name,
-        tokenType: data.tokenType,
-        positionX: String(data.positionX),
-        positionY: String(data.positionY),
-        imageUrl: data.imageUrl || null,
-        sizeWidth: data.sizeWidth ? String(data.sizeWidth) : '1.0',
-        sizeHeight: data.sizeHeight ? String(data.sizeHeight) : '1.0',
-        gridSize: data.gridSize || 'medium',
-        visionEnabled: data.visionEnabled || false,
-        visionRange: data.visionRange ? String(data.visionRange) : null,
-        emitsLight: data.emitsLight || false,
-        lightRange: data.lightRange ? String(data.lightRange) : null,
-        lightColor: data.lightColor || null,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            actorId: sql`${data.actorId || null}`,
+            createdBy: sql`${userId}`,
+            name: sql`${data.name}`,
+            tokenType: sql`${data.tokenType}`,
+            positionX: sql`${String(data.positionX)}`,
+            positionY: sql`${String(data.positionY)}`,
+            imageUrl: sql`${data.imageUrl || null}`,
+            sizeWidth: sql`${data.sizeWidth ? String(data.sizeWidth) : '1.0'}`,
+            sizeHeight: sql`${data.sizeHeight ? String(data.sizeHeight) : '1.0'}`,
+            gridSize: sql`${data.gridSize || 'medium'}`,
+            visionEnabled: sql`${data.visionEnabled || false}`,
+            visionRange: sql`${data.visionRange ? String(data.visionRange) : null}`,
+            emitsLight: sql`${data.emitsLight || false}`,
+            lightRange: sql`${data.lightRange ? String(data.lightRange) : null}`,
+            lightColor: sql`${data.lightColor || null}`,
+          })
+          .from(scenes)
+          .where(
+            and(
+              eq(scenes.id, sceneId),
+              eq(scenes.userId, userId),
+              data.actorId
+                ? exists(
+                    db
+                      .select()
+                      .from(characters)
+                      .where(
+                        and(
+                          eq(characters.id, data.actorId),
+                          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                        )
+                      )
+                  )
+                : sql`true`
+            )
+          )
+      )
       .returning();
 
     if (!token) {
-      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create token' });
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access to mask resource existence.
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene or character not found' });
     }
 
     // If actorId is provided, create character-token link
@@ -342,18 +363,35 @@ export class TokenService {
     characterId: string,
     userId: string,
   ): Promise<boolean> {
-    // Verify character ownership first
-    await this.verifyCharacterOwnership(characterId, userId);
+    // 🛡️ Sentinel: Refactored to incorporate ownership checks directly into queries.
+    // This prevents separate check-then-act vulnerabilities and masks existence.
+    // We require both scene ownership and character ownership for unlinking,
+    // maintaining consistency with the linkToCharacter pattern.
 
     // ⚡ Bolt: Parallelize independent database operations to reduce aggregate latency.
-    await Promise.all([
-      // Remove character-token link
+    const [deletedResults, updatedResults] = await Promise.all([
+      // Remove character-token link with atomic ownership check
       db
         .delete(characterTokens)
         .where(
-          and(eq(characterTokens.characterId, characterId), eq(characterTokens.tokenId, tokenId)),
-        ),
-      // 🛡️ Sentinel: Clear actorId with atomic ownership check
+          and(
+            eq(characterTokens.characterId, characterId),
+            eq(characterTokens.tokenId, tokenId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .returning({ characterId: characterTokens.characterId }),
+      // Clear actorId with atomic ownership check
       db
         .update(tokens)
         .set({ actorId: null, updatedAt: new Date() })
@@ -367,9 +405,27 @@ export class TokenService {
                 .from(scenes)
                 .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
             ),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
           ),
-        ),
+        )
+        .returning({ id: tokens.id }),
     ]);
+
+    if (deletedResults.length === 0 || updatedResults.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND if either operation failed to affect rows
+      // (likely due to missing ownership or record not existing).
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Token or character not found' });
+    }
 
     return true;
   }
@@ -378,21 +434,32 @@ export class TokenService {
    * Get all tokens for a character
    */
   static async getTokensForCharacter(characterId: string, userId: string): Promise<Token[]> {
-    // Verify character ownership
-    await this.verifyCharacterOwnership(characterId, userId);
+    // ⚡ Bolt: Consolidate ownership verification and token retrieval into a single joined query.
+    // This reduces database round-trips from 2 to 1 and improves performance.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const results = await (db as any)
+      .select({
+        token: tokens,
+      })
+      .from(characters)
+      .leftJoin(characterTokens, eq(characters.id, characterTokens.characterId))
+      .leftJoin(tokens, eq(characterTokens.tokenId, tokens.id))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+      );
 
-    // Get all tokens linked to this character using relation (single query instead of 2)
-    const links = await db.query.characterTokens.findMany({
-      where: eq(characterTokens.characterId, characterId),
-      with: {
-        token: true,
-      },
-    });
+    if (results.length === 0) {
+      // 🛡️ Sentinel: Throw NOT_FOUND if character doesn't exist or user doesn't own it
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
+    }
 
-    // Extract tokens from the links, filtering out any null tokens
-    return links
-      .map((link: { token: Token | null }) => link.token)
-      .filter((token): token is Token => token !== null);
+    // Filter out null tokens (case where character exists but has no tokens)
+    return results
+      .map((r: { token: Token | null }) => r.token)
+      .filter((token: Token | null): token is Token => token !== null);
   }
 
   /**
@@ -508,6 +575,7 @@ export class TokenService {
 
     if (existing) {
       // Update existing config
+      // 🛡️ Sentinel: Atomic update with ownership check (characterId ownership)
       const [updated] = await db
         .update(tokenConfigurations)
         .set({
@@ -517,33 +585,81 @@ export class TokenService {
         .where(
           and(
             eq(tokenConfigurations.id, existing.id),
-            eq(tokenConfigurations.characterId, characterId)
+            eq(tokenConfigurations.characterId, characterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
           )
         )
         .returning();
 
       if (!updated) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update token configuration',
+          code: 'NOT_FOUND',
+          message: 'Character or token configuration not found',
         });
       }
 
       return updated;
     } else {
       // Create new config
+      // 🛡️ Sentinel: Atomic insert with ownership check (characterId ownership)
       const [created] = await db
         .insert(tokenConfigurations)
-        .values({
-          characterId,
-          ...config,
-        })
+        .select(
+          db
+            .select({
+              characterId: characters.id,
+              imageUrl: sql`${config.imageUrl ?? null}`,
+              avatarUrl: sql`${config.avatarUrl ?? null}`,
+              sizeWidth: sql`${config.sizeWidth ?? '1.0'}`,
+              sizeHeight: sql`${config.sizeHeight ?? '1.0'}`,
+              gridSize: sql`${config.gridSize ?? 'medium'}`,
+              tintColor: sql`${config.tintColor ?? null}`,
+              scale: sql`${config.scale ?? '1.0'}`,
+              opacity: sql`${config.opacity ?? '1.0'}`,
+              borderColor: sql`${config.borderColor ?? null}`,
+              borderWidth: sql`${config.borderWidth ?? 2}`,
+              showNameplate: sql`${config.showNameplate ?? true}`,
+              nameplatePosition: sql`${config.nameplatePosition ?? 'bottom'}`,
+              visionEnabled: sql`${config.visionEnabled ?? false}`,
+              visionRange: sql`${config.visionRange ?? null}`,
+              visionAngle: sql`${config.visionAngle ?? null}`,
+              nightVision: sql`${config.nightVision ?? false}`,
+              darkvisionRange: sql`${config.darkvisionRange ?? null}`,
+              emitsLight: sql`${config.emitsLight ?? false}`,
+              lightRange: sql`${config.lightRange ?? null}`,
+              lightAngle: sql`${config.lightAngle ?? null}`,
+              lightColor: sql`${config.lightColor ?? null}`,
+              lightIntensity: sql`${config.lightIntensity ?? null}`,
+              dimLightRange: sql`${config.dimLightRange ?? null}`,
+              brightLightRange: sql`${config.brightLightRange ?? null}`,
+              movementSpeed: sql`${config.movementSpeed ?? null}`,
+              hasFlying: sql`${config.hasFlying ?? false}`,
+              hasSwimming: sql`${config.hasSwimming ?? false}`,
+            })
+            .from(characters)
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        )
         .returning();
 
       if (!created) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create token configuration',
+          code: 'NOT_FOUND',
+          message: 'Character not found',
         });
       }
 

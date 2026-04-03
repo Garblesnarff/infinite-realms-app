@@ -13,10 +13,13 @@
  * Ported from /server/src/routes/v1/spells.ts
  */
 
-import { Elysia, t } from 'elysia';
-import { authenticateRequest } from '../../lib/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { supabaseService } from '../../lib/supabase.js';
+/* eslint-disable max-lines */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { inArray } from 'drizzle-orm';
+import { Elysia } from 'elysia';
+
+import { db } from '../../../../db/client';
+import { classes } from '../../../../db/schema/index';
 import {
   getClassSpells,
   getSpellById,
@@ -25,7 +28,10 @@ import {
   spellProgression,
   spellcastingClasses,
 } from '../../data/spellData.js';
+import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
+import { supabaseService } from '../../lib/supabase.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 
 export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
 
@@ -81,12 +87,14 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
           ...wizardSpells.cantrips, ...wizardSpells.spells,
         ];
 
-        // Remove duplicates by id
-        const uniqueSpells = allClassSpells.filter((spell, index, self) =>
-          index === self.findIndex((s) => s.id === spell.id)
-        );
+        // ⚡ Bolt: Use a Map for O(N) de-duplication instead of O(N^2) filter/findIndex.
+        // This is significantly faster for large spell lists.
+        const uniqueSpellsMap = new Map();
+        allClassSpells.forEach((spell) => {
+          uniqueSpellsMap.set(spell.id, spell);
+        });
 
-        spells = uniqueSpells;
+        spells = Array.from(uniqueSpellsMap.values());
       }
 
       // Apply additional filters
@@ -315,22 +323,26 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       let totalCasterLevel = 0;
       let pactMagicSlots = { level: 0, slots: 0 };
 
+      // ⚡ Bolt: Batch fetch class caster types instead of O(N) database queries.
+      const classNames = classLevels.map((cl) => cl.className);
+      const classesData = await db
+        .select({
+          name: classes.name,
+          casterType: classes.casterType,
+        })
+        .from(classes)
+        .where(inArray(classes.name, classNames));
+
+      const casterTypeMap = new Map(classesData.map((c) => [c.name, c.casterType]));
+
       for (const classLevel of classLevels) {
         const { className, level } = classLevel;
+        const casterType = casterTypeMap.get(className);
 
-        // Get class caster type
-        const { data: classData, error } = await supabaseService
-          .from('classes')
-          .select('caster_type')
-          .eq('name', className)
-          .single();
-
-        if (error || !classData) {
+        if (!casterType) {
           set.status = 400;
           return { error: `Class ${className} not found` };
         }
-
-        const casterType = classData.caster_type;
 
         switch (casterType) {
           case 'full':
@@ -358,9 +370,13 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       // Get multiclass spell slots for the calculated caster level
       let spellSlots = null;
       if (totalCasterLevel > 0) {
+        // ⚡ Bolt: Use explicit column list for spell slots to avoid over-fetching and improve performance.
         const { data: slotsData } = await supabaseService
           .from('multiclass_spell_slots')
-          .select('*')
+          .select(`
+            caster_level, spell_slots_1, spell_slots_2, spell_slots_3, spell_slots_4,
+            spell_slots_5, spell_slots_6, spell_slots_7, spell_slots_8, spell_slots_9
+          `)
           .eq('caster_level', Math.min(totalCasterLevel, 20))
           .single();
         spellSlots = slotsData || null;

@@ -14,7 +14,7 @@ import {
   getModifiedHitPointMax,
   processLongRestExhaustionRecovery,
   getExhaustionDescription,
-  getActiveExhaustionEffects
+  getActiveExhaustionEffects,
 } from '../exhaustionUtils';
 
 import type { CombatParticipant, Condition } from '@/types/combat';
@@ -40,7 +40,7 @@ describe('exhaustionUtils', () => {
     reactionOpportunities: [],
     damageResistances: [],
     damageImmunities: [],
-    damageVulnerabilities: []
+    damageVulnerabilities: [],
   };
 
   describe('getExhaustionLevel', () => {
@@ -51,7 +51,7 @@ describe('exhaustionUtils', () => {
 
     it('should return the correct level when exhaustion condition is present', () => {
       const conditions: Condition[] = [
-        { name: 'exhaustion', level: 3, description: 'Level 3', duration: -1 }
+        { name: 'exhaustion', level: 3, description: 'Level 3', duration: -1 },
       ];
       expect(getExhaustionLevel(conditions)).toBe(3);
     });
@@ -61,7 +61,7 @@ describe('exhaustionUtils', () => {
     it('should add exhaustion condition if not present', () => {
       const result = applyExhaustion(mockParticipant, 1);
       expect(getExhaustionLevel(result.conditions)).toBe(1);
-      expect(result.conditions.some(c => c.name === 'exhaustion')).toBe(true);
+      expect(result.conditions.some((c) => c.name === 'exhaustion')).toBe(true);
     });
 
     it('should update exhaustion level if already present', () => {
@@ -74,7 +74,7 @@ describe('exhaustionUtils', () => {
       const participantWithExhaustion = applyExhaustion(mockParticipant, 1);
       const result = applyExhaustion(participantWithExhaustion, 0);
       expect(getExhaustionLevel(result.conditions)).toBe(0);
-      expect(result.conditions.some(c => c.name === 'exhaustion')).toBe(false);
+      expect(result.conditions.some((c) => c.name === 'exhaustion')).toBe(false);
     });
 
     it('should clamp exhaustion level between 0 and 6', () => {
@@ -113,7 +113,7 @@ describe('exhaustionUtils', () => {
       let participant = applyExhaustion(mockParticipant, 1);
       participant = removeExhaustionLevel(participant);
       expect(getExhaustionLevel(participant.conditions)).toBe(0);
-      expect(participant.conditions.some(c => c.name === 'exhaustion')).toBe(false);
+      expect(participant.conditions.some((c) => c.name === 'exhaustion')).toBe(false);
     });
 
     it('should not go below level 0', () => {

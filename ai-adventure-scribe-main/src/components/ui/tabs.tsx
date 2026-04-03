@@ -44,11 +44,13 @@ const tabsTriggerVariants = cva(
 );
 
 export interface TabsListProps
-  extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>,
+  extends
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>,
     VariantProps<typeof tabsListVariants> {}
 
 export interface TabsTriggerProps
-  extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>,
+  extends
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>,
     VariantProps<typeof tabsTriggerVariants> {}
 
 const TabsList = React.forwardRef<React.ElementRef<typeof TabsPrimitive.List>, TabsListProps>(

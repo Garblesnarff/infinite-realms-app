@@ -19,11 +19,11 @@ import React from 'react';
 import { useLocalStorage } from './use-local-storage';
 import { useToast } from './use-toast';
 import { useVoiceAudioControl } from './use-voice-audio-control';
+import { useVoiceApiKey } from './voice/use-voice-api-key';
 import { logger } from '../lib/logger';
 
 import type { VoiceSegment, AISegment } from '@/services/voice-routing';
 
-import { supabase } from '@/integrations/supabase/client';
 import { VoiceDirector } from '@/services/voice-director';
 
 export interface ProgressiveVoiceState {
@@ -47,6 +47,51 @@ export const useProgressiveVoice = () => {
     true,
   );
 
+  const onSegmentStart = React.useCallback((index: number) => {
+    setState((prev) => ({
+      ...prev,
+      currentSegmentIndex: index,
+      segments: prev.segments.map((s, idx) => ({
+        ...s,
+        isPlaying: idx === index,
+      })),
+    }));
+  }, []);
+
+  const onSegmentEnd = React.useCallback((_index: number) => {
+    setState((prev) => ({
+      ...prev,
+      segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
+    }));
+  }, []);
+
+  const onPlaybackPause = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      isPaused: true,
+    }));
+  }, []);
+
+  const onPlaybackResume = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: true,
+      isPaused: false,
+    }));
+  }, []);
+
+  const onPlaybackStop = React.useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      isPaused: false,
+      isProcessing: false,
+      currentSegmentIndex: -1,
+      segments: [],
+    }));
+  }, []);
+
   /**
    * Initialize Audio Control Hook
    */
@@ -62,46 +107,11 @@ export const useProgressiveVoice = () => {
     handleSetVolume,
     toggleMute: baseToggleMute,
   } = useVoiceAudioControl({
-    onSegmentStart: (index) => {
-      setState((prev) => ({
-        ...prev,
-        currentSegmentIndex: index,
-        segments: prev.segments.map((s, idx) => ({
-          ...s,
-          isPlaying: idx === index,
-        })),
-      }));
-    },
-    onSegmentEnd: (_index) => {
-      setState((prev) => ({
-        ...prev,
-        segments: prev.segments.map((s) => ({ ...s, isPlaying: false })),
-      }));
-    },
-    onPlaybackPause: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: false,
-        isPaused: true,
-      }));
-    },
-    onPlaybackResume: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: true,
-        isPaused: false,
-      }));
-    },
-    onPlaybackStop: () => {
-      setState((prev) => ({
-        ...prev,
-        isPlaying: false,
-        isPaused: false,
-        isProcessing: false,
-        currentSegmentIndex: -1,
-        segments: [],
-      }));
-    },
+    onSegmentStart,
+    onSegmentEnd,
+    onPlaybackPause,
+    onPlaybackResume,
+    onPlaybackStop,
   });
 
   // State
@@ -121,77 +131,17 @@ export const useProgressiveVoice = () => {
     setState((prev) => ({ ...prev, volume, isMuted }));
   }, [volume, isMuted]);
 
-  // API key state
-  const [apiKey, setApiKey] = React.useState<string | null>(null);
-  const apiKeyRef = React.useRef<string | null>(null);
-
-  // Update ref when apiKey changes
-  React.useEffect(() => {
-    apiKeyRef.current = apiKey;
-  }, [apiKey]);
+  // ElevenLabs API key management
+  const {
+    apiKey,
+    apiKeyRef,
+    error: apiKeyError,
+    retryApiKeyFetch,
+    waitForApiKey,
+  } = useVoiceApiKey();
 
   // Audio management
   const abortController = React.useRef<AbortController | null>(null);
-
-  // Fetch API key from Supabase secrets or environment
-  React.useEffect(() => {
-    const fetchApiKey = async () => {
-      try {
-        logger.info('🔑 Attempting to retrieve ElevenLabs API key...');
-
-        // Try environment variable first (for development)
-        const envApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-        logger.info('📝 Environment check:', {
-          hasEnvKey: !!envApiKey,
-          keyLength: envApiKey ? envApiKey.length : 0,
-          keyPrefix: envApiKey ? envApiKey.substring(0, 10) + '...' : 'N/A',
-        });
-
-        if (envApiKey) {
-          logger.info('✅ Using ElevenLabs API key from environment variable');
-          setApiKey(envApiKey);
-          apiKeyRef.current = envApiKey; // Set ref immediately
-          return;
-        }
-
-        logger.info('🔄 No environment variable found, trying Supabase edge function...');
-
-        // Fallback to Supabase edge function (for production)
-        const { data, error } = await supabase.functions.invoke('get-secret', {
-          body: { secretName: 'ELEVEN_LABS_API_KEY' },
-        });
-
-        if (error) {
-          logger.error('❌ Error calling get-secret function:', error);
-          throw new Error(`Failed to call get-secret: ${error.message}`);
-        }
-
-        if (data?.secret) {
-          logger.info('✅ Retrieved ElevenLabs API key from Supabase secrets');
-          setApiKey(data.secret);
-          apiKeyRef.current = data.secret; // Set ref immediately
-        } else {
-          logger.error('❌ Empty response from get-secret function:', data);
-          throw new Error('ElevenLabs API key is empty or not found');
-        }
-      } catch (error) {
-        logger.error('❌ Error fetching API key for progressive voice:', error);
-
-        // Show detailed error message
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        toast({
-          title: 'API Key Configuration Error',
-          description: `Failed to retrieve ElevenLabs API key: ${errorMessage}. Check console for details.`,
-          variant: 'destructive',
-        });
-
-        // Set error state
-        setState((prev) => ({ ...prev, error: `API Key Error: ${errorMessage}` }));
-      }
-    };
-
-    fetchApiKey();
-  }, [toast]);
 
   /**
    * Progressive generation and playback
@@ -273,7 +223,7 @@ export const useProgressiveVoice = () => {
 
       logger.info('🏁 Progressive processing complete');
     },
-    [playAudioSegment],
+    [playAudioSegment, apiKeyRef],
   );
 
   /**
@@ -298,10 +248,6 @@ export const useProgressiveVoice = () => {
         segmentCount: aiSegments?.length || 0,
         isVoiceEnabled: state.isVoiceEnabled,
         isProcessing: state.isProcessing,
-        hasApiKey: !!apiKey,
-        hasApiKeyRef: !!apiKeyRef.current,
-        apiKeyLength: apiKey?.length || 0,
-        apiKeyRefLength: apiKeyRef.current?.length || 0,
       });
 
       if (!state.isVoiceEnabled || !aiSegments?.length || state.isProcessing) {
@@ -310,34 +256,19 @@ export const useProgressiveVoice = () => {
       }
 
       // Wait for API key if it's not available yet (max 3 seconds)
-      const currentApiKey = apiKeyRef.current;
+      const currentApiKey = await waitForApiKey(3000);
       if (!currentApiKey) {
-        logger.info('⏳ API key not ready, waiting...');
-
-        let attempts = 0;
-        const maxAttempts = 30; // 3 seconds at 100ms intervals
-
-        while (!apiKeyRef.current && attempts < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          attempts++;
-        }
-
-        if (!apiKeyRef.current) {
-          logger.error('❌ API key is still missing after waiting');
-          setState((prev) => ({
-            ...prev,
-            error: 'API key timeout - could not retrieve ElevenLabs API key',
-          }));
-          toast({
-            title: 'API Key Timeout',
-            description:
-              'ElevenLabs API key could not be retrieved. Please check your configuration.',
-            variant: 'destructive',
-          });
-          return;
-        }
-
-        logger.info('✅ API key is now available after waiting');
+        setState((prev) => ({
+          ...prev,
+          error: 'API key timeout - could not retrieve ElevenLabs API key',
+        }));
+        toast({
+          title: 'API Key Timeout',
+          description:
+            'ElevenLabs API key could not be retrieved. Please check your configuration.',
+          variant: 'destructive',
+        });
+        return;
       }
 
       logger.info('🎭 Progressive Voice: Starting to process', aiSegments.length, 'AI segments');
@@ -406,11 +337,13 @@ export const useProgressiveVoice = () => {
     [
       state.isVoiceEnabled,
       state.isProcessing,
+      state.isPlaying,
       toast,
       initializeAudioContext,
       stopPlayback,
       processSegmentsProgressively,
       currentAudio,
+      waitForApiKey,
     ],
   );
 
@@ -468,7 +401,7 @@ export const useProgressiveVoice = () => {
       const remainingSegments = state.segments.slice(state.currentSegmentIndex);
       await processSegmentsProgressively(remainingSegments, state.currentSegmentIndex);
     }
-  }, [state.segments, state.currentSegmentIndex, baseResumePlayback]);
+  }, [state.segments, state.currentSegmentIndex, baseResumePlayback, processSegmentsProgressively]);
 
   /**
    * Pause current playback without losing state
@@ -508,56 +441,10 @@ export const useProgressiveVoice = () => {
   /**
    * Manual API key retry function
    */
-  const retryApiKeyFetch = React.useCallback(async () => {
-    logger.info('🔄 Manually retrying API key fetch...');
-    setApiKey(null);
+  const handleRetryApiKeyFetch = React.useCallback(async () => {
     setState((prev) => ({ ...prev, error: undefined }));
-
-    try {
-      // Try environment variable first (for development)
-      const envApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-      if (envApiKey) {
-        logger.info('✅ Using ElevenLabs API key from environment variable');
-        setApiKey(envApiKey);
-        apiKeyRef.current = envApiKey; // Set ref immediately
-        toast({
-          title: 'API Key Retrieved',
-          description: 'ElevenLabs API key loaded from environment variable.',
-        });
-        return;
-      }
-
-      // Fallback to Supabase edge function (for production)
-      const { data, error } = await supabase.functions.invoke('get-secret', {
-        body: { secretName: 'ELEVEN_LABS_API_KEY' },
-      });
-
-      if (error) {
-        throw new Error(`Failed to call get-secret: ${error.message}`);
-      }
-
-      if (data?.secret) {
-        logger.info('✅ Retrieved ElevenLabs API key from Supabase secrets');
-        setApiKey(data.secret);
-        apiKeyRef.current = data.secret; // Set ref immediately
-        toast({
-          title: 'API Key Retrieved',
-          description: 'ElevenLabs API key loaded from Supabase secrets.',
-        });
-      } else {
-        throw new Error('ElevenLabs API key is empty or not found');
-      }
-    } catch (error) {
-      logger.error('❌ Error in manual API key retry:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setState((prev) => ({ ...prev, error: `API Key Error: ${errorMessage}` }));
-      toast({
-        title: 'API Key Error',
-        description: `Still unable to retrieve API key: ${errorMessage}`,
-        variant: 'destructive',
-      });
-    }
-  }, [toast]);
+    await retryApiKeyFetch();
+  }, [retryApiKeyFetch]);
 
   // Cleanup on unmount
   React.useEffect(() => {
@@ -567,7 +454,7 @@ export const useProgressiveVoice = () => {
       }
       stopPlayback();
     };
-  }, []); // Empty dependency array - only run on mount/unmount
+  }, [stopPlayback]);
 
   return {
     // State
@@ -579,7 +466,7 @@ export const useProgressiveVoice = () => {
     volume: state.volume,
     isMuted: state.isMuted,
     isVoiceEnabled: state.isVoiceEnabled,
-    error: state.error,
+    error: state.error || apiKeyError,
     apiKey, // Expose API key state for debugging
 
     // Actions
@@ -591,7 +478,7 @@ export const useProgressiveVoice = () => {
     setVolume: handleSetVolume,
     toggleMute,
     toggleVoiceEnabled,
-    retryApiKeyFetch, // Manual API key retry
+    retryApiKeyFetch: handleRetryApiKeyFetch, // Manual API key retry
 
     // Voice management utilities
     getCharacterVoiceMappings: VoiceDirector.getCharacterVoiceMappings,

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
 import React from 'react';
@@ -9,7 +10,6 @@ import CampaignSessions from './CampaignSessions';
 import CampaignSettings from './CampaignSettings';
 import CampaignWorld from './CampaignWorld';
 
-import CharacterSelectionModal from '@/components/campaign-list/character-selection-modal';
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { CharacterSelectionModal } from '@/features/campaign/components';
 import { supabase } from '@/integrations/supabase/client';
 
 const CampaignHub: React.FC = () => {
@@ -34,9 +35,13 @@ const CampaignHub: React.FC = () => {
         throw new Error('Not authenticated');
       }
 
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
+      // of heavy JSONB columns (setting_details, thematic_elements, etc.) not used in this view.
       const { data, error } = await supabase
         .from('campaigns')
-        .select('*')
+        .select(
+          'id, user_id, name, description, genre, difficulty_level, campaign_length, tone, background_image',
+        )
         .eq('id', campaignId as string)
         .eq('user_id', user.id) // SECURITY: Validate ownership
         .single();

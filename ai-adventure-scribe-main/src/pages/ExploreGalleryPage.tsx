@@ -5,13 +5,14 @@
  * Route: /explore
  */
 
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Sparkles } from 'lucide-react';
 
 import { StarterCampaignCard } from '@/components/campaigns/StarterCampaignCard';
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
 export const ExploreGalleryPage: React.FC = () => {
@@ -29,9 +30,15 @@ export const ExploreGalleryPage: React.FC = () => {
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900/20 to-gray-900">
         {/* Header */}
-        <header className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-lg border-b border-gray-800">
+        <header
+          className="sticky top-0 bg-gray-900/80 backdrop-blur-lg border-b border-gray-800"
+          style={{ zIndex: Z_INDEX.STICKY }}
+        >
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+            <Link
+              to="/"
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            >
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Home</span>
             </Link>
@@ -50,9 +57,8 @@ export const ExploreGalleryPage: React.FC = () => {
               Explore Adventures
             </h1>
             <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              Discover professionally crafted campaigns ready for immediate play.
-              Each adventure features rich storytelling, memorable characters, and
-              unique challenges.
+              Discover professionally crafted campaigns ready for immediate play. Each adventure
+              features rich storytelling, memorable characters, and unique challenges.
             </p>
           </div>
 
@@ -60,10 +66,7 @@ export const ExploreGalleryPage: React.FC = () => {
           {isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[1, 2, 3].map((n) => (
-                <div
-                  key={n}
-                  className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse"
-                />
+                <div key={n} className="h-[450px] rounded-2xl bg-gray-800/50 animate-pulse" />
               ))}
             </div>
           )}
@@ -105,9 +108,8 @@ export const ExploreGalleryPage: React.FC = () => {
           <div className="mt-16 text-center border-t border-gray-800 pt-12">
             <h2 className="text-2xl font-bold text-white mb-4">More Adventures Coming Soon</h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              Our team is crafting new campaigns across different genres and themes.
-              From epic fantasy quests to mysterious horror tales, there's an
-              adventure for every player.
+              Our team is crafting new campaigns across different genres and themes. From epic
+              fantasy quests to mysterious horror tales, there's an adventure for every player.
             </p>
           </div>
         </main>

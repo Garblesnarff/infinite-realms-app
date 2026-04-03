@@ -6,9 +6,19 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, or } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import {
+  verifySessionAccess,
+  verifyEncounterAccess,
+  verifyCharacterAccess,
+  verifyCharactersAccessBatch,
+  verifyNPCAccess,
+  verifyNPCsAccessBatch,
+  verifyParticipantOwnership,
+} from './combat/combat-authorization.js';
+import { InitiativeMechanics, rollD20 } from './combat/initiative-mechanics.js';
+import { db } from '../../../db/client';
 import {
   combatEncounters,
   combatParticipants,
@@ -17,7 +27,7 @@ import {
   characters,
   type CombatEncounter,
   type CombatParticipant,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
 
 import type {
@@ -29,118 +39,10 @@ import type {
 } from '../types/combat.js';
 
 /**
- * Roll a d20 for initiative
- */
-function rollD20(): number {
-  return Math.floor(Math.random() * 20) + 1;
-}
-
-/**
  * Combat Initiative Service
  * Provides type-safe database operations for combat encounters
  */
 export class CombatInitiativeService {
-  /**
-   * Verify session ownership through campaign/character links.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifySessionAccess(sessionId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: gameSessions.id })
-      .from(gameSessions)
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(gameSessions.id, sessionId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Session', sessionId);
-    }
-  }
-
-  /**
-   * Verify encounter ownership through its session's campaign/character links.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: combatEncounters.id })
-      .from(combatEncounters)
-      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(combatEncounters.id, encounterId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Combat encounter', encounterId);
-    }
-  }
-
-  /**
-   * Verify character ownership through user_id/owner_id.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyCharacterAccess(characterId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Character', characterId);
-    }
-  }
-
-  /**
-   * ⚡ Bolt: Verify multiple characters' ownership in a single batch query.
-   * Prevents N+1 database round-trips during combat initialization.
-   */
-  private static async verifyCharactersAccessBatch(characterIds: string[], userId: string): Promise<void> {
-    if (characterIds.length === 0) return;
-
-    const results = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        inArray(characters.id, characterIds),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ));
-
-    if (results.length !== characterIds.length) {
-      const foundIds = new Set(results.map(r => r.id));
-      for (const id of characterIds) {
-        if (!foundIds.has(id)) {
-          throw new NotFoundError('Character', id);
-        }
-      }
-    }
-  }
-
   /**
    * Start a new combat encounter
    * @param sessionId - Game session ID
@@ -155,9 +57,6 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<CombatState> {
     if (userId) {
-      await this.verifySessionAccess(sessionId, userId);
-
-      // ⚡ Bolt: Prevent cross-tenant references by validating all character-linked participants in batch.
       const characterIds = [
         ...new Set(
           participantInputs
@@ -165,7 +64,20 @@ export class CombatInitiativeService {
             .filter((id): id is string => Boolean(id))
         ),
       ];
-      await this.verifyCharactersAccessBatch(characterIds, userId);
+      const npcIds = [
+        ...new Set(
+          participantInputs
+            .map((input) => input.npcId)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+
+      // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
+      await Promise.all([
+        verifySessionAccess(sessionId, userId),
+        verifyCharactersAccessBatch(characterIds, userId),
+        verifyNPCsAccessBatch(npcIds, userId),
+      ]);
     }
 
     // Create the encounter
@@ -183,11 +95,14 @@ export class CombatInitiativeService {
       throw new InternalServerError('Failed to create combat encounter');
     }
 
+    let participants: CombatParticipant[] = [];
+
     // Batch insert all participants (single query instead of N queries)
     if (participantInputs.length > 0) {
-      const participantValues = participantInputs.map(input => {
+      // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
+      const participantsWithInitiative = participantInputs.map(input => {
         const roll = rollD20();
-        const initiative = roll + input.initiativeModifier;
+        const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
         return {
           encounterId: encounter.id,
           characterId: input.characterId || null,
@@ -195,19 +110,41 @@ export class CombatInitiativeService {
           name: input.name,
           initiative,
           initiativeModifier: input.initiativeModifier,
-          turnOrder: 0, // Will be recalculated
           participantType: input.characterId ? 'player' as const : input.npcId ? 'npc' as const : 'other' as const,
         };
       });
 
-      await db.insert(combatParticipants).values(participantValues);
+      // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
+      const sortedValues = InitiativeMechanics.sortParticipants(participantsWithInitiative);
+
+      const participantValues = sortedValues.map((p, index) => ({
+        ...p,
+        turnOrder: index,
+        isActive: true,
+      }));
+
+      const insertedParticipants = await db.insert(combatParticipants).values(participantValues).returning();
+      // Ensure participants are sorted by turnOrder to match getCombatState behavior
+      participants = insertedParticipants.sort((a, b) => a.turnOrder - b.turnOrder);
     }
 
-    // Calculate initial turn order
-    await this.calculateTurnOrder(encounter.id);
+    // ⚡ Bolt: Construct CombatState in-memory to avoid redundant fetch of just-inserted data.
+    // This reduces database round-trips from 6 down to 3.
+    const activeParticipants = participants.filter(p => p.isActive);
+    const currentParticipant = activeParticipants[0] || null;
 
-    // Get the updated state
-    return await this.getCombatState(encounter.id, userId);
+    const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
+      activeParticipants,
+      0,
+      currentParticipant?.id || null
+    );
+
+    return {
+      encounter: encounter as CombatEncounter,
+      participants,
+      turnOrder,
+      currentParticipant,
+    };
   }
 
   /**
@@ -219,15 +156,17 @@ export class CombatInitiativeService {
     userId?: string
   ): Promise<CombatParticipant> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
-      if (input.characterId) {
-        await this.verifyCharacterAccess(input.characterId, userId);
-      }
+      // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
+      await Promise.all([
+        verifyEncounterAccess(encounterId, userId),
+        input.characterId ? verifyCharacterAccess(input.characterId, userId) : Promise.resolve(),
+        input.npcId ? verifyNPCAccess(input.npcId, userId) : Promise.resolve(),
+      ]);
     }
 
     // Roll initiative (d20 + modifier)
     const roll = rollD20();
-    const initiative = roll + input.initiativeModifier;
+    const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
 
     const [participant] = await db
       .insert(combatParticipants)
@@ -265,17 +204,15 @@ export class CombatInitiativeService {
     modifier?: number,
     userId?: string
   ): Promise<InitiativeRoll> {
-    if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
-    }
-
-    // Get participant
-    const participant = await db.query.combatParticipants.findFirst({
-      where: (cp, { eq, and }) => and(
-        eq(cp.id, participantId),
-        eq(cp.encounterId, encounterId)
-      ),
-    });
+    // ⚡ Bolt: Parallelize ownership verification and participant retrieval to reduce latency
+    const [_, participant] = await Promise.all([
+      userId
+        ? verifyParticipantOwnership(participantId, encounterId, userId)
+        : Promise.resolve(),
+      db.query.combatParticipants.findFirst({
+        where: (cp, { eq, and }) => and(eq(cp.id, participantId), eq(cp.encounterId, encounterId)),
+      }),
+    ]);
 
     if (!participant) {
       throw new NotFoundError('Participant', participantId);
@@ -284,7 +221,7 @@ export class CombatInitiativeService {
     // Use provided roll or roll d20
     const diceRoll = roll !== undefined ? roll : rollD20();
     const initiativeModifier = modifier !== undefined ? modifier : participant.initiativeModifier;
-    const total = diceRoll + initiativeModifier;
+    const total = InitiativeMechanics.calculateInitiative(diceRoll, initiativeModifier);
 
     // Update participant initiative
     const [updated] = await db
@@ -320,37 +257,18 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    */
   static async calculateTurnOrder(encounterId: string): Promise<void> {
-    // Get all active participants
-    const participants = await db.query.combatParticipants.findMany({
-      where: (cp, { eq, and }) => and(
-        eq(cp.encounterId, encounterId),
-        eq(cp.isActive, true)
-      ),
-    });
-
-    // Sort by initiative (desc), then by modifier (desc) for ties
-    const sorted = participants.sort((a, b) => {
-      if (b.initiative !== a.initiative) {
-        return b.initiative - a.initiative;
-      }
-      return b.initiativeModifier - a.initiativeModifier;
-    });
-
-    // Skip if no participants to update
-    if (sorted.length === 0) return;
-
-    // Build batch update using SQL CASE statement (single query instead of N queries)
-    const caseStatements = sorted.map((p, i) =>
-      sql`WHEN ${p.id} THEN ${i}`
-    );
-    const participantIds = sorted.map(p => p.id);
-
+    // ⚡ Bolt: Optimized to use a single atomic SQL UPDATE with a window function (ROW_NUMBER()).
+    // This reduces database round-trips from 2 to 1 and avoids loading all participants into memory.
     await db.execute(sql`
+      WITH sorted_participants AS (
+        SELECT id, (ROW_NUMBER() OVER (ORDER BY initiative DESC, initiative_modifier DESC) - 1) as new_turn_order
+        FROM combat_participants
+        WHERE encounter_id = ${encounterId} AND is_active = true
+      )
       UPDATE combat_participants
-      SET turn_order = CASE id
-        ${sql.join(caseStatements, sql` `)}
-      END
-      WHERE id IN ${participantIds}
+      SET turn_order = sorted_participants.new_turn_order
+      FROM sorted_participants
+      WHERE combat_participants.id = sorted_participants.id
     `);
   }
 
@@ -361,7 +279,7 @@ export class CombatInitiativeService {
    */
   static async advanceTurn(encounterId: string, userId?: string): Promise<AdvanceTurnResult> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     // Single relational query to fetch encounter and active participants
@@ -393,10 +311,11 @@ export class CombatInitiativeService {
     const previousParticipant = participants[encounter.currentTurnOrder] || null;
 
     // Calculate next turn
-    const currentTurnOrder = encounter.currentTurnOrder;
-    const nextTurnOrder = (currentTurnOrder + 1) % participants.length;
-    const newRound = nextTurnOrder === 0 && currentTurnOrder !== 0;
-    const newRoundNumber = newRound ? encounter.currentRound + 1 : encounter.currentRound;
+    const { nextTurnOrder, newRound, newRoundNumber } = InitiativeMechanics.calculateNextTurn(
+      encounter.currentTurnOrder,
+      participants.length,
+      encounter.currentRound
+    );
 
     // Update encounter
     await db
@@ -431,9 +350,12 @@ export class CombatInitiativeService {
    * @param encounterId - Combat encounter ID
    * @returns Current participant or null
    */
-  static async getCurrentTurn(encounterId: string, userId?: string): Promise<CombatParticipant | null> {
+  static async getCurrentTurn(
+    encounterId: string,
+    userId?: string,
+  ): Promise<CombatParticipant | null> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
@@ -463,10 +385,12 @@ export class CombatInitiativeService {
     encounterId: string,
     participantId: string,
     newInitiative: number,
-    userId?: string
+    userId?: string,
   ): Promise<void> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      // 🛡️ Sentinel: Replaced generic encounter access check with specific participant ownership check.
+      // This prevents unauthorized manual adjustment of initiative for other participants.
+      await verifyParticipantOwnership(participantId, encounterId, userId);
     }
 
     // Update participant initiative
@@ -489,7 +413,7 @@ export class CombatInitiativeService {
    */
   static async endCombat(encounterId: string, userId?: string): Promise<CombatEncounter> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     const [updated] = await db
@@ -516,7 +440,7 @@ export class CombatInitiativeService {
    */
   static async getCombatState(encounterId: string, userId?: string): Promise<CombatState> {
     if (userId) {
-      await this.verifyEncounterAccess(encounterId, userId);
+      await verifyEncounterAccess(encounterId, userId);
     }
 
     // Single relational query to fetch encounter and all participants
@@ -541,11 +465,11 @@ export class CombatInitiativeService {
     const currentParticipant = activeParticipants[encounter.currentTurnOrder] || null;
 
     // Build turn order entries in-memory
-    const turnOrder: TurnOrderEntry[] = activeParticipants.map((participant, index) => ({
-      participant,
-      isCurrent: currentParticipant?.id === participant.id,
-      hasGone: index < encounter.currentTurnOrder,
-    }));
+    const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(
+      activeParticipants,
+      encounter.currentTurnOrder,
+      currentParticipant?.id || null
+    );
 
     return {
       encounter: encounter as CombatEncounter,
@@ -624,6 +548,8 @@ export class CombatInitiativeService {
     let participant: { id: string; encounterId: string } | undefined;
 
     if (userId) {
+      // 🛡️ Sentinel: Updated to verify ownership of the specific participant, not just encounter access.
+      // This prevents players from removing other participants from combat.
       const [scopedParticipant] = await db
         .select({
           id: combatParticipants.id,
@@ -633,18 +559,22 @@ export class CombatInitiativeService {
         .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
         .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
         .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(
-          eq(combatParticipants.id, participantId),
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
+        .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
+        .where(
+          and(
+            eq(combatParticipants.id, participantId),
+            or(
+              eq(campaigns.userId, userId),
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+            ),
+          ),
+        )
         .limit(1);
 
       if (!scopedParticipant) {
+        // If not authorized or not found, we simply return (or could throw NotFoundError)
+        // Match existing behavior of returning early.
         return;
       }
 

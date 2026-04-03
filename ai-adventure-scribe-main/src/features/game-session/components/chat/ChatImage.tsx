@@ -1,7 +1,14 @@
 import { X } from 'lucide-react';
 import React from 'react';
 
-import { Dialog, DialogTrigger, DialogContent, DialogClose, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogClose,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 type Props = {
   url: string;

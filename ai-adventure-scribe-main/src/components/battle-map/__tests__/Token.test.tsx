@@ -92,11 +92,7 @@ vi.mock('../TokenNameplate', () => ({
     />
   ),
   TokenStatusIcons: ({ icons, position }: any) => (
-    <mesh
-      data-testid="status-icons"
-      data-icon-count={icons.length}
-      data-position={position}
-    />
+    <mesh data-testid="status-icons" data-icon-count={icons.length} data-position={position} />
   ),
 }));
 
@@ -352,7 +348,8 @@ describe('Token', () => {
     it('should call onClick handler when token is clicked', () => {
       const onClick = vi.fn();
       const { container } = render(<Token {...defaultProps} onClick={onClick} />);
-      const interactionMesh = container.querySelector('mesh[data-testid="token-image"]')
+      const interactionMesh = container
+        .querySelector('mesh[data-testid="token-image"]')
         ?.parentElement?.querySelector('mesh:last-child');
 
       if (interactionMesh) {
@@ -367,9 +364,10 @@ describe('Token', () => {
       const onClick = vi.fn();
       const token = { ...baseToken, locked: true };
       const { container } = render(
-        <Token {...defaultProps} token={token} onClick={onClick} isGM={false} />
+        <Token {...defaultProps} token={token} onClick={onClick} isGM={false} />,
       );
-      const interactionMesh = container.querySelector('mesh[data-testid="token-image"]')
+      const interactionMesh = container
+        .querySelector('mesh[data-testid="token-image"]')
         ?.parentElement?.querySelector('mesh:last-child');
 
       if (interactionMesh) {
@@ -384,9 +382,7 @@ describe('Token', () => {
     it('should call onClick when token is locked but user is GM', () => {
       const onClick = vi.fn();
       const token = { ...baseToken, locked: true };
-      render(
-        <Token {...defaultProps} token={token} onClick={onClick} isGM={true} />
-      );
+      render(<Token {...defaultProps} token={token} onClick={onClick} isGM={true} />);
 
       // GM can click locked tokens
       expect(onClick).toHaveBeenCalledTimes(0); // Not auto-clicked, waiting for user interaction
@@ -448,7 +444,8 @@ describe('Token', () => {
 
     it('should call setHoveredToken on pointer enter', () => {
       const { container } = render(<Token {...defaultProps} />);
-      const interactionMesh = container.querySelector('mesh[data-testid="token-image"]')
+      const interactionMesh = container
+        .querySelector('mesh[data-testid="token-image"]')
         ?.parentElement?.querySelector('mesh:last-child');
 
       if (interactionMesh) {

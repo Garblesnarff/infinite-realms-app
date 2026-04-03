@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -15,10 +15,10 @@ import {
   blogPostCategories,
   blogPostTags,
   blogTags,
-} from '../../../../db/schema/index.js';
+} from '../../../../db/schema/index';
 import { adminProcedure, protectedProcedure, publicProcedure, router } from '../trpc.js';
+import { canManagePost, syncPostCategories, syncPostTags } from './blog-helpers.js';
 import { blogCategorySchema, blogTagSchema } from './blog-schemas.js';
-import { canManagePost } from './blog-helpers.js';
 
 export const blogTaxonomyRouter = router({
   /**
@@ -27,29 +27,42 @@ export const blogTaxonomyRouter = router({
   getCategories: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
-      const categories = await ctx.db
-        .select()
-        .from(blogCategories)
-        .orderBy(blogCategories.name);
+      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB metadata and SEO fields
+      // when only basic taxonomy information is needed for lists or navigation.
+      const baseColumns = {
+        id: blogCategories.id,
+        name: blogCategories.name,
+        slug: blogCategories.slug,
+        description: blogCategories.description,
+      };
 
       if (!input.includeCount) {
-        return categories;
+        return await ctx.db.select(baseColumns).from(blogCategories).orderBy(blogCategories.name);
       }
 
-      // Add post counts - batched to avoid N+1 queries
-      const counts = await ctx.db
+      // ⚡ Bolt: Consolidated category list and post counts into a single joined query.
+      // 🛡️ Sentinel: Filtered counts to only include published posts for public access.
+      const results = await ctx.db
         .select({
-          categoryId: blogPostCategories.categoryId,
-          count: sql<number>`count(*)::int`,
+          category: baseColumns,
+          postCount: sql<number>`count(${blogPosts.id})::int`,
         })
-        .from(blogPostCategories)
-        .groupBy(blogPostCategories.categoryId);
+        .from(blogCategories)
+        .leftJoin(blogPostCategories, eq(blogCategories.id, blogPostCategories.categoryId))
+        .leftJoin(
+          blogPosts,
+          and(
+            eq(blogPostCategories.postId, blogPosts.id),
+            eq(blogPosts.status, 'published'),
+            lte(blogPosts.publishedAt, new Date()),
+          ),
+        )
+        .groupBy(blogCategories.id)
+        .orderBy(blogCategories.name);
 
-      const countMap = new Map(counts.map((c) => [c.categoryId, c.count]));
-
-      return categories.map((category) => ({
-        ...category,
-        postCount: countMap.get(category.id) ?? 0,
+      return results.map((r) => ({
+        ...r.category,
+        postCount: r.postCount,
       }));
     }),
 
@@ -59,26 +72,42 @@ export const blogTaxonomyRouter = router({
   getTags: publicProcedure
     .input(z.object({ includeCount: z.boolean().default(false) }))
     .query(async ({ input, ctx }) => {
-      const tags = await ctx.db.select().from(blogTags).orderBy(blogTags.name);
+      // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB metadata
+      // when only basic tag information is needed for lists or navigation.
+      const baseColumns = {
+        id: blogTags.id,
+        name: blogTags.name,
+        slug: blogTags.slug,
+        description: blogTags.description,
+      };
 
       if (!input.includeCount) {
-        return tags;
+        return await ctx.db.select(baseColumns).from(blogTags).orderBy(blogTags.name);
       }
 
-      // Add post counts - batched to avoid N+1 queries
-      const counts = await ctx.db
+      // ⚡ Bolt: Consolidated tag list and post counts into a single joined query.
+      // 🛡️ Sentinel: Filtered counts to only include published posts for public access.
+      const results = await ctx.db
         .select({
-          tagId: blogPostTags.tagId,
-          count: sql<number>`count(*)::int`,
+          tag: baseColumns,
+          postCount: sql<number>`count(${blogPosts.id})::int`,
         })
-        .from(blogPostTags)
-        .groupBy(blogPostTags.tagId);
+        .from(blogTags)
+        .leftJoin(blogPostTags, eq(blogTags.id, blogPostTags.tagId))
+        .leftJoin(
+          blogPosts,
+          and(
+            eq(blogPostTags.postId, blogPosts.id),
+            eq(blogPosts.status, 'published'),
+            lte(blogPosts.publishedAt, new Date()),
+          ),
+        )
+        .groupBy(blogTags.id)
+        .orderBy(blogTags.name);
 
-      const countMap = new Map(counts.map((c) => [c.tagId, c.count]));
-
-      return tags.map((tag) => ({
-        ...tag,
-        postCount: countMap.get(tag.id) ?? 0,
+      return results.map((r) => ({
+        ...r.tag,
+        postCount: r.postCount,
       }));
     }),
 
@@ -162,10 +191,9 @@ export const blogTaxonomyRouter = router({
   deleteCategory: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      // Delete post associations
-      await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.categoryId, input.id));
-
-      // Delete category
+      // ⚡ Bolt: Removed manual deletion of post associations.
+      // The schema defines ON DELETE CASCADE for blog_post_categories.category_id,
+      // so deleting the category automatically removes all associations in one round-trip.
       await ctx.db.delete(blogCategories).where(eq(blogCategories.id, input.id));
 
       return { success: true };
@@ -248,10 +276,9 @@ export const blogTaxonomyRouter = router({
   deleteTag: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      // Delete post associations
-      await ctx.db.delete(blogPostTags).where(eq(blogPostTags.tagId, input.id));
-
-      // Delete tag
+      // ⚡ Bolt: Removed manual deletion of post associations.
+      // The schema defines ON DELETE CASCADE for blog_post_tags.tag_id,
+      // so deleting the tag automatically removes all associations in one round-trip.
       await ctx.db.delete(blogTags).where(eq(blogTags.id, input.id));
 
       return { success: true };
@@ -266,7 +293,7 @@ export const blogTaxonomyRouter = router({
       z.object({
         postId: z.string().uuid(),
         categoryIds: z.array(z.string().uuid()).min(1).max(10),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const [post] = await ctx.db
@@ -279,22 +306,17 @@ export const blogTaxonomyRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        input.postId,
+        post.authorId,
+      );
+      if (!canManage) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      // Delete existing category associations
-      await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.postId, input.postId));
-
-      // Insert new associations
-      if (input.categoryIds.length > 0) {
-        await ctx.db.insert(blogPostCategories).values(
-          input.categoryIds.map((categoryId) => ({
-            postId: input.postId,
-            categoryId,
-          }))
-        );
-      }
+      // 🛡️ Sentinel: Use hardened helper with atomic ownership checks.
+      await syncPostCategories(ctx, input.postId, input.categoryIds, userAuthorId, isAdmin);
 
       return { success: true };
     }),
@@ -308,7 +330,7 @@ export const blogTaxonomyRouter = router({
       z.object({
         postId: z.string().uuid(),
         tagIds: z.array(z.string().uuid()).min(1).max(20),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const [post] = await ctx.db
@@ -321,22 +343,17 @@ export const blogTaxonomyRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      if (!(await canManagePost(ctx, input.postId, post.authorId))) {
+      const { canManage, userAuthorId, isAdmin } = await canManagePost(
+        ctx,
+        input.postId,
+        post.authorId,
+      );
+      if (!canManage) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
       }
 
-      // Delete existing tag associations
-      await ctx.db.delete(blogPostTags).where(eq(blogPostTags.postId, input.postId));
-
-      // Insert new associations
-      if (input.tagIds.length > 0) {
-        await ctx.db.insert(blogPostTags).values(
-          input.tagIds.map((tagId) => ({
-            postId: input.postId,
-            tagId,
-          }))
-        );
-      }
+      // 🛡️ Sentinel: Use hardened helper with atomic ownership checks.
+      await syncPostTags(ctx, input.postId, input.tagIds, userAuthorId, isAdmin);
 
       return { success: true };
     }),

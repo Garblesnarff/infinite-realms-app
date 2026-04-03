@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Character Loading Service
  *
@@ -46,7 +47,9 @@ export class CharacterLoaderService {
       if (userId) {
         query = query.eq('user_id', userId);
       } else {
-        logger.warn('[CharacterLoader] Loading character without userId validation - this is insecure');
+        logger.warn(
+          '[CharacterLoader] Loading character without userId validation - this is insecure',
+        );
       }
 
       const { data: characterData, error: characterError } = await query.single();
@@ -225,6 +228,120 @@ export class CharacterLoaderService {
     } catch (error) {
       logger.error('[CharacterLoader] Error loading character with spells:', error);
       return null;
+    }
+  }
+  /**
+   * Load character details by game session ID.
+   * Resolves the character_id from the session, then loads the character with equipment.
+   *
+   * @param sessionId - The game session ID
+   * @param userId - Optional user ID for ownership validation (SECURITY: strongly recommended)
+   * @returns Character object or undefined if not found
+   */
+  async loadCharacterBySession(sessionId: string, userId?: string): Promise<Character | undefined> {
+    try {
+      // Build session query with ownership validation if userId provided
+      let sessionQuery = supabase
+        .from('game_sessions')
+        .select('character_id, user_id')
+        .eq('id', sessionId);
+
+      // SECURITY: Validate session ownership if userId provided
+      if (userId) {
+        sessionQuery = sessionQuery.eq('user_id', userId);
+      }
+
+      const { data: session } = await sessionQuery.single();
+
+      if (!session?.character_id) return undefined;
+
+      // Build character query with ownership validation if userId provided
+      let characterQuery = supabase
+        .from('characters')
+        .select(
+          `
+          *,
+          character_stats (*),
+          character_equipment (*)
+        `,
+        )
+        .eq('id', session.character_id);
+
+      // SECURITY: Validate character ownership if userId provided
+      if (userId) {
+        characterQuery = characterQuery.eq('user_id', userId);
+      }
+
+      const { data: characterData } = await characterQuery.single();
+
+      if (!characterData) return undefined;
+
+      const characterRace = characterData.race
+        ? ({ name: characterData.race } as Partial<CharacterRace>)
+        : null;
+      const characterClass = characterData.class
+        ? ({ name: characterData.class } as Partial<CharacterClass>)
+        : null;
+      const characterBackground = characterData.background
+        ? ({ name: characterData.background } as Partial<CharacterBackground>)
+        : null;
+
+      return {
+        id: characterData.id,
+        user_id: characterData.user_id,
+        name: characterData.name,
+        race: characterRace as CharacterRace | null,
+        class: characterClass as CharacterClass | null,
+        level: characterData.level,
+        background: characterBackground as CharacterBackground | null,
+        description: characterData.description,
+        abilityScores: characterData.character_stats?.[0]
+          ? {
+              strength: {
+                score: characterData.character_stats[0].strength,
+                modifier: Math.floor((characterData.character_stats[0].strength - 10) / 2),
+                savingThrow: false,
+              },
+              dexterity: {
+                score: characterData.character_stats[0].dexterity,
+                modifier: Math.floor((characterData.character_stats[0].dexterity - 10) / 2),
+                savingThrow: false,
+              },
+              constitution: {
+                score: characterData.character_stats[0].constitution,
+                modifier: Math.floor((characterData.character_stats[0].constitution - 10) / 2),
+                savingThrow: false,
+              },
+              intelligence: {
+                score: characterData.character_stats[0].intelligence,
+                modifier: Math.floor((characterData.character_stats[0].intelligence - 10) / 2),
+                savingThrow: false,
+              },
+              wisdom: {
+                score: characterData.character_stats[0].wisdom,
+                modifier: Math.floor((characterData.character_stats[0].wisdom - 10) / 2),
+                savingThrow: false,
+              },
+              charisma: {
+                score: characterData.character_stats[0].charisma,
+                modifier: Math.floor((characterData.character_stats[0].charisma - 10) / 2),
+                savingThrow: false,
+              },
+            }
+          : undefined,
+        experience: characterData.experience_points || 0,
+        alignment: characterData.alignment || '',
+        personalityTraits: [],
+        ideals: [],
+        bonds: [],
+        flaws: [],
+        equipment:
+          characterData.character_equipment?.map((item: { item_name: string }) => item.item_name) ||
+          [],
+      };
+    } catch (error) {
+      logger.error('[CharacterLoader] Error loading character by session:', error);
+      return undefined;
     }
   }
 }

@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { db } from '../../../../db/client.js';
+
+import { db } from '../../../../db/client';
 import { CharacterFolderService } from '../character-folder-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       characterFolders: {
@@ -20,7 +21,13 @@ vi.mock('../../../../db/client.js', () => ({
     where: vi.fn(),
     groupBy: vi.fn(),
     insert: vi.fn(),
-    update: vi.fn(),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(),
+        })),
+      })),
+    })),
     delete: vi.fn(),
   },
 }));
@@ -96,6 +103,71 @@ describe('CharacterFolderService Optimization', () => {
       expect(result[0].id).toBe('parent');
       expect(result[0].children).toHaveLength(1);
       expect(result[0].children[0].id).toBe('child');
+    });
+  });
+
+  describe('createFolder Security', () => {
+    it('should throw NotFoundError and NOT insert if parent folder ownership verification fails', async () => {
+      const parentFolderId = 'unowned-parent';
+      const data = { name: 'New Folder', parentFolderId };
+
+      // Mock max sort order query (Bolt optimization)
+      const mockSelectMax = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([{ maxSortOrder: 0 }]),
+      };
+      (db.select as any).mockReturnValueOnce(mockSelectMax);
+
+      // Mock atomic insert with selection
+      const mockReturning = vi.fn().mockResolvedValue([]);
+      const mockSelectInsert = vi.fn().mockReturnValue({ returning: mockReturning });
+      (db.insert as any).mockReturnValue({ select: mockSelectInsert });
+
+      await expect(CharacterFolderService.createFolder(mockUserId, data))
+        .rejects.toThrow();
+
+      expect(db.insert).toHaveBeenCalled();
+      expect(mockSelectInsert).toHaveBeenCalled();
+    });
+
+    it('should create folder successfully when no parent is provided', async () => {
+      const data = { name: 'Root Folder' };
+
+      // Mock max sort order query
+      const mockSelectMax = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([{ maxSortOrder: 0 }]),
+      };
+      (db.select as any).mockReturnValueOnce(mockSelectMax);
+
+      // Mock direct insert
+      const mockFolder = { id: 'new-folder', ...data, userId: mockUserId };
+      const mockReturning = vi.fn().mockResolvedValue([mockFolder]);
+      const mockValues = vi.fn().mockReturnValue({ returning: mockReturning });
+      (db.insert as any).mockReturnValue({ values: mockValues });
+
+      const result = await CharacterFolderService.createFolder(mockUserId, data);
+
+      expect(result).toEqual(mockFolder);
+      expect(db.insert).toHaveBeenCalled();
+      expect(mockValues).toHaveBeenCalled();
+    });
+  });
+
+  describe('moveCharacterToFolder Security', () => {
+    it('should throw NotFoundError and NOT update if character or folder ownership verification fails', async () => {
+      const characterId = 'unowned-character';
+      const folderId = 'unowned-folder';
+
+      const mockReturning = vi.fn().mockResolvedValue([]);
+      const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
+      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as any);
+
+      await expect(CharacterFolderService.moveCharacterToFolder(characterId, folderId, mockUserId))
+        .rejects.toThrow();
+
+      expect(db.update).toHaveBeenCalled();
     });
   });
 });

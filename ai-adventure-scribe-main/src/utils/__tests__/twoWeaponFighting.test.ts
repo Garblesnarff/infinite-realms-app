@@ -7,7 +7,7 @@ import {
   makeMainHandAttack,
   makeOffHandAttack,
   calculateTwoWeaponAttacks,
-  getTwoWeaponAttackSequence
+  getTwoWeaponAttackSequence,
 } from '../twoWeaponFighting';
 
 import type { CombatParticipant } from '@/types/combat';
@@ -25,18 +25,18 @@ describe('twoWeaponFighting', () => {
   const mockLightWeapon: any = {
     name: 'Shortsword',
     weaponProperties: { light: true, finesse: true },
-    damage: { dice: '1d6', type: 'piercing' }
+    damage: { dice: '1d6', type: 'piercing' },
   };
 
   const mockNonLightWeapon: any = {
     name: 'Longsword',
     weaponProperties: { light: false },
-    damage: { dice: '1d8', type: 'slashing' }
+    damage: { dice: '1d8', type: 'slashing' },
   };
 
   const mockShield: any = {
     name: 'Shield',
-    category: 'shield'
+    category: 'shield',
   };
 
   const baseParticipant: Partial<CombatParticipant> = {
@@ -45,7 +45,7 @@ describe('twoWeaponFighting', () => {
     level: 1,
     bonusActionTaken: false,
     actionTaken: false,
-    fightingStyles: []
+    fightingStyles: [],
   };
 
   // Add ability scores to match the runtime check in twoWeaponFighting.ts
@@ -53,8 +53,8 @@ describe('twoWeaponFighting', () => {
     ...baseParticipant,
     abilityScores: {
       strength: { modifier: 3 },
-      dexterity: { modifier: 2 }
-    }
+      dexterity: { modifier: 2 },
+    },
   };
 
   beforeEach(() => {
@@ -63,44 +63,77 @@ describe('twoWeaponFighting', () => {
 
   describe('canUseTwoWeaponFighting', () => {
     it('should return false if main hand is empty', () => {
-      const p = { ...baseParticipant, mainHandWeapon: undefined, offHandWeapon: mockLightWeapon } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: undefined,
+        offHandWeapon: mockLightWeapon,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return false if off hand is empty', () => {
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: undefined } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: undefined,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return true if both weapons are light', () => {
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: mockLightWeapon } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: mockLightWeapon,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(true);
     });
 
     it('should return false if one weapon is not light', () => {
-      const p = { ...baseParticipant, mainHandWeapon: mockNonLightWeapon, offHandWeapon: mockLightWeapon } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockNonLightWeapon,
+        offHandWeapon: mockLightWeapon,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return false if off-hand is a shield (by category)', () => {
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: mockShield } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: mockShield,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return false if off-hand is a shield (by name)', () => {
       const shieldByName = { name: 'Wooden Shield', category: 'armor' };
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: shieldByName } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: shieldByName,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return false if off-hand is a focus', () => {
       const focus = { name: 'Arcane Focus', subcategory: 'Focus' };
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: focus } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: focus,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
 
     it('should return false if bonus action is taken', () => {
-      const p = { ...baseParticipant, mainHandWeapon: mockLightWeapon, offHandWeapon: mockLightWeapon, bonusActionTaken: true } as any;
+      const p = {
+        ...baseParticipant,
+        mainHandWeapon: mockLightWeapon,
+        offHandWeapon: mockLightWeapon,
+        bonusActionTaken: true,
+      } as any;
       expect(canUseTwoWeaponFighting(p)).toBe(false);
     });
   });
@@ -114,7 +147,7 @@ describe('twoWeaponFighting', () => {
     it('should calculate attack and damage with ability modifier', () => {
       const p = {
         ...participantWithAbilities,
-        mainHandWeapon: mockLightWeapon
+        mainHandWeapon: mockLightWeapon,
       } as any;
 
       const mockAttackRoll = { total: 15, critical: false };
@@ -134,14 +167,14 @@ describe('twoWeaponFighting', () => {
     });
 
     it('should use STR if weapon is not finesse', () => {
-       const mockStrWeapon: any = {
+      const mockStrWeapon: any = {
         name: 'Handaxe',
         weaponProperties: { light: true, finesse: false },
-        damage: { dice: '1d6', type: 'slashing' }
+        damage: { dice: '1d6', type: 'slashing' },
       };
       const p = {
         ...participantWithAbilities,
-        mainHandWeapon: mockStrWeapon
+        mainHandWeapon: mockStrWeapon,
       } as any;
 
       (diceUtils.rollAttack as any).mockReturnValue({ total: 10, critical: false });
@@ -156,7 +189,7 @@ describe('twoWeaponFighting', () => {
     it('should return 0 modifier if abilityScores is missing', () => {
       const p = {
         ...baseParticipant,
-        mainHandWeapon: mockLightWeapon
+        mainHandWeapon: mockLightWeapon,
       } as any;
 
       (diceUtils.rollAttack as any).mockReturnValue({ total: 10, critical: false });
@@ -178,7 +211,7 @@ describe('twoWeaponFighting', () => {
     it('should NOT add ability modifier to damage by default', () => {
       const p = {
         ...participantWithAbilities,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
 
       (diceUtils.rollAttack as any).mockReturnValue({ total: 15, critical: false });
@@ -194,7 +227,7 @@ describe('twoWeaponFighting', () => {
       const p = {
         ...participantWithAbilities,
         offHandWeapon: mockLightWeapon,
-        fightingStyles: [{ name: 'two_weapon_fighting' }]
+        fightingStyles: [{ name: 'two_weapon_fighting' }],
       } as any;
 
       (diceUtils.rollAttack as any).mockReturnValue({ total: 15, critical: false });
@@ -209,7 +242,7 @@ describe('twoWeaponFighting', () => {
     it('should return 0 modifier if abilityScores is missing', () => {
       const p = {
         ...baseParticipant,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
 
       (diceUtils.rollAttack as any).mockReturnValue({ total: 10, critical: false });
@@ -229,7 +262,7 @@ describe('twoWeaponFighting', () => {
         characterClass: 'fighter',
         level: 1,
         mainHandWeapon: mockLightWeapon,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
       const result = calculateTwoWeaponAttacks(p);
       expect(result.mainHandAttacks).toBe(1);
@@ -242,7 +275,7 @@ describe('twoWeaponFighting', () => {
         characterClass: 'fighter',
         level: 5,
         mainHandWeapon: mockLightWeapon,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
       const result = calculateTwoWeaponAttacks(p);
       expect(result.mainHandAttacks).toBe(2);
@@ -256,7 +289,7 @@ describe('twoWeaponFighting', () => {
         level: 2,
         resources: { action_surge: { currentUses: 1 } },
         mainHandWeapon: mockLightWeapon,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
       const result = calculateTwoWeaponAttacks(p);
       expect(result.mainHandAttacks).toBe(2); // 1 base + 1 action surge
@@ -270,7 +303,7 @@ describe('twoWeaponFighting', () => {
         characterClass: 'fighter',
         level: 5,
         mainHandWeapon: mockLightWeapon,
-        offHandWeapon: mockLightWeapon
+        offHandWeapon: mockLightWeapon,
       } as any;
       const sequence = getTwoWeaponAttackSequence(p);
       expect(sequence).toEqual(['main_hand', 'main_hand', 'off_hand']);

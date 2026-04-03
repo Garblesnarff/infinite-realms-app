@@ -645,20 +645,20 @@ vi.mock('stripe', () => ({
 
 **Linting:**
 ```bash
-npm run lint -- src/__tests__ server/tests
+bun run lint -- src/__tests__ server/tests
 ```
 - Assert: 0 errors
 
 **Test Execution:**
 ```bash
-npm run server:test
-cd server && npx vitest run
+bun run server:test
+cd server && bunx vitest run
 ```
 - Assert: 100% passing (27 existing + 100+ new = 127+ tests all passing)
 
 **Coverage Report:**
 ```bash
-npm run server:test -- --coverage
+bun run server:test -- --coverage
 ```
 - Assert: 
   - Overall: ≥70% coverage
@@ -667,7 +667,7 @@ npm run server:test -- --coverage
 
 **Test Speed:**
 ```bash
-npm run server:test -- --reporter=verbose
+bun run server:test -- --reporter=verbose
 ```
 - Assert: Total runtime <30 seconds
 
@@ -711,7 +711,7 @@ grep -r "test.skip\|test.todo\|describe.skip" server/tests/ src/__tests__
 **Before submission, verify ALL:**
 
 - [ ] All 10 work units have test files created
-- [ ] All test files pass `npm run lint`
+- [ ] All test files pass `bun run lint`
 - [ ] All tests pass (100% pass rate)
 - [ ] Coverage report shows ≥70% overall, ≥85% critical paths
 - [ ] Total test runtime <30 seconds
@@ -747,9 +747,9 @@ server/tests/regression-suite.test.ts
 
 Verify all pass:
 ```bash
-npm run lint
-npm run server:test
-npm run server:test -- --coverage
+bun run lint
+bun run server:test
+bun run server:test -- --coverage
 ```
 
 ---

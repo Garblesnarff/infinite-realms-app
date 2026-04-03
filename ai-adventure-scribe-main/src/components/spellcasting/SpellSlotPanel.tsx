@@ -100,12 +100,20 @@ const SpellSlotPanel: React.FC<SpellSlotPanelProps> = ({
               <div key={level} className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
                   <span className="font-semibold">Level {level}</span>
-                  <Badge variant={isAvailable ? 'default' : 'outline'} className="ml-2">
+                  <Badge
+                    variant={isAvailable ? 'default' : 'outline'}
+                    className="ml-2"
+                    aria-label={
+                      slot
+                        ? `${slot.current} of ${slot.max} level ${level} slots remaining`
+                        : `No level ${level} slots available`
+                    }
+                  >
                     {slot ? `${slot.current}/${slot.max}` : '0/0'}
                   </Badge>
                 </div>
                 {isAvailable && (
-                  <div className="space-x-2">
+                  <div className="space-x-2" role="group" aria-label={`Spells for level ${level}`}>
                     {availableSpells.map((spell) => (
                       <Button
                         key={spell}
@@ -113,6 +121,8 @@ const SpellSlotPanel: React.FC<SpellSlotPanelProps> = ({
                         size="sm"
                         onClick={() => onSpellSelect(spell, level as SpellSlotLevel)}
                         className="mr-2 text-xs"
+                        title={`Cast ${spell} using a level ${level} slot`}
+                        aria-label={`Cast ${spell} using a level ${level} slot`}
                       >
                         {spell}
                       </Button>

@@ -18,34 +18,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install server-bun dependencies
         run: cd server-bun && bun install
 
       - name: Lint
-        run: npm run lint
+        run: bun run lint
+
+      - name: Guardrails
+        run: bun run check:db-modules
 
       - name: Server tests
-        run: npm run server:test
-
-      - name: Bun server tests
         run: cd server-bun && bun test
 
       - name: Frontend/services tests with coverage
-        run: npx vitest run --coverage
+        run: bunx vitest run --coverage
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -62,23 +56,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: bunx playwright install --with-deps
 
       - name: Run auth/role E2E tests (Playwright API)
         env:
-          # Playwright config will start server with these env var overrides per project
           PW_SUPABASE_JWT_SECRET: testsecret
-        run: npm run e2e
+        run: bun run e2e
 
   security:
     runs-on: ubuntu-latest
@@ -89,14 +81,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
 
-      - name: Install dependencies (for npm audit)
-        run: npm ci
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Gitleaks (secrets scan including history)
         uses: zricethezav/gitleaks-action@v2

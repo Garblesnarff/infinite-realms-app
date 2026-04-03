@@ -1,23 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 
-import type { Memory, MemoryType } from '@/components/game/memory/types';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
+import type { Memory, MemoryType } from '@/types/memory';
+import type { RollRequest } from '@/types/roll-request';
 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
+import { cleanupPlainNarrativeText } from '@/utils/narrative-text-cleanup';
+import { extractNarrativeContent } from '@/utils/parseMessageOptions';
+import { truncateAtRollRequest } from '@/utils/roll-request/validate';
+import { parseRollRequests } from '@/utils/rollRequestParser';
+import { SentenceSegmenter } from '@/utils/sentence-segmenter';
 
 interface InitialGreetingProps {
   sessionId: string | null;
-  sessionData: { turn_count?: number; starter_campaign_id?: string | null } | null;
+  sessionData: {
+    turn_count?: number;
+    starter_campaign_id?: string | null;
+    session_number?: number | null;
+  } | null;
   characterId: string | null;
   campaignId: string | null;
   messages: ChatMessage[];
   messagesLoading?: boolean;
   onGreetingGenerated: (message: ChatMessage) => Promise<void>;
+  onRollRequestsDetected?: (requests: RollRequest[]) => void;
   onMemoryCreated?: (memory: Omit<Memory, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
 }
 
@@ -45,6 +57,7 @@ export const useInitialGreeting = ({
   messages,
   messagesLoading = false,
   onGreetingGenerated,
+  onRollRequestsDetected,
   onMemoryCreated,
 }: InitialGreetingProps) => {
   const [state, setState] = useState<InitialGreetingState>({
@@ -111,40 +124,63 @@ export const useInitialGreeting = ({
         return;
       }
 
-      // Fetch character data
-      const { data: characterData, error: characterError } = await supabase
-        .from('characters')
-        .select(
-          `
-          *,
-          character_stats(*)
-        `,
-        )
-        .eq('id', characterId as string)
-        .single();
+      // ⚡ Bolt: Parallelize character and campaign data fetching to reduce total latency.
+      // Also used explicit column selection instead of select('*') to minimize data transfer.
+      const [characterResult, campaignResult] = await Promise.all([
+        supabase
+          .from('characters')
+          .select(
+            `
+            id, name, level, race, class, background,
+            character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
+          `,
+          )
+          .eq('id', characterId as string)
+          .single(),
+        supabase
+          .from('campaigns')
+          .select('id, name, description')
+          .eq('id', campaignId as string)
+          .single(),
+      ]);
+
+      const { data: characterData, error: characterError } = characterResult;
+      const { data: campaignData, error: campaignError } = campaignResult;
 
       if (characterError) {
         throw new Error(`Failed to load character: ${characterError.message}`);
       }
 
-      // Fetch campaign data
-      const { data: campaignData, error: campaignError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', campaignId as string)
-        .single();
-
       if (campaignError) {
         throw new Error(`Failed to load campaign: ${campaignError.message}`);
       }
 
-      // Build initial greeting prompt (not currently used externally, but kept for reference)
-      const greetingPrompt = buildGreetingPrompt(
-        characterData as unknown as Character,
-        campaignData as unknown as Campaign,
-      );
-
       logger.info('[Initial Greeting] Generated prompt for AI service');
+
+      // Fetch "Previously On" recap for continuation sessions (session_number > 1)
+      let previouslyOnText: string | null = null;
+      if (
+        sessionData?.session_number &&
+        sessionData.session_number > 1 &&
+        campaignId &&
+        sessionId
+      ) {
+        try {
+          const token = localStorage.getItem('workos_access_token');
+          const res = await fetch(
+            `/api/trpc/chronicles.getPreviouslyOn?input=${encodeURIComponent(
+              JSON.stringify({ newSessionId: sessionId, campaignId }),
+            )}`,
+            token ? { headers: { Authorization: `Bearer ${token}` } } : {},
+          );
+          if (res.ok) {
+            const json = await res.json();
+            previouslyOnText = json?.result?.data?.previouslyOn ?? null;
+          }
+        } catch {
+          // Non-blocking — failure just means no recap shown
+        }
+      }
 
       // Generate AI response using AIService
       const openingText = await AIService.generateOpeningMessage({
@@ -159,12 +195,21 @@ export const useInitialGreeting = ({
         },
       });
 
+      // Only parse structured ROLL_REQUESTS_V1 blocks from the opening message.
+      // Regex-based prose detection is intentionally skipped here: option descriptions
+      // often contain informational roll hints like "(Roll for Persuasion if you choose B)"
+      // which are not actual roll requests and would trigger false dice popups.
+      const hasStructuredRollBlock = /```ROLL_REQUESTS_V1[\s\S]*?```/.test(openingText);
+      const openingRollRequests = hasStructuredRollBlock ? parseRollRequests(openingText) : [];
+      const displayText =
+        openingRollRequests.length > 0 ? truncateAtRollRequest(openingText) : openingText;
+
       // Create chat message from AI response (string only; narration is handled elsewhere)
       const greetingMessage: ChatMessage = {
         // Align with ChatMessage shape from '@/types/game'
         id: crypto.randomUUID(),
         sender: 'dm',
-        text: openingText,
+        text: displayText,
         timestamp: new Date().toISOString(),
       };
 
@@ -173,15 +218,35 @@ export const useInitialGreeting = ({
         greetingMessage.text.substring(0, 100) + '...',
       );
 
-      // Call the callback to add the message to the conversation
+      // 1. Inject "Previously On" recap if this is a continuation session
+      if (previouslyOnText) {
+        const previouslyOnMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          sender: 'dm',
+          text: previouslyOnText,
+          timestamp: new Date().toISOString(),
+          context: { previouslyOn: true },
+        };
+        await onGreetingGenerated(previouslyOnMessage);
+      }
+
+      // 2. Normal DM opening message
       await onGreetingGenerated(greetingMessage);
 
-      // Create initial memories if callback is provided
+      // 3. Trigger dice UI if opening message contains roll requests
+      if (openingRollRequests.length > 0) {
+        logger.info(
+          `[Initial Greeting] Detected ${openingRollRequests.length} roll request(s) in opening message`,
+        );
+        onRollRequestsDetected?.(openingRollRequests);
+      }
+
+      // Create initial memories if callback is provided (use displayText to avoid raw ROLL_REQUESTS blocks)
       if (onMemoryCreated) {
         await createInitialMemories(
           characterData as unknown as Character,
           campaignData as unknown as Campaign,
-          openingText,
+          displayText,
           onMemoryCreated,
         );
       }
@@ -226,29 +291,6 @@ export const useInitialGreeting = ({
         });
       }
     }
-  };
-
-  const buildGreetingPrompt = (character: Character, campaign: Campaign): string => {
-    return `You are the Dungeon Master for a D&D 5e campaign called "${campaign.name || 'Untitled Campaign'}".
-
-A new adventure is beginning. The player character is:
-- Name: ${character.name}
-- Race: ${character.race?.name || character.race || 'Unknown'}
-- Class: ${character.class?.name || character.class || 'Unknown'} (Level ${character.level || 1})
-- Background: ${character.background?.name || character.background || 'Unknown'}
-
-Campaign Setting: ${campaign.description || 'A fantasy world of adventure and mystery.'}
-
-Your task: Write an engaging opening scene that:
-1. Introduces the character into the world naturally
-2. Sets the scene with vivid environmental details (time, weather, location)
-3. Provides immediate context for where they are and why
-4. Includes a subtle hook or opportunity for adventure
-5. Ends with a question or situation that invites player action
-
-Keep it immersive, detailed, and true to D&D 5e style. This is the very beginning of their adventure, so set an exciting tone while establishing the world. Make the character feel like they belong in this moment.
-
-Write in second person ("You...") and present tense. Length: 2-3 paragraphs.`;
   };
 
   const createInitialMemories = async (
@@ -327,29 +369,51 @@ Write in second person ("You...") and present tense. Length: 2-3 paragraphs.`;
   };
 
   const extractAtmosphereFromGreeting = (greetingText: string): string | null => {
+    const cleanNarrativeText = sanitizeForMemoryExtraction(extractNarrativeContent(greetingText))
+      .replace(/^(?:[-*]{3,}\s*)+/, '')
+      .trim();
+
     // Simple extraction of atmospheric details from the greeting
     // This could be enhanced with more sophisticated parsing
-    const sentences = greetingText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-    const atmosphericWords = [
-      'weather',
-      'sun',
-      'moon',
-      'wind',
-      'air',
-      'smell',
-      'sound',
-      'feeling',
-      'atmosphere',
-      'mood',
-      'ambiance',
+    const sentences = SentenceSegmenter.splitIntoSentences(cleanNarrativeText)
+      .map((sentence) =>
+        cleanupPlainNarrativeText(sentence)
+          .replace(/^[-—–]+\s*/, '')
+          .replace(/^["“”]+|["“”]+$/g, '')
+          .trim(),
+      )
+      .filter((s) => s.length > 0);
+    const atmosphericPatterns = [
+      /^(?:the\s+)?air\b/i,
+      /^(?:the\s+)?floor(?:boards)?\b/i,
+      /^(?:the\s+)?hallway\b/i,
+      /^(?:the\s+)?room\b/i,
+      /^(?:the\s+)?kitchen\b/i,
+      /^(?:the\s+)?light(?:ing)?\b/i,
+      /^(?:the\s+)?walls?\b/i,
+      /^(?:the\s+)?ceiling\b/i,
+      /^(?:the\s+)?shadows?\b/i,
+      /^(?:the\s+)?heat\b/i,
+      /^(?:the\s+)?steam\b/i,
+      /\bsmells?\b/i,
+      /\bscent\b/i,
+      /\bozone\b/i,
+      /\bhums?\b/i,
+      /\bglow(?:ing)?\b/i,
+      /\bwarm\b/i,
+      /\bcold\b/i,
     ];
+    const characterActionPattern =
+      /\b(?:he|she|they|i|balthazar|remy|whisper|dishwasher prime|lord diabolo|saint celestia)\b/i;
 
-    const atmosphericSentences = sentences.filter((sentence) =>
-      atmosphericWords.some((word) => sentence.toLowerCase().includes(word)),
-    );
+    const atmosphericSentences = sentences
+      .filter((sentence) => atmosphericPatterns.some((pattern) => pattern.test(sentence)))
+      .filter((sentence) => !/["“”]/.test(sentence))
+      .filter((sentence) => !characterActionPattern.test(sentence))
+      .slice(0, 4);
 
     return atmosphericSentences.length > 0
-      ? `Initial atmosphere: ${atmosphericSentences.join('. ').trim()}.`
+      ? `Initial atmosphere: ${atmosphericSentences.join(' ').trim()}`
       : null;
   };
 

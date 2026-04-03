@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Game Core Schema
  *
@@ -6,14 +7,31 @@
  */
 
 import { relations } from 'drizzle-orm';
-import { pgTable, uuid, text, timestamp, jsonb, index, integer, boolean, pgEnum } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  integer,
+  boolean,
+  pgEnum,
+} from 'drizzle-orm/pg-core';
 
-import type { InferSelectModel, InferInsertModel} from 'drizzle-orm';
+import { characterHitDice } from './rest';
+
+import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
  * Enums
  */
-export const sharingModeEnum = pgEnum('sharing_mode', ['private', 'view_only', 'can_edit', 'co_owner']);
+export const sharingModeEnum = pgEnum('sharing_mode', [
+  'private',
+  'view_only',
+  'can_edit',
+  'co_owner',
+]);
 
 /**
  * Campaigns Table
@@ -46,7 +64,7 @@ export const campaigns = pgTable(
   (table) => ({
     userIdIdx: index('idx_campaigns_user_id').on(table.userId),
     statusIdx: index('idx_campaigns_status').on(table.status),
-  })
+  }),
 );
 
 /**
@@ -101,7 +119,7 @@ export const characters = pgTable(
     ownerIdIdx: index('idx_characters_owner_id').on(table.ownerId),
     isPublicIdx: index('idx_characters_is_public').on(table.isPublic),
     folderIdIdx: index('idx_characters_folder_id').on(table.folderId),
-  })
+  }),
 );
 
 /**
@@ -112,7 +130,9 @@ export const characterStats = pgTable(
   'character_stats',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    characterId: uuid('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
     strength: integer('strength').default(10).notNull(),
     dexterity: integer('dexterity').default(10).notNull(),
     constitution: integer('constitution').default(10).notNull(),
@@ -124,7 +144,7 @@ export const characterStats = pgTable(
   },
   (table) => ({
     characterIdIdx: index('idx_character_stats_character_id').on(table.characterId),
-  })
+  }),
 );
 
 /**
@@ -157,7 +177,7 @@ export const gameSessions = pgTable(
     characterIdIdx: index('idx_game_sessions_character_id').on(table.characterId),
     statusIdx: index('idx_game_sessions_status').on(table.status),
     starterCampaignIdx: index('idx_game_sessions_starter_campaign').on(table.starterCampaignId),
-  })
+  }),
 );
 
 /**
@@ -180,8 +200,43 @@ export const dialogueHistory = pgTable(
   (table) => ({
     sessionIdIdx: index('idx_dialogue_history_session_id').on(table.sessionId),
     timestampIdx: index('idx_dialogue_history_timestamp').on(table.timestamp),
-  })
+  }),
 );
+
+/**
+ * Session Chronicles Table
+ * AI-generated fantasy prose chapters for completed game sessions.
+ * Pro users get full illustrated chronicles; free users get plain summaries.
+ */
+export const sessionChronicles = pgTable(
+  'session_chronicles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => gameSessions.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    // 'pending' | 'generating' | 'ready' | 'failed'
+    status: text('status').notNull().default('pending'),
+    chronicleText: text('chronicle_text'),
+    chapterTitle: text('chapter_title'),
+    previouslyOn: text('previously_on'),
+    illustrationUrl: text('illustration_url'),
+    shareToken: text('share_token').unique(),
+    generatedAt: timestamp('generated_at', { withTimezone: true, mode: 'date' }),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionIdIdx: index('idx_sc_session_id').on(table.sessionId),
+    shareTokenIdx: index('idx_sc_share_token').on(table.shareToken),
+    userIdIdx: index('idx_sc_user_id').on(table.userId),
+  }),
+);
+
+export type SessionChronicle = InferSelectModel<typeof sessionChronicles>;
+export type NewSessionChronicle = InferInsertModel<typeof sessionChronicles>;
 
 // Define relations
 export const charactersRelations = relations(characters, ({ one, many }) => ({
@@ -193,6 +248,7 @@ export const charactersRelations = relations(characters, ({ one, many }) => ({
     fields: [characters.id],
     references: [characterStats.characterId],
   }),
+  hitDice: many(characterHitDice),
 }));
 
 export const campaignsRelations = relations(campaigns, ({ many }) => ({

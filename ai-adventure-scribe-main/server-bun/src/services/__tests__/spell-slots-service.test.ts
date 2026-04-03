@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
 
+let nextSelectResults: any[] = [];
+
 // Mock the db client
-vi.mock('../../../../db/client.js', () => ({
+vi.mock('../../../../db/client', () => ({
   db: {
     query: {
       characters: {
@@ -20,13 +22,24 @@ vi.mock('../../../../db/client.js', () => ({
         findMany: vi.fn(),
       },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(),
-      })),
-    })),
+    select: vi.fn(() => {
+      const mockChain: any = {
+        from: vi.fn(() => mockChain),
+        leftJoin: vi.fn(() => mockChain),
+        innerJoin: vi.fn(() => mockChain),
+        where: vi.fn(() => mockChain),
+        orderBy: vi.fn(() => mockChain),
+        limit: vi.fn(() => mockChain),
+        offset: vi.fn(() => mockChain),
+        then: vi.fn((cb) => Promise.resolve(nextSelectResults).then(cb)),
+      };
+      return mockChain;
+    }),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
+        returning: vi.fn(),
+      })),
+      select: vi.fn(() => ({
         returning: vi.fn(),
       })),
     })),
@@ -95,23 +108,37 @@ describe('SpellSlotsService', () => {
 
   describe('Security: getCharacterSpellSlots', () => {
     it('should throw NotFoundError if character is not found or not owned by user', async () => {
-      (db.query.characterSpellSlots.findMany as any).mockResolvedValue([]);
-      (db.query.characters.findFirst as any).mockResolvedValue(null);
+      nextSelectResults = [];
 
       await expect(SpellSlotsService.getCharacterSpellSlots(mockCharacterId, mockUserId))
         .rejects.toThrow(NotFoundError);
     });
 
     it('should succeed if character is owned by user', async () => {
-      const mockSlots = [
-        { id: '1', characterId: mockCharacterId, spellLevel: 1, totalSlots: 2, usedSlots: 0 }
+      nextSelectResults = [
+        {
+          charId: mockCharacterId,
+          slot: { id: '1', characterId: mockCharacterId, spellLevel: 1, totalSlots: 2, usedSlots: 0 }
+        }
       ];
-      (db.query.characterSpellSlots.findMany as any).mockResolvedValue(mockSlots);
 
       const result = await SpellSlotsService.getCharacterSpellSlots(mockCharacterId, mockUserId);
       expect(result.characterId).toBe(mockCharacterId);
       expect(result.slots).toHaveLength(1);
       expect(result[1]).toBeDefined();
+    });
+
+    it('should return empty slots for a character that exists but has no slots', async () => {
+      nextSelectResults = [
+        {
+          charId: mockCharacterId,
+          slot: null
+        }
+      ];
+
+      const result = await SpellSlotsService.getCharacterSpellSlots(mockCharacterId, mockUserId);
+      expect(result.characterId).toBe(mockCharacterId);
+      expect(result.slots).toHaveLength(0);
     });
   });
 
@@ -152,9 +179,9 @@ describe('SpellSlotsService', () => {
       });
 
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'log-123', timestamp: new Date() }])
-        })
+        values: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: 'log-123', timestamp: new Date() }])
       });
 
       const result = await SpellSlotsService.useSpellSlot({
@@ -171,7 +198,7 @@ describe('SpellSlotsService', () => {
 
   describe('Security: restoreSpellSlots', () => {
     it('should throw NotFoundError if character not owned', async () => {
-      (db.query.characters.findFirst as any).mockResolvedValue(null);
+      nextSelectResults = [];
 
       await expect(SpellSlotsService.restoreSpellSlots({
         characterId: mockCharacterId,
@@ -179,10 +206,13 @@ describe('SpellSlotsService', () => {
     });
 
     it('should restore slots if character owned', async () => {
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-      (db.query.characterSpellSlots.findMany as any).mockResolvedValue([
-        { id: 'slot-1', spellLevel: 1, usedSlots: 1 }
-      ]);
+      nextSelectResults = [
+        {
+          charId: mockCharacterId,
+          slot: { id: 'slot-1', spellLevel: 1, usedSlots: 1, totalSlots: 2 }
+        }
+      ];
+
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockResolvedValue({})
@@ -199,11 +229,30 @@ describe('SpellSlotsService', () => {
 
   describe('Security: getSpellSlotUsageHistory', () => {
     it('should throw NotFoundError if character not owned', async () => {
+      nextSelectResults = [];
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
       await expect(SpellSlotsService.getSpellSlotUsageHistory({
         characterId: mockCharacterId,
       }, mockUserId)).rejects.toThrow(NotFoundError);
+    });
+
+    it('should return entries and total if character owned', async () => {
+      const mockLog = { id: 'log-1', characterId: mockCharacterId, spellName: 'Fireball', timestamp: new Date() };
+      nextSelectResults = [
+        {
+          log: mockLog,
+          totalCount: 1
+        }
+      ];
+
+      const result = await SpellSlotsService.getSpellSlotUsageHistory({
+        characterId: mockCharacterId,
+      }, mockUserId);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.entries[0]).toEqual(mockLog);
     });
   });
 
@@ -224,10 +273,17 @@ describe('SpellSlotsService', () => {
         where: vi.fn().mockResolvedValue({})
       });
       (db.insert as any).mockReturnValue({
-        values: vi.fn().mockResolvedValue({})
+        values: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([])
       });
       // Mock the final call to getCharacterSpellSlots
-      (db.query.characterSpellSlots.findMany as any).mockResolvedValue([]);
+      nextSelectResults = [
+        {
+          charId: mockCharacterId,
+          slot: null
+        }
+      ];
 
       await SpellSlotsService.initializeSpellSlots(
         mockCharacterId,

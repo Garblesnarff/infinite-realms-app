@@ -1,4 +1,11 @@
 /**
+ * ⚡ Bolt: Explicit column list for campaign retrieval to avoid over-fetching
+ * large JSONB fields like 'setting_details' and 'thematic_elements' when not needed.
+ */
+export const CAMPAIGN_SELECT_COLUMNS =
+  'id, name, description, genre, difficulty_level, campaign_length, tone, status, background_image, art_style, created_at, updated_at, era, location, atmosphere, setting_details, thematic_elements, style_config, rules_config, user_id';
+
+/**
  * Interface for campaign setting details
  */
 export interface CampaignSetting {

@@ -112,7 +112,7 @@ export function BattleCanvas({
         onSceneLoaded(scene);
       }
     },
-    [onSceneLoaded]
+    [onSceneLoaded],
   );
 
   /**
@@ -181,18 +181,10 @@ export function BattleCanvas({
 
         {/* Lighting */}
         <ambientLight intensity={0.6} />
-        <directionalLight
-          position={[10, 10, 10]}
-          intensity={0.5}
-          castShadow={false}
-        />
+        <directionalLight position={[10, 10, 10]} intensity={0.5} castShadow={false} />
 
         {/* Scene Content */}
-        <BattleScene
-          sceneId={sceneId}
-          onSceneLoaded={handleSceneLoaded}
-          showLoading={true}
-        />
+        <BattleScene sceneId={sceneId} onSceneLoaded={handleSceneLoaded} showLoading={true} />
 
         {/* Optional: Add performance monitor in development */}
         {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}

@@ -12,6 +12,7 @@
 
 import { Elysia } from 'elysia';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { logger } from '../../lib/logger';
 import { workos, authConfig } from '../../services/workos';
 import { db } from '../../lib/drizzle';
@@ -21,21 +22,54 @@ import { eq } from 'drizzle-orm';
 // Test auth configuration
 const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;
 const TEST_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
+const OAUTH_STATE_COOKIE = 'ir_oauth_state';
+const OAUTH_STATE_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
+
+function createOAuthState(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function getCookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(';').map((entry) => entry.trim());
+  for (const cookie of cookies) {
+    const [key, ...rest] = cookie.split('=');
+    if (key === name) {
+      return rest.join('=') || null;
+    }
+  }
+  return null;
+}
+
+function buildOAuthStateCookie(value: string, maxAgeSec: number): string {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `${OAUTH_STATE_COOKIE}=${value}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAgeSec}${secure}`;
+}
 
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
   /**
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
    */
-  .get('/login', ({ redirect, set }) => {
+  .get('/login', ({ redirect, request, set }) => {
     try {
+      const state = createOAuthState();
       const authorizationUrl = workos.userManagement.getAuthorizationUrl({
         provider: 'authkit',
         clientId: authConfig.clientId,
         redirectUri: authConfig.redirectUri,
+        state,
         // Force account selection screen in Google OAuth
         prompt: 'select_account',
       });
+
+      const existingCookie = request.headers.get('cookie');
+      const hadPriorState = Boolean(getCookieValue(existingCookie, OAUTH_STATE_COOKIE));
+      set.headers['Set-Cookie'] = buildOAuthStateCookie(state, OAUTH_STATE_MAX_AGE_SECONDS);
+
+      if (hadPriorState) {
+        logger.warn({ msg: 'Replacing existing OAuth state cookie' });
+      }
 
       return redirect(authorizationUrl);
     } catch (error) {
@@ -49,12 +83,26 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
    * Handle OAuth callback from WorkOS
    * GET /v1/auth/callback?code=xxx
    */
-  .get('/callback', async ({ query, redirect, set }) => {
+  .get('/callback', async ({ query, request, redirect, set }) => {
     const code = query.code as string | undefined;
+    const state = query.state as string | undefined;
+
+    const cookieState = getCookieValue(request.headers.get('cookie'), OAUTH_STATE_COOKIE);
+    set.headers['Set-Cookie'] = buildOAuthStateCookie('', 0);
 
     if (!code) {
       set.status = 400;
       return { error: 'Missing authorization code' };
+    }
+
+    if (!state || !cookieState || state !== cookieState) {
+      logger.warn({
+        msg: 'OAuth state validation failed',
+        hasState: Boolean(state),
+        hasCookieState: Boolean(cookieState),
+      });
+      set.status = 400;
+      return { error: 'Invalid OAuth state' };
     }
 
     try {
@@ -65,32 +113,26 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
           clientId: authConfig.clientId,
         });
 
-      // Create or update user in database
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.id, user.id),
-      });
-
-      if (!existingUser) {
-        // Create new user with free plan by default
-        await db.insert(users).values({
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
+      // This reduces database round-trips from 2 down to 1 for every authentication callback.
+      await db
+        .insert(users)
+        .values({
           id: user.id,
           email: user.email,
           plan: 'free',
           firstName: user.firstName || null,
           lastName: user.lastName || null,
-        });
-      } else {
-        // Update existing user info
-        await db
-          .update(users)
-          .set({
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
             email: user.email,
             firstName: user.firstName || null,
             lastName: user.lastName || null,
             updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id));
-      }
+          },
+        });
 
       // Redirect to frontend with tokens in URL hash
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
@@ -168,11 +210,11 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
   /**
    * Test authentication endpoint for automated testing
-   * GET /v1/auth/test-login?secret=xxx
+   * GET /v1/auth/test-login (requires x-test-auth-secret header)
    *
    * SECURITY: Disabled in production unless ENABLE_TEST_AUTH is set.
    */
-  .get('/test-login', async ({ query, redirect, set }) => {
+  .get('/test-login', async ({ query, headers, redirect, set }) => {
     // SECURITY: Disable in production environment
     if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_AUTH) {
       set.status = 404;
@@ -185,10 +227,15 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
       return { error: 'Unauthorized' };
     }
 
-    const secret = query.secret as string | undefined;
+    const headerSecret = headers['x-test-auth-secret'];
+    const querySecret = query.secret as string | undefined;
+
+    if (querySecret) {
+      logger.warn({ msg: 'Deprecated test auth query secret usage detected' });
+    }
 
     // Verify test auth secret
-    if (secret !== TEST_AUTH_SECRET) {
+    if (headerSecret !== TEST_AUTH_SECRET) {
       set.status = 401;
       return { error: 'Unauthorized' };
     }

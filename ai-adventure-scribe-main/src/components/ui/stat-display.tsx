@@ -42,8 +42,7 @@ const statDisplayVariants = cva(
 );
 
 export interface StatDisplayProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof statDisplayVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof statDisplayVariants> {
   /** The primary value to display */
   value: number | string;
   /** Label for the stat (e.g., "STR", "HP", "AC") */

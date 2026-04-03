@@ -1,25 +1,17 @@
-import {
-  applyAssetPostProcessing,
-  insertAssetTags,
-  getCachedAssets
-} from './asset-processor';
-import { voiceConsistencyService } from '../voice-consistency-service';
+import { applyAssetPostProcessing, insertAssetTags, getCachedAssets } from './asset-processor';
 import { parseXMLTagsFromResponse } from './xml-parser';
 import { MemoryManager } from '../memory-manager';
-import { sampleFromVerbalizedResponse } from './shared/verbalized-sampling';
-import { WorldBuilderService } from '../world-builders/world-builder-service';
+import { voiceConsistencyService } from '../voice-consistency-service';
+import { WorldBuilderService, WorldBuilderRepository } from '../world-builders';
 
 import type { MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
-import type {
-  ChatMessage,
-  NarrationSegment,
-  GameContext,
-  AIResponse
-} from './shared/types';
+import type { ChatMessage, NarrationSegment, GameContext, AIResponse } from './shared/types';
 import type { CombatDetectionResult } from '@/utils/combatDetection';
 
 import logger from '@/lib/logger';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
 
 interface ProcessDMResponseParams {
   rawResponse: string;
@@ -51,7 +43,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     isFirstMessage,
     combatDetection,
     roll_requests,
-    dice_rolls
+    dice_rolls,
   } = params;
 
   // Initialize result with raw text
@@ -60,7 +52,17 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   // 1. Post-processing logic (Formatting & Parsing)
   if (isFirstMessage) {
     logger.info('[Opening Message] Raw AI response length:', rawResponse.length);
-    const sampledText = sampleFromVerbalizedResponse(rawResponse);
+    // Strip any code-fence wrapper the model adds around the response.
+    // Pattern 1: entire response is wrapped (```response...```) — unwrap it, keep content.
+    // Pattern 2: leading metadata block before narrative — strip just that block.
+    // Preserves mid-response ROLL_REQUESTS_V1 fences in both cases.
+    let sampledText: string;
+    const entirelyWrapped = rawResponse.match(/^```\w*\n([\s\S]*)\n```\s*$/);
+    if (entirelyWrapped) {
+      sampledText = entirelyWrapped[1].trim();
+    } else {
+      sampledText = rawResponse.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
+    }
     logger.info('[Opening Message] Sampled text length:', sampledText.length);
     const processed = applyAssetPostProcessing({ text: sampledText });
     result = { text: processed.text };
@@ -68,9 +70,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     try {
       // Clean the response by removing markdown code blocks first
       let cleanedResponse = rawResponse.trim();
-      cleanedResponse = cleanedResponse
-        .replace(/^```(?:json)?\s*/, '')
-        .replace(/\s*```$/, '');
+      cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
 
       // Try to find JSON content if the response has extra text
       const jsonStart = cleanedResponse.indexOf('{');
@@ -92,7 +92,8 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       logger.debug('🎭 Successfully parsed structured voice response');
 
       // Map snake_case narration_segments to camelCase narrationSegments
-      const narrationSegments = structuredResponse.narration_segments || structuredResponse.narrationSegments;
+      const narrationSegments =
+        structuredResponse.narration_segments || structuredResponse.narrationSegments;
 
       if (narrationSegments) {
         logger.debug('📊 AI SEGMENTS ANALYSIS:', narrationSegments.length);
@@ -121,13 +122,10 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       }
       result = {
         text: structuredResponse.text || rawResponse,
-        narrationSegments: narrationSegments
+        narrationSegments: narrationSegments,
       };
     } catch (parseError) {
-      logger.warn(
-        'Failed to parse structured response, attempting to extract text:',
-        parseError,
-      );
+      logger.warn('Failed to parse structured response, attempting to extract text:', parseError);
 
       // Try to extract text from malformed JSON
       try {
@@ -175,26 +173,30 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     result = applyAssetPostProcessing({ text: rawResponse });
   }
 
+  // Normalize malformed asset tags before persistence, rendering, and memory extraction.
+  result.text = normalizeAssetTagsInContent(result.text);
+  if (result.narrationSegments) {
+    result.narrationSegments = result.narrationSegments.map((segment) => ({
+      ...segment,
+      text: segment.text ? normalizeAssetTagsInContent(segment.text) : segment.text,
+    }));
+  }
+
   // 2. Process voice assignments if we have structured data
   if (result.narrationSegments && context.sessionId && voiceContext) {
     try {
       // Normalize segment types for compatibility
-      const normalizedSegments = result.narrationSegments.map(
-        (segment: NarrationSegment) => ({
-          ...segment,
-          type:
-            segment.type === 'dm'
-              ? 'narration'
-              : segment.type === 'character'
-                ? 'dialogue'
-                : (segment.type as string),
-        }),
-      );
+      const normalizedSegments = result.narrationSegments.map((segment: NarrationSegment) => ({
+        ...segment,
+        type:
+          segment.type === 'dm'
+            ? 'narration'
+            : segment.type === 'character'
+              ? 'dialogue'
+              : (segment.type as string),
+      }));
 
-      await voiceConsistencyService.processVoiceAssignments(
-        context.sessionId,
-        normalizedSegments,
-      );
+      await voiceConsistencyService.processVoiceAssignments(context.sessionId, normalizedSegments);
       logger.info('🎪 Processed voice assignments for character consistency');
     } catch (voiceError) {
       logger.warn('Voice assignment processing failed (non-fatal):', voiceError);
@@ -208,7 +210,9 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
     // If XML tags were found, use them directly (no additional API calls!)
     if (xmlParsed.hadTags) {
-      logger.info(`📋 Found XML tags in DM response: ${xmlParsed.memories.length} memories, ${xmlParsed.worldUpdates.npcs.length} NPCs, ${xmlParsed.worldUpdates.locations.length} locations, ${xmlParsed.worldUpdates.quests.length} quests`);
+      logger.info(
+        `📋 Found XML tags in DM response: ${xmlParsed.memories.length} memories, ${xmlParsed.worldUpdates.npcs.length} NPCs, ${xmlParsed.worldUpdates.locations.length} locations, ${xmlParsed.worldUpdates.quests.length} quests`,
+      );
 
       // Store memories from XML tags (no API call needed)
       if (xmlParsed.memories.length > 0) {
@@ -223,41 +227,73 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
             metadata: { source: 'xml_extraction', characterId: context.characterId },
           }));
           await MemoryManager.saveMemories(memoriesToSave);
-          logger.info(`🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`);
+          logger.info(
+            `🧠 Saved ${memoriesToSave.length} memories from XML tags (no extra API call)`,
+          );
         } catch (memoryError) {
           logger.warn('Failed to save XML-extracted memories (non-fatal):', memoryError);
         }
       }
 
       // Process world updates from XML tags
-      const hasWorldUpdates = xmlParsed.worldUpdates.npcs.length > 0 ||
+      const hasWorldUpdates =
+        xmlParsed.worldUpdates.npcs.length > 0 ||
         xmlParsed.worldUpdates.locations.length > 0 ||
         xmlParsed.worldUpdates.quests.length > 0;
 
       if (hasWorldUpdates) {
         try {
+          let savedNPCs = 0,
+            savedLocations = 0,
+            savedQuests = 0;
+
           for (const npc of xmlParsed.worldUpdates.npcs) {
-            await WorldBuilderService.saveNPCFromXML(
-              context.campaignId,
-              context.sessionId!,
-              npc,
-            );
+            if (
+              await WorldBuilderRepository.saveNPCFromXML(
+                context.campaignId,
+                context.sessionId!,
+                npc,
+              )
+            )
+              savedNPCs++;
           }
           for (const loc of xmlParsed.worldUpdates.locations) {
-            await WorldBuilderService.saveLocationFromXML(
-              context.campaignId,
-              context.sessionId!,
-              loc,
-            );
+            if (
+              await WorldBuilderRepository.saveLocationFromXML(
+                context.campaignId,
+                context.sessionId!,
+                loc,
+              )
+            )
+              savedLocations++;
           }
           for (const quest of xmlParsed.worldUpdates.quests) {
-            await WorldBuilderService.saveQuestFromXML(
-              context.campaignId,
-              context.sessionId!,
-              quest,
+            if (
+              await WorldBuilderRepository.saveQuestFromXML(
+                context.campaignId,
+                context.sessionId!,
+                quest,
+              )
+            )
+              savedQuests++;
+          }
+
+          const total = savedNPCs + savedLocations + savedQuests;
+          const attempted =
+            xmlParsed.worldUpdates.npcs.length +
+            xmlParsed.worldUpdates.locations.length +
+            xmlParsed.worldUpdates.quests.length;
+
+          if (total > 0) {
+            logger.info(
+              `🌍 World expanded from XML: +${savedLocations} locations, +${savedNPCs} NPCs, +${savedQuests} quests`,
             );
           }
-          logger.info(`🌍 World expanded from XML: +${xmlParsed.worldUpdates.locations.length} locations, +${xmlParsed.worldUpdates.npcs.length} NPCs, +${xmlParsed.worldUpdates.quests.length} quests`);
+          if (total < attempted) {
+            logger.warn(
+              `[WorldBuilder] ${attempted - total}/${attempted} XML world updates failed to save`,
+            );
+          }
         } catch (worldError) {
           logger.warn('Failed to save XML-extracted world updates (non-fatal):', worldError);
         }
@@ -282,19 +318,20 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
             campaignId: context.campaignId,
             characterId: context.characterId,
             currentMessage: message,
-            recentMessages:
-              conversationHistory?.slice(-5).map((msg) => msg.content) || [],
+            recentMessages: conversationHistory?.slice(-5).map((msg) => msg.content) || [],
           };
 
           const extractionResult = await MemoryManager.extractMemories(
             memoryContext,
             message,
-            result.text,
+            sanitizeForMemoryExtraction(result.text),
           );
 
           if (extractionResult.memories.length > 0) {
             await MemoryManager.saveMemories(extractionResult.memories);
-            logger.info(`🧠 Extracted and saved ${extractionResult.memories.length} memories (fallback API call)`);
+            logger.info(
+              `🧠 Extracted and saved ${extractionResult.memories.length} memories (fallback API call)`,
+            );
           }
         } catch (memoryError) {
           logger.warn('Memory extraction failed (non-fatal):', memoryError);

@@ -1,21 +1,33 @@
+/* eslint-disable max-lines */
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+import type { Campaign } from '@/types/campaign';
+import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
 
-import { ASSET_TAG_PATTERN } from '@/features/game-session/utils/parse-asset-tags';
+import {
+  ASSET_TAG_PATTERN,
+  normalizeAssetTagKeysInContent,
+} from '@/features/game-session/utils/parse-asset-tags';
+import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
-import { llmApiClient } from '@/services/llm-api-client';
 import { generateSceneImage, type AssetReference } from '@/services/scene-image-generator';
 import { handleAsyncError } from '@/utils/error-handler';
 import { generateImageLabel } from '@/utils/image-label-generator';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
 
+// Type alias for Campaign objects that may carry runtime enhancement data
+// not yet reflected in the Campaign interface.
+type CampaignContext = Campaign & { enhancementEffects?: { atmosphere?: string[] } };
+
+const env = import.meta.env as Record<string, string | undefined>;
+
 interface UseImageGenerationProps {
   sessionId?: string;
   routeCampaignId?: string;
-  character: any;
-  campaign: any;
+  character: Character | null;
+  campaign: CampaignContext | null;
   messages: ChatMessage[];
   getAssetImageUrl?: (type: string, key: string) => string | null;
 }
@@ -40,11 +52,9 @@ export const useImageGeneration = ({
   const lastGenRef = useRef<number>(0);
 
   // Env flags
-  const AUTO = String((import.meta as any)?.env?.VITE_DM_AUTO_IMAGE ?? 'false').toLowerCase();
+  const AUTO = String(env.VITE_DM_AUTO_IMAGE ?? 'false').toLowerCase();
   const isAuto = ['1', 'true', 'yes', 'on'].includes(AUTO);
-  const MAX = Number.parseInt(
-    String((import.meta as any)?.env?.VITE_DM_IMAGE_MAX_PER_SESSION ?? '3'),
-  );
+  const MAX = Number.parseInt(String(env.VITE_DM_IMAGE_MAX_PER_SESSION ?? '3'));
 
   // Helpers for per-session caps
   const capKey = (sid: string) => `dm-img-cap:${sid}`;
@@ -83,11 +93,12 @@ export const useImageGeneration = ({
         // Extract asset URLs from message for reference images
         const assetUrls: AssetReference[] = [];
         if (getAssetImageUrl) {
-          // Parse [ASSET:type:key] tags from message text using shared pattern
+          // Parse [ASSET:type:key] tags from message text using shared pattern.
+          // Normalize first so malformed keys (e.g. with quotes) are matched.
           const tagPattern = new RegExp(ASSET_TAG_PATTERN.source, 'gi');
           let match;
           const seen = new Set<string>();
-          const fullText = message.text || baseText;
+          const fullText = normalizeAssetTagKeysInContent(message.text || baseText);
           while ((match = tagPattern.exec(fullText)) !== null) {
             const [, type, key] = match;
             const lookupKey = `${type}:${key}`;
@@ -126,14 +137,14 @@ export const useImageGeneration = ({
             name: campaign?.name,
             genre: campaign?.genre || undefined,
             tone: campaign?.tone || undefined,
-            atmosphere: (campaign?.enhancementEffects?.atmosphere?.[0] as string) || undefined,
+            atmosphere: campaign?.enhancementEffects?.atmosphere?.[0] || undefined,
           },
           character: character
             ? {
                 name: character.name,
-                race: character.race as any,
-                subrace: character.subrace as any,
-                class: character.class as any,
+                race: character.race,
+                subrace: character.subrace,
+                class: character.class,
                 appearance: character.appearance || undefined,
                 personality_notes:
                   character.personalityNotes || character.personality_notes || undefined,
@@ -143,10 +154,8 @@ export const useImageGeneration = ({
               }
             : null,
           assetUrls: assetUrls.length > 0 ? assetUrls : undefined,
-          quality: (import.meta as any)?.env?.VITE_DM_IMAGE_QUALITY || 'low',
-          model:
-            (import.meta as any)?.env?.VITE_DM_IMAGE_MODEL ||
-            'google/gemini-2.5-flash-image',
+          quality: (env.VITE_DM_IMAGE_QUALITY as 'low' | 'medium' | 'high' | undefined) || 'low',
+          model: env.VITE_DM_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
           storage: routeCampaignId
             ? { entityType: 'campaign', entityId: routeCampaignId, label }
             : { label },
@@ -159,19 +168,25 @@ export const useImageGeneration = ({
 
         if (message.id) {
           try {
-            logger.info({
-              messageId: message.id,
-              imageUrl: res.url,
-            }, '[useImageGeneration] Attempting to attach image');
+            logger.info(
+              { messageId: message.id, imageUrl: res.url },
+              '[useImageGeneration] Attempting to attach image',
+            );
 
             await llmApiClient.appendMessageImage({
               messageId: message.id,
               image: { url: res.url, prompt: res.prompt, model: res.model, quality: res.quality },
             });
 
-            logger.info({ messageId: message.id }, '[useImageGeneration] ✅ Image attached successfully');
+            logger.info(
+              { messageId: message.id },
+              '[useImageGeneration] ✅ Image attached successfully',
+            );
           } catch (persistErr) {
-            logger.error({ error: persistErr, messageId: message.id }, '[useImageGeneration] ❌ Image attachment FAILED');
+            logger.error(
+              { error: persistErr, messageId: message.id },
+              '[useImageGeneration] ❌ Image attachment FAILED',
+            );
             handleAsyncError(persistErr, {
               userMessage: 'Failed to save generated image',
               logLevel: 'warn',
@@ -192,8 +207,8 @@ export const useImageGeneration = ({
           ms: Math.round(lastGenRef.current - t0),
           model: res.model,
         });
-      } catch (e: any) {
-        const msg = e?.message || 'Failed to generate image';
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Failed to generate image';
         setGenErrorByMessage((prev) => ({ ...prev, [messageId]: msg }));
         handleAsyncError(e, {
           userMessage: 'Failed to generate scene image',
@@ -225,14 +240,14 @@ export const useImageGeneration = ({
     if (generatingFor.has(String(msgId))) return;
 
     const hasImageRequests =
-      Array.isArray((lastDm as any).imageRequests) && (lastDm as any).imageRequests.length > 0;
+      Array.isArray(lastDm.imageRequests) && (lastDm.imageRequests?.length ?? 0) > 0;
     const hasVisualMarker = /^[\t ]*VISUAL\s+PROMPT:\s*(.+)$/im.test(lastDm.text || '');
     if (!hasImageRequests && !hasVisualMarker) return;
 
     if (performance.now() - lastGenRef.current < 1000) return;
 
     markTriggered(sessionId, String(msgId));
-    handleGenerateScene(lastDm as any).catch(() => {});
+    handleGenerateScene(lastDm).catch(() => {});
   }, [messages, isAuto, sessionId, generatingFor, handleGenerateScene]);
 
   return {

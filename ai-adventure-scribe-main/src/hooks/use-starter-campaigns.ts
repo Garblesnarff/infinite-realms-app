@@ -5,7 +5,8 @@
  * and campaign detail views.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StarterCampaign {
@@ -75,12 +76,12 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    async function fetchCampaigns() {
+    async function fetchCampaigns(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_campaigns')
           .select(
-            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url'
+            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
           )
           .eq('is_published', true)
           .eq('is_complete', true)
@@ -102,9 +103,12 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
     fetchCampaigns();
   }, []);
 
-  const featuredCampaigns = campaigns.filter((c) => c.isFeatured);
+  const featuredCampaigns = useMemo(() => campaigns.filter((c) => c.isFeatured), [campaigns]);
 
-  return { campaigns, featuredCampaigns, isLoading, error };
+  return useMemo(
+    () => ({ campaigns, featuredCampaigns, isLoading, error }),
+    [campaigns, featuredCampaigns, isLoading, error],
+  );
 }
 
 /**
@@ -121,11 +125,13 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
       return;
     }
 
-    async function fetchCampaign() {
+    async function fetchCampaign(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_campaigns')
-          .select('*')
+          .select(
+            'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
+          )
           .eq('slug', slug)
           .eq('is_published', true)
           .eq('is_complete', true)
@@ -151,5 +157,5 @@ export function useStarterCampaign(slug: string | undefined): UseStarterCampaign
     fetchCampaign();
   }, [slug]);
 
-  return { campaign, isLoading, error };
+  return useMemo(() => ({ campaign, isLoading, error }), [campaign, isLoading, error]);
 }

@@ -16,30 +16,31 @@ export {
   calculateVisionPolygon,
   hasLineOfSight,
   mergeVisionPolygons,
-
-  // Types
-  type VisionPolygon,
 } from './vision-polygon';
+
+export type { VisionPolygon as VisionPolygonType } from './vision-polygon';
 
 export {
   // Main functions
   canSeeToken,
-
-  // Light calculations
-  getEffectiveLightLevel,
-  calculateLightReach,
-  getLightSourcesAtPosition,
-  stackLightLevels,
 
   // Vision utilities
   calculateVisionRadius,
   getActiveVisionType,
   getVisionColor,
   getVisionOpacity,
+} from './vision-calculations';
+
+export {
+  // Light calculations
+  getEffectiveLightLevel,
+  calculateLightReach,
+  getLightSourcesAtPosition,
+  stackLightLevels,
 
   // Types
   type LightLevel,
-} from './vision-calculations';
+} from './lighting-utils';
 
 // ===========================
 // Geometric Utilities
@@ -59,23 +60,26 @@ export {
 export {
   // Raycasting
   raycastToWalls,
-  getAllRayIntersections,
   lineSegmentIntersection,
-  sortPointsByAngle,
-  sortEndpointsByAngle,
-  removeDuplicatePoints,
-
   // Advanced raycasting
   raycastCone,
   isInShadow,
   calculateReflection,
-
   // Types
   type Ray,
   type LineSegment,
   type RayIntersection,
-  type VisionEndpoint,
 } from './raycasting';
+
+export {
+  // Vision polygon generation
+  getAllRayIntersections,
+  sortPointsByAngle,
+  sortEndpointsByAngle,
+  removeDuplicatePoints,
+  // Types
+  type VisionEndpoint,
+} from './vision-polygon-generator';
 
 // ===========================
 // Spatial Partitioning
@@ -86,6 +90,12 @@ export {
   QuadTree,
   buildQuadTree,
 
+  // Types
+  type QuadTreeNode,
+  type QuadTreeConfig,
+} from './spatial-partitioning';
+
+export {
   // Utilities
   calculateWallBounds,
   createBoundsFromRadius,
@@ -95,9 +105,7 @@ export {
 
   // Types
   type AABB,
-  type QuadTreeNode,
-  type QuadTreeConfig,
-} from './spatial-partitioning';
+} from './spatial/aabb';
 
 // ===========================
 // Web Worker Manager

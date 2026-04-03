@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Scene WebSocket Hook
  *
@@ -14,7 +15,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 
 // WebSocket message types matching server
@@ -79,9 +80,7 @@ export interface UseSceneWebSocketReturn {
 /**
  * Hook for scene WebSocket connection
  */
-export function useSceneWebSocket(
-  options: UseSceneWebSocketOptions
-): UseSceneWebSocketReturn {
+export function useSceneWebSocket(options: UseSceneWebSocketOptions): UseSceneWebSocketReturn {
   const {
     sceneId,
     onMessage,
@@ -133,7 +132,7 @@ export function useSceneWebSocket(
         logger.error('[WebSocket] Failed to parse message', { error });
       }
     },
-    [onMessage, onTokenUpdate]
+    [onMessage, onTokenUpdate],
   );
 
   /**
@@ -156,7 +155,7 @@ export function useSceneWebSocket(
 
     // Determine WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.NEXT_PUBLIC_WS_URL || window.location.host;
+    const host = import.meta.env.VITE_WS_URL || window.location.host;
     const wsUrl = `${protocol}//${host}/ws?token=${session.access_token}&sessionId=scene:${sceneId}`;
 
     logger.info('[WebSocket] Connecting to scene', {
@@ -243,7 +242,7 @@ export function useSceneWebSocket(
           JSON.stringify({
             type: 'scene:leave',
             sceneId,
-          })
+          }),
         );
       }
 

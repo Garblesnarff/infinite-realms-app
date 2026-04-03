@@ -6,7 +6,8 @@
  * that are adapted to fit each campaign's theme and setting.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface StarterCharacterTemplate {
@@ -100,7 +101,7 @@ function mapTemplateRow(row: Record<string, unknown>): StarterCharacterTemplate 
  * @returns Object containing templates array, loading state, and error
  */
 export function useStarterCharacterTemplates(
-  campaignId: string | undefined
+  campaignId: string | undefined,
 ): UseStarterCharacterTemplatesResult {
   const [templates, setTemplates] = useState<StarterCharacterTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,11 +114,13 @@ export function useStarterCharacterTemplates(
       return;
     }
 
-    async function fetchTemplates() {
+    async function fetchTemplates(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_character_templates')
-          .select('*')
+          .select(
+            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
+          )
           .eq('starter_campaign_id', campaignId)
           .order('display_order');
 
@@ -137,7 +140,7 @@ export function useStarterCharacterTemplates(
     fetchTemplates();
   }, [campaignId]);
 
-  return { templates, isLoading, error };
+  return useMemo(() => ({ templates, isLoading, error }), [templates, isLoading, error]);
 }
 
 /**
@@ -146,9 +149,7 @@ export function useStarterCharacterTemplates(
  * @param templateId - The UUID of the template
  * @returns Object containing template, loading state, and error
  */
-export function useStarterCharacterTemplate(
-  templateId: string | undefined
-): {
+export function useStarterCharacterTemplate(templateId: string | undefined): {
   template: StarterCharacterTemplate | null;
   isLoading: boolean;
   error: Error | null;
@@ -164,11 +165,13 @@ export function useStarterCharacterTemplate(
       return;
     }
 
-    async function fetchTemplate() {
+    async function fetchTemplate(): Promise<void> {
       try {
         const { data, error: queryError } = await supabase
           .from('starter_character_templates')
-          .select('*')
+          .select(
+            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
+          )
           .eq('id', templateId)
           .single();
 
@@ -191,5 +194,5 @@ export function useStarterCharacterTemplate(
     fetchTemplate();
   }, [templateId]);
 
-  return { template, isLoading, error };
+  return useMemo(() => ({ template, isLoading, error }), [template, isLoading, error]);
 }

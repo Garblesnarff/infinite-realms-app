@@ -16,8 +16,8 @@ if [ -z "$STAGED_FILES" ]; then
     exit 0
 fi
 
-# Check for secret patterns
-FOUND_SECRETS=$(echo "$STAGED_FILES" | xargs grep -lEi "$SECRETS_PATTERN" 2>/dev/null || true)
+# Check for secret patterns (exclude env var references like Deno.env.get/process.env)
+FOUND_SECRETS=$(echo "$STAGED_FILES" | xargs grep -Ei "$SECRETS_PATTERN" 2>/dev/null | grep -viE "(env\.get|process\.env|\.env\b)" | cut -d: -f1 | sort -u || true)
 
 if [ -n "$FOUND_SECRETS" ]; then
     echo "❌ BLOCKED: Potential secrets detected in staged files:"

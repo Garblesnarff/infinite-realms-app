@@ -5,19 +5,19 @@
  *
  * Dependencies:
  * - Supabase client (src/integrations/supabase/client.ts)
- * - ChatMessage and Memory types (src/types/game.ts, src/components/game/memory/types.ts)
+ * - ChatMessage and Memory types (src/types/game.ts, src/types/memory.ts)
  *
  * @author AI Dungeon Master Team
  */
 
-import type { Memory } from '@/components/game/memory/types';
 import type { Campaign } from '@/types/campaign';
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
+import type { Memory } from '@/types/memory';
 
-import { isValidMemoryType } from '@/components/game/memory/types';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
 
 /**
  * Formats chat messages into a task object for the DM Agent.
@@ -88,9 +88,10 @@ export async function fetchGameContext(
  * @returns {Promise<Memory[]>} Array of validated memories
  */
 export async function fetchMemories(sessionId: string): Promise<Memory[]> {
+  // ⚡ Bolt: Using explicit column list to avoid fetching large vector embeddings (~3KB/row).
   const { data: memoriesData } = await supabase
     .from('memories')
-    .select('*')
+    .select(MEMORY_SELECT_COLUMNS)
     .eq('session_id', sessionId);
 
   return (memoriesData || []).map((memory): Memory => {

@@ -1,14 +1,20 @@
+/* eslint-disable max-lines */
 import React from 'react';
 
-const DIALOGUE_PATTERN = /^"[\s\S]*"$/;
+import { sanitizeEmphasisDelimiters } from './sanitize-emphasis';
+
+export { sanitizeEmphasisDelimiters };
+
+const DIALOGUE_PATTERN = /^["“][\s\S]*["”]$/;
 const BULLET_PATTERN = /^[-•]/;
 
 /**
- * Unescapes JSON literal characters like `\"` to `"` within the text.
+ * Convert JSON-style backslash-escape sequences that the AI occasionally emits
+ * in narrative text (e.g. \" → ", \' → ', \\n → newline, \\t → tab).
+ * Applied before other sanitizers so downstream logic sees clean text.
  */
-const unescapeJsonLiteralChars = (text: string): string => {
-  return text.replace(/\\"/g, '"');
-};
+const unescapeJsonLiteralChars = (text: string): string =>
+  text.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n').replace(/\\t/g, '\t');
 
 /**
  * Remove leaked verbalized sampling brainstorming patterns from AI response.
@@ -35,13 +41,13 @@ const cleanBrainstorming = (text: string): string => {
 
 const splitIntoSentences = (block: string): string[] => {
   const sentences: string[] = [];
-  const regex = /[^.!?]+[.!?]+[""']?\s*/g;
+  const regex = /[^.!?]+[.!?]+["“”'’]?\s*/g;
   let match: RegExpExecArray | null;
   let lastMatchEnd = 0;
 
   while ((match = regex.exec(block)) !== null) {
     sentences.push(match[0].trim());
-    lastMatchEnd = regex.lastIndex;  // Track position BEFORE lastIndex resets to 0
+    lastMatchEnd = regex.lastIndex; // Track position BEFORE lastIndex resets to 0
   }
 
   // Use our tracked position, not regex.lastIndex (which resets to 0 after loop)
@@ -157,18 +163,15 @@ export const formatNarrative = (
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
-  // Unescape JSON literal characters first
-  const unescapedText = unescapeJsonLiteralChars(rawText);
-
-  // Clean any leaked brainstorming patterns before processing
-  const trimmed = cleanBrainstorming(unescapedText);
+  // Clean brainstorming artifacts and sanitize markdown delimiters before processing
+  const trimmed = sanitizeEmphasisDelimiters(cleanBrainstorming(unescapeJsonLiteralChars(rawText)));
 
   if (!trimmed) {
     return { content: null, charCount: 0, paragraphCount: 0 };
   }
 
   // Normalize for comparison - handles quotes, dashes, and whitespace
-  const normalize = (value: string) =>
+  const normalize = (value: string): string =>
     value
       .replace(/[\u2018\u2019\u201C\u201D]/g, "'") // Smart quotes to straight
       .replace(/[\u2013\u2014]/g, '-') // En/em dashes to hyphen
@@ -189,7 +192,6 @@ export const formatNarrative = (
       const currentNorm = normalize(rawParagraphs[i]);
       const currentStart = currentNorm.slice(0, 60);
       let isDuplicate = false;
-      let duplicateReason = '';
 
       // Check 1: This paragraph starts the same as a previous one (simple dup)
       if (seenStarts.some((s) => s === currentStart)) {

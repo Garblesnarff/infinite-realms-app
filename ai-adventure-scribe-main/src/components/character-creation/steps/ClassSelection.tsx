@@ -116,6 +116,9 @@ const ClassSelection: React.FC = () => {
               onMouseLeave={() => setHoveredClassId(null)}
               role="button"
               tabIndex={0}
+              aria-label={`Select ${characterClass.name} class`}
+              aria-pressed={isSelected}
+              title={`Select ${characterClass.name}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   handleClassSelect(characterClass);
@@ -133,19 +136,23 @@ const ClassSelection: React.FC = () => {
             >
               {/* Background Overlay */}
               {characterClass.backgroundImage && (
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30 z-0 transition-opacity group-hover:opacity-90" />
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30 transition-opacity group-hover:opacity-90"
+                  style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
+                />
               )}
 
               {/* Selected Indicator */}
               {isSelected && (
                 <div
-                  className={`absolute top-4 right-4 z-[${Z_INDEX.CARD_HOVER}] bg-primary text-primary-foreground rounded-full p-2 shadow-lg`}
+                  className="absolute top-4 right-4 bg-primary text-primary-foreground rounded-full p-2 shadow-lg"
+                  style={{ zIndex: Z_INDEX.CARD_HOVER }}
                 >
                   <Check className="w-5 h-5" />
                 </div>
               )}
 
-              <CardHeader className={`relative z-[${Z_INDEX.OVERLAY_EFFECT}] pb-3`}>
+              <CardHeader className="relative pb-3" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
@@ -164,7 +171,10 @@ const ClassSelection: React.FC = () => {
                 </div>
               </CardHeader>
 
-              <CardContent className={`relative z-[${Z_INDEX.OVERLAY_EFFECT}] space-y-4`}>
+              <CardContent
+                className="relative space-y-4"
+                style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+              >
                 <p
                   className={`text-sm leading-relaxed ${characterClass.backgroundImage ? 'text-gray-100' : 'text-muted-foreground'}`}
                 >

@@ -9,12 +9,12 @@
  *
  * Key Dependencies:
  * - Supabase client (`@/integrations/supabase/client`)
- * - Memory types from `@/components/game/memory/types`.
+ * - Memory types from `@/types/memory`.
  *
  * @author AI Dungeon Master Team
  */
 
-import { Memory } from '@/components/game/memory/types';
+import type { Memory } from '@/types/memory';
 import { MemoryService } from './MemoryService';
 
 export class MemoryManager {

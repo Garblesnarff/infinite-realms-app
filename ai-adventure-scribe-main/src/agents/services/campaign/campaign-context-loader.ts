@@ -51,7 +51,9 @@ export class CampaignContextLoader {
     if (userId) {
       query = query.eq('user_id', userId);
     } else {
-      logger.warn(`[CampaignContextLoader] Loading campaign ${campaignId} without userId validation - this is insecure`);
+      logger.warn(
+        `[CampaignContextLoader] Loading campaign ${campaignId} without userId validation - this is insecure`,
+      );
     }
 
     const { data: campaign, error } = await query.single();

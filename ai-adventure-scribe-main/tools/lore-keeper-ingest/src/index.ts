@@ -6,10 +6,10 @@
  * for use by the Lore Keeper MCP server.
  *
  * Usage:
- *   npm run ingest                      # Ingest all campaigns
- *   npm run ingest -- --campaign foo    # Ingest specific campaign
- *   npm run ingest -- --dry-run         # Preview without database changes
- *   npm run ingest -- --skip-embeddings # Skip embedding generation
+ *   bun run ingest                      # Ingest all campaigns
+ *   bun run ingest -- --campaign foo    # Ingest specific campaign
+ *   bun run ingest -- --dry-run         # Preview without database changes
+ *   bun run ingest -- --skip-embeddings # Skip embedding generation
  */
 
 import { config } from 'dotenv';

@@ -13,8 +13,13 @@
  *   [ASSET:monster:abyssal-horror]
  */
 
+import { normalizeNarrativeSpacing } from '@/utils/narrative-text-cleanup';
+import { normalizeAssetTagsInContent } from '@/utils/normalize-asset-tags';
+
+export { normalizeAssetTagKeysInContent } from '@/utils/normalize-asset-tags';
+
 export interface AssetTag {
-  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene';
+  type: 'character' | 'npc' | 'location' | 'monster' | 'item' | 'scene' | 'entity';
   key: string;
   fullMatch: string;
 }
@@ -28,7 +33,7 @@ export interface ParsedAssets {
 
 /** Regex pattern to match [ASSET:type:key] tags */
 export const ASSET_TAG_PATTERN =
-  /\[ASSET:(character|npc|location|monster|item|scene):([a-z0-9-]+)\]/gi;
+  /\[ASSET:(character|npc|location|monster|item|scene|entity):([a-z0-9-]+)\]/gi;
 
 /**
  * Parse asset tags from message content
@@ -39,11 +44,14 @@ export const ASSET_TAG_PATTERN =
 export function parseAssetTags(content: string): ParsedAssets {
   const assets: AssetTag[] = [];
 
+  // Normalize malformed keys (e.g. with quotes) before the strict pattern runs
+  const normalizedContent = normalizeAssetTagsInContent(content);
+
   // Find all asset tags
   let match: RegExpExecArray | null;
   const pattern = new RegExp(ASSET_TAG_PATTERN.source, 'gi');
 
-  while ((match = pattern.exec(content)) !== null) {
+  while ((match = pattern.exec(normalizedContent)) !== null) {
     assets.push({
       type: match[1].toLowerCase() as AssetTag['type'],
       key: match[2].toLowerCase(),
@@ -51,17 +59,19 @@ export function parseAssetTags(content: string): ParsedAssets {
     });
   }
 
-  // Remove asset tags from content for display
-  const cleanContent = content.replace(ASSET_TAG_PATTERN, '').trim();
+  // Remove asset tags from content for display, collapsing any resulting double spaces
+  const cleanContent = normalizedContent.replace(ASSET_TAG_PATTERN, '').replace(/[ \t]{2,}/g, ' ');
+
+  const normalizedCleanContent = normalizeNarrativeSpacing(cleanContent);
 
   // Deduplicate assets (same entity may be mentioned multiple times)
   const uniqueAssets = assets.filter(
     (asset, index, self) =>
-      index === self.findIndex((a) => a.type === asset.type && a.key === asset.key)
+      index === self.findIndex((a) => a.type === asset.type && a.key === asset.key),
   );
 
   return {
-    cleanContent,
+    cleanContent: normalizedCleanContent,
     assets: uniqueAssets,
   };
 }

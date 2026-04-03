@@ -210,11 +210,7 @@ describe('magicItemEffects', () => {
       expect(canAttuneToMoreItems(mockCharacter as Character)).toBe(true);
 
       const fullChar: any = {
-        inventory: [
-          { isAttuned: true },
-          { isAttuned: true },
-          { isAttuned: true },
-        ],
+        inventory: [{ isAttuned: true }, { isAttuned: true }, { isAttuned: true }],
       };
       expect(canAttuneToMoreItems(fullChar)).toBe(false);
     });

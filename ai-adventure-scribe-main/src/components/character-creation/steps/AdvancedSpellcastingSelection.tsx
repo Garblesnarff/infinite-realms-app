@@ -1,5 +1,5 @@
 import { Sparkles, BookOpen, Clock, Zap, Star, Scroll, Crown, Shield } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 import type { Spell } from '@/types/character';
 
@@ -7,149 +7,42 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
-import { useCharacter } from '@/contexts/CharacterContext';
-import {
-  metamagicOptions,
-  MetamagicOption,
-  getSpellSlotsByLevel,
-  getPactMagicProgression,
-  calculateSpellsKnown,
-  canCastRituals,
-  hasPactMagic,
-  hasMetamagic,
-  getSorceryPoints,
-  getMetamagicOptionsKnown,
-} from '@/data/spellcastingFeatures';
-import logger from '@/lib/logger';
-import { spellApi } from '@/services/spellApi';
+import { metamagicOptions } from '@/data/spellcastingFeatures';
+import { useAdvancedSpellcasting } from '@/hooks/useAdvancedSpellcasting';
 
 /**
  * AdvancedSpellcastingSelection component for advanced spellcasting features
  * Handles spell preparation, metamagic, ritual casting, and pact magic
  */
 const AdvancedSpellcastingSelection: React.FC = () => {
-  const { state, dispatch } = useCharacter();
-  const { toast } = useToast();
-  const character = state.character;
-  const characterClass = character?.class;
-  const level = character?.level || 1;
-  const spellcastingAbility = characterClass?.spellcasting?.ability;
-  const abilityModifier = spellcastingAbility
-    ? character?.abilityScores?.[spellcastingAbility]?.modifier || 0
-    : 0;
-
-  const [preparedSpells, setPreparedSpells] = useState<string[]>([]);
-  const [selectedMetamagic, setSelectedMetamagic] = useState<string[]>([]);
-  const [ritualSpells, setRitualSpells] = useState<string[]>([]);
-  const [pactMagicSpells, setPactMagicSpells] = useState<string[]>([]);
-  const [allSpells, setAllSpells] = useState<Spell[]>([]);
-  const [isLoadingSpells, setIsLoadingSpells] = useState(true);
-
-  // Check if character has spellcasting
-  const hasSpellcasting = characterClass?.spellcasting !== undefined;
-  const canPrepareSpells = ['cleric', 'druid', 'paladin', 'wizard'].includes(
-    characterClass?.id || '',
-  );
-  const usesRitualCasting = canCastRituals(characterClass?.id || '');
-  const usesPactMagic = hasPactMagic(characterClass?.id || '');
-  const usesMetamagic = hasMetamagic(characterClass?.id || '', level);
-
-  // Calculate spell preparation limits
-  const maxPreparedSpells = canPrepareSpells
-    ? calculateSpellsKnown(characterClass?.id || '', level, abilityModifier)
-    : 0;
-  const availableSpells = allSpells.filter(
-    (spell: Spell) => spell.level <= Math.min(5, Math.ceil(level / 2)),
-  );
-  const availableRitualSpells = allSpells.filter(
-    (spell: Spell) => spell.ritual && spell.level <= Math.min(5, Math.ceil(level / 2)),
-  );
-
-  // Pact Magic progression
-  const pactProgression = usesPactMagic ? getPactMagicProgression(level) : null;
-  const maxPactSpells = pactProgression?.spellsKnown || 0;
-
-  // Metamagic
-  const sorceryPoints = usesMetamagic ? getSorceryPoints(level) : 0;
-  const maxMetamagicOptions = usesMetamagic ? getMetamagicOptionsKnown(level) : 0;
-
-  // Check if all required selections are complete
-  const hasRequiredPreparations = !canPrepareSpells || preparedSpells.length === maxPreparedSpells;
-  const hasRequiredMetamagic = !usesMetamagic || selectedMetamagic.length === maxMetamagicOptions;
-  const hasRequiredPactSpells = !usesPactMagic || pactMagicSpells.length === maxPactSpells;
-  const allSelectionsComplete =
-    hasRequiredPreparations && hasRequiredMetamagic && hasRequiredPactSpells;
-
-  // Fetch class-specific spells on component mount
-  useEffect(() => {
-    const fetchSpells = async () => {
-      if (!characterClass?.name) {
-        setAllSpells([]);
-        setIsLoadingSpells(false);
-        return;
-      }
-
-      try {
-        const { cantrips, spells } = await spellApi.getClassSpells(characterClass.name, level);
-        const allClassSpells = [...cantrips, ...spells];
-        setAllSpells(allClassSpells);
-      } catch (error) {
-        logger.error('Failed to fetch class spells:', error);
-        setAllSpells([]);
-      } finally {
-        setIsLoadingSpells(false);
-      }
-    };
-
-    fetchSpells();
-  }, [characterClass?.name, level]);
-
-  // Auto-apply when all required selections are made
-  useEffect(() => {
-    // Don't auto-apply if component is still loading or has no spellcasting
-    if (isLoadingSpells || !hasSpellcasting) return;
-
-    // Auto-apply when all required features are complete
-    if (allSelectionsComplete) {
-      applySpellcastingFeatures();
-    }
-  }, [
+  const {
+    characterClass,
+    level,
+    spellcastingAbility,
+    abilityModifier,
     preparedSpells,
     selectedMetamagic,
     pactMagicSpells,
-    ritualSpells,
-    isLoadingSpells,
-    hasSpellcasting,
-    allSelectionsComplete,
-  ]);
-
-  // Auto-apply empty configuration for characters with no advanced features
-  useEffect(() => {
-    if (
-      !isLoadingSpells &&
-      (!hasSpellcasting ||
-        (!canPrepareSpells && !usesMetamagic && !usesPactMagic && !usesRitualCasting))
-    ) {
-      dispatch({
-        type: 'UPDATE_CHARACTER',
-        payload: {
-          advancedSpellcastingComplete: true,
-        },
-      });
-    }
-  }, [
     isLoadingSpells,
     hasSpellcasting,
     canPrepareSpells,
-    usesMetamagic,
-    usesPactMagic,
     usesRitualCasting,
-    dispatch,
-  ]);
+    usesPactMagic,
+    usesMetamagic,
+    maxPreparedSpells,
+    availableSpells,
+    availableRitualSpells,
+    pactProgression,
+    maxPactSpells,
+    sorceryPoints,
+    maxMetamagicOptions,
+    allSelectionsComplete,
+    handleSpellPreparation,
+    handleMetamagicSelection,
+    handlePactSpellSelection,
+    applySpellcastingFeatures,
+  } = useAdvancedSpellcasting();
 
   if (isLoadingSpells) {
     return (
@@ -184,90 +77,12 @@ const AdvancedSpellcastingSelection: React.FC = () => {
     );
   }
 
-  /**
-   * Handle spell preparation
-   */
-  const handleSpellPreparation = (spellId: string, checked: boolean) => {
-    if (checked && preparedSpells.length < maxPreparedSpells) {
-      setPreparedSpells([...preparedSpells, spellId]);
-    } else if (!checked) {
-      setPreparedSpells(preparedSpells.filter((s) => s !== spellId));
-    }
-  };
-
-  /**
-   * Handle metamagic selection
-   */
-  const handleMetamagicSelection = (optionId: string, checked: boolean) => {
-    if (checked && selectedMetamagic.length < maxMetamagicOptions) {
-      setSelectedMetamagic([...selectedMetamagic, optionId]);
-    } else if (!checked) {
-      setSelectedMetamagic(selectedMetamagic.filter((m) => m !== optionId));
-    }
-  };
-
-  /**
-   * Handle pact magic spells
-   */
-  const handlePactSpellSelection = (spellId: string, checked: boolean) => {
-    if (checked && pactMagicSpells.length < maxPactSpells) {
-      setPactMagicSpells([...pactMagicSpells, spellId]);
-    } else if (!checked) {
-      setPactMagicSpells(pactMagicSpells.filter((s) => s !== spellId));
-    }
-  };
-
-  /**
-   * Apply all spellcasting selections
-   */
-  const applySpellcastingFeatures = () => {
-    const updates: any = {};
-
-    if (canPrepareSpells) {
-      updates.preparedSpells = preparedSpells;
-    }
-
-    if (usesMetamagic) {
-      updates.metamagicOptions = selectedMetamagic;
-      updates.sorceryPoints = {
-        maximum: sorceryPoints,
-        current: sorceryPoints,
-      };
-    }
-
-    if (usesPactMagic) {
-      updates.pactMagicSpells = pactMagicSpells;
-      updates.pactSlots = {
-        maximum: pactProgression?.pactSlots || 0,
-        current: pactProgression?.pactSlots || 0,
-        level: pactProgression?.pactSlotLevel || 1,
-      };
-    }
-
-    if (usesRitualCasting) {
-      updates.ritualSpells = ritualSpells;
-    }
-
-    // Mark advanced spellcasting as complete
-    updates.advancedSpellcastingComplete = true;
-
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: updates,
-    });
-
-    toast({
-      title: 'Spellcasting Features Applied',
-      description: 'Your advanced spellcasting features have been configured.',
-    });
-  };
-
   const getSpellCard = (
     spell: Spell,
     isSelected: boolean,
     onSelectionChange: (id: string, checked: boolean) => void,
     disabled: boolean = false,
-  ) => (
+  ): React.ReactNode => (
     <div
       key={spell.id}
       className={`p-3 border rounded-lg cursor-pointer transition-all ${

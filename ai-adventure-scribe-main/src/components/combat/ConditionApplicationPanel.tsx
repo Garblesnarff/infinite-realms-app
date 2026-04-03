@@ -5,7 +5,7 @@
  * Provides templates for common conditions with default durations and descriptions.
  */
 
-import { UserX } from 'lucide-react';
+import { UserX, X } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
 import { CONDITION_ICONS, CONDITION_TEMPLATES } from './condition-utils';
@@ -15,6 +15,7 @@ import type { ConditionName, Condition, CombatParticipant } from '@/types/combat
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -80,15 +81,15 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
       <h4 className="font-semibold">Apply Condition</h4>
 
       <div className="space-y-3">
-        <div>
-          <label htmlFor={conditionSelectId} className="text-sm font-medium">
-            Condition:
-          </label>
+        <div className="space-y-2">
+          <Label htmlFor={conditionSelectId}>
+            Condition
+          </Label>
           <Select
             value={selectedCondition || ''}
             onValueChange={(value) => setSelectedCondition(value as ConditionName)}
           >
-            <SelectTrigger id={conditionSelectId} aria-label="Select condition">
+            <SelectTrigger id={conditionSelectId}>
               <SelectValue placeholder="Select a condition" />
             </SelectTrigger>
             <SelectContent>
@@ -110,20 +111,20 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
         </div>
 
         {selectedCondition && (
-          <div>
-            <label className="text-sm font-medium">Description:</label>
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Description</div>
             <p className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
               {CONDITION_TEMPLATES[selectedCondition].description}
             </p>
           </div>
         )}
 
-        <div>
-          <label htmlFor={targetSelectId} className="text-sm font-medium">
-            Target:
-          </label>
+        <div className="space-y-2">
+          <Label htmlFor={targetSelectId}>
+            Target
+          </Label>
           <Select value={selectedTarget || ''} onValueChange={setSelectedTarget}>
-            <SelectTrigger id={targetSelectId} aria-label="Select target">
+            <SelectTrigger id={targetSelectId}>
               <SelectValue placeholder="Select target" />
             </SelectTrigger>
             <SelectContent>
@@ -141,10 +142,10 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
           </Select>
         </div>
 
-        <div>
-          <label htmlFor={durationInputId} className="text-sm font-medium">
-            Duration (rounds, 0 for save-based):
-          </label>
+        <div className="space-y-2">
+          <Label htmlFor={durationInputId}>
+            Duration (rounds, 0 for save-based)
+          </Label>
           <Input
             id={durationInputId}
             type="number"
@@ -168,8 +169,8 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
 
       {/* Current Conditions */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Managing Conditions:</label>
-        <div className="space-y-1">
+        <div className="text-sm font-medium">Managing Conditions</div>
+        <div className="space-y-1" role="status" aria-live="polite">
           {!hasAnyConditions ? (
             <p className="text-xs text-muted-foreground italic p-2 bg-muted/30 rounded border border-dashed text-center">
               No active conditions on participants.
@@ -202,7 +203,7 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
                     aria-label={`Remove ${condition.name} from ${participant.name}`}
                     title={`Remove ${condition.name} from ${participant.name}`}
                   >
-                    ×
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
               )),

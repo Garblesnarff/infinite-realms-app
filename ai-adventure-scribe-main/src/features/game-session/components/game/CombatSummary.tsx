@@ -1,11 +1,86 @@
-import { Users, Sword, Heart, Zap, Clock } from 'lucide-react';
+import { Sword, Zap, Clock } from 'lucide-react';
 import React from 'react';
 
+import type { CombatParticipant } from '@/types/combat';
+
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCombat } from '@/contexts/CombatContext';
+import { getHPColor } from '@/utils/hp-utils';
+
+/**
+ * ParticipantListItem - Memoized component for individual combatants
+ * ⚡ Bolt: Extracted to prevent re-rendering all participants when only one changes
+ */
+const ParticipantListItem = React.memo(
+  ({ participant, isCurrentTurn }: { participant: CombatParticipant; isCurrentTurn: boolean }) => {
+    const hpPercent = (participant.currentHitPoints / participant.maxHitPoints) * 100;
+    const isPlayer = participant.participantType === 'player';
+
+    return (
+      <div
+        className={`p-2 rounded-md border ${
+          isCurrentTurn
+            ? 'border-primary bg-primary/5'
+            : isPlayer
+              ? 'border-blue-200 bg-blue-50'
+              : 'border-red-200 bg-red-50'
+        }`}
+        aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}${participant.name}`}
+      >
+        <div className="flex items-center justify-between text-xs">
+          <span className={`font-medium ${isPlayer ? 'text-blue-800' : 'text-red-800'}`}>
+            {participant.name}
+          </span>
+          <span className="text-muted-foreground">Init: {participant.initiative}</span>
+        </div>
+        <div className="space-y-1 mt-1">
+          <div className="flex items-center justify-between text-xs">
+            <span>
+              HP: {participant.currentHitPoints}/{participant.maxHitPoints}
+            </span>
+            <span className="text-muted-foreground">AC: {participant.armorClass}</span>
+          </div>
+          <Progress
+            value={hpPercent}
+            className="h-1"
+            indicatorClassName={getHPColor(hpPercent)}
+            aria-label={`${participant.name} Health percentage`}
+          />
+        </div>
+        {participant.conditions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {participant.conditions.slice(0, 3).map((condition) => (
+              <span key={condition.name} className="px-1 py-0.5 bg-muted text-xs rounded">
+                {condition.name}
+              </span>
+            ))}
+            {participant.conditions.length > 3 && (
+              <span className="text-xs text-muted-foreground">
+                +{participant.conditions.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+        {isCurrentTurn && (
+          <div
+            className="flex items-center gap-1 mt-1 text-xs text-primary"
+            role="status"
+            aria-live="polite"
+          >
+            <Zap className="w-3 h-3" />
+            <span>Current Turn</span>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
+
+ParticipantListItem.displayName = 'ParticipantListItem';
 
 /**
  * CombatSummary - Compact combat overview for game sidebar
@@ -17,16 +92,19 @@ import { useCombat } from '@/contexts/CombatContext';
  *
  * Usage: Render in combat tab; updates live during combat
  */
-export const CombatSummary: React.FC = () => {
+export const CombatSummary: React.FC = React.memo(() => {
   const { state, nextTurn, endCombat } = useCombat();
   const { activeEncounter, isInCombat } = state;
 
   if (!isInCombat || !activeEncounter) {
     return (
-      <Card className="p-4 text-center text-muted-foreground">
-        <Users className="w-8 h-8 mx-auto mb-2" />
-        <p className="text-sm">No active combat</p>
-      </Card>
+      <EmptyState
+        illustration="no-sessions"
+        title="No active combat"
+        description="When combat starts, you'll see the initiative order and participant status here."
+        variant="card"
+        className="p-8"
+      />
     );
   }
 
@@ -56,63 +134,13 @@ export const CombatSummary: React.FC = () => {
       {/* Initiative Order */}
       <ScrollArea className="flex-1 max-h-48">
         <div className="space-y-2">
-          {activeEncounter.participants.map((participant, index) => {
-            const isCurrentTurn = participant.id === activeEncounter.currentTurnParticipantId;
-            const hpPercent = (participant.currentHitPoints / participant.maxHitPoints) * 100;
-            const isPlayer = participant.participantType === 'player';
-
-            return (
-              <div
-                key={participant.id}
-                className={`p-2 rounded-md border ${
-                  isCurrentTurn
-                    ? 'border-primary bg-primary/5'
-                    : isPlayer
-                      ? 'border-blue-200 bg-blue-50'
-                      : 'border-red-200 bg-red-50'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs">
-                  <span className={`font-medium ${isPlayer ? 'text-blue-800' : 'text-red-800'}`}>
-                    {participant.name}
-                  </span>
-                  <span className="text-muted-foreground">Init: {participant.initiative}</span>
-                </div>
-                <div className="space-y-1 mt-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span>
-                      HP: {participant.currentHitPoints}/{participant.maxHitPoints}
-                    </span>
-                    <span className="text-muted-foreground">AC: {participant.armorClass}</span>
-                  </div>
-                  <Progress
-                    value={hpPercent}
-                    className={`h-1 ${hpPercent > 50 ? 'bg-green-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  />
-                </div>
-                {participant.conditions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {participant.conditions.slice(0, 3).map((condition) => (
-                      <span key={condition.name} className="px-1 py-0.5 bg-muted text-xs rounded">
-                        {condition.name}
-                      </span>
-                    ))}
-                    {participant.conditions.length > 3 && (
-                      <span className="text-xs text-muted-foreground">
-                        +{participant.conditions.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {isCurrentTurn && (
-                  <div className="flex items-center gap-1 mt-1 text-xs text-primary">
-                    <Zap className="w-3 h-3" />
-                    <span>Current Turn</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {activeEncounter.participants.map((participant) => (
+            <ParticipantListItem
+              key={participant.id}
+              participant={participant}
+              isCurrentTurn={participant.id === activeEncounter.currentTurnParticipantId}
+            />
+          ))}
         </div>
       </ScrollArea>
 
@@ -148,4 +176,6 @@ export const CombatSummary: React.FC = () => {
       )}
     </Card>
   );
-};
+});
+
+CombatSummary.displayName = 'CombatSummary';

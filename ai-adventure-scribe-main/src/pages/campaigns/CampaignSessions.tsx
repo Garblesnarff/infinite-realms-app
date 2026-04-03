@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -6,12 +7,15 @@ import SessionCard from './SessionCard';
 
 import type { SessionListItem } from './SessionCard';
 
+import ChronicleViewer from '@/components/chronicles/ChronicleViewer';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { trpc } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 
 const PAGE_SIZE = 10;
 // Session expiry times
@@ -28,17 +32,22 @@ const CampaignSessions: React.FC = () => {
   const { toast } = useToast();
   const { userPlan } = useAuth();
 
-  const sessionExpiryMs = userPlan && userPlan !== 'free'
-    ? PAID_SESSION_EXPIRY_MS
-    : FREE_SESSION_EXPIRY_MS;
+  const sessionExpiryMs =
+    userPlan && userPlan !== 'free' ? PAID_SESSION_EXPIRY_MS : FREE_SESSION_EXPIRY_MS;
 
-  const isSessionExpired = React.useCallback((session: SessionListItem) => {
-    const start = session.start_time || session.created_at;
-    if (!start) return false;
-    const startTime = new Date(start).getTime();
-    return Number.isFinite(startTime) ? Date.now() - startTime > sessionExpiryMs : false;
-  }, [sessionExpiryMs]);
+  const isSessionExpired = React.useCallback(
+    (session: SessionListItem) => {
+      const start = session.start_time || session.created_at;
+      if (!start) return false;
+      const startTime = new Date(start).getTime();
+      return Number.isFinite(startTime) ? Date.now() - startTime > sessionExpiryMs : false;
+    },
+    [sessionExpiryMs],
+  );
   const [continuingId, setContinuingId] = React.useState<string | null>(null);
+  const [chronicleSessionId, setChronicleSessionId] = React.useState<string | null>(null);
+
+  const generateChronicle = trpc.chronicles.generate.useMutation();
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } =
     useInfiniteQuery({
@@ -60,7 +69,8 @@ const CampaignSessions: React.FC = () => {
           current_scene_description,
           turn_count,
           created_at,
-          character:characters ( id, name, image_url )
+          character:characters ( id, name, image_url ),
+          session_chronicles ( id, status, chapter_title, share_token )
         `,
           )
           .eq('campaign_id', campaignId)
@@ -71,11 +81,10 @@ const CampaignSessions: React.FC = () => {
           throw fetchError;
         }
 
-        console.log('[CampaignSessions] Query results:', {
+        logger.debug('[CampaignSessions] Query results', {
           campaignId,
           pageParam,
           rowCount: rows?.length ?? 0,
-          rows: rows?.map(r => ({ id: r.id, session_number: r.session_number, status: r.status })),
         });
 
         return (rows ?? []) as SessionListItem[];
@@ -87,10 +96,9 @@ const CampaignSessions: React.FC = () => {
 
   const sessions = React.useMemo(() => {
     const flattened = data?.pages ? data.pages.flat() : [];
-    console.log('[CampaignSessions] Flattened sessions:', {
+    logger.debug('[CampaignSessions] Flattened sessions', {
       pageCount: data?.pages?.length ?? 0,
       totalSessions: flattened.length,
-      sessions: flattened.map(s => ({ id: s.id, session_number: s.session_number, status: s.status })),
     });
     return flattened;
   }, [data?.pages]);
@@ -166,7 +174,7 @@ const CampaignSessions: React.FC = () => {
       const expired = isSessionExpired(session) || session.status === 'expired';
 
       // Debug logging
-      console.log('[CampaignSessions] handleContinue called:', {
+      logger.info('[CampaignSessions] handleContinue called', {
         sessionId: session.id,
         sessionNumber: session.session_number,
         status: session.status,
@@ -180,14 +188,14 @@ const CampaignSessions: React.FC = () => {
       // Navigate to game without creating a new session
       // Pass sessionId to ensure we load THIS specific session, not just the most recent one
       if (session.status === 'active' && !expired) {
-        console.log('[CampaignSessions] RESUMING - navigating without creating new session');
+        logger.info('[CampaignSessions] RESUMING - navigating without creating new session');
         navigate(`/app/game/${campaignId}?character=${session.character.id}&session=${session.id}`);
         return;
       }
 
       // CONTINUE: Completed or expired session
       // Create a new continuation session with incremented session_number
-      console.log('[CampaignSessions] CONTINUING - creating new session');
+      logger.info('[CampaignSessions] CONTINUING - creating new session');
       setContinuingId(session.id);
 
       try {
@@ -235,7 +243,7 @@ const CampaignSessions: React.FC = () => {
         setContinuingId(null);
       }
     },
-    [campaignId, navigate, queryClient, toast],
+    [campaignId, navigate, queryClient, toast, isSessionExpired],
   );
 
   const renderContent = () => {
@@ -281,6 +289,9 @@ const CampaignSessions: React.FC = () => {
             expired={isSessionExpired(session) || session.status === 'expired'}
             onContinue={handleContinue}
             continuing={continuingId === session.id}
+            onViewChronicle={(id) => setChronicleSessionId(id)}
+            onGenerateChronicle={(id) => generateChronicle.mutate({ sessionId: id })}
+            userPlan={userPlan ?? undefined}
           />
         ))}
         {hasNextPage && (
@@ -296,6 +307,11 @@ const CampaignSessions: React.FC = () => {
 
   return (
     <div className="mt-4 space-y-4">
+      <ChronicleViewer
+        sessionId={chronicleSessionId}
+        open={!!chronicleSessionId}
+        onClose={() => setChronicleSessionId(null)}
+      />
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">Sessions</h2>

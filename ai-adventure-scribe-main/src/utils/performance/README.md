@@ -86,7 +86,7 @@ Performance audits are automated via Lighthouse CI. See `lighthouserc.json` for 
 
 Run audits with:
 ```bash
-npm run lighthouse        # Desktop audit
-npm run lighthouse:mobile # Mobile audit
-npm run perf:analyze      # Full analysis with build
+bun run lighthouse        # Desktop audit
+bun run lighthouse:mobile # Mobile audit
+bun run perf:analyze      # Full analysis with build
 ```

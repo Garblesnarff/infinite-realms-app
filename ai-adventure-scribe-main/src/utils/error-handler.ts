@@ -133,15 +133,15 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<any>>(
  * @param options - Configuration options for error handling
  */
 export function handleAPIError(error: unknown, options: ErrorHandlerOptions = {}): void {
-  let userMessage = options.userMessage || 'Network request failed';
+  let userMessage = options.userMessage;
 
-  // Check for common HTTP error patterns
-  if (error instanceof Error) {
+  // Check for common HTTP error patterns if no custom message provided
+  if (!userMessage && error instanceof Error) {
     const message = error.message.toLowerCase();
 
     if (message.includes('network') || message.includes('fetch')) {
       userMessage = 'Network connection error. Please check your internet connection.';
-    } else if (message.includes('timeout')) {
+    } else if (message.includes('timeout') || message.includes('timed out')) {
       userMessage = 'Request timed out. Please try again.';
     } else if (message.includes('unauthorized') || message.includes('401')) {
       userMessage = 'Authentication required. Please sign in again.';
@@ -156,7 +156,7 @@ export function handleAPIError(error: unknown, options: ErrorHandlerOptions = {}
 
   handleAsyncError(error, {
     ...options,
-    userMessage,
+    userMessage: userMessage || 'Network request failed',
   });
 }
 

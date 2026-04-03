@@ -112,7 +112,7 @@ export class OpenRouterService {
       model: modelId,
       maxTokens: request.maxTokens,
       temperature: request.temperature,
-      requestType: request.requestType,  // Pass through for quota tracking
+      requestType: request.requestType, // Pass through for quota tracking
     });
     const cfg = this.models.find((m) => m.id === modelId);
     if (cfg?.isFree && cfg.dailyLimit) {

@@ -134,18 +134,25 @@ const memoryStore = new MemoryStore();
  * Extract client IP from request
  */
 function getClientIp(request: Request): string {
-  // Check common proxy headers
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim();
+  // Only trust proxy-provided IP headers when explicitly enabled.
+  // This prevents client-side header spoofing in deployments where
+  // proxy sanitization is not guaranteed.
+  const trustProxy = process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
+
+  if (trustProxy) {
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    if (forwardedFor) {
+      const firstIp = forwardedFor.split(',')[0]?.trim();
+      if (firstIp) return firstIp;
+    }
+
+    const realIp = request.headers.get('x-real-ip');
+    if (realIp) {
+      return realIp;
+    }
   }
 
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-
-  // Fallback (Bun doesn't expose socket directly in Request)
+  // Fallback when no trusted proxy metadata is available.
   return 'unknown';
 }
 

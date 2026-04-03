@@ -160,7 +160,8 @@ export const CONDITION_ICONS: Record<ConditionName, ConditionIconConfig> = {
     color: '#ffffff',
     backgroundColor: '#1f2937', // gray-800
     priority: 0,
-    description: 'Incapacitated, prone, drops held items, auto-fail STR/DEX saves, attacks are crits',
+    description:
+      'Incapacitated, prone, drops held items, auto-fail STR/DEX saves, attacks are crits',
     size: 16,
   },
   exhaustion: {

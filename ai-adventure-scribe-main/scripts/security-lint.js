@@ -188,7 +188,7 @@ function checkDangerousHTML(filePath, content) {
   if (!filePath.endsWith('.tsx') && !filePath.endsWith('.jsx')) return;
 
   // Skip server-side rendering views - these are controlled by application, not user input
-  if (relPath.includes('server/src/views/')) return;
+  if (relPath.includes('server-bun/src/views/')) return;
 
   const lines = content.split('\n');
 
@@ -235,7 +235,7 @@ function checkErrorLeakage(filePath, content) {
   const relPath = path.relative(rootDir, filePath);
 
   // Only check server-side files
-  if (!relPath.includes('server/src')) return;
+  if (!relPath.includes('server-bun/src')) return;
 
   const lines = content.split('\n');
 
@@ -327,10 +327,10 @@ function checkSQLInjection(filePath, content) {
   const relPath = path.relative(rootDir, filePath);
 
   // Only check server-side files
-  if (!relPath.includes('server/src')) return;
+  if (!relPath.includes('server-bun/src')) return;
 
   // Skip seed scripts and one-time utilities
-  if (relPath.includes('server/src/scripts/')) return;
+  if (relPath.includes('server-bun/src/scripts/')) return;
 
   const lines = content.split('\n');
 
@@ -371,7 +371,7 @@ function scanFiles() {
   console.log(`${colors.blue}🔍 Security Linting - AI Adventure Scribe${colors.reset}\n`);
 
   // Get all TypeScript and TSX files
-  const tsFiles = getFiles(path.join(rootDir, 'server/src'), /\.(ts|tsx)$/);
+  const tsFiles = getFiles(path.join(rootDir, 'server-bun/src'), /\.(ts|tsx)$/);
   const clientFiles = getFiles(path.join(rootDir, 'src'), /\.(ts|tsx)$/);
   const allFiles = [...tsFiles, ...clientFiles];
 

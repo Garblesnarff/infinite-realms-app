@@ -35,7 +35,10 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
   const { state: characterState } = useCharacter();
 
   // ⚡ Bolt: Wrap character initialization in useMemo to avoid re-calculating dependency objects
-  const character = useMemo(() => characterState.character || ({} as any), [characterState.character]);
+  const character = useMemo(
+    () => characterState.character || ({} as any),
+    [characterState.character],
+  );
 
   // Combat HP state
   const [combatHP, setCombatHP] = useState<{
@@ -105,17 +108,23 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
         async (payload) => {
           logger.info('[CompactCharacterHeader] HP status updated:', payload);
 
-          // Refresh status
-          const status = await getParticipantStatus(participantId);
-          if (status) {
+          if (payload.eventType === 'DELETE') {
+            setCombatHP(null);
+            return;
+          }
+
+          // ⚡ Bolt: Use data from payload directly to avoid redundant network request.
+          // This eliminates one network round-trip per HP update.
+          const newData = payload.new as any;
+          if (newData) {
             setCombatHP({
-              current_hp: status.current_hp,
-              max_hp: status.max_hp,
-              temp_hp: status.temp_hp,
-              is_conscious: status.is_conscious,
+              current_hp: newData.current_hp,
+              max_hp: newData.max_hp,
+              temp_hp: newData.temp_hp,
+              is_conscious: newData.is_conscious,
             });
           }
-        }
+        },
       )
       .subscribe();
 
@@ -181,9 +190,10 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
     logger.info('Long rest initiated');
   }, []);
 
-  const backgroundImage = useMemo(() =>
-    character.background_image || DEFAULT_BACKGROUND_IMAGE
-  , [character.background_image]);
+  const backgroundImage = useMemo(
+    () => character.background_image || DEFAULT_BACKGROUND_IMAGE,
+    [character.background_image],
+  );
 
   if (!characterState.character) {
     return (
@@ -217,10 +227,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
       {/* Avatar */}
       {character.avatar_url && (
-        <div
-          className="relative flex justify-center pt-4"
-          style={{ zIndex: Z_INDEX.SIDEBAR }}
-        >
+        <div className="relative flex justify-center pt-4" style={{ zIndex: Z_INDEX.SIDEBAR }}>
           <img
             src={character.avatar_url}
             alt={`${character.name} avatar`}
@@ -230,10 +237,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
       )}
 
       {/* Content */}
-      <div
-        className="p-4 pt-3 space-y-3 relative"
-        style={{ zIndex: Z_INDEX.SIDEBAR }}
-      >
+      <div className="p-4 pt-3 space-y-3 relative" style={{ zIndex: Z_INDEX.SIDEBAR }}>
         <div className="text-center">
           <h3 className="font-semibold text-lg text-white">{character.name}</h3>
           <p className="text-sm text-gray-300">
@@ -311,7 +315,10 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
             </span>
             <span aria-hidden="true">{armorClass}</span>
           </div>
-          <div className="flex items-center gap-1" aria-label={`Proficiency Bonus: +${proficiency}`}>
+          <div
+            className="flex items-center gap-1"
+            aria-label={`Proficiency Bonus: +${proficiency}`}
+          >
             <Zap className="w-4 h-4 text-green-400" aria-hidden="true" />
             <span className="font-semibold" aria-hidden="true">
               PROF:
@@ -330,7 +337,9 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
             { label: 'WIS', key: 'wisdom' },
             { label: 'CHA', key: 'charisma' },
           ].map((score) => {
-            const modifier = getModifier(character.abilityScores?.[score.key as keyof typeof character.abilityScores]?.score);
+            const modifier = getModifier(
+              character.abilityScores?.[score.key as keyof typeof character.abilityScores]?.score,
+            );
             return (
               <div
                 key={score.key}

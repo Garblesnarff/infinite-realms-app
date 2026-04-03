@@ -120,7 +120,7 @@ Created a comprehensive testing script with features:
 
 **Usage:**
 ```bash
-npm run test-rate-limits --endpoint /v1/campaigns --plan free --count 100 --delay 50
+bun run test-rate-limits --endpoint /v1/campaigns --plan free --count 100 --delay 50
 ```
 
 **Output Features:**
@@ -221,7 +221,7 @@ curl -v http://localhost:4000/v1/campaigns
 curl -v -H "X-Plan: pro" http://localhost:4000/v1/campaigns
 
 # Test rate limit
-npm run test-rate-limits --plan free --count 100 --delay 50
+bun run test-rate-limits --plan free --count 100 --delay 50
 ```
 
 ### 2. Integration Testing

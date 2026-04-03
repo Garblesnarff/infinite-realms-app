@@ -10,6 +10,7 @@
  * @module server/services/combat-action-service
  */
 
+import { ConditionResolutionService } from './conditions/condition-resolution-service.js';
 import { ConditionsService } from './conditions-service.js';
 
 /**
@@ -288,8 +289,16 @@ export class CombatActionService {
     canTake: boolean;
     reason?: string;
   }> {
+    // ⚡ Bolt: Fetch aggregated mechanical effects once to avoid redundant database calls.
+    // This improves performance for every action check by consolidating condition lookups.
+    const effects = await ConditionsService.getMechanicalEffects(participantId, userId);
+
     // Check conditions first
-    const { canAct, canReact, reasons } = await ConditionsService.canTakeActions(participantId, userId);
+    const { canAct, canReact, reasons } = await ConditionResolutionService.canTakeActions(
+      participantId,
+      userId,
+      effects
+    );
 
     switch (actionType) {
       case 'action':
@@ -324,7 +333,8 @@ export class CombatActionService {
           return { canTake: false, reason: 'No movement remaining' };
         }
         // Check for speed = 0 conditions
-        const speedMods = await ConditionsService.getSpeedModifiers(participantId, userId);
+        // ⚡ Bolt: Reuse pre-fetched effects to avoid a second DB round-trip for movement checks.
+        const speedMods = await ConditionResolutionService.getSpeedModifiers(participantId, userId, effects);
         if (speedMods.speedOverride === 0) {
           return { canTake: false, reason: speedMods.reasons.join(', ') };
         }
@@ -392,7 +402,7 @@ export class CombatActionService {
     effectiveSpeed: number;
     reasons: string[];
   }> {
-    const speedMods = await ConditionsService.getSpeedModifiers(participantId, userId);
+    const speedMods = await ConditionResolutionService.getSpeedModifiers(participantId, userId);
 
     let effectiveSpeed = turnState.maxMovement;
     const reasons: string[] = [];

@@ -376,8 +376,8 @@ await manualCleanup(48 * 60 * 60 * 1000); // 48 hours
 
 **Verification:**
 ```bash
-npm run server:build
-npm run server:start
+bun run server:build
+bun run server:start
 # Test spell validation endpoint
 ```
 
@@ -560,7 +560,7 @@ SELECT * FROM game_sessions WHERE status = 'active';
 ### Test Scripts
 
 - `/home/wonky/ai-adventure-scribe-main/scripts/test-session-constraints.js`
-- `/home/wonky/ai-adventure-scribe-main/scripts/test-archival.sql`
+- `/home/wonky/ai-adventure-scribe-main/docs/examples/sql/test-archival.sql`
 - `/home/wonky/ai-adventure-scribe-main/src/agents/messaging/services/storage/__tests__/indexeddb-cleanup.test.ts`
 
 ### Comprehensive Guides

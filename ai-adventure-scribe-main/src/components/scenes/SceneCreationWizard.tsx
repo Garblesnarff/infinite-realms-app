@@ -12,17 +12,17 @@
 import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import React, { useState } from 'react';
 
-import { MapUploader } from './MapUploader';
-import { SceneSettings } from './SceneSettings';
+import { StepBackgroundImage } from './scene-creation-wizard/StepBackgroundImage';
+import { StepDimensions } from './scene-creation-wizard/StepDimensions';
+import { StepGridSettings } from './scene-creation-wizard/StepGridSettings';
+import { StepNameDescription } from './scene-creation-wizard/StepNameDescription';
+import { StepSceneSettings } from './scene-creation-wizard/StepSceneSettings';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
+import { Z_INDEX } from '@/constants/z-index';
 import { trpc } from '@/infrastructure/api/trpc-client';
 import { cn } from '@/lib/utils';
 import { GridType } from '@/types/scene';
@@ -144,7 +144,12 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
         }
         return true;
       case 1:
-        if (formData.width < 1 || formData.width > 100 || formData.height < 1 || formData.height > 100) {
+        if (
+          formData.width < 1 ||
+          formData.width > 100 ||
+          formData.height < 1 ||
+          formData.height > 100
+        ) {
           toast({
             title: 'Invalid Dimensions',
             description: 'Width and height must be between 1 and 100.',
@@ -219,7 +224,13 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </CardDescription>
             </div>
             {onCancel && (
-              <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close scene creation wizard">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onCancel}
+                aria-label="Close scene creation wizard"
+                title="Close scene creation wizard"
+              >
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -233,7 +244,7 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </span>
               <span className="font-medium">{Math.round(progress)}%</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress value={progress} className="h-2" aria-label="Creation progress" />
           </div>
 
           {/* Step Indicators */}
@@ -243,16 +254,22 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
                 key={index}
                 className={cn(
                   'flex flex-col items-center gap-2 flex-1',
-                  index < STEPS.length - 1 && 'relative after:absolute after:top-5 after:left-[60%] after:w-full after:h-0.5 after:bg-border',
+                  index < STEPS.length - 1 &&
+                    'relative after:absolute after:top-5 after:left-[60%] after:w-full after:h-0.5 after:bg-border',
                 )}
               >
                 <div
                   className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative z-10',
+                    'w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all relative',
                     index < currentStep && 'bg-electricCyan text-white',
-                    index === currentStep && 'bg-infinite-purple text-white ring-4 ring-infinite-purple/20',
+                    index === currentStep &&
+                      'bg-infinite-purple text-white ring-4 ring-infinite-purple/20',
                     index > currentStep && 'bg-muted text-muted-foreground',
                   )}
+                  style={{ zIndex: Z_INDEX.DROPDOWN }}
+                  aria-label={`Step ${index + 1}: ${step.title} - ${
+                    index < currentStep ? 'Completed' : index === currentStep ? 'Current' : 'Upcoming'
+                  }`}
                 >
                   {index < currentStep ? <Check className="h-5 w-5" /> : index + 1}
                 </div>
@@ -265,216 +282,57 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
         <CardContent className="pt-6">
           {/* Step 1: Name & Description */}
           {currentStep === 0 && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="scene-name">Scene Name *</Label>
-                <Input
-                  id="scene-name"
-                  placeholder="e.g., Goblin Cave Entrance"
-                  value={formData.name}
-                  onChange={(e) => updateFormData({ name: e.target.value })}
-                  maxLength={255}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="scene-description">Description (Optional)</Label>
-                <Textarea
-                  id="scene-description"
-                  placeholder="Describe the scene, important features, or notes for yourself..."
-                  value={formData.description}
-                  onChange={(e) => updateFormData({ description: e.target.value })}
-                  rows={6}
-                />
-              </div>
-            </div>
+            <StepNameDescription
+              name={formData.name}
+              description={formData.description}
+              onUpdate={updateFormData}
+            />
           )}
 
           {/* Step 2: Dimensions */}
           {currentStep === 1 && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="scene-width">Width (squares) *</Label>
-                  <Input
-                    id="scene-width"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={formData.width}
-                    onChange={(e) => updateFormData({ width: parseInt(e.target.value) || 1 })}
-                  />
-                  <p className="text-xs text-muted-foreground">1 - 100 squares</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="scene-height">Height (squares) *</Label>
-                  <Input
-                    id="scene-height"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={formData.height}
-                    onChange={(e) => updateFormData({ height: parseInt(e.target.value) || 1 })}
-                  />
-                  <p className="text-xs text-muted-foreground">1 - 100 squares</p>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <p className="text-sm font-medium mb-2">Preview Dimensions</p>
-                <p className="text-muted-foreground">
-                  Your scene will be <strong>{formData.width} × {formData.height}</strong> squares
-                  {' '}({formData.width * formData.gridSize} × {formData.height * formData.gridSize} feet)
-                </p>
-              </div>
-
-              {/* Common presets */}
-              <div className="space-y-2">
-                <Label>Quick Presets</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[
-                    { name: 'Small (15×15)', w: 15, h: 15 },
-                    { name: 'Medium (20×20)', w: 20, h: 20 },
-                    { name: 'Large (30×30)', w: 30, h: 30 },
-                    { name: 'Huge (40×30)', w: 40, h: 30 },
-                  ].map((preset) => (
-                    <Button
-                      key={preset.name}
-                      variant="outline"
-                      onClick={() => updateFormData({ width: preset.w, height: preset.h })}
-                    >
-                      {preset.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <StepDimensions
+              width={formData.width}
+              height={formData.height}
+              gridSize={formData.gridSize}
+              onUpdate={updateFormData}
+            />
           )}
 
           {/* Step 3: Grid Settings */}
           {currentStep === 2 && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label>Grid Type *</Label>
-                <RadioGroup
-                  value={formData.gridType}
-                  onValueChange={(value) => updateFormData({ gridType: value as GridType })}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-                      <RadioGroupItem value={GridType.SQUARE} id="grid-square" />
-                      <Label htmlFor="grid-square" className="flex-1 cursor-pointer">
-                        <div className="font-medium">Square Grid</div>
-                        <div className="text-sm text-muted-foreground">Classic D&D grid</div>
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-                      <RadioGroupItem value={GridType.HEXAGONAL_HORIZONTAL} id="grid-hex-h" />
-                      <Label htmlFor="grid-hex-h" className="flex-1 cursor-pointer">
-                        <div className="font-medium">Hex (Horizontal)</div>
-                        <div className="text-sm text-muted-foreground">Flat-topped hexagons</div>
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-                      <RadioGroupItem value={GridType.HEXAGONAL_VERTICAL} id="grid-hex-v" />
-                      <Label htmlFor="grid-hex-v" className="flex-1 cursor-pointer">
-                        <div className="font-medium">Hex (Vertical)</div>
-                        <div className="text-sm text-muted-foreground">Point-topped hexagons</div>
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50">
-                      <RadioGroupItem value={GridType.GRIDLESS} id="grid-none" />
-                      <Label htmlFor="grid-none" className="flex-1 cursor-pointer">
-                        <div className="font-medium">Gridless</div>
-                        <div className="text-sm text-muted-foreground">No grid overlay</div>
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="grid-size">Grid Size (feet per square) *</Label>
-                <Input
-                  id="grid-size"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={formData.gridSize}
-                  onChange={(e) => updateFormData({ gridSize: parseInt(e.target.value) || 1 })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Common values: 5ft (standard), 10ft (large scale)
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="grid-color">Grid Color</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="grid-color"
-                    type="color"
-                    value={formData.gridColor}
-                    onChange={(e) => updateFormData({ gridColor: e.target.value })}
-                    className="w-20 h-10"
-                  />
-                  <Input
-                    type="text"
-                    value={formData.gridColor}
-                    onChange={(e) => updateFormData({ gridColor: e.target.value })}
-                    placeholder="#000000"
-                    maxLength={7}
-                  />
-                </div>
-              </div>
-            </div>
+            <StepGridSettings
+              gridType={formData.gridType}
+              gridSize={formData.gridSize}
+              gridColor={formData.gridColor}
+              onUpdate={updateFormData}
+            />
           )}
 
           {/* Step 4: Background Image */}
           {currentStep === 3 && (
-            <div className="space-y-6">
-              <MapUploader
-                campaignId={campaignId}
-                width={formData.width}
-                height={formData.height}
-                gridSize={formData.gridSize}
-                onImageUpload={(url, thumbnailUrl) => {
-                  updateFormData({
-                    backgroundImageUrl: url,
-                    thumbnailUrl: thumbnailUrl || url,
-                  });
-                }}
-              />
-
-              {formData.backgroundImageUrl && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm font-medium mb-2">Image Uploaded</p>
-                  <p className="text-xs text-muted-foreground break-all">
-                    {formData.backgroundImageUrl}
-                  </p>
-                </div>
-              )}
-            </div>
+            <StepBackgroundImage
+              campaignId={campaignId}
+              width={formData.width}
+              height={formData.height}
+              gridSize={formData.gridSize}
+              backgroundImageUrl={formData.backgroundImageUrl}
+              onUpdate={updateFormData}
+            />
           )}
 
           {/* Step 5: Scene Settings */}
           {currentStep === 4 && (
-            <SceneSettings
-              settings={{
-                enableFogOfWar: formData.enableFogOfWar,
-                enableDynamicLighting: formData.enableDynamicLighting,
-                snapToGrid: formData.snapToGrid,
-                gridOpacity: formData.gridOpacity,
-                ambientLightLevel: formData.ambientLightLevel,
-                darknessLevel: formData.darknessLevel,
-                weatherEffects: formData.weatherEffects || undefined,
-                timeOfDay: formData.timeOfDay || undefined,
-              }}
-              onChange={(settings) => updateFormData(settings as Partial<SceneFormData>)}
+            <StepSceneSettings
+              enableFogOfWar={formData.enableFogOfWar}
+              enableDynamicLighting={formData.enableDynamicLighting}
+              snapToGrid={formData.snapToGrid}
+              gridOpacity={formData.gridOpacity}
+              ambientLightLevel={formData.ambientLightLevel}
+              darknessLevel={formData.darknessLevel}
+              weatherEffects={formData.weatherEffects}
+              timeOfDay={formData.timeOfDay}
+              onUpdate={updateFormData}
             />
           )}
         </CardContent>

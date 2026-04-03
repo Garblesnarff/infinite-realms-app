@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
+import { CharacterPermissionService } from '../../services/character-permission-service.js';
 import { CharacterService } from '../../services/character-service.js';
 
 /**
@@ -78,7 +79,7 @@ export const charactersRouter = router({
       const { characterId, targetUserId, permission } = input;
       const userId = ctx.user.userId;
 
-      return await CharacterService.shareCharacter(
+      return await CharacterPermissionService.shareCharacter(
         characterId,
         userId,
         targetUserId,
@@ -101,7 +102,7 @@ export const charactersRouter = router({
       const { characterId, targetUserId, permission } = input;
       const userId = ctx.user.userId;
 
-      return await CharacterService.updatePermission(
+      return await CharacterPermissionService.updatePermission(
         characterId,
         userId,
         targetUserId,
@@ -123,7 +124,7 @@ export const charactersRouter = router({
       const { characterId, targetUserId } = input;
       const userId = ctx.user.userId;
 
-      const success = await CharacterService.revokePermission(
+      const success = await CharacterPermissionService.revokePermission(
         characterId,
         userId,
         targetUserId
@@ -138,7 +139,7 @@ export const charactersRouter = router({
   listShared: protectedProcedure
     .query(async ({ ctx }) => {
       const userId = ctx.user.userId;
-      return await CharacterService.listSharedCharacters(userId);
+      return await CharacterPermissionService.listSharedCharacters(userId);
     }),
 
   /**
@@ -154,7 +155,7 @@ export const charactersRouter = router({
       const { characterId } = input;
       const userId = ctx.user.userId;
 
-      return await CharacterService.listPermissions(characterId, userId);
+      return await CharacterPermissionService.listPermissions(characterId, userId);
     }),
 
   /**

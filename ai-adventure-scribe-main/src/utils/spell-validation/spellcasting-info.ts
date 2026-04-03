@@ -1,14 +1,13 @@
 import type { CharacterClass } from '@/types/character';
 import type { SpellcastingInfo } from '@/utils/spell-validation/types';
 
-
 /**
  * Get complete spellcasting information for a class at level 1
  * Level 1 spell counts by class following D&D 5E rules
  */
 export function getSpellcastingInfo(
   characterClass: CharacterClass,
-  _level: number = 1,
+  level: number = 1,
 ): SpellcastingInfo | null {
   if (!characterClass.spellcasting) {
     return null;
@@ -67,7 +66,10 @@ export function getSpellcastingInfo(
     },
   };
 
-  const classInfo = levelOneSpellcasting[characterClass.name];
+  // Use case-insensitive lookup
+  const normalizedClassName =
+    characterClass.name.charAt(0).toUpperCase() + characterClass.name.slice(1).toLowerCase();
+  const classInfo = levelOneSpellcasting[normalizedClassName];
   if (!classInfo) {
     return null;
   }

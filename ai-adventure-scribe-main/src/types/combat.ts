@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Combat Types for D&D 5e Tabletop Experience
  *
@@ -354,6 +355,15 @@ export interface CombatParticipant {
   obscurement?: ObscurementLevel;
   isHidden?: boolean;
   stealthCheckBonus?: number;
+
+  // Monster data for detected enemies
+  monsterData?: {
+    type: string;
+    challengeRating: string;
+    alignment: string;
+    specialAbilities: any[];
+    attacks: MonsterAttack[];
+  };
 }
 
 export interface MonsterAttack {
@@ -531,6 +541,7 @@ export interface DiceRollRequest {
     dieType: number;
     count: number;
     modifier: number;
+    abilityModifier?: string; // symbolic ability name e.g. "cha", "int", "wis" — resolved by UI component
     advantage?: boolean;
     disadvantage?: boolean;
   };

@@ -1,3 +1,5 @@
+import type { Condition } from '@/types/combat';
+
 export interface Ability {
   score: number;
   modifier: number;
@@ -240,6 +242,7 @@ export interface Character {
       description: string;
     }>;
   };
+  conditions?: Condition[];
   equipment?: string[];
   selectedEquipmentOptionIndex?: number; // Tracks which equipment option was selected (for UI feedback)
   skillProficiencies?: string[];

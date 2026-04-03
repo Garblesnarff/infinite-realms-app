@@ -1108,6 +1108,7 @@ export type Database = {
           quest_giver: string | null
           quest_type: string | null
           rewards: string[] | null
+          session_id: string | null
           status: string | null
           title: string
           updated_at: string | null
@@ -1124,6 +1125,7 @@ export type Database = {
           quest_giver?: string | null
           quest_type?: string | null
           rewards?: string[] | null
+          session_id?: string | null
           status?: string | null
           title: string
           updated_at?: string | null
@@ -1140,6 +1142,7 @@ export type Database = {
           quest_giver?: string | null
           quest_type?: string | null
           rewards?: string[] | null
+          session_id?: string | null
           status?: string | null
           title?: string
           updated_at?: string | null

@@ -32,12 +32,13 @@ interface CombatStatusProps {
  * Combat Status display component
  * Shows current game phase, combat state, and active participant info
  */
-export const CombatStatus: React.FC<CombatStatusProps> = ({ className }) => {
+export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className }) => {
   const { state: gameState } = useGame();
   const { state: combatState } = useCombat();
 
   // Get phase display info
-  const getPhaseInfo = () => {
+  // ⚡ Bolt: Memoize phase info to avoid re-calculating on every render
+  const phaseInfo = React.useMemo(() => {
     switch (gameState.currentPhase) {
       case 'exploration':
         return { icon: Search, label: 'Exploration', color: 'bg-blue-500' };
@@ -52,13 +53,13 @@ export const CombatStatus: React.FC<CombatStatusProps> = ({ className }) => {
       default:
         return { icon: Search, label: 'Unknown', color: 'bg-gray-400' };
     }
-  };
+  }, [gameState.currentPhase]);
 
-  const phaseInfo = getPhaseInfo();
   const PhaseIcon = phaseInfo.icon;
 
   // Get current turn info
-  const getCurrentTurnInfo = () => {
+  // ⚡ Bolt: Memoize current turn info to avoid searching participants array unnecessarily
+  const currentTurn = React.useMemo(() => {
     if (!combatState.isInCombat || !combatState.activeEncounter) return null;
 
     const currentParticipant = combatState.activeEncounter.participants.find(
@@ -72,10 +73,13 @@ export const CombatStatus: React.FC<CombatStatusProps> = ({ className }) => {
       initiative: currentParticipant.initiative?.value || 0,
       hp: currentParticipant.hitPoints,
     };
-  };
+  }, [combatState.isInCombat, combatState.activeEncounter]);
 
-  const currentTurn = getCurrentTurnInfo();
-  const pendingRolls = gameState.diceRollQueue.pendingRolls.filter((r) => r.status === 'pending');
+  // ⚡ Bolt: Memoize pending rolls filtering
+  const pendingRolls = React.useMemo(
+    () => gameState.diceRollQueue.pendingRolls.filter((r) => r.status === 'pending'),
+    [gameState.diceRollQueue.pendingRolls],
+  );
 
   return (
     <Card className={`p-3 bg-white/90 backdrop-blur-sm border-2 ${className}`}>
@@ -140,4 +144,4 @@ export const CombatStatus: React.FC<CombatStatusProps> = ({ className }) => {
       </div>
     </Card>
   );
-};
+});

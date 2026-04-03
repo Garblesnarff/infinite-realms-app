@@ -68,9 +68,12 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
               onActionClick(action);
             }}
             disabled={!available || isSubmitting}
+            title={action.description}
+            aria-label={`${action.name}: ${action.description}${statusText ? `. ${statusText}` : ''}`}
           >
             <ActionIcon
               className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`}
+              aria-hidden="true"
             />
 
             <div className="text-center">

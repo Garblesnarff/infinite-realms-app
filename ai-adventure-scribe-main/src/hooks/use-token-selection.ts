@@ -34,9 +34,7 @@ export interface UseTokenSelectionReturn {
 /**
  * Hook for managing token selection on the battle map
  */
-export function useTokenSelection(
-  options: UseTokenSelectionOptions = {},
-): UseTokenSelectionReturn {
+export function useTokenSelection(options: UseTokenSelectionOptions = {}): UseTokenSelectionReturn {
   const { onSelectionChange, enableKeyboardShortcuts = true } = options;
 
   // Get state from store

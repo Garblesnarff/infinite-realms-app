@@ -5,8 +5,9 @@
  * Extracted from GameContext.tsx for better maintainability and testability.
  */
 
+import type { DiceRollRequest, DiceRollQueue, DiceRoll } from '@/types/combat';
+
 import logger from '@/lib/logger';
-import type { DiceRollRequest, DiceRollQueue } from '@/types/combat';
 
 // Game phase types
 export type GamePhase =
@@ -43,7 +44,7 @@ export interface GameState {
 export type GameAction =
   | { type: 'SET_PHASE'; payload: GamePhase }
   | { type: 'ADD_DICE_ROLL_REQUEST'; payload: DiceRollRequest }
-  | { type: 'COMPLETE_DICE_ROLL'; payload: { id: string; result: any } }
+  | { type: 'COMPLETE_DICE_ROLL'; payload: { id: string; result: DiceRoll } }
   | { type: 'CANCEL_DICE_ROLL'; payload: string }
   | { type: 'CLEAR_DICE_ROLL_QUEUE' }
   | { type: 'SET_CURRENT_BATCH'; payload: string }

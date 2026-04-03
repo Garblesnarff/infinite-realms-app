@@ -43,21 +43,9 @@ export interface BattleSceneProps {
  * </Canvas>
  * ```
  */
-export function BattleScene({
-  sceneId,
-  onSceneLoaded,
-  showLoading = true,
-}: BattleSceneProps) {
-  const {
-    scene,
-    isLoading,
-    error,
-    width,
-    height,
-    gridSize,
-    backgroundImageUrl,
-    settings,
-  } = useSceneData({ sceneId });
+export function BattleScene({ sceneId, onSceneLoaded, showLoading = true }: BattleSceneProps) {
+  const { scene, isLoading, error, width, height, gridSize, backgroundImageUrl, settings } =
+    useSceneData({ sceneId });
 
   // Notify parent when scene is loaded
   React.useEffect(() => {

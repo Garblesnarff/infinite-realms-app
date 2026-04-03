@@ -158,21 +158,21 @@ describe('RollStateManager', () => {
         weaponName,
         true, // isCritical
         undefined, // character
-        undefined // preferredAbility
+        undefined, // preferredAbility
       );
       expect(suggestion).toEqual(mockSuggestion);
     });
 
     it('should return default suggestion if weapon not found', () => {
-        const rollId = rollStateManager.addPendingRoll({
-          type: 'attack',
-          actorId: 'player1',
-          context: 'Attack',
-        });
-        rollStateManager.recordAttackRoll(rollId, 15, 10);
+      const rollId = rollStateManager.addPendingRoll({
+        type: 'attack',
+        actorId: 'player1',
+        context: 'Attack',
+      });
+      rollStateManager.recordAttackRoll(rollId, 15, 10);
 
-        const suggestion = rollStateManager.getDamageRollSuggestion(rollId);
-        expect(suggestion).toEqual({ formula: '1d6+3', purpose: 'Damage roll' });
+      const suggestion = rollStateManager.getDamageRollSuggestion(rollId);
+      expect(suggestion).toEqual({ formula: '1d6+3', purpose: 'Damage roll' });
     });
 
     it('should return null for non-existent attack roll suggestion', () => {
@@ -182,7 +182,11 @@ describe('RollStateManager', () => {
 
   describe('Cleanup', () => {
     it('should clear completed rolls', () => {
-      const rollId = rollStateManager.addPendingRoll({ type: 'attack', actorId: 'p1', context: 'A' });
+      const rollId = rollStateManager.addPendingRoll({
+        type: 'attack',
+        actorId: 'p1',
+        context: 'A',
+      });
       rollStateManager.recordAttackRoll(rollId, 15, 10);
 
       expect(rollStateManager.getCompletedRolls()).toHaveLength(1);
@@ -192,7 +196,11 @@ describe('RollStateManager', () => {
 
     it('should clear all state', () => {
       rollStateManager.addPendingRoll({ type: 'attack', actorId: 'p1', context: 'A' });
-      const rollId = rollStateManager.addPendingRoll({ type: 'attack', actorId: 'p1', context: 'A' });
+      const rollId = rollStateManager.addPendingRoll({
+        type: 'attack',
+        actorId: 'p1',
+        context: 'A',
+      });
       rollStateManager.recordAttackRoll(rollId, 15, 10);
 
       rollStateManager.clearAllState();

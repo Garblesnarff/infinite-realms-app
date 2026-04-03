@@ -8,7 +8,10 @@
  * @module server/services/class-features-service
  */
 
-import { db } from '../../../db/client.js';
+import { eq, and, desc, sql, exists, or, isNull, inArray } from 'drizzle-orm';
+
+import { db } from '../../../db/client';
+import { SubclassService } from './subclass-service.js';
 import {
   classFeaturesLibrary,
   characterFeatures,
@@ -19,8 +22,9 @@ import {
   type CharacterFeature,
   type CharacterSubclass,
   type FeatureUsageLog,
-} from '../../../db/schema/index.js';
-import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
+} from '../../../db/schema/index';
+import { NotFoundError, ConflictError, BusinessLogicError } from '../lib/errors.js';
+
 import type {
   GrantFeatureInput,
   UseFeatureInput,
@@ -34,43 +38,6 @@ import type {
   CharacterFeaturesWithUsage,
   FeatureUsageHistoryParams,
 } from '../types/class-features.js';
-import { NotFoundError, ConflictError, ValidationError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
-
-/**
- * Subclass choice level mapping
- */
-const SUBCLASS_CHOICE_LEVELS: Record<string, number> = {
-  'Barbarian': 3,
-  'Bard': 3,
-  'Cleric': 1,
-  'Druid': 2,
-  'Fighter': 3,
-  'Monk': 3,
-  'Paladin': 3,
-  'Ranger': 3,
-  'Rogue': 3,
-  'Sorcerer': 1,
-  'Warlock': 1,
-  'Wizard': 2,
-};
-
-/**
- * Available subclasses by class (PHB only)
- */
-const AVAILABLE_SUBCLASSES: Record<string, string[]> = {
-  'Fighter': ['Champion', 'Battle Master', 'Eldritch Knight'],
-  'Rogue': ['Thief', 'Assassin', 'Arcane Trickster'],
-  'Wizard': ['School of Evocation', 'School of Abjuration'],
-  'Cleric': ['Life Domain', 'War Domain'],
-  'Barbarian': ['Path of the Berserker', 'Path of the Totem Warrior'],
-  'Bard': ['College of Lore', 'College of Valor'],
-  'Druid': ['Circle of the Land', 'Circle of the Moon'],
-  'Monk': ['Way of the Open Hand', 'Way of Shadow', 'Way of the Four Elements'],
-  'Paladin': ['Oath of Devotion', 'Oath of the Ancients', 'Oath of Vengeance'],
-  'Ranger': ['Hunter', 'Beast Master'],
-  'Sorcerer': ['Draconic Bloodline', 'Wild Magic'],
-  'Warlock': ['The Archfey', 'The Fiend', 'The Great Old One'],
-};
 
 /**
  * Class Features Service
@@ -141,7 +108,7 @@ export class ClassFeaturesService {
    * Get the level at which a class chooses its subclass
    */
   static getSubclassChoiceLevel(className: string): number {
-    return SUBCLASS_CHOICE_LEVELS[className] || 3;
+    return SubclassService.getSubclassChoiceLevel(className);
   }
 
   /**
@@ -168,72 +135,100 @@ export class ClassFeaturesService {
 
   /**
    * Grant a feature to a character
+   * ⚡ Bolt: Optimized to use a single atomic query for existence and ownership verification.
    */
   static async grantFeature(input: GrantFeatureInput & { userId: string }): Promise<CharacterFeature> {
     const { characterId, featureId, acquiredAtLevel, userId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    // Verify feature exists
-    const feature = await this.getFeatureById(featureId);
-    if (!feature) {
-      throw new NotFoundError('Feature', featureId);
-    }
-
-    // Check if feature is already granted AND verify character ownership
-    const existing = await db.query.characterFeatures.findFirst({
-      where: and(
-        eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
-
-    if (existing) {
-      throw new ConflictError(`Feature ${feature.featureName} already granted to character`, {
-        featureId,
-        characterId,
-      });
-    }
-
-    // Verify ownership before granting
-    const [character] = await db
-      .select({ id: characters.id })
-      .from(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .limit(1);
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    // Grant the feature
+    // ⚡ Bolt: Combined check for existing feature, character ownership, and library feature data.
+    // This reduces database round-trips from 4 down to 1.
     const [granted] = await db
       .insert(characterFeatures)
-      .values({
-        characterId,
-        featureId,
-        usesRemaining: feature.usesCount || null,
-        isActive: true,
-        acquiredAtLevel,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: classFeaturesLibrary.id,
+            usesRemaining: classFeaturesLibrary.usesCount,
+            isActive: sql`true`,
+            acquiredAtLevel: sql`${acquiredAtLevel}`,
+          })
+          .from(classFeaturesLibrary)
+          .innerJoin(characters, and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+          .leftJoin(characterFeatures, and(
+            eq(characterFeatures.characterId, characterId),
+            eq(characterFeatures.featureId, classFeaturesLibrary.id)
+          ))
+          .where(and(
+            eq(classFeaturesLibrary.id, featureId),
+            isNull(characterFeatures.id)
+          ))
+      )
       .returning();
 
     if (!granted) {
-      throw new InternalServerError('Failed to grant feature');
+      // If insertion failed, it could be because the feature is already granted,
+      // the character doesn't exist/isn't owned, or the feature ID is invalid.
+      // We perform one fallback check to throw the correct error.
+      const existing = await db.query.characterFeatures.findFirst({
+        where: and(eq(characterFeatures.characterId, characterId), eq(characterFeatures.featureId, featureId))
+      });
+
+      if (existing) {
+        throw new ConflictError('Feature already granted to character', { featureId, characterId });
+      }
+
+      await this.verifyCharacterOwnership(characterId, userId);
+      throw new NotFoundError('Feature', featureId);
     }
+
+    return granted;
+  }
+
+  /**
+   * Grant multiple features to a character in a single batch operation.
+   * ⚡ Bolt: Optimized to use a single INSERT ... SELECT query with joins to verify ownership
+   * and skip already granted features in one round-trip.
+   */
+  static async grantFeaturesBatch(
+    characterId: string,
+    featureIds: string[],
+    acquiredAtLevel: number,
+    userId: string
+  ): Promise<CharacterFeature[]> {
+    if (featureIds.length === 0) return [];
+
+    // 🛡️ Sentinel: Incorporate ownership check and "not already granted" check into a single atomic query.
+    // This reduces O(N) database round-trips to O(1).
+    const granted = await db
+      .insert(characterFeatures)
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: classFeaturesLibrary.id,
+            usesRemaining: classFeaturesLibrary.usesCount,
+            isActive: sql`true`,
+            acquiredAtLevel: sql`${acquiredAtLevel}`,
+          })
+          .from(classFeaturesLibrary)
+          .innerJoin(characters, and(
+            eq(characters.id, characterId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          ))
+          .leftJoin(characterFeatures, and(
+            eq(characterFeatures.characterId, characterId),
+            eq(characterFeatures.featureId, classFeaturesLibrary.id)
+          ))
+          .where(and(
+            inArray(classFeaturesLibrary.id, featureIds),
+            isNull(characterFeatures.id) // Only insert if not already granted
+          ))
+      )
+      .returning();
 
     return granted;
   }
@@ -358,13 +353,22 @@ export class ClassFeaturesService {
 
     // Decrement uses
     const newUsesRemaining = characterFeature.usesRemaining - 1;
+    // 🛡️ Sentinel: Incorporate ownership check into the UPDATE query for defense-in-depth.
     await db
       .update(characterFeatures)
       .set({ usesRemaining: newUsesRemaining })
       .where(and(
         eq(characterFeatures.id, characterFeature.id),
         eq(characterFeatures.characterId, characterId),
-        eq(characterFeatures.featureId, featureId)
+        eq(characterFeatures.featureId, featureId),
+        exists(
+          db.select()
+            .from(characters)
+            .where(and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            ))
+        )
       ));
 
     // Log the usage
@@ -387,54 +391,30 @@ export class ClassFeaturesService {
     const { characterId, restType, userId } = input;
 
     // Get all character features with ownership check
-    const allFeatures = await db.query.characterFeatures.findMany({
-      where: and(
-        eq(characterFeatures.characterId, characterId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
+    // ⚡ Bolt: Optimized N+1 update loop into a single atomic UPDATE ... FROM query.
+    // This reduces database round-trips from O(N) (number of character features) to O(1).
+    // 🛡️ Sentinel: Incorporate ownership check into the batch UPDATE query for defense-in-depth.
+    const restoredRows = await db.execute<{ feature_name: string }>(sql`
+      UPDATE ${characterFeatures} cf
+      SET uses_remaining = cfl.uses_count
+      FROM ${classFeaturesLibrary} cfl
+      WHERE cf.feature_id = cfl.id
+        AND cf.character_id = ${characterId}
+        AND cfl.uses_count IS NOT NULL
+        AND (
+          (${restType} = 'short' AND cfl.uses_per_rest = 'short_rest')
+          OR
+          (${restType} = 'long' AND (cfl.uses_per_rest = 'short_rest' OR cfl.uses_per_rest = 'long_rest'))
         )
-      ),
-      with: {
-        feature: true,
-      },
-    });
+        AND EXISTS (
+          SELECT 1 FROM ${characters} c
+          WHERE c.id = cf.character_id
+          AND (c.user_id = ${userId} OR c.owner_id = ${userId})
+        )
+      RETURNING cfl.feature_name
+    `);
 
-    const featuresRestored: string[] = [];
-
-    // Determine which features to restore based on rest type
-    for (const charFeature of allFeatures) {
-      const feature = charFeature.feature!;
-
-      let shouldRestore = false;
-
-      if (restType === 'short') {
-        // Short rest restores short_rest features
-        shouldRestore = feature.usesPerRest === 'short_rest';
-      } else if (restType === 'long') {
-        // Long rest restores both short_rest and long_rest features
-        shouldRestore =
-          feature.usesPerRest === 'short_rest' ||
-          feature.usesPerRest === 'long_rest';
-      }
-
-      if (shouldRestore && feature.usesCount !== null) {
-        // Restore uses to maximum
-        await db
-          .update(characterFeatures)
-          .set({ usesRemaining: feature.usesCount })
-          .where(and(
-            eq(characterFeatures.id, charFeature.id),
-            eq(characterFeatures.characterId, characterId)
-          ));
-
-        featuresRestored.push(feature.featureName);
-      }
-    }
+    const featuresRestored = restoredRows.map(row => row.feature_name);
 
     return {
       featuresRestored,
@@ -450,93 +430,7 @@ export class ClassFeaturesService {
    * Set a character's subclass
    */
   static async setSubclass(input: SetSubclassInput & { userId: string }): Promise<SetSubclassResult> {
-    const { characterId, className, subclassName, level, userId } = input;
-
-    // Verify character exists and verify ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new NotFoundError('Character', characterId);
-    }
-
-    // Verify subclass is valid for the class
-    const validSubclasses = AVAILABLE_SUBCLASSES[className];
-    if (!validSubclasses || !validSubclasses.includes(subclassName)) {
-      throw new ValidationError(`${subclassName} is not a valid subclass for ${className}`, {
-        className,
-        subclassName,
-        validSubclasses,
-      });
-    }
-
-    // Check if subclass already set for this class
-    const existing = await db.query.characterSubclasses.findFirst({
-      where: and(
-        eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className)
-      ),
-    });
-
-    if (existing) {
-      throw new ConflictError(
-        `Character already has subclass ${existing.subclassName} for ${className}. Subclass choices are permanent.`,
-        { existingSubclass: existing.subclassName, className }
-      );
-    }
-
-    // Verify level is appropriate for subclass choice
-    const requiredLevel = this.getSubclassChoiceLevel(className);
-    if (level < requiredLevel) {
-      throw new BusinessLogicError(
-        `${className} chooses subclass at level ${requiredLevel}. Character is level ${level}.`,
-        { className, requiredLevel, characterLevel: level }
-      );
-    }
-
-    // Set the subclass
-    await db.insert(characterSubclasses).values({
-      characterId,
-      className,
-      subclassName,
-      chosenAtLevel: level,
-    });
-
-    // Get subclass features acquired at the choice level
-    const subclassFeatures = await db.query.classFeaturesLibrary.findMany({
-      where: and(
-        eq(classFeaturesLibrary.className, className),
-        eq(classFeaturesLibrary.subclassName, subclassName),
-        eq(classFeaturesLibrary.levelAcquired, requiredLevel)
-      ),
-    });
-
-    // Grant subclass features
-    const newFeatures: ClassFeatureLibrary[] = [];
-    for (const feature of subclassFeatures) {
-      try {
-        await this.grantFeature({
-          characterId,
-          featureId: feature.id,
-          acquiredAtLevel: level,
-          userId,
-        });
-        newFeatures.push(feature);
-      } catch (error) {
-        // Skip if already granted
-        console.warn(`Failed to grant feature ${feature.featureName}:`, error);
-      }
-    }
-
-    return {
-      subclass: subclassName,
-      newFeatures,
-      message: `Subclass ${subclassName} chosen for ${className}. Granted ${newFeatures.length} features.`,
-    };
+    return SubclassService.setSubclass(input);
   }
 
   /**
@@ -547,38 +441,14 @@ export class ClassFeaturesService {
     className: string,
     userId: string
   ): Promise<CharacterSubclass | null> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
-
-    const subclass = await db.query.characterSubclasses.findFirst({
-      where: and(
-        eq(characterSubclasses.characterId, characterId),
-        eq(characterSubclasses.className, className),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
-
-    return subclass || null;
+    return SubclassService.getCharacterSubclass(characterId, className, userId);
   }
 
   /**
    * Get available subclasses for a class
    */
   static getAvailableSubclasses(className: string): AvailableSubclasses {
-    const subclasses = AVAILABLE_SUBCLASSES[className] || [];
-
-    return {
-      className,
-      subclasses,
-    };
+    return SubclassService.getAvailableSubclasses(className);
   }
 
   // ============================================================================
@@ -609,18 +479,29 @@ export class ClassFeaturesService {
       throw new NotFoundError('Character', characterId);
     }
 
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [log] = await db
       .insert(featureUsageLog)
-      .values({
-        characterId,
-        featureId,
-        sessionId: sessionId || null,
-        context: context || null,
-      })
+      .select(
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            featureId: sql`${featureId}`,
+            sessionId: sql`${sessionId || null}`,
+            context: sql`${context || null}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+            )
+          )
+      )
       .returning();
 
     if (!log) {
-      throw new InternalServerError('Failed to log feature usage');
+      throw new NotFoundError('Character', characterId);
     }
 
     return log;
@@ -712,7 +593,7 @@ export class ClassFeaturesService {
     }
 
     // Get subclass if character has one
-    const subclass = await this.getCharacterSubclass(characterId, className, userId);
+    const subclass = await SubclassService.getCharacterSubclass(characterId, className, userId);
 
     // Get base class features for this level
     const classFeatures = await this.getFeaturesByLevel(className, level);
@@ -729,32 +610,16 @@ export class ClassFeaturesService {
       });
     }
 
-    const allFeatures = [...classFeatures, ...subclassFeatures];
-    const grantedFeatures: ClassFeatureLibrary[] = [];
+    const allFeatures = [...classFeatures, ...subclassFeatures]
+      .filter(f => !f.featureName.includes('Archetype') &&
+                   !f.featureName.includes('Tradition') &&
+                   !f.featureName.includes('Domain'));
 
-    // Grant each feature
-    for (const feature of allFeatures) {
-      // Skip subclass choice features (just markers)
-      if (feature.featureName.includes('Archetype') ||
-          feature.featureName.includes('Tradition') ||
-          feature.featureName.includes('Domain')) {
-        continue;
-      }
+    // ⚡ Bolt: Optimized to grant all features for the level in a single batch operation.
+    // This reduces database round-trips from O(N) to O(1).
+    const featureIds = allFeatures.map(f => f.id);
+    await this.grantFeaturesBatch(characterId, featureIds, level, userId);
 
-      try {
-        await this.grantFeature({
-          characterId,
-          featureId: feature.id,
-          acquiredAtLevel: level,
-          userId,
-        });
-        grantedFeatures.push(feature);
-      } catch (error) {
-        // Skip if already granted
-        console.warn(`Failed to grant feature ${feature.featureName}:`, error);
-      }
-    }
-
-    return grantedFeatures;
+    return allFeatures;
   }
 }

@@ -1,0 +1,75 @@
+import { describe, it, expect } from 'vitest';
+
+import { generateAssetKey } from '../asset-key';
+
+/**
+ * Asset Key Generation Utility Tests
+ *
+ * Verifies that generateAssetKey produces URL-friendly keys
+ * for asset tags as per project standards.
+ */
+
+describe('generateAssetKey', () => {
+  it('should convert strings to lowercase', () => {
+    expect(generateAssetKey('REMY')).toBe('remy');
+    expect(generateAssetKey('The Manager')).toBe('the-manager');
+  });
+
+  it('should replace spaces with hyphens', () => {
+    expect(generateAssetKey('remy the manager')).toBe('remy-the-manager');
+  });
+
+  it('should collapse multiple spaces and hyphens', () => {
+    expect(generateAssetKey('remy   the manager')).toBe('remy-the-manager');
+    expect(generateAssetKey('remy---the---manager')).toBe('remy-the-manager');
+    expect(generateAssetKey('remy - the - manager')).toBe('remy-the-manager');
+  });
+
+  it('should remove ASCII quote variants without adding hyphens', () => {
+    expect(generateAssetKey("'remy' \"the\" `manager`")).toBe('remy-the-manager');
+    expect(generateAssetKey("Don't")).toBe('dont');
+  });
+
+  it('should remove Unicode quote variants without adding hyphens', () => {
+    expect(generateAssetKey('«remy» ‘the’ “manager”')).toBe('remy-the-manager');
+  });
+
+  it('should remove special characters without adding hyphens (squashing)', () => {
+    expect(generateAssetKey('remy!the manager')).toBe('remythe-manager');
+    expect(generateAssetKey('area 51!')).toBe('area-51');
+  });
+
+  it('should preserve alphanumeric characters and spaces', () => {
+    expect(generateAssetKey('remy ! the manager')).toBe('remy-the-manager');
+    expect(generateAssetKey('area 51')).toBe('area-51');
+  });
+
+  it('should trim leading and trailing hyphens and spaces', () => {
+    expect(generateAssetKey(' -remy- ')).toBe('remy');
+    expect(generateAssetKey('---remy---')).toBe('remy');
+  });
+
+  it('should handle the example from the docstring correctly', () => {
+    expect(generateAssetKey('Remy "The Manager"')).toBe('remy-the-manager');
+  });
+
+  it('should return an empty string for strings containing only special characters', () => {
+    expect(generateAssetKey('!!!')).toBe('');
+    expect(generateAssetKey(' @#$ ')).toBe('');
+  });
+
+  it('should handle numeric characters correctly', () => {
+    expect(generateAssetKey('Level 10 NPC')).toBe('level-10-npc');
+  });
+
+  it('should preserve existing hyphens', () => {
+    expect(generateAssetKey('well-known-npc')).toBe('well-known-npc');
+  });
+
+  it('should normalize accented characters by converting to base characters', () => {
+    // We expect normalization (ä -> a, û -> u, etc.)
+    expect(generateAssetKey('Fäerun')).toBe('faerun');
+    expect(generateAssetKey('Faerûn')).toBe('faerun');
+    expect(generateAssetKey('Mjölnir')).toBe('mjolnir');
+  });
+});

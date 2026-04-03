@@ -16,17 +16,18 @@
  * @module server/services/measurement-service
  */
 
-import { eq, and, lt, or, exists } from 'drizzle-orm';
+import { eq, and, lt, or, exists, isNotNull, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   measurementTemplates,
   scenes,
   tokens,
+  characters,
   type MeasurementTemplate,
   type Token,
-} from '../../../db/schema/index.js';
-import { InternalServerError, NotFoundError } from '../lib/errors.js';
+} from '../../../db/schema/index';
+import { NotFoundError } from '../lib/errors.js';
 
 /**
  * Data required to create a new measurement template
@@ -67,38 +68,34 @@ export class MeasurementService {
     userId: string,
     data: CreateTemplateData
   ): Promise<MeasurementTemplate> {
-    // Verify the scene exists and user has access (is the owner/GM)
-    const [scene] = await db
-      .select({ id: scenes.id })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    // Create the template
+    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
+    // This ensures that templates can only be added to scenes the user is authorized to access
+    // while masking resource existence in a single atomic database round-trip.
     const [template] = await db
       .insert(measurementTemplates)
-      .values({
-        // Use verified sceneId parameter (not payload value) to prevent cross-scene writes.
-        sceneId,
-        createdBy: userId,
-        templateType: data.templateType,
-        originX: data.originX,
-        originY: data.originY,
-        direction: data.direction,
-        distance: data.distance,
-        width: data.width ?? null,
-        color: data.color ?? '#FF0000',
-        opacity: data.opacity ?? 0.5,
-        isTemporary: data.isTemporary ?? true,
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            createdBy: sql`${userId}`,
+            templateType: sql`${data.templateType}`,
+            originX: sql`${data.originX}`,
+            originY: sql`${data.originY}`,
+            direction: sql`${data.direction}`,
+            distance: sql`${data.distance}`,
+            width: sql`${data.width ?? null}`,
+            color: sql`${data.color ?? '#FF0000'}`,
+            opacity: sql`${data.opacity ?? 0.5}`,
+            isTemporary: sql`${data.isTemporary ?? true}`,
+          })
+          .from(scenes)
+          .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
+      )
       .returning();
 
     if (!template) {
-      throw new InternalServerError('Failed to create template');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Scene', sceneId);
     }
 
     return template;
@@ -137,21 +134,32 @@ export class MeasurementService {
    * Calculate which tokens are affected by a template
    * Uses geometry calculations based on template type
    */
-  static async calculateAffectedTokens(templateId: string, userId: string): Promise<AffectedTokensResult> {
-    // Get the template with scene info to check authorization
+  static async calculateAffectedTokens(
+    templateId: string,
+    userId: string
+  ): Promise<AffectedTokensResult> {
+    // ⚡ Bolt: Optimized template retrieval by selecting only the required columns
+    // and using an innerJoin to verify scene ownership in a single round-trip.
     const [existing] = await db
       .select({
-        template: measurementTemplates,
+        template: {
+          id: measurementTemplates.id,
+          templateType: measurementTemplates.templateType,
+          originX: measurementTemplates.originX,
+          originY: measurementTemplates.originY,
+          distance: measurementTemplates.distance,
+          direction: measurementTemplates.direction,
+          width: measurementTemplates.width,
+          sceneId: measurementTemplates.sceneId,
+        },
+        sceneOwnerId: scenes.userId,
       })
       .from(measurementTemplates)
       .innerJoin(scenes, eq(measurementTemplates.sceneId, scenes.id))
       .where(
         and(
           eq(measurementTemplates.id, templateId),
-          or(
-            eq(measurementTemplates.createdBy, userId),
-            eq(scenes.userId, userId)
-          )
+          or(eq(measurementTemplates.createdBy, userId), eq(scenes.userId, userId))
         )
       )
       .limit(1);
@@ -160,17 +168,73 @@ export class MeasurementService {
       throw new NotFoundError('Template', templateId);
     }
 
-    const template = existing.template;
+    const { template, sceneOwnerId } = existing;
+    const isSceneOwner = sceneOwnerId === userId;
 
-    // Get all tokens in the same scene
-    const sceneTokens = await db
-      .select()
+    // ⚡ Bolt: Pre-parse template values to avoid redundant parsing in the filter loop.
+    const originX = parseFloat(String(template.originX));
+    const originY = parseFloat(String(template.originY));
+    const distance = parseFloat(String(template.distance));
+    const direction = parseFloat(String(template.direction));
+    const width = template.width ? parseFloat(String(template.width)) : null;
+
+    // ⚡ Bolt: Added spatial bounding box check to the SQL query.
+    // This reduces data transfer and in-memory processing by filtering out tokens
+    // that are clearly outside the template's maximum range.
+    const minX = originX - distance;
+    const maxX = originX + distance;
+    const minY = originY - distance;
+    const maxY = originY + distance;
+
+    // 🛡️ Sentinel: Get tokens in the same scene, respecting visibility for non-GMs.
+    // ⚡ Bolt: Optimized query by selecting only required columns, using SQL casting (::float)
+    // for coordinates, and joining the characters table only when necessary for non-owners.
+    const tokensResult = await (db as any)
+      .select({
+        id: tokens.id,
+        name: tokens.name,
+        positionX: sql<number>`${tokens.positionX}::float`,
+        positionY: sql<number>`${tokens.positionY}::float`,
+        isVisible: tokens.isVisible,
+        isHidden: tokens.isHidden,
+        actorId: tokens.actorId,
+        createdBy: tokens.createdBy,
+      })
       .from(tokens)
-      .where(eq(tokens.sceneId, template.sceneId));
+      .leftJoin(
+        characters,
+        isSceneOwner ? sql`false` : eq(tokens.actorId, characters.id)
+      )
+      .where(
+        and(
+          eq(tokens.sceneId, template.sceneId),
+          // ⚡ Bolt: Spatial bounding box filter (numeric cast handled by Drizzle/PG)
+          sql`${tokens.positionX} BETWEEN ${minX} AND ${maxX}`,
+          sql`${tokens.positionY} BETWEEN ${minY} AND ${maxY}`,
+          isSceneOwner
+            ? undefined
+            : or(
+                // Players can see visible tokens
+                and(eq(tokens.isVisible, true), eq(tokens.isHidden, false)),
+                // Players can always see tokens they created
+                eq(tokens.createdBy, userId),
+                // Players can always see their own characters' tokens
+                and(
+                  isNotNull(tokens.actorId),
+                  or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+                )
+              )
+        )
+      );
+
+    const sceneTokens = tokensResult as any[];
 
     // Filter tokens based on template geometry
+    // ⚡ Bolt: Pass pre-parsed template values for better performance
+    const parsedTemplate = { originX, originY, distance, direction, width };
+
     const affectedTokens = sceneTokens.filter((token) => {
-      return this.isTokenInTemplate(template, token);
+      return this.isTokenInTemplate(template as any, token, parsedTemplate);
     });
 
     return {
@@ -179,8 +243,8 @@ export class MeasurementService {
       tokens: affectedTokens.map((t) => ({
         id: t.id,
         name: t.name,
-        positionX: parseFloat(String(t.positionX)),
-        positionY: parseFloat(String(t.positionY)),
+        positionX: t.positionX,
+        positionY: t.positionY,
       })),
     };
   }
@@ -188,13 +252,20 @@ export class MeasurementService {
   /**
    * Check if a token is within a template's area
    */
-  private static isTokenInTemplate(template: MeasurementTemplate, token: Token): boolean {
-    const tokenX = parseFloat(String(token.positionX));
-    const tokenY = parseFloat(String(token.positionY));
-    const originX = parseFloat(String(template.originX));
-    const originY = parseFloat(String(template.originY));
-    const distance = parseFloat(String(template.distance));
-    const direction = parseFloat(String(template.direction));
+  private static isTokenInTemplate(
+    template: MeasurementTemplate,
+    token: any,
+    // ⚡ Bolt: Optional pre-parsed values to avoid redundant parsing
+    parsedTemplate?: { originX: number; originY: number; distance: number; direction: number; width: number | null }
+  ): boolean {
+    // ⚡ Bolt: Use pre-parsed numeric coordinates from optimized query
+    const tokenX = typeof token.positionX === 'number' ? token.positionX : parseFloat(String(token.positionX));
+    const tokenY = typeof token.positionY === 'number' ? token.positionY : parseFloat(String(token.positionY));
+
+    const originX = parsedTemplate?.originX ?? parseFloat(String(template.originX));
+    const originY = parsedTemplate?.originY ?? parseFloat(String(template.originY));
+    const distance = parsedTemplate?.distance ?? parseFloat(String(template.distance));
+    const direction = parsedTemplate?.direction ?? parseFloat(String(template.direction));
 
     switch (template.templateType) {
       case 'sphere':
@@ -211,8 +282,8 @@ export class MeasurementService {
 
       case 'line':
       case 'ray': {
-        const width = template.width ? parseFloat(String(template.width)) : 5;
-        return this.isInLine(tokenX, tokenY, originX, originY, distance, direction, width);
+        const width = parsedTemplate?.width ?? (template.width ? parseFloat(String(template.width)) : 5);
+        return this.isInLine(tokenX, tokenY, originX, originY, distance, direction, width ?? 5);
       }
 
       default:
@@ -376,19 +447,11 @@ export class MeasurementService {
     userId: string,
     maxAgeMinutes: number = 60
   ): Promise<number> {
-    // Verify scene ownership
-    const [scene] = await db
-      .select({ userId: scenes.userId })
-      .from(scenes)
-      .where(and(eq(scenes.id, sceneId), eq(scenes.userId, userId)))
-      .limit(1);
-
-    if (!scene) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
     const cutoffDate = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
 
+    // 🛡️ Sentinel: Atomic delete with ownership check via exists subquery.
+    // We removed the redundant pre-flight scene ownership query for performance
+    // and to follow the atomic verification pattern.
     const result = await db
       .delete(measurementTemplates)
       .where(
@@ -396,12 +459,12 @@ export class MeasurementService {
           eq(measurementTemplates.sceneId, sceneId),
           eq(measurementTemplates.isTemporary, true),
           lt(measurementTemplates.createdAt, cutoffDate),
-          sql`EXISTS (
-            SELECT 1
-            FROM scenes s
-            WHERE s.id = ${measurementTemplates.sceneId}
-              AND s.user_id = ${userId}
-          )`
+          exists(
+            db
+              .select()
+              .from(scenes)
+              .where(and(eq(scenes.id, measurementTemplates.sceneId), eq(scenes.userId, userId)))
+          )
         )
       )
       .returning({ id: measurementTemplates.id });

@@ -67,7 +67,7 @@ export const BackgroundPlaceholder: React.FC<BackgroundPlaceholderProps> = ({
             />
           </bufferGeometry>
           <lineBasicMaterial attach="material" color="#ffffff" opacity={0.1} transparent />
-        </line>
+        </line>,
       );
     }
 
@@ -85,7 +85,7 @@ export const BackgroundPlaceholder: React.FC<BackgroundPlaceholderProps> = ({
             />
           </bufferGeometry>
           <lineBasicMaterial attach="material" color="#ffffff" opacity={0.1} transparent />
-        </line>
+        </line>,
       );
     }
 
@@ -107,7 +107,9 @@ export const BackgroundPlaceholder: React.FC<BackgroundPlaceholderProps> = ({
       <group position={[0, 0, 0.01]}>
         {/* Outer pulse circle */}
         <mesh ref={pulseRef}>
-          <ringGeometry args={[Math.min(width, height) * 0.05, Math.min(width, height) * 0.08, 32]} />
+          <ringGeometry
+            args={[Math.min(width, height) * 0.05, Math.min(width, height) * 0.08, 32]}
+          />
           <meshBasicMaterial color="#ffffff" opacity={0.3} transparent />
         </mesh>
 
@@ -167,7 +169,7 @@ const LoadingDots: React.FC<LoadingDotsProps> = ({
         <mesh key={i} position={[x, y, 0]}>
           <circleGeometry args={[dotSize, 16]} />
           <meshBasicMaterial color="#ffffff" opacity={opacity} transparent />
-        </mesh>
+        </mesh>,
       );
     }
 

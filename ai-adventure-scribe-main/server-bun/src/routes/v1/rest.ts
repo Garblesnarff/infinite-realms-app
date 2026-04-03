@@ -1,23 +1,31 @@
-/**
- * Rest Routes (Elysia/Bun)
- *
- * REST endpoints for D&D 5E rest mechanics:
- * - Short rests (1 hour, spend hit dice)
- * - Long rests (8 hours, full restoration)
- * - Hit dice management
- *
- * Ported from /server/src/routes/v1/rest.ts
- */
-
+/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest } from '../../lib/auth.js';
+import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
 import { RestService } from '../../services/rest-service.js';
+
+const shortRestSchema = t.Object({
+  hitDiceToSpend: t.Optional(t.Number({ minimum: 0 })),
+  sessionId: t.Optional(t.String()),
+  notes: t.Optional(t.String()),
+});
+const longRestSchema = t.Object({
+  sessionId: t.Optional(t.String()),
+  notes: t.Optional(t.String()),
+});
+const spendHitDiceSchema = t.Object({
+  count: t.Number({ minimum: 1 }),
+  roll: t.Optional(t.Number({ minimum: 1, maximum: 12 })),
+});
+const initializeHitDiceSchema = t.Object({
+  className: t.String({ minLength: 1 }),
+  level: t.Number({ minimum: 1, maximum: 20 }),
+});
 
 function mapRestError(
   set: any,
@@ -47,24 +55,28 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
   /**
    * Centralized authentication and character ownership verification
    */
-  .derive(async ({ request }) => {
+  .derive(async ({ request, params }) => {
     const { user, error: authError } = await authenticateRequest(request);
-    return { user, authError };
+
+    let character = null;
+    if (user && params?.id) {
+      // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
+      // CharacterService.getById verifies dual-ownership (userId OR ownerId).
+      character = await CharacterService.getById(params.id, user.userId);
+    }
+
+    return { user, authError, character };
   })
-  .onBeforeHandle(async ({ user, authError, params, set }) => {
+  .onBeforeHandle(async ({ user, authError, params, character, set }) => {
     if (authError || !user) {
       set.status = 401;
       return { error: authError || 'Unauthorized' };
     }
 
-    if (params.id) {
-      // 🛡️ Sentinel: Use CharacterService.getById which verifies dual-ownership (userId/ownerId)
-      // and masks existence by returning null for unauthorized access.
-      const character = await CharacterService.getById(params.id, user.userId);
-      if (!character) {
-        set.status = 404;
-        return { error: 'Character not found' };
-      }
+    if (params?.id && !character) {
+      // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
+      set.status = 404;
+      return { error: 'Character not found' };
     }
   })
 
@@ -72,60 +84,71 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
    * POST /v1/rest/characters/:id/short
    * Take a short rest
    */
-  .post('/characters/:id/short', async ({ params, body, set, user }) => {
-    try {
-      const { hitDiceToSpend, sessionId, notes } = body as {
-        hitDiceToSpend?: number;
-        sessionId?: string;
-        notes?: string;
-      };
+  .post(
+    '/characters/:id/short',
+    async ({ params, body, set, user }) => {
+      try {
+        const { hitDiceToSpend, sessionId, notes } = body;
+        const userId = (user as AuthUser).userId;
 
-      if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
+        if (sessionId) {
+          const verification = await verifySessionOwnership(sessionId, userId);
+          if (!verification.success) {
+            set.status = verification.error?.status || 404;
+            return { error: verification.error?.message || 'Session not found' };
+          }
         }
+
+        const result = await RestService.takeShortRest(
+          params.id,
+          userId,
+          hitDiceToSpend || 0,
+          sessionId,
+          notes,
+        );
+
+        return result;
+      } catch (error) {
+        logger.error({ msg: 'REST_SHORT error', error });
+        return mapRestError(set, error, 'Failed to complete short rest');
       }
-
-      const result = await RestService.takeShortRest(
-        params.id,
-        (user as { userId: string }).userId,
-        hitDiceToSpend || 0,
-        sessionId,
-        notes
-      );
-
-      return result;
-    } catch (error) {
-      logger.error({ msg: 'REST_SHORT error', error });
-      return mapRestError(set, error, 'Failed to complete short rest');
-    }
-  })
+    },
+    {
+      body: shortRestSchema,
+    },
+  )
 
   /**
    * POST /v1/rest/characters/:id/long
    * Take a long rest (8 hours, restore all HP, spell slots, and half hit dice)
    */
-  .post('/characters/:id/long', async ({ params, body, set, user }) => {
-    try {
-      const { sessionId, notes } = body as {
-        sessionId?: string;
-        notes?: string;
-      };
+  .post(
+    '/characters/:id/long',
+    async ({ params, body, set, user }) => {
+      try {
+        const { sessionId, notes } = body;
+        const userId = (user as AuthUser).userId;
 
-      const result = await RestService.takeLongRest(
-        params.id,
-        (user as { userId: string }).userId,
-        sessionId,
-        notes
-      );
-      return result;
-    } catch (error) {
-      logger.error({ msg: 'REST_LONG error', error });
-      return mapRestError(set, error, 'Failed to complete long rest');
-    }
-  })
+        // Verify session ownership for long rests to prevent IDOR.
+        if (sessionId) {
+          const verification = await verifySessionOwnership(sessionId, userId);
+          if (!verification.success) {
+            set.status = verification.error?.status || 404;
+            return { error: verification.error?.message || 'Session not found' };
+          }
+        }
+
+        const result = await RestService.takeLongRest(params.id, userId, sessionId, notes);
+        return result;
+      } catch (error) {
+        logger.error({ msg: 'REST_LONG error', error });
+        return mapRestError(set, error, 'Failed to complete long rest');
+      }
+    },
+    {
+      body: longRestSchema,
+    },
+  )
 
   /**
    * GET /v1/rest/characters/:id/hit-dice
@@ -145,94 +168,97 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
    * POST /v1/rest/characters/:id/hit-dice/spend
    * Spend hit dice to recover HP
    */
-  .post('/characters/:id/hit-dice/spend', async ({ params, body, set, user }) => {
-    try {
-      const { count, roll } = body as {
-        count: number;
-        roll?: number;
-      };
+  .post(
+    '/characters/:id/hit-dice/spend',
+    async ({ params, body, set, user }) => {
+      try {
+        const { count, roll } = body;
+        const userId = (user as AuthUser).userId;
 
-      if (!count || count < 1) {
-        set.status = 400;
-        return { error: 'Count must be at least 1' };
+        const result = await RestService.spendHitDice(
+          params.id,
+          userId,
+          count,
+          roll ? [roll] : undefined,
+        );
+
+        return {
+          hpRestored: result.hpRestored,
+          hitDiceSpent: result.hitDiceSpent,
+          rolls: result.rolls,
+          remaining: result.hitDiceRemaining,
+        };
+      } catch (error) {
+        logger.error({ msg: 'REST_HITDICE_SPEND error', error });
+        return mapRestError(set, error, 'Failed to spend hit dice');
       }
-
-      const result = await RestService.spendHitDice(
-        params.id,
-        (user as { userId: string }).userId,
-        count,
-        roll ? [roll] : undefined
-      );
-
-      return {
-        hpRestored: result.hpRestored,
-        hitDiceSpent: result.hitDiceSpent,
-        rolls: result.rolls,
-        remaining: result.hitDiceRemaining,
-      };
-    } catch (error) {
-      logger.error({ msg: 'REST_HITDICE_SPEND error', error });
-      return mapRestError(set, error, 'Failed to spend hit dice');
-    }
-  })
+    },
+    {
+      body: spendHitDiceSchema,
+    },
+  )
 
   /**
    * GET /v1/rest/characters/:id/rest-history
    * Get rest history for a character
    */
-  .get('/characters/:id/rest-history', async ({ params, query, set, user }) => {
-    try {
-      const { sessionId, limit } = query as { sessionId?: string; limit?: string };
+  .get(
+    '/characters/:id/rest-history',
+    async ({ params, query, set, user }) => {
+      try {
+        const { sessionId, limit } = query;
+        const userId = (user as AuthUser).userId;
 
-      if (sessionId) {
-        const verification = await verifySessionOwnership(sessionId, user.userId);
-        if (!verification.success) {
-          set.status = verification.error!.status;
-          return { error: verification.error!.message };
+        if (sessionId) {
+          const verification = await verifySessionOwnership(sessionId, userId);
+          if (!verification.success) {
+            set.status = verification.error?.status || 404;
+            return { error: verification.error?.message || 'Session not found' };
+          }
         }
+
+        const rests = await RestService.getRestHistory(
+          params.id,
+          userId,
+          sessionId,
+          limit ? parseInt(limit) : undefined,
+        );
+
+        return { rests };
+      } catch (error) {
+        logger.error({ msg: 'REST_HISTORY error', error });
+        return mapRestError(set, error, 'Failed to get rest history');
       }
-
-      const rests = await RestService.getRestHistory(
-        params.id,
-        (user as { userId: string }).userId,
-        sessionId,
-        limit ? parseInt(limit) : undefined
-      );
-
-      return { rests };
-    } catch (error) {
-      logger.error({ msg: 'REST_HISTORY error', error });
-      return mapRestError(set, error, 'Failed to get rest history');
-    }
-  })
+    },
+    {
+      query: t.Object({
+        sessionId: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
+      }),
+    },
+  )
 
   /**
    * POST /v1/rest/characters/:id/hit-dice/initialize
    * Initialize hit dice for a character (used when creating/leveling character)
    */
-  .post('/characters/:id/hit-dice/initialize', async ({ params, body, set, user }) => {
-    try {
-      const { className, level } = body as {
-        className: string;
-        level: number;
-      };
+  .post(
+    '/characters/:id/hit-dice/initialize',
+    async ({ params, body, set, user }) => {
+      try {
+        const { className, level } = body;
+        const userId = (user as AuthUser).userId;
 
-      if (!className || !level || level < 1 || level > 20) {
-        set.status = 400;
-        return { error: 'Valid className and level (1-20) are required' };
+        const hitDice = await RestService.initializeHitDice(params.id, userId, className, level);
+
+        set.status = 201;
+        return { hitDice };
+      } catch (error) {
+        logger.error({ msg: 'REST_HITDICE_INIT error', error });
+        return mapRestError(set, error, 'Failed to initialize hit dice');
       }
-
-      const hitDice = await RestService.initializeHitDice(
-        params.id,
-        (user as { userId: string }).userId,
-        className,
-        level
-      );
-
-      set.status = 201;
-      return { hitDice };
-    } catch (error) {
-      logger.error({ msg: 'REST_HITDICE_INIT error', error });
-      return mapRestError(set, error, 'Failed to initialize hit dice');
-    }
-  });
+    },
+    {
+      body: initializeHitDiceSchema,
+    },
+  );

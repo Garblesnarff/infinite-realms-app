@@ -57,7 +57,7 @@ VITE_FEATURE_USE_LANGGRAPH=true
 
 **Step 2**: Restart your development server:
 ```bash
-npm run dev
+bun run dev
 ```
 
 **Step 3**: Verify it's working:
@@ -77,12 +77,12 @@ VITE_FEATURE_USE_LANGGRAPH=false
 
 **Test LangGraph**:
 ```bash
-VITE_FEATURE_USE_LANGGRAPH=true npm run dev
+VITE_FEATURE_USE_LANGGRAPH=true bun run dev
 ```
 
 **Test Legacy**:
 ```bash
-VITE_FEATURE_USE_LANGGRAPH=false npm run dev
+VITE_FEATURE_USE_LANGGRAPH=false bun run dev
 ```
 
 **Compare Results**:
@@ -394,13 +394,13 @@ console.log('Result:', result);
 
 ```bash
 # All LangGraph tests
-npm test -- langgraph
+bun test -- langgraph
 
 # Specific test suite
-npm test -- src/agents/langgraph/__tests__/integration.test.ts
+bun test -- src/agents/langgraph/__tests__/integration.test.ts
 
 # Performance tests
-npm test -- src/agents/langgraph/__tests__/performance.test.ts
+bun test -- src/agents/langgraph/__tests__/performance.test.ts
 ```
 
 ### Manual Testing Checklist

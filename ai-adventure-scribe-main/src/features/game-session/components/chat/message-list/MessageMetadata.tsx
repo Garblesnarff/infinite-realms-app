@@ -12,8 +12,11 @@ interface MessageMetadataProps {
 /**
  * MessageMetadata Component
  * Displays timestamps, context metadata (emotion, location) for messages
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the metadata
+ * (emotions, locations, timestamps) for all messages when only one message changes.
  */
-export const MessageMetadata: React.FC<MessageMetadataProps> = ({
+export const MessageMetadata: React.FC<MessageMetadataProps> = React.memo(({
   message,
   isFirstInGroup,
   isLastInGroup,
@@ -52,4 +55,4 @@ export const MessageMetadata: React.FC<MessageMetadataProps> = ({
       )}
     </>
   );
-};
+});

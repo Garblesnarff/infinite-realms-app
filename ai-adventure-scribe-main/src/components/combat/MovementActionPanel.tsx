@@ -5,10 +5,11 @@
  */
 
 import { ArrowRight } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ const MovementActionPanel: React.FC<MovementActionPanelProps> = ({
 }) => {
   const { state, moveParticipant } = useCombat();
   const { activeEncounter } = state;
+  const moveSelectId = useId();
 
   const [targetPosition, setTargetPosition] = useState<string>('');
 
@@ -42,7 +44,7 @@ const MovementActionPanel: React.FC<MovementActionPanelProps> = ({
     { value: 'distant', label: 'Distant (60+ ft)' },
   ];
 
-  const handleMove = async () => {
+  const handleMove = async (): Promise<void> => {
     if (!targetPosition || !activeEncounter) return;
 
     try {
@@ -70,9 +72,11 @@ const MovementActionPanel: React.FC<MovementActionPanelProps> = ({
 
         <div className="flex gap-2 items-end">
           <div className="flex-1">
-            <label className="text-sm font-medium">Move To</label>
+            <Label htmlFor={moveSelectId} className="text-sm font-medium">
+              Move To
+            </Label>
             <Select value={targetPosition} onValueChange={setTargetPosition}>
-              <SelectTrigger>
+              <SelectTrigger id={moveSelectId} aria-label="Select target position">
                 <SelectValue placeholder="Select position" />
               </SelectTrigger>
               <SelectContent>

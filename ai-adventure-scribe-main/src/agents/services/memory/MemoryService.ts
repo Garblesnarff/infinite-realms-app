@@ -1,9 +1,7 @@
 import { llmApiClient } from '@/services/llm-api-client';
+import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
-import type {
-  Memory as UIMemory,
-  MemoryType as UIMemoryType,
-} from '@/components/game/memory/types';
+import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';
 import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
 
 import { MemoryImportanceService } from './MemoryImportanceService';
@@ -105,6 +103,9 @@ export class MemoryService {
     aiResponse: string,
   ): Promise<MemoryExtractionResult> {
     try {
+      const cleanUserMessage = sanitizeForMemoryExtraction(userMessage);
+      const cleanAiResponse = sanitizeForMemoryExtraction(aiResponse);
+
       const extractionPrompt = `You are a memory extraction system for a D&D campaign. Extract important memories from this conversation exchange.
 
 CONTEXT:
@@ -114,8 +115,8 @@ CONTEXT:
 - Active Quests: ${context.activeQuests?.join(', ') || 'None'}
 
 CONVERSATION:
-Player: ${userMessage}
-DM: ${aiResponse}
+Player: ${cleanUserMessage}
+DM: ${cleanAiResponse}
 
 Extract 1-4 key memories in this JSON format:
 {
@@ -201,7 +202,7 @@ Extract 1-4 key memories in this JSON format:
       return this.semanticSearch(options.query, options);
     }
     const data = await repository.fetchMemories(this.sessionId, options);
-    return Promise.all(data.map((item) => repository.transformDatabaseMemory(item)));
+    return data.map((item) => repository.transformDatabaseMemory(item));
   }
 
   private async semanticSearch(
@@ -218,6 +219,6 @@ Extract 1-4 key memories in this JSON format:
       options.limit || 10,
       0.7,
     );
-    return Promise.all(data.map((item: any) => repository.transformDatabaseMemory(item)));
+    return data.map((item: any) => repository.transformDatabaseMemory(item));
   }
 }

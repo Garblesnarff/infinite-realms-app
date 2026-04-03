@@ -406,7 +406,7 @@ Submit a PR with corrections! See [CONTRIBUTING.md](../CONTRIBUTING.md).
 ### Development Tools
 - [VS Code](https://code.visualstudio.com/docs) - Editor documentation
 - [Git](https://git-scm.com/doc) - Version control
-- [npm](https://docs.npmjs.com/) - Package manager
+- [Bun](https://bun.sh/docs) - Package manager
 
 ---
 

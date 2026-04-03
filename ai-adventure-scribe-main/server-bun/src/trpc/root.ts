@@ -20,17 +20,18 @@
  * ```
  */
 
-import { router } from './trpc.js';
 import { authRouter } from './routers/auth.js';
 import { blogRouter } from './routers/blog.js';
+import { characterFoldersRouter } from './routers/character-folders.js';
+import { charactersRouter } from './routers/characters.js';
+import { chroniclesRouter } from './routers/chronicles.js';
+import { drawingsRouter } from './routers/drawings.js';
+import { fogOfWarRouter } from './routers/fog-of-war.js';
+import { measurementsRouter } from './routers/measurements.js';
 import { scenesRouter } from './routers/scenes.js';
 import { tokensRouter } from './routers/tokens.js';
-import { drawingsRouter } from './routers/drawings.js';
-import { measurementsRouter } from './routers/measurements.js';
-import { charactersRouter } from './routers/characters.js';
-import { characterFoldersRouter } from './routers/character-folders.js';
-import { fogOfWarRouter } from './routers/fog-of-war.js';
 import { visionBlockersRouter } from './routers/vision-blockers.js';
+import { router } from './trpc.js';
 
 /**
  * Root tRPC router
@@ -64,6 +65,7 @@ export const appRouter = router({
   characterFolders: characterFoldersRouter,
   fogOfWar: fogOfWarRouter,
   visionBlockers: visionBlockersRouter,
+  chronicles: chroniclesRouter,
 });
 
 /**

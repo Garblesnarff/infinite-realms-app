@@ -9,7 +9,7 @@
  * - Create, duplicate, delete, and set active actions
  */
 
-import { Grid, List, Plus, Copy, Trash2, Eye, MoreVertical } from 'lucide-react';
+import { Grid, List, Plus } from 'lucide-react';
 import React, { useState } from 'react';
 
 import {
@@ -22,25 +22,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
-import { cn } from '@/lib/utils';
+
+import { SceneCard } from './SceneCard';
+import { SceneListItem } from './SceneListItem';
 
 interface SceneManagerProps {
   campaignId: string;
@@ -142,8 +136,37 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-muted-foreground">Loading scenes...</div>
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-9 w-9" />
+            <Skeleton className="h-9 w-9" />
+            <Skeleton className="h-5 w-20 ml-2" />
+          </div>
+          <Skeleton className="h-10 w-44" />
+        </div>
+
+        {/* Grid Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} variant="parchment" className="overflow-hidden">
+              <Skeleton className="h-48 w-full" />
+              <CardHeader className="pb-3">
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
@@ -156,6 +179,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2" role="group" aria-label="View mode">
           <Button
+            type="button"
             variant={viewMode === 'grid' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('grid')}
@@ -166,6 +190,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             <Grid className="h-4 w-4" />
           </Button>
           <Button
+            type="button"
             variant={viewMode === 'list' ? 'default' : 'outline'}
             size="icon"
             onClick={() => setViewMode('list')}
@@ -175,11 +200,15 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
           >
             <List className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-muted-foreground ml-2">
+          <span
+            className="text-sm text-muted-foreground ml-2"
+            role="status"
+            aria-live="polite"
+          >
             {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
           </span>
         </div>
-        <Button onClick={onCreateScene} variant="cosmic">
+        <Button type="button" onClick={onCreateScene} variant="cosmic">
           <Plus className="mr-2 h-4 w-4" />
           Create New Scene
         </Button>
@@ -187,122 +216,33 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
 
       {/* Empty state */}
       {sceneList.length === 0 && (
-        <Card variant="parchment" className="p-12 text-center">
-          <CardContent>
-            <div className="mb-4 text-6xl">🗺️</div>
-            <CardTitle className="mb-2">No Scenes Yet</CardTitle>
-            <CardDescription className="mb-6">
-              Create your first scene to bring your campaign to life with interactive battle maps.
-            </CardDescription>
-            <Button onClick={onCreateScene} variant="cosmic">
+        <EmptyState
+          illustration="no-locations"
+          variant="card"
+          title="No Scenes Yet"
+          description="Create your first scene to bring your campaign to life with interactive battle maps."
+          action={
+            <Button type="button" onClick={onCreateScene} variant="cosmic">
               <Plus className="mr-2 h-4 w-4" />
               Create First Scene
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       {/* Grid View */}
       {viewMode === 'grid' && sceneList.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {sceneList.map((scene: any) => (
-            <Card
+            <SceneCard
               key={scene.id}
-              variant="parchment"
-              className={cn(
-                'overflow-hidden transition-all cursor-pointer',
-                scene.isActive && 'ring-4 ring-electricCyan shadow-lg shadow-electricCyan/50',
-              )}
-              onClick={() => onViewScene?.(scene.id)}
-            >
-              {/* Thumbnail */}
-              <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
-                {scene.thumbnailUrl || scene.backgroundImageUrl ? (
-                  <img
-                    src={scene.thumbnailUrl || scene.backgroundImageUrl}
-                    alt={scene.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-6xl text-slate-400">
-                    🗺️
-                  </div>
-                )}
-                {scene.isActive && (
-                  <Badge className="absolute top-2 left-2 bg-electricCyan text-white">
-                    <Eye className="mr-1 h-3 w-3" />
-                    Active
-                  </Badge>
-                )}
-              </div>
-
-              {/* Content */}
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg truncate">{scene.name}</CardTitle>
-                    <CardDescription className="text-xs mt-1">
-                      {scene.width} × {scene.height} squares
-                    </CardDescription>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open scene menu">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        onViewScene?.(scene.id);
-                      }}>
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Scene
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        onEditScene?.(scene.id);
-                      }}>
-                        Edit
-                      </DropdownMenuItem>
-                      {!scene.isActive && (
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          handleSetActive(scene.id);
-                        }}>
-                          Set as Active
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleDuplicate(scene);
-                      }}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSceneToDelete(scene.id);
-                        }}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-
-              {scene.description && (
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {scene.description}
-                  </p>
-                </CardContent>
-              )}
-            </Card>
+              scene={scene}
+              onViewScene={onViewScene}
+              onEditScene={onEditScene}
+              onSetActive={handleSetActive}
+              onDuplicate={handleDuplicate}
+              onDelete={setSceneToDelete}
+            />
           ))}
         </div>
       )}
@@ -311,102 +251,15 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
       {viewMode === 'list' && sceneList.length > 0 && (
         <div className="space-y-3">
           {sceneList.map((scene: any) => (
-            <Card
+            <SceneListItem
               key={scene.id}
-              variant="parchment"
-              className={cn(
-                'overflow-hidden transition-all cursor-pointer',
-                scene.isActive && 'ring-2 ring-electricCyan',
-              )}
-              onClick={() => onViewScene?.(scene.id)}
-            >
-              <div className="flex items-center gap-4 p-4">
-                {/* Thumbnail */}
-                <div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded overflow-hidden flex-shrink-0">
-                  {scene.thumbnailUrl || scene.backgroundImageUrl ? (
-                    <img
-                      src={scene.thumbnailUrl || scene.backgroundImageUrl}
-                      alt={scene.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-4xl text-slate-400">
-                      🗺️
-                    </div>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-semibold truncate">{scene.name}</h3>
-                    {scene.isActive && (
-                      <Badge className="bg-electricCyan text-white">
-                        <Eye className="mr-1 h-3 w-3" />
-                        Active
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {scene.width} × {scene.height} squares • {scene.gridType}
-                  </p>
-                  {scene.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {scene.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" aria-label="Open scene menu">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onViewScene?.(scene.id);
-                    }}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Scene
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onEditScene?.(scene.id);
-                    }}>
-                      Edit
-                    </DropdownMenuItem>
-                    {!scene.isActive && (
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleSetActive(scene.id);
-                      }}>
-                        Set as Active
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      handleDuplicate(scene);
-                    }}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSceneToDelete(scene.id);
-                      }}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </Card>
+              scene={scene}
+              onViewScene={onViewScene}
+              onEditScene={onEditScene}
+              onSetActive={handleSetActive}
+              onDuplicate={handleDuplicate}
+              onDelete={setSceneToDelete}
+            />
           ))}
         </div>
       )}

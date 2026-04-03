@@ -128,7 +128,11 @@ export class FrustumCuller {
    * @returns True if point is visible
    */
   isPointVisible(position: THREE.Vector3 | { x: number; y: number; z?: number }): boolean {
-    const point = new THREE.Vector3(position.x, position.y, 'z' in position ? position.z ?? 0 : 0);
+    const point = new THREE.Vector3(
+      position.x,
+      position.y,
+      'z' in position ? (position.z ?? 0) : 0,
+    );
     return this.frustum.containsPoint(point);
   }
 
@@ -142,11 +146,11 @@ export class FrustumCuller {
    */
   isSphereVisible(
     center: THREE.Vector3 | { x: number; y: number; z?: number },
-    radius: number
+    radius: number,
   ): boolean {
     const sphere = new THREE.Sphere(
-      new THREE.Vector3(center.x, center.y, 'z' in center ? center.z ?? 0 : 0),
-      radius
+      new THREE.Vector3(center.x, center.y, 'z' in center ? (center.z ?? 0) : 0),
+      radius,
     );
     return this.frustum.intersectsSphere(sphere);
   }
@@ -161,11 +165,11 @@ export class FrustumCuller {
    */
   isBoxVisible(
     min: THREE.Vector3 | { x: number; y: number; z?: number },
-    max: THREE.Vector3 | { x: number; y: number; z?: number }
+    max: THREE.Vector3 | { x: number; y: number; z?: number },
   ): boolean {
     const box = new THREE.Box3(
-      new THREE.Vector3(min.x, min.y, 'z' in min ? min.z ?? 0 : 0),
-      new THREE.Vector3(max.x, max.y, 'z' in max ? max.z ?? 0 : 0)
+      new THREE.Vector3(min.x, min.y, 'z' in min ? (min.z ?? 0) : 0),
+      new THREE.Vector3(max.x, max.y, 'z' in max ? (max.z ?? 0) : 0),
     );
     return this.frustum.intersectsBox(box);
   }
@@ -199,7 +203,11 @@ export class FrustumCuller {
    * @returns Distance in world units
    */
   getDistanceFromCamera(position: THREE.Vector3 | { x: number; y: number; z?: number }): number {
-    const point = new THREE.Vector3(position.x, position.y, 'z' in position ? position.z ?? 0 : 0);
+    const point = new THREE.Vector3(
+      position.x,
+      position.y,
+      'z' in position ? (position.z ?? 0) : 0,
+    );
     return this.cameraPosition.distanceTo(point);
   }
 
@@ -266,7 +274,9 @@ export class FrustumCuller {
       }
     }
 
-    visibleWithDistance.sort((a, b) => (ascending ? a.distance - b.distance : b.distance - a.distance));
+    visibleWithDistance.sort((a, b) =>
+      ascending ? a.distance - b.distance : b.distance - a.distance,
+    );
 
     return visibleWithDistance.map((item) => item.id);
   }
@@ -328,7 +338,7 @@ export function createCullableFromToken(
     sizeWidth?: number;
     sizeHeight?: number;
   },
-  gridSize: number = 1
+  gridSize: number = 1,
 ): CullableObject {
   const width = (token.sizeWidth ?? 1) * gridSize;
   const height = (token.sizeHeight ?? 1) * gridSize;

@@ -21,8 +21,8 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 
-import { gameSessions, characters } from './game.js';
-import { npcs } from './world.js';
+import { gameSessions, characters } from './game';
+import { npcs } from './world';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 

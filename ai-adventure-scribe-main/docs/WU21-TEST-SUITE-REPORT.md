@@ -13,9 +13,9 @@
 
 ## Test Execution Results
 
-### Frontend Tests (via `npx vitest run`)
+### Frontend Tests (via `bunx vitest run`)
 
-**Command**: `npx vitest run --config vitest.config.ts`
+**Command**: `bunx vitest run --config vitest.config.ts`
 **Duration**: 53.51s
 **Coverage**: Enabled with v8 provider
 
@@ -90,9 +90,9 @@
   - Duplicate intent handling issues (1 test)
 **Affected by our changes**: No - pre-existing failures
 
-### Backend/Server Tests (via `cd server && npx vitest run`)
+### Backend/Server Tests (via `cd server && bunx vitest run`)
 
-**Command**: `cd /home/wonky/ai-adventure-scribe-main/server && npx vitest run`
+**Command**: `cd /home/wonky/ai-adventure-scribe-main/server && bunx vitest run`
 **Duration**: 11.18s
 **Coverage**: Enabled with v8 provider
 

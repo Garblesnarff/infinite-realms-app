@@ -46,7 +46,7 @@ export function snapToGrid(
   x: number,
   y: number,
   gridSize: number,
-  gridType: GridType
+  gridType: GridType,
 ): WorldCoordinates {
   if (gridType === GridType.GRIDLESS) {
     return { x, y };
@@ -60,8 +60,7 @@ export function snapToGrid(
   }
 
   // For hexagonal grids, convert to hex coordinates, round, then convert back
-  const hexType =
-    gridType === GridType.HEXAGONAL_VERTICAL ? 'pointy' : 'flat';
+  const hexType = gridType === GridType.HEXAGONAL_VERTICAL ? 'pointy' : 'flat';
   const hexCoords = worldToHex(x, y, gridSize, hexType);
   const roundedHex = roundHexCoordinates(hexCoords.q, hexCoords.r);
   return hexToWorld(roundedHex.q, roundedHex.r, gridSize, hexType);
@@ -74,11 +73,7 @@ export function snapToGrid(
  * @param gridSize - Size of each grid cell in world units
  * @returns Grid cell coordinates
  */
-export function worldToGrid(
-  x: number,
-  y: number,
-  gridSize: number
-): GridCoordinates {
+export function worldToGrid(x: number, y: number, gridSize: number): GridCoordinates {
   return {
     col: Math.floor(x / gridSize),
     row: Math.floor(y / gridSize),
@@ -93,11 +88,7 @@ export function worldToGrid(
  * @param gridSize - Size of each grid cell in world units
  * @returns World coordinates at the center of the grid cell
  */
-export function gridToWorld(
-  col: number,
-  row: number,
-  gridSize: number
-): WorldCoordinates {
+export function gridToWorld(col: number, row: number, gridSize: number): WorldCoordinates {
   return {
     x: (col + 0.5) * gridSize,
     y: (row + 0.5) * gridSize,
@@ -128,7 +119,7 @@ export function worldToHex(
   x: number,
   y: number,
   gridSize: number,
-  hexType: HexType
+  hexType: HexType,
 ): AxialCoordinates {
   if (hexType === 'pointy') {
     // Pointy-top hexagon (vertical orientation)
@@ -155,7 +146,7 @@ export function hexToWorld(
   q: number,
   r: number,
   gridSize: number,
-  hexType: HexType
+  hexType: HexType,
 ): WorldCoordinates {
   if (hexType === 'pointy') {
     // Pointy-top hexagon
@@ -165,7 +156,7 @@ export function hexToWorld(
   } else {
     // Flat-top hexagon
     const x = gridSize * ((3 / 2) * q);
-    const y = gridSize * (Math.sqrt(3) / 2) * q + Math.sqrt(3) * r;
+    const y = gridSize * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
     return { x, y };
   }
 }
@@ -218,7 +209,7 @@ export function getHexGridPoints(
   row: number,
   col: number,
   gridSize: number,
-  hexType: HexType
+  hexType: HexType,
 ): HexPoint[] {
   // Get center of hex
   const center = hexToWorld(col, row, gridSize, hexType);
@@ -261,7 +252,7 @@ export function getHexesInArea(
   width: number,
   height: number,
   gridSize: number,
-  hexType: HexType
+  hexType: HexType,
 ): AxialCoordinates[] {
   const hexes: AxialCoordinates[] = [];
 
@@ -279,8 +270,12 @@ export function getHexesInArea(
     for (let r = minR; r <= maxR; r++) {
       // Check if hex center is within bounds
       const center = hexToWorld(q, r, gridSize, hexType);
-      if (center.x >= -gridSize && center.x <= width + gridSize &&
-          center.y >= -gridSize && center.y <= height + gridSize) {
+      if (
+        center.x >= -gridSize &&
+        center.x <= width + gridSize &&
+        center.y >= -gridSize &&
+        center.y <= height + gridSize
+      ) {
         hexes.push({ q, r });
       }
     }
@@ -297,12 +292,7 @@ export function getHexesInArea(
  * @param r2 - Second hex row
  * @returns Distance in hex cells
  */
-export function hexDistance(
-  q1: number,
-  r1: number,
-  q2: number,
-  r2: number
-): number {
+export function hexDistance(q1: number, r1: number, q2: number, r2: number): number {
   // Convert to cube coordinates for easier distance calculation
   const x1 = q1;
   const z1 = r1;

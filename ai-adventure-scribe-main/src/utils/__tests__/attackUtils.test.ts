@@ -13,7 +13,7 @@ import {
   canUseSneakAttack,
   performAttack,
   createCombatActionFromAttack,
-  type FullAttackResult
+  type FullAttackResult,
 } from '../attackUtils';
 import * as characterCalculations from '../character-calculations';
 import * as diceUtils from '../diceUtils';
@@ -96,7 +96,13 @@ describe('attackUtils', () => {
   describe('resolveAttack', () => {
     it('should return a hit when the roll meets or exceeds AC', () => {
       const mockRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 5, results: [10], keptResults: [10], total: 15, naturalRoll: 10,
+        dieType: 20,
+        count: 1,
+        modifier: 5,
+        results: [10],
+        keptResults: [10],
+        total: 15,
+        naturalRoll: 10,
       };
       (diceUtils.rollAttack as Mock).mockReturnValue(mockRoll);
 
@@ -109,7 +115,13 @@ describe('attackUtils', () => {
 
     it('should return a miss when the roll is below AC', () => {
       const mockRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 5, results: [5], keptResults: [5], total: 10, naturalRoll: 5,
+        dieType: 20,
+        count: 1,
+        modifier: 5,
+        results: [5],
+        keptResults: [5],
+        total: 10,
+        naturalRoll: 5,
       };
       (diceUtils.rollAttack as Mock).mockReturnValue(mockRoll);
 
@@ -120,7 +132,13 @@ describe('attackUtils', () => {
 
     it('should return a critical hit on natural 20', () => {
       const mockRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 5, results: [20], keptResults: [20], total: 25, naturalRoll: 20,
+        dieType: 20,
+        count: 1,
+        modifier: 5,
+        results: [20],
+        keptResults: [20],
+        total: 25,
+        naturalRoll: 20,
       };
       (diceUtils.rollAttack as Mock).mockReturnValue(mockRoll);
 
@@ -132,7 +150,13 @@ describe('attackUtils', () => {
 
     it('should return a critical fail on natural 1 (automatic miss)', () => {
       const mockRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 20, results: [1], keptResults: [1], total: 21, naturalRoll: 1,
+        dieType: 20,
+        count: 1,
+        modifier: 20,
+        results: [1],
+        keptResults: [1],
+        total: 21,
+        naturalRoll: 1,
       };
       (diceUtils.rollAttack as Mock).mockReturnValue(mockRoll);
 
@@ -143,10 +167,22 @@ describe('attackUtils', () => {
     });
 
     it('should handle spell attacks for various classes', () => {
-      const classes = ['wizard', 'sorcerer', 'cleric', 'paladin', 'ranger', 'druid', 'bard', 'warlock', 'artificer', 'arcane_trickster', 'cloak_of_elvenkind'];
+      const classes = [
+        'wizard',
+        'sorcerer',
+        'cleric',
+        'paladin',
+        'ranger',
+        'druid',
+        'bard',
+        'warlock',
+        'artificer',
+        'arcane_trickster',
+        'cloak_of_elvenkind',
+      ];
       (diceUtils.rollAttack as Mock).mockReturnValue({ total: 20 });
 
-      classes.forEach(cls => {
+      classes.forEach((cls) => {
         const attacker = { ...mockAttacker, characterClass: cls };
         resolveAttack(null, attacker, mockTarget, { spellAttack: true });
         expect(diceUtils.rollAttack).toHaveBeenCalled();
@@ -156,19 +192,32 @@ describe('attackUtils', () => {
     it('should apply advantage for various target conditions', () => {
       const conditions = ['blinded', 'prone', 'paralyzed', 'stunned', 'unconscious'];
       (diceUtils.rollAttack as Mock).mockReturnValue({ total: 20 });
-      conditions.forEach(cond => {
-        const target = { ...mockTarget, conditions: [{ name: cond as any, description: '', duration: -1 }] };
+      conditions.forEach((cond) => {
+        const target = {
+          ...mockTarget,
+          conditions: [{ name: cond as any, description: '', duration: -1 }],
+        };
         resolveAttack(mockWeapon, mockAttacker, target);
-        expect(diceUtils.rollAttack).toHaveBeenLastCalledWith(expect.any(Number), expect.objectContaining({ advantage: true }));
+        expect(diceUtils.rollAttack).toHaveBeenLastCalledWith(
+          expect.any(Number),
+          expect.objectContaining({ advantage: true }),
+        );
       });
     });
   });
 
   describe('calculateAttackDamage', () => {
     it('should calculate base weapon damage correctly', () => {
-      const mockRolls: DiceRoll[] = [{
-        dieType: 8, count: 1, modifier: 0, results: [5], keptResults: [5], total: 5,
-      }];
+      const mockRolls: DiceRoll[] = [
+        {
+          dieType: 8,
+          count: 1,
+          modifier: 0,
+          results: [5],
+          keptResults: [5],
+          total: 5,
+        },
+      ];
       (diceUtils.rollDamage as Mock).mockReturnValue(mockRolls);
       (diceUtils.calculateDamage as Mock).mockImplementation((base: number) => base);
 
@@ -179,7 +228,9 @@ describe('attackUtils', () => {
     });
 
     it('should handle critical hits by passing the critical flag to rollDamage', () => {
-      (diceUtils.rollDamage as Mock).mockReturnValue([{ total: 10, results: [5, 5], modifier: 0, count: 2 }]);
+      (diceUtils.rollDamage as Mock).mockReturnValue([
+        { total: 10, results: [5, 5], modifier: 0, count: 2 },
+      ]);
       calculateAttackDamage(mockWeapon, mockAttacker, true);
       expect(diceUtils.rollDamage).toHaveBeenCalledWith('1d8', true, expect.any(Object));
     });
@@ -193,9 +244,16 @@ describe('attackUtils', () => {
 
       (diceUtils.calculateDamage as Mock).mockImplementation((base: number) => base);
 
-      rageBonusTests.forEach(test => {
-        (diceUtils.rollDamage as Mock).mockReturnValue([{ total: 5, count: 1, modifier: 0, results: [5] }]);
-        const attacker = { ...mockAttacker, characterClass: 'barbarian', isRaging: true, level: test.level };
+      rageBonusTests.forEach((test) => {
+        (diceUtils.rollDamage as Mock).mockReturnValue([
+          { total: 5, count: 1, modifier: 0, results: [5] },
+        ]);
+        const attacker = {
+          ...mockAttacker,
+          characterClass: 'barbarian',
+          isRaging: true,
+          level: test.level,
+        };
         const result = calculateAttackDamage(mockWeapon, attacker, false);
         expect(result.totalBeforeResistance).toBe(test.expected);
       });
@@ -207,9 +265,11 @@ describe('attackUtils', () => {
         { level: 3, expected: '2d6' },
         { level: 5, expected: '3d6' },
       ];
-      (diceUtils.calculateDamage as Mock).mockImplementation(b => b);
-      sneakDiceTests.forEach(test => {
-        (diceUtils.rollDamage as Mock).mockReturnValue([{ total: 1, results: [1], modifier: 0, count: 1 }]);
+      (diceUtils.calculateDamage as Mock).mockImplementation((b) => b);
+      sneakDiceTests.forEach((test) => {
+        (diceUtils.rollDamage as Mock).mockReturnValue([
+          { total: 1, results: [1], modifier: 0, count: 1 },
+        ]);
         const rogue = { ...mockAttacker, characterClass: 'rogue', level: test.level };
         calculateAttackDamage(mockWeapon, rogue, false, { sneakAttack: true });
         expect(diceUtils.rollDamage).toHaveBeenLastCalledWith(test.expected, false, {});
@@ -220,10 +280,21 @@ describe('attackUtils', () => {
   describe('performAttack', () => {
     it('should execute both resolution and damage calculation on a hit', () => {
       const attackRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 5, results: [15], keptResults: [15], total: 20, naturalRoll: 15,
+        dieType: 20,
+        count: 1,
+        modifier: 5,
+        results: [15],
+        keptResults: [15],
+        total: 20,
+        naturalRoll: 15,
       };
       const damageRoll: DiceRoll = {
-        dieType: 8, count: 1, modifier: 0, results: [6], keptResults: [6], total: 6,
+        dieType: 8,
+        count: 1,
+        modifier: 0,
+        results: [6],
+        keptResults: [6],
+        total: 6,
       };
 
       (diceUtils.rollAttack as Mock).mockReturnValue(attackRoll);
@@ -240,7 +311,13 @@ describe('attackUtils', () => {
 
     it('should return no damage on a miss (including critical fail)', () => {
       const attackRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 20, results: [1], keptResults: [1], total: 21, naturalRoll: 1,
+        dieType: 20,
+        count: 1,
+        modifier: 20,
+        results: [1],
+        keptResults: [1],
+        total: 21,
+        naturalRoll: 1,
       };
       (diceUtils.rollAttack as Mock).mockReturnValue(attackRoll);
 
@@ -281,18 +358,50 @@ describe('attackUtils', () => {
   describe('createCombatActionFromAttack', () => {
     it('should create a correctly formatted combat action', () => {
       const attackRoll: DiceRoll = {
-        dieType: 20, count: 1, modifier: 5, results: [15], keptResults: [15], total: 20, naturalRoll: 15,
+        dieType: 20,
+        count: 1,
+        modifier: 5,
+        results: [15],
+        keptResults: [15],
+        total: 20,
+        naturalRoll: 15,
       };
       const damageRoll: DiceRoll = {
-        dieType: 8, count: 1, modifier: 0, results: [6], keptResults: [6], total: 6,
+        dieType: 8,
+        count: 1,
+        modifier: 0,
+        results: [6],
+        keptResults: [6],
+        total: 6,
       };
       const attackResult = {
-        resolution: { hit: true, roll: attackRoll, acHit: 14, criticalHit: false, criticalFail: false, advantage: false, disadvantage: false },
-        damage: { rolls: [damageRoll], totalBeforeResistance: 8, totalAfterResistance: 8, damageType: 'slashing' as const, resistances: [], vulnerabilities: [], immunities: [] },
+        resolution: {
+          hit: true,
+          roll: attackRoll,
+          acHit: 14,
+          criticalHit: false,
+          criticalFail: false,
+          advantage: false,
+          disadvantage: false,
+        },
+        damage: {
+          rolls: [damageRoll],
+          totalBeforeResistance: 8,
+          totalAfterResistance: 8,
+          damageType: 'slashing' as const,
+          resistances: [],
+          vulnerabilities: [],
+          immunities: [],
+        },
         totalDamageDealt: 8,
       };
 
-      const action = createCombatActionFromAttack(mockAttacker, mockTarget, mockWeapon, attackResult as unknown as FullAttackResult);
+      const action = createCombatActionFromAttack(
+        mockAttacker,
+        mockTarget,
+        mockWeapon,
+        attackResult as unknown as FullAttackResult,
+      );
 
       expect(action.hit).toBe(true);
       expect(action.description).toContain('hits');

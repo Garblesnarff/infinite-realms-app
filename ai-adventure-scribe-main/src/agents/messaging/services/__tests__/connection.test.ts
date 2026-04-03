@@ -29,21 +29,6 @@ vi.mock('../../../../lib/logger', () => ({
   },
 }));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: {
-      onAuthStateChange: vi.fn((callback) => {
-        // Store callback for testing
-        return { data: { subscription: { unsubscribe: vi.fn() } } };
-      }),
-      getSession: vi.fn().mockResolvedValue({
-        data: { session: { user: { id: 'test-user' } } },
-        error: null,
-      }),
-    },
-  },
-}));
-
 vi.mock('../connection/EventEmitter');
 vi.mock('../connection/ReconnectionManager');
 vi.mock('../connection/ConnectionStateManager');
@@ -63,6 +48,9 @@ describe('ConnectionStateService', () => {
   // Store window event listeners
   let onlineListeners: Array<() => void> = [];
   let offlineListeners: Array<() => void> = [];
+  let authReadyListeners: Array<() => void> = [];
+  let authTokensUpdatedListeners: Array<() => void> = [];
+  let storageListeners: Array<(event: StorageEvent) => void> = [];
 
   beforeEach(() => {
     // Reset all mocks
@@ -71,12 +59,20 @@ describe('ConnectionStateService', () => {
     // Reset event listeners
     onlineListeners = [];
     offlineListeners = [];
+    authReadyListeners = [];
+    authTokensUpdatedListeners = [];
+    storageListeners = [];
 
     // Mock window event listeners
     global.window.addEventListener = vi.fn((event: string, handler: any) => {
       if (event === 'online') onlineListeners.push(handler);
       if (event === 'offline') offlineListeners.push(handler);
+      if (event === 'auth-ready') authReadyListeners.push(handler);
+      if (event === 'auth-tokens-updated') authTokensUpdatedListeners.push(handler);
+      if (event === 'storage') storageListeners.push(handler);
     });
+
+    localStorage.setItem('workos_access_token', 'test-token');
 
     // Setup mock implementations
     mockEventEmitter = {
@@ -307,12 +303,13 @@ describe('ConnectionStateService', () => {
       const callback1 = vi.fn();
       const callback2 = vi.fn();
       const callback3 = vi.fn();
+      const initialCallCount = mockEventEmitter.on.mock.calls.length;
 
       service.onConnectionStateChanged(callback1);
       service.onConnectionStateChanged(callback2);
       service.onReconnectionFailed(callback3);
 
-      expect(mockEventEmitter.on).toHaveBeenCalledTimes(3);
+      expect(mockEventEmitter.on.mock.calls.length - initialCallCount).toBe(3);
     });
   });
 
@@ -331,11 +328,7 @@ describe('ConnectionStateService', () => {
     });
 
     it('should retry reconnection on failure', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      (supabase.auth.getSession as any).mockResolvedValueOnce({
-        data: { session: null },
-        error: new Error('No session'),
-      });
+      localStorage.removeItem('workos_access_token');
 
       const reconnectionCallback = mockEventEmitter.on.mock.calls.find(
         (call: any) => call[0] === 'reconnectionAttempt',
@@ -350,11 +343,7 @@ describe('ConnectionStateService', () => {
     });
 
     it('should succeed reconnection with valid session', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      (supabase.auth.getSession as any).mockResolvedValueOnce({
-        data: { session: { user: { id: 'test-user' } } },
-        error: null,
-      });
+      localStorage.setItem('workos_access_token', 'valid-token');
 
       const reconnectionCallback = mockEventEmitter.on.mock.calls.find(
         (call: any) => call[0] === 'reconnectionAttempt',
@@ -370,39 +359,32 @@ describe('ConnectionStateService', () => {
   });
 
   describe('Auth State Integration', () => {
-    it('should handle SIGNED_IN auth event', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const authCallback = (supabase.auth.onAuthStateChange as any).mock.calls[0]?.[0];
-
-      if (authCallback) {
-        await authCallback('SIGNED_IN');
+    it('should handle auth-tokens-updated event with token', async () => {
+      localStorage.setItem('workos_access_token', 'new-token');
+      for (const listener of authTokensUpdatedListeners) {
+        await listener();
       }
 
       expect(mockStateManager.handleConnectionRestored).toHaveBeenCalled();
     });
 
-    it('should handle SIGNED_OUT auth event', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const authCallback = (supabase.auth.onAuthStateChange as any).mock.calls[0]?.[0];
-
-      if (authCallback) {
-        await authCallback('SIGNED_OUT');
+    it('should handle auth-ready event without token', async () => {
+      localStorage.removeItem('workos_access_token');
+      for (const listener of authReadyListeners) {
+        await listener();
       }
 
       expect(mockStateManager.handleConnectionLost).toHaveBeenCalled();
     });
 
-    it('should ignore other auth events', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const authCallback = (supabase.auth.onAuthStateChange as any).mock.calls[0]?.[0];
-
+    it('should ignore auth-tokens-updated when token is missing', async () => {
       const initialCallCount = mockStateManager.handleConnectionRestored.mock.calls.length;
+      localStorage.removeItem('workos_access_token');
 
-      if (authCallback) {
-        await authCallback('TOKEN_REFRESHED');
+      for (const listener of authTokensUpdatedListeners) {
+        await listener();
       }
 
-      // Should not trigger connection state changes for irrelevant events
       expect(mockStateManager.handleConnectionRestored).toHaveBeenCalledTimes(initialCallCount);
     });
   });
@@ -429,9 +411,8 @@ describe('ConnectionStateService', () => {
       }).rejects.toThrow('Lost handling failed');
     });
 
-    it('should handle session retrieval errors', async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      (supabase.auth.getSession as any).mockRejectedValue(new Error('Session error'));
+    it('should handle missing token during reconnection attempt', async () => {
+      localStorage.removeItem('workos_access_token');
 
       const reconnectionCallback = mockEventEmitter.on.mock.calls.find(
         (call: any) => call[0] === 'reconnectionAttempt',
@@ -443,6 +424,16 @@ describe('ConnectionStateService', () => {
 
       // Should handle error and continue
       expect(mockReconnectionManager.startReconnection).toHaveBeenCalled();
+    });
+
+    it('should handle storage event token removal', async () => {
+      localStorage.removeItem('workos_access_token');
+
+      for (const listener of storageListeners) {
+        await listener({ key: 'workos_access_token', newValue: null } as StorageEvent);
+      }
+
+      expect(mockStateManager.handleConnectionLost).toHaveBeenCalled();
     });
   });
 

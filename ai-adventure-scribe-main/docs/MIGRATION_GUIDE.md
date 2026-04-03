@@ -60,7 +60,7 @@ Phase 6: Backend APIs (Admin endpoints)
 
 - [x] Supabase project access (SQL Editor permissions)
 - [x] Git repository access
-- [x] Node.js/npm installed locally
+- [x] Bun installed locally (https://bun.sh)
 - [x] Environment variables configured
 
 ### Required Knowledge
@@ -96,8 +96,8 @@ git status
 git diff
 
 # Ensure all dependencies installed
-npm install
-cd server && npm install
+bun install
+cd server && bun install
 ```
 
 ### 2. Test Current Functionality
@@ -165,7 +165,7 @@ These changes are already in your codebase. Verify they're working:
 
 ```bash
 cd /home/wonky/ai-adventure-scribe-main
-npm run server:build
+bun run server:build
 ```
 
 **Expected Output:**
@@ -184,7 +184,7 @@ npm run server:build
 #### Step 1.2: Test Backend
 
 ```bash
-npm run server:start
+bun run server:start
 ```
 
 In another terminal:
@@ -571,8 +571,8 @@ router.use('/v1/admin', adminRoutes);
 #### Step 6.2: Build and Start Backend
 
 ```bash
-npm run server:build
-npm run server:start
+bun run server:build
+bun run server:start
 ```
 
 #### Step 6.3: Test Admin Endpoints
@@ -708,8 +708,8 @@ WHERE session_id = 'some-id' AND speaker_type = 'player';
 git revert COMMIT_HASH
 
 # Rebuild
-npm run server:build
-npm run server:start
+bun run server:build
+bun run server:start
 ```
 
 ### Phase 2-3: Database Constraints
@@ -751,7 +751,7 @@ DROP TABLE IF EXISTS game_sessions_archive;
 ```bash
 # Revert client-side and backend changes
 git revert COMMIT_HASH
-npm run server:build
+bun run server:build
 ```
 
 ---

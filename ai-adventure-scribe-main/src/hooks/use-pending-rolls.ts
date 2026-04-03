@@ -58,7 +58,8 @@ export const usePendingRolls = () => {
     // we'd briefly suppress that too. But the dice UI remains available, and once
     // the player takes any other action, normal behavior resumes.
     const playerMessages = messages.filter((m) => m.sender === 'player');
-    const lastPlayerMessage = playerMessages.length > 0 ? playerMessages[playerMessages.length - 1] : null;
+    const lastPlayerMessage =
+      playerMessages.length > 0 ? playerMessages[playerMessages.length - 1] : null;
 
     // Detect dice roll patterns in player message
     const isDiceRollMessage = (msg: typeof lastPlayerMessage): boolean => {
@@ -66,9 +67,9 @@ export const usePendingRolls = () => {
       if (msg.context?.intent === 'dice_roll') return true;
       const text = msg.text || '';
       return (
-        /:\s*\d+\s*[✓✗]/u.test(text) ||  // "Perception: 15 ✓" or "Investigation: 7 ✗"
-        /rolled?\s+\d+/i.test(text) ||     // "rolled 15" or "I roll 15"
-        /\d+\s*[✓✗]/u.test(text)           // "15 ✓" anywhere
+        /:\s*\d+\s*[✓✗]/u.test(text) || // "Perception: 15 ✓" or "Investigation: 7 ✗"
+        /rolled?\s+\d+/i.test(text) || // "rolled 15" or "I roll 15"
+        /\d+\s*[✓✗]/u.test(text) // "15 ✓" anywhere
       );
     };
 

@@ -6,11 +6,7 @@ import { buildPrompt } from "./promptBuilder.ts";
 import { DMResponse, StructuredDMResponse, VoiceContext, NarrationSegment } from "./types.ts";
 import { calculatePassiveScores } from "./passiveSkillsEvaluator.ts";
 import { buildStarterCampaignContext } from "./contextBuilder.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://infiniterealms.app',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id, x-release, x-environment',
-};
+import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
 const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash-lite';
 const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash-lite';
@@ -98,9 +94,8 @@ const buildModelCandidates = (preferred: string, variants: string[], fallback: s
 const GEMINI_MODEL_CANDIDATES = buildModelCandidates(GEMINI_PRIMARY_MODEL, GEMINI_VARIANT_MODELS, GEMINI_FALLBACK_MODEL);
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   const requestId = req.headers.get('x-request-id') || (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 

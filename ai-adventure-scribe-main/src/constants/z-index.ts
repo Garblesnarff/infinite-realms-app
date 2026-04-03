@@ -23,11 +23,14 @@
  * ```tsx
  * import { Z_INDEX } from '@/constants/z-index';
  *
- * // For Tailwind classes
+ * // RIGHT - Always use inline styles for z-index (Tailwind JIT may not reliably generate arbitrary values)
+ * <div style={{ zIndex: Z_INDEX.MODAL }}>Modal Content</div>
+ *
+ * // AVOID - Tailwind arbitrary classes with constants are less reliable in this project
  * <div className={`fixed z-[${Z_INDEX.MODAL}]`}>Modal Content</div>
  *
- * // For inline styles
- * <div style={{ zIndex: Z_INDEX.TOOLTIP }}>Tooltip</div>
+ * // Note: The above AVOID pattern is being phased out in core UI components
+ * // to ensure consistent layering across all browsers and build environments.
  * ```
  *
  * Note: CSS files cannot import TypeScript constants.
@@ -69,6 +72,9 @@ export const Z_INDEX = {
 
   // Popovers and context menus
   POPOVER: 70,
+
+  // Context menus (alias for POPOVER)
+  CONTEXT_MENU: 70,
 
   // Tooltips
   TOOLTIP: 80,

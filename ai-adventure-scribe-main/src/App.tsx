@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import React, { lazy, Suspense } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
@@ -13,8 +14,8 @@ import Breadcrumbs from './shared/components/layout/breadcrumbs';
 import Navigation from './shared/components/layout/navigation';
 import { RouteLoading } from './shared/components/RouteLoading';
 
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Z_INDEX } from '@/constants/z-index';
+import { ProtectedRoute } from '@/features/auth';
 
 // Lazy load route page components for code splitting
 const Index = lazy(() => import('./pages/Index'));
@@ -42,9 +43,7 @@ const BlogEditor = lazy(() => import('./pages/BlogEditor'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
-const StarterCharacterSelectionPage = lazy(
-  () => import('./pages/StarterCharacterSelectionPage'),
-);
+const StarterCharacterSelectionPage = lazy(() => import('./pages/StarterCharacterSelectionPage'));
 
 // TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;
@@ -72,7 +71,7 @@ function App() {
                     v7_relativeSplatPath: true,
                   }}
                 >
-                <div className="min-h-screen">
+                  <div className="min-h-screen">
                     {/* Skip to content for keyboard users */}
                     <a
                       href="#main-content"

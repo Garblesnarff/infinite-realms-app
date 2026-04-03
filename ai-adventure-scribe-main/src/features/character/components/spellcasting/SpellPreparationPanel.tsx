@@ -16,11 +16,11 @@
 
 import { BookOpen, CheckCircle, Circle, AlertCircle, Volume2, Hand, Package } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 import type { Spell } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -31,7 +31,6 @@ import { spellApi } from '@/services/spellApi';
 import {
   calculateSpellPreparationLimits,
   validateSpellPreparation,
-  getSpellPreparationType,
   getSpellPreparationInfo,
   type SpellPreparationLimits,
 } from '@/utils/spell-preparation';
@@ -52,7 +51,6 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
 
   const [preparedSpells, setPreparedSpells] = useState<string[]>(character?.preparedSpells || []);
   const [knownSpells, setKnownSpells] = useState<Spell[]>([]);
-  const [availableSpells, setAvailableSpells] = useState<Spell[]>([]);
   const [isLoadingSpells, setIsLoadingSpells] = useState(false);
   const [preparationLimits, setPreparationLimits] = useState<SpellPreparationLimits | null>(null);
 
@@ -75,12 +73,9 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
       spellApi
         .getClassSpells(character.class.name, character.level || 1)
         .then(({ cantrips, spells }) => {
-          // For prepared casters, show all available spells they can choose from
-          const allAvailableSpells = [...cantrips, ...spells];
-          setAvailableSpells(allAvailableSpells);
-
           // If character already has known spells, filter to those
           if (character.knownSpells) {
+            const allAvailableSpells = [...cantrips, ...spells];
             const characterKnownSpells = allAvailableSpells.filter((spell) =>
               character.knownSpells.includes(spell.name),
             );
@@ -113,7 +108,7 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
   });
 
   // Toggle spell preparation with validation
-  const toggleSpellPreparation = async (spellName: string) => {
+  const toggleSpellPreparation = async (spellName: string): Promise<void> => {
     if (!character || !preparationLimits) return;
 
     try {
@@ -125,7 +120,7 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
       } else {
         // Prepare spell - check if we have room
         if (preparedSpells.length >= (preparationLimits.spellsPrepared || 0)) {
-          alert(`You can only prepare ${preparationLimits.spellsPrepared} spells.`);
+          toast.error(`You can only prepare ${preparationLimits.spellsPrepared} spells.`);
           return;
         }
         newPreparedSpells = [...preparedSpells, spellName];
@@ -140,7 +135,7 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
       );
 
       if (!validation.valid) {
-        alert(`Cannot prepare spell: ${validation.errors.join(', ')}`);
+        toast.error(`Cannot prepare spell: ${validation.errors.join(', ')}`);
         return;
       }
 
@@ -154,12 +149,14 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
       });
     } catch (error) {
       logger.error('Error preparing/unpreparing spell:', error);
-      alert('Failed to update spell preparation. Please try again.');
+      toast.error('Failed to update spell preparation. Please try again.');
     }
   };
 
   // Get component icons
-  const getComponentIcon = (componentType: 'verbal' | 'somatic' | 'material') => {
+  const getComponentIcon = (
+    componentType: 'verbal' | 'somatic' | 'material',
+  ): React.ReactNode => {
     switch (componentType) {
       case 'verbal':
         return <Volume2 className="w-4 h-4" />;
@@ -307,6 +304,7 @@ const SpellPreparationPanel: React.FC<SpellPreparationPanelProps> = ({ className
                                 checked={isPrepared}
                                 disabled={!isPrepared && !canPrepare}
                                 onCheckedChange={() => toggleSpellPreparation(spell.name)}
+                                aria-label={`Prepare ${spell.name}`}
                               />
                               {!canPrepare && !isPrepared && (
                                 <AlertCircle className="w-4 h-4 text-muted-foreground" />

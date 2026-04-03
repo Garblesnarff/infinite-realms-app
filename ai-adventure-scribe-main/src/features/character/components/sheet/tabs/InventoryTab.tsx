@@ -1,28 +1,13 @@
-import {
-  Package,
-  Coins,
-  Sword,
-  Shield,
-  Weight,
-  Plus,
-  Minus,
-  Star,
-  Zap,
-  Heart,
-  ZapIcon,
-  Info,
-} from 'lucide-react';
-import React, { useState } from 'react';
+import { Package, Coins, Sword, Shield, Weight, Star, Info, Loader2 } from 'lucide-react';
+import React from 'react';
 
 import type { Character } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import DiceRoller from '@/components/ui/dice-roller';
-import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { useMagicItemAttunement } from '@/hooks/use-magic-item-attunement';
-import { validateAttunementRequirements } from '@/utils/magicItemEffects';
 
 interface InventoryTabProps {
   character: Character;
@@ -50,7 +35,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
     pp: character.currency?.pp || 0,
   };
 
-  const { attuneToItem, removeAttunement, getItemAttunementStatus, getAttunementSummary } =
+  const { attuneToItem, removeAttunement, getAttunementSummary, isAttuning } =
     useMagicItemAttunement(character, onUpdate);
 
   // Calculate carrying capacity
@@ -205,20 +190,20 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                   <span>Heavy: {heavilyEncumbered}</span>
                   <span>Max: {carryingCapacity}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${
-                      encumbranceStatus === 'overloaded'
-                        ? 'bg-red-500'
-                        : encumbranceStatus === 'heavily-encumbered'
-                          ? 'bg-orange-500'
-                          : encumbranceStatus === 'encumbered'
-                            ? 'bg-yellow-500'
-                            : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min(100, (totalWeight / carryingCapacity) * 100)}%` }}
-                  />
-                </div>
+                <Progress
+                  value={(totalWeight / carryingCapacity) * 100}
+                  className="h-2"
+                  indicatorClassName={
+                    encumbranceStatus === 'overloaded'
+                      ? 'bg-red-500'
+                      : encumbranceStatus === 'heavily-encumbered'
+                        ? 'bg-orange-500'
+                        : encumbranceStatus === 'encumbered'
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                  }
+                  aria-label="Carrying capacity"
+                />
               </div>
 
               {encumbranceStatus !== 'normal' && (
@@ -327,6 +312,8 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                           size="sm"
                           variant={item.equipped ? 'default' : 'outline'}
                           onClick={() => toggleEquipped(item.itemId)}
+                          aria-pressed={item.equipped}
+                          title={item.equipped ? 'Unequip item' : 'Equip item'}
                         >
                           {item.equipped ? 'Unequip' : 'Equip'}
                         </Button>
@@ -337,8 +324,21 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                             variant={item.isAttuned ? 'secondary' : 'outline'}
                             onClick={() => handleAttuneToggle(item.itemId)}
                             className="text-xs"
-                            disabled={!item.equipped || !attunementStatus.canAttune}
+                            disabled={isAttuning || !item.equipped || (!item.isAttuned && !attunementStatus.canAttune)}
+                            aria-pressed={item.isAttuned}
+                            title={
+                              !item.equipped
+                                ? 'Must be equipped to attune'
+                                : item.isAttuned
+                                  ? 'Remove attunement'
+                                  : attunementStatus.canAttune
+                                    ? 'Attune to item'
+                                    : 'Attunement slots full'
+                            }
                           >
+                            {isAttuning ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : null}
                             {item.isAttuned ? 'Unattune' : 'Attune'}
                           </Button>
                         )}
@@ -365,7 +365,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
         <CardContent>
           <div className="flex items-center gap-4">
             <span className="text-sm">Attuned Items:</span>
-            <div className="flex gap-2">
+            <div className="flex gap-2" role="group" aria-label="Attunement slots">
               {[1, 2, 3].map((slot) => {
                 const attunedItems = character.inventory?.filter((item) => item.isAttuned) || [];
                 const isOccupied = slot <= attunedItems.length;
@@ -373,9 +373,11 @@ const InventoryTab: React.FC<InventoryTabProps> = ({ character, onUpdate }) => {
                 return (
                   <div
                     key={slot}
-                    className={`w-8 h-8 rounded border-2 flex items-center justify-center ${
+                    className={`w-8 h-8 rounded border-2 flex items-center justify-center transition-colors ${
                       isOccupied ? 'bg-purple-500 border-purple-600 text-white' : 'border-gray-300'
                     }`}
+                    aria-label={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
+                    title={`Attunement slot ${slot}: ${isOccupied ? 'Occupied' : 'Empty'}`}
                   >
                     {isOccupied && <Star className="w-4 h-4" />}
                   </div>

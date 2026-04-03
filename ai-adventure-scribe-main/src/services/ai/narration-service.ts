@@ -8,29 +8,12 @@
  * @module narration-service
  */
 
-import { AgentOrchestrator } from '../crewai/agent-orchestrator';
 import { MemoryManager } from '../memory-manager';
-import { SessionStateService } from '../session-state-service';
-import { voiceConsistencyService } from '../voice-consistency-service';
-import { WorldBuilderService } from '../world-builders/world-builder-service';
-import {
-  buildDMPersonaPrompt,
-  buildGameContextPrompt,
-  buildResponseStructurePrompt,
-  buildCombatContextPrompt,
-  buildOpeningScenePrompt,
-} from './shared/prompts';
-import {
-  useCrewAI,
-  keyFor,
-  getOrCreateDeduped,
-  addEquipmentContext,
-} from './shared/utils';
+import { keyFor, getOrCreateDeduped } from './shared/utils';
 
-import { llmApiClient } from '@/services/llm-api-client';
-import type { Memory, MemoryContext } from '../memory-manager';
+import type { Memory } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';
-import type { ChatMessage, GameContext, AIResponse, NarrationSegment } from './shared/types';
+import type { ChatMessage, GameContext, AIResponse } from './shared/types';
 
 import logger from '@/lib/logger';
 import { detectCombatFromText } from '@/utils/combatDetection';
@@ -99,160 +82,13 @@ export async function chatWithDM(params: ChatParams): Promise<AIResponse> {
         });
       }
 
-      // Optional path: delegate to CrewAI orchestrator
-      if (useCrewAI() && params.context.sessionId) {
-        const crewResult = await attemptCrewAI(params, relevantMemories, combatDetection);
-        if (crewResult) return crewResult;
-      }
-
-      // Use local Gemini API
+      // Use OpenRouter API
       return await generateGeminiResponse(params, relevantMemories, voiceContext, combatDetection);
     } catch (geminiError) {
       logger.error('Local Gemini API failed:', geminiError);
       throw new Error('Failed to get DM response - AI service unavailable');
     }
   });
-}
-
-/**
- * Attempt CrewAI orchestration (feature-flagged)
- */
-async function attemptCrewAI(
-  params: ChatParams,
-  relevantMemories: Memory[],
-  combatDetection: any,
-): Promise<AIResponse | null> {
-  try {
-    logger.info('Using CrewAI microservice for chat...');
-    const sessionState = await SessionStateService.getState(params.context.sessionId!);
-    const crewResult = await AgentOrchestrator.generateResponse({
-      message: params.message,
-      context: params.context,
-      conversationHistory: params.conversationHistory || [],
-      sessionState,
-    });
-
-    let finalText = crewResult.text || '';
-    const isPlaceholder = finalText.trim().startsWith('[CrewAI placeholder]');
-    const rollRequests = (crewResult as any).roll_requests || [];
-
-    if (isPlaceholder) {
-      if (Array.isArray(rollRequests) && rollRequests.length > 0) {
-        const rr = rollRequests[0];
-        const typeLabel =
-          rr.type === 'check'
-            ? 'Check'
-            : rr.type === 'save'
-              ? 'Saving Throw'
-              : rr.type === 'attack'
-                ? 'Attack'
-                : rr.type === 'damage'
-                  ? 'Damage'
-                  : 'Initiative';
-        const purpose = rr.purpose || (rr.type === 'check' ? 'Ability/Skill Check' : typeLabel);
-        const target = rr.dc ? ` (DC ${rr.dc})` : rr.ac ? ` (AC ${rr.ac})` : '';
-        const advantage = rr.advantage
-          ? ' with advantage'
-          : rr.disadvantage
-            ? ' with disadvantage'
-            : '';
-        finalText = `Please roll ${purpose}${target}${advantage}.`;
-      } else {
-        const geminiText = await generateFallbackNarration(params.message);
-        finalText = geminiText || finalText;
-      }
-    }
-
-    // Post-processing: memory extraction and world expansion
-    await postProcessResponse(params, finalText);
-
-    return {
-      ...crewResult,
-      text: finalText,
-      combatDetection: {
-        isCombat: combatDetection.isCombat,
-        confidence: combatDetection.confidence,
-        combatType: combatDetection.combatType,
-        shouldStartCombat: combatDetection.shouldStartCombat,
-        shouldEndCombat: combatDetection.shouldEndCombat,
-        enemies: combatDetection.enemies || [],
-        combatActions: combatDetection.combatActions || [],
-      },
-    } as any;
-  } catch (crewError) {
-    logger.warn('CrewAI orchestrator failed, falling back to Gemini:', crewError);
-    return null;
-  }
-}
-
-/**
- * Generate fallback narration via LLM
- */
-async function generateFallbackNarration(message: string): Promise<string> {
-  logger.info('CrewAI returned placeholder text; generating narration via LLM.');
-  try {
-    const prompt = `Respond to the player succinctly (2-3 short paragraphs) and end with 2-3 lettered options. Player said: "${message}"`;
-    return await llmApiClient.generateText({
-      prompt,
-      temperature: 0.9,
-      maxTokens: 2048,
-    });
-  } catch (e) {
-    logger.warn('LLM fallback for placeholder failed:', e);
-    return '';
-  }
-}
-
-/**
- * Post-process response: extract memories and expand world
- */
-async function postProcessResponse(params: ChatParams, responseText: string): Promise<void> {
-  if (!params.context.sessionId) return;
-
-  try {
-    const memoryContext: MemoryContext = {
-      sessionId: params.context.sessionId,
-      campaignId: params.context.campaignId,
-      characterId: params.context.characterId,
-      currentMessage: params.message,
-      recentMessages: params.conversationHistory?.slice(-5).map((msg) => msg.content) || [],
-    };
-
-    const extractionResult = await MemoryManager.extractMemories(
-      memoryContext,
-      params.message,
-      responseText,
-    );
-
-    if (extractionResult.memories.length > 0) {
-      await MemoryManager.saveMemories(extractionResult.memories);
-      logger.info(`🧠 Extracted and saved ${extractionResult.memories.length} memories`);
-    }
-  } catch (memoryError) {
-    logger.warn('Memory extraction failed (non-fatal):', memoryError);
-  }
-
-  try {
-    const worldExpansion = await WorldBuilderService.respondToPlayerAction(
-      params.context.campaignId,
-      params.context.sessionId!,
-      params.context.characterId,
-      params.message,
-      responseText,
-    );
-
-    if (
-      worldExpansion &&
-      worldExpansion.locations.length + worldExpansion.npcs.length + worldExpansion.quests.length >
-        0
-    ) {
-      logger.info(
-        `🌍 World expanded: +${worldExpansion.locations.length} locations, +${worldExpansion.npcs.length} NPCs, +${worldExpansion.quests.length} quests`,
-      );
-    }
-  } catch (worldError) {
-    logger.warn('World building failed (non-fatal):', worldError);
-  }
 }
 
 // Due to length constraints, generateGeminiResponse is continued in narration-service-impl.ts

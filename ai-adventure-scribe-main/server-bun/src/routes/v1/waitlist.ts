@@ -8,12 +8,16 @@
  * Ported from /server/src/routes/v1/waitlist.ts
  */
 
-import { Elysia, t } from 'elysia';
-import { db } from '../../../../db/client.js';
-import { waitlist } from '../../../../db/schema/index.js';
-import { eq } from 'drizzle-orm';
-import { sendWaitlistConfirmation } from '../../services/email-service.js';
+import { eq, count } from 'drizzle-orm';
+import { Elysia } from 'elysia';
+
+import { db } from '../../../../db/client';
+import { waitlist } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
+import { requireAdmin } from '../../middleware/admin.js';
+import { requireAuth } from '../../middleware/auth.js';
+import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
+import { sendWaitlistConfirmation } from '../../services/email-service.js';
 
 export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
 
@@ -23,7 +27,11 @@ export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
    */
   .post('/', async ({ body, set }) => {
     try {
-      const { email, name, source = 'launch_page' } = body as {
+      const {
+        email,
+        name,
+        source = 'launch_page',
+      } = body as {
         email?: string;
         name?: string;
         source?: string;
@@ -102,23 +110,35 @@ export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
 
   /**
    * GET /v1/waitlist/stats
-   * Get waitlist stats (could add auth later)
+   * Get waitlist stats (auth-protected, admin only)
    */
-  .get('/stats', async ({ set }) => {
-    try {
-      const total = await db.query.waitlist.findMany();
-      const byStatus = total.reduce(
-        (acc, entry) => {
-          acc[entry.status] = (acc[entry.status] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
+  .use(requireAuth)
+  .use(requireAdmin)
+  .use(createSimpleRateLimit({ windowMs: 60_000, max: 10, key: 'waitlist:stats' }))
+  .get('/stats', async ({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { error: 'Authentication required' };
+    }
 
-      return {
-        total: total.length,
-        byStatus,
-      };
+    try {
+      // Use aggregate query instead of loading all rows into memory
+      const rows = await db
+        .select({
+          status: waitlist.status,
+          count: count(),
+        })
+        .from(waitlist)
+        .groupBy(waitlist.status);
+
+      const byStatus: Record<string, number> = {};
+      let total = 0;
+      for (const row of rows) {
+        byStatus[row.status] = row.count;
+        total += row.count;
+      }
+
+      return { total, byStatus };
     } catch (error) {
       logger.error({ msg: 'Error fetching waitlist stats', error });
       set.status = 500;

@@ -15,7 +15,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import { VoiceMapper, VoiceConfig } from './voice-mapper';
 import logger from '@/lib/logger';
-import { llmApiClient } from '@/services/llm-api-client';
+import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
+
+export { type VoiceProfile };
 
 export interface CharacterVoiceMapping {
   id: string;
@@ -48,20 +50,6 @@ export interface SessionVoiceContext {
     }
   >;
   availableVoiceCategories: string[];
-}
-
-export interface VoiceProfile {
-  id?: string;
-  character_id: string;
-  voice_style: string;
-  speech_patterns: string[];
-  vocabulary_level: 'simple' | 'average' | 'advanced' | 'archaic';
-  tone: string;
-  quirks: string[];
-  example_phrases: string[];
-  consistency_score: number;
-  created_at?: Date;
-  updated_at?: Date;
 }
 
 export class VoiceConsistencyService {
@@ -309,7 +297,9 @@ export class VoiceConsistencyService {
 
       if (error) throw error;
 
-      logger.debug(`📊 Updated character usage for mapping: ${mappingId} (count: ${currentCount + 1})`);
+      logger.debug(
+        `📊 Updated character usage for mapping: ${mappingId} (count: ${currentCount + 1})`,
+      );
     } catch (error) {
       logger.error('Error updating character usage:', error);
     }
@@ -398,157 +388,27 @@ export class VoiceConsistencyService {
   }
 
   /**
-   * Retrieves the voice profile for a character
+   * Retrieves the voice profile for a character (Delegated)
    */
   async getVoiceProfile(characterId: string): Promise<VoiceProfile | null> {
-    try {
-      const { data, error } = await supabase
-        .from('character_voice_profiles')
-        .select('*')
-        .eq('character_id', characterId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No voice profile found (not an error)
-          logger.debug(`No voice profile found for character: ${characterId}`);
-          return null;
-        }
-        logger.error('Error fetching voice profile:', error);
-        return null;
-      }
-
-      return data as VoiceProfile;
-    } catch (error) {
-      logger.error('Error accessing voice profile database:', error);
-      return null;
-    }
+    return voiceProfileService.getVoiceProfile(characterId);
   }
 
   /**
-   * Creates or updates a character's voice profile
+   * Creates or updates a character's voice profile (Delegated)
    */
   async upsertVoiceProfile(
     characterId: string,
     profile: Partial<Omit<VoiceProfile, 'id' | 'character_id' | 'created_at' | 'updated_at'>>,
   ): Promise<VoiceProfile | null> {
-    try {
-      const { data, error } = await supabase
-        .from('character_voice_profiles')
-        .upsert({
-          character_id: characterId,
-          voice_style: profile.voice_style || '',
-          speech_patterns: profile.speech_patterns || [],
-          vocabulary_level: profile.vocabulary_level || 'average',
-          tone: profile.tone || '',
-          quirks: profile.quirks || [],
-          example_phrases: profile.example_phrases || [],
-          consistency_score: profile.consistency_score || 0.0,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Failed to upsert voice profile:', error);
-        throw new Error(`Failed to upsert voice profile: ${error.message}`);
-      }
-
-      logger.info(`✅ Voice profile saved for character: ${characterId}`);
-      return data as VoiceProfile;
-    } catch (error) {
-      logger.error('Error upserting voice profile:', error);
-      return null;
-    }
+    return voiceProfileService.upsertVoiceProfile(characterId, profile);
   }
 
   /**
-   * Analyzes dialogue to extract voice characteristics using AI
+   * Analyzes dialogue to extract voice characteristics using AI (Delegated)
    */
   async analyzeDialogue(dialogue: string[]): Promise<Partial<VoiceProfile>> {
-    try {
-      if (!dialogue || dialogue.length === 0) {
-        logger.warn('No dialogue provided for analysis');
-        return {
-          voice_style: 'neutral',
-          speech_patterns: [],
-          vocabulary_level: 'average',
-          tone: 'neutral',
-          quirks: [],
-          example_phrases: [],
-          consistency_score: 0.0,
-        };
-      }
-
-      const prompt = `Analyze the following dialogue samples and extract voice characteristics:
-
-Dialogue samples:
-${dialogue.map((line, i) => `${i + 1}. "${line}"`).join('\n')}
-
-Please analyze and provide a JSON response with the following structure:
-{
-  "voice_style": "string describing overall style (e.g., gruff, eloquent, timid, confident)",
-  "speech_patterns": ["array", "of", "speech", "pattern", "descriptors"],
-  "vocabulary_level": "simple|average|advanced|archaic",
-  "tone": "string describing emotional tone (e.g., serious, humorous, sarcastic)",
-  "quirks": ["array", "of", "unique", "speech", "quirks"],
-  "example_phrases": ["array", "of", "representative", "phrases"],
-  "consistency_score": 0.85
-}
-
-Be specific and base your analysis on the actual dialogue provided. The consistency_score should be between 0 and 1.`;
-
-      const response = await llmApiClient.generateText({
-        prompt,
-        temperature: 0.3,
-        maxTokens: 1000,
-      });
-
-      // Parse the JSON response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        logger.error('Failed to parse AI response for voice analysis');
-        throw new Error('Invalid AI response format');
-      }
-
-      const analysis = JSON.parse(jsonMatch[0]);
-
-      // Validate and normalize the response
-      const voiceProfile: Partial<VoiceProfile> = {
-        voice_style: analysis.voice_style || 'neutral',
-        speech_patterns: Array.isArray(analysis.speech_patterns) ? analysis.speech_patterns : [],
-        vocabulary_level: ['simple', 'average', 'advanced', 'archaic'].includes(
-          analysis.vocabulary_level,
-        )
-          ? analysis.vocabulary_level
-          : 'average',
-        tone: analysis.tone || 'neutral',
-        quirks: Array.isArray(analysis.quirks) ? analysis.quirks : [],
-        example_phrases: Array.isArray(analysis.example_phrases)
-          ? analysis.example_phrases
-          : dialogue.slice(0, 3),
-        consistency_score:
-          typeof analysis.consistency_score === 'number'
-            ? Math.max(0, Math.min(1, analysis.consistency_score))
-            : 0.0,
-      };
-
-      logger.info('🎭 Voice analysis completed:', voiceProfile);
-      return voiceProfile;
-    } catch (error) {
-      logger.error('Error analyzing dialogue:', error);
-
-      // Return a default profile on error
-      return {
-        voice_style: 'neutral',
-        speech_patterns: ['conversational'],
-        vocabulary_level: 'average',
-        tone: 'neutral',
-        quirks: [],
-        example_phrases: dialogue.slice(0, 3),
-        consistency_score: 0.5,
-      };
-    }
+    return voiceProfileService.analyzeDialogue(dialogue);
   }
 }
 

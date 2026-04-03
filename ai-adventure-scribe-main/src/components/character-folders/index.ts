@@ -5,9 +5,8 @@
  */
 
 export { FolderTree } from './FolderTree';
-export {
-  CreateFolderDialog,
-  EditFolderDialog,
-  DeleteFolderDialog,
-  MoveCharactersDialog,
-} from './CharacterFolderDialog';
+export { CreateFolderDialog } from './CreateFolderDialog';
+export { EditFolderDialog } from './EditFolderDialog';
+export { DeleteFolderDialog } from './DeleteFolderDialog';
+export { MoveCharactersDialog } from './MoveCharactersDialog';
+export { FOLDER_COLORS } from './constants';

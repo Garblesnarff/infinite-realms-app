@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Z_INDEX } from '@/constants/z-index';
 import { getRecordedMetrics, clearRecordedMetrics } from '@/utils/performance/web-vitals';
 
 interface MetricData {
@@ -79,7 +80,7 @@ export function PerformanceMonitor() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-4 right-4" style={{ zIndex: Z_INDEX.TOAST }}>
       {!isVisible && (
         <Button onClick={handleToggle} variant="outline" size="sm" className="shadow-lg">
           Show Performance

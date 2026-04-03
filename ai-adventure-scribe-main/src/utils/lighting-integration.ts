@@ -71,7 +71,7 @@ export interface LightingResult {
 export function calculateLightPolygon(
   lightSource: Token,
   walls: VisionBlocker[],
-  quadTree?: QuadTree
+  quadTree?: QuadTree,
 ): { bright: LightPolygon | null; dim: LightPolygon | null } {
   if (!lightSource.light.emitsLight) {
     return { bright: null, dim: null };
@@ -83,9 +83,7 @@ export function calculateLightPolygon(
   const totalRange = brightRange + dimRange;
 
   // Use quadtree if available for better performance
-  const relevantWalls = quadTree
-    ? quadTree.queryRadius(origin, totalRange)
-    : walls;
+  const relevantWalls = quadTree ? quadTree.queryRadius(origin, totalRange) : walls;
 
   // Filter walls that block light
   const lightBlockingWalls = relevantWalls.filter((w) => w.blocksLight);
@@ -94,22 +92,28 @@ export function calculateLightPolygon(
   const lightPolygonPoints = calculateLightRays(origin, lightBlockingWalls, totalRange);
 
   // Split into bright and dim regions
-  const brightPolygon: LightPolygon | null = brightRange > 0 ? {
-    points: clipPolygonToRadius(lightPolygonPoints, origin, brightRange),
-    color: lightSource.light.lightColor,
-    intensity: lightSource.light.luminosity || 0.5,
-    isBright: true,
-  } : null;
+  const brightPolygon: LightPolygon | null =
+    brightRange > 0
+      ? {
+          points: clipPolygonToRadius(lightPolygonPoints, origin, brightRange),
+          color: lightSource.light.lightColor,
+          intensity: lightSource.light.luminosity || 0.5,
+          isBright: true,
+        }
+      : null;
 
-  const dimPolygon: LightPolygon | null = dimRange > 0 ? {
-    points: subtractPolygons(
-      clipPolygonToRadius(lightPolygonPoints, origin, totalRange),
-      brightPolygon?.points || []
-    ),
-    color: lightSource.light.lightColor,
-    intensity: (lightSource.light.luminosity || 0.5) * 0.5,
-    isBright: false,
-  } : null;
+  const dimPolygon: LightPolygon | null =
+    dimRange > 0
+      ? {
+          points: subtractPolygons(
+            clipPolygonToRadius(lightPolygonPoints, origin, totalRange),
+            brightPolygon?.points || [],
+          ),
+          color: lightSource.light.lightColor,
+          intensity: (lightSource.light.luminosity || 0.5) * 0.5,
+          isBright: false,
+        }
+      : null;
 
   return { bright: brightPolygon, dim: dimPolygon };
 }
@@ -117,11 +121,7 @@ export function calculateLightPolygon(
 /**
  * Calculate light rays from origin with wall blocking
  */
-function calculateLightRays(
-  origin: Point2D,
-  walls: VisionBlocker[],
-  maxRange: number
-): Point2D[] {
+function calculateLightRays(origin: Point2D, walls: VisionBlocker[], maxRange: number): Point2D[] {
   const points: Point2D[] = [];
   const angles: number[] = [];
 
@@ -196,7 +196,7 @@ function calculateLightRays(
 export function calculateShadows(
   lightSource: Token,
   walls: VisionBlocker[],
-  maxShadowLength: number = 2000
+  maxShadowLength: number = 2000,
 ): ShadowSegment[] {
   if (!lightSource.light.emitsLight) {
     return [];
@@ -247,7 +247,7 @@ function castShadowFromSegment(
   lightPos: Point2D,
   segmentStart: Point2D,
   segmentEnd: Point2D,
-  shadowLength: number
+  shadowLength: number,
 ): Point2D[] | null {
   // Calculate if wall faces light
   const toStart = { x: segmentStart.x - lightPos.x, y: segmentStart.y - lightPos.y };
@@ -303,7 +303,7 @@ export function calculateAmbientOcclusion(
   bounds: { minX: number; minY: number; maxX: number; maxY: number },
   walls: VisionBlocker[],
   gridSize: number = 50,
-  sampleRadius: number = 100
+  sampleRadius: number = 100,
 ): number[][] {
   const width = Math.ceil((bounds.maxX - bounds.minX) / gridSize);
   const height = Math.ceil((bounds.maxY - bounds.minY) / gridSize);
@@ -337,7 +337,7 @@ export function calculateAmbientOcclusion(
                 { x: worldX, y: worldY },
                 { x: sampleX, y: sampleY },
                 wall.points[j],
-                wall.points[j + 1]
+                wall.points[j + 1],
               )
             ) {
               isBlocked = true;
@@ -371,25 +371,36 @@ export function calculateAmbientOcclusion(
  * Clip polygon to radius
  */
 function clipPolygonToRadius(points: Point2D[], center: Point2D, radius: number): Point2D[] {
-  return points.filter((point) => {
+  return points.map((point) => {
     const dx = point.x - center.x;
     const dy = point.y - center.y;
-    return Math.sqrt(dx * dx + dy * dy) <= radius;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= radius) {
+      return point;
+    }
+
+    // Project point to radius
+    return {
+      x: center.x + (dx / distance) * radius,
+      y: center.y + (dy / distance) * radius,
+    };
   });
 }
 
 /**
  * Subtract one polygon from another (simplified)
+ *
+ * For dim light calculation, we need to subtract the bright light area from the total light area.
+ * Since both are derived from the same raycast results but clipped to different radii,
+ * we can create a "ring" polygon by combining both sets of points.
  */
 function subtractPolygons(outer: Point2D[], inner: Point2D[]): Point2D[] {
-  // Simplified: just return outer if different from inner
-  if (outer.length !== inner.length) return outer;
+  if (inner.length === 0) return outer;
 
-  // For proper polygon subtraction, use a library like polygon-clipping
-  // This is a placeholder implementation
-  return outer.filter((point) => {
-    return !inner.some((p) => p.x === point.x && p.y === point.y);
-  });
+  // To create a proper ring for rendering, we combine outer points and inner points in reverse
+  // This creates a single polygon path that covers the area between the two radii
+  return [...outer, ...[...inner].reverse()];
 }
 
 // ===========================
@@ -409,7 +420,7 @@ function subtractPolygons(outer: Point2D[], inner: Point2D[]): Point2D[] {
 export function calculateSceneLighting(
   tokens: Token[],
   walls: VisionBlocker[],
-  quadTree?: QuadTree
+  quadTree?: QuadTree,
 ): LightingResult {
   const brightLightPolygons: LightPolygon[] = [];
   const dimLightPolygons: LightPolygon[] = [];
@@ -448,7 +459,7 @@ export function calculateSceneLighting(
 export function isPointInLight(
   point: Point2D,
   lightSources: Token[],
-  walls: VisionBlocker[]
+  walls: VisionBlocker[],
 ): boolean {
   for (const source of lightSources) {
     if (!source.light.emitsLight) continue;
@@ -458,12 +469,19 @@ export function isPointInLight(
     const distance = Math.sqrt(dx * dx + dy * dy);
     const distanceInFeet = distance / 20;
 
-    const totalRange =
-      source.light.lightRange + (source.light.dimLightRange || 0);
+    const totalRange = source.light.lightRange + (source.light.dimLightRange || 0);
 
     if (distanceInFeet <= totalRange) {
       // Check if blocked by walls
-      if (!isInShadow(point, { x: source.x, y: source.y }, walls[0])) {
+      let blocked = false;
+      for (const wall of walls) {
+        if (isInShadow(point, { x: source.x, y: source.y }, wall)) {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (!blocked) {
         return true;
       }
     }

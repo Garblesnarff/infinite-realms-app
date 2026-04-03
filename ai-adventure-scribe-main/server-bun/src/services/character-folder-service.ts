@@ -9,14 +9,14 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import { db } from '../../../db/client.js';
+import { db } from '../../../db/client';
 import {
   characterFolders,
   characters,
   type CharacterFolder,
-} from '../../../db/schema/index.js';
+} from '../../../db/schema/index';
 import { InternalServerError } from '../lib/errors.js';
 
 export interface CreateFolderData {
@@ -53,54 +53,53 @@ export class CharacterFolderService {
    * Get all folder IDs in a subtree (including the folder itself)
    */
   private static async getFolderSubtree(folderId: string, userId: string): Promise<string[]> {
-    const allFolders = await db.query.characterFolders.findMany({
-      where: eq(characterFolders.userId, userId),
-      columns: { id: true, parentFolderId: true },
-    });
+    // ⚡ Bolt: Optimized to use a PostgreSQL recursive CTE to fetch only the relevant subtree IDs.
+    // This replaces the previous in-memory calculation which required fetching ALL folders for the user.
+    // Reduces database data transfer and application memory usage from O(N) to O(Subtree).
+    const results = await db.execute<{ id: string }>(sql`
+      WITH RECURSIVE folder_subtree AS (
+        SELECT ${characterFolders.id} FROM ${characterFolders}
+        WHERE ${characterFolders.id} = ${folderId} AND ${characterFolders.userId} = ${userId}
+        UNION ALL
+        SELECT f.${characterFolders.id} FROM ${characterFolders} f
+        JOIN folder_subtree fs ON f.${characterFolders.parentFolderId} = fs.${characterFolders.id}
+        WHERE f.${characterFolders.userId} = ${userId}
+      )
+      SELECT ${characterFolders.id} FROM folder_subtree
+    `);
 
-    const subtree: string[] = [folderId];
-    let currentLevel = [folderId];
-
-    while (currentLevel.length > 0) {
-      const nextLevel: string[] = [];
-      for (const folder of allFolders) {
-        if (folder.parentFolderId && currentLevel.includes(folder.parentFolderId)) {
-          subtree.push(folder.id);
-          nextLevel.push(folder.id);
-        }
-      }
-      currentLevel = nextLevel;
-    }
-
-    return subtree;
+    return results.map((r) => r.id as string);
   }
 
   /**
    * List all folders for a user with nested structure
    */
   static async listFolders(userId: string): Promise<FolderWithChildren[]> {
-    const folders = await db.query.characterFolders.findMany({
-      where: eq(characterFolders.userId, userId),
-      orderBy: [asc(characterFolders.sortOrder)],
-    });
+    // ⚡ Bolt: Parallelize fetching folders and character counts to reduce total latency.
+    // Both operations are independent and can be executed concurrently.
+    const [folders, counts] = await Promise.all([
+      db.query.characterFolders.findMany({
+        where: eq(characterFolders.userId, userId),
+        orderBy: [asc(characterFolders.sortOrder)],
+      }),
+      // ⚡ Bolt: Use SQL aggregation (count/groupBy) instead of fetching all characters to memory.
+      // This significantly reduces data transfer and memory usage as the character list grows.
+      db
+        .select({
+          folderId: characters.folderId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(characters)
+        .where(
+          and(
+            isNotNull(characters.folderId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        )
+        .groupBy(characters.folderId),
+    ]);
 
-    // ⚡ Bolt: Use SQL aggregation (count/groupBy) instead of fetching all characters to memory.
-    // This significantly reduces data transfer and memory usage as the character list grows.
-    const counts = await db
-      .select({
-        folderId: characters.folderId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(characters)
-      .where(and(
-        isNotNull(characters.folderId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ))
-      .groupBy(characters.folderId);
-
-    const folderCounts = new Map<string, number>(
-      counts.map(c => [c.folderId as string, c.count])
-    );
+    const folderCounts = new Map<string, number>(counts.map((c) => [c.folderId as string, c.count]));
 
     const foldersWithCounts = folders.map(folder => ({
       ...folder,
@@ -114,55 +113,72 @@ export class CharacterFolderService {
    * Create a new folder
    */
   static async createFolder(userId: string, data: CreateFolderData): Promise<CharacterFolder> {
-    // Validate parent folder exists and belongs to user if specified
-    if (data.parentFolderId) {
-      const parentFolder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, data.parentFolderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
-
-      if (!parentFolder) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Parent folder not found',
-        });
-      }
-    }
-
     // Get next sort order if not provided
     let sortOrder = data.sortOrder ?? 0;
     if (data.sortOrder === undefined) {
-      const existingFolders = await db.query.characterFolders.findMany({
-        where: and(
-          eq(characterFolders.userId, userId),
-          data.parentFolderId
-            ? eq(characterFolders.parentFolderId, data.parentFolderId)
-            : isNull(characterFolders.parentFolderId)
-        ),
-        columns: { sortOrder: true },
-      });
+      // ⚡ Bolt: Optimized to use SQL MAX() aggregation instead of fetching all folders at the same level.
+      // This reduces data transfer and memory usage during folder creation.
+      const [maxResult] = await db
+        .select({
+          maxSortOrder: sql<number>`max(${characterFolders.sortOrder})`,
+        })
+        .from(characterFolders)
+        .where(
+          and(
+            eq(characterFolders.userId, userId),
+            data.parentFolderId
+              ? eq(characterFolders.parentFolderId, data.parentFolderId)
+              : isNull(characterFolders.parentFolderId)
+          )
+        );
 
-      sortOrder = existingFolders.length > 0
-        ? Math.max(...existingFolders.map(f => f.sortOrder)) + 1
-        : 0;
+      sortOrder = (maxResult?.maxSortOrder ?? -1) + 1;
     }
 
-    const [folder] = await db
-      .insert(characterFolders)
-      .values({
-        userId,
-        name: data.name,
-        parentFolderId: data.parentFolderId || null,
-        color: data.color || null,
-        icon: data.icon || null,
-        sortOrder,
-      })
-      .returning();
+    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT when a parent folder is provided.
+    // This ensures that the parent folder belongs to the user in a single atomic operation
+    // while masking resource existence.
+    let folder: CharacterFolder | undefined;
+
+    if (data.parentFolderId) {
+      [folder] = await db
+        .insert(characterFolders)
+        .select(
+          db.select({
+            userId: sql`${userId}`,
+            name: sql`${data.name}`,
+            parentFolderId: characterFolders.id,
+            color: sql`${data.color || null}`,
+            icon: sql`${data.icon || null}`,
+            sortOrder: sql`${sortOrder}`,
+          })
+          .from(characterFolders)
+          .where(and(
+            eq(characterFolders.id, data.parentFolderId),
+            eq(characterFolders.userId, userId)
+          ))
+        )
+        .returning();
+    } else {
+      [folder] = await db
+        .insert(characterFolders)
+        .values({
+          userId,
+          name: data.name,
+          parentFolderId: null,
+          color: data.color || null,
+          icon: data.icon || null,
+          sortOrder,
+        })
+        .returning();
+    }
 
     if (!folder) {
-      throw new InternalServerError('Failed to create folder');
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing parent to mask existence.
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Parent folder not found',
+      });
     }
 
     return folder;
@@ -193,21 +209,24 @@ export class CharacterFolderService {
 
     // Prevent moving folder to be its own child
     if (updates.parentFolderId) {
-      const subtree = await this.getFolderSubtree(folderId, userId);
+      // ⚡ Bolt: Parallelize independent validation checks (subtree retrieval and parent existence)
+      // to reduce database round-trip sum during folder movement.
+      const [subtree, parentFolder] = await Promise.all([
+        this.getFolderSubtree(folderId, userId),
+        db.query.characterFolders.findFirst({
+          where: and(
+            eq(characterFolders.id, updates.parentFolderId),
+            eq(characterFolders.userId, userId),
+          ),
+        }),
+      ]);
+
       if (subtree.includes(updates.parentFolderId)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Cannot move folder to be a child of itself',
         });
       }
-
-      // Verify parent folder exists and belongs to user
-      const parentFolder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, updates.parentFolderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
 
       if (!parentFolder) {
         throw new TRPCError({
@@ -217,10 +236,13 @@ export class CharacterFolderService {
       }
     }
 
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    const { id: _id, userId: _userId, ...safeUpdates } = updates as any;
+
     const [updated] = await db
       .update(characterFolders)
       .set({
-        ...updates,
+        ...safeUpdates,
         updatedAt: new Date(),
       })
       .where(and(
@@ -255,23 +277,25 @@ export class CharacterFolderService {
       });
     }
 
-    // Move all characters in this folder to the parent folder (or root if no parent)
-    await db
-      .update(characters)
-      .set({ folderId: folder.parentFolderId })
-      .where(and(
-        eq(characters.folderId, folderId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ));
-
-    // Move all subfolders to the parent folder (or root if no parent)
-    await db
-      .update(characterFolders)
-      .set({ parentFolderId: folder.parentFolderId })
-      .where(and(
-        eq(characterFolders.parentFolderId, folderId),
-        eq(characterFolders.userId, userId)
-      ));
+    // ⚡ Bolt: Parallelize character and subfolder migration to reduce total latency.
+    // These updates are independent and can be executed concurrently.
+    await Promise.all([
+      // Move all characters in this folder to the parent folder (or root if no parent)
+      db
+        .update(characters)
+        .set({ folderId: folder.parentFolderId })
+        .where(
+          and(
+            eq(characters.folderId, folderId),
+            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+          ),
+        ),
+      // Move all subfolders to the parent folder (or root if no parent)
+      db
+        .update(characterFolders)
+        .set({ parentFolderId: folder.parentFolderId })
+        .where(and(eq(characterFolders.parentFolderId, folderId), eq(characterFolders.userId, userId))),
+    ]);
 
     // Delete the folder
     const result = await db
@@ -293,40 +317,9 @@ export class CharacterFolderService {
     folderId: string | null,
     userId: string
   ): Promise<boolean> {
-    // Verify character ownership
-    const character = await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-    });
-
-    if (!character) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Character not found',
-      });
-    }
-
-    // If moving to a folder, verify it exists and belongs to user
-    if (folderId) {
-      const folder = await db.query.characterFolders.findFirst({
-        where: and(
-          eq(characterFolders.id, folderId),
-          eq(characterFolders.userId, userId)
-        ),
-      });
-
-      if (!folder) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Folder not found',
-        });
-      }
-    }
-
-    // Move character
-    const result = await db
+    // 🛡️ Sentinel: Refactored to use a single atomic UPDATE statement with inline ownership verification.
+    // This eliminates multiple pre-flight queries and prevents IDOR while masking resource existence.
+    const [updated] = await db
       .update(characters)
       .set({
         folderId: folderId,
@@ -334,10 +327,28 @@ export class CharacterFolderService {
       })
       .where(and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        folderId
+          ? exists(
+              db.select()
+                .from(characterFolders)
+                .where(and(
+                  eq(characterFolders.id, folderId),
+                  eq(characterFolders.userId, userId)
+                ))
+            )
+          : sql`true`
       ))
       .returning({ id: characters.id });
 
-    return result.length > 0;
+    if (!updated) {
+      // 🛡️ Sentinel: Throw NOT_FOUND for unauthorized access or missing resource to mask existence.
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Character or folder not found',
+      });
+    }
+
+    return true;
   }
 }

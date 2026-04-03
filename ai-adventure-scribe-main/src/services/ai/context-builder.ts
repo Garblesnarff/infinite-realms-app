@@ -1,4 +1,5 @@
 import { ContextBuilderPrompts } from './context-builder-prompts';
+import { CombatRulesPrompts } from './prompts/combat-rules-prompts';
 import { RulesPrompts } from './prompts/rules-prompts';
 
 import type { Memory } from '../memory-manager';
@@ -19,27 +20,31 @@ export class ContextBuilder {
     const { context, combatDetection, voiceContext, isFirstMessage, relevantMemories } = params;
 
     let contextPrompt = ContextBuilderPrompts.buildPersonaSection();
-    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
     contextPrompt += await ContextBuilderPrompts.buildGameContextSection(context, relevantMemories);
 
     if (isFirstMessage) {
       contextPrompt += ContextBuilderPrompts.buildOpeningSceneSection();
+      contextPrompt += ContextBuilderPrompts.buildOpeningResponseStructureSection();
+      contextPrompt += ContextBuilderPrompts.buildOpeningFinalRemindersSection();
+      return contextPrompt;
     }
 
+    contextPrompt += RulesPrompts.buildRulesOfPlaySection();
+
     if (combatDetection) {
-      contextPrompt += RulesPrompts.formatCombatContext(combatDetection);
+      contextPrompt += CombatRulesPrompts.formatCombatContext(combatDetection);
       if (combatDetection.isCombat) {
-        contextPrompt += RulesPrompts.buildCombatRollRequirementsSection();
+        contextPrompt += CombatRulesPrompts.buildCombatRollRequirementsSection();
       }
     }
 
-    if (voiceContext && !isFirstMessage) {
+    if (voiceContext) {
       contextPrompt += ContextBuilderPrompts.buildVoiceOptimizationSection();
     }
 
     contextPrompt += ContextBuilderPrompts.buildResponseStructureSection();
 
-    if (voiceContext && !isFirstMessage) {
+    if (voiceContext) {
       contextPrompt += `\n**REMEMBER: Always respond in the JSON format with narration_segments for voice synthesis!**`;
     }
 

@@ -80,7 +80,7 @@ function catmullRomPoint(
   p2: Point2D,
   p3: Point2D,
   t: number,
-  tension: number = 0.5
+  tension: number = 0.5,
 ): Point2D {
   const t2 = t * t;
   const t3 = t2 * t;
@@ -105,12 +105,7 @@ function catmullRomPoint(
  * @returns Smoothed points
  */
 export function smoothPath(points: Point2D[], options: SmoothingOptions = {}): Point2D[] {
-  const {
-    tension = 0.5,
-    minDistance = 2,
-    maxPoints,
-    reducePoints: shouldReduce = true,
-  } = options;
+  const { tension = 0.5, minDistance = 2, maxPoints, reducePoints: shouldReduce = true } = options;
 
   // Need at least 2 points
   if (points.length < 2) return points;
@@ -288,10 +283,7 @@ function perpendicularDistance(point: Point2D, lineStart: Point2D, lineEnd: Poin
   // Calculate the t parameter
   const t = Math.max(
     0,
-    Math.min(
-      1,
-      ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSquared
-    )
+    Math.min(1, ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSquared),
   );
 
   // Project point onto line

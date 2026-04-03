@@ -16,17 +16,22 @@ import type { CombatParticipant, ConditionName } from '@/types/combat';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { cn } from '@/lib/utils';
+import { getHPColor } from '@/utils/hp-utils';
 
 // ===========================
 // Condition Icons & Colors
 // ===========================
 
-const CONDITION_ICONS: Record<ConditionName, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+const CONDITION_ICONS: Record<
+  ConditionName,
+  { icon: React.ComponentType<{ className?: string }>; color: string }
+> = {
   blinded: { icon: UserX, color: 'bg-gray-500' },
   charmed: { icon: Heart, color: 'bg-pink-500' },
   deafened: { icon: UserX, color: 'bg-slate-500' },
@@ -74,7 +79,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
   // Look up portrait from campaign assets
   const assetKey = participant.name.toLowerCase().replace(/\s+/g, '-');
-  const assetType = participant.participantType === 'monster' || participant.participantType === 'enemy' ? 'monster' : 'npc';
+  const assetType =
+    participant.participantType === 'monster' || participant.participantType === 'enemy'
+      ? 'monster'
+      : 'npc';
   const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
   const getParticipantTypeIcon = (): React.ReactNode => {
@@ -93,18 +101,39 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   };
 
   const rowClasses = cn(
-    'flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer shadow-sm',
+    'flex items-center justify-between rounded-lg border p-3 transition-all cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none',
     isCurrentTurn
       ? 'border-amber-300/70 bg-amber-50 dark:bg-amber-900/30 ring-1 ring-amber-200'
       : 'border-border bg-card hover:bg-muted/60',
     isDead && 'opacity-60 grayscale',
   );
 
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelectParticipant?.(participant.id);
+    }
+  };
+
   return (
-    <div className={rowClasses} onClick={() => onSelectParticipant?.(participant.id)}>
+    <div
+      className={rowClasses}
+      onClick={() => onSelectParticipant?.(participant.id)}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}Select ${participant.name}`}
+    >
       {/* Turn Indicator & Initiative */}
       <div className="flex items-center space-x-3">
-        {isCurrentTurn && <ChevronRight className="w-5 h-5 text-amber-600 animate-pulse" />}
+        {isCurrentTurn && (
+          <ChevronRight
+            className="w-5 h-5 text-amber-600 animate-pulse"
+            role="status"
+            aria-live="polite"
+            aria-label="Current turn indicator"
+          />
+        )}
 
         <div className="flex flex-col items-center">
           <div className="text-lg font-bold text-gray-700 min-w-[2rem] text-center">
@@ -115,11 +144,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
           {portraitUrl ? (
-            <img
-              src={portraitUrl}
-              alt={participant.name}
-              className="w-full h-full object-cover"
-            />
+            <img src={portraitUrl} alt={participant.name} className="w-full h-full object-cover" />
           ) : (
             getParticipantTypeIcon()
           )}
@@ -164,7 +189,12 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         {/* HP Bar */}
         <div className="mt-2 flex items-center gap-2">
-          <Progress value={hpPercent} className="h-2 flex-1" />
+          <Progress
+            value={hpPercent}
+            className="h-2 flex-1"
+            indicatorClassName={getHPColor(hpPercent)}
+            aria-label={`${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`}
+          />
           <span className="min-w-[4rem] text-right text-sm font-medium">
             {participant.currentHitPoints}/{participant.maxHitPoints}
             {participant.temporaryHitPoints > 0 && (
@@ -175,9 +205,14 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
         {/* Death Saves */}
         {needsDeathSave && (
-          <div className="flex items-center space-x-1 mt-1">
-            <span className="text-xs text-red-600 font-medium">Death Saves:</span>
-            <div className="flex space-x-1">
+          <div
+            className="flex items-center space-x-1 mt-1"
+            aria-label={`Death saves: ${participant.deathSaves.successes} successes, ${participant.deathSaves.failures} failures`}
+          >
+            <span className="text-xs text-red-600 font-medium" aria-hidden="true">
+              Death Saves:
+            </span>
+            <div className="flex space-x-1" aria-hidden="true">
               {[1, 2, 3].map((i) => (
                 <div
                   key={`success-${i}`}
@@ -187,8 +222,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
                 />
               ))}
             </div>
-            <span className="text-xs mx-1">/</span>
-            <div className="flex space-x-1">
+            <span className="text-xs mx-1" aria-hidden="true">
+              /
+            </span>
+            <div className="flex space-x-1" aria-hidden="true">
               {[1, 2, 3].map((i) => (
                 <div
                   key={`failure-${i}`}
@@ -216,11 +253,14 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
               const ConditionIcon = CONDITION_ICONS[condition.name]?.icon || UserX;
               const colorClass = CONDITION_ICONS[condition.name]?.color || 'bg-gray-500';
 
+              const conditionLabel = `${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`;
               return (
                 <div
                   key={index}
                   className={`rounded-full p-1 text-white ${colorClass}`}
-                  title={`${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`}
+                  title={conditionLabel}
+                  aria-label={conditionLabel}
+                  role="img"
                 >
                   <ConditionIcon className="h-3 w-3" />
                 </div>
@@ -261,8 +301,13 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          No active combat
+        <CardContent className="py-8">
+          <EmptyState
+            illustration="no-sessions"
+            title="No Active Combat"
+            description="Start a combat encounter to see the initiative order here."
+            variant="minimal"
+          />
         </CardContent>
       </Card>
     );
@@ -292,10 +337,12 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
           </div>
           {onAddParticipant && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={onAddParticipant}
               aria-label="Add participant"
+              title="Add participant"
               className="h-8 w-8"
             >
               <Plus className="h-4 w-4" />
@@ -304,15 +351,23 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={rollInitiative}
             className="flex-1 min-w-[140px] sm:flex-none"
+            title="Roll initiative for all participants"
           >
             <Dices className="mr-2 h-4 w-4" />
             Roll Initiative
           </Button>
-          <Button size="sm" onClick={nextTurn} className="flex-1 min-w-[140px]">
+          <Button
+            type="button"
+            size="sm"
+            onClick={nextTurn}
+            className="flex-1 min-w-[140px]"
+            title="Advance to the next participant's turn"
+          >
             <ChevronRight className="mr-2 h-4 w-4" />
             Next Turn
           </Button>
@@ -322,9 +377,20 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
       <CardContent className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-3">
           {activeEncounter.participants.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-              No combatants in the initiative order.
-            </div>
+            <EmptyState
+              illustration="no-characters"
+              title="No Combatants"
+              description="Add participants to the encounter to begin tracking initiative."
+              variant="card"
+              action={
+                onAddParticipant && (
+                  <Button onClick={onAddParticipant} variant="outline" size="sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Participant
+                  </Button>
+                )
+              }
+            />
           ) : (
             <div className="space-y-3">
               {activeEncounter.participants.map((participant) => (

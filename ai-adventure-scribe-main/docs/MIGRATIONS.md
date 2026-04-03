@@ -90,7 +90,7 @@ Never manually edit or delete applied migrations from the database or filesystem
 The project includes an automated migration testing script that validates all aspects of the database schema:
 
 ```bash
-npm run test:migrations
+bun run test:migrations
 ```
 
 Or run directly:
@@ -146,7 +146,7 @@ The test script automatically detects CI environments and skips interactive prom
 
 ```bash
 # In CI/CD pipeline
-CI=true npm run test:migrations
+CI=true bun run test:migrations
 ```
 
 ### Understanding Test Output
@@ -234,7 +234,7 @@ If tests fail, the script provides detailed error information:
 
 In addition to the automated tests, perform these manual checks before production deployment:
 
-- [ ] Run automated test suite: `npm run test:migrations`
+- [ ] Run automated test suite: `bun run test:migrations`
 - [ ] Review test output for any warnings
 - [ ] Verify all tables created with correct schema
 - [ ] Run application test suite

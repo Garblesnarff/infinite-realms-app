@@ -2,7 +2,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface VolumeButtonProps {
   isMuted: boolean;
@@ -27,6 +27,7 @@ export const VolumeButton: React.FC<VolumeButtonProps> = ({
           size="icon"
           onClick={onToggleMute}
           aria-label={isMuted ? 'Unmute voice' : 'Mute voice'}
+          title={isMuted ? 'Unmute voice' : 'Mute voice'}
           aria-pressed={isMuted}
           className={`bg-primary/10 hover:bg-primary/20 transition-colors ${
             isSpeaking ? 'animate-pulse ring-2 ring-primary shadow-lg shadow-primary/50' : ''

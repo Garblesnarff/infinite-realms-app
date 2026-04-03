@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+import { logger } from './logger.js';
+
 export interface ManifestEntry {
   file: string;
   src?: string;
@@ -88,7 +90,8 @@ export async function resolveAssetsForEntries(entries: string[]): Promise<Resolv
     };
   } catch (error) {
     if (!manifestWarningLogged) {
-      console.warn('Unable to resolve Vite manifest assets:', error);
+      // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
+      logger.warn('Unable to resolve Vite manifest assets', { error });
       manifestWarningLogged = true;
     }
     return null;

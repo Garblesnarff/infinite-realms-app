@@ -5,14 +5,17 @@
  * - POST /v1/observability/error - Log frontend errors
  * - POST /v1/observability/metric - Log frontend metrics
  *
- * These endpoints don't require auth (for guest users) but are heavily rate limited.
+ * These endpoints are intentionally unauthenticated so guest/pre-login users can
+ * report errors and metrics. Security is enforced via aggressive per-IP rate limiting
+ * (20 errors/min, 50 metrics/min) to prevent log poisoning.
  *
  * Ported from /server/src/routes/v1/observability.ts
  */
 
-import { Elysia, t } from 'elysia';
-import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
+import { Elysia } from 'elysia';
+
 import { logger } from '../../lib/logger.js';
+import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 
 // Aggressive rate limiting to prevent log poisoning attacks
 const errorRateLimit = createSimpleRateLimit({

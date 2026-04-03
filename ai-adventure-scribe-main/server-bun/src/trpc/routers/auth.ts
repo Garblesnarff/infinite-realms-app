@@ -11,12 +11,13 @@
  */
 
 import { TRPCError } from '@trpc/server';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { router, publicProcedure, protectedProcedure } from '../trpc.js';
+
+import { db } from '../../../../db/client';
+import { users } from '../../../../db/schema/index';
 import { workos, authConfig } from '../../services/workos.js';
-import { db } from '../../../../db/client.js';
-import { users } from '../../../../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 
 /**
  * Auth router for WorkOS authentication
@@ -44,36 +45,39 @@ export const authRouter = router({
     .input(
       z.object({
         code: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Authenticate with WorkOS using the authorization code
-      const { user, accessToken, refreshToken } =
-        await workos.userManagement.authenticateWithCode({
-          code: input.code,
-          clientId: authConfig.clientId,
-        });
-
-      // Create or update user in database
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.id, user.id),
+      const { user, accessToken, refreshToken } = await workos.userManagement.authenticateWithCode({
+        code: input.code,
+        clientId: authConfig.clientId,
       });
 
-      if (!existingUser) {
-        // Create new user with free plan by default
-        await db.insert(users).values({
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert-then-find' with a single atomic UPSERT.
+      // This reduces database round-trips from 2-3 down to 1 for every authentication callback.
+      // Explicitly return only the plan column to avoid over-fetching.
+      const [userData] = await db
+        .insert(users)
+        .values({
           id: user.id,
           email: user.email,
           plan: 'free',
           firstName: user.firstName || null,
           lastName: user.lastName || null,
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
+            email: user.email,
+            firstName: user.firstName || null,
+            lastName: user.lastName || null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning({
+          plan: users.plan,
         });
-      }
-
-      // Get user plan from database
-      const userData = await db.query.users.findFirst({
-        where: eq(users.id, user.id),
-      });
 
       return {
         user: {
@@ -81,7 +85,7 @@ export const authRouter = router({
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          plan: userData?.plan || 'free',
+          plan: userData.plan,
         },
         accessToken,
         refreshToken,
@@ -92,10 +96,15 @@ export const authRouter = router({
    * Get current authenticated user
    */
   me: protectedProcedure.query(async ({ ctx }) => {
-    // User is already verified in context
-    // Fetch additional user data from database
-    const userData = await db.query.users.findFirst({
-      where: eq(users.id, ctx.user.userId),
+    // ⚡ Bolt: Use explicit column selection to avoid over-fetching Stripe IDs and timestamps.
+    // This reduces data transfer for a high-frequency procedure.
+    const userData = await (db.query as any).users.findFirst({
+      where: (fields: any, { eq }: any) => eq(fields.id, ctx.user.userId),
+      columns: {
+        plan: true,
+        firstName: true,
+        lastName: true,
+      },
     });
 
     return {
@@ -110,7 +119,7 @@ export const authRouter = router({
   /**
    * Logout - revoke session
    */
-  logout: protectedProcedure.mutation(async ({ ctx }) => {
+  logout: protectedProcedure.mutation(async () => {
     // WorkOS sessions are stateless JWT tokens
     // No server-side revocation needed
     // Client will remove the token from storage
@@ -124,7 +133,7 @@ export const authRouter = router({
     .input(
       z.object({
         refreshToken: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const response = await workos.userManagement.authenticateWithRefreshToken({
@@ -149,41 +158,39 @@ export const authRouter = router({
         email: z.string().email(),
         firstName: z.string().optional(),
         lastName: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       if (input.userId !== ctx.user.userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Forbidden' });
       }
-      // Check if user already exists
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.id, input.userId),
-      });
 
-      if (existingUser) {
-        // User exists, update their info
-        await db
-          .update(users)
-          .set({
+      // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
+      // This reduces database round-trips from 2 down to 1.
+      // We use the PostgreSQL 'xmax' system column to determine if a row was inserted (0) or updated (non-zero).
+      // This preserves the API contract for 'created' while maintaining O(1) performance.
+      const [result] = await db
+        .insert(users)
+        .values({
+          id: input.userId,
+          email: input.email,
+          firstName: input.firstName || null,
+          lastName: input.lastName || null,
+          plan: 'free',
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
             email: input.email,
             firstName: input.firstName || null,
             lastName: input.lastName || null,
             updatedAt: new Date(),
-          })
-          .where(eq(users.id, input.userId));
+          },
+        })
+        .returning({
+          created: sql<boolean>`(xmax = 0)`,
+        });
 
-        return { success: true, created: false };
-      }
-
-      // Create new user
-      await db.insert(users).values({
-        id: input.userId,
-        email: input.email,
-        firstName: input.firstName || null,
-        lastName: input.lastName || null,
-        plan: 'free',
-      });
-
-      return { success: true, created: true };
+      return { success: true, created: result?.created ?? false };
     }),
 });

@@ -6,12 +6,8 @@
  * Actions are sent to the AI DM for narrative resolution.
  */
 
-import {
-  MessageSquare,
-  Dice6,
-  RotateCcw,
-} from 'lucide-react';
-import React, { useState } from 'react';
+import { MessageSquare, Dice6, RotateCcw } from 'lucide-react';
+import React, { useState, useId } from 'react';
 
 import { type ActionDefinition, MANAGEMENT_ACTIONS } from './actions/ActionDefinitions';
 import { CombatActionGrid } from './actions/CombatActionGrid';
@@ -24,11 +20,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
-
 
 // ===========================
 // Component Props
@@ -50,6 +46,8 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const { state, applyCondition, removeCondition } = useCombat();
   const { activeEncounter } = state;
 
+  const hitDiceInputId = useId();
+  const actionDetailsId = useId();
   const [selectedAction, setSelectedAction] = useState<ActionDefinition | null>(null);
   const [selectedManagement, setSelectedManagement] = useState<string | null>(null);
   const [actionDetails, setActionDetails] = useState('');
@@ -60,7 +58,7 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
 
   // Handle management panel selection
   const handleManagementSelect = (managementType: string): void => {
-    setSelectedManagement(managementType);
+    setSelectedManagement((prev) => (prev === managementType ? null : managementType));
   };
 
   const handleApplyCondition = async (condition: Condition, targetId: string): Promise<void> => {
@@ -174,18 +172,24 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
 
         {/* Management Actions */}
         <div className="flex justify-end space-x-2">
-          {MANAGEMENT_ACTIONS.map((action) => (
-            <Button
-              key={action.type}
-              variant="outline"
-              size="sm"
-              onClick={() => handleManagementSelect(action.type)}
-              className="text-purple-600"
-            >
-              <action.icon className="w-4 h-4 mr-1" />
-              {action.name.replace('Manage ', '')}
-            </Button>
-          ))}
+          {MANAGEMENT_ACTIONS.map((action) => {
+            const isActive = selectedManagement === action.type;
+            return (
+              <Button
+                key={action.type}
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleManagementSelect(action.type)}
+                className={isActive ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-purple-600'}
+                title={action.description}
+                aria-label={action.name}
+                aria-pressed={isActive}
+              >
+                <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
+                {action.name.replace('Manage ', '')}
+              </Button>
+            );
+          })}
         </div>
       </CardHeader>
 
@@ -216,6 +220,8 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                 size="sm"
                 onClick={handleCancelAction}
                 disabled={isSubmitting}
+                aria-label="Cancel action"
+                title="Cancel action"
               >
                 <RotateCcw className="w-4 h-4" />
               </Button>
@@ -235,8 +241,11 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
             ) : selectedAction.type === 'short_rest' || selectedAction.type === 'long_rest' ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">Hit dice to roll:</label>
+                  <Label htmlFor={hitDiceInputId} className="text-sm font-medium">
+                    Hit dice to roll:
+                  </Label>
                   <Input
+                    id={hitDiceInputId}
                     type="number"
                     min="1"
                     value={hitDiceToRoll}
@@ -253,19 +262,26 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                     }}
                     disabled={isSubmitting}
                     className="flex-1"
+                    title={`Submit ${selectedAction.name} and roll ${hitDiceToRoll} hit dice`}
                   >
                     Take {selectedAction.name}
                   </Button>
                 </div>
               </div>
             ) : (
-              <Textarea
-                placeholder={`Describe your ${selectedAction.name.toLowerCase()}...`}
-                value={actionDetails}
-                onChange={(e) => setActionDetails(e.target.value)}
-                className="min-h-[100px]"
-                disabled={isSubmitting}
-              />
+              <div className="space-y-2">
+                <Label htmlFor={actionDetailsId} className="text-sm font-medium">
+                  Action Details
+                </Label>
+                <Textarea
+                  id={actionDetailsId}
+                  placeholder={`Describe your ${selectedAction.name.toLowerCase()}...`}
+                  value={actionDetails}
+                  onChange={(e) => setActionDetails(e.target.value)}
+                  className="min-h-[100px]"
+                  disabled={isSubmitting}
+                />
+              </div>
             )}
 
             {selectedAction.type !== 'cast_spell' &&
@@ -276,12 +292,18 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
                     onClick={handleDetailedAction}
                     disabled={!actionDetails.trim() || isSubmitting}
                     className="flex-1"
+                    title={`Submit ${selectedAction.name} action`}
                   >
-                    <MessageSquare className="w-4 h-4 mr-2" />
+                    <MessageSquare className="w-4 h-4 mr-2" aria-hidden="true" />
                     {isSubmitting ? 'Submitting...' : `Take ${selectedAction.name}`}
                   </Button>
 
-                  <Button variant="outline" onClick={handleCancelAction} disabled={isSubmitting}>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelAction}
+                    disabled={isSubmitting}
+                    title="Cancel and return to action list"
+                  >
                     Cancel
                   </Button>
                 </div>

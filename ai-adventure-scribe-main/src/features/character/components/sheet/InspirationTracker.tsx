@@ -79,10 +79,13 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
           </div>
 
           <Button
+            type="button"
             variant={hasInspiration ? 'default' : 'outline'}
             size="sm"
             onClick={toggleInspiration}
             className={hasInspiration ? 'bg-gold-600 hover:bg-gold-700' : ''}
+            aria-pressed={hasInspiration}
+            title={hasInspiration ? 'Use inspiration' : 'Award inspiration'}
           >
             {hasInspiration ? (
               <>

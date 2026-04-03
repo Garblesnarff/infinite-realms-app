@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * CharacterPortrait Component
  *
@@ -15,12 +16,15 @@
  * />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
 import { User, Heart, Shield, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import * as React from 'react';
+
 import { Badge } from './badge';
+
+import { Z_INDEX } from '@/constants/z-index';
+import { cn } from '@/lib/utils';
 
 const characterPortraitVariants = cva(
   'relative inline-flex items-center justify-center rounded-lg overflow-hidden bg-gradient-to-br from-muted to-muted/60 transition-all duration-300',
@@ -48,8 +52,7 @@ const characterPortraitVariants = cva(
 );
 
 export interface CharacterPortraitProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof characterPortraitVariants> {
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof characterPortraitVariants> {
   /** Character name */
   name: string;
   /** Character race */
@@ -145,7 +148,7 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
 
         {/* Level Badge */}
         {level !== undefined && (
-          <div className="absolute top-1 left-1 z-10">
+          <div className="absolute top-1 left-1" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
             <Badge variant="purple" className="text-xs font-bold px-1.5 py-0.5">
               {level}
             </Badge>
@@ -154,7 +157,10 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
 
         {/* Stats Overlay (Bottom) */}
         {showStats && (hp !== undefined || ac !== undefined || initiative !== undefined) && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent p-1.5 backdrop-blur-sm">
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 backdrop-blur-sm"
+            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+          >
             <div className="flex items-center justify-around gap-1 text-white text-[0.625rem]">
               {hp !== undefined && maxHp !== undefined && (
                 <div className="flex items-center gap-0.5">
@@ -182,7 +188,10 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
 
         {/* Status Effects */}
         {status.length > 0 && (
-          <div className="absolute top-1 right-1 z-10 flex flex-col gap-1">
+          <div
+            className="absolute top-1 right-1 flex flex-col gap-1"
+            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
+          >
             {status.slice(0, 3).map((effect, index) => (
               <Badge key={index} variant="warning" className="text-[0.625rem] px-1 py-0">
                 {effect}
@@ -194,7 +203,8 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
         {/* Hover Details */}
         {showDetailsOnHover && isHovered && (race || characterClass) && (
           <motion.div
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/90 p-2 text-white"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 p-2 text-white"
+            style={{ zIndex: Z_INDEX.CARD_HOVER }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

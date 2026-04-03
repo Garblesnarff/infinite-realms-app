@@ -1,6 +1,8 @@
 import { Elysia } from 'elysia';
-import { BlogService } from '../services/blog-service.js';
+
 import { getSiteConfig } from '../config/site.js';
+import { logger } from '../lib/logger.js';
+import { BlogService } from '../services/blog-service.js';
 
 type BlogPosts = Awaited<ReturnType<typeof BlogService.fetchPublishedBlogPosts>>;
 
@@ -115,7 +117,7 @@ export const seoRoutes = new Elysia()
 
       return xml;
     } catch (error) {
-      console.error('Failed to generate sitemap', error);
+      logger.error({ msg: 'Failed to generate sitemap', error });
       set.status = 500;
       return 'Unable to generate sitemap';
     }
@@ -132,7 +134,7 @@ export const seoRoutes = new Elysia()
 
       return rss;
     } catch (error) {
-      console.error('Failed to generate RSS feed', error);
+      logger.error({ msg: 'Failed to generate RSS feed', error });
       set.status = 500;
       return 'Unable to generate RSS feed';
     }

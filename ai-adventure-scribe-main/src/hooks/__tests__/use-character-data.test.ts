@@ -8,6 +8,7 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn(),
     })),
   },
@@ -92,15 +93,14 @@ describe('useCharacterData', () => {
         wisdom: 10,
         charisma: 8,
       },
-      character_equipment: [
-        { item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true },
-      ],
+      character_equipment: [{ item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true }],
     };
 
     const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
@@ -129,10 +129,12 @@ describe('useCharacterData', () => {
 
     renderHook(() => useCharacterData('invalid-uuid'));
 
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Invalid Character',
-      variant: 'destructive',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Invalid Character',
+        variant: 'destructive',
+      }),
+    );
     expect(mockNavigate).toHaveBeenCalledWith('/app/characters');
   });
 
@@ -142,9 +144,11 @@ describe('useCharacterData', () => {
     renderHook(() => useCharacterData(mockCharacterId));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/login'));
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Not Authenticated',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Not Authenticated',
+      }),
+    );
   });
 
   it('should handle character not found or unauthorized', async () => {
@@ -152,15 +156,18 @@ describe('useCharacterData', () => {
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
     renderHook(() => useCharacterData(mockCharacterId));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/app/characters'));
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Character Not Found',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Character Not Found',
+      }),
+    );
   });
 
   it('should handle database errors', async () => {
@@ -169,34 +176,49 @@ describe('useCharacterData', () => {
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
     renderHook(() => useCharacterData(mockCharacterId));
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/characters'));
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Error',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+      }),
+    );
   });
 
   it('should handle character data as an array from Supabase', async () => {
     // Sometimes .select() can return an array even if we expect a single object if not careful
-    const mockCharacterData = [{
-      id: mockCharacterId,
-      user_id: mockUserId,
-      name: 'Array Hero',
-      race: 'Human',
-      class: 'Fighter',
-      level: 1,
-      character_stats: [{ strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }],
-      character_equipment: [],
-    }];
+    const mockCharacterData = [
+      {
+        id: mockCharacterId,
+        user_id: mockUserId,
+        name: 'Array Hero',
+        race: 'Human',
+        class: 'Fighter',
+        level: 1,
+        character_stats: [
+          {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 10,
+          },
+        ],
+        character_equipment: [],
+      },
+    ];
 
     const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
@@ -222,6 +244,7 @@ describe('useCharacterData', () => {
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 

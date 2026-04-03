@@ -7,14 +7,23 @@
  */
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  User,
+  MapPin,
+  Sword,
+  Package,
+  Image as ImageIcon,
+  X,
+  Sparkles,
+  Loader2,
+} from 'lucide-react';
 import React from 'react';
-import { User, MapPin, Sword, Package, Image as ImageIcon, X, Sparkles, Loader2 } from 'lucide-react';
-
-import { cn } from '@/lib/utils';
-import { Z_INDEX } from '@/constants/z-index';
 
 import type { AssetTag } from '../../utils/parse-asset-tags';
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
+
+import { Z_INDEX } from '@/constants/z-index';
+import { cn } from '@/lib/utils';
 
 interface GeneratedImageData {
   url?: string;
@@ -93,16 +102,18 @@ const AssetCard: React.FC<{
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-purple-500/50',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 focus-visible:scale-105 focus-visible:shadow-xl',
         'cursor-pointer',
-        getAssetGradient(asset.type)
+        getAssetGradient(asset.type),
       )}
       title={`Click to view ${asset.name}`}
+      aria-label={`View ${asset.name}`}
     >
       {/* Image or placeholder - larger size */}
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner">
@@ -118,13 +129,13 @@ const AssetCard: React.FC<{
               alt={asset.name}
               className={cn(
                 'w-full h-full object-cover transition-opacity duration-300',
-                imageLoaded ? 'opacity-100' : 'opacity-0'
+                imageLoaded ? 'opacity-100' : 'opacity-0',
               )}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
-            {/* Expand indicator on hover */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            {/* Expand indicator on hover/focus */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 flex items-center justify-center">
               <span className="text-white text-xs font-medium">View</span>
             </div>
           </>
@@ -156,16 +167,18 @@ const GeneratedImageCard: React.FC<{
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200 hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50 focus-visible:scale-105 focus-visible:shadow-xl',
         'cursor-pointer',
-        getAssetGradient('generated')
+        getAssetGradient('generated'),
       )}
       title="Click to view generated scene"
+      aria-label="View generated scene"
     >
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner">
         {!imageError ? (
@@ -180,12 +193,12 @@ const GeneratedImageCard: React.FC<{
               alt="Generated scene"
               className={cn(
                 'w-full h-full object-cover transition-opacity duration-300',
-                imageLoaded ? 'opacity-100' : 'opacity-0'
+                imageLoaded ? 'opacity-100' : 'opacity-0',
               )}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 flex items-center justify-center">
               <span className="text-white text-xs font-medium">View</span>
             </div>
           </>
@@ -213,24 +226,26 @@ const GenerateButtonCard: React.FC<{
 }> = ({ isGenerating, error, onGenerate }) => {
   return (
     <button
+      type="button"
       onClick={onGenerate}
       disabled={isGenerating}
       className={cn(
         'group relative flex flex-col items-center gap-2 p-3 rounded-xl',
         'bg-gradient-to-br border backdrop-blur-sm',
         'transition-all duration-200',
-        isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl',
-        'focus:outline-none focus:ring-2 focus:ring-pink-500/50',
+        isGenerating ? 'opacity-70' : 'hover:scale-105 hover:shadow-xl focus-visible:scale-105 focus-visible:shadow-xl',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500/50',
         'cursor-pointer',
-        getAssetGradient('generated')
+        getAssetGradient('generated'),
       )}
       title={isGenerating ? 'Generating...' : 'Generate scene image'}
+      aria-label={isGenerating ? 'Generating scene image' : 'Generate scene image'}
     >
       <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black/30 shadow-inner flex items-center justify-center">
         {isGenerating ? (
           <Loader2 className="h-8 w-8 text-pink-400 animate-spin" />
         ) : (
-          <Sparkles className="h-8 w-8 text-pink-400 group-hover:scale-110 transition-transform" />
+          <Sparkles className="h-8 w-8 text-pink-400 group-hover:scale-110 group-focus-visible:scale-110 transition-transform" />
         )}
       </div>
       <div className="text-center max-w-[100px]">
@@ -310,7 +325,10 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
       </div>
 
       {/* Expanded asset view modal - uses high z-index to appear above all game UI */}
-      <DialogPrimitive.Root open={!!expandedAsset} onOpenChange={(open) => !open && setExpandedAsset(null)}>
+      <DialogPrimitive.Root
+        open={!!expandedAsset}
+        onOpenChange={(open) => !open && setExpandedAsset(null)}
+      >
         <DialogPrimitive.Portal>
           {/* Overlay with very high z-index */}
           <DialogPrimitive.Overlay
@@ -333,7 +351,10 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
               <div className="relative">
                 {/* Close button */}
                 <DialogPrimitive.Close
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  style={{ zIndex: Z_INDEX.POPOVER }}
+                  aria-label="Close"
+                  title="Close"
                 >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
@@ -348,10 +369,12 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                 </div>
 
                 {/* Asset info */}
-                <div className={cn(
-                  'p-4 bg-gradient-to-t border-t',
-                  getAssetGradient(expandedAsset.type)
-                )}>
+                <div
+                  className={cn(
+                    'p-4 bg-gradient-to-t border-t',
+                    getAssetGradient(expandedAsset.type),
+                  )}
+                >
                   <h3 className="text-lg font-semibold text-white">{expandedAsset.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getAssetIcon(expandedAsset.type)}
@@ -389,7 +412,10 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
             {generatedImage?.url && (
               <div className="relative">
                 <DialogPrimitive.Close
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
+                  style={{ zIndex: Z_INDEX.POPOVER }}
+                  aria-label="Close"
+                  title="Close"
                 >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
@@ -400,10 +426,7 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <div className={cn(
-                  'p-4 bg-gradient-to-t border-t',
-                  getAssetGradient('generated')
-                )}>
+                <div className={cn('p-4 bg-gradient-to-t border-t', getAssetGradient('generated'))}>
                   <h3 className="text-lg font-semibold text-white">Generated Scene</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getAssetIcon('generated')}

@@ -6,7 +6,7 @@ This work breakdown converts the approved roadmap into executable work units for
 
 ## Phase 0 — Foundations (Day 0)
 1. **Environment sanity check**
-   - Verify repository cleanliness (`git status`) and dependency versions (`npm install`, `npm run build`).
+   - Verify repository cleanliness (`git status`) and dependency versions (`bun install`, `bun run build`).
    - Ensure `.env` values exist for Supabase local/test instances.
    - Capture baseline by running existing lint/tests.
 2. **Context refresh**
@@ -81,7 +81,7 @@ Deliverables: Updated API endpoints with unit/integration tests.
 
 ## Phase 4 — Shared Data Build (Day 7)
 ### Work Unit 4.1 — Build Pipeline
-1. Create script `npm run build:spell-data` generating synchronized artifacts for server (`.ts`) and client (`.json` or `.ts`).
+1. Create script `bun run build:spell-data` generating synchronized artifacts for server (`.ts`) and client (`.json` or `.ts`).
 2. Store outputs in `server/dist/spells.json` (runtime use) and `src/data/generated/spells.ts`.
 3. Add CI check comparing hashes to prevent divergence between client/server datasets.
 

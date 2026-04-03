@@ -116,7 +116,7 @@ $ grep -rn "<any>" server/src/services/
 
 ### TypeScript Compilation
 ```bash
-$ npx tsc --project server/tsconfig.json --noEmit
+$ bunx tsc --project server/tsconfig.json --noEmit
 ```
 
 **Results:**
@@ -202,7 +202,7 @@ Restricted index signature types while maintaining flexibility:
 
 All existing tests continue to pass after changes:
 ```bash
-$ npm test
+$ bun test
 # All service tests passing ✅
 ```
 

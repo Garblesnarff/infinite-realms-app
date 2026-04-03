@@ -13,7 +13,7 @@ export interface RollRequestEntry {
   ac?: number;
   advantage?: boolean;
   disadvantage?: boolean;
-  meta?: any;
+  meta?: Record<string, unknown>;
 }
 
 export interface RollResultEntry {
@@ -24,11 +24,46 @@ export interface RollResultEntry {
   dc?: number;
   ac?: number;
   success?: boolean;
-  meta?: any;
+  meta?: Record<string, unknown>;
+}
+
+/** Shape of a row inserted into the roll_history Supabase table. */
+interface RollHistoryInsert {
+  session_id: string;
+  kind: RollKind;
+  purpose?: string | null;
+  formula?: string | null;
+  dc?: number | null;
+  ac?: number | null;
+  advantage?: boolean | null;
+  disadvantage?: boolean | null;
+  result_total?: number | null;
+  result_natural?: number | null;
+  success?: boolean | null;
+  meta: Record<string, unknown>;
+}
+
+/** Shape of a row returned from the roll_history Supabase table. */
+interface RollHistoryRow {
+  id: string;
+  session_id: string;
+  created_at: string;
+  kind: string;
+  purpose: string | null;
+  formula: string | null;
+  dc: number | null;
+  ac: number | null;
+  result_total: number | null;
+  result_natural: number | null;
+  advantage: boolean | null;
+  disadvantage: boolean | null;
+  success: boolean | null;
+  meta: Record<string, unknown>;
 }
 
 function flagEnabled(): boolean {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
     const v = String((import.meta as any)?.env?.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
     return ['1', 'true', 'yes', 'on'].includes(v);
   } catch {
@@ -45,7 +80,7 @@ async function safePrune(sessionId: string, cap = 500) {
       .order('created_at', { ascending: false })
       .range(cap, 100000);
 
-    const toDelete = (ids || []).map((r: any) => r.id);
+    const toDelete = (ids || []).map((r: { id: string }) => r.id);
     if (toDelete.length > 0) {
       await supabase.from('roll_history').delete().in('id', toDelete);
     }
@@ -59,7 +94,7 @@ export const RollManager = {
   async recordRollRequest(e: RollRequestEntry) {
     if (!flagEnabled()) return;
     try {
-      const payload: any = {
+      const payload: RollHistoryInsert = {
         session_id: e.sessionId,
         kind: e.kind,
         purpose: e.purpose ?? null,
@@ -84,7 +119,7 @@ export const RollManager = {
       if (typeof e.dc === 'number') success = e.resultTotal >= e.dc;
       if (typeof e.ac === 'number') success = e.resultTotal >= e.ac;
 
-      const payload: any = {
+      const payload: RollHistoryInsert = {
         session_id: e.sessionId,
         kind: e.kind,
         result_total: e.resultTotal,
@@ -102,7 +137,7 @@ export const RollManager = {
   },
 
   async getRecentRolls(sessionId: string, limit = 50) {
-    if (!flagEnabled()) return [] as any[];
+    if (!flagEnabled()) return [] as RollHistoryRow[];
     try {
       const { data, error } = await supabase
         .from('roll_history')
@@ -111,10 +146,10 @@ export const RollManager = {
         .order('created_at', { ascending: false })
         .limit(limit);
       if (error) throw error;
-      return data || [];
+      return (data || []) as RollHistoryRow[];
     } catch (err) {
       logger.warn('[RollManager] getRecentRolls failed (non-fatal):', err);
-      return [] as any[];
+      return [] as RollHistoryRow[];
     }
   },
 };

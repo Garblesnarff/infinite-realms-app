@@ -10,8 +10,8 @@
  * - Rotation control
  */
 
-import React, { useState, useRef, useCallback } from 'react';
-import { Upload, X, RotateCw, Grid, Move, ZoomIn, ZoomOut } from 'lucide-react';
+import { Upload, X, RotateCw, Grid, Move, ZoomIn } from 'lucide-react';
+import React, { useState, useRef, useCallback, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,6 +51,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
   const [offsetX, setOffsetX] = useState([0]);
   const [offsetY, setOffsetY] = useState([0]);
   const [rotation, setRotation] = useState(0);
+
+  const scaleId = useId();
+  const offsetXId = useId();
+  const offsetYId = useId();
   const [showGrid, setShowGrid] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,43 +99,52 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     return true;
   };
 
-  const handleFile = useCallback((file: File) => {
-    if (!validateFile(file)) {
-      return;
-    }
+  const handleFile = useCallback(
+    (file: File) => {
+      if (!validateFile(file)) {
+        return;
+      }
 
-    setImageFile(file);
+      setImageFile(file);
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreviewUrl(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
 
-    toast({
-      title: 'Image Loaded',
-      description: 'Adjust the image using the controls below, then click Upload.',
-    });
-  }, [toast]);
+      toast({
+        title: 'Image Loaded',
+        description: 'Adjust the image using the controls below, then click Upload.',
+      });
+    },
+    [toast],
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFile(files[0]);
-    }
-  }, [handleFile]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFile(files[0]);
-    }
-  }, [handleFile]);
+  const handleFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFile(files[0]);
+      }
+    },
+    [handleFile],
+  );
 
   const handleUpload = async () => {
     if (!imageFile) {
@@ -147,7 +160,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
 
     try {
       // Upload to storage bucket
-      const filename = buildTimestampedFilename('scene-map', imageFile.name.split('.').pop() || 'png');
+      const filename = buildTimestampedFilename(
+        'scene-map',
+        imageFile.name.split('.').pop() || 'png',
+      );
       const path = `campaigns/${campaignId}/scenes/${filename}`;
 
       const result = await uploadFile('campaign-assets', path, imageFile, {
@@ -241,7 +257,10 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
           {/* Preview */}
           <Card variant="parchment">
             <CardContent className="p-4">
-              <div className="relative bg-slate-100 rounded-lg overflow-hidden" style={{ aspectRatio: `${width}/${height}` }}>
+              <div
+                className="relative bg-slate-100 rounded-lg overflow-hidden"
+                style={{ aspectRatio: `${width}/${height}` }}
+              >
                 {/* Background Image */}
                 <img
                   src={previewUrl}
@@ -279,20 +298,17 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
             <CardContent className="p-6 space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-semibold">Image Adjustments</h4>
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="group" aria-label="Image adjustment tools">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowGrid(!showGrid)}
+                    aria-pressed={showGrid}
                   >
                     <Grid className="mr-2 h-4 w-4" />
                     {showGrid ? 'Hide Grid' : 'Show Grid'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRotate}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleRotate}>
                     <RotateCw className="mr-2 h-4 w-4" />
                     Rotate
                   </Button>
@@ -302,54 +318,60 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
               {/* Scale */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={scaleId} className="flex items-center gap-2">
                     <ZoomIn className="h-4 w-4" />
                     Scale
                   </Label>
                   <span className="text-sm text-muted-foreground">{scale[0]}%</span>
                 </div>
                 <Slider
+                  id={scaleId}
                   value={scale}
                   onValueChange={setScale}
                   min={10}
                   max={200}
                   step={1}
+                  aria-label="Scale percentage"
                 />
               </div>
 
               {/* Offset X */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={offsetXId} className="flex items-center gap-2">
                     <Move className="h-4 w-4" />
                     Horizontal Offset
                   </Label>
                   <span className="text-sm text-muted-foreground">{offsetX[0]}px</span>
                 </div>
                 <Slider
+                  id={offsetXId}
                   value={offsetX}
                   onValueChange={setOffsetX}
                   min={-500}
                   max={500}
                   step={1}
+                  aria-label="Horizontal offset in pixels"
                 />
               </div>
 
               {/* Offset Y */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
+                  <Label htmlFor={offsetYId} className="flex items-center gap-2">
                     <Move className="h-4 w-4" />
                     Vertical Offset
                   </Label>
                   <span className="text-sm text-muted-foreground">{offsetY[0]}px</span>
                 </div>
                 <Slider
+                  id={offsetYId}
                   value={offsetY}
                   onValueChange={setOffsetY}
                   min={-500}
                   max={500}
                   step={1}
+                  aria-label="Vertical offset in pixels"
                 />
               </div>
 

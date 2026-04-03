@@ -126,8 +126,14 @@ export const RoadmapSection: React.FC = () => {
                         <div className="flex flex-col gap-3">
                           {phase.features.map((feature, featureIndex) => (
                             <div key={featureIndex} className="flex items-start gap-3">
-                              <span className={`${styling.icon} flex-shrink-0 text-lg leading-relaxed`}>•</span>
-                              <span className="text-gray-300 text-sm leading-relaxed whitespace-normal">{feature}</span>
+                              <span
+                                className={`${styling.icon} flex-shrink-0 text-lg leading-relaxed`}
+                              >
+                                •
+                              </span>
+                              <span className="text-gray-300 text-sm leading-relaxed whitespace-normal">
+                                {feature}
+                              </span>
                             </div>
                           ))}
                         </div>

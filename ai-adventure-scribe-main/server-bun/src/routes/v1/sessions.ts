@@ -1,3 +1,4 @@
+/* eslint-disable import/order */
 /**
  * Session Routes for Elysia
  *
@@ -10,18 +11,25 @@
  * and existence masking.
  */
 
-import { Elysia } from 'elysia';
-import { authenticateRequest } from '../../lib/auth.js';
-import { sql } from '../../lib/db.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { SessionService } from '../../services/session-service.js';
+import { Elysia, t } from 'elysia';
+import { eq } from 'drizzle-orm';
+
 import { logger } from '../../lib/logger.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { authenticateRequest } from '../../lib/auth.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
+import { SessionService } from '../../services/session-service.js';
+import { db } from '../../../../db/client';
+import { sessionChronicles } from '../../../../db/schema/index';
+import { chronicleGenerator } from '../../services/chronicle-generator.js';
+
+import type { GameSession } from '../../../../db/schema/index';
 
 /**
  * Helper to map camelCase Session to snake_case for API compatibility
  */
-const mapSessionToApi = (session: any) => ({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapSessionToApi = (session: GameSession): any => ({
   id: session.id,
   campaign_id: session.campaignId,
   character_id: session.characterId,
@@ -38,6 +46,16 @@ const mapSessionToApi = (session: any) => ({
   ruleset: session.ruleset,
   created_at: session.createdAt,
   updated_at: session.updatedAt,
+});
+
+/**
+ * Validation schema for creating a session
+ */
+const createSessionSchema = t.Object({
+  campaign_id: t.Optional(t.Nullable(t.String())),
+  character_id: t.Optional(t.Nullable(t.String())),
+  session_number: t.Optional(t.Number({ minimum: 1 })),
+  status: t.Optional(t.String()),
 });
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
@@ -57,32 +75,38 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    * Create a new game session
    */
   .use(planRateLimit('default'))
-  .post('/', async ({ body, set, user }) => {
-    const { campaign_id, character_id, session_number } = body as {
-      campaign_id?: string;
-      character_id?: string;
-      session_number?: number;
-    };
+  .post(
+    '/',
+    async ({ body, set, user }) => {
+      const { campaign_id, character_id, session_number, status } = body;
 
-    try {
-      const session = await SessionService.createSession({
-        campaignId: campaign_id,
-        characterId: character_id,
-        sessionNumber: session_number,
-      }, (user as any).userId);
+      try {
+        const session = await SessionService.createSession(
+          {
+            campaignId: campaign_id,
+            characterId: character_id,
+            sessionNumber: session_number,
+            status: status || undefined,
+          },
+          (user as { userId: string }).userId,
+        );
 
-      set.status = 201;
-      return mapSessionToApi(session);
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        set.status = 404;
-        return { error: error.message };
+        set.status = 201;
+        return mapSessionToApi(session);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: error.message };
+        }
+        logger.error({ msg: 'SESSION_CREATE error', error });
+        set.status = 500;
+        return { error: 'Failed to create session' };
       }
-      logger.error({ msg: 'SESSION_CREATE error', error });
-      set.status = 500;
-      return { error: 'Failed to create session' };
-    }
-  })
+    },
+    {
+      body: createSessionSchema,
+    },
+  )
 
   /**
    * GET /v1/sessions/:id
@@ -92,7 +116,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { id } = params;
 
     try {
-      const session = await SessionService.getSessionById(id, (user as any).userId);
+      const session = await SessionService.getSessionById(id, (user as { userId: string }).userId);
       return mapSessionToApi(session);
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -114,7 +138,64 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     const { summary } = body as { summary?: string };
 
     try {
-      const session = await SessionService.completeSession(id, (user as any).userId, summary);
+      const session = await SessionService.completeSession(
+        id,
+        (user as { userId: string }).userId,
+        summary,
+      );
+
+      // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
+      const userPlan = (user as { userId: string; plan?: string }).plan;
+      if (userPlan === 'pro' || userPlan === 'enterprise') {
+        const sessionUserId = (user as { userId: string }).userId;
+        const sessionIdForChronicle = id;
+        (async () => {
+          try {
+            const [row] = await db
+              .insert(sessionChronicles)
+              .values({
+                sessionId: sessionIdForChronicle,
+                userId: sessionUserId,
+                status: 'generating',
+              })
+              .returning({ id: sessionChronicles.id });
+
+            const content = await chronicleGenerator.generateProChronicle(
+              sessionIdForChronicle,
+              sessionUserId,
+            );
+            const illustrationUrl = await chronicleGenerator.generateIllustration(
+              content.illustrationPrompt,
+            );
+
+            await db
+              .update(sessionChronicles)
+              .set({
+                status: 'ready',
+                chronicleText: content.chronicleText,
+                chapterTitle: content.chapterTitle,
+                previouslyOn: content.previouslyOn,
+                illustrationUrl,
+                shareToken: chronicleGenerator.generateShareToken(),
+                generatedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(sessionChronicles.id, row.id));
+
+            logger.info({
+              msg: '[Sessions] Chronicle generated',
+              sessionId: sessionIdForChronicle,
+            });
+          } catch (err) {
+            logger.error({
+              msg: '[Sessions] Auto chronicle failed',
+              sessionId: sessionIdForChronicle,
+              error: err,
+            });
+          }
+        })();
+      }
+
       return mapSessionToApi(session);
     } catch (error) {
       if (error instanceof NotFoundError) {

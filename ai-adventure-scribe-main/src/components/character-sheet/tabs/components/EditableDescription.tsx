@@ -1,5 +1,5 @@
 import { Edit3, Save, X, Sparkles } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -61,6 +61,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaId = useId();
 
   // Auto-resize textarea
   useEffect(() => {
@@ -113,6 +114,13 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
     }
   };
 
+  const handleDisplayKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleEdit();
+    }
+  };
+
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditValue(e.target.value);
     // Auto-resize
@@ -124,7 +132,9 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
     <div className={cn('space-y-2', className)}>
       {/* Label and AI Badge Row */}
       <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
+        <Label htmlFor={textareaId} className="text-sm font-medium text-muted-foreground">
+          {label}
+        </Label>
         <div className="flex items-center gap-2">
           {isAiGenerated && !isEditing && (
             <Badge
@@ -142,6 +152,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
               onClick={handleEdit}
               disabled={disabled}
               className="h-6 w-6 p-0 hover:bg-accent"
+              title={`Edit ${label}`}
             >
               <Edit3 className="w-3 h-3" />
               <span className="sr-only">Edit {label}</span>
@@ -154,6 +165,7 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
       {isEditing ? (
         <div className="space-y-2">
           <Textarea
+            id={textareaId}
             ref={textareaRef}
             value={editValue}
             onChange={handleTextareaChange}
@@ -166,11 +178,25 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
             rows={3}
           />
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={handleCancel} className="h-8 px-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancel}
+              className="h-8 px-3"
+              aria-label="Cancel editing"
+              title="Cancel editing"
+            >
               <X className="w-3 h-3 mr-1" />
               Cancel
             </Button>
-            <Button variant="default" size="sm" onClick={handleSave} className="h-8 px-3">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSave}
+              className="h-8 px-3"
+              aria-label={`Save ${label}`}
+              title={`Save ${label}`}
+            >
               <Save className="w-3 h-3 mr-1" />
               Save
             </Button>
@@ -182,12 +208,16 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
       ) : (
         <div
           className={cn(
-            'relative rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors',
+            'relative rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
             minHeight,
             'hover:bg-accent/50 cursor-pointer group',
             disabled && 'opacity-50 cursor-not-allowed hover:bg-background',
           )}
           onClick={handleEdit}
+          onKeyDown={handleDisplayKeyDown}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          aria-label={`Edit ${label}`}
         >
           {value ? (
             <div className="whitespace-pre-wrap break-words leading-relaxed">{value}</div>

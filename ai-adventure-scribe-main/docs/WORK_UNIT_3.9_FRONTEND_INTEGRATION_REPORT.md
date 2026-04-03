@@ -112,7 +112,7 @@ Comprehensive integration guide covering:
 
 ### 2. Client Type Definitions: `client-types.ts`
 
-**File:** `/home/user/ai-adventure-scribe-main/docs/client-types.ts`
+**File:** `/home/user/ai-adventure-scribe-main/docs/examples/frontend-integration/client-types.ts`
 **Size:** 15 KB
 **Lines:** 670 lines
 
@@ -181,7 +181,7 @@ Production-ready TypeScript type definitions including:
 
 ### 3. Sample API Client: `sample-api-client.ts`
 
-**File:** `/home/user/ai-adventure-scribe-main/docs/sample-api-client.ts`
+**File:** `/home/user/ai-adventure-scribe-main/docs/examples/frontend-integration/sample-api-client.ts`
 **Size:** 21 KB
 **Lines:** 782 lines
 

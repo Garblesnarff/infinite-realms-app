@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+import { GAME_SESSION_SELECT_COLUMNS } from '../types/session';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -54,7 +56,7 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
           session_number: nextSessionNumber,
           status: 'active',
         })
-        .select()
+        .select(GAME_SESSION_SELECT_COLUMNS)
         .single();
 
       if (error) throw error;
@@ -78,7 +80,7 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
       // Look for existing sessions, both active and completed
       const { data: existingSessions, error } = await supabase
         .from('game_sessions')
-        .select('*')
+        .select(GAME_SESSION_SELECT_COLUMNS)
         .eq('campaign_id', campaignId)
         .eq('character_id', characterId)
         .order('created_at', { ascending: false })
@@ -122,7 +124,7 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
             // Add a summary note about continuation
             summary: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
           })
-          .select()
+          .select(GAME_SESSION_SELECT_COLUMNS)
           .single();
 
         if (createError) throw createError;

@@ -38,7 +38,11 @@ export function checkDowntimePrerequisites(
   }
 
   // Check gold cost
-  if (activity.goldCost && character.gold && character.gold < activity.goldCost) {
+  if (
+    activity.goldCost !== undefined &&
+    character.gold !== undefined &&
+    character.gold < activity.goldCost
+  ) {
     return {
       canPerform: false,
       reason: `Requires ${activity.goldCost} gold`,
@@ -102,12 +106,12 @@ export function performDowntimeActivity(
   const updatedCharacter = { ...character };
 
   // Deduct gold
-  if (activity.goldCost && updatedCharacter.gold) {
+  if (activity.goldCost !== undefined && updatedCharacter.gold !== undefined) {
     updatedCharacter.gold -= activity.goldCost;
   }
 
   // Deduct materials
-  if (activity.materialCost && updatedCharacter.gold) {
+  if (activity.materialCost !== undefined && updatedCharacter.gold !== undefined) {
     // Using gold field for materials as well
     updatedCharacter.gold -= activity.materialCost;
   }
@@ -156,12 +160,12 @@ export function performDowntimeActivity(
   // Apply outcome effects
   if (outcome) {
     // Add experience if specified
-    if (outcome.experienceGained && updatedCharacter.experience) {
+    if (outcome.experienceGained !== undefined && updatedCharacter.experience !== undefined) {
       updatedCharacter.experience += outcome.experienceGained;
     }
 
     // Recover some gold on failure if specified
-    if (outcome.goldRecovery && updatedCharacter.gold) {
+    if (outcome.goldRecovery !== undefined && updatedCharacter.gold !== undefined) {
       updatedCharacter.gold += outcome.goldRecovery;
     }
 

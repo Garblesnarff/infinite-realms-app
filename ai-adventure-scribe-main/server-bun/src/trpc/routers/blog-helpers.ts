@@ -7,9 +7,19 @@
  * - Post relation management
  */
 
+/* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
-import { blogAuthors, blogPostCategories, blogPostTags } from '../../../../db/schema/index.js';
+import { and, eq, exists, inArray, sql } from 'drizzle-orm';
+
+import {
+  blogAuthors,
+  blogCategories,
+  blogPosts,
+  blogPostCategories,
+  blogPostTags,
+  blogTags,
+} from '../../../../db/schema/index';
+
 import type { Context } from '../context.js';
 
 /**
@@ -30,7 +40,7 @@ export async function resolveAuthorId(
       });
     }
 
-    const isAdmin = ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise';
+    const isAdmin = ctx.user.plan === 'admin';
 
     if (isAdmin) {
       const [author] = await ctx.db
@@ -130,25 +140,89 @@ export function normalizeStatusFields(
 }
 
 /**
+ * Sync both categories and tags in parallel to avoid redundant sequential round-trips.
+ * Uses Promise.all to run category and tag synchronization tasks simultaneously.
+ */
+export async function syncPostRelations(
+  ctx: Context,
+  postId: string,
+  categoryIds?: string[],
+  tagIds?: string[],
+  userAuthorId?: string | null,
+  isAdmin?: boolean,
+): Promise<void> {
+  // ⚡ Bolt: Parallelize category and tag synchronization to reduce sequential database round-trips.
+  const tasks: Promise<void>[] = [];
+
+  if (categoryIds !== undefined) {
+    tasks.push(syncPostCategories(ctx, postId, categoryIds, userAuthorId, isAdmin));
+  }
+
+  if (tagIds !== undefined) {
+    tasks.push(syncPostTags(ctx, postId, tagIds, userAuthorId, isAdmin));
+  }
+
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+}
+
+/**
  * Sync post categories
  * Deletes existing relationships and creates new ones
  */
 export async function syncPostCategories(
   ctx: Context,
   postId: string,
-  categoryIds: string[]
+  categoryIds: string[],
+  userAuthorId?: string | null,
+  isAdmin?: boolean,
 ): Promise<void> {
-  // Delete existing categories
-  await ctx.db.delete(blogPostCategories).where(eq(blogPostCategories.postId, postId));
+  // 🛡️ Sentinel: Incorporate ownership check into the DELETE query for defense-in-depth.
+  await ctx.db.delete(blogPostCategories).where(
+    and(
+      eq(blogPostCategories.postId, postId),
+      userAuthorId && !isAdmin
+        ? exists(
+            ctx.db
+              .select()
+              .from(blogPosts)
+              .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
+          )
+        : undefined,
+    ),
+  );
 
-  // Insert new categories
+  // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
   if (categoryIds.length > 0) {
-    await ctx.db.insert(blogPostCategories).values(
-      categoryIds.map((categoryId) => ({
-        postId,
-        categoryId,
-      }))
-    );
+    if (userAuthorId && !isAdmin) {
+      await ctx.db.insert(blogPostCategories).select(
+        ctx.db
+          .select({
+            postId: sql`${postId}`,
+            categoryId: blogCategories.id,
+          })
+          .from(blogCategories)
+          .where(
+            and(
+              inArray(blogCategories.id, categoryIds),
+              exists(
+                ctx.db
+                  .select()
+                  .from(blogPosts)
+                  .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
+              ),
+            ),
+          ),
+      );
+    } else {
+      await ctx.db.insert(blogPostCategories).values(
+        categoryIds.map((categoryId) => ({
+          postId,
+          categoryId,
+        })),
+      );
+    }
   }
 }
 
@@ -159,34 +233,73 @@ export async function syncPostCategories(
 export async function syncPostTags(
   ctx: Context,
   postId: string,
-  tagIds: string[]
+  tagIds: string[],
+  userAuthorId?: string | null,
+  isAdmin?: boolean,
 ): Promise<void> {
-  // Delete existing tags
-  await ctx.db.delete(blogPostTags).where(eq(blogPostTags.postId, postId));
+  // 🛡️ Sentinel: Incorporate ownership check into the DELETE query for defense-in-depth.
+  await ctx.db.delete(blogPostTags).where(
+    and(
+      eq(blogPostTags.postId, postId),
+      userAuthorId && !isAdmin
+        ? exists(
+            ctx.db
+              .select()
+              .from(blogPosts)
+              .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
+          )
+        : undefined,
+    ),
+  );
 
-  // Insert new tags
+  // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
   if (tagIds.length > 0) {
-    await ctx.db.insert(blogPostTags).values(
-      tagIds.map((tagId) => ({
-        postId,
-        tagId,
-      }))
-    );
+    if (userAuthorId && !isAdmin) {
+      await ctx.db.insert(blogPostTags).select(
+        ctx.db
+          .select({
+            postId: sql`${postId}`,
+            tagId: blogTags.id,
+          })
+          .from(blogTags)
+          .where(
+            and(
+              inArray(blogTags.id, tagIds),
+              exists(
+                ctx.db
+                  .select()
+                  .from(blogPosts)
+                  .where(and(eq(blogPosts.id, postId), eq(blogPosts.authorId, userAuthorId))),
+              ),
+            ),
+          ),
+      );
+    } else {
+      await ctx.db.insert(blogPostTags).values(
+        tagIds.map((tagId) => ({
+          postId,
+          tagId,
+        })),
+      );
+    }
   }
 }
 
 /**
  * Check if user can manage a post
  * Users can manage their own posts, admins can manage all posts
+ * Returns an object containing canManage flag and the user's authorId
  */
 export async function canManagePost(
   ctx: Context,
   postId: string,
-  authorId: string
-): Promise<boolean> {
+  postAuthorId: string,
+): Promise<{ canManage: boolean; userAuthorId: string | null; isAdmin: boolean }> {
   if (!ctx.user) {
-    return false;
+    return { canManage: false, userAuthorId: null, isAdmin: false };
   }
+
+  const isAdmin = ctx.user.plan === 'admin';
 
   // Get current user's author profile
   const [userAuthor] = await ctx.db
@@ -195,19 +308,17 @@ export async function canManagePost(
     .where(eq(blogAuthors.userId, ctx.user.userId))
     .limit(1);
 
-  if (!userAuthor) {
-    return false;
-  }
+  const userAuthorId = userAuthor?.id || null;
 
   // User can manage if they're the author
-  if (userAuthor.id === authorId) {
-    return true;
+  if (userAuthorId === postAuthorId) {
+    return { canManage: true, userAuthorId, isAdmin };
   }
 
   // Admin users can manage all posts
-  if (ctx.user.plan === 'admin' || ctx.user.plan === 'enterprise') {
-    return true;
+  if (isAdmin) {
+    return { canManage: true, userAuthorId, isAdmin };
   }
 
-  return false;
+  return { canManage: false, userAuthorId, isAdmin };
 }

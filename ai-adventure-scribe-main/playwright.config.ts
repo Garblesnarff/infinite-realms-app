@@ -19,7 +19,7 @@ export default defineConfig({
         baseURL: 'http://localhost:8891',
       },
       webServer: {
-        command: 'npm run server:start:ci',
+        command: 'bun run server:start:ci',
         url: 'http://localhost:8891/health',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
@@ -38,7 +38,7 @@ export default defineConfig({
         baseURL: 'http://localhost:8892',
       },
       webServer: {
-        command: 'npm run server:start:ci',
+        command: 'bun run server:start:ci',
         url: 'http://localhost:8892/health',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

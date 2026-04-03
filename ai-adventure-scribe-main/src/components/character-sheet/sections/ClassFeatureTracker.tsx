@@ -101,6 +101,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                     <Progress
                       value={(feature.currentUses / feature.maxUses) * 100}
                       className="h-2"
+                      aria-label={`${feature.name} uses`}
                     />
                   </div>
                 )}
@@ -150,7 +151,11 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                         {dice.current} / {dice.max}
                       </span>
                     </div>
-                    <Progress value={(dice.current / dice.max) * 100} className="h-2" />
+                    <Progress
+                      value={(dice.current / dice.max) * 100}
+                      className="h-2"
+                      aria-label={`Hit Dice (${dieType}) remaining`}
+                    />
                   </div>
                 </div>
               ))}
@@ -177,6 +182,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                   <Progress
                     value={(characterResources.rages.current / characterResources.rages.max) * 100}
                     className="h-2"
+                    aria-label="Rages remaining"
                   />
                 </div>
               </div>
@@ -205,6 +211,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       (characterResources.kiPoints.current / characterResources.kiPoints.max) * 100
                     }
                     className="h-2"
+                    aria-label="Ki Points remaining"
                   />
                 </div>
               </div>
@@ -239,6 +246,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       100
                     }
                     className="h-2"
+                    aria-label="Sorcery Points remaining"
                   />
                 </div>
               </div>
@@ -275,6 +283,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       100
                     }
                     className="h-2"
+                    aria-label="Bardic Inspiration remaining"
                   />
                 </div>
               </div>
@@ -309,6 +318,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       100
                     }
                     className="h-2"
+                    aria-label="Channel Divinity remaining"
                   />
                 </div>
               </div>
@@ -336,6 +346,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       100
                     }
                     className="h-2"
+                    aria-label="Lay on Hands remaining"
                   />
                 </div>
               </div>
@@ -369,6 +380,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
                       100
                     }
                     className="h-2"
+                    aria-label="Action Surge remaining"
                   />
                 </div>
               </div>

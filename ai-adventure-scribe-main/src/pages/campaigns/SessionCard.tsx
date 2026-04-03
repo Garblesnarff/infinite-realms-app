@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { format, formatDistanceToNow } from 'date-fns';
 import React from 'react';
 
@@ -24,6 +25,12 @@ export interface SessionListItem {
     name: string | null;
     image_url?: string | null;
   } | null;
+  session_chronicles?: Array<{
+    id: string;
+    status: string;
+    chapter_title: string | null;
+    share_token: string | null;
+  }>;
 }
 
 interface SessionCardProps {
@@ -31,6 +38,9 @@ interface SessionCardProps {
   expired: boolean;
   onContinue: (session: SessionListItem) => void;
   continuing?: boolean;
+  onViewChronicle?: (sessionId: string) => void;
+  onGenerateChronicle?: (sessionId: string) => void;
+  userPlan?: string;
 }
 
 const statusStyles: Record<string, string> = {
@@ -47,7 +57,15 @@ const statusLabels: Record<string, string> = {
   expired: 'Expired',
 };
 
-const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue, continuing }) => {
+const SessionCard: React.FC<SessionCardProps> = ({
+  session,
+  expired,
+  onContinue,
+  continuing,
+  onViewChronicle,
+  onGenerateChronicle,
+  userPlan,
+}) => {
   const statusKey = session.status ?? 'completed';
   const badgeClass = statusStyles[statusKey] ?? statusStyles.completed;
   const badgeLabel = statusLabels[statusKey] ?? 'Completed';
@@ -76,9 +94,7 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue,
   const isResumable = session.status === 'active' && !expired;
   const buttonLabel = isResumable ? 'Resume Session' : 'Continue Session';
   const buttonVariant = isResumable ? 'default' : 'outline';
-  const helperText = isResumable
-    ? 'Resume where you left off'
-    : 'Create continuation session';
+  const helperText = isResumable ? 'Resume where you left off' : 'Create continuation session';
 
   return (
     <Card className="p-4 md:p-5 shadow-sm border border-border/60">
@@ -139,9 +155,7 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue,
             {continuing ? 'Continuing...' : buttonLabel}
           </Button>
           {!continueDisabled && !continuing && (
-            <p className="text-xs text-muted-foreground text-center md:text-right">
-              {helperText}
-            </p>
+            <p className="text-xs text-muted-foreground text-center md:text-right">{helperText}</p>
           )}
           {continueDisabled && !session.character?.id && (
             <p className="text-xs text-destructive/80 text-center md:text-right">
@@ -155,6 +169,54 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, expired, onContinue,
           )}
         </div>
       </div>
+
+      {(session.status === 'completed' || session.status === 'expired') &&
+        (() => {
+          const chronicle = session.session_chronicles?.[0];
+          const isPro = userPlan && userPlan !== 'free';
+
+          return (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              {chronicle?.status === 'ready' ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-amber-600 hover:text-amber-700 h-7 px-2 text-xs"
+                    onClick={() => onViewChronicle?.(session.id)}
+                  >
+                    📖 Read Chronicle
+                  </Button>
+                  {chronicle.share_token && isPro && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground h-7 px-2 text-xs"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `${window.location.origin}/chronicle/${chronicle.share_token}`,
+                        );
+                      }}
+                    >
+                      Share ↗
+                    </Button>
+                  )}
+                </div>
+              ) : chronicle?.status === 'generating' ? (
+                <p className="text-xs text-amber-500 animate-pulse">✨ Writing your chronicle...</p>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground h-7 px-2 text-xs"
+                  onClick={() => onGenerateChronicle?.(session.id)}
+                >
+                  {isPro ? '✨ Generate Chronicle' : '📝 Generate Summary'}
+                </Button>
+              )}
+            </div>
+          );
+        })()}
     </Card>
   );
 };

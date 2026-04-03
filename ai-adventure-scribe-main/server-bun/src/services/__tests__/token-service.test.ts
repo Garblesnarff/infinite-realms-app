@@ -2,11 +2,11 @@
 import { TRPCError } from '@trpc/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { db } from '../../../../db/client.js';
+import { db } from '../../../../db/client';
 import { TokenService } from '../token-service.js';
 
 // Mock the db client
-vi.mock('../../../../db/client.js', () => {
+vi.mock('../../../../db/client', () => {
   const mockDb = {
     query: {
       characters: {
@@ -40,6 +40,7 @@ vi.mock('../../../../db/client.js', () => {
       returning: vi.fn(() => mock),
       values: vi.fn(() => mock),
       set: vi.fn(() => mock),
+      select: vi.fn(() => mock),
     };
     // Make it thenable for easy awaiting if needed, or just mock the final method
     return mock;
@@ -116,16 +117,13 @@ describe('TokenService', () => {
   });
 
   describe('createToken', () => {
-    it('should parallelize verifySceneAccess and verifyCharacterOwnership', async () => {
-      (db.query.scenes.findFirst as any).mockResolvedValue({ id: mockSceneId });
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-
+    it('should use atomic INSERT ... SELECT for ownership verification', async () => {
       const mockInsertBuilder = (db as any).insert();
-      mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
       mockInsertBuilder.returning.mockResolvedValue([{ id: mockTokenId, sceneId: mockSceneId }]);
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
-      await TokenService.createToken(mockSceneId, mockUserId, {
+      const result = await TokenService.createToken(mockSceneId, mockUserId, {
         sceneId: mockSceneId,
         actorId: mockCharacterId,
         name: 'New Token',
@@ -134,9 +132,25 @@ describe('TokenService', () => {
         positionY: 0
       });
 
-      expect(db.query.scenes.findFirst).toHaveBeenCalled();
-      expect(db.query.characters.findFirst).toHaveBeenCalled();
       expect(db.insert).toHaveBeenCalled();
+      expect(mockInsertBuilder.select).toHaveBeenCalled();
+      expect(result).toEqual({ id: mockTokenId, sceneId: mockSceneId });
+    });
+
+    it('should throw NOT_FOUND if insertion fails (unauthorized or missing)', async () => {
+      const mockInsertBuilder = (db as any).insert();
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([]);
+      (db as any).insert.mockReturnValue(mockInsertBuilder);
+
+      await expect(TokenService.createToken(mockSceneId, mockUserId, {
+        sceneId: mockSceneId,
+        actorId: mockCharacterId,
+        name: 'New Token',
+        tokenType: 'character',
+        positionX: 0,
+        positionY: 0
+      })).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
     });
   });
 

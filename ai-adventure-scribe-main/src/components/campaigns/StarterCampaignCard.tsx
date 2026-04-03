@@ -8,8 +8,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-import { Badge } from '@/components/ui/badge';
 import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
+
+import { Badge } from '@/components/ui/badge';
+import { Z_INDEX } from '@/constants/z-index';
 
 interface StarterCampaignCardProps {
   campaign: StarterCampaign;
@@ -92,26 +94,26 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent"></div>
 
         {/* Genre Badges - Top Left */}
-        <div className="absolute top-4 left-4 z-10 flex flex-wrap gap-2">
+        <div
+          className="absolute top-4 left-4 flex flex-wrap gap-2"
+          style={{ zIndex: Z_INDEX.DROPDOWN }}
+        >
           {campaign.genre.slice(0, 2).map((g) => (
-            <Badge
-              key={g}
-              className={`${getGenreStyle(g)} border backdrop-blur-sm capitalize`}
-            >
+            <Badge key={g} className={`${getGenreStyle(g)} border backdrop-blur-sm capitalize`}>
               {g}
             </Badge>
           ))}
         </div>
 
         {/* Difficulty Badge - Top Right */}
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
           <Badge className={`${getDifficultyStyle(campaign.difficulty)} border backdrop-blur-sm`}>
             {formatDifficulty(campaign.difficulty)}
           </Badge>
         </div>
 
         {/* Content - Bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-6" style={{ zIndex: Z_INDEX.DROPDOWN }}>
           {/* Title */}
           <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">
             {campaign.title}
@@ -131,12 +133,7 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
           <div className="flex items-center gap-4 text-xs text-gray-400">
             {campaign.levelRange && (
               <span className="flex items-center gap-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -149,12 +146,7 @@ export const StarterCampaignCard: React.FC<StarterCampaignCardProps> = ({ campai
             )}
             {campaign.estimatedSessions && (
               <span className="flex items-center gap-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

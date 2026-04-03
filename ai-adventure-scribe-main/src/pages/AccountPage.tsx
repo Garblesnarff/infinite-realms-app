@@ -1,10 +1,12 @@
 import { Crown, CreditCard, Settings, Zap, Shield, Sparkles } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth, type UserPlan } from '@/contexts/AuthContext';
 
 interface SubscriptionStatus {
@@ -35,6 +37,7 @@ const AccountPage: React.FC = () => {
   } as const;
 
   const currentPrice = PRICE;
+  const quotaLabelId = useId();
   const { user, userPlan, refreshUserPlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -186,13 +189,14 @@ const AccountPage: React.FC = () => {
             <Settings className="h-8 w-8" />
             Account Settings
           </h1>
-          <p className="text-white/80 mt-2">
-            Manage your subscription and account preferences
-          </p>
+          <p className="text-white/80 mt-2">Manage your subscription and account preferences</p>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8 -mt-6 relative z-10">
+      <div
+        className="max-w-4xl mx-auto px-4 py-8 -mt-6 relative"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         {/* Current Plan Card */}
         <Card className="mb-8 shadow-lg border-2 border-infinite-purple/20">
           <CardHeader>
@@ -301,29 +305,31 @@ const AccountPage: React.FC = () => {
                 <Zap className="h-5 w-5" />
                 Today's Usage
               </CardTitle>
-              <CardDescription>
-                Your AI message quota resets daily at midnight UTC
-              </CardDescription>
+              <CardDescription>Your AI message quota resets daily at midnight UTC</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between text-sm mb-1">
-                    <span>AI Messages</span>
+                    <span id={quotaLabelId}>AI Messages</span>
                     <span>
                       {quota.used} / {quota.limit === -1 ? 'Unlimited' : quota.limit}
                     </span>
                   </div>
-                  {quota.limit !== -1 && (
-                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-infinite-purple to-infinite-gold transition-all"
-                        style={{ width: `${Math.min((quota.used / quota.limit) * 100, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                  {quota.limit === -1 && (
-                    <div className="h-2 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full" />
+                  {quota.limit !== -1 ? (
+                    <Progress
+                      value={Math.min((quota.used / quota.limit) * 100, 100)}
+                      className="h-2"
+                      indicatorClassName="bg-gradient-to-r from-infinite-purple to-infinite-gold"
+                      aria-labelledby={quotaLabelId}
+                    />
+                  ) : (
+                    <Progress
+                      value={100}
+                      className="h-2"
+                      indicatorClassName="bg-gradient-to-r from-amber-400 to-amber-500"
+                      aria-labelledby={quotaLabelId}
+                    />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">

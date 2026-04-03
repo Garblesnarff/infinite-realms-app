@@ -107,8 +107,8 @@ const isAdmin = middleware(({ ctx, next }) => {
     });
   }
 
-  // Check if user has admin plan/role
-  if (ctx.user.plan !== 'admin' && ctx.user.plan !== 'enterprise') {
+  // Check explicit admin plan only. Enterprise billing tier is not an admin role.
+  if (ctx.user.plan !== 'admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'You do not have permission to access this resource',

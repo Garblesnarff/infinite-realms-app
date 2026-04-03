@@ -3,7 +3,7 @@ import logger from '@/lib/logger';
 import { isSemanticMemoriesEnabled } from '@/config/featureFlags';
 
 import type { EnhancedMemory, MemoryQueryOptions } from '@/types/memory';
-import type { Memory } from '@/components/game/memory/types';
+import { MEMORY_SELECT_COLUMNS, type Memory } from '@/types/memory';
 
 let hasLoggedSemanticDisabled = false;
 
@@ -17,7 +17,7 @@ export class MemoryRepository {
   async loadRecentMemories(sessionId: string, limit: number = 5): Promise<Memory[]> {
     const { data, error } = await supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -28,7 +28,7 @@ export class MemoryRepository {
   async loadTopMemories(sessionId: string, limit: number): Promise<Memory[]> {
     const { data, error } = await supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .order('importance', { ascending: false })
       .order('created_at', { ascending: false })
@@ -40,7 +40,7 @@ export class MemoryRepository {
   async loadFictionReadyMemories(sessionId: string, minNarrativeWeight: number): Promise<Memory[]> {
     const { data, error } = await supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .gte('narrative_weight', minNarrativeWeight)
       .order('created_at', { ascending: true });
@@ -51,7 +51,7 @@ export class MemoryRepository {
   async fetchMemories(sessionId: string, options: MemoryQueryOptions = {}): Promise<any[]> {
     let query = supabase
       .from('memories')
-      .select('*')
+      .select(MEMORY_SELECT_COLUMNS)
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false });
 
@@ -153,7 +153,7 @@ export class MemoryRepository {
     return (data as any).embedding ?? null;
   }
 
-  async transformDatabaseMemory(dbMemory: any): Promise<EnhancedMemory> {
+  transformDatabaseMemory(dbMemory: any): EnhancedMemory {
     const metadata = dbMemory.metadata || {};
     const context = metadata.context ? JSON.parse(metadata.context) : {};
     return {

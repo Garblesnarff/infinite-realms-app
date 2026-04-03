@@ -10,10 +10,7 @@
 import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon } from '@/utils/vision-polygon';
-import type {
-  VisionWorkerMessage,
-  VisionWorkerResponse,
-} from '@/workers/vision-worker';
+import type { VisionWorkerMessage, VisionWorkerResponse } from '@/workers/vision-worker';
 
 // ===========================
 // Types
@@ -89,10 +86,9 @@ export class VisionWorkerManager {
 
     try {
       // Create worker
-      this.worker = new Worker(
-        new URL('../workers/vision-worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      this.worker = new Worker(new URL('../workers/vision-worker.ts', import.meta.url), {
+        type: 'module',
+      });
 
       // Set up message handler
       this.worker.onmessage = this.handleMessage.bind(this);
@@ -105,7 +101,8 @@ export class VisionWorkerManager {
 
       this.isInitialized = true;
     } catch (error) {
-      this.initializationError = error instanceof Error ? error : new Error('Failed to initialize worker');
+      this.initializationError =
+        error instanceof Error ? error : new Error('Failed to initialize worker');
       throw this.initializationError;
     }
   }
@@ -121,7 +118,7 @@ export class VisionWorkerManager {
   async calculateVision(
     token: Token,
     walls: VisionBlocker[],
-    range?: number
+    range?: number,
   ): Promise<VisionPolygon> {
     await this.ensureInitialized();
 
@@ -160,7 +157,7 @@ export class VisionWorkerManager {
   async calculateMultiVision(
     tokens: Token[],
     walls: VisionBlocker[],
-    range?: number
+    range?: number,
   ): Promise<Map<string, VisionPolygon>> {
     await this.ensureInitialized();
 
@@ -338,7 +335,7 @@ export class VisionWorkerManager {
 export async function calculateVisionAsync(
   token: Token,
   walls: VisionBlocker[],
-  range?: number
+  range?: number,
 ): Promise<VisionPolygon> {
   const manager = VisionWorkerManager.getInstance();
   return manager.calculateVision(token, walls, range);
@@ -350,7 +347,7 @@ export async function calculateVisionAsync(
 export async function calculateMultiVisionAsync(
   tokens: Token[],
   walls: VisionBlocker[],
-  range?: number
+  range?: number,
 ): Promise<Map<string, VisionPolygon>> {
   const manager = VisionWorkerManager.getInstance();
   return manager.calculateMultiVision(tokens, walls, range);

@@ -15,22 +15,22 @@ The project uses the following code quality tools:
 
 ```bash
 # Run linting (check for issues)
-npm run lint
+bun run lint
 
 # Run linting with auto-fix
-npm run lint:fix
+bun run lint:fix
 
 # Check code formatting
-npm run format:check
+bun run format:check
 
 # Format code automatically
-npm run format
+bun run format
 
 # Check TypeScript types
-npm run type-check
+bun run type-check
 
 # Check type coverage percentage
-npm run type-coverage
+bun run type-coverage
 ```
 
 ## ESLint Configuration
@@ -171,13 +171,13 @@ The configuration enforces architectural rules:
 
 ```bash
 # Check for issues
-npm run lint
+bun run lint
 
 # Fix auto-fixable issues
-npm run lint:fix
+bun run lint:fix
 
 # Lint specific files
-npx eslint src/components/MyComponent.tsx
+bunx eslint src/components/MyComponent.tsx
 ```
 
 ### Common Issues and Fixes
@@ -237,7 +237,7 @@ function calculateTotal(items: Item[]): number {
 #### Issue: "Import order violations"
 
 **Fix:**
-Run `npm run lint:fix` to automatically reorganize imports.
+Run `bun run lint:fix` to automatically reorganize imports.
 
 ## Prettier Configuration
 
@@ -277,13 +277,13 @@ Prettier automatically formats code for consistency across the project.
 
 ```bash
 # Format all files
-npm run format
+bun run format
 
 # Check formatting without changing files
-npm run format:check
+bun run format:check
 
 # Format specific files
-npx prettier --write src/components/MyComponent.tsx
+bunx prettier --write src/components/MyComponent.tsx
 ```
 
 ### Ignored Files
@@ -310,13 +310,13 @@ TypeScript is configured with strict mode enabled for maximum type safety.
 
 ```bash
 # Type check entire project
-npm run type-check
+bun run type-check
 
 # Type check only (no type coverage)
-npx tsc --noEmit
+bunx tsc --noEmit
 
 # Type check server
-npx tsc -p server/tsconfig.json --noEmit
+bunx tsc -p server/tsconfig.json --noEmit
 ```
 
 ## Type Coverage
@@ -336,14 +336,14 @@ Both exceed the 95% minimum threshold!
 
 ```bash
 # Get type coverage percentage
-npm run type-coverage
+bun run type-coverage
 
 # Check that coverage meets 95% minimum
-npm run type-check
+bun run type-check
 
 # Get detailed report (shows untyped locations)
-npx type-coverage -p tsconfig.app.json --detail
-npx type-coverage -p server/tsconfig.json --detail
+bunx type-coverage -p tsconfig.app.json --detail
+bunx type-coverage -p server/tsconfig.json --detail
 ```
 
 ### Improving Type Coverage
@@ -421,13 +421,13 @@ Consider adding these to your CI pipeline:
 ```yaml
 # Example GitHub Actions
 - name: Lint
-  run: npm run lint
+  run: bun run lint
 
 - name: Format Check
-  run: npm run format:check
+  run: bun run format:check
 
 - name: Type Check
-  run: npm run type-check
+  run: bun run type-check
 ```
 
 ### Pre-commit Hooks (Optional)
@@ -435,13 +435,13 @@ Consider adding these to your CI pipeline:
 To automatically lint and format before commits, install husky:
 
 ```bash
-npm install --save-dev husky lint-staged
+bun add --dev husky lint-staged
 
 # Initialize husky
-npx husky init
+bunx husky init
 
 # Add pre-commit hook
-echo "npx lint-staged" > .husky/pre-commit
+echo "bunx lint-staged" > .husky/pre-commit
 ```
 
 Add to `package.json`:
@@ -487,8 +487,8 @@ Add to `package.json`:
 ### Next Steps for Improvement
 
 #### Priority 1 (Auto-fixable)
-1. Run `npm run lint:fix` to fix import organization
-2. Run `npm run format` to fix formatting issues
+1. Run `bun run lint:fix` to fix import organization
+2. Run `bun run format` to fix formatting issues
 3. Auto-fix duplicate imports and simple violations
 
 #### Priority 2 (Manual fixes)
@@ -514,17 +514,17 @@ Add to `package.json`:
 
 1. **Before committing:**
    ```bash
-   npm run lint:fix
-   npm run format
-   npm run type-check
+   bun run lint:fix
+   bun run format
+   bun run type-check
    ```
 
 2. **Weekly:**
-   - Review linting violations: `npm run lint`
-   - Check type coverage: `npm run type-coverage`
+   - Review linting violations: `bun run lint`
+   - Check type coverage: `bun run type-coverage`
 
 3. **Monthly:**
-   - Update dependencies: `npm update`
+   - Update dependencies: `bun update`
    - Review and update ESLint rules
    - Check for new TypeScript strict settings
 
@@ -532,13 +532,13 @@ Add to `package.json`:
 
 ```bash
 # Update ESLint and plugins
-npm update eslint typescript-eslint eslint-config-prettier
+bun update eslint typescript-eslint eslint-config-prettier
 
 # Update Prettier
-npm update prettier
+bun update prettier
 
 # Update TypeScript
-npm update typescript
+bun update typescript
 ```
 
 ## Resources

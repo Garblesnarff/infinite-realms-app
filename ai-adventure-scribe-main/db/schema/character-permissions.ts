@@ -8,7 +8,7 @@
 import { relations } from 'drizzle-orm';
 import { pgTable, uuid, text, timestamp, boolean, integer, index, unique, pgEnum } from 'drizzle-orm/pg-core';
 
-import { characters } from './game.js';
+import { characters } from './game';
 
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 

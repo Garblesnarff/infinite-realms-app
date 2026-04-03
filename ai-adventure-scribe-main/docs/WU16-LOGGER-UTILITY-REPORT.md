@@ -167,7 +167,7 @@ Coverage: 95.79% statements, 85.71% branches, 100% functions
 
 ### Build Verification ✅
 ```bash
-npm run build:dev
+bun run build:dev
 ✓ built in 1m 1s
 ```
 

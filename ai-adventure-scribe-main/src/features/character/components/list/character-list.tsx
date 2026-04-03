@@ -9,6 +9,7 @@ import type { Character } from '@/types/character';
 
 import { CharacterListSkeleton } from '@/components/skeletons/CharacterListSkeleton';
 import { Button } from '@/components/ui/button';
+import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { classes } from '@/data/classOptions';
 import { baseRaces } from '@/data/raceOptions';
@@ -245,7 +246,10 @@ const CharacterList: React.FC = () => {
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-8 -mt-10 relative z-10">
+        <div
+          className="container mx-auto px-4 py-8 -mt-10 relative"
+          style={{ zIndex: Z_INDEX.DROPDOWN }}
+        >
           <div className="flex justify-center items-center mb-6">
             <div className="flex items-center gap-2">
               <Users className="w-6 h-6 text-infinite-purple animate-pulse" />
@@ -308,7 +312,10 @@ const CharacterList: React.FC = () => {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 -mt-10 relative z-10">
+      <div
+        className="container mx-auto px-4 py-8 -mt-10 relative"
+        style={{ zIndex: Z_INDEX.DROPDOWN }}
+      >
         <div className="flex justify-center items-center mb-6">
           <div className="flex items-center gap-2">
             <Users className="w-6 h-6 text-infinite-purple" />

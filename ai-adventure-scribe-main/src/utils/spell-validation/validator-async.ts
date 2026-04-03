@@ -4,8 +4,6 @@ import type { SpellValidationResult, SpellValidationError } from '@/utils/spell-
 import { getRacialSpells } from '@/utils/spell-validation/racial-spells';
 import { getSpellcastingInfo } from '@/utils/spell-validation/spellcasting-info';
 
-
-
 /**
  * Async version of validateSpellSelection that validates against API data
  */

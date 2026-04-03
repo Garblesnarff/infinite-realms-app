@@ -5,12 +5,13 @@
  */
 
 import { Sword, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -35,6 +36,8 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
 }) => {
   const { equipMainHandWeapon, equipOffHandWeapon, unequipMainHandWeapon, unequipOffHandWeapon } =
     useCombat();
+  const mainHandId = useId();
+  const offHandId = useId();
 
   const [selectedMainHand, setSelectedMainHand] = useState<string>(mainHandWeapon?.id || '');
   const [selectedOffHand, setSelectedOffHand] = useState<string>(offHandWeapon?.id || '');
@@ -71,7 +74,7 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
         {/* Main Hand Weapon */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <label className="text-sm font-medium">Main Hand</label>
+            <Label htmlFor={mainHandId}>Main Hand</Label>
             {mainHandWeapon && (
               <Button
                 variant="ghost"
@@ -80,6 +83,8 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
                   unequipMainHandWeapon(participantId);
                   setSelectedMainHand('');
                 }}
+                aria-label="Unequip main hand"
+                title="Unequip main hand weapon"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -101,7 +106,11 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
           ) : (
             <div className="flex gap-2">
               <Select value={selectedMainHand} onValueChange={setSelectedMainHand}>
-                <SelectTrigger>
+                <SelectTrigger
+                  id={mainHandId}
+                  aria-label="Select main hand weapon"
+                  title="Choose a weapon to equip in main hand"
+                >
                   <SelectValue placeholder="Select weapon" />
                 </SelectTrigger>
                 <SelectContent>
@@ -122,7 +131,7 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
         {/* Off-Hand Weapon */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <label className="text-sm font-medium">Off-Hand</label>
+            <Label htmlFor={offHandId}>Off-Hand</Label>
             {offHandWeapon && (
               <Button
                 variant="ghost"
@@ -131,6 +140,8 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
                   unequipOffHandWeapon(participantId);
                   setSelectedOffHand('');
                 }}
+                aria-label="Unequip off-hand"
+                title="Unequip off-hand weapon"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -152,7 +163,11 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
           ) : (
             <div className="flex gap-2">
               <Select value={selectedOffHand} onValueChange={setSelectedOffHand}>
-                <SelectTrigger>
+                <SelectTrigger
+                  id={offHandId}
+                  aria-label="Select off-hand weapon"
+                  title="Choose a weapon to equip in off-hand"
+                >
                   <SelectValue placeholder="Select weapon" />
                 </SelectTrigger>
                 <SelectContent>

@@ -31,12 +31,30 @@ export function extractPrimaryRollRequest(message: string): ParsedRollRequest | 
 }
 
 /**
+ * Returns the index of the last sentence-terminating character (.!?) in text,
+ * where the punctuation is followed by whitespace or is at end-of-string.
+ * Returns -1 if no boundary is found.
+ */
+export function findLastSentenceBoundary(text: string): number {
+  const boundaryPattern = /[.!?](?=\s|$)/g;
+  let lastIndex = -1;
+  let match: RegExpExecArray | null;
+  while ((match = boundaryPattern.exec(text)) !== null) {
+    lastIndex = match.index;
+  }
+  return lastIndex;
+}
+
+/**
  * CRITICAL: Truncates message at ROLL_REQUESTS_V1 block.
  * This prevents the AI's premature outcome narrative from being displayed.
  *
  * Use this BEFORE displaying/saving the message when roll requests are present.
  * The player should only see text BEFORE the roll request - the outcome comes
  * in a NEW response after the roll is completed.
+ *
+ * Truncation ends at the last complete sentence boundary (.!?) before the block.
+ * Paragraph structure is preserved. Falls back to cleaned text if no boundary found.
  */
 export function truncateAtRollRequest(message: string): string {
   if (!message) return message;
@@ -45,16 +63,30 @@ export function truncateAtRollRequest(message: string): string {
   const rollBlockMatch = message.match(/```ROLL_REQUESTS_V1[\s\S]*?```/);
 
   if (rollBlockMatch && rollBlockMatch.index !== undefined) {
-    // Keep only content BEFORE the roll request block
-    let truncated = message.substring(0, rollBlockMatch.index).trim();
+    const beforeBlock = message.substring(0, rollBlockMatch.index);
 
-    // Clean up trailing punctuation and whitespace
-    truncated = truncated
-      .replace(/\s+/g, ' ')
+    // Normalize whitespace within each paragraph while preserving paragraph breaks
+    const normalized = beforeBlock
+      .split(/\n{2,}/)
+      .map((para) => para.replace(/\s+/g, ' ').trim())
+      .filter((para) => para.length > 0)
+      .join('\n\n');
+
+    // Strip trailing incomplete-sentence punctuation and em-dashes
+    const withoutTrailingJunk = normalized
       .replace(/[,;:]\s*$/, '')
+      .replace(/—\s*$/, '')
       .trim();
 
-    return truncated;
+    // Find the last complete sentence boundary
+    const boundaryIdx = findLastSentenceBoundary(withoutTrailingJunk);
+
+    if (boundaryIdx === -1) {
+      // Fallback: no clean boundary found — return cleaned text as-is
+      return withoutTrailingJunk;
+    }
+
+    return withoutTrailingJunk.substring(0, boundaryIdx + 1).trim();
   }
 
   return message; // No roll block found - return as-is
@@ -67,7 +99,28 @@ export function truncateAtRollRequest(message: string): string {
 export function removeRollRequestsFromMessage(message: string): string {
   if (!message) return message;
 
-  // Use truncation to remove everything at and after the roll request block
-  // This prevents showing the outcome that the AI generated after the roll request
-  return truncateAtRollRequest(message);
+  // Remove the ROLL_REQUESTS_V1 block (internal metadata, not for display)
+  let result = message.replace(/```ROLL_REQUESTS_V1[\s\S]*?```/g, '');
+
+  // Remove VISUAL PROMPT section (image-generation metadata, not player-facing)
+  result = result.replace(/\*\*VISUAL PROMPT:\*\*[\s\S]*$/, '');
+  result = result.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '');
+
+  // Strip A/B/C lettered action options — shown separately in the options panel, not in the bubble.
+  // Handles both `A. **Action**` and `**A.** **Action**` formats.
+  const optionLineIdx = result.search(/(?:^|\n)(?:\*\*)?[A-C]\.(?:\*\*)?\s/m);
+  if (optionLineIdx !== -1) {
+    result = result.substring(0, optionLineIdx);
+  }
+
+  // Strip ** bold markers — the custom renderer converts ** to * which causes orphan * artifacts
+  // when smartSplitParagraph splits long bold spans at sentence boundaries.
+  result = result.replace(/\*\*([^*\n]*)\*\*/g, '$1');
+
+  // Strip leading/trailing --- separators (DM uses these to frame the narrative)
+  result = result.replace(/^---\s*\n+/, '');
+  result = result.replace(/\s*\n+\s*---\s*[\s\S]*$/, '');
+
+  // Collapse runs of 3+ blank lines down to 2, then trim
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }

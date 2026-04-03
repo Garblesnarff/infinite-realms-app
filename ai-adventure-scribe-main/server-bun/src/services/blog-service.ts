@@ -1,4 +1,5 @@
-import { supabase } from '../../../src/infrastructure/database/index.js';
+import { supabase } from '../../../src/infrastructure/database/index';
+import { logger } from '../lib/logger.js';
 import { createExcerpt, renderMarkdown } from '../utils/markdown.js';
 
 
@@ -22,12 +23,12 @@ import { createExcerpt, renderMarkdown } from '../utils/markdown.js';
  */
 export class BlogService {
   private static readonly BLOG_TABLE = process.env.SUPABASE_BLOG_TABLE || 'blog_posts';
-  private static readonly BLOG_POST_SELECT = `
+
+  private static readonly BLOG_POST_LIST_SELECT = `
   id,
   slug,
   title,
   summary,
-  content,
   featured_image_url,
   hero_image_alt,
   seo_title,
@@ -59,6 +60,8 @@ export class BlogService {
   )
 `;
 
+  private static readonly BLOG_POST_FULL_SELECT = `${BlogService.BLOG_POST_LIST_SELECT}, content`;
+
   private static readonly WORDS_PER_MINUTE = 200;
 
   /**
@@ -83,15 +86,54 @@ export class BlogService {
 
     const nowIso = new Date().toISOString();
 
+    // ⚡ Bolt: Use lighter list select to avoid fetching large content fields for list views.
     const { data, error } = await supabase
       .from(BlogService.BLOG_TABLE)
-      .select(BlogService.BLOG_POST_SELECT)
+      .select(BlogService.BLOG_POST_LIST_SELECT)
       .eq('status', 'published')
       .lte('published_at', nowIso)
       .order('published_at', { ascending: false });
 
     if (error) {
-      console.error('Failed to fetch blog posts', error);
+      logger.error('Failed to fetch blog posts', { error });
+      return [];
+    }
+
+    const rows = (data ?? []) as unknown as SupabaseBlogRow[];
+    return rows
+      .map(BlogService.mapRowToBlogPost)
+      .filter((post): post is BlogPost => Boolean(post));
+  }
+
+  /**
+   * Fetch recent published blog posts with limit and optional exclusion
+   * @param excludeSlug - Slug to exclude from results (e.g. current post)
+   * @param limit - Maximum number of posts to fetch
+   * @returns Array of blog posts
+   */
+  static async fetchRecentBlogPosts(excludeSlug?: string, limit: number = 8): Promise<BlogPost[]> {
+    if (!BlogService.isSupabaseConfigured()) {
+      return [];
+    }
+
+    const nowIso = new Date().toISOString();
+
+    let query = supabase
+      .from(BlogService.BLOG_TABLE)
+      .select(BlogService.BLOG_POST_LIST_SELECT)
+      .eq('status', 'published')
+      .lte('published_at', nowIso)
+      .order('published_at', { ascending: false });
+
+    if (excludeSlug) {
+      query = query.neq('slug', excludeSlug);
+    }
+
+    // ⚡ Bolt: Use SQL LIMIT to avoid over-fetching and reduce database/network overhead.
+    const { data, error } = await query.limit(limit);
+
+    if (error) {
+      logger.error('Failed to fetch recent blog posts', { error });
       return [];
     }
 
@@ -111,15 +153,16 @@ export class BlogService {
       return null;
     }
 
+    // ⚡ Bolt: Use full select for single post retrieval to include content.
     const { data, error } = await supabase
       .from(BlogService.BLOG_TABLE)
-      .select(BlogService.BLOG_POST_SELECT)
+      .select(BlogService.BLOG_POST_FULL_SELECT)
       .eq('slug', slug)
       .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.error(`Failed to fetch blog post with slug ${slug}`, error);
+      logger.error(`Failed to fetch blog post with slug ${slug}`, { error });
       return null;
     }
 
@@ -152,7 +195,8 @@ export class BlogService {
     }
 
     const markdown = row.content ?? '';
-    const rendered = renderMarkdown(markdown);
+    // ⚡ Bolt: Only render markdown if content is present to avoid expensive processing for list views.
+    const rendered = row.content ? renderMarkdown(markdown) : { html: '', text: '' };
     const summary = BlogService.deriveSummary(row.summary, rendered.text);
     const excerpt = summary ?? createExcerpt(rendered.text);
     const publishedAt = BlogService.normalizeDate(row.published_at || row.publish_date);

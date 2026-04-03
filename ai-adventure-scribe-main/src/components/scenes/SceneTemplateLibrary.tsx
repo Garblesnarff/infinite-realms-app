@@ -347,15 +347,11 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                   )}
                 </div>
                 <CardTitle className="text-lg">{template.name}</CardTitle>
-                <CardDescription className="text-sm">
-                  {template.description}
-                </CardDescription>
+                <CardDescription className="text-sm">{template.description}</CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
-                <Badge className={CATEGORY_COLORS[template.category]}>
-                  {template.category}
-                </Badge>
+                <Badge className={CATEGORY_COLORS[template.category]}>{template.category}</Badge>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
@@ -366,9 +362,7 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                   </div>
                   <div>
                     <p className="text-muted-foreground">Grid</p>
-                    <p className="font-medium capitalize">
-                      {template.gridType.replace('_', ' ')}
-                    </p>
+                    <p className="font-medium capitalize">{template.gridType.replace('_', ' ')}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Light</p>
@@ -378,9 +372,7 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                   </div>
                   <div>
                     <p className="text-muted-foreground">Time</p>
-                    <p className="font-medium capitalize">
-                      {template.suggestedSettings.timeOfDay}
-                    </p>
+                    <p className="font-medium capitalize">{template.suggestedSettings.timeOfDay}</p>
                   </div>
                 </div>
 
@@ -416,9 +408,7 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
         <Card variant="parchment" className="p-12 text-center">
           <div className="text-6xl mb-4">🔍</div>
           <CardTitle className="mb-2">No Templates Found</CardTitle>
-          <CardDescription>
-            Try adjusting your search or filter to find templates.
-          </CardDescription>
+          <CardDescription>Try adjusting your search or filter to find templates.</CardDescription>
         </Card>
       )}
     </div>

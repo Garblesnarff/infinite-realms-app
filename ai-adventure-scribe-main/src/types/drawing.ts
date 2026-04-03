@@ -352,7 +352,10 @@ export const defaultTextConfig: TextConfig = {
 /**
  * Template type to default dimensions (in feet)
  */
-export const templateTypeDefaults: Record<TemplateType, { distance: number; width?: number; angle?: number }> = {
+export const templateTypeDefaults: Record<
+  TemplateType,
+  { distance: number; width?: number; angle?: number }
+> = {
   [TemplateType.CONE]: { distance: 15, angle: 90 },
   [TemplateType.CUBE]: { distance: 10, width: 10 },
   [TemplateType.SPHERE]: { distance: 20 },
@@ -372,7 +375,7 @@ export const commonSpellTemplates: Record<string, Partial<CreateTemplateData>> =
     fillColor: '#ff4500',
     damageType: 'fire',
   },
-  'Fireball': {
+  Fireball: {
     templateType: TemplateType.SPHERE,
     distance: 20,
     fillColor: '#ff4500',
@@ -392,7 +395,7 @@ export const commonSpellTemplates: Record<string, Partial<CreateTemplateData>> =
     fillColor: '#4169e1',
     damageType: 'cold',
   },
-  'Thunderwave': {
+  Thunderwave: {
     templateType: TemplateType.CUBE,
     distance: 15,
     width: 15,
