@@ -265,6 +265,8 @@ export default tseslint.config(
       'src/services/voice-consistency-service.ts',
       'src/components/combat/CombatActionPanel.tsx', // 773 lines
       'src/components/character-creation/steps/RaceSelection.tsx', // 766 lines
+      'src/components/character-creation/steps/VariantHumanSelection.tsx',
+      'src/components/character-creation/steps/variant-human/use-variant-human-selection.ts',
       'src/components/ui/sidebar.tsx', // 490 lines
       'src/components/ui/sidebar-menu.tsx', // 264 lines
       'src/services/ai/prompts/game-context-prompts.ts',
