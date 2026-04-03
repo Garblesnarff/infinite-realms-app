@@ -5,6 +5,7 @@ import {
   stripVisualPromptBlocks,
   stripSeparatorLines,
   stripAssetTags,
+  stripBrainstorming,
   sanitizeForMemoryExtraction,
   splitIntoSegments,
 } from '../segmentation';
@@ -30,6 +31,14 @@ describe('stripOptionMenus', () => {
     const result = stripOptionMenus(input);
     expect(result).not.toContain('(Request a Stealth check)');
     expect(result).not.toContain('(Request a Charisma check)');
+  });
+
+  it('removes numbered option menu lines (1., 2., 3.)', () => {
+    const input =
+      'The door stands before you.\n1. **Push it open**, entering boldly.\n2. **Listen first**, press your ear.\n3. **Pick the lock**, use your tools.';
+    const result = stripOptionMenus(input);
+    expect(result).not.toMatch(/^\d+\.\s+\*\*/m);
+    expect(result).toContain('The door stands before you.');
   });
 
   it('preserves narrative text that happens to start with A or B mid-sentence', () => {
@@ -241,6 +250,37 @@ describe('sanitizeForMemoryExtraction — asset tag stripping (issue #341)', () 
     expect(result).toContain('“The first shift starts in ten minutes.”');
     expect(result).not.toContain('*');
     expect(result).not.toContain('[ASSET:');
+  });
+});
+
+describe('stripBrainstorming', () => {
+  it('strips numbered probability scenarios', () => {
+    const input =
+      '1. Negotiate and explain purpose (prob: 0.85)\n2. Threaten the guard (prob: 0.10)\n3. Sneak past (prob: 0.05)\nThe guard watches you closely.';
+    const result = stripBrainstorming(input);
+    expect(result).not.toContain('prob:');
+    expect(result).toContain('The guard watches you closely.');
+  });
+
+  it('strips Selected/Chosen lines', () => {
+    const result = stripBrainstorming(
+      'Selected: Negotiate approach\nThe merchant nods thoughtfully.',
+    );
+    expect(result).not.toContain('Selected:');
+    expect(result).toContain('The merchant nods thoughtfully.');
+  });
+
+  it('strips brainstorming XML tags', () => {
+    const result = stripBrainstorming(
+      '<brainstorming>thinking...</brainstorming>\nThe wizard speaks.',
+    );
+    expect(result).not.toContain('<brainstorming>');
+    expect(result).toContain('The wizard speaks.');
+  });
+
+  it('handles content with no brainstorming unchanged', () => {
+    const plain = 'The thief hides in shadows.';
+    expect(stripBrainstorming(plain)).toBe(plain);
   });
 });
 

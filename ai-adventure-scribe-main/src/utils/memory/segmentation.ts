@@ -116,6 +116,8 @@ export const stripOptionMenus = (content: string): string =>
   content
     // Remove lines that begin with a single A/B/C letter-dot option prefix
     .replace(/^[A-Ca-c]\.\s+\**.*$/gm, '')
+    // Remove lines that begin with a numbered option prefix (1., 2., 3.)
+    .replace(/^\d+\.\s+\*\*[^*]+\*\*.*$/gm, '')
     // Remove parenthetical helper phrases like (Request a Stealth check) or (Request an Arcana check...)
     .replace(/\(Request\s+a[^)]*check[^)]*\)/gi, '')
     // Collapse excessive blank lines left behind
@@ -169,12 +171,30 @@ const finalizePlainText = (content: string): string => cleanupPlainNarrativeText
  *         VISUAL PROMPT blocks, A/B/C option menus, separator lines,
  *         [ASSET:*] tags.
  */
+/**
+ * Strip verbalized AI brainstorming/sampling artifacts.
+ * These are internal reasoning that sometimes leaks into output.
+ */
+export const stripBrainstorming = (content: string): string =>
+  content
+    // Remove numbered scenario lists with probabilities: "1. Scenario (prob: 0.85)"
+    .replace(/^\d+\.\s+[^(]+\(prob:\s*0\.\d+\)[^\n]*\n?/gm, '')
+    // Remove "Selected:" or "Chosen:" lines
+    .replace(
+      /^(?:Selected|Chosen|Final selection|I'll go with|Internal brainstorming):[^\n]*\n?/gim,
+      '',
+    )
+    // Remove XML-like tags from verbalized sampling
+    .replace(/<\/?(?:brainstorming|narrative|options)>/gi, '')
+    .trim();
+
 export const sanitizeForMemoryExtraction = (content: string): string => {
   let text = stripCodeBlocks(content); // existing: ROLL_REQUESTS_V1, code blocks, roll markers
   text = stripVisualPromptBlocks(text);
   text = stripOptionMenus(text);
   text = stripSeparatorLines(text);
   text = stripAssetTags(text);
+  text = stripBrainstorming(text);
   return finalizePlainText(text);
 };
 
