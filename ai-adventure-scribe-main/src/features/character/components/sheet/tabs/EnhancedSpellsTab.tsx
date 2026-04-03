@@ -1,12 +1,13 @@
 import { Wand2, BookOpen, Clock, Zap, Star, Crown, Circle } from 'lucide-react';
 import React from 'react';
 
+import EnhancedSpellCard from './components/EnhancedSpellCard';
+
 import type { Character, Spell } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import DiceRoller from '@/components/ui/dice-roller';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEnhancedSpellcasting } from '@/features/character/hooks/use-enhanced-spellcasting';
@@ -70,66 +71,6 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
       </div>
     );
   }
-
-  const getSpellCard = (spell: Spell | undefined, showPreparedBadge = false): JSX.Element | null => {
-    if (!spell) {
-      return null;
-    }
-
-    return (
-      <div key={spell?.id} className="p-3 border rounded-lg">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-medium">{spell?.name}</span>
-              <Badge variant="outline" className="text-xs">
-                Level {spell?.level}
-              </Badge>
-              {spell?.ritual && (
-                <Badge variant="secondary" className="text-xs">
-                  Ritual
-                </Badge>
-              )}
-              {spell?.concentration && (
-                <Badge variant="secondary" className="text-xs">
-                  Concentration
-                </Badge>
-              )}
-              {showPreparedBadge && (
-                <Badge variant="default" className="text-xs">
-                  Prepared
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">
-              {spell?.school} • {spell?.castingTime} • {spell?.range}
-            </p>
-            <p className="text-sm">{spell?.description}</p>
-          </div>
-          <div className="flex flex-col gap-2">
-            {spell?.damage && <DiceRoller dice={spell.damage} label="Damage" />}
-            {spell?.level > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => (hasPactMagic ? consumePactSlot() : consumeSpellSlot(spell.level))}
-                disabled={
-                  hasPactMagic
-                    ? pactSlots.current === 0
-                    : !spellSlots[spell.level] ||
-                      spellSlots[spell.level].used >= spellSlots[spell.level].total
-                }
-                aria-label={`Cast ${spell?.name}`}
-                title={`Cast ${spell?.name}`}
-              >
-                Cast
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -235,9 +176,18 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {(preparedSpells.length > 0 ? preparedSpells : knownSpells).map((spell) =>
-                    getSpellCard(spell, preparedSpells.length > 0),
-                  )}
+                  {(preparedSpells.length > 0 ? preparedSpells : knownSpells).map((spell) => (
+                    <EnhancedSpellCard
+                      key={spell.id}
+                      spell={spell}
+                      showPreparedBadge={preparedSpells.length > 0}
+                      hasPactMagic={hasPactMagic}
+                      pactSlots={pactSlots}
+                      spellSlots={spellSlots}
+                      consumePactSlot={consumePactSlot}
+                      consumeSpellSlot={consumeSpellSlot}
+                    />
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -255,7 +205,17 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {knownCantrips.map((cantrip) => getSpellCard(cantrip))}
+                {knownCantrips.map((cantrip) => (
+                  <EnhancedSpellCard
+                    key={cantrip.id}
+                    spell={cantrip}
+                    hasPactMagic={hasPactMagic}
+                    pactSlots={pactSlots}
+                    spellSlots={spellSlots}
+                    consumePactSlot={consumePactSlot}
+                    consumeSpellSlot={consumeSpellSlot}
+                  />
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -318,7 +278,17 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {pactMagicSpells.map((spell) => getSpellCard(spell))}
+                    {pactMagicSpells.map((spell) => (
+                      <EnhancedSpellCard
+                        key={spell.id}
+                        spell={spell}
+                        hasPactMagic={hasPactMagic}
+                        pactSlots={pactSlots}
+                        spellSlots={spellSlots}
+                        consumePactSlot={consumePactSlot}
+                        consumeSpellSlot={consumeSpellSlot}
+                      />
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -412,33 +382,16 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
               <CardContent>
                 <div className="space-y-3">
                   {ritualSpells.map((spell: Spell) => (
-                    <div key={spell.id} className="p-3 border rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">{spell.name}</span>
-                            <Badge variant="outline" className="text-xs">
-                              Level {spell.level}
-                            </Badge>
-                            <Badge variant="secondary" className="text-xs">
-                              Ritual
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {spell.school} • {spell.castingTime} (+10 min as ritual) • {spell.range}
-                          </p>
-                          <p className="text-sm">{spell.description}</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          aria-label={`Cast ${spell.name} as ritual`}
-                          title={`Cast ${spell.name} as ritual`}
-                        >
-                          Cast as Ritual
-                        </Button>
-                      </div>
-                    </div>
+                    <EnhancedSpellCard
+                      key={spell.id}
+                      spell={spell}
+                      hasPactMagic={hasPactMagic}
+                      pactSlots={pactSlots}
+                      spellSlots={spellSlots}
+                      consumePactSlot={consumePactSlot}
+                      consumeSpellSlot={consumeSpellSlot}
+                      isRitualDisplay={true}
+                    />
                   ))}
                 </div>
               </CardContent>
