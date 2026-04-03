@@ -311,6 +311,7 @@ export default defineConfig({
       'src/services/__tests__/personalityService.test.ts',
       'src/hooks/ai/__tests__/ai-utils.test.ts',
       'src/utils/multiclass/__tests__/spellcasting.test.ts',
+      'src/services/ai-execution/__tests__/LocalFallbackStrategy.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -481,6 +482,7 @@ export default defineConfig({
         'src/hooks/useAutosave.ts',
         'src/services/ai-execution/AIExecutionManager.ts',
         'src/services/ai-execution/EdgeFunctionStrategy.ts',
+        'src/services/ai-execution/LocalFallbackStrategy.ts',
         'src/utils/roll-request/__tests__/parse.test.ts',
         'src/hooks/ai/game-phase-updater.ts',
         'src/hooks/ai/roll-processor.ts',
