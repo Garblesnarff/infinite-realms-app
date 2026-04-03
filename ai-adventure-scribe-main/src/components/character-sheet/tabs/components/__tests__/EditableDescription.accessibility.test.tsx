@@ -24,10 +24,10 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    const displayArea = screen.getByLabelText(/edit bio/i);
+    const displayArea = screen.getByTitle(/click to edit bio/i);
     expect(displayArea).toBeInTheDocument();
     expect(displayArea).toHaveAttribute('role', 'button');
-    expect(displayArea).toHaveAttribute('tabIndex', '0');
+    expect(displayArea).toHaveAttribute('tabindex', '0');
     expect(screen.getByText('Initial bio')).toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    const displayArea = screen.getByLabelText(/edit bio/i);
+    const displayArea = screen.getByTitle(/click to edit bio/i);
     fireEvent.click(displayArea);
 
     expect(screen.getByPlaceholderText('Enter bio...')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    const displayArea = screen.getByLabelText(/edit bio/i);
+    const displayArea = screen.getByTitle(/click to edit bio/i);
     fireEvent.keyDown(displayArea, { key: 'Enter', code: 'Enter' });
 
     expect(screen.getByPlaceholderText('Enter bio...')).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    const displayArea = screen.getByLabelText(/edit bio/i);
+    const displayArea = screen.getByTitle(/click to edit bio/i);
     fireEvent.keyDown(displayArea, { key: ' ', code: 'Space' });
 
     expect(screen.getByPlaceholderText('Enter bio...')).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText(/edit bio/i));
+    fireEvent.click(screen.getByTitle(/click to edit bio/i));
 
     expect(screen.getByTitle(/save bio/i)).toBeInTheDocument();
     expect(screen.getByTitle(/cancel editing/i)).toBeInTheDocument();
@@ -118,8 +118,8 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    const displayArea = screen.getByLabelText(/edit bio/i);
-    expect(displayArea).toHaveAttribute('tabIndex', '-1');
+    const displayArea = screen.getByTitle(/click to edit bio/i);
+    expect(displayArea).toHaveAttribute('tabindex', '-1');
   });
 
   it('handles Escape key to cancel', () => {
@@ -134,7 +134,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText(/edit bio/i));
+    fireEvent.click(screen.getByTitle(/click to edit bio/i));
     const textarea = screen.getByPlaceholderText('Enter bio...');
     fireEvent.change(textarea, { target: { value: 'New bio' } });
     fireEvent.keyDown(textarea, { key: 'Escape', code: 'Escape' });
@@ -155,7 +155,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText(/edit bio/i));
+    fireEvent.click(screen.getByTitle(/click to edit bio/i));
     const textarea = screen.getByPlaceholderText('Enter bio...');
     fireEvent.change(textarea, { target: { value: 'New bio' } });
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter', ctrlKey: true });
@@ -176,7 +176,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText(/edit bio/i));
+    fireEvent.click(screen.getByTitle(/click to edit bio/i));
     const textarea = screen.getByPlaceholderText('Enter bio...');
     fireEvent.change(textarea, { target: { value: 'Clicked Save' } });
     fireEvent.click(screen.getByLabelText(/save bio/i));
@@ -196,7 +196,7 @@ describe('EditableDescription Accessibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText(/edit bio/i));
+    fireEvent.click(screen.getByTitle(/click to edit bio/i));
     const textarea = screen.getByPlaceholderText('Enter bio...');
     fireEvent.change(textarea, { target: { value: 'Cancelled' } });
     fireEvent.click(screen.getByLabelText(/cancel editing/i));

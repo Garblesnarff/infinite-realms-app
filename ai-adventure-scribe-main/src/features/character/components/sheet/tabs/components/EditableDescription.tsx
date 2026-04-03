@@ -132,7 +132,11 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
     <div className={cn('space-y-2', className)}>
       {/* Label and AI Badge Row */}
       <div className="flex items-center justify-between">
-        <Label htmlFor={textareaId} className="text-sm font-medium text-muted-foreground">
+        <Label
+          id={`${textareaId}-label`}
+          htmlFor={isEditing ? textareaId : undefined}
+          className="text-sm font-medium text-muted-foreground"
+        >
           {label}
         </Label>
         <div className="flex items-center gap-2">
@@ -152,10 +156,10 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
               onClick={handleEdit}
               disabled={disabled}
               className="h-6 w-6 p-0 hover:bg-accent"
+              aria-label={`Edit ${label}`}
               title={`Edit ${label}`}
             >
               <Edit3 className="w-3 h-3" />
-              <span className="sr-only">Edit {label}</span>
             </Button>
           )}
         </div>
@@ -217,7 +221,8 @@ const EditableDescription: React.FC<EditableDescriptionProps> = ({
           onKeyDown={handleDisplayKeyDown}
           role="button"
           tabIndex={disabled ? -1 : 0}
-          aria-label={`Edit ${label}`}
+          aria-labelledby={`${textareaId}-label`}
+          title={`Click to edit ${label}`}
         >
           {value ? (
             <div className="whitespace-pre-wrap break-words leading-relaxed">{value}</div>

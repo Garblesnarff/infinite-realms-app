@@ -41,12 +41,7 @@ export const AoEOptions: React.FC<AoEOptionsProps> = ({
           Template Type
         </Label>
         <Select value={templateType} onValueChange={(value: any) => setTemplateType(value)}>
-          <SelectTrigger
-            id={templateTypeId}
-            className="w-full"
-            aria-label="Template type"
-            title="Template type"
-          >
+          <SelectTrigger id={templateTypeId} className="w-full" title="Template type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -98,7 +93,6 @@ export const AoEOptions: React.FC<AoEOptionsProps> = ({
           max={100}
           step={5}
           className="w-full"
-          aria-label="Template Opacity"
         />
         <span className="text-xs text-muted-foreground">{Math.round(fillOpacity * 100)}%</span>
       </div>

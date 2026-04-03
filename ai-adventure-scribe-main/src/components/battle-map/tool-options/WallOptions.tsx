@@ -40,7 +40,7 @@ export const WallOptions: React.FC<WallOptionsProps> = ({
           Wall Type
         </Label>
         <Select value={wallType} onValueChange={(value: any) => setWallType(value)}>
-          <SelectTrigger id={wallTypeId} className="w-full" aria-label="Wall type">
+          <SelectTrigger id={wallTypeId} className="w-full" title="Wall type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -82,7 +82,6 @@ export const WallOptions: React.FC<WallOptionsProps> = ({
           max={10}
           step={1}
           className="w-full"
-          aria-label="Stroke Width"
         />
         <span className="text-xs text-muted-foreground">{strokeWidth}px</span>
       </div>

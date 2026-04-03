@@ -178,7 +178,6 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
               min={0}
               max={100}
               step={1}
-              aria-label="Grid Opacity"
             />
           </div>
         </CardContent>
@@ -206,7 +205,6 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
               min={0}
               max={100}
               step={1}
-              aria-label="Ambient Light Level"
             />
             <p className="text-xs text-muted-foreground">
               Base light level when no light sources are present
@@ -227,7 +225,6 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
               min={0}
               max={100}
               step={1}
-              aria-label="Darkness Level"
             />
             <p className="text-xs text-muted-foreground">
               Global darkness overlay (useful for night scenes)
