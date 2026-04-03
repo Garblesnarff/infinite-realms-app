@@ -63,13 +63,13 @@ export const classifySegment = (content: string): MemoryType => {
  * Processes content into classified memory segments
  */
 export const processContent = (content: string): MemorySegment[] => {
+  if (!content || content.trim().length === 0) return [];
+
   const segments = splitIntoSegments(content, {
     maxLength: 100,
     minLength: 20,
     preserveQuotes: true,
   });
-
-  if (!content || content.trim().length === 0) return [];
 
   // Fallback: if nothing met minLength, use sanitized content as a single segment
   const effectiveSegments =
@@ -88,8 +88,7 @@ export const processContent = (content: string): MemorySegment[] => {
         return 'dialogue';
       case 'world_detail':
       case 'atmosphere':
-        return 'description';
-      case 'quest':
+      case 'quest': // Quests can also be considered events for importance calculation
         return 'event';
       default:
         return type;

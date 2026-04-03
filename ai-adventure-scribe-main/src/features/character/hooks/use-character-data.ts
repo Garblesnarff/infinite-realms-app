@@ -95,6 +95,35 @@ interface CharacterRow {
   character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;
 }
+
+const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
+  if (!raw) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn('Failed to parse character JSON field', { raw, error });
+    return fallback;
+  }
+};
+
+const parseSpellListField = (raw: string | null | undefined): string[] => {
+  if (!raw) return [];
+
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith('[')) {
+    const parsed = parseJsonField<string[] | null>(trimmed, null);
+    if (Array.isArray(parsed)) {
+      return parsed.map((id) => String(id).trim()).filter((id) => id.length > 0);
+    }
+  }
+
+  return trimmed
+    .split(',')
+    .map((id: string) => id.trim())
+    .filter((id: string) => id.length > 0);
+};
 /**
  * Transforms database stats into Character ability scores format
  * @param statsData - Raw stats data from database
@@ -203,7 +232,7 @@ const transformCharacterData = (
   experience: characterData.experience_points || 0,
   alignment: characterData.alignment || '',
   // Vision and Stealth
-  visionTypes: characterData.vision_types ? JSON.parse(characterData.vision_types) : [],
+  visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
   obscurement: characterData.obscurement || 'clear',
   isHidden: characterData.is_hidden || false,
   stealthCheckBonus: characterData.stealth_check_bonus || 0,
@@ -216,13 +245,13 @@ const transformCharacterData = (
       // Magic item properties
       isMagic: item.is_magic || false,
       magicBonus: item.magic_bonus || 0,
-      magicProperties: item.magic_properties ? JSON.parse(item.magic_properties) : [],
+      magicProperties: parseJsonField<string[]>(item.magic_properties, []),
       requiresAttunement: item.requires_attunement || false,
       isAttuned: item.is_attuned || false,
       attunementRequirements: item.attunement_requirements || '',
       magicItemType: item.magic_item_type || '',
       magicItemRarity: item.magic_item_rarity || 'common',
-      magicEffects: item.magic_effects ? JSON.parse(item.magic_effects) : {},
+      magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
     })) || [],
   // AI-generated fields
   avatar_url: characterData.avatar_url,
@@ -236,31 +265,11 @@ const transformCharacterData = (
   ideals: [],
   bonds: [],
   flaws: [],
-  // Spell data - this was missing!
-  cantrips: characterData.cantrips
-    ? characterData.cantrips
-        .split(',')
-        .map((id: string) => id.trim())
-        .filter((id: string) => id.length > 0)
-    : [],
-  knownSpells: characterData.known_spells
-    ? characterData.known_spells
-        .split(',')
-        .map((id: string) => id.trim())
-        .filter((id: string) => id.length > 0)
-    : [],
-  preparedSpells: characterData.prepared_spells
-    ? characterData.prepared_spells
-        .split(',')
-        .map((id: string) => id.trim())
-        .filter((id: string) => id.length > 0)
-    : [],
-  ritualSpells: characterData.ritual_spells
-    ? characterData.ritual_spells
-        .split(',')
-        .map((id: string) => id.trim())
-        .filter((id: string) => id.length > 0)
-    : [],
+  // Spell data supports both JSON arrays and legacy comma-separated strings.
+  cantrips: parseSpellListField(characterData.cantrips),
+  knownSpells: parseSpellListField(characterData.known_spells),
+  preparedSpells: parseSpellListField(characterData.prepared_spells),
+  ritualSpells: parseSpellListField(characterData.ritual_spells),
 });
 
 /**

@@ -46,6 +46,7 @@ export const useSessionInitialization = ({
   // Race condition prevention: track initialization status
   const initializingRef = useRef(false);
   const sessionInitializedRef = useRef(false);
+  const lastInitKeyRef = useRef<string | null>(null);
 
   // AbortController for cancelling in-flight async operations
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -64,6 +65,19 @@ export const useSessionInitialization = ({
         logger.info('[Session Init] Waiting for campaignId and characterId');
       }
       return;
+    }
+
+    const initKey = [
+      campaignId,
+      characterId,
+      forceNew ? 'force-new' : 'reuse',
+      specificSessionId || 'none',
+      starterCampaignId || 'none',
+    ].join(':');
+
+    if (lastInitKeyRef.current !== initKey) {
+      sessionInitializedRef.current = false;
+      lastInitKeyRef.current = initKey;
     }
 
     // Guard: Prevent concurrent initialization
@@ -101,12 +115,27 @@ export const useSessionInitialization = ({
           setSessionState('loading');
         }
 
+        const handleSessionCreationFailure = (context: string) => {
+          logger.error(`[Session Init] ${context}: createGameSession returned null`);
+          if (!abortSignal.aborted && mountedRef.current) {
+            setSessionState('error');
+            toastRef.current({
+              title: 'Error',
+              description: 'Failed to create game session',
+              variant: 'destructive',
+            });
+          }
+          sessionInitializedRef.current = false;
+        };
+
         // If forceNew=true, skip checking for existing sessions and create a new one
         if (forceNew) {
           logger.info('[Session Init] forceNew=true, creating new session');
           const newSessionId = await createGameSession(campaignId, characterId);
           if (newSessionId && mountedRef.current) {
             sessionInitializedRef.current = true;
+          } else {
+            handleSessionCreationFailure('forceNew path');
           }
           return;
         }
@@ -123,6 +152,11 @@ export const useSessionInitialization = ({
             .eq('campaign_id', campaignId)
             .eq('character_id', characterId)
             .single();
+
+          if (abortSignal.aborted || !mountedRef.current) {
+            logger.info('[Session Init] Aborted after specific session fetch');
+            return;
+          }
 
           if (specificError) {
             logger.error('[Session Init] Error loading specific session:', specificError);
@@ -156,6 +190,8 @@ export const useSessionInitialization = ({
           const newSessionId = await createGameSession(campaignId, characterId);
           if (newSessionId && mountedRef.current) {
             sessionInitializedRef.current = true;
+          } else {
+            handleSessionCreationFailure('fallback after existing session fetch error');
           }
           return;
         }
@@ -217,7 +253,10 @@ export const useSessionInitialization = ({
             .select()
             .single();
 
-          if (!mountedRef.current) return;
+          if (abortSignal.aborted || !mountedRef.current) {
+            logger.info('[Session Init] Aborted after continuation session insert');
+            return;
+          }
 
           if (error) {
             logger.error('[Session Init] Error creating continuation session:', error);
@@ -242,6 +281,8 @@ export const useSessionInitialization = ({
         const newSessionId = await createGameSession(campaignId, characterId);
         if (newSessionId && mountedRef.current) {
           sessionInitializedRef.current = true;
+        } else {
+          handleSessionCreationFailure('initial session creation');
         }
       } catch (error) {
         logger.error('[Session Init] Error in session initialization:', error);
@@ -255,6 +296,8 @@ export const useSessionInitialization = ({
         }
         initializingRef.current = false;
         sessionInitializedRef.current = false;
+      } finally {
+        initializingRef.current = false;
       }
     };
 
@@ -263,7 +306,6 @@ export const useSessionInitialization = ({
     return () => {
       logger.info('🔓 [Session Init] Releasing lock on unmount');
       initializingRef.current = false;
-      sessionInitializedRef.current = false;
 
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();

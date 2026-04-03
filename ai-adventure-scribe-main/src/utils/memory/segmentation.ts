@@ -83,7 +83,7 @@ export const splitIntoSegments = (
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   // Strip all scaffolding before segmentation to prevent transient content
-  // (code blocks, ROLL_REQUESTS_V1, option menus, VISUAL PROMPT, separators)
+  // (code blocks, ROLL_REQUESTS_V1, option menus, VISUAL PROMPT, separators, asset tags)
   // from being classified as memories
   const cleanedContent = sanitizeForMemoryExtraction(content);
 
