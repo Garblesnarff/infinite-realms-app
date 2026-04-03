@@ -13,7 +13,7 @@ export interface AssetInfo {
 let cachedAssets: { campaignId: string; assets: AssetInfo[] } | null = null;
 
 function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
