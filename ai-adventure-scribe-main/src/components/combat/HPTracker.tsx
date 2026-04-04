@@ -8,7 +8,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
 import { getHPColor } from '@/utils/hp-utils';
 
 interface HPTrackerProps {
@@ -38,6 +37,9 @@ const HPTracker: React.FC<HPTrackerProps> = ({
     armorClass = 10,
   } = participant;
   const hpPercent = maxHitPoints > 0 ? (currentHitPoints / maxHitPoints) * 100 : 0;
+  const hpString = `${currentHitPoints} / ${maxHitPoints} HP${
+    temporaryHitPoints > 0 ? ` (+${temporaryHitPoints} temporary)` : ''
+  }`;
 
   const handleDamage = (): void => {
     const damage = parseInt(damageAmount, 10);
@@ -89,8 +91,8 @@ const HPTracker: React.FC<HPTrackerProps> = ({
             value={hpPercent}
             className="h-2"
             indicatorClassName={getHPColor(hpPercent)}
-            aria-label={`${participant.name} health: ${currentHitPoints} / ${maxHitPoints} HP`}
-            title={`${currentHitPoints} / ${maxHitPoints} HP`}
+            aria-label={`${participant.name} health: ${hpString}`}
+            title={hpString}
           />
         </div>
 
@@ -107,7 +109,6 @@ const HPTracker: React.FC<HPTrackerProps> = ({
                 value={damageAmount}
                 onChange={(e) => setDamageAmount(e.target.value)}
                 className="h-8"
-                aria-label="Damage amount"
               />
               <Button
                 onClick={handleDamage}
@@ -131,7 +132,6 @@ const HPTracker: React.FC<HPTrackerProps> = ({
                 value={healAmount}
                 onChange={(e) => setHealAmount(e.target.value)}
                 className="h-8"
-                aria-label="Healing amount"
               />
               <Button
                 onClick={handleHeal}
