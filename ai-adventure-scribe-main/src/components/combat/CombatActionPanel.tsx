@@ -6,23 +6,20 @@
  * Actions are sent to the AI DM for narrative resolution.
  */
 
-import { MessageSquare, Dice6, RotateCcw } from 'lucide-react';
-import React, { useState, useId } from 'react';
+import { Dice6 } from 'lucide-react';
+import React, { useState } from 'react';
 
 import { type ActionDefinition, MANAGEMENT_ACTIONS } from './actions/ActionDefinitions';
 import { CombatActionGrid } from './actions/CombatActionGrid';
+import { CombatActionForm } from './CombatActionForm';
 import { ConditionApplicationPanel } from './ConditionApplicationPanel';
 
 import type { ActionType, ConditionName, Condition, CombatParticipant } from '@/types/combat';
 
-import SpellSlotPanel from '@/components/spellcasting/SpellSlotPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 
@@ -46,15 +43,19 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const { state, applyCondition, removeCondition } = useCombat();
   const { activeEncounter } = state;
 
-  const hitDiceInputId = useId();
-  const actionDetailsId = useId();
   const [selectedAction, setSelectedAction] = useState<ActionDefinition | null>(null);
   const [selectedManagement, setSelectedManagement] = useState<string | null>(null);
-  const [actionDetails, setActionDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedSpell, setSelectedSpell] = useState<string | null>(null);
-  const [selectedSpellLevel, setSelectedSpellLevel] = useState<number>(1);
-  const [hitDiceToRoll, setHitDiceToRoll] = useState<number>(1);
+
+  // Unified submission handler that resets current selection
+  const handleActionSubmit = async (
+    type: ActionType,
+    desc: string,
+    data?: unknown,
+  ): Promise<void> => {
+    await onActionSubmit(type, desc, data);
+    setSelectedAction(null);
+  };
 
   // Handle management panel selection
   const handleManagementSelect = (managementType: string): void => {
@@ -88,41 +89,8 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
     }
   };
 
-  const handleDetailedAction = async (): Promise<void> => {
-    if (!selectedAction) return;
-
-    setIsSubmitting(true);
-    try {
-      // For spell casting, include spell details
-      if (selectedAction.type === 'cast_spell') {
-        if (!selectedSpell) {
-          logger.error('No spell selected');
-          return;
-        }
-        await onActionSubmit(selectedAction.type, actionDetails, {
-          spellName: selectedSpell,
-          spellLevel: selectedSpellLevel,
-        });
-      }
-      // For rest actions, include hit dice selection
-      else if (selectedAction.type === 'short_rest' || selectedAction.type === 'long_rest') {
-        await onActionSubmit(selectedAction.type, actionDetails, { hitDiceToRoll });
-      } else {
-        await onActionSubmit(selectedAction.type, actionDetails);
-      }
-      setSelectedAction(null);
-      setActionDetails('');
-      setSelectedSpell(null);
-      setSelectedSpellLevel(1);
-      setHitDiceToRoll(1);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleCancelAction = (): void => {
     setSelectedAction(null);
-    setActionDetails('');
   };
 
   const handleActionClick = (action: ActionDefinition): void => {
@@ -211,104 +179,11 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
             </div>
           </div>
         ) : selectedAction ? (
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <selectedAction.icon className="w-5 h-5" />
-              <h4 className="font-semibold">{selectedAction.name}</h4>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelAction}
-                disabled={isSubmitting}
-                aria-label="Cancel action"
-                title="Cancel action"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <p className="text-sm text-gray-600">{selectedAction.description}</p>
-
-            {selectedAction.type === 'cast_spell' ? (
-              <SpellSlotPanel
-                onSpellSelect={(spellName, level) => {
-                  setSelectedSpell(spellName);
-                  setSelectedSpellLevel(level);
-                  setActionDetails(`Cast ${spellName} at level ${level}`);
-                }}
-                availableSpells={['Fire Bolt', 'Magic Missile', 'Cure Wounds', 'Healing Word']} // From character data
-              />
-            ) : selectedAction.type === 'short_rest' || selectedAction.type === 'long_rest' ? (
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor={hitDiceInputId} className="text-sm font-medium">
-                    Hit dice to roll:
-                  </Label>
-                  <Input
-                    id={hitDiceInputId}
-                    type="number"
-                    min="1"
-                    value={hitDiceToRoll}
-                    onChange={(e) => setHitDiceToRoll(Number(e.target.value))}
-                    className="mt-1"
-                    placeholder="Number of hit dice"
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => {
-                      setActionDetails(`${selectedAction.name}: Rolling ${hitDiceToRoll} hit dice`);
-                      handleDetailedAction();
-                    }}
-                    disabled={isSubmitting}
-                    className="flex-1"
-                    title={`Submit ${selectedAction.name} and roll ${hitDiceToRoll} hit dice`}
-                  >
-                    Take {selectedAction.name}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor={actionDetailsId} className="text-sm font-medium">
-                  Action Details
-                </Label>
-                <Textarea
-                  id={actionDetailsId}
-                  placeholder={`Describe your ${selectedAction.name.toLowerCase()}...`}
-                  value={actionDetails}
-                  onChange={(e) => setActionDetails(e.target.value)}
-                  className="min-h-[100px]"
-                  disabled={isSubmitting}
-                />
-              </div>
-            )}
-
-            {selectedAction.type !== 'cast_spell' &&
-              selectedAction.type !== 'short_rest' &&
-              selectedAction.type !== 'long_rest' && (
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={handleDetailedAction}
-                    disabled={!actionDetails.trim() || isSubmitting}
-                    className="flex-1"
-                    title={`Submit ${selectedAction.name} action`}
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" aria-hidden="true" />
-                    {isSubmitting ? 'Submitting...' : `Take ${selectedAction.name}`}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelAction}
-                    disabled={isSubmitting}
-                    title="Cancel and return to action list"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )}
-          </div>
+          <CombatActionForm
+            selectedAction={selectedAction}
+            onActionSubmit={handleActionSubmit}
+            onCancel={handleCancelAction}
+          />
         ) : (
           // Integrated SpellSlotPanel for cast_spell actions
           /* Action Selection Grid */
