@@ -414,6 +414,8 @@ export default tseslint.config(
       'src/components/character-sheet/tabs/EnhancedSpellsTab.tsx',
       'src/components/character-sheet/tabs/hooks/use-enhanced-spellcasting.ts',
       'src/features/character/hooks/use-personality-manager.ts',
+      'src/features/character/hooks/use-enhanced-spellcasting.ts',
+      'src/features/character/hooks/__tests__/use-enhanced-spellcasting.test.ts',
       'src/features/character/components/sheet/PersonalityManager.tsx',
       'src/components/character-sheet/PersonalityManager.tsx',
       'src/utils/stealthUtils.ts',

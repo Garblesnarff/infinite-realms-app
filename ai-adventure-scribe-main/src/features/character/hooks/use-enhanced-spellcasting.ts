@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 import type { Character, Spell } from '@/types/character';
 
 import { metamagicOptions } from '@/data/spellcastingFeatures';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
+import { calculateSpellSlots } from '@/utils/spell-management';
 
 export interface SpellSlots {
   [key: number]: { total: number; used: number };
@@ -54,7 +55,7 @@ export function useEnhancedSpellcasting(
 
   // Fetch all spells on component mount
   useEffect(() => {
-    const fetchSpells = async () => {
+    const fetchSpells = async (): Promise<void> => {
       try {
         const spells = await spellApi.getAllSpells();
         setAllSpells(spells);
@@ -79,14 +80,29 @@ export function useEnhancedSpellcasting(
   const spellAttackBonus = spellcastingMod + proficiencyBonus;
   const spellSaveDC = 8 + spellcastingMod + proficiencyBonus;
 
+  // Derive initial spell slots from character data
+  const derivedSlots = useMemo(() => {
+    const slots = calculateSpellSlots(character);
+    const result: SpellSlots = {};
+    Object.entries(slots).forEach(([level, config]) => {
+      const lvl = parseInt(level);
+      if (config.max > 0) {
+        result[lvl] = {
+          total: config.max,
+          used: config.max - config.current,
+        };
+      }
+    });
+    return result;
+  }, [character]);
+
   // Spell slot management
-  const [spellSlots, setSpellSlots] = useState<SpellSlots>({
-    1: { total: 4, used: 1 },
-    2: { total: 3, used: 0 },
-    3: { total: 3, used: 2 },
-    4: { total: 1, used: 0 },
-    5: { total: 1, used: 1 },
-  });
+  const [spellSlots, setSpellSlots] = useState<SpellSlots>(derivedSlots);
+
+  // Sync spell slots if character changes (e.g. after rest or level up)
+  useEffect(() => {
+    setSpellSlots(derivedSlots);
+  }, [derivedSlots]);
 
   // Pact magic management
   const [pactSlots, setPactSlots] = useState({
@@ -95,11 +111,28 @@ export function useEnhancedSpellcasting(
     level: character?.pactSlots?.level || 1,
   });
 
+  // Sync pact slots
+  useEffect(() => {
+    setPactSlots({
+      current: character?.pactSlots?.current || 0,
+      maximum: character?.pactSlots?.maximum || 0,
+      level: character?.pactSlots?.level || 1,
+    });
+  }, [character?.pactSlots]);
+
   // Sorcery points management
   const [sorceryPoints, setSorceryPoints] = useState({
     current: character?.sorceryPoints?.current || 0,
     maximum: character?.sorceryPoints?.maximum || 0,
   });
+
+  // Sync sorcery points
+  useEffect(() => {
+    setSorceryPoints({
+      current: character?.sorceryPoints?.current || 0,
+      maximum: character?.sorceryPoints?.maximum || 0,
+    });
+  }, [character?.sorceryPoints]);
 
   // Check for spellcasting features
   const hasSpellcasting = characterClass?.spellcasting !== undefined;
