@@ -368,6 +368,8 @@ export default defineConfig({
         'src/utils/grappleUtils.ts',
         'src/utils/lighting-integration.ts',
         'src/utils/animations/utilities.ts',
+        'src/utils/rest/hit-dice.ts',
+        'src/utils/rest/exhaustion.ts',
         'src/utils/restMechanics.ts',
         'src/utils/conditionEffects.ts',
         'src/utils/twoWeaponFighting.ts',
