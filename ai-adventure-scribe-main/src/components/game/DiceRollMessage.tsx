@@ -3,7 +3,7 @@
  * Displays dice roll results in chat with visual flair
  */
 
-import { Dice6, Plus, Minus, ArrowUp, ArrowDown } from 'lucide-react';
+import { Dice6, ArrowUp, ArrowDown } from 'lucide-react';
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +33,72 @@ interface DiceRollMessageProps {
 }
 
 /**
+ * ⚡ Bolt: Static helper function extracted outside the component to avoid
+ * re-allocation on every render.
+ */
+const getResultColor = (
+  critical: boolean | undefined,
+  naturalRoll: number | undefined,
+  dieType: number,
+): string => {
+  if (critical && naturalRoll === 20) return 'text-green-600 font-bold';
+  if (critical === false && naturalRoll === 1) return 'text-red-600 font-bold';
+  if (dieType === 20 && naturalRoll) {
+    if (naturalRoll >= 15) return 'text-green-500';
+    if (naturalRoll <= 5) return 'text-orange-500';
+  }
+  return 'text-blue-600';
+};
+
+/**
+ * ⚡ Bolt: Standalone memoized component for individual rolls breakdown
+ * to prevent redundant re-renders and logic execution within the main component.
+ */
+const IndividualRolls = React.memo(
+  ({
+    advantage,
+    disadvantage,
+    results,
+    keptResults,
+    count,
+  }: {
+    advantage: boolean;
+    disadvantage: boolean;
+    results: number[];
+    keptResults?: number[];
+    count: number;
+  }) => {
+    if (advantage || disadvantage) {
+      const kept = keptResults || results.slice(0, 1);
+      const dropped = results.filter((r) => !kept.includes(r));
+
+      return (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-green-600 font-medium">Kept: [{kept.join(', ')}]</span>
+            {dropped.length > 0 && (
+              <span className="text-xs text-red-400 line-through">
+                Dropped: [{dropped.join(', ')}]
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    } else if (count > 1) {
+      return (
+        <div className="text-xs text-muted-foreground">
+          Individual rolls: [{results.join(', ')}]
+        </div>
+      );
+    }
+
+    return null;
+  },
+);
+
+IndividualRolls.displayName = 'IndividualRolls';
+
+/**
  * Dice Roll Message Component for Chat
  * Displays dice roll results with visual styling similar to CombatMessage
  */
@@ -42,7 +108,6 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
       formula,
       count,
       dieType,
-      modifier,
       advantage,
       disadvantage,
       results,
@@ -52,45 +117,6 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
       critical,
       label,
     } = data;
-
-    // Determine result styling
-    const getResultColor = () => {
-      if (critical && naturalRoll === 20) return 'text-green-600 font-bold';
-      if (critical === false && naturalRoll === 1) return 'text-red-600 font-bold';
-      if (dieType === 20 && naturalRoll) {
-        if (naturalRoll >= 15) return 'text-green-500';
-        if (naturalRoll <= 5) return 'text-orange-500';
-      }
-      return 'text-blue-600';
-    };
-
-    const formatIndividualRolls = () => {
-      if (advantage || disadvantage) {
-        const kept = keptResults || results.slice(0, 1);
-        const dropped = results.filter((r) => !kept.includes(r));
-
-        return (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-green-600 font-medium">Kept: [{kept.join(', ')}]</span>
-              {dropped.length > 0 && (
-                <span className="text-xs text-red-400 line-through">
-                  Dropped: [{dropped.join(', ')}]
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      } else if (count > 1) {
-        return (
-          <div className="text-xs text-muted-foreground">
-            Individual rolls: [{results.join(', ')}]
-          </div>
-        );
-      }
-
-      return null;
-    };
 
     return (
       <Card
@@ -152,7 +178,7 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
 
             <div className="text-center" aria-label={`Total result: ${total}`}>
               <div
-                className={cn('text-2xl font-bold', getResultColor())}
+                className={cn('text-2xl font-bold', getResultColor(critical, naturalRoll, dieType))}
                 aria-hidden="true"
               >
                 {total}
@@ -164,9 +190,15 @@ export const DiceRollMessage: React.FC<DiceRollMessageProps> = React.memo(
           </div>
 
           {/* Individual Roll Results */}
-          {formatIndividualRolls() && (
-            <div aria-label="Individual roll breakdown">{formatIndividualRolls()}</div>
-          )}
+          <div aria-label="Individual roll breakdown">
+            <IndividualRolls
+              advantage={advantage}
+              disadvantage={disadvantage}
+              results={results}
+              keptResults={keptResults}
+              count={count}
+            />
+          </div>
 
           {/* Critical Hit/Miss Indicator */}
           {critical !== undefined && naturalRoll && (
