@@ -378,6 +378,8 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
                 max={1}
                 step={0.05}
                 className="flex-1"
+                aria-label="Adjust playback volume"
+                title="Adjust playback volume"
               />
 
               <span className="text-xs text-muted-foreground w-10 text-right">
