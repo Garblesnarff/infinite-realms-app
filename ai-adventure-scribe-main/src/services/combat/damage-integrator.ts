@@ -42,6 +42,8 @@ export interface HPUpdateResult {
 
 /**
  * Get current HP status for a combat participant
+ * ⚡ Bolt: Consolidated two sequential queries into a single joined query
+ * to reduce network round-trips during combat HP status retrieval.
  */
 export async function getParticipantStatus(participantId: string): Promise<{
   current_hp: number;
@@ -53,28 +55,38 @@ export async function getParticipantStatus(participantId: string): Promise<{
   damage_vulnerabilities: string[];
 } | null> {
   try {
-    // Get status from combat_participant_status
-    const { data: status, error: statusError } = await supabase
-      .from('combat_participant_status')
-      .select('current_hp, max_hp, temp_hp, is_conscious')
-      .eq('participant_id', participantId)
-      .single();
-
-    if (statusError) throw statusError;
-    if (!status) return null;
-
-    // Get damage modifiers from combat_participants
-    const { data: participant, error: participantError } = await supabase
+    // ⚡ Bolt: Use a single joined query to fetch both participant info and status
+    const { data: participant, error } = await supabase
       .from('combat_participants')
-      .select('damage_resistances, damage_immunities, damage_vulnerabilities')
+      .select(`
+        damage_resistances,
+        damage_immunities,
+        damage_vulnerabilities,
+        combat_participant_status!inner(
+          current_hp,
+          max_hp,
+          temp_hp,
+          is_conscious
+        )
+      `)
       .eq('id', participantId)
       .single();
 
-    if (participantError) throw participantError;
-    if (!participant) return null;
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      throw error;
+    }
+
+    if (!participant || !participant.combat_participant_status) return null;
+
+    // PostgREST returns inner joined single relations as objects
+    const status = participant.combat_participant_status as any;
 
     return {
-      ...status,
+      current_hp: status.current_hp,
+      max_hp: status.max_hp,
+      temp_hp: status.temp_hp,
+      is_conscious: status.is_conscious,
       damage_resistances: participant.damage_resistances || [],
       damage_immunities: participant.damage_immunities || [],
       damage_vulnerabilities: participant.damage_vulnerabilities || [],

@@ -81,39 +81,33 @@ describe('DamageIntegrator', () => {
 
     it('should apply damage and update HP correctly', async () => {
       // Setup mocks
-      const mockStatus = {
-        current_hp: 20,
-        max_hp: 30,
-        temp_hp: 0,
-        is_conscious: true,
-      };
-      const mockModifiers = {
+      const mockParticipantData = {
         damage_resistances: [],
         damage_immunities: [],
         damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 20,
+          max_hp: 30,
+          temp_hp: 0,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
 
-      // First call to combat_participant_status
+      // Combined call to combat_participants with joined status
       (fromSpy as any).mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
       });
-      // Second call to combat_participants
-      (fromSpy as any).mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockModifiers, error: null }),
-      });
-      // Third call to update
+      // Second call to update
       const updateMock = vi.fn().mockReturnThis();
       (fromSpy as any).mockReturnValueOnce({
         update: updateMock,
         eq: vi.fn().mockResolvedValue({ error: null }),
       });
-      // Fourth call to log
+      // Third call to log
       (fromSpy as any).mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null }),
       });
@@ -134,30 +128,24 @@ describe('DamageIntegrator', () => {
     });
 
     it('should deplete temp HP before real HP', async () => {
-      const mockStatus = {
-        current_hp: 20,
-        max_hp: 30,
-        temp_hp: 10,
-        is_conscious: true,
-      };
-      const mockModifiers = {
+      const mockParticipantData = {
         damage_resistances: [],
         damage_immunities: [],
         damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 20,
+          max_hp: 30,
+          temp_hp: 10,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockModifiers, error: null }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       // Mock update and insert too to avoid errors
       (fromSpy as any)
@@ -182,30 +170,24 @@ describe('DamageIntegrator', () => {
     });
 
     it('should partially deplete temp HP when damage is less than temp HP', async () => {
-      const mockStatus = {
-        current_hp: 20,
-        max_hp: 30,
-        temp_hp: 10,
-        is_conscious: true,
-      };
-      const mockModifiers = {
+      const mockParticipantData = {
         damage_resistances: [],
         damage_immunities: [],
         damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 20,
+          max_hp: 30,
+          temp_hp: 10,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockModifiers, error: null }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       // Mock update and insert
       (fromSpy as any)
@@ -230,30 +212,24 @@ describe('DamageIntegrator', () => {
     });
 
     it('should set conscious to false when HP reaches 0', async () => {
-      const mockStatus = {
-        current_hp: 5,
-        max_hp: 30,
-        temp_hp: 0,
-        is_conscious: true,
+      const mockParticipantData = {
+        damage_resistances: [],
+        damage_immunities: [],
+        damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 5,
+          max_hp: 30,
+          temp_hp: 0,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       // Mock update and insert
       (fromSpy as any)
@@ -278,30 +254,24 @@ describe('DamageIntegrator', () => {
     });
 
     it('should return no damage when immunity results in 0 damage', async () => {
-      const mockStatus = {
-        current_hp: 20,
-        max_hp: 30,
-        temp_hp: 0,
-        is_conscious: true,
-      };
-      const mockModifiers = {
+      const mockParticipantData = {
         damage_resistances: [],
         damage_immunities: ['fire'],
         damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 20,
+          max_hp: 30,
+          temp_hp: 0,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockModifiers, error: null }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       const result = await applyDamageFromRoll({
         participantId: mockParticipantId,
@@ -337,28 +307,20 @@ describe('DamageIntegrator', () => {
 
     it('should handle database errors in applyDamageFromRoll', async () => {
       const fromSpy = vi.spyOn(supabase, 'from');
-      // getParticipantStatus calls
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { current_hp: 10, max_hp: 10, is_conscious: true },
-              error: null,
-            }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      // getParticipantStatus call
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            damage_resistances: [],
+            damage_immunities: [],
+            damage_vulnerabilities: [],
+            combat_participant_status: { current_hp: 10, max_hp: 10, is_conscious: true },
+          },
+          error: null,
+        }),
+      });
       // update call
       (fromSpy as any).mockReturnValueOnce({
         update: vi.fn().mockReturnThis(),
@@ -378,24 +340,18 @@ describe('DamageIntegrator', () => {
     });
 
     it('should continue even if damage logging fails', async () => {
-      const mockStatus = { current_hp: 20, max_hp: 30, temp_hp: 0, is_conscious: true };
+      const mockParticipantData = {
+        damage_resistances: [],
+        damage_immunities: [],
+        damage_vulnerabilities: [],
+        combat_participant_status: { current_hp: 20, max_hp: 30, temp_hp: 0, is_conscious: true },
+      };
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       // update call success
       (fromSpy as any).mockReturnValueOnce({
@@ -449,27 +405,21 @@ describe('DamageIntegrator', () => {
 
       // Mock dependencies for applyDamageFromRoll
       const fromSpy = vi.spyOn(supabase, 'from');
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            damage_resistances: [],
+            damage_immunities: [],
+            damage_vulnerabilities: [],
+            combat_participant_status: { current_hp: 10, max_hp: 10, temp_hp: 0, is_conscious: true },
+          },
+          error: null,
+        }),
+      });
+
       (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { current_hp: 10, max_hp: 10, temp_hp: 0, is_conscious: true },
-              error: null,
-            }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        })
         .mockReturnValueOnce({
           update: vi.fn().mockReturnThis(),
           eq: vi.fn().mockResolvedValue({ error: null }),
@@ -494,31 +444,24 @@ describe('DamageIntegrator', () => {
 
   describe('applyHealingFromRoll', () => {
     it('should increase HP and cap at max HP', async () => {
-      const mockStatus = {
-        participant_id: 'p1',
-        current_hp: 25,
-        max_hp: 30,
-        temp_hp: 0,
-        is_conscious: true,
+      const mockParticipantData = {
+        damage_resistances: [],
+        damage_immunities: [],
+        damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 25,
+          max_hp: 30,
+          temp_hp: 0,
+          is_conscious: true,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       // Mock update
       (fromSpy as any).mockReturnValueOnce({
@@ -536,31 +479,24 @@ describe('DamageIntegrator', () => {
     });
 
     it('should bring a participant back to consciousness and reset death saves', async () => {
-      const mockStatus = {
-        participant_id: 'p1',
-        current_hp: 0,
-        max_hp: 30,
-        temp_hp: 0,
-        is_conscious: false,
+      const mockParticipantData = {
+        damage_resistances: [],
+        damage_immunities: [],
+        damage_vulnerabilities: [],
+        combat_participant_status: {
+          current_hp: 0,
+          max_hp: 30,
+          temp_hp: 0,
+          is_conscious: false,
+        },
       };
 
       const fromSpy = vi.spyOn(supabase, 'from');
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ data: mockStatus, error: null }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockParticipantData, error: null }),
+      });
 
       const updateMock = vi.fn().mockReturnThis();
       (fromSpy as any).mockReturnValueOnce({
@@ -603,28 +539,20 @@ describe('DamageIntegrator', () => {
 
     it('should handle errors during healing application', async () => {
       const fromSpy = vi.spyOn(supabase, 'from');
-      // getParticipantStatus calls
-      (fromSpy as any)
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { current_hp: 0, max_hp: 10, is_conscious: false },
-              error: null,
-            }),
-        })
-        .mockReturnValueOnce({
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi
-            .fn()
-            .mockResolvedValue({
-              data: { damage_resistances: [], damage_immunities: [], damage_vulnerabilities: [] },
-              error: null,
-            }),
-        });
+      // getParticipantStatus call
+      (fromSpy as any).mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: {
+            damage_resistances: [],
+            damage_immunities: [],
+            damage_vulnerabilities: [],
+            combat_participant_status: { current_hp: 0, max_hp: 10, is_conscious: false },
+          },
+          error: null,
+        }),
+      });
       // update call
       (fromSpy as any).mockReturnValueOnce({
         update: vi.fn().mockReturnThis(),
