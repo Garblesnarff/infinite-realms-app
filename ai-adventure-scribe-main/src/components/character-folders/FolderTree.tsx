@@ -144,8 +144,8 @@ const FolderItem: React.FC<FolderItemProps> = ({
             variant="ghost"
             size="icon"
             className="h-4 w-4 p-0 hover:bg-accent rounded"
-            aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
-            title={isExpanded ? 'Collapse folder' : 'Expand folder'}
+            aria-label={isExpanded ? `Collapse ${folder.name} folder` : `Expand ${folder.name} folder`}
+            title={isExpanded ? `Collapse ${folder.name} folder` : `Expand ${folder.name} folder`}
             aria-expanded={isExpanded}
             onClick={(e) => {
               e.stopPropagation();
@@ -191,8 +191,8 @@ const FolderItem: React.FC<FolderItemProps> = ({
               variant="ghost"
               size="icon"
               className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-              aria-label="Folder actions"
-              title="Folder actions"
+              aria-label={`Actions for ${folder.name} folder`}
+              title={`Actions for ${folder.name} folder`}
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
