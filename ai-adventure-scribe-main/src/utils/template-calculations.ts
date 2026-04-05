@@ -5,8 +5,9 @@
  * determining affected tokens, and managing measurement templates on the battle map.
  */
 
+
 import type { MeasurementTemplate } from '@/types/drawing';
-import type { Point2D, GridType } from '@/types/scene';
+import type { GridType, Point2D } from '@/types/scene';
 import type { Token } from '@/types/token';
 
 import { TemplateType } from '@/types/drawing';

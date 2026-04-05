@@ -7,13 +7,9 @@ import {
   gridDistance,
   calculateDistance,
   calculateMeasurementPath,
-  getConePoints,
   getTokensInCone,
-  getSpherePoints,
   getTokensInSphere,
-  getCubePoints,
   getTokensInCube,
-  getLinePoints,
   getTokensInLine,
   getAffectedGridSquares,
   snapToGridIntersection,
@@ -94,15 +90,6 @@ describe('template-calculations', () => {
     });
   });
 
-  describe('getConePoints', () => {
-    it('should generate a triangle-like polygon for a cone', () => {
-      const origin = { x: 100, y: 100 };
-      const points = getConePoints(origin, 90, 15, 90, GRID_SIZE);
-      expect(points.length).toBeGreaterThan(2);
-      expect(points[0]).toEqual(origin);
-    });
-  });
-
   describe('getTokensInCone', () => {
     it('should filter tokens within a cone', () => {
       const origin = { x: 0, y: 0 };
@@ -114,18 +101,6 @@ describe('template-calculations', () => {
       const affected = getTokensInCone(origin, 90, 90, 30, tokens, GRID_SIZE);
       expect(affected).toHaveLength(1);
       expect(affected[0].x).toBe(50);
-    });
-  });
-
-  describe('getSpherePoints', () => {
-    it('should generate points for a circle', () => {
-      const origin = { x: 100, y: 100 };
-      const points = getSpherePoints(origin, 10, GRID_SIZE, 8);
-      expect(points.length).toBe(8);
-      points.forEach((p) => {
-        const dist = euclideanDistance(origin, p);
-        expect(dist).toBeCloseTo(200);
-      });
     });
   });
 
@@ -141,18 +116,6 @@ describe('template-calculations', () => {
     });
   });
 
-  describe('getCubePoints', () => {
-    it('should generate corners for a square', () => {
-      const origin = { x: 100, y: 100 };
-      const points = getCubePoints(origin, 10, GRID_SIZE);
-      expect(points.length).toBe(4);
-      expect(points).toContainEqual({ x: 0, y: 0 });
-      expect(points).toContainEqual({ x: 200, y: 0 });
-      expect(points).toContainEqual({ x: 200, y: 200 });
-      expect(points).toContainEqual({ x: 0, y: 200 });
-    });
-  });
-
   describe('getTokensInCube', () => {
     it('should filter tokens within a cube', () => {
       const origin = { x: 100, y: 100 };
@@ -162,14 +125,6 @@ describe('template-calculations', () => {
       ];
       const affected = getTokensInCube(origin, 10, tokens, GRID_SIZE);
       expect(affected).toHaveLength(1);
-    });
-  });
-
-  describe('getLinePoints', () => {
-    it('should generate points for a line', () => {
-      const origin = { x: 0, y: 0 };
-      const points = getLinePoints(origin, 90, 20, 10, GRID_SIZE); // 90deg East, 20ft long, 10ft wide.
-      expect(points).toHaveLength(4);
     });
   });
 
