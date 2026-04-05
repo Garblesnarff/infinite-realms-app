@@ -28,6 +28,42 @@ export interface UseAvailableSpellsReturn {
 }
 
 /**
+ * ⚡ Bolt: Static helper function extracted outside the hook to avoid
+ * unnecessary useCallback overhead and simplify dependency tracking for pure logic.
+ */
+const filterSpells = (spells: Spell[], searchTerm: string, filters: SpellFilters): Spell[] => {
+  return spells.filter((spell) => {
+    // Search term filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        spell.name.toLowerCase().includes(searchLower) ||
+        spell.description.toLowerCase().includes(searchLower) ||
+        spell.school.toLowerCase().includes(searchLower);
+
+      if (!matchesSearch) return false;
+    }
+
+    // School filter
+    if (filters.schools.length > 0 && !filters.schools.includes(spell.school)) {
+      return false;
+    }
+
+    // Component filters
+    if (filters.components.verbal && !spell.components_verbal) return false;
+    if (filters.components.somatic && !spell.components_somatic) return false;
+    if (filters.components.material && !spell.components_material) return false;
+
+    // Property filters
+    if (filters.properties.concentration && !spell.concentration) return false;
+    if (filters.properties.ritual && !spell.ritual) return false;
+    if (filters.properties.damage && !spell.damage) return false;
+
+    return true;
+  });
+};
+
+/**
  * useAvailableSpells - Hook for fetching and filtering available spells
  * Extracted from useSpellSelection to handle spell discovery logic independently.
  */
@@ -106,50 +142,14 @@ export function useAvailableSpells({
     fetchSpells();
   }, [fetchSpells]);
 
-  // Spell filtering function
-  const filterSpells = useCallback(
-    (spells: Spell[], searchTerm: string, filters: SpellFilters): Spell[] => {
-      return spells.filter((spell) => {
-        // Search term filter
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
-          const matchesSearch =
-            spell.name.toLowerCase().includes(searchLower) ||
-            spell.description.toLowerCase().includes(searchLower) ||
-            spell.school.toLowerCase().includes(searchLower);
-
-          if (!matchesSearch) return false;
-        }
-
-        // School filter
-        if (filters.schools.length > 0 && !filters.schools.includes(spell.school)) {
-          return false;
-        }
-
-        // Component filters
-        if (filters.components.verbal && !spell.components_verbal) return false;
-        if (filters.components.somatic && !spell.components_somatic) return false;
-        if (filters.components.material && !spell.components_material) return false;
-
-        // Property filters
-        if (filters.properties.concentration && !spell.concentration) return false;
-        if (filters.properties.ritual && !spell.ritual) return false;
-        if (filters.properties.damage && !spell.damage) return false;
-
-        return true;
-      });
-    },
-    [],
-  );
-
   // Filtered spells
   const filteredCantrips = useMemo(() => {
     return filterSpells(availableCantrips, searchTerm, filters);
-  }, [availableCantrips, searchTerm, filters, filterSpells]);
+  }, [availableCantrips, searchTerm, filters]);
 
   const filteredSpells = useMemo(() => {
     return filterSpells(availableSpells, searchTerm, filters);
-  }, [availableSpells, searchTerm, filters, filterSpells]);
+  }, [availableSpells, searchTerm, filters]);
 
   return {
     availableCantrips,
