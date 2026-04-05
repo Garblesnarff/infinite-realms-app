@@ -7,6 +7,7 @@
  */
 
 import { supabaseService } from './supabase.js';
+import { CombatEncounterService } from '../services/combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../services/combat-initiative-service.js';
 
 /**
@@ -43,7 +44,7 @@ export async function verifyEncounterOwnership(
   }
 
   // Get encounter
-  const encounter = await CombatInitiativeService.getEncounterById(encounterId, userId);
+  const encounter = await CombatEncounterService.getEncounterById(encounterId, userId);
   if (!encounter) {
     return {
       success: false,

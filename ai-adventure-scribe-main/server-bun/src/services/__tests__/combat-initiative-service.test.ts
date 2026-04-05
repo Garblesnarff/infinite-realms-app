@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
+import { CombatEncounterService } from '../combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 
 // Mock the db client
@@ -73,7 +74,7 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
-describe('CombatInitiativeService', () => {
+describe('CombatEncounterService', () => {
   const mockUserId = 'user-123';
   const mockSessionId = 'session-123';
 
@@ -112,7 +113,7 @@ describe('CombatInitiativeService', () => {
         ])
       });
 
-      await CombatInitiativeService.startCombat(
+      await CombatEncounterService.startCombat(
         mockSessionId,
         [
           { name: 'Player 1', characterId: 'char-1', initiativeModifier: 2, encounterId: '' },
@@ -141,7 +142,7 @@ describe('CombatInitiativeService', () => {
         where: vi.fn().mockResolvedValue([{ id: 'char-1' }])
       });
 
-      await expect(CombatInitiativeService.startCombat(
+      await expect(CombatEncounterService.startCombat(
         mockSessionId,
         [
           { name: 'Player 1', characterId: 'char-1', initiativeModifier: 2, encounterId: '' },

@@ -2,6 +2,7 @@ import { Elysia } from 'elysia';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
+import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
 import type { CreateParticipantInput } from '../../../types/combat.js';
@@ -59,7 +60,7 @@ export const initiativeRoutes = new Elysia()
         return { error: 'Participants array is required and must not be empty' };
       }
 
-      const combatState = await CombatInitiativeService.startCombat(
+      const combatState = await CombatEncounterService.startCombat(
         params.sessionId,
         participants,
         surpriseRound || false,
@@ -183,7 +184,7 @@ export const initiativeRoutes = new Elysia()
         newInitiative,
         user.userId
       );
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
+      const combatState = await CombatEncounterService.getCombatState(params.encounterId, user.userId);
 
       return combatState;
     } catch (e) {
@@ -210,7 +211,7 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const updatedEncounter = await CombatInitiativeService.endCombat(params.encounterId, user.userId);
+      const updatedEncounter = await CombatEncounterService.endCombat(params.encounterId, user.userId);
       return updatedEncounter;
     } catch (e) {
       logger.error({ msg: 'End combat error', error: e });
@@ -236,7 +237,7 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const combatState = await CombatInitiativeService.getCombatState(params.encounterId, user.userId);
+      const combatState = await CombatEncounterService.getCombatState(params.encounterId, user.userId);
       return combatState;
     } catch (e) {
       logger.error({ msg: 'Get combat status error', error: e });

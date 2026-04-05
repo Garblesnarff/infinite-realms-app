@@ -304,6 +304,7 @@ export default tseslint.config(
       'server-bun/src/services/character-permission-service.ts',
       'server-bun/src/services/progression/level-up-service.ts',
       'server-bun/src/services/combat-initiative-service.ts',
+      'server-bun/src/services/combat/combat-encounter-service.ts',
       'server-bun/src/services/combat/combat-authorization.ts',
       'src/components/scenes/SceneCreationWizard.tsx',
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',

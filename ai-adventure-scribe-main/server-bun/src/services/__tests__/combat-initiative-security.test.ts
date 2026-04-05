@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
+import { CombatEncounterService } from '../combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 
 // Mock the db client
@@ -105,7 +106,7 @@ describe('CombatInitiativeService Security', () => {
         .mockReturnValueOnce(qb1)
         .mockReturnValueOnce(qb2);
 
-      await expect(CombatInitiativeService.startCombat(
+      await expect(CombatEncounterService.startCombat(
         mockSessionId,
         [
           { name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
@@ -142,7 +143,7 @@ describe('CombatInitiativeService Security', () => {
         ])
       });
 
-      const result = await CombatInitiativeService.startCombat(
+      const result = await CombatEncounterService.startCombat(
         mockSessionId,
         [
           { name: 'NPC 1', npcId: 'npc-1', initiativeModifier: 2 },
