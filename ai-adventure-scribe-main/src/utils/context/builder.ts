@@ -111,8 +111,8 @@ class GameContextBuilder {
       context.memories = {
         recent: memories.filter((m) => m.type === 'event').slice(0, 5),
         locations: memories.filter((m) => m.type === 'location'),
-        characters: memories.filter((m) => m.type === 'character'),
-        plot: memories.filter((m) => m.type === 'plot'),
+        characters: memories.filter((m) => m.type === 'npc'),
+        plot: memories.filter((m) => m.type === 'plot_point'),
       };
     }
 

@@ -179,3 +179,7 @@
 ## 2026-02-13 - [Dice Engine Coverage & rpg-dice-roller 5.x Gotchas]
 **Learning:** Found that `DiceEngine.ts` was under-tested. During testing, discovered that `@dice-roller/rpg-dice-roller` v5.x includes both die results and grouping objects in its `rolls` array. Also learned that advantage/disadvantage flags should be explicitly initialized to `false` rather than `undefined` to ensure consistent API responses and simplify test assertions.
 **Action:** When iterating over `roll.rolls` from `rpg-dice-roller`, always check for the existence of the `sides` property to distinguish between actual die rolls and result groups. Ensure boolean flags in result objects are explicitly cast or defaulted (e.g., `!!val || false`). Added comprehensive coverage for `DiceEngine.ts` reaching 99% line coverage.
+
+## 2026-04-05 - [GameContextBuilder Coverage & Type Mismatch]
+**Learning:** Found that `GameContextBuilder` in `src/utils/context/builder.ts` was completely untested. Testing revealed a bug where memory types were being filtered using `'character'` and `'plot'` strings, which did not match the actual `MemoryType` enum values used in the system (`'npc'` and `'plot_point'`).
+**Action:** When testing data aggregators, verify that all filtering criteria (like `type` or `status`) match the actual values present in the database or defined in TypeScript enums. Ensure that `vitest.config.ts` includes both the new test file and the source module for accurate coverage reporting.
