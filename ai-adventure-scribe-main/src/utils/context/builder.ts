@@ -16,9 +16,11 @@ interface ContextParams {
 
 class GameContextBuilder {
   private async fetchCampaign(campaignId: string): Promise<CampaignRow | null> {
+    // ⚡ Bolt: Optimized to select only required columns and use explicit selection for joined relations
+    // (worlds, quests) to reduce over-fetching and minimize payload size.
     const { data, error } = await supabase
       .from('campaigns')
-      .select('*, worlds(*), quests(*)')
+      .select('id, name, description, genre, status, era, location, atmosphere, thematic_elements, worlds(id, name, description), quests(id, title, description, status)')
       .eq('id', campaignId)
       .maybeSingle();
     if (error) throw error;
@@ -26,9 +28,40 @@ class GameContextBuilder {
   }
 
   private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
+    // ⚡ Bolt: Optimized to select only required columns and relations with explicit selection for nested objects.
+    // This reduces database load and data transfer while maintaining all required context data.
     const { data, error } = await supabase
       .from('characters')
-      .select('*, character_stats(*), character_equipment(*), quest_progress(*, quests(title))')
+      .select(`
+        id,
+        name,
+        race,
+        class,
+        level,
+        character_stats(
+          strength,
+          dexterity,
+          constitution,
+          intelligence,
+          wisdom,
+          charisma,
+          current_hit_points,
+          max_hit_points,
+          armor_class
+        ),
+        character_equipment(
+          item_name,
+          item_type,
+          equipped
+        ),
+        quest_progress(
+          status,
+          updated_at,
+          quests(
+            title
+          )
+        )
+      `)
       .eq('id', characterId)
       .maybeSingle();
     if (error) throw error;
