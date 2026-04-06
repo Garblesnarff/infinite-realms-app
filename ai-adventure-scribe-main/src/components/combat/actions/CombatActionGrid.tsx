@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 
 import { COMBAT_ACTIONS, type ActionDefinition } from './ActionDefinitions';
 
@@ -15,13 +15,13 @@ interface CombatActionGridProps {
 /**
  * Grid of combat action buttons
  */
-export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
+export const CombatActionGrid: React.FC<CombatActionGridProps> = React.memo(({
   currentParticipant,
   onActionClick,
   isSubmitting,
 }) => {
   // Check if action is available for current participant
-  const isActionAvailable = (action: ActionDefinition): boolean => {
+  const isActionAvailable = useCallback((action: ActionDefinition): boolean => {
     if (!currentParticipant) return false;
 
     if (action.actionRequired && currentParticipant.actionTaken) {
@@ -33,9 +33,9 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
     }
 
     return true;
-  };
+  }, [currentParticipant]);
 
-  const getActionStatusText = (action: ActionDefinition): string => {
+  const getActionStatusText = useCallback((action: ActionDefinition): string => {
     if (!currentParticipant) return '';
 
     if (action.actionRequired && currentParticipant.actionTaken) {
@@ -47,7 +47,7 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
     }
 
     return '';
-  };
+  }, [currentParticipant]);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -85,4 +85,6 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = ({
       })}
     </div>
   );
-};
+});
+
+CombatActionGrid.displayName = 'CombatActionGrid';

@@ -7,7 +7,7 @@
  */
 
 import { Dice6 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 
 import { type ActionDefinition, MANAGEMENT_ACTIONS } from './actions/ActionDefinitions';
 import { CombatActionGrid } from './actions/CombatActionGrid';
@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCombat } from '@/contexts/CombatContext';
-import logger from '@/lib/logger';
 
 // ===========================
 // Component Props
@@ -48,37 +47,37 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Unified submission handler that resets current selection
-  const handleActionSubmit = async (
+  const handleActionSubmit = useCallback(async (
     type: ActionType,
     desc: string,
     data?: unknown,
   ): Promise<void> => {
     await onActionSubmit(type, desc, data);
     setSelectedAction(null);
-  };
+  }, [onActionSubmit]);
 
   // Handle management panel selection
-  const handleManagementSelect = (managementType: string): void => {
+  const handleManagementSelect = useCallback((managementType: string): void => {
     setSelectedManagement((prev) => (prev === managementType ? null : managementType));
-  };
+  }, []);
 
-  const handleApplyCondition = async (condition: Condition, targetId: string): Promise<void> => {
+  const handleApplyCondition = useCallback(async (condition: Condition, targetId: string): Promise<void> => {
     await applyCondition(targetId, condition);
-  };
+  }, [applyCondition]);
 
-  const handleRemoveCondition = async (
+  const handleRemoveCondition = useCallback(async (
     conditionName: ConditionName,
     targetId: string,
   ): Promise<void> => {
     await removeCondition(targetId, conditionName);
-  };
+  }, [removeCondition]);
 
   // Get current participant to check action availability
-  const currentParticipant = activeEncounter?.participants.find(
+  const currentParticipant = useMemo(() => activeEncounter?.participants.find(
     (p: CombatParticipant) => p.id === activeEncounter.currentTurnParticipantId,
-  );
+  ), [activeEncounter?.participants, activeEncounter?.currentTurnParticipantId]);
 
-  const handleQuickAction = async (action: ActionDefinition): Promise<void> => {
+  const handleQuickAction = useCallback(async (action: ActionDefinition): Promise<void> => {
     if (!action.quickAction) return;
 
     setIsSubmitting(true);
@@ -87,19 +86,19 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [onActionSubmit]);
 
-  const handleCancelAction = (): void => {
+  const handleCancelAction = useCallback((): void => {
     setSelectedAction(null);
-  };
+  }, []);
 
-  const handleActionClick = (action: ActionDefinition): void => {
+  const handleActionClick = useCallback((action: ActionDefinition): void => {
     if (action.quickAction) {
       handleQuickAction(action);
     } else {
       setSelectedAction(action);
     }
-  };
+  }, [handleQuickAction]);
 
   return (
     <Card className={`w-full ${className}`}>
@@ -212,4 +211,4 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   );
 };
 
-export default CombatActionPanel;
+export default React.memo(CombatActionPanel);
