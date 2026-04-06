@@ -316,7 +316,11 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
                   <Circle className="w-5 h-5 text-purple-500" />
                   Spell Slots
                 </CardTitle>
-                <Button size="sm" onClick={longRest}>
+                <Button
+                  size="sm"
+                  onClick={longRest}
+                  title="Recover all spell slots"
+                >
                   Long Rest
                 </Button>
               </CardHeader>
@@ -330,7 +334,8 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
                           {Array.from({ length: slots.total }).map((_, i) => (
                             <button
                               key={i}
-                              className={`w-6 h-6 rounded border-2 ${
+                              type="button"
+                              className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
                                 i < slots.used
                                   ? 'bg-gray-300 border-gray-400'
                                   : 'bg-purple-500 border-purple-600'
@@ -340,6 +345,11 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
                                   ? restoreSpellSlot(parseInt(level))
                                   : consumeSpellSlot(parseInt(level))
                               }
+                              aria-label={`Level ${level} spell slot ${
+                                i < slots.used ? 'expended' : 'available'
+                              }`}
+                              title={i < slots.used ? 'Restore spell slot' : 'Consume spell slot'}
+                              aria-pressed={i >= slots.used}
                             />
                           ))}
                         </div>

@@ -121,7 +121,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Spell Slots
                   </CardTitle>
-                  <Button size="sm" onClick={longRest}>
+                  <Button
+                    size="sm"
+                    onClick={longRest}
+                    title="Recover all spell slots and sorcery points"
+                  >
                     Long Rest
                   </Button>
                 </CardHeader>
@@ -148,7 +152,9 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                                       ? restoreSpellSlot(parseInt(level))
                                       : consumeSpellSlot(parseInt(level))
                                   }
-                                  aria-label={`Level ${level} spell slot ${isUsed ? 'expended' : 'available'}`}
+                                  aria-label={`Level ${level} spell slot ${
+                                    isUsed ? 'expended' : 'available'
+                                  }`}
                                   title={isUsed ? 'Restore spell slot' : 'Consume spell slot'}
                                   aria-pressed={!isUsed}
                                 />
@@ -232,7 +238,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Slots
                   </CardTitle>
-                  <Button size="sm" onClick={shortRest}>
+                  <Button
+                    size="sm"
+                    onClick={shortRest}
+                    title="Recover pact magic slots"
+                  >
                     Short Rest
                   </Button>
                 </CardHeader>
@@ -320,7 +330,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
                       </div>
                     </div>
-                    <Button size="sm" onClick={longRest}>
+                    <Button
+                      size="sm"
+                      onClick={longRest}
+                      title="Recover all spell slots and sorcery points"
+                    >
                       Long Rest
                     </Button>
                   </div>

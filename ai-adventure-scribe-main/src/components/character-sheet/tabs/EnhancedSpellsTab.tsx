@@ -118,7 +118,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Spell Slots
                   </CardTitle>
-                  <Button size="sm" onClick={longRest}>
+                  <Button
+                    size="sm"
+                    onClick={longRest}
+                    title="Recover all spell slots and sorcery points"
+                  >
                     Long Rest
                   </Button>
                 </CardHeader>
@@ -134,7 +138,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                               return (
                                 <button
                                   key={i}
-                                  className={`w-6 h-6 rounded border-2 ${
+                                  type="button"
+                                  className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
                                     isUsed
                                       ? 'bg-gray-300 border-gray-400'
                                       : 'bg-purple-500 border-purple-600'
@@ -229,7 +234,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Slots
                   </CardTitle>
-                  <Button size="sm" onClick={shortRest}>
+                  <Button
+                    size="sm"
+                    onClick={shortRest}
+                    title="Recover pact magic slots"
+                  >
                     Short Rest
                   </Button>
                 </CardHeader>
@@ -243,7 +252,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                           return (
                             <button
                               key={i}
-                              className={`w-8 h-8 rounded border-2 ${
+                              type="button"
+                              className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
                                 isExpended
                                   ? 'bg-gray-300 border-gray-400'
                                   : 'bg-purple-500 border-purple-600'
@@ -316,7 +326,11 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
                       </div>
                     </div>
-                    <Button size="sm" onClick={longRest}>
+                    <Button
+                      size="sm"
+                      onClick={longRest}
+                      title="Recover all spell slots and sorcery points"
+                    >
                       Long Rest
                     </Button>
                   </div>
@@ -347,6 +361,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                             variant="outline"
                             onClick={() => spendSorceryPoints(option.sorceryPointCost)}
                             disabled={sorceryPoints.current < option.sorceryPointCost}
+                            aria-label={`Use ${option.name} metamagic`}
+                            title={`Use ${option.name} metamagic`}
                           >
                             Use
                           </Button>
