@@ -1,5 +1,7 @@
-import { Wand2, Circle, Dot, Book, Target, Loader2 } from 'lucide-react';
+import { Wand2, Circle, Book, Loader2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
+
+import SpellListItem from './components/SpellListItem';
 
 import type { Character } from '@/types/character';
 import type { CharacterSpellDisplay } from '@/utils/spell-lookup';
@@ -7,11 +9,9 @@ import type { CharacterSpellDisplay } from '@/utils/spell-lookup';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import DiceRoller from '@/components/ui/dice-roller';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import logger from '@/lib/logger';
-import { characterSpellService, CharacterSpellData } from '@/services/characterSpellApi';
+import { characterSpellService } from '@/services/characterSpellApi';
 import { getCharacterSpells } from '@/utils/spell-lookup';
 
 interface SpellsTabProps {
@@ -28,7 +28,7 @@ interface SpellSlots {
 /**
  * Spells tab with spell slot tracking and spell management
  */
-const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
+const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate }) => {
   // State for spell data
   const [spells, setSpells] = useState<CharacterSpellDisplay[]>([]);
   const [loading, setLoading] = useState(false); // Start false since we use character data first
@@ -64,6 +64,8 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
       logger.debug('🎭 [SpellsTab] FULL CHARACTER OBJECT:', character);
 
       setError(null);
+
+      if (!character) return;
 
       // Primary: Use character data directly
       const characterSpellData = getCharacterSpells(character);
@@ -171,22 +173,6 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
   const cantrips = spells.filter((spell) => spell.level === 0);
   const leveledSpells = spells.filter((spell) => spell.level > 0);
 
-  // Helper function to format spell components with error handling
-  const formatComponents = (spell: CharacterSpellDisplay) => {
-    try {
-      if (!spell) return '';
-
-      const components = [];
-      if (spell.verbal || spell.components_verbal) components.push('V');
-      if (spell.somatic || spell.components_somatic) components.push('S');
-      if (spell.material || spell.components_material) components.push('M');
-      return components.join(', ');
-    } catch (error) {
-      logger.warn('[SpellsTab] Error formatting components for spell:', spell?.name, error);
-      return 'V, S, M'; // Safe fallback
-    }
-  };
-
   // Show loading state
   if (loading) {
     return (
@@ -292,57 +278,9 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
                       No cantrips learned yet
                     </div>
                   ) : (
-                    cantrips
-                      .map((spell) => {
-                        try {
-                          if (!spell || !spell.id) {
-                            logger.warn('[SpellsTab] Invalid cantrip data:', spell);
-                            return null;
-                          }
-
-                          return (
-                            <div
-                              key={spell.id}
-                              className="flex items-center justify-between p-3 border rounded-lg"
-                            >
-                              <div className="flex-1">
-                                <div className="font-medium">{spell.name || 'Unknown Cantrip'}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {spell.school || 'Unknown'} • {spell.casting_time || 'Unknown'} •{' '}
-                                  {spell.range_text || 'Unknown'}
-                                </div>
-                                {formatComponents(spell) && (
-                                  <div className="text-xs text-muted-foreground">
-                                    Components: {formatComponents(spell)}
-                                  </div>
-                                )}
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {spell.description || 'No description available.'}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        } catch (error) {
-                          logger.error('[SpellsTab] Error rendering cantrip:', spell, error);
-                          return (
-                            <div
-                              key={spell?.id || Math.random()}
-                              className="flex items-center justify-between p-3 border rounded-lg border-red-200"
-                            >
-                              <div className="flex-1">
-                                <div className="font-medium text-red-600">
-                                  Error loading cantrip
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  There was an error displaying this cantrip. Please refresh the
-                                  page.
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-                      })
-                      .filter(Boolean)
+                    cantrips.map((spell) => (
+                      <SpellListItem key={spell.id} spell={spell} isCantrip />
+                    ))
                   )}
                 </div>
               </CardContent>
@@ -364,82 +302,7 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
                       No spells learned yet
                     </div>
                   ) : (
-                    leveledSpells
-                      .map((spell) => {
-                        try {
-                          if (!spell || !spell.id) {
-                            logger.warn('[SpellsTab] Invalid leveled spell data:', spell);
-                            return null;
-                          }
-
-                          return (
-                            <div
-                              key={spell.id}
-                              className="flex items-center justify-between p-3 border rounded-lg"
-                            >
-                              <div className="flex items-start gap-3 flex-1">
-                                {/* Prepared indicator */}
-                                <div className="flex flex-col items-center gap-1 mt-1">
-                                  {spell.is_prepared ? (
-                                    <Dot className="w-4 h-4 text-green-500" />
-                                  ) : (
-                                    <Circle className="w-4 h-4 text-gray-400" />
-                                  )}
-                                  <Badge variant="outline" className="text-xs px-1">
-                                    {spell.level || '?'}
-                                  </Badge>
-                                </div>
-
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">
-                                      {spell.name || 'Unknown Spell'}
-                                    </span>
-                                    {spell.ritual && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        R
-                                      </Badge>
-                                    )}
-                                    {spell.concentration && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        C
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {spell.school || 'Unknown'} • {spell.casting_time || 'Unknown'}{' '}
-                                    • {spell.range_text || 'Unknown'}
-                                  </div>
-                                  {formatComponents(spell) && (
-                                    <div className="text-xs text-muted-foreground">
-                                      Components: {formatComponents(spell)}
-                                    </div>
-                                  )}
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    {spell.description || 'No description available.'}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        } catch (error) {
-                          logger.error('[SpellsTab] Error rendering leveled spell:', spell, error);
-                          return (
-                            <div
-                              key={spell?.id || Math.random()}
-                              className="flex items-center justify-between p-3 border rounded-lg border-red-200"
-                            >
-                              <div className="flex-1">
-                                <div className="font-medium text-red-600">Error loading spell</div>
-                                <div className="text-sm text-muted-foreground">
-                                  There was an error displaying this spell. Please refresh the page.
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-                      })
-                      .filter(Boolean)
+                    leveledSpells.map((spell) => <SpellListItem key={spell.id} spell={spell} />)
                   )}
                 </div>
               </CardContent>
