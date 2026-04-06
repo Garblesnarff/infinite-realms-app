@@ -7,10 +7,11 @@
 
 
 import type { MeasurementTemplate } from '@/types/drawing';
-import type { GridType, Point2D } from '@/types/scene';
+import type { Point2D } from '@/types/scene';
 import type { Token } from '@/types/token';
 
 import { TemplateType } from '@/types/drawing';
+import { GridType } from '@/types/scene';
 import { isPointInPolygon } from '@/utils/polygon-utils';
 import {
   FEET_PER_GRID_SQUARE,
