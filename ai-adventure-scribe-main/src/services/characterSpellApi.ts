@@ -81,11 +81,15 @@ class CharacterSpellService {
       const token = await this.getAccessToken();
       const response = await this.executeRequest(url, options, token);
 
-      if (response.status === 401) {
-        throw new Error('Your session has expired. Please sign in again.');
-      }
-
       if (!response.ok) {
+        if (response.status === 401) {
+          const message = await this.parseError(response);
+          // If parseError didn't return a specialized message, use a default one
+          if (message.includes('401') || message === 'Unknown error') {
+            throw new Error('Your session has expired. Please sign in again.');
+          }
+          throw new Error(message);
+        }
         const message = await this.parseError(response);
         throw new Error(message);
       }
