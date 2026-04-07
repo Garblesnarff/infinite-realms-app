@@ -67,6 +67,45 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
+/**
+ * Helper: creates a mock chain for db.select() covering all Drizzle chain patterns.
+ * Includes .from().innerJoin().where().limit(), .from().where().limit(), etc.
+ *
+ * The `.innerJoin().where()` method resolves to `resolvedValue` both directly (for
+ * queries that await `.where()` without a trailing `.limit()`) and via `.limit()`.
+ * This covers both `recoverAmmunition`/`useAmmunition` (no limit) and `attuneItem`
+ * (uses `.limit(1)`).
+ */
+function mockDbSelectChain(resolvedValue: any) {
+  const limitFn = vi.fn().mockResolvedValue(resolvedValue);
+  const innerJoinWhereFn = vi.fn().mockResolvedValue(resolvedValue);
+  // Make the where return value also expose .limit() so callers using .where().limit() work too.
+  (innerJoinWhereFn as any).mockReturnValue(
+    Object.assign(Promise.resolve(resolvedValue), {
+      limit: vi.fn().mockResolvedValue(resolvedValue),
+      orderBy: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(resolvedValue) }),
+    })
+  );
+  return {
+    from: vi.fn().mockReturnValue({
+      innerJoin: vi.fn().mockReturnValue({
+        where: innerJoinWhereFn,
+      }),
+      leftJoin: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockResolvedValue(resolvedValue),
+        }),
+      }),
+      where: vi.fn().mockReturnValue({
+        limit: limitFn,
+        orderBy: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue(resolvedValue),
+        }),
+      }),
+    }),
+  };
+}
+
 describe('InventoryService Security', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
@@ -116,8 +155,9 @@ describe('InventoryService Security', () => {
 
   describe('useConsumable', () => {
     it('should throw NotFoundError if item lookup fails', async () => {
-      // Mock getItemById returning null
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(null);
+      // The service calls db.select().from().innerJoin().where().limit() to find the item.
+      // Returning an empty array means item is not found → NotFoundError.
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
 
       const input = {
         characterId: mockCharacterId,
@@ -131,16 +171,19 @@ describe('InventoryService Security', () => {
 
     it('should use atomic insert for log entry with ownership verification', async () => {
       const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 5 };
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(mockItem as any);
 
-      // Mock successful log insertion
+      // First db.select call: item lookup via innerJoin chain returns found item.
+      // Subsequent db.select calls (inside exists() subquery) just need a valid chain.
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
+
+      // Mock successful log insertion (INSERT...SELECT...RETURNING)
       (db.insert as any).mockReturnValue({
         select: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'log-123' }])
         })
       });
 
-      // Mock successful update
+      // Mock successful update (quantity decremented, exists() subquery uses db.select internally)
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -366,46 +409,61 @@ describe('InventoryService Security', () => {
 
   describe('attuneItem', () => {
     it('should fail if item is not found', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(null);
+      // attuneItem uses db.select().from().innerJoin().where().limit() in a single query.
+      // Empty result means item not found.
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Item not found');
     });
 
     it('should fail if item does not require attunement', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, requiresAttunement: false } as any);
+      // Return item that does not require attunement; attunedCount irrelevant for this branch.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: false }, attunedCount: 0 }])
+      );
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Item does not require attunement');
     });
 
     it('should fail if item is already attuned', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, requiresAttunement: true, isAttuned: true } as any);
+      // Item requires attunement but is already attuned.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: true }, attunedCount: 1 }])
+      );
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Item is already attuned');
     });
 
     it('should fail if max attuned count reached', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, requiresAttunement: true, isAttuned: false } as any);
-      vi.spyOn(InventoryService, 'getAttunedItems').mockResolvedValue([{ id: '1' }, { id: '2' }, { id: '3' }] as any);
+      // attunedCount of 3 == MAX_ATTUNED_ITEMS, so attunement is blocked.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 3 }])
+      );
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toContain('Cannot attune to more than 3 items');
     });
 
     it('should succeed if under max count', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, requiresAttunement: true, isAttuned: false } as any);
-      vi.spyOn(InventoryService, 'getAttunedItems').mockResolvedValue([{ id: '1' }] as any);
+      // attunedCount of 1 is under the limit; item is eligible. updateItem completes the attunement.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 1 }])
+      );
       vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, isAttuned: true } as any);
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(true);
+      // currentAttunedCount = attunedCount + 1 = 1 + 1 = 2
       expect(result.currentAttunedCount).toBe(2);
     });
 
     it('should fail if update fails during attunement', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, requiresAttunement: true, isAttuned: false } as any);
-      vi.spyOn(InventoryService, 'getAttunedItems').mockResolvedValue([] as any);
+      // Item is valid but updateItem returns null (e.g. race condition or DB error).
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 0 }])
+      );
       vi.spyOn(InventoryService, 'updateItem').mockResolvedValue(null);
       const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
@@ -414,7 +472,8 @@ describe('InventoryService Security', () => {
 
     it('should handle usage with sessionId and context', async () => {
       const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 5 };
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(mockItem as any);
+      // useConsumable: first db.select fetches the item (no preFetchedItem passed here).
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
       (db.insert as any).mockReturnValue({ select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }) });
       (db.update as any).mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([mockItem]) }) }) });
 
@@ -431,29 +490,72 @@ describe('InventoryService Security', () => {
 
   describe('equipItem', () => {
     it('should fail if item is not found', async () => {
+      // equipItem does a single atomic db.update with an exists() subquery.
+      // The exists() subquery calls db.select().from().where() during query construction —
+      // it must return a chain with .where() at the .from() level.
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
+      // Returning [] means the update found no matching row.
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([])
+          })
+        })
+      });
+      // Diagnostic: getItemById returns null → "Item not found"
       vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(null);
+
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Item not found');
     });
 
     it('should fail if item is not a weapon or armor', async () => {
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([])
+          })
+        })
+      });
+      // Diagnostic: item exists but is a consumable → "Only weapons and armor can be equipped"
       vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, itemType: 'consumable' } as any);
+
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Only weapons and armor can be equipped');
     });
 
     it('should succeed for weapons', async () => {
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, itemType: 'weapon' } as any);
-      vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, isEquipped: true } as any);
+      // The exists() subquery inside db.update's where clause calls db.select().from().where().
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
+      // Returning a non-empty array means update succeeded.
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: mockItemId, isEquipped: true }])
+          })
+        })
+      });
+
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(true);
     });
 
     it('should fail if update fails during equip', async () => {
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
+      // Update returns [] (0 rows affected).
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([])
+          })
+        })
+      });
+      // Diagnostic: item is a weapon but update failed for another reason → "Failed to equip item"
       vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, itemType: 'weapon' } as any);
-      vi.spyOn(InventoryService, 'updateItem').mockResolvedValue(null);
+
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
       expect(result.error).toBe('Failed to equip item');
@@ -529,9 +631,16 @@ describe('InventoryService Security', () => {
   describe('useAmmunition', () => {
     it('should delete item if quantity reaches 0', async () => {
       const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 1 };
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(mockItem as any);
+      // useConsumable fetches item via db.select().from().innerJoin().where().limit()
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
+      // Log insertion succeeds
       (db.insert as any).mockReturnValue({ select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }) });
-      const removeSpy = vi.spyOn(InventoryService, 'removeItem').mockResolvedValue(true);
+      // When newQuantity <= 0 the service calls db.delete (not removeItem); exists() subquery uses db.select internally.
+      (db.delete as any).mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([])
+        })
+      });
 
       const result = await InventoryService.useConsumable({
         characterId: mockCharacterId,
@@ -539,7 +648,7 @@ describe('InventoryService Security', () => {
         quantity: 1,
       }, mockUserId);
       expect(result.itemDeleted).toBe(true);
-      expect(removeSpy).toHaveBeenCalled();
+      expect(db.delete).toHaveBeenCalled();
     });
 
     it('should throw NotFoundError if ammunition not found', async () => {
@@ -571,60 +680,61 @@ describe('InventoryService Security', () => {
 
   describe('recoverAmmunition', () => {
     it('should update existing ammunition if found', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ item: { id: mockItemId, quantity: 10 } }])
+      // recoverAmmunition calls db.select().from().innerJoin().where() (no limit) to find ammo.
+      // Then db.update().set().where().returning() with exists(db.select().from().where()) subquery.
+      // mockDbSelectChain covers both the innerJoin path (main query) and the from().where() path (subquery).
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }])
+      );
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: mockItemId, quantity: 15 }])
           })
         })
       });
-
-      const updateSpy = vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, quantity: 15 } as any);
 
       const result = await InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5);
       expect(result.quantity).toBe(15);
-      expect(updateSpy).toHaveBeenCalledWith(mockItemId, mockCharacterId, mockUserId, { quantity: 15 });
     });
 
     it('should create new ammunition if not found', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([])
-          })
+      // Empty result from the select → create new ammo via INSERT...SELECT...RETURNING.
+      // The INSERT...SELECT also calls db.select().from().where() internally.
+      (db.select as any).mockReturnValue(mockDbSelectChain([]));
+      (db.insert as any).mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'new-ammo', quantity: 5 }])
         })
       });
-
-      const addSpy = vi.spyOn(InventoryService, 'addItem').mockResolvedValue({ id: 'new-ammo', quantity: 5 } as any);
 
       const result = await InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5);
       expect(result.id).toBe('new-ammo');
-      expect(addSpy).toHaveBeenCalled();
+      expect(db.insert).toHaveBeenCalled();
     });
 
     it('should throw InternalServerError if update fails', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ item: { id: mockItemId, quantity: 10 } }])
+      // Item found, but db.update returns [] (0 rows updated) → InternalServerError.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }])
+      );
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([])
           })
         })
       });
-
-      vi.spyOn(InventoryService, 'updateItem').mockResolvedValue(null);
 
       await expect(InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5))
         .rejects.toThrow('Failed to update ammunition');
     });
 
     it('should throw InternalServerError if result item is missing', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ something: 'else' }])
-          })
-        })
-      });
+      // Result has no .item property → InternalServerError before attempting the update.
+      (db.select as any).mockReturnValue(
+        mockDbSelectChain([{ something: 'else' }])
+      );
 
       await expect(InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5))
         .rejects.toThrow('Failed to find ammunition item');

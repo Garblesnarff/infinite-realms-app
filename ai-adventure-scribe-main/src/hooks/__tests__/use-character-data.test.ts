@@ -276,6 +276,7 @@ describe('useCharacterData', () => {
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
@@ -308,6 +309,7 @@ describe('useCharacterData', () => {
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       maybeSingle: mockMaybeSingle,
     });
 
