@@ -11,12 +11,17 @@ export default defineConfig({
     // Added resolve configuration
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'pino': path.resolve(__dirname, './src/test/__mocks__/pino.ts'),
     },
   },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts', // Optional: if we need setup files
+    env: {
+      VITE_SUPABASE_URL: 'https://test.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+    },
     css: true, // If you have CSS imports in components
     include: [
       'src/lib/logger.test.ts',
