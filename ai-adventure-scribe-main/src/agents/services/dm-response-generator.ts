@@ -133,15 +133,16 @@ export class DMResponseGenerator {
       .single();
 
     if (session?.character_id) {
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
+      const CHAR_COLS = `
+        id, user_id, name, race, class, level, background, description, experience_points, alignment,
+        character_stats (strength, dexterity, constitution, intelligence, wisdom, charisma),
+        character_equipment (item_name)
+      `;
+
       const { data: characterData } = await supabase
         .from('characters')
-        .select(
-          `
-          *,
-          character_stats (*),
-          character_equipment (*)
-        `,
-        )
+        .select(CHAR_COLS)
         .eq('id', session.character_id)
         .single();
 

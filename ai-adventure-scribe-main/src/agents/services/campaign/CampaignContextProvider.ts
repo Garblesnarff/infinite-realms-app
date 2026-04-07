@@ -35,8 +35,11 @@ export class CampaignContextProvider {
 
   public async fetchCampaignDetails(campaignId: string) {
     try {
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
+      const CAMPAIGN_COLS = 'id, name, description, genre, tone, setting_details, thematic_elements';
+
       const { data, error } = await this.errorHandler.handleDatabaseOperation(
-        async () => supabase.from('campaigns').select('*').eq('id', campaignId).single(),
+        async () => supabase.from('campaigns').select(CAMPAIGN_COLS).eq('id', campaignId).single(),
         {
           category: ErrorCategory.DATABASE,
           context: 'CampaignContextProvider.fetchCampaignDetails',

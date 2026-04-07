@@ -19,9 +19,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 export class NPCDataService {
   async fetchNPCData(worldId: string, npcName: string) {
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
+    const NPC_COLS = 'id, name, personality, race, occupation, description, relationship';
+
     const { data: npcData } = await supabase
       .from('npcs')
-      .select('*')
+      .select(NPC_COLS)
       .eq('world_id', worldId)
       .eq('name', npcName)
       .single();
