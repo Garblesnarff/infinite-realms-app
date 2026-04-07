@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
+import { InventoryAttunementService } from '../inventory/inventory-attunement-service.js';
 import { InventoryService } from '../inventory-service.js';
 
 // Mock the db client
@@ -202,6 +203,32 @@ describe('InventoryService Security', () => {
       expect(result.success).toBe(true);
       expect(db.insert).toHaveBeenCalled();
     });
+
+    it('should handle usage with sessionId and context', async () => {
+      const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 5 };
+      // useConsumable: first db.select fetches the item (no preFetchedItem passed here).
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
+      (db.insert as any).mockReturnValue({
+        select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }),
+      });
+      (db.update as any).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([mockItem]) }),
+        }),
+      });
+
+      await InventoryService.useConsumable(
+        {
+          characterId: mockCharacterId,
+          itemId: mockItemId,
+          quantity: 1,
+          sessionId: 'session-1',
+          context: 'Test',
+        },
+        mockUserId,
+      );
+      expect(db.insert).toHaveBeenCalled();
+    });
   });
 
   describe('updateItem', () => {
@@ -391,100 +418,111 @@ describe('InventoryService Security', () => {
     });
   });
 
-  describe('getAttunedItems', () => {
-    it('should fetch attuned items with ownership join', async () => {
-      (db.select as any).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ item: { id: 'attuned-1', isAttuned: true } }])
+  describe('InventoryAttunementService Security', () => {
+    describe('getAttunedItems', () => {
+      it('should fetch attuned items with ownership join', async () => {
+        (db.select as any).mockReturnValue({
+          from: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue([{ item: { id: 'attuned-1', isAttuned: true } }])
+            })
           })
-        })
+        });
+
+        const result = await InventoryAttunementService.getAttunedItems(mockCharacterId, mockUserId);
+        expect(result).toHaveLength(1);
+        expect(result[0].isAttuned).toBe(true);
+      });
+    });
+
+    describe('attuneItem', () => {
+      it('should fail if item is not found', async () => {
+        // attuneItem uses db.select().from().innerJoin().where().limit() in a single query.
+        // Empty result means item not found.
+        (db.select as any).mockReturnValue(mockDbSelectChain([]));
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Item not found');
       });
 
-      const result = await InventoryService.getAttunedItems(mockCharacterId, mockUserId);
-      expect(result).toHaveLength(1);
-      expect(result[0].isAttuned).toBe(true);
-    });
-  });
+      it('should fail if item does not require attunement', async () => {
+        // Return item that does not require attunement; attunedCount irrelevant for this branch.
+        (db.select as any).mockReturnValue(
+          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: false }, attunedCount: 0 }])
+        );
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Item does not require attunement');
+      });
 
-  describe('attuneItem', () => {
-    it('should fail if item is not found', async () => {
-      // attuneItem uses db.select().from().innerJoin().where().limit() in a single query.
-      // Empty result means item not found.
-      (db.select as any).mockReturnValue(mockDbSelectChain([]));
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Item not found');
-    });
+      it('should fail if item is already attuned', async () => {
+        // Item requires attunement but is already attuned.
+        (db.select as any).mockReturnValue(
+          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: true }, attunedCount: 1 }])
+        );
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Item is already attuned');
+      });
 
-    it('should fail if item does not require attunement', async () => {
-      // Return item that does not require attunement; attunedCount irrelevant for this branch.
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: false }, attunedCount: 0 }])
-      );
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Item does not require attunement');
-    });
+      it('should fail if max attuned count reached', async () => {
+        // attunedCount of 3 == MAX_ATTUNED_ITEMS, so attunement is blocked.
+        (db.select as any).mockReturnValue(
+          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 3 }])
+        );
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Cannot attune to more than 3 items');
+      });
 
-    it('should fail if item is already attuned', async () => {
-      // Item requires attunement but is already attuned.
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: true }, attunedCount: 1 }])
-      );
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Item is already attuned');
-    });
+      it('should succeed if under max count', async () => {
+        // attunedCount of 1 is under the limit; item is eligible. update completes the attunement.
+        (db.select as any).mockReturnValue(
+          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 1 }])
+        );
+        (db.update as any).mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: true }])
+            })
+          })
+        });
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(true);
+        // currentAttunedCount = attunedCount + 1 = 1 + 1 = 2
+        expect(result.currentAttunedCount).toBe(2);
+      });
 
-    it('should fail if max attuned count reached', async () => {
-      // attunedCount of 3 == MAX_ATTUNED_ITEMS, so attunement is blocked.
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 3 }])
-      );
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Cannot attune to more than 3 items');
-    });
-
-    it('should succeed if under max count', async () => {
-      // attunedCount of 1 is under the limit; item is eligible. updateItem completes the attunement.
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 1 }])
-      );
-      vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, isAttuned: true } as any);
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(true);
-      // currentAttunedCount = attunedCount + 1 = 1 + 1 = 2
-      expect(result.currentAttunedCount).toBe(2);
-    });
-
-    it('should fail if update fails during attunement', async () => {
-      // Item is valid but updateItem returns null (e.g. race condition or DB error).
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 0 }])
-      );
-      vi.spyOn(InventoryService, 'updateItem').mockResolvedValue(null);
-      const result = await InventoryService.attuneItem(mockCharacterId, mockItemId, mockUserId);
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Failed to attune to item');
+      it('should fail if update fails during attunement', async () => {
+        // Item is valid but update returns [] (e.g. race condition or DB error).
+        (db.select as any).mockReturnValue(
+          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 0 }])
+        );
+        (db.update as any).mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([])
+            })
+          })
+        });
+        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Failed to attune to item');
+      });
     });
 
-    it('should handle usage with sessionId and context', async () => {
-      const mockItem = { id: mockItemId, name: 'Health Potion', quantity: 5 };
-      // useConsumable: first db.select fetches the item (no preFetchedItem passed here).
-      (db.select as any).mockReturnValue(mockDbSelectChain([{ item: mockItem }]));
-      (db.insert as any).mockReturnValue({ select: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: 'log-1' }]) }) });
-      (db.update as any).mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([mockItem]) }) }) });
-
-      await InventoryService.useConsumable({
-        characterId: mockCharacterId,
-        itemId: mockItemId,
-        quantity: 1,
-        sessionId: 'session-1',
-        context: 'Test'
-      }, mockUserId);
-      expect(db.insert).toHaveBeenCalled();
+    describe('unattuneItem', () => {
+      it('should call update with isAttuned false', async () => {
+        (db.update as any).mockReturnValue({
+          set: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: false }])
+            })
+          })
+        });
+        const result = await InventoryAttunementService.unattuneItem(mockItemId, mockCharacterId, mockUserId);
+        expect(result?.isAttuned).toBe(false);
+      });
     });
   });
 
@@ -750,12 +788,4 @@ describe('InventoryService Security', () => {
     });
   });
 
-  describe('unattuneItem', () => {
-    it('should call updateItem with isAttuned false', async () => {
-      const updateSpy = vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, isAttuned: false } as any);
-      const result = await InventoryService.unattuneItem(mockItemId, mockCharacterId, mockUserId);
-      expect(result?.isAttuned).toBe(false);
-      expect(updateSpy).toHaveBeenCalledWith(mockItemId, mockCharacterId, mockUserId, { isAttuned: false });
-    });
-  });
 });

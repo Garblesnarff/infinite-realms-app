@@ -14,22 +14,19 @@
 
 import { eq, and, desc, or, sql, exists, inArray } from 'drizzle-orm';
 
-import { InventoryMechanics } from './inventory/inventory-mechanics.js';
+import { InventoryAttunementService } from './inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from './inventory/inventory-consumable-service.js';
+import { InventoryMechanics } from './inventory/inventory-mechanics.js';
 import { db } from '../../../db/client';
 import {
   inventoryItems,
-  consumableUsageLog,
   characterStats,
   characters,
   type InventoryItem,
   type NewInventoryItem,
   type ConsumableUsageLog,
 } from '../../../db/schema/index';
-import { NotFoundError, BusinessLogicError, InternalServerError } from '../lib/errors.js';
-import {
-  MAX_ATTUNED_ITEMS,
-} from '../types/inventory.js';
+import { NotFoundError } from '../lib/errors.js';
 
 import type {
   CreateInventoryItemInput,
@@ -457,128 +454,30 @@ export class InventoryService {
 
   /**
    * Get all attuned items for a character
-   * @param characterId - Character ID
-   * @param userId - User ID (for ownership verification)
-   * @returns Array of attuned items
+   * @deprecated Use InventoryAttunementService.getAttunedItems directly
    */
   static async getAttunedItems(characterId: string, userId: string): Promise<InventoryItem[]> {
-    const results = await db
-      .select({ item: inventoryItems })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(and(
-        eq(inventoryItems.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        eq(inventoryItems.isAttuned, true)
-      ));
-
-    return results.map(r => r.item);
+    return InventoryAttunementService.getAttunedItems(characterId, userId);
   }
 
   /**
    * Attune to a magic item
-   * Maximum 3 items can be attuned at once (DMG pg. 136)
-   * @param characterId - Character ID
-   * @param itemId - Item ID to attune
-   * @param userId - User ID (for ownership verification)
-   * @returns Attunement result
+   * @deprecated Use InventoryAttunementService.attuneItem directly
    */
   static async attuneItem(
     characterId: string,
     itemId: string,
     userId: string,
   ): Promise<AttunementResult> {
-    // ⚡ Bolt: Consolidated item fetch and attuned count check into a single query.
-    // This reduces database round-trips from 3 to 2 for the successful attunement path.
-    const results = await db
-      .select({
-        item: inventoryItems,
-        attunedCount: sql<number>`(
-          SELECT count(*)::int
-          FROM ${inventoryItems}
-          WHERE ${inventoryItems.characterId} = ${characterId} AND ${inventoryItems.isAttuned} = true
-        )`,
-      })
-      .from(inventoryItems)
-      .innerJoin(characters, eq(inventoryItems.characterId, characters.id))
-      .where(
-        and(
-          eq(inventoryItems.id, itemId),
-          eq(inventoryItems.characterId, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
-        ),
-      )
-      .limit(1);
-
-    const result = results[0];
-
-    if (!result) {
-      return {
-        success: false,
-        currentAttunedCount: 0,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: 'Item not found',
-      };
-    }
-
-    const { item, attunedCount } = result;
-
-    if (!item.requiresAttunement) {
-      return {
-        success: false,
-        currentAttunedCount: attunedCount,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: 'Item does not require attunement',
-      };
-    }
-
-    if (item.isAttuned) {
-      return {
-        success: false,
-        currentAttunedCount: attunedCount,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: 'Item is already attuned',
-      };
-    }
-
-    if (attunedCount >= MAX_ATTUNED_ITEMS) {
-      return {
-        success: false,
-        currentAttunedCount: attunedCount,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: `Cannot attune to more than ${MAX_ATTUNED_ITEMS} items. Unattune from another item first.`,
-      };
-    }
-
-    // Attune to the item
-    const updated = await this.updateItem(itemId, characterId, userId, { isAttuned: true });
-
-    if (!updated) {
-      return {
-        success: false,
-        currentAttunedCount: attunedCount,
-        maxAttunedCount: MAX_ATTUNED_ITEMS,
-        error: 'Failed to attune to item',
-      };
-    }
-
-    return {
-      success: true,
-      attunedItem: updated,
-      currentAttunedCount: attunedCount + 1,
-      maxAttunedCount: MAX_ATTUNED_ITEMS,
-    };
+    return InventoryAttunementService.attuneItem(characterId, itemId, userId);
   }
 
   /**
    * Break attunement with a magic item
-   * @param itemId - Item ID to unattune
-   * @param characterId - Character ID (for ownership verification)
-   * @param userId - User ID (for ownership verification)
-   * @returns Updated item or null
+   * @deprecated Use InventoryAttunementService.unattuneItem directly
    */
   static async unattuneItem(itemId: string, characterId: string, userId: string): Promise<InventoryItem | null> {
-    return this.updateItem(itemId, characterId, userId, { isAttuned: false });
+    return InventoryAttunementService.unattuneItem(itemId, characterId, userId);
   }
 
   // ==========================================

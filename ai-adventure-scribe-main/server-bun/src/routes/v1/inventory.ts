@@ -17,8 +17,9 @@ import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
-import { InventoryService } from '../../services/inventory-service.js';
+import { InventoryAttunementService } from '../../services/inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
+import { InventoryService } from '../../services/inventory-service.js';
 
 import type { GetInventoryOptions, ItemType } from '../../types/inventory.js';
 
@@ -290,7 +291,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .post('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const result = await InventoryService.attuneItem(params.id, params.itemId, (user as any).userId);
+      const result = await InventoryAttunementService.attuneItem(params.id, params.itemId, (user as any).userId);
 
       if (!result.success) {
         set.status = 400;
@@ -319,7 +320,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .delete('/:id/attune/:itemId', async ({ params, set, user }) => {
     try {
-      const item = await InventoryService.unattuneItem(params.itemId, params.id, (user as any).userId);
+      const item = await InventoryAttunementService.unattuneItem(params.itemId, params.id, (user as any).userId);
 
       if (!item) {
         set.status = 404;
@@ -339,7 +340,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get('/:id/attuned', async ({ params, set, user }) => {
     try {
-      const items = await InventoryService.getAttunedItems(params.id, (user as any).userId);
+      const items = await InventoryAttunementService.getAttunedItems(params.id, (user as any).userId);
       return { items };
     } catch (error) {
       logger.error({ msg: 'ATTUNED_ITEMS error', error });

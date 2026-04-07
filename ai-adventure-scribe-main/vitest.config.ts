@@ -539,6 +539,7 @@ export default defineConfig({
         'server-bun/src/services/inventory-service.ts',
         'server-bun/src/services/inventory/inventory-mechanics.ts',
         'server-bun/src/services/inventory/inventory-consumable-service.ts',
+        'server-bun/src/services/inventory/inventory-attunement-service.ts',
         'server-bun/src/services/campaign-service.ts',
         'server-bun/src/services/measurement-service.ts',
         'server-bun/src/trpc/routers/chronicles.ts',
