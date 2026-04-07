@@ -433,6 +433,8 @@ export default tseslint.config(
       'src/components/combat/InitiativeTracker.tsx',
       'src/features/campaign/hooks/use-character-selection.ts',
       'src/components/character-creation/steps/PhysicalStep.tsx',
+      'src/components/character-creation/steps/SpellSelection.tsx',
+      'src/components/character-creation/steps/spell-selection/SpellSelectionTabs.tsx',
       'src/components/battle-map/hotkeys/constants.ts',
       'src/hooks/useSpellSelection.ts',
       'src/components/spells/SpellFilterPanel.tsx',
