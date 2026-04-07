@@ -100,7 +100,7 @@ const HPTracker: React.FC<HPTrackerProps> = ({
           <div className="flex gap-2">
             <div className="flex-1 flex gap-1">
               <Label htmlFor={damageInputId} className="sr-only">
-                Damage Amount
+                Damage amount for {participant.name}
               </Label>
               <Input
                 id={damageInputId}
@@ -115,15 +115,15 @@ const HPTracker: React.FC<HPTrackerProps> = ({
                 size="sm"
                 variant="destructive"
                 className="h-8"
-                aria-label="Apply damage"
-                title="Apply damage"
+                aria-label={`Apply damage to ${participant.name}`}
+                title={`Apply damage to ${participant.name}`}
               >
                 <MinusCircle className="w-4 h-4" />
               </Button>
             </div>
             <div className="flex-1 flex gap-1">
               <Label htmlFor={healInputId} className="sr-only">
-                Healing Amount
+                Healing amount for {participant.name}
               </Label>
               <Input
                 id={healInputId}
@@ -138,8 +138,8 @@ const HPTracker: React.FC<HPTrackerProps> = ({
                 size="sm"
                 variant="secondary"
                 className="h-8"
-                aria-label="Apply healing"
-                title="Apply healing"
+                aria-label={`Apply healing to ${participant.name}`}
+                title={`Apply healing to ${participant.name}`}
               >
                 <PlusCircle className="w-4 h-4" />
               </Button>
