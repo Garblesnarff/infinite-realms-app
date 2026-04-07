@@ -1,5 +1,5 @@
 import { OrbitControls, Text } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
@@ -14,7 +14,7 @@ import { cardItem } from '@/utils/animations';
 // We allow up to MAX_CONTEXT_LOSS_RECOVERIES recovery attempts before permanently
 // degrading to 2D/text mode for the rest of the session.
 let __dice3dContextLossCount = 0;
-const MAX_CONTEXT_LOSS_RECOVERIES = 1;
+const MAX_CONTEXT_LOSS_RECOVERIES = 3;
 let __dice3dDead = false;
 let __dice3dWarned = false;
 
@@ -35,7 +35,12 @@ const RECOVERY_COOLDOWN_MS = 1500;
 // Auto-fallback: if context is never restored within this window, permanently degrade.
 const AUTO_FALLBACK_TIMEOUT_MS = 8000;
 
-// 3D Dice Component
+// Context loss counter decay: after this many ms of stable operation, decrement the
+// loss counter by 1, preventing transient GPU pressure from permanently killing 3D dice.
+const CONTEXT_LOSS_DECAY_MS = 60_000;
+
+// 3D Dice Component — uses useFrame for animation (runs inside R3F render loop,
+// avoids GPU pressure from an independent setInterval timer).
 function Dice3D({
   value,
   isRolling,
@@ -47,21 +52,14 @@ function Dice3D({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useEffect(() => {
+  useFrame((_state, delta) => {
     if (isRolling && meshRef.current) {
-      // Animate dice rolling
-      const animate = () => {
-        if (meshRef.current) {
-          meshRef.current.rotation.x += 0.1;
-          meshRef.current.rotation.y += 0.1;
-          meshRef.current.rotation.z += 0.05;
-        }
-      };
-
-      const interval = setInterval(animate, 16);
-      return () => clearInterval(interval);
+      const speed = delta * 6;
+      meshRef.current.rotation.x += speed;
+      meshRef.current.rotation.y += speed;
+      meshRef.current.rotation.z += speed * 0.5;
     }
-  }, [isRolling]);
+  });
 
   // Different dice shapes for different die types
   const getDiceGeometry = (sides: number) => {
@@ -142,9 +140,11 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
   const boundOnLostRef = useRef<EventListener | null>(null);
   const boundOnRestoredRef = useRef<EventListener | null>(null);
 
-  // Timers for recovery cooldown and auto-fallback
+  // Timers for recovery cooldown, auto-fallback, and loss counter decay
   const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const decayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   const envRecord = import.meta.env as Record<string, string | undefined>;
   const disable3D = (envRecord.VITE_DISABLE_DICE_3D ?? 'false').toLowerCase() === 'true';
@@ -165,21 +165,30 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
     }
 
     const canvas = gl.domElement as HTMLCanvasElement;
+    rendererRef.current = gl;
 
     const onLost: EventListener = (e: Event) => {
       e.preventDefault();
-      setContextLost(true);
 
       // Burst deduplication: if another canvas instance already handled this GPU-reclamation
       // episode (within CONTEXT_LOSS_DEBOUNCE_MS), absorb silently — counter, telemetry, and
-      // logs have already been recorded for this episode.
+      // logs have already been recorded for this episode. Don't update UI state either.
       const now = Date.now();
       const isBurstLoss = now - __lastContextLossEpisodeTime < CONTEXT_LOSS_DEBOUNCE_MS;
       if (isBurstLoss) return;
 
+      // Only update UI state after deduplication — prevents flicker on burst losses.
+      setContextLost(true);
+
       __lastContextLossEpisodeTime = now;
       __dice3dContextLossCount++;
       telemetry.recordWebGLContextLoss(); // once per episode, not per canvas instance
+
+      // Cancel any pending decay timer — we just had a new loss.
+      if (decayTimerRef.current) {
+        clearTimeout(decayTimerRef.current);
+        decayTimerRef.current = null;
+      }
 
       if (__dice3dContextLossCount > MAX_CONTEXT_LOSS_RECOVERIES) {
         __dice3dDead = true;
@@ -191,7 +200,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
         }
       } else {
         logger.warn(
-          `THREE.WebGLRenderer: Context Lost (episode #${__dice3dContextLossCount}). Attempting recovery...`,
+          `THREE.WebGLRenderer: Context Lost (episode #${__dice3dContextLossCount}/${MAX_CONTEXT_LOSS_RECOVERIES}). Attempting recovery...`,
         );
 
         // Auto-fallback: if context is never restored, permanently degrade after timeout.
@@ -229,6 +238,20 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
         logger.info('WebGL context restored; remounting 3D dice canvas.');
         setContextLost(false);
         setCanvasKey((k) => k + 1);
+
+        // Start decay timer: after CONTEXT_LOSS_DECAY_MS of stable operation, forgive one
+        // past context loss. This prevents transient GPU pressure (e.g., tab switch, screen
+        // lock) from permanently killing 3D dice over a long play session.
+        if (decayTimerRef.current) clearTimeout(decayTimerRef.current);
+        decayTimerRef.current = setTimeout(() => {
+          decayTimerRef.current = null;
+          if (__dice3dContextLossCount > 0) {
+            __dice3dContextLossCount--;
+            logger.debug(
+              `WebGL context loss counter decayed to ${__dice3dContextLossCount} after stable operation.`,
+            );
+          }
+        }, CONTEXT_LOSS_DECAY_MS);
       }, RECOVERY_COOLDOWN_MS);
     };
 
@@ -243,7 +266,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
     __activeDice3dCount++;
   }, []);
 
-  // Clean up WebGL context event listeners and pending timers when the component unmounts.
+  // Clean up WebGL context event listeners, pending timers, and renderer when unmounting.
   useEffect(() => {
     return () => {
       if (boundCanvasRef.current && boundOnLostRef.current) {
@@ -260,6 +283,16 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
       if (autoFallbackTimerRef.current) {
         clearTimeout(autoFallbackTimerRef.current);
         autoFallbackTimerRef.current = null;
+      }
+      if (decayTimerRef.current) {
+        clearTimeout(decayTimerRef.current);
+        decayTimerRef.current = null;
+      }
+      // Explicitly dispose the WebGL renderer to free GPU resources immediately,
+      // rather than relying on GC which can lag and cause context exhaustion.
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        rendererRef.current = null;
       }
       __activeDice3dCount = Math.max(0, __activeDice3dCount - 1);
     };
@@ -280,6 +313,7 @@ export const Dice3DSection: React.FC<Dice3DSectionProps> = ({
             {!contextLost ? (
               <Canvas
                 key={canvasKey}
+                frameloop={isRolling ? 'always' : 'demand'}
                 onCreated={handleCreated}
                 gl={{
                   powerPreference: 'high-performance',
