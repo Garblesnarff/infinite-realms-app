@@ -183,3 +183,7 @@
 ## 2026-04-05 - [GameContextBuilder Coverage & Type Mismatch]
 **Learning:** Found that `GameContextBuilder` in `src/utils/context/builder.ts` was completely untested. Testing revealed a bug where memory types were being filtered using `'character'` and `'plot'` strings, which did not match the actual `MemoryType` enum values used in the system (`'npc'` and `'plot_point'`).
 **Action:** When testing data aggregators, verify that all filtering criteria (like `type` or `status`) match the actual values present in the database or defined in TypeScript enums. Ensure that `vitest.config.ts` includes both the new test file and the source module for accurate coverage reporting.
+
+## 2025-02-14 - [Condition Definitions Coverage]
+**Learning:** Found that `condition-definitions.ts` was completely untested. Testing revealed that the `unconscious` condition implements a catch-all `autoFail: true` for any `rollType` that isn't exactly `defense`, effectively covering actions, saves, and ability checks in one branch.
+**Action:** When testing conditions, ensure to verify all relevant `rollType` values (attack, defense, saves, ability_check) as many conditions have specialized logic for each. Always add new tests to both `include` and `coverage.include` in `vitest.config.ts`.
