@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth, type UserPlan } from '@/contexts/AuthContext';
+import { analytics } from '@/services/analytics';
 
 interface SubscriptionStatus {
   plan: string;
@@ -51,9 +52,11 @@ const AccountPage: React.FC = () => {
 
     if (success === 'true') {
       toast.success('Welcome to Legend tier! Your subscription is now active.');
+      analytics.track('checkout_completed', { source: 'stripe_redirect' });
       refreshUserPlan();
     } else if (canceled === 'true') {
       toast.info('Subscription checkout was canceled.');
+      analytics.track('checkout_canceled', { source: 'stripe_redirect' });
     }
   }, [searchParams, refreshUserPlan]);
 
@@ -109,6 +112,7 @@ const AccountPage: React.FC = () => {
 
   const handleUpgrade = async () => {
     setLoading(true);
+    analytics.track('upgrade_clicked', { price: currentPrice.label, priceId: currentPrice.priceId });
     try {
       const token = localStorage.getItem('workos_access_token');
       if (!token) {
@@ -129,11 +133,13 @@ const AccountPage: React.FC = () => {
 
       if (!response.ok) {
         const error = await response.json();
+        analytics.track('checkout_error', { error: error.error || 'unknown' });
         throw new Error(error.error || 'Failed to create checkout session');
       }
 
       const { url } = await response.json();
       if (url) {
+        analytics.track('checkout_redirected', { priceId: currentPrice.priceId });
         window.location.href = url;
       }
     } catch (error) {
@@ -146,6 +152,7 @@ const AccountPage: React.FC = () => {
 
   const handleManageSubscription = async () => {
     setLoading(true);
+    analytics.track('manage_subscription_clicked');
     try {
       const token = localStorage.getItem('workos_access_token');
       if (!token) {

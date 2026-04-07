@@ -292,6 +292,17 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               userId,
               subscriptionId,
             });
+
+            // Log conversion event for analytics
+            logger.info({
+              msg: 'ANALYTICS_CONVERSION',
+              event: 'checkout_completed',
+              userId,
+              customerId,
+              subscriptionId,
+              amountTotal: session.amount_total,
+              currency: session.currency,
+            });
           }
           break;
         }
@@ -319,6 +330,16 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
             status,
             plan,
           });
+
+          // Log analytics event for plan changes
+          logger.info({
+            msg: 'ANALYTICS_SUBSCRIPTION',
+            event: 'subscription_updated',
+            customerId,
+            status,
+            plan,
+            priceId,
+          });
           break;
         }
 
@@ -341,6 +362,13 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
             msg: 'SUBSCRIPTION_CANCELED',
             customerId,
           });
+
+          // Log churn event for analytics
+          logger.info({
+            msg: 'ANALYTICS_CHURN',
+            event: 'subscription_canceled',
+            customerId,
+          });
           break;
         }
 
@@ -360,6 +388,16 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
           logger.warn({
             msg: 'PAYMENT_FAILED',
             customerId,
+          });
+
+          // Log payment failure for analytics
+          logger.info({
+            msg: 'ANALYTICS_PAYMENT',
+            event: 'payment_failed',
+            customerId,
+            invoiceId: invoice.id,
+            amountDue: invoice.amount_due,
+            currency: invoice.currency,
           });
           break;
         }
