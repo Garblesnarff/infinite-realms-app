@@ -281,32 +281,46 @@ export const BattleMapPage: React.FC = () => {
         style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
       >
         {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+        <nav
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          aria-label="Breadcrumb"
+        >
           <button
             type="button"
             onClick={() => navigate('/app/campaigns')}
             className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+            aria-label="Back to Campaigns"
+            title="Back to Campaigns"
           >
             Campaigns
           </button>
-          <span>/</span>
+          <span aria-hidden="true">/</span>
           <button
             type="button"
             onClick={handleBackToCampaign}
             className="hover:text-foreground transition-colors max-w-[150px] truncate focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+            aria-label={campaign?.name ? `Back to ${campaign.name}` : 'Back to Campaign'}
+            title={campaign?.name ? `Back to ${campaign.name}` : 'Back to Campaign'}
           >
             {campaign?.name || 'Campaign'}
           </button>
-          <span>/</span>
+          <span aria-hidden="true">/</span>
           <button
             type="button"
             onClick={handleBackToScenes}
             className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+            aria-label="Back to Scenes"
+            title="Back to Scenes"
           >
             Scenes
           </button>
-          <span>/</span>
-          <span className="text-foreground font-medium max-w-[200px] truncate">{scene.name}</span>
+          <span aria-hidden="true">/</span>
+          <span
+            className="text-foreground font-medium max-w-[200px] truncate"
+            aria-current="page"
+          >
+            {scene.name}
+          </span>
         </nav>
 
         {/* Actions */}
