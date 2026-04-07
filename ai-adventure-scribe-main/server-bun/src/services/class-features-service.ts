@@ -266,24 +266,22 @@ export class ClassFeaturesService {
     featureId: string,
     userId: string
   ): Promise<number | null> {
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
+    // ⚡ Bolt: Removed redundant verifyCharacterOwnership call.
+    // Ownership is verified atomically within the main characterFeatures query via an explicit JOIN.
+    // This reduces database round-trips from 2 to 1.
 
-    const characterFeature = await db.query.characterFeatures.findFirst({
-      where: and(
+    const [characterFeature] = await (db as any)
+      .select({
+        usesRemaining: characterFeatures.usesRemaining,
+      })
+      .from(characterFeatures)
+      .innerJoin(characters, eq(characterFeatures.characterId, characters.id))
+      .where(and(
         eq(characterFeatures.characterId, characterId),
         eq(characterFeatures.featureId, featureId),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
 
     if (!characterFeature) {
       throw new NotFoundError('Feature for character', characterId);

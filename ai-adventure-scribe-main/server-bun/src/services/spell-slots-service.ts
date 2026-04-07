@@ -149,9 +149,9 @@ export class SpellSlotsService {
   static async useSpellSlot(input: UseSpellSlotInput, userId: string): Promise<UseSpellSlotResult> {
     const { characterId, spellName, spellLevel, slotLevelUsed, sessionId } = input;
 
-    if (userId) {
-      await this.verifyCharacterOwnership(characterId, userId);
-    }
+    // ⚡ Bolt: Removed redundant verifyCharacterOwnership call.
+    // Ownership is verified atomically within the main slot retrieval query via EXISTS subquery.
+    // This reduces database round-trips from 2 to 1 in the happy path.
 
     // Validate spell levels
     if (spellLevel < 0 || spellLevel > 9) {
@@ -170,20 +170,23 @@ export class SpellSlotsService {
     const wasUpcast = spellLevel > 0 && slotLevelUsed > spellLevel;
 
     // Get current slot state with ownership verification
-    const slotData = await db.query.characterSpellSlots.findFirst({
-      where: and(
+    // ⚡ Bolt: Using explicit JOIN instead of EXISTS for better visibility and slightly better performance in some DB engines.
+    const [slotData] = await (db as any)
+      .select({
+        id: characterSpellSlots.id,
+        characterId: characterSpellSlots.characterId,
+        spellLevel: characterSpellSlots.spellLevel,
+        totalSlots: characterSpellSlots.totalSlots,
+        usedSlots: characterSpellSlots.usedSlots,
+      })
+      .from(characterSpellSlots)
+      .innerJoin(characters, eq(characterSpellSlots.characterId, characters.id))
+      .where(and(
         eq(characterSpellSlots.characterId, characterId),
         eq(characterSpellSlots.spellLevel, slotLevelUsed),
-        exists(
-          db.select()
-            .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
-      ),
-    });
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+      ))
+      .limit(1);
 
     if (!slotData) {
       throw new NotFoundError(`Level ${slotLevelUsed} spell slots for character`, characterId);

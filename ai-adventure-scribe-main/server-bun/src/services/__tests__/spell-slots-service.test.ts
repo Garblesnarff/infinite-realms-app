@@ -144,7 +144,7 @@ describe('SpellSlotsService', () => {
 
   describe('Security: useSpellSlot', () => {
     it('should throw NotFoundError if slot is not found or character not owned', async () => {
-      (db.query.characterSpellSlots.findFirst as any).mockResolvedValue(null);
+      nextSelectResults = [];
 
       await expect(SpellSlotsService.useSpellSlot({
         characterId: mockCharacterId,
@@ -155,14 +155,13 @@ describe('SpellSlotsService', () => {
     });
 
     it('should succeed and log usage if slot exists and character owned', async () => {
-      (db.query.characters.findFirst as any).mockResolvedValue({ id: mockCharacterId });
-      (db.query.characterSpellSlots.findFirst as any).mockResolvedValue({
+      nextSelectResults = [{
         id: 'slot-123',
         characterId: mockCharacterId,
         spellLevel: 3,
         totalSlots: 3,
         usedSlots: 0
-      });
+      }];
 
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
