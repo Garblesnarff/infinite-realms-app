@@ -88,15 +88,15 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
   const getParticipantTypeIcon = (): React.ReactNode => {
     switch (participant.participantType) {
       case 'player':
-        return <Shield className="w-4 h-4 text-blue-500" />;
+        return <Shield className="w-4 h-4 text-blue-500" aria-label="Player" title="Player" />;
       case 'npc':
-        return <Heart className="w-4 h-4 text-green-500" />;
+        return <Heart className="w-4 h-4 text-green-500" aria-label="NPC" title="NPC" />;
       case 'enemy':
-        return <Sword className="w-4 h-4 text-red-500" />;
+        return <Sword className="w-4 h-4 text-red-500" aria-label="Enemy" title="Enemy" />;
       case 'monster':
-        return <Sword className="w-4 h-4 text-red-500" />;
+        return <Sword className="w-4 h-4 text-red-500" aria-label="Monster" title="Monster" />;
       default:
-        return <UserX className="w-4 h-4 text-gray-500" />;
+        return <UserX className="w-4 h-4 text-gray-500" aria-label="Unknown" title="Unknown" />;
     }
   };
 
@@ -135,7 +135,10 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
           />
         )}
 
-        <div className="flex flex-col items-center">
+        <div
+          className="flex flex-col items-center"
+          aria-label={`Initiative: ${participant.initiative}`}
+        >
           <div className="text-lg font-bold text-gray-700 min-w-[2rem] text-center">
             {participant.initiative}
           </div>
@@ -241,8 +244,11 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
 
       {/* AC & Conditions */}
       <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
-          <Shield className="h-4 w-4 text-muted-foreground" />
+        <div
+          className="flex items-center gap-1 text-sm font-semibold text-foreground"
+          aria-label={`Armor Class: ${participant.armorClass}`}
+        >
+          <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span>AC {participant.armorClass}</span>
         </div>
 
@@ -357,6 +363,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
             onClick={rollInitiative}
             className="flex-1 min-w-[140px] sm:flex-none"
             title="Roll initiative for all participants"
+            aria-label="Roll initiative for all participants"
           >
             <Dices className="mr-2 h-4 w-4" />
             Roll Initiative
@@ -367,6 +374,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
             onClick={nextTurn}
             className="flex-1 min-w-[140px]"
             title="Advance to the next participant's turn"
+            aria-label="Advance to the next participant's turn"
           >
             <ChevronRight className="mr-2 h-4 w-4" />
             Next Turn

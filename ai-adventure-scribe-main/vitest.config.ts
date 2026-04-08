@@ -59,6 +59,7 @@ export default defineConfig({
       'src/utils/__tests__/srd-gate.test.ts',
       'src/utils/__tests__/image-label-generator.test.ts',
       'src/components/combat/__tests__/CombatActionPanels.accessibility.test.tsx',
+      'src/components/combat/__tests__/InitiativeTracker.accessibility.test.tsx',
       'src/components/combat/__tests__/CombatActionPanel.ux.test.tsx',
       'src/components/combat/__tests__/HPTracker.test.tsx',
       'src/utils/memoryClassification.test.ts',
