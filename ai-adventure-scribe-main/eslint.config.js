@@ -447,6 +447,7 @@ export default tseslint.config(
       'src/contexts/character/character-reducer.ts',
       'src/components/game/DiceRollRequest.tsx',
       'src/components/game/DiceRollMessage.tsx',
+      'src/utils/roll-request/regex-parser.ts',
       'src/hooks/game/use-dice-roll-request.ts',
       'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
       'server-bun/src/services/inventory/inventory-consumable-service.ts',
