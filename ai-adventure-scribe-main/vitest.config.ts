@@ -577,6 +577,7 @@ export default defineConfig({
         'src/utils/combatDetection.ts',
         'src/utils/combat/participant-generation.ts',
         'src/utils/movement-validation.ts',
+        'src/utils/movement-navigation.ts',
         'src/utils/__tests__/movement-validation.test.ts',
         'src/utils/__tests__/polygon-utils.test.ts',
         'src/utils/geometry.ts',

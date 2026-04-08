@@ -6,8 +6,6 @@ import { describe, it, expect } from 'vitest';
 import {
   getMovementCost,
   isMovementBlocked,
-  calculateReachableSquares,
-  calculatePath,
   pixelToGrid,
   gridToPixel,
   gridDistance,
@@ -15,6 +13,8 @@ import {
   type TerrainInfo,
   type Wall,
 } from '../movement-validation';
+
+import { calculateReachableSquares, calculatePath } from '../movement-navigation';
 
 import { TokenSize } from '@/types/token';
 
