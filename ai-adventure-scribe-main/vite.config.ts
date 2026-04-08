@@ -63,19 +63,42 @@ export default defineConfig(({ mode }) => ({
       },
       output: {
         manualChunks(id) {
-          // Only split out the largest dependencies to keep chunks manageable
           if (id.includes('node_modules')) {
-            // 3D Graphics (very large - ~700KB) - safe to split as it has no React deps
-            if (id.includes('three')) {
+            // 3D Graphics (~800KB) - standalone, no React deps
+            if (id.includes('three') || id.includes('@react-three')) {
               return 'three';
             }
 
-            // Audio libraries - safe to split as standalone
+            // Audio - standalone
             if (id.includes('howler')) {
               return 'audio';
             }
 
-            // Everything else stays together to avoid dependency issues
+            // AI SDKs - only loaded on game/AI pages
+            if (id.includes('openai') || id.includes('@anthropic-ai') || id.includes('@google/generative-ai')) {
+              return 'ai-sdk';
+            }
+
+            // Animations - large, only needed when components mount
+            if (id.includes('framer-motion')) {
+              return 'animations';
+            }
+
+            // Supabase client - loaded on most pages but cacheable separately
+            if (id.includes('@supabase')) {
+              return 'supabase';
+            }
+
+            // Radix UI primitives - large set of components
+            if (id.includes('@radix-ui')) {
+              return 'radix-ui';
+            }
+
+            // Data fetching layer
+            if (id.includes('@tanstack')) {
+              return 'react-query';
+            }
+
             return 'vendor';
           }
           return undefined;
