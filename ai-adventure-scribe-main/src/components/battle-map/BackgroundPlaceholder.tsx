@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
-import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import React, { useRef, useEffect } from 'react';
+
+import type * as THREE from 'three';
 
 export interface BackgroundPlaceholderProps {
   width: number;

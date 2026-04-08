@@ -10,20 +10,21 @@
  * - Breadcrumbs navigation
  */
 
+import { ArrowLeft, Map, Plus, Settings } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Map, Plus, Settings } from 'lucide-react';
 
-import { SceneManager } from '@/components/scenes/SceneManager';
+import type {
+  SceneTemplate} from '@/components/scenes/SceneTemplateLibrary';
+
 import { SceneCreationWizard } from '@/components/scenes/SceneCreationWizard';
+import { SceneManager } from '@/components/scenes/SceneManager';
 import {
   SceneTemplateLibrary,
-  BUILT_IN_TEMPLATES,
-  SceneTemplate,
+  BUILT_IN_TEMPLATES
 } from '@/components/scenes/SceneTemplateLibrary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
 

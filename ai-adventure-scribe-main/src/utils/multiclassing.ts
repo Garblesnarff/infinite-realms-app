@@ -4,6 +4,9 @@
  * Functions for handling multiclassing rules, calculations, and validations
  */
 
+import { calculateMulticlassSpellcasting } from './multiclass/spellcasting';
+
+import type { MulticlassSpellcastingResult } from './multiclass/spellcasting';
 import type { AbilityScores, Character, CharacterClass, ClassFeature } from '@/types/character';
 
 import {
@@ -12,8 +15,6 @@ import {
   getAllClassFeaturesUpToLevel,
 } from '@/data/levelProgression';
 
-import { calculateMulticlassSpellcasting } from './multiclass/spellcasting';
-import type { MulticlassSpellcastingResult } from './multiclass/spellcasting';
 
 // Re-export spellcasting types and functions for backward compatibility
 export type { MulticlassSpellcastingResult };

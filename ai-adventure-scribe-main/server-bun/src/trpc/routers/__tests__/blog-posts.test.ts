@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { blogPostsRouter } from '../blog-posts.js';
 
 describe('Blog Posts Router - getBySlug', () => {

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
 import { StepNameDescription } from '../scene-creation-wizard/StepNameDescription';
 
 describe('StepNameDescription Accessibility', () => {

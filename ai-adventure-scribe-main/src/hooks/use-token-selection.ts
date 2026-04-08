@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect } from 'react';
+
 import { useBattleMapStore, useSelectedTokenIds } from '@/stores/useBattleMapStore';
 
 export interface UseTokenSelectionOptions {

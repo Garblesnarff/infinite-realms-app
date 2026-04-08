@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { createCombatParticipantsFromDetection } from '../participant-generation';
+
 import type { DetectedEnemy } from '@/utils/combatDetection';
 
 describe('createCombatParticipantsFromDetection', () => {

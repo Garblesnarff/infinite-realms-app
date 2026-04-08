@@ -2,8 +2,9 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { useCharacter } from '@/contexts/CharacterContext';
 import { useDiceRollRequest, isNumericFormula } from '../use-dice-roll-request';
+
+import { useCharacter } from '@/contexts/CharacterContext';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 
 // Mock dependencies

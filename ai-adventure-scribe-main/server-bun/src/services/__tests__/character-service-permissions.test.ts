@@ -1,8 +1,9 @@
+import { TRPCError } from '@trpc/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CharacterPermissionService } from '../character-permission-service.js';
+
 import { db } from '../../../../db/client';
 import { characters, characterPermissions } from '../../../../db/schema/index';
-import { TRPCError } from '@trpc/server';
+import { CharacterPermissionService } from '../character-permission-service.js';
 
 // Mock the database client
 vi.mock('../../../../db/client', () => ({

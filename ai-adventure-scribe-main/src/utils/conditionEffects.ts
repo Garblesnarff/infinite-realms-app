@@ -8,11 +8,12 @@
  * @author AI Assistant
  */
 
-import { CONDITION_EFFECTS } from '@/utils/condition-definitions';
 import { d20 } from './diceRolls';
 
-import type { ConditionModifiers } from '@/utils/condition-definitions';
 import type { CombatParticipant, Condition, ConditionName, DiceRoll } from '@/types/combat';
+import type { ConditionModifiers } from '@/utils/condition-definitions';
+
+import { CONDITION_EFFECTS } from '@/utils/condition-definitions';
 
 // ===========================
 // Main Function: Get Condition Modifiers

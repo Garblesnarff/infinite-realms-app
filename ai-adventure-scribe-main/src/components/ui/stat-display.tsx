@@ -9,9 +9,10 @@
  * <StatDisplay value={45} label="HP" max={60} variant="progress" />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
+import * as React from 'react';
+
 import { cn } from '@/lib/utils';
 
 const statDisplayVariants = cva(

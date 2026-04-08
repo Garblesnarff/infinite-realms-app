@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { AIService } from '@/services/ai-service';
 import { LocalFallbackStrategy } from '../LocalFallbackStrategy';
+
+import { AIService } from '@/services/ai-service';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

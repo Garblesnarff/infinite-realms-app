@@ -12,6 +12,9 @@
 import { Grid, List, Plus } from 'lucide-react';
 import React, { useState } from 'react';
 
+import { SceneCard } from './SceneCard';
+import { SceneListItem } from './SceneListItem';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,8 +36,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
 
-import { SceneCard } from './SceneCard';
-import { SceneListItem } from './SceneListItem';
 
 interface SceneManagerProps {
   campaignId: string;

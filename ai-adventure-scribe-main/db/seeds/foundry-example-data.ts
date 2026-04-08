@@ -8,9 +8,10 @@
  */
 
 import 'dotenv/config';
+import { eq, and } from 'drizzle-orm';
+
 import { db } from '../client.js';
 import { campaigns, scenes, sceneSettings, sceneLayers, tokens, visionBlockingShapes } from '../schema/index.js';
-import { eq, and } from 'drizzle-orm';
 
 // Example user ID - this should match your test user in the database
 const EXAMPLE_USER_ID = 'example-user-foundry-seed';
@@ -535,7 +536,7 @@ export async function seedFoundryData() {
 
     // 1. Create or get example campaign
     console.log('📖 Creating example campaign...');
-    let campaign = await db
+    const campaign = await db
       .select()
       .from(campaigns)
       .where(and(

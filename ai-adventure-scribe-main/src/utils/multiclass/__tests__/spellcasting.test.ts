@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { calculateMulticlassSpellcasting } from '../spellcasting';
+
 import type { Character } from '@/types/character';
 
 describe('calculateMulticlassSpellcasting', () => {

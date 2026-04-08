@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import logger from '@/lib/logger';
+
 import {
   convertSpellIdsToDatabase,
   convertSpellIdsToFrontend,
@@ -7,6 +7,8 @@ import {
   hasSpellMapping,
   SPELL_ID_MAPPING,
 } from '../spell-id-mapping';
+
+import logger from '@/lib/logger';
 
 // Mock the logger
 vi.mock('@/lib/logger', () => ({

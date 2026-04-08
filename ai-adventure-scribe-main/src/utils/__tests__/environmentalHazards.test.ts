@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as diceUtils from '../diceUtils';
 
+import * as diceUtils from '../diceUtils';
 import {
   detectHazard,
   interactWithHazard,

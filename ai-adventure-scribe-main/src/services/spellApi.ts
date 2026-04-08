@@ -2,8 +2,8 @@ import { localSpellService } from './localSpellService';
 
 import type { Spell } from '@/types/character';
 
-import { waitForAuth } from '@/lib/auth-gate';
 import { supabase } from '@/integrations/supabase/client';
+import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';

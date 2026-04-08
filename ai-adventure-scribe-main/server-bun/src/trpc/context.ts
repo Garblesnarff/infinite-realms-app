@@ -10,8 +10,8 @@
  */
 
 import { db } from '../../../db/client';
-import { logger } from '../lib/logger.js';
 import { getBearerToken } from '../lib/jwt.js';
+import { logger } from '../lib/logger.js';
 import { verifyWorkOSToken } from '../services/workos.js';
 
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';

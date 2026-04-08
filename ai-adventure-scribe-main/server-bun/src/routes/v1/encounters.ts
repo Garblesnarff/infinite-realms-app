@@ -9,10 +9,11 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { authenticateRequest } from '../../lib/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { recordEncounterOutcome, getDifficultyAdjustment } from '../../lib/encounter-telemetry.js';
+
 import { verifySessionOwnership } from './combat/helpers.js';
+import { authenticateRequest } from '../../lib/auth.js';
+import { recordEncounterOutcome, getDifficultyAdjustment } from '../../lib/encounter-telemetry.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 
 export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { InventoryConsumableService } from '../inventory-consumable-service.js';
+
 import { db } from '../../../../../db/client';
 import { NotFoundError, BusinessLogicError } from '../../../lib/errors.js';
+import { InventoryConsumableService } from '../inventory-consumable-service.js';
 
 vi.mock('../../../../../db/client', () => {
   const createChainableMock = () => {

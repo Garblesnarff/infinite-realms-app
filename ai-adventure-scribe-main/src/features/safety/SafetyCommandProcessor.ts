@@ -1,13 +1,16 @@
-import type { ChatMessage } from '@/types/game';
-import { supabase } from '@/integrations/supabase/client';
-import logger from '@/lib/logger';
 import {
+  SAFETY_TRIGGER_WORDS,
+} from './types';
+
+import type {
   SafetyCommand,
   SessionConfig,
   TriggerWords,
-  SafetyCommandResponse,
-  SAFETY_TRIGGER_WORDS,
-} from './types';
+  SafetyCommandResponse} from './types';
+import type { ChatMessage } from '@/types/game';
+
+import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 
 export const SAFETY_ENABLED =
   String(import.meta.env.VITE_ENABLE_SAFETY_GUARDS ?? '').toLowerCase() === 'true' ||

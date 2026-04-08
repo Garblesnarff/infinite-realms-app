@@ -9,9 +9,10 @@
  */
 
 import { Elysia, t } from 'elysia';
+
+import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
 import { requireApiKey, hasPermission, generateApiKey } from '../../middleware/api-key.js';
-import { logger } from '../../lib/logger.js';
 
 const RELEASE_NOTES_CATEGORY_SLUG = 'release-notes';
 const SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID || null;

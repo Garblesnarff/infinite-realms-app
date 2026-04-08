@@ -11,11 +11,12 @@
  */
 
 import { Elysia, t } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
-import { planRateLimit } from '../../middleware/rate-limit.js';
-import { isAdmin } from '../../middleware/admin.js';
-import { supabaseService } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { supabaseService } from '../../lib/supabase.js';
+import { isAdmin } from '../../middleware/admin.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 
 export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
 

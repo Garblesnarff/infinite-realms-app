@@ -1,6 +1,7 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
 import { vi, describe, it, expect } from 'vitest';
+
 import AbilityScoreCard from '../AbilityScoreCard';
 
 describe('AbilityScoreCard', () => {

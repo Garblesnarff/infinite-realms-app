@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 
 import type { ActionType, CombatParticipant } from '@/types/combat';
+
 import logger from '@/lib/logger';
 import { calculateAttackDamage } from '@/utils/attackUtils';
+import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { getRageDamageBonus, canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves, rollDeathSave } from '@/utils/combat/deathSaves';
 import { rollDice, rollAttack } from '@/utils/diceUtils';
@@ -11,7 +13,6 @@ import {
   equipMainHandWeapon,
   equipOffHandWeapon,
 } from '@/utils/equipmentUtils';
-import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { canUseRacialTrait } from '@/utils/racialTraits';
 import {
   canUseTwoWeaponFighting,

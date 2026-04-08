@@ -23,8 +23,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { useCombatCanvasSync } from '../use-combat-canvas-sync';
-import { useCombatStore, useParticipants, useCurrentTurnParticipantId } from '@/stores/useCombatStore';
+
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
+import { useCombatStore, useParticipants, useCurrentTurnParticipantId } from '@/stores/useCombatStore';
 
 describe('useCombatCanvasSync', () => {
   const mockUpdateParticipant = vi.fn();

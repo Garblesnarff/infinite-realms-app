@@ -11,9 +11,10 @@
  * - And more...
  */
 
-import React, { useState } from 'react';
 import { Search, Check } from 'lucide-react';
+import React, { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -24,9 +25,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { GridType } from '@/types/scene';
 import { cn } from '@/lib/utils';
+import { GridType } from '@/types/scene';
 
 interface SceneTemplate {
   id: string;

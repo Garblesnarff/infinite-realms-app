@@ -10,11 +10,12 @@
  */
 
 import { Elysia, t } from 'elysia';
+
 import { authenticateRequest } from '../../lib/auth.js';
+import { sql } from '../../lib/db.js';
+import { logger } from '../../lib/logger.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
-import { logger } from '../../lib/logger.js';
-import { sql } from '../../lib/db.js';
 
 /**
  * Helper to find URL-like string
@@ -235,7 +236,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         const data = (await response.json()) as ORImageResp;
 
         const choice = data.choices?.[0];
-        let imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
+        const imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
 
         if (!imageRef) {
           logger.warn({ msg: 'IMAGE_NO_DATA', details: 'OpenRouter parsing found no image fields' });

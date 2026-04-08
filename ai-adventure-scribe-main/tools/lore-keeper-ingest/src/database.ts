@@ -2,8 +2,10 @@
  * Database operations for Lore Keeper ingestion
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+
 import type { CampaignChunk, CampaignRule, ParsedCampaign } from './types.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 let supabase: SupabaseClient | null = null;
 

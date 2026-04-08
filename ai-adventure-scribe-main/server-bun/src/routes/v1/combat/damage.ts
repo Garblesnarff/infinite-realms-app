@@ -1,11 +1,11 @@
 import { Elysia } from 'elysia';
 
+import { verifyEncounterOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatHPService } from '../../../services/combat-hp-service.js';
 
-import { verifyEncounterOwnership } from './helpers.js';
 
 function mapCombatError(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

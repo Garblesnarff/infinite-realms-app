@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { useSceneData } from '../use-scene-data';
+
 import { trpc } from '@/infrastructure/api';
 
 vi.mock('@/infrastructure/api', () => ({

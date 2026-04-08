@@ -7,10 +7,12 @@
  * Ported from /server/src/middleware/api-key.ts
  */
 
-import { Elysia } from 'elysia';
 import crypto from 'crypto';
-import { supabaseService } from '../lib/supabase.js';
+
+import { Elysia } from 'elysia';
+
 import { logger } from '../lib/logger.js';
+import { supabaseService } from '../lib/supabase.js';
 
 export interface ApiKeyPayload {
   keyId: string;

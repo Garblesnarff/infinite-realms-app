@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { DMChatBubble } from '../DMChatBubble';
-import { SimpleMessageProvider } from '../../../../../../contexts/SimpleMessageContext';
 import { BrowserRouter } from 'react-router-dom';
+import { describe, it, expect, vi } from 'vitest';
+
+import { SimpleMessageProvider } from '../../../../../../contexts/SimpleMessageContext';
+import { DMChatBubble } from '../DMChatBubble';
+
 
 // Mock dependencies
 vi.mock('@/hooks/use-progressive-voice', () => ({

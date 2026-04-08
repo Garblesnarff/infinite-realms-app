@@ -1,5 +1,5 @@
-import React, { StrictMode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
+import React, { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSessionInitialization } from '../game-session/use-session-initialization';

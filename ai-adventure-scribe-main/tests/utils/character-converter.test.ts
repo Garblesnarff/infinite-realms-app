@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { convertCharacterDetailsToCharacter } from '../../src/utils/character-converter';
+
 import type { Character } from '../../src/types/character';
 
 describe('convertCharacterDetailsToCharacter', () => {

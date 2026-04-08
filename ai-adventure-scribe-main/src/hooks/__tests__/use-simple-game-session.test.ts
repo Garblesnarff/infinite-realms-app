@@ -358,6 +358,7 @@ describe('useSimpleGameSession', () => {
     it('should handle createGameSession when err is not an Error object', async () => {
        const mockFrom = vi.spyOn(supabase, 'from');
       (mockFrom as any).mockImplementationOnce(() => {
+        // eslint-disable-next-line no-throw-literal
         throw 'String error';
       });
 
@@ -431,6 +432,7 @@ describe('useSimpleGameSession', () => {
     it('should handle endSession when err is not an Error object', async () => {
        const mockFrom = vi.spyOn(supabase, 'from');
       (mockFrom as any).mockImplementationOnce(() => {
+        // eslint-disable-next-line no-throw-literal
         throw 'String error';
       });
 

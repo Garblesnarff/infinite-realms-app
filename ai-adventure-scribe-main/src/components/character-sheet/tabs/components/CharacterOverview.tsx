@@ -1,10 +1,14 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
-import { Character } from '@/types/character';
-import EditableDescription from './EditableDescription';
 import { User, Heart, Palette, FileText, Sparkles, Image } from 'lucide-react';
+import React from 'react';
+
+import EditableDescription from './EditableDescription';
+
+import type { Character } from '@/types/character';
+
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
+
 
 interface CharacterOverviewProps {
   character: Character;

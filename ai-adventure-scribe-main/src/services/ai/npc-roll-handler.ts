@@ -4,8 +4,9 @@
  */
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
-import { AIService } from '@/services/ai-service';
+
 import logger from '@/lib/logger';
+import { AIService } from '@/services/ai-service';
 
 export interface NPCRollContinuationResult {
   narrative: string;

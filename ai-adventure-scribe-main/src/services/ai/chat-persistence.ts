@@ -1,6 +1,7 @@
+import type { ChatMessage } from './shared/types';
+
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import type { ChatMessage } from './shared/types';
 
 export class ChatPersistence {
   /**

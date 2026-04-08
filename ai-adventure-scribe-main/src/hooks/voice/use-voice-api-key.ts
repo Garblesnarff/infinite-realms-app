@@ -1,8 +1,9 @@
 import React from 'react';
 
 import { useToast } from '../use-toast';
-import { logger } from '@/lib/logger';
+
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 /**
  * Hook to manage the ElevenLabs API key lifecycle.

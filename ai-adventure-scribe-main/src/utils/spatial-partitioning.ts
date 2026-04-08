@@ -9,8 +9,6 @@
 
 /* eslint-disable max-lines */
 
-import type { Point2D, VisionBlocker } from '@/types/scene';
-
 import {
   type AABB,
   calculateWallBounds,
@@ -19,6 +17,9 @@ import {
   boundsContainsPoint,
   mergeBounds,
 } from './spatial/aabb';
+
+import type { Point2D, VisionBlocker } from '@/types/scene';
+
 
 // Re-export for backward compatibility
 export {

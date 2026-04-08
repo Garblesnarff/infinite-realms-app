@@ -12,20 +12,13 @@
  *   bun run ingest -- --skip-embeddings # Skip embedding generation
  */
 
-import { config } from 'dotenv';
-import { Command } from 'commander';
-import { join } from 'path';
 import { existsSync } from 'fs';
+import { join } from 'path';
 
-import {
-  readCampaignFiles,
-  listCampaignDirectories,
-  parseOverview,
-  extractTagline,
-  isCampaignComplete,
-} from './parser.js';
+import { Command } from 'commander';
+import { config } from 'dotenv';
+
 import { chunkCampaignFiles } from './chunker.js';
-import { initOpenAI, generateEmbeddings, estimateCost } from './embeddings.js';
 import {
   initSupabase,
   testConnection,
@@ -36,6 +29,15 @@ import {
   insertCampaignRules,
   listStarterCampaigns,
 } from './database.js';
+import { initOpenAI, generateEmbeddings, estimateCost } from './embeddings.js';
+import {
+  readCampaignFiles,
+  listCampaignDirectories,
+  parseOverview,
+  extractTagline,
+  isCampaignComplete,
+} from './parser.js';
+
 import type { IngestOptions, IngestResult } from './types.js';
 
 // Load environment variables

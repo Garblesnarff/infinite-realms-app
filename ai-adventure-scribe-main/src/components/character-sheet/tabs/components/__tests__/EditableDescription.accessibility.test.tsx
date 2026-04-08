@@ -1,7 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import EditableDescription from '../EditableDescription';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
+import EditableDescription from '../EditableDescription';
 
 const mockCharacter: any = {
   id: '1',

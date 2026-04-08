@@ -1,8 +1,10 @@
 import { buildNPCPrompt } from './npc-prompt-builder';
+
 import type { NPCRequest, GeneratedNPC } from './npc-types';
-import { llmApiClient } from '@/services/llm-api-client';
+
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { llmApiClient } from '@/services/llm-api-client';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export class NPCGenerator {

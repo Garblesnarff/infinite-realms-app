@@ -1,4 +1,5 @@
 import type { Character } from '@/types/character';
+
 import logger from '@/lib/logger';
 
 /**

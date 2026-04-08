@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Point2D } from '@/types/scene';
+
 import smoothPath, {
   distance,
   reducePoints,
@@ -8,6 +8,8 @@ import smoothPath, {
   pointsToSmoothSVGPath,
   douglasPeucker,
 } from '../drawing-smoothing';
+
+import type { Point2D } from '@/types/scene';
 
 describe('drawing-smoothing utils', () => {
   const p1: Point2D = { x: 0, y: 0 };

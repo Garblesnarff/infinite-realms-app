@@ -1,6 +1,8 @@
 import { Shuffle, Heart, Crown, Shield, Zap, Sparkles } from 'lucide-react';
 import React from 'react';
 
+import type { PersonalityElement } from '@/services/personalityService';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -9,7 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import logger from '@/lib/logger';
-import { personalityService, PersonalityElement } from '@/services/personalityService';
+import { personalityService } from '@/services/personalityService';
 
 /**
  * Safely extract text from a PersonalityElement based on field type

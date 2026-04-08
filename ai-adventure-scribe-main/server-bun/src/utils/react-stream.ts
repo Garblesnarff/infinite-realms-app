@@ -1,7 +1,9 @@
 import { renderToReadableStream } from 'react-dom/server.browser';
-import type { ReactElement } from 'react';
 
 import { logger } from '../lib/logger.js';
+
+import type { ReactElement } from 'react';
+
 
 interface StreamOptions {
   status?: number;

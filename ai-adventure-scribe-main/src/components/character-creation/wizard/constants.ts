@@ -9,10 +9,10 @@ import ClassSelection from '../steps/ClassSelection';
 import EquipmentSelection from '../steps/EquipmentSelection';
 import PersonalitySelection from '../steps/PersonalitySelection';
 import PhysicalStep from '../steps/PhysicalStep';
+import ProficienciesSelection from '../steps/ProficienciesSelection';
 import RaceSelection from '../steps/RaceSelection';
 import SpellSelection from '../steps/SpellSelection';
 import SubraceSelection from '../steps/SubraceSelection';
-import ProficienciesSelection from '../steps/ProficienciesSelection';
 
 import type { WizardStep } from './types';
 

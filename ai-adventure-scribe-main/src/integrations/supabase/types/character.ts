@@ -1,4 +1,4 @@
-import { Tables, TablesInsert, TablesUpdate } from './common';
+import type { Tables, TablesInsert, TablesUpdate } from './common';
 
 export type Character = Tables<'characters'>;
 export type CharacterInsert = TablesInsert<'characters'>;

@@ -1,12 +1,13 @@
 import React, { useLayoutEffect, useState } from 'react';
 
-import { Z_INDEX } from '@/constants/z-index';
 
 import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { FloatingActionPanel } from '../FloatingActionPanel';
+
+import { Z_INDEX } from '@/constants/z-index';
 import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
 
 /**

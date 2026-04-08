@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { supabase } from '@/integrations/supabase/client';
 import { EdgeFunctionStrategy } from '../EdgeFunctionStrategy';
+
+import { supabase } from '@/integrations/supabase/client';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

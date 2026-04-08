@@ -1,6 +1,6 @@
-import { llmApiClient } from '@/services/llm-api-client';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { llmApiClient } from '@/services/llm-api-client';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export interface LocationRequest {

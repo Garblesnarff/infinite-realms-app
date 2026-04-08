@@ -6,13 +6,13 @@
  * for Foundry VTT scenes.
  */
 
-import { Elysia, t } from 'elysia';
 import { and, eq } from 'drizzle-orm';
+import { Elysia, t } from 'elysia';
 
-import { db } from '../../db/client';
-import { scenes } from '../../db/schema/index';
 import { logger } from './lib/logger';
 import { verifyWorkOSToken } from './services/workos';
+import { db } from '../../db/client';
+import { scenes } from '../../db/schema/index';
 
 type RoomId = string;
 

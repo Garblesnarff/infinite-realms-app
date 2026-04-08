@@ -9,8 +9,8 @@ import type { SpellSlotLevel } from '@/utils/spell-management';
 
 import logger from '@/lib/logger';
 import { activateRage, deactivateRage } from '@/utils/classFeatures';
-import { castSpell } from '@/utils/spell-management';
 import { processShortRestCombat, processLongRestCombat } from '@/utils/restMechanics';
+import { castSpell } from '@/utils/spell-management';
 import { attemptHide, applyHiddenCondition, removeHiddenCondition } from '@/utils/stealthUtils';
 
 /**

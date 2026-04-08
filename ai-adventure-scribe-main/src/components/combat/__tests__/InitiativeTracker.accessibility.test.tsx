@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { expect, describe, it, vi } from 'vitest';
 import React from 'react';
+import { expect, describe, it, vi } from 'vitest';
+
 import InitiativeTracker from '../InitiativeTracker';
 
 // Mock the useCombat hook

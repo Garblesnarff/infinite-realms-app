@@ -12,10 +12,11 @@
 
 import { Elysia, t } from 'elysia';
 import Stripe from 'stripe';
+
 import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
-import { logger } from '../../lib/logger.js';
 import { env } from '../../lib/env.js';
+import { logger } from '../../lib/logger.js';
 
 // Initialize Stripe client (lazy - only if key is configured)
 let stripe: Stripe | null = null;

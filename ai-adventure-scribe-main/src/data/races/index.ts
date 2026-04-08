@@ -11,12 +11,12 @@ import { halfElf } from './half-elf';
 import { halfOrc } from './half-orc';
 import { halfling } from './halfling';
 import { human } from './human';
+import { lizardfolk } from './lizardfolk';
 import { ravenfolk } from './ravenfolk';
 import { seaborn } from './seaborn';
 import { serpentfolk } from './serpentfolk';
 import { stoneGiant } from './stone-giant';
 import { tiefling } from './tiefling';
-import { lizardfolk } from './lizardfolk';
 
 import type { CharacterRace } from '@/types/character';
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { generateImageLabel, formatLabelForDisplay } from '../image-label-generator';
 
 describe('image-label-generator', () => {

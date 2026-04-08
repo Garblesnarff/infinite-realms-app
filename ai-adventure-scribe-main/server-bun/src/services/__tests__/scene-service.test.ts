@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
-import { SceneService } from '../scene-service.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { SceneService } from '../scene-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => {

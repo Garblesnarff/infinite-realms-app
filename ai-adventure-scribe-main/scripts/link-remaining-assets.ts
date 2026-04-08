@@ -3,9 +3,10 @@
  * Link remaining unlinked assets to entities using fuzzy matching
  */
 
+import { join } from 'path';
+
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
-import { join } from 'path';
 
 config();
 config({ path: join(process.cwd(), 'server-bun/.env') });

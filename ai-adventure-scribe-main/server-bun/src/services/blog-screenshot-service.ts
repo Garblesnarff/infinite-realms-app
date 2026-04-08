@@ -1,6 +1,9 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer from 'puppeteer';
+
 import { supabase } from '../../../src/infrastructure/database/index';
 import { logger } from '../utils/logger.js';
+
+import type { Browser, Page } from 'puppeteer';
 
 /**
  * Blog Screenshot Service

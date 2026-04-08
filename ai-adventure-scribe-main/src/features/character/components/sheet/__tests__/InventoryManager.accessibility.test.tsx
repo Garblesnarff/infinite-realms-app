@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
 
 import InventoryManager from '../InventoryManager';
+
 import type { Character } from '@/types/character';
 
 // Mock the hook

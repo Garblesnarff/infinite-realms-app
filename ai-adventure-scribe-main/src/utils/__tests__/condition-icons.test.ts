@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   getSortedConditions,
   getPrimaryCondition,
@@ -9,6 +10,7 @@ import {
   getConditionBorderColor,
   CONDITION_ICONS,
 } from '../condition-icons';
+
 import type { ConditionName } from '@/types/combat';
 
 describe('condition-icons', () => {

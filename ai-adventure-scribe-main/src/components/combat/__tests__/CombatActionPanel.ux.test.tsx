@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
+import { vi, describe, it, expect } from 'vitest';
+
 import CombatActionPanel from '../CombatActionPanel';
 
 // Mock the context

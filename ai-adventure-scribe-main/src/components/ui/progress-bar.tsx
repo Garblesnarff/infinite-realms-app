@@ -9,9 +9,10 @@
  * <ProgressBar value={750} max={1000} variant="xp" />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
+import * as React from 'react';
+
 import { cn } from '@/lib/utils';
 
 const progressBarVariants = cva('fantasy-progress relative w-full overflow-hidden', {

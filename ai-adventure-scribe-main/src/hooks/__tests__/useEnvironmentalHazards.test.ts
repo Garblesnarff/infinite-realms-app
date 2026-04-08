@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import * as hazardUtils from '../../utils/environmentalHazards';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import * as hazardUtils from '../../utils/environmentalHazards';
 import { useEnvironmentalHazards } from '../use-environmental-hazards';
 
 // Mock the utility functions

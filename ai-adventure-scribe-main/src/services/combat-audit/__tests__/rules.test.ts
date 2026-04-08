@@ -1,6 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { validateAction } from '../rules';
+
 import type { CombatAction } from '../types';
 
 describe('combat-audit rules', () => {

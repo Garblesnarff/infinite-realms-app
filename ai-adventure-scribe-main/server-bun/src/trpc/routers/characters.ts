@@ -10,9 +10,10 @@
  */
 
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc.js';
+
 import { CharacterPermissionService } from '../../services/character-permission-service.js';
 import { CharacterService } from '../../services/character-service.js';
+import { router, protectedProcedure } from '../trpc.js';
 
 /**
  * Permission level enum for validation

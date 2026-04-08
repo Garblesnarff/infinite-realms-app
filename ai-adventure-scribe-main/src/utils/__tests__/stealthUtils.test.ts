@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import * as diceUtils from '../diceUtils';
 import {
   calculateStealthBonus,
   rollStealthCheck,
@@ -13,7 +14,6 @@ import {
   canSeeHidden,
   getStealthActionDescription
 } from '../stealthUtils';
-import * as diceUtils from '../diceUtils';
 
 // Mock diceUtils
 vi.mock('../diceUtils', () => ({

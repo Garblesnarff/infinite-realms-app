@@ -11,6 +11,7 @@
  */
 
 import { Elysia, t } from 'elysia';
+
 import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';

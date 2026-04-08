@@ -1,10 +1,12 @@
 import { Elysia } from 'elysia';
+
+import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
-import { verifyEncounterOwnership, verifySessionOwnership } from './helpers.js';
+
 import type { CreateParticipantInput } from '../../../types/combat.js';
 
 function mapCombatError(

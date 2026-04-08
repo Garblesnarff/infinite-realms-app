@@ -13,10 +13,13 @@
  * />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
-import { Scroll, Users, Swords, BookOpen, Sparkles, Dice6, Map, LucideIcon } from 'lucide-react';
+import { Scroll, Users, Swords, BookOpen, Sparkles, Dice6, Map } from 'lucide-react';
+import * as React from 'react';
+
+import type { LucideIcon } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 
 const emptyStateVariants = cva(

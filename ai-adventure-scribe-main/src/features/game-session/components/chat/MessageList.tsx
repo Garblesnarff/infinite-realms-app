@@ -7,8 +7,9 @@ import { useImageGeneration } from './message-list/useImageGeneration';
 import { useScrollBehavior } from './message-list/useScrollBehavior';
 
 import type { ChatMessage } from '@/types/game';
-import { useCampaign } from '@/contexts/CampaignContext';
+
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useGame } from '@/contexts/GameContext';

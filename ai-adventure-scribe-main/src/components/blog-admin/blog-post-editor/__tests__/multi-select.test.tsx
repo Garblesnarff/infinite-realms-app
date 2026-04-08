@@ -1,7 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { MultiSelect } from '../multi-select';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
+import { MultiSelect } from '../multi-select';
 
 describe('MultiSelect Accessibility', () => {
   const options = [

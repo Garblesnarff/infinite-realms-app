@@ -1,6 +1,5 @@
+import { Hammer, Clock, Heart , Twitter } from 'lucide-react';
 import React from 'react';
-import { Hammer, Clock, Heart } from 'lucide-react';
-import { Twitter } from 'lucide-react';
 
 import { Z_INDEX } from '@/constants/z-index';
 

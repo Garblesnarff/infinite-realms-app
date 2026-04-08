@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { isOnline, isOffline, addNetworkListener } from '../network';
 
 describe('network utilities', () => {

@@ -1,7 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
 import { CampaignHeader } from './CampaignHeader';
+
 import type { Campaign } from '@/types/game';
 
 // Mock the AlertDialog components since they might be complex

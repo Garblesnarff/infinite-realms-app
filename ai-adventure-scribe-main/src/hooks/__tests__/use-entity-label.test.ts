@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable max-lines */
+ 
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { useEntityLabel } from '../use-entity-label';
+
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { useEntityLabel } from '../use-entity-label';
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {

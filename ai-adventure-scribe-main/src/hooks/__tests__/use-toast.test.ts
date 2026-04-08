@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useToast, toast } from '../use-toast';
 import { toast as sonnerToast } from 'sonner';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import { useToast, toast } from '../use-toast';
 
 vi.mock('sonner', () => {
   const mockToast = vi.fn(() => 'mock-id');

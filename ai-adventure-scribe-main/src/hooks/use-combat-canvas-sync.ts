@@ -8,15 +8,17 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+
+import type { CombatParticipant } from '@/types/combat';
+import type { Token, UpdateTokenData } from '@/types/token';
+
+import logger from '@/lib/logger';
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 import {
   useCombatStore,
   useParticipants,
   useCurrentTurnParticipantId,
 } from '@/stores/useCombatStore';
-import { useBattleMapStore } from '@/stores/useBattleMapStore';
-import type { CombatParticipant } from '@/types/combat';
-import type { Token, UpdateTokenData } from '@/types/token';
-import logger from '@/lib/logger';
 
 // ===========================
 // Types

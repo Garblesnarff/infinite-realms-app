@@ -1,6 +1,6 @@
+import type { FullAttackResult } from './attack-types';
 import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant, CombatAction } from '@/types/combat';
-import type { FullAttackResult } from './attack-types';
 
 /**
  * Generate attack description

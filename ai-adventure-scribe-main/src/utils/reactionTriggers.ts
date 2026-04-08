@@ -5,12 +5,6 @@
  * Extracted from reactionSystem.ts
  */
 
-import type {
-  ReactionOpportunity,
-  CombatParticipant,
-  CombatEncounter,
-  CombatAction,
-} from '@/types/combat';
 
 import {
   createReactionOpportunity,
@@ -23,7 +17,6 @@ import {
   isWithinReach,
   isWithinCounterspellRange,
 } from './combat/reactions/reactionUtils';
-
 import {
   checkShieldSpellOpportunities,
   canCastShieldSpell,
@@ -32,6 +25,13 @@ import {
   checkHellishRebukeOpportunities,
   canCastHellishRebuke,
 } from './combat/reactions/spellReactions';
+
+import type {
+  ReactionOpportunity,
+  CombatParticipant,
+  CombatEncounter,
+  CombatAction,
+} from '@/types/combat';
 
 // Re-export utilities from modular files to maintain backward compatibility
 export {

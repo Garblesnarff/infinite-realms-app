@@ -53,13 +53,14 @@ vi.mock('../lib/logger', () => ({
   },
 }));
 
+import { useCharacterData } from '../use-character-data';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { isValidUUID } from '@/utils/validation';
 
-import { useCharacterData } from '../use-character-data';
 
 describe('useCharacterData', () => {
   const mockUserId = 'user-123';

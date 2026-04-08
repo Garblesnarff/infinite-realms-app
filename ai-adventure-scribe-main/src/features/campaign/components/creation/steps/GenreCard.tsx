@@ -1,12 +1,13 @@
 import { Check } from 'lucide-react';
 import React from 'react';
 
+import type { GenreMeta } from '@/features/campaign/data/genres';
+
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroupItem } from '@/components/ui/radio-group';
 import { Z_INDEX } from '@/constants/z-index';
-import type { GenreMeta } from '@/features/campaign/data/genres';
 
 interface GenreCardProps {
   genre: GenreMeta;

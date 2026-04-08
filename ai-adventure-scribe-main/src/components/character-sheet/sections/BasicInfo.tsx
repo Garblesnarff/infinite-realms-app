@@ -1,10 +1,14 @@
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { ScrollText, Eye, Heart, BookOpen, Shield, Book, Languages } from 'lucide-react';
-import { Character, Subrace } from '@/types/character';
-import { useCharacterStats } from '@/hooks/use-character-stats';
+
 import InspirationTracker from '../InspirationTracker';
+
+import type { Character, Subrace } from '@/types/character';
+
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
+import { useCharacterStats } from '@/hooks/use-character-stats';
+
 
 interface BasicInfoProps {
   character: Character;

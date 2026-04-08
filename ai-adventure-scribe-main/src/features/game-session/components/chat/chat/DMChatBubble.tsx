@@ -1,6 +1,8 @@
 import { Play, Pause, Volume2, VolumeX, AlertCircle, RefreshCw } from 'lucide-react';
 import React, { useMemo } from 'react';
 
+import { formatNarrative } from '../message-list/formatNarrative';
+
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 import type { ChatMessage } from '@/services/ai-service';
 
@@ -15,7 +17,6 @@ import {
   extractNarrativeContent,
   createPlayerMessageFromOption,
 } from '@/utils/parseMessageOptions';
-import { formatNarrative } from '../message-list/formatNarrative';
 
 interface DMChatBubbleProps {
   message: ChatMessage;

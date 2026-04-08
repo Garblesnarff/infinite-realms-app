@@ -10,6 +10,7 @@
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';
+
 import { sql } from './db.js';
 import * as schema from '../../../db/schema/index';
 

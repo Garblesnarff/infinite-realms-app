@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { slugify, ensureSlugFormat } from '../slug';
 
 describe('slug utilities', () => {

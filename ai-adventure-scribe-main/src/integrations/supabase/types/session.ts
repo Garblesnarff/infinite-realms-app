@@ -1,4 +1,4 @@
-import { Tables, TablesInsert, TablesUpdate } from './common';
+import type { Tables, TablesInsert, TablesUpdate } from './common';
 
 export type GameSession = Tables<'game_sessions'>;
 export type GameSessionInsert = TablesInsert<'game_sessions'>;

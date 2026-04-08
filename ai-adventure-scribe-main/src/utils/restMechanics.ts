@@ -13,6 +13,9 @@
  * @author AI Dungeon Master Team
  */
 
+import { recoverExhaustion } from './rest/exhaustion';
+import { calculateMaxHitDice, rollHitDice, recoverHitDice } from './rest/hit-dice';
+
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
 
@@ -20,8 +23,6 @@ import { restoreClassFeatures, getCharacterResources } from '@/utils/classFeatur
 import { rollDie } from '@/utils/diceRolls';
 import { restoreSpellSlots } from '@/utils/spell-management';
 
-import { recoverExhaustion } from './rest/exhaustion';
-import { calculateMaxHitDice, rollHitDice, recoverHitDice } from './rest/hit-dice';
 
 // Re-export for backward compatibility
 export { recoverExhaustion, calculateMaxHitDice, rollHitDice, recoverHitDice };

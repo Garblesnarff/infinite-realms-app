@@ -1,4 +1,4 @@
-import { Database as DB } from './database';
+import type { Database as DB } from './database';
 
 export type Json =
   | string

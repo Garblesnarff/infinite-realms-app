@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { isValidUUID } from '../validation';
 
 describe('validation utilities', () => {

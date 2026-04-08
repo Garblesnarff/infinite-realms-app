@@ -11,6 +11,7 @@ import {
 } from '../use-character-stats';
 
 import type { Character } from '@/types/character';
+
 import { applyRacialBonuses, formatRacialBonus } from '@/utils/racialAbilityBonuses';
 
 // Mock logger to avoid console noise

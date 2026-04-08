@@ -8,9 +8,10 @@
  *   bun scripts/upload-campaign-assets.ts --dry-run
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { readdir, readFile, stat } from 'fs/promises';
 import { join, basename, extname } from 'path';
+
+import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
 // Load environment variables

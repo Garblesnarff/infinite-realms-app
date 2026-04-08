@@ -18,6 +18,7 @@ import {
   type ConsumableUsageLog,
 } from '../../../../db/schema/index';
 import { NotFoundError, BusinessLogicError, InternalServerError } from '../../lib/errors.js';
+
 import type {
   UseConsumableInput,
   UseConsumableResult,

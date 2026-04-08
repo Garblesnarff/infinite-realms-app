@@ -8,10 +8,10 @@
  * propagation issues.
  */
 
-import { getBearerToken } from './jwt.js';
-import { verifyWorkOSToken } from '../services/workos.js';
 import { sql } from './db.js';
+import { getBearerToken } from './jwt.js';
 import { logger } from './logger.js';
+import { verifyWorkOSToken } from '../services/workos.js';
 
 export interface AuthUser {
   userId: string;

@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { useMulticlassing } from '../use-multiclassing';
+
 import type { Character, CharacterClass } from '@/types/character';
-import * as multiclassUtils from '@/utils/multiclassing';
+
 import * as spellcastingUtils from '@/utils/multiclass/spellcasting';
+import * as multiclassUtils from '@/utils/multiclassing';
 
 // Mock the utilities
 vi.mock('@/utils/multiclassing', () => ({

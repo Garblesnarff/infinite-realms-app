@@ -10,8 +10,9 @@
  */
 
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc.js';
+
 import { CharacterFolderService } from '../../services/character-folder-service.js';
+import { router, protectedProcedure } from '../trpc.js';
 
 /**
  * Folder creation/update schemas

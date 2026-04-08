@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { CombatResponseValidator, type CombatStateProvider } from '../CombatResponseValidator';
 
 describe('CombatResponseValidator', () => {

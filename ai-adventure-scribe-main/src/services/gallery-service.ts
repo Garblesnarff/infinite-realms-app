@@ -1,7 +1,8 @@
 import { logger } from '../lib/logger';
-import { formatLabelForDisplay } from '@/utils/image-label-generator';
 
 import { supabase } from '@/integrations/supabase/client';
+import { formatLabelForDisplay } from '@/utils/image-label-generator';
+
 
 export type EntityType = 'campaign' | 'character';
 

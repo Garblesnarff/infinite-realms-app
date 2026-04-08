@@ -4,6 +4,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+
 import type { CampaignFiles, ParsedCampaign, Difficulty } from './types.js';
 
 /**
@@ -142,7 +143,7 @@ export function parseOverview(content: string, campaignId: string): ParsedCampai
   const genreMatch = content.match(/\*\*Campaign Type \/ Genre:\*\*\s*(.+)/i) ||
                      content.match(/Campaign Type:\s*(.+)/i);
   const genreRaw = genreMatch ? genreMatch[1].trim() : '';
-  const genre = genreRaw.split(/[\/,]/).map(g => g.trim().toLowerCase()).filter(Boolean);
+  const genre = genreRaw.split(/[/,]/).map(g => g.trim().toLowerCase()).filter(Boolean);
 
   // Extract tone keywords
   const toneMatch = content.match(/\*\*Tone.*?:\*\*\s*(.+)/i) ||

@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { Token } from '../Token';
-import { TokenSize, TokenDisposition, NameplatePosition } from '@/types/token';
+
 import type { Token as TokenData } from '@/types/token';
+
+import { TokenSize, TokenDisposition, NameplatePosition } from '@/types/token';
 
 // Mock React Three Fiber
 vi.mock('@react-three/fiber', () => ({

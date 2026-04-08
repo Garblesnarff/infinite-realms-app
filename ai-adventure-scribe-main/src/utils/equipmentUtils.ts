@@ -2,10 +2,11 @@
  * Equipment utility functions for combat and inventory management
  */
 
+import { calculateProficiencyBonus } from './character-calculations';
+
 import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant } from '@/types/combat';
 
-import { calculateProficiencyBonus } from './character-calculations';
 
 type WeaponLike = {
   name: string;

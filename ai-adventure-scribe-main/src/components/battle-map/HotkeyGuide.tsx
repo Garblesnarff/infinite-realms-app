@@ -19,11 +19,11 @@
 import { Search, Keyboard } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 
-import { CategorySection } from './hotkeys/HotkeyGuideComponents';
 import { SHORTCUTS, CATEGORY_ORDER } from './hotkeys/constants';
+import { CategorySection } from './hotkeys/HotkeyGuideComponents';
 
-import type { HotkeyBadgeProps } from './hotkeys/HotkeyBadge';
 import type { ShortcutInfo } from './hotkeys/constants';
+import type { HotkeyBadgeProps } from './hotkeys/HotkeyBadge';
 
 import { Badge } from '@/components/ui/badge';
 import {

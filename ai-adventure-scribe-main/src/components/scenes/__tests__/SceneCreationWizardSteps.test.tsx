@@ -1,8 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { StepGridSettings } from '../scene-creation-wizard/StepGridSettings';
+import { describe, it, expect, vi } from 'vitest';
+
 import { StepDimensions } from '../scene-creation-wizard/StepDimensions';
+import { StepGridSettings } from '../scene-creation-wizard/StepGridSettings';
+
 import { GridType } from '@/types/scene';
 
 describe('SceneCreationWizard Steps Accessibility', () => {

@@ -27,16 +27,17 @@
 // SDK Imports
 import React, { createContext, useContext, useReducer, useMemo } from 'react';
 
-import type { ReactNode } from 'react';
-
-// Project Modules & Hooks
-import { useToast } from '@/components/ui/use-toast';
 import {
   characterReducer,
   initialState,
   type CharacterState,
   type CharacterAction,
 } from './character/character-reducer';
+
+import type { ReactNode } from 'react';
+
+// Project Modules & Hooks
+import { useToast } from '@/components/ui/use-toast';
 
 /**
  * Create context with type definition for better TypeScript support

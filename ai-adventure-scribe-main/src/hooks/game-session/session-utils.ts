@@ -4,6 +4,7 @@
  */
 
 import type { GameSession } from '@/types/game';
+
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 

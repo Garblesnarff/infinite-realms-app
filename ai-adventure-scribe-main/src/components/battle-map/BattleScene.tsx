@@ -7,10 +7,12 @@
  * @module components/battle-map/BattleScene
  */
 
-import React from 'react';
-import { useSceneData } from '@/hooks/use-scene-data';
-import { BackgroundImage } from './BackgroundImage';
 import { Loader2 } from 'lucide-react';
+import React from 'react';
+
+import { BackgroundImage } from './BackgroundImage';
+
+import { useSceneData } from '@/hooks/use-scene-data';
 
 /**
  * Props for BattleScene component

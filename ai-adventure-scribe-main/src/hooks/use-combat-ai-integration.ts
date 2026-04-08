@@ -24,8 +24,8 @@ import {
   shouldTriggerDMNarration,
   formatCombatEventForDM,
 } from '@/utils/combat/ai-narration-utils';
-import { detectCombatFromText } from '@/utils/combatDetection';
 import { createCombatParticipantsFromDetection } from '@/utils/combat/participant-generation';
+import { detectCombatFromText } from '@/utils/combatDetection';
 import { rollDice } from '@/utils/diceUtils';
 import { callEdgeFunction } from '@/utils/edgeFunctionHandler';
 

@@ -7,10 +7,12 @@
  * @module components/battle-map/BattleCanvas
  */
 
-import React, { useCallback, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import React, { useCallback, useState } from 'react';
+
 import { BattleScene, SceneLoadingOverlay, SceneErrorOverlay } from './BattleScene';
 import { CameraController } from './CameraController';
+
 import logger from '@/lib/logger';
 
 /**

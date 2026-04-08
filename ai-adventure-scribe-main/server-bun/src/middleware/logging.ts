@@ -17,6 +17,7 @@
  */
 
 import { Elysia } from 'elysia';
+
 import { logger } from '../lib/logger.js';
 
 /**

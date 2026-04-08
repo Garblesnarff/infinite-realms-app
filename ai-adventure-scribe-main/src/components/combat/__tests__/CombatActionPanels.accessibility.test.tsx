@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { expect, describe, it, vi } from 'vitest';
 import React from 'react';
+import { expect, describe, it, vi } from 'vitest';
+
 import GrappleActionPanel from '../GrappleActionPanel';
-import WeaponManagementPanel from '../WeaponManagementPanel';
 import ResourceConsumptionPanel from '../ResourceConsumptionPanel';
+import WeaponManagementPanel from '../WeaponManagementPanel';
 
 // Mock the useCombat hook
 vi.mock('@/contexts/CombatContext', () => ({

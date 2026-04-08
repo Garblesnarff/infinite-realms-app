@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, it, expect } from 'vitest';
-import { TokenSize } from '@/types/token';
+
 import {
   getTokenDimensions,
   getTokenScale,
@@ -10,6 +10,8 @@ import {
   getBorderWidth,
   getNameplateOffset
 } from '../token-sizing';
+
+import { TokenSize } from '@/types/token';
 
 describe('token-sizing utilities', () => {
   const GRID_SIZE = 100;

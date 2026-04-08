@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useIndexedDBCleanup, formatCleanupStats, timeSinceLastCleanup } from '../use-indexeddb-cleanup';
+
 import { IndexedDBService } from '../../agents/messaging/services/storage/IndexedDBService';
+import { useIndexedDBCleanup, formatCleanupStats, timeSinceLastCleanup } from '../use-indexeddb-cleanup';
 
 vi.mock('../../agents/messaging/services/storage/IndexedDBService', () => {
   const mockInstance = {
@@ -97,6 +98,7 @@ describe('useIndexedDBCleanup', () => {
     const { result } = renderHook(() => useIndexedDBCleanup());
     const service = IndexedDBService.getInstance();
     (service.getCleanupStats as any).mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
       throw 'string error';
     });
 

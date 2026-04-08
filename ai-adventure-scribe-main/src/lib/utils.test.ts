@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { stripAssetTags } from './utils';
 
 describe('stripAssetTags', () => {

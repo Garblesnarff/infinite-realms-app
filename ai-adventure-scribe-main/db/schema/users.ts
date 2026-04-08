@@ -6,6 +6,7 @@
  */
 
 import { pgTable, text, timestamp, index } from 'drizzle-orm/pg-core';
+
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**

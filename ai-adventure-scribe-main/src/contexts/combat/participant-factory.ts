@@ -5,6 +5,7 @@
  */
 
 import type { CombatParticipant, FightingStyleName } from '@/types/combat';
+
 import { rollDie } from '@/utils/diceRolls';
 import { FIGHTING_STYLES } from '@/utils/fightingStyles';
 

@@ -2,9 +2,10 @@ import { Slot } from '@radix-ui/react-slot';
 import { cva } from 'class-variance-authority';
 import * as React from 'react';
 
+import { useSidebar } from './sidebar';
+
 import type { VariantProps } from 'class-variance-authority';
 
-import { useSidebar } from './sidebar';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

@@ -1,6 +1,4 @@
 /* eslint-disable max-lines */
-import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
-
 import {
   SPELLCASTING_ABILITY_MAP,
   FULL_CASTER_SLOTS_MAP,
@@ -9,6 +7,9 @@ import {
   SUBRACE_SKILL_PROFICIENCIES_MAP,
   CLASS_SAVING_THROW_PROFICIENCIES_MAP,
 } from './character-calculations-data';
+
+import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
+
 
 /**
  * Comprehensive D&D 5e character calculations utility

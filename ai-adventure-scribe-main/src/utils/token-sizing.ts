@@ -8,7 +8,9 @@
  * @module utils/token-sizing
  */
 
-import { TokenSize, tokenSizeToGridSquares } from '@/types/token';
+import type { TokenSize} from '@/types/token';
+
+import { tokenSizeToGridSquares } from '@/types/token';
 
 /**
  * Token dimensions in grid squares

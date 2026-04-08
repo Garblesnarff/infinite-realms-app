@@ -1,6 +1,6 @@
+import { Users, Eye, Edit, Crown, Filter, X, ArrowRight, UserMinus } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Eye, Edit, Crown, Filter, X, ArrowRight, UserMinus } from 'lucide-react';
 
 import {
   AlertDialog,

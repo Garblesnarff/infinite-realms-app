@@ -1,4 +1,6 @@
+import { TRPCError } from '@trpc/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import {
   resolveAuthorId,
   canManagePost,
@@ -7,7 +9,6 @@ import {
   syncPostCategories,
   syncPostTags
 } from '../blog-helpers.js';
-import { TRPCError } from '@trpc/server';
 
 describe('Blog Helpers - Security and Functionality', () => {
   let mockCtx: any;

@@ -1,7 +1,9 @@
+import { useThree } from '@react-three/fiber';
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as THREE from 'three';
-import { useThree } from '@react-three/fiber';
+
 import { BackgroundPlaceholder } from './BackgroundPlaceholder';
+
 import logger from '@/lib/logger';
 
 export interface BackgroundImageProps {

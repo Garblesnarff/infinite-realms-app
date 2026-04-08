@@ -1,6 +1,8 @@
 import { BookOpen, Grid, List, Eye, Sparkles } from 'lucide-react';
 import React, { useId } from 'react';
 
+import { CompactGenreCard, GridGenreCard, ListGenreCard } from './GenreCard';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +13,6 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { GENRES } from '@/features/campaign/data/genres';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 
-import { CompactGenreCard, GridGenreCard, ListGenreCard } from './GenreCard';
 
 const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }) => {
   const { state, dispatch } = useCampaign();

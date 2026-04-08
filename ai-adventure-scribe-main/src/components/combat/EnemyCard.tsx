@@ -17,8 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
-import { useCombat } from '@/contexts/CombatContext';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
+import { useCombat } from '@/contexts/CombatContext';
 
 interface EnemyCardProps {
   enemyId: string;

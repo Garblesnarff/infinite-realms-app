@@ -1,11 +1,16 @@
+import { useQuery } from '@tanstack/react-query';
 import { renderHook, act } from '@testing-library/react';
+import { useNavigate } from 'react-router-dom';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
 import { useCharacterSelection } from '../use-character-selection';
-import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
+
+import type { Mock } from 'vitest';
+
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
 
 // Mocks
 vi.mock('@/contexts/AuthContext', () => ({

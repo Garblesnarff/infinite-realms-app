@@ -1,5 +1,5 @@
-import React from 'react';
 import { Eye, EyeOff, Scroll, Info } from 'lucide-react';
+import React from 'react';
 
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';

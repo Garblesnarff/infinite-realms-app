@@ -44,7 +44,7 @@ export interface ParsedXMLTags {
  */
 export function parseXMLTagsFromResponse(rawResponse: string): ParsedXMLTags {
   // Extract narrative (everything before XML tags)
-  let narrative = rawResponse
+  const narrative = rawResponse
     .replace(/<memories>[\s\S]*?<\/memories>/gi, '')
     .replace(/<world_updates>[\s\S]*?<\/world_updates>/gi, '')
     .trim();

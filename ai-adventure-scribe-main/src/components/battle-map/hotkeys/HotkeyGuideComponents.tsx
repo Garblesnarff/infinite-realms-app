@@ -1,6 +1,8 @@
 import React from 'react';
-import { Badge } from '@/components/ui/badge';
+
 import type { ShortcutInfo } from './constants';
+
+import { Badge } from '@/components/ui/badge';
 
 // ===========================
 // Shortcut Item Component

@@ -8,11 +8,11 @@
 
 import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant, CombatAction, DamageType, DiceRoll } from '@/types/combat';
+import type { AttackResolution, DamageCalculation, FullAttackResult } from '@/utils/combat/attack-types';
 
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
-import { rollAttack, rollDamage, calculateDamage } from '@/utils/diceUtils';
 import { createCombatActionFromAttack, generateAttackDescription } from '@/utils/combat/attack-narration';
-import type { AttackResolution, DamageCalculation, FullAttackResult } from '@/utils/combat/attack-types';
+import { rollAttack, rollDamage, calculateDamage } from '@/utils/diceUtils';
 
 // Re-export extracted types and functions for backward compatibility
 export type { AttackResolution, DamageCalculation, FullAttackResult };

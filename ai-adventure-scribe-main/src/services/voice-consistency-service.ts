@@ -12,10 +12,14 @@
  * @author AI Dungeon Master Team
  */
 
-import { supabase } from '@/integrations/supabase/client';
-import { VoiceMapper, VoiceConfig } from './voice-mapper';
-import logger from '@/lib/logger';
+import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
+
+import type { VoiceConfig } from './voice-mapper';
+
+import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
+
 
 export { type VoiceProfile };
 

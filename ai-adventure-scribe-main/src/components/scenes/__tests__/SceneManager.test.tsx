@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
-import { SceneManager } from '../SceneManager';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
+import { SceneManager } from '../SceneManager';
 
 // Mock trpc
 vi.mock('@/infrastructure/api/trpc-client', () => ({

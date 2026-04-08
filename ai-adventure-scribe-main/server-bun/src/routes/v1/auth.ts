@@ -10,14 +10,17 @@
  * Ported from /server/src/routes/v1/auth.ts
  */
 
+import crypto from 'crypto';
+
+import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+
+import { users } from '../../../../db/schema/index';
+import { db } from '../../lib/drizzle';
 import { logger } from '../../lib/logger';
 import { workos, authConfig } from '../../services/workos';
-import { db } from '../../lib/drizzle';
-import { users } from '../../../../db/schema/index';
-import { eq } from 'drizzle-orm';
+
 
 // Test auth configuration
 const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;

@@ -1,4 +1,5 @@
 import { vi, describe, it, expect } from 'vitest';
+
 import { checkSafetyCommands, processSafetyCommand } from '../safetyCommands';
 
 // Mock Supabase client to avoid "supabaseUrl is required" error during module load

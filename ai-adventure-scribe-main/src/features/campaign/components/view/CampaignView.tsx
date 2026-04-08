@@ -5,7 +5,6 @@ import { CampaignCollapsible } from './sections/CampaignCollapsible';
 import { CampaignHeader } from './sections/CampaignHeader';
 import { GameSession } from './sections/GameSession';
 
-import { CAMPAIGN_SELECT_COLUMNS } from '@/types/campaign';
 import type { Campaign } from '@/types/game';
 
 import { Card } from '@/components/ui/card';
@@ -13,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { CAMPAIGN_SELECT_COLUMNS } from '@/types/campaign';
 import { isValidUUID } from '@/utils/validation';
 
 /**

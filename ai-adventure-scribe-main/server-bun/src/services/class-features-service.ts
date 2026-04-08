@@ -10,8 +10,8 @@
 
 import { eq, and, desc, sql, exists, or, isNull, inArray } from 'drizzle-orm';
 
-import { db } from '../../../db/client';
 import { SubclassService } from './subclass-service.js';
+import { db } from '../../../db/client';
 import {
   classFeaturesLibrary,
   characterFeatures,

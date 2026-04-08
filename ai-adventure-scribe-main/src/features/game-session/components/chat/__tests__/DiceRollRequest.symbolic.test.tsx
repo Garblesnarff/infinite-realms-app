@@ -11,10 +11,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { type RollRequest } from '../DiceRollRequest';
 
-import { DiceRollRequest } from '@/components/game/DiceRollRequest';
-
 import type { Character } from '@/types/character';
 
+import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 

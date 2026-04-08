@@ -21,6 +21,7 @@ import {
   type TokenConfiguration,
   type NewTokenConfiguration,
 } from '../../../../db/schema/index';
+
 import type { TokenService } from '../token-service';
 
 /**

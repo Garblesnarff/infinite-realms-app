@@ -14,9 +14,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useBattleMapStore } from '@/stores/useBattleMapStore';
-import type { Token } from '@/types/token';
+
 import type { SceneSettings } from '@/types/scene';
+import type { Token } from '@/types/token';
+
+import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
 export interface Point2D {
   x: number;

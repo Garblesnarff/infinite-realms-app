@@ -1,5 +1,7 @@
-import { Character, AbilityScores } from '@/types/character';
+import type { Character} from '@/types/character';
+
 import { getProficiencyBonus } from '@/data/levelProgression';
+import { AbilityScores } from '@/types/character';
 
 /**
  * PassiveSkillsService

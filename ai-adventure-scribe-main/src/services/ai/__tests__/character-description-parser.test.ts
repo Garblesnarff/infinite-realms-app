@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+
 import { extractSections, parseDescriptionResponse } from '../character-description-parser';
+
 import type { CharacterData } from '../prompts/character-description-prompts';
 
 describe('CharacterDescriptionParser', () => {

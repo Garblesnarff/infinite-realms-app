@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { SidebarProvider, SidebarTrigger, SidebarRail } from '../sidebar';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
+import { SidebarProvider, SidebarTrigger, SidebarRail } from '../sidebar';
 
 // Mock useIsMobile hook
 vi.mock('@/hooks/use-mobile', () => ({

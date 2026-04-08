@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import {
   calculatePassiveSkill,
   calculatePassivePerception,
@@ -11,8 +12,9 @@ import {
   getPassiveCheckNarration,
   getCharacterPassiveScores,
 } from '../../src/services/passive-skills-service';
-import type { Character } from '../../src/types/character';
+
 import type { Scene } from '../../src/services/passive-skills-service';
+import type { Character } from '../../src/types/character';
 
 describe('PassiveSkillsService', () => {
   describe('calculatePassiveSkill', () => {

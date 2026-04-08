@@ -14,8 +14,9 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-import { supabase } from '@/integrations/supabase/client';
 import { useStarterCharacterTemplates, useStarterCharacterTemplate } from '../use-starter-character-templates';
+
+import { supabase } from '@/integrations/supabase/client';
 
 describe('useStarterCharacterTemplates', () => {
   const mockCampaignId = 'campaign-123';
@@ -112,6 +113,7 @@ describe('useStarterCharacterTemplates', () => {
 
   it('should handle non-Error catch objects', async () => {
     const mockOrder = vi.fn().mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
       throw 'string error';
     });
     (supabase.from as any).mockReturnValue({
@@ -241,6 +243,7 @@ describe('useStarterCharacterTemplate', () => {
 
   it('should handle string throw in single fetch', async () => {
     const mockSingle = vi.fn().mockImplementation(() => {
+      // eslint-disable-next-line no-throw-literal
       throw 'string error';
     });
     (supabase.from as any).mockReturnValue({

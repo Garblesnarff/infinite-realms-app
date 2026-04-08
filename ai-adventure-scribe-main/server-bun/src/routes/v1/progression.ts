@@ -14,12 +14,12 @@
 
 import { Elysia } from 'elysia';
 
+import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
-import { verifySessionOwnership } from './combat/helpers.js';
 
 import type { XPSource, LevelUpInput } from '../../types/progression.js';
 

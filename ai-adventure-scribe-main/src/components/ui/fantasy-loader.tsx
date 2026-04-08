@@ -10,10 +10,11 @@
  * <FantasyLoader type="dice" label="Rolling..." />
  */
 
-import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
 import { Loader2, Sparkles, Dice6, Scroll } from 'lucide-react';
+import * as React from 'react';
+
 import { cn } from '@/lib/utils';
 
 const fantasyLoaderVariants = cva('inline-flex flex-col items-center justify-center gap-3', {

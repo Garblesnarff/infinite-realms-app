@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+
 import type { VoiceProfile } from '@/services/voice-profile-service';
 
 // Mock Supabase client

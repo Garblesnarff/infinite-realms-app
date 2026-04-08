@@ -17,8 +17,9 @@
  */
 
 import { Elysia } from 'elysia';
-import { httpRequestCounter, httpRequestDuration } from '../lib/metrics.js';
+
 import { logger } from '../lib/logger.js';
+import { httpRequestCounter, httpRequestDuration } from '../lib/metrics.js';
 
 /**
  * Extract route pattern from request

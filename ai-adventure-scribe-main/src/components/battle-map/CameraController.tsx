@@ -10,7 +10,8 @@
 import { OrthographicCamera } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import { useRef, useEffect, useState, useCallback } from 'react';
-import * as THREE from 'three';
+
+import type * as THREE from 'three';
 
 /**
  * Props for CameraController component

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
+import type { CharacterPromptData } from '@/services/prompts/character-prompt-types';
 import type { Character } from '@/types/character';
 
 import {
@@ -7,7 +8,6 @@ import {
   buildCharacterImagePrompt,
   toCharacterPromptData,
 } from '@/services/prompts/characterPrompts';
-import type { CharacterPromptData } from '@/services/prompts/character-prompt-types';
 
 describe('characterPrompts', () => {
   it('injects mandatory physical traits into description prompts', () => {

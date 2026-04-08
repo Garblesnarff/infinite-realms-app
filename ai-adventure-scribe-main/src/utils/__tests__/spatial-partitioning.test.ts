@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildQuadTree } from '../spatial-partitioning';
 import {
   calculateWallBounds,
   createBoundsFromRadius,
@@ -8,6 +7,7 @@ import {
   boundsContainsPoint,
   mergeBounds,
 } from '../spatial/aabb';
+import { buildQuadTree } from '../spatial-partitioning';
 
 import type { VisionBlocker } from '@/types/scene';
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { createStagger, createFade, respectReducedMotion } from '../animations/utilities';
 
 describe('Animation Utilities', () => {
