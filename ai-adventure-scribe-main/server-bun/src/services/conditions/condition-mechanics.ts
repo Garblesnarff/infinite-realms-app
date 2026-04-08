@@ -6,11 +6,14 @@
  * aggregating effects and calculating roll modifiers.
  */
 
+import { ConditionQueryService } from './condition-query-service.js';
+
 import type {
   AggregatedMechanicalEffects,
   MechanicalEffects,
   SaveAbility,
   ParticipantConditionWithDetails,
+  ConditionConflict,
 } from '../../types/combat.js';
 
 /**
@@ -426,5 +429,63 @@ export class ConditionMechanics {
     }
 
     return { speedMultiplier, speedOverride, reasons };
+  }
+
+  /**
+   * Check for condition conflicts before applying
+   */
+  static async checkConditionConflicts(
+    participantId: string,
+    newConditionName: string,
+    userId?: string
+  ): Promise<ConditionConflict[]> {
+    const activeConditions = await ConditionQueryService.getActiveConditions(participantId, userId);
+    const conflicts: ConditionConflict[] = [];
+
+    for (const existingCondition of activeConditions) {
+      const existingName = existingCondition.condition.name;
+
+      // Check for duplicate
+      if (existingName === newConditionName) {
+        conflicts.push({
+          existingCondition,
+          newConditionName,
+          conflictType: 'duplicate',
+          message: `${newConditionName} is already applied to this participant`,
+        });
+      }
+
+      // Check if new condition supersedes existing
+      if (CONDITION_HIERARCHY[newConditionName]?.includes(existingName)) {
+        conflicts.push({
+          existingCondition,
+          newConditionName,
+          conflictType: 'superseded',
+          message: `${newConditionName} includes ${existingName}, which will be removed`,
+        });
+      }
+
+      // Check if existing condition supersedes new
+      if (CONDITION_HIERARCHY[existingName]?.includes(newConditionName)) {
+        conflicts.push({
+          existingCondition,
+          newConditionName,
+          conflictType: 'superseded',
+          message: `${existingName} already includes the effects of ${newConditionName}`,
+        });
+      }
+
+      // Check for incompatibilities
+      if (INCOMPATIBLE_CONDITIONS[newConditionName]?.includes(existingName)) {
+        conflicts.push({
+          existingCondition,
+          newConditionName,
+          conflictType: 'incompatible',
+          message: `${newConditionName} is incompatible with ${existingName}`,
+        });
+      }
+    }
+
+    return conflicts;
   }
 }
