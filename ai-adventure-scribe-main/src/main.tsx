@@ -1,12 +1,11 @@
 import { createRoot } from 'react-dom/client';
-
-import App from './App.tsx';
-
-import './index.css';
 import { v4 as uuidv4 } from 'uuid';
 
+import App from './App.tsx';
 import { initializeAnalytics } from './utils/analytics';
 import { validateEnvironment } from './utils/env-validation';
+
+import './index.css';
 
 // Basic frontend observability: request-id propagation and error reporting
 (function setupObservability() {

@@ -18,4 +18,4 @@ export type {
   AppendMessageImageParams,
 } from './rest-client';
 
-export type { ImageQuotaStatus } from '@/services/llm-api-client';
+export type { ImageQuotaStatus } from './rest-client';

@@ -22,6 +22,7 @@
 // SDK Imports
 import React, { createContext, useContext, useReducer, useMemo } from 'react'; // Added ReactNode
 
+import type { OptionSelection } from '../types/enhancement-options';
 import type { ReactNode } from 'react';
 
 // Interfaces and Types (defined in-file, specific to this context)
@@ -37,7 +38,7 @@ interface Campaign {
   // Defaults and configuration for scoped flows
   defaultArtStyle?: string; // e.g., 'fantasy', 'cyberpunk'
   rules?: Record<string, unknown> | string; // ruleset identifier or config blob
-  enhancementSelections?: import('../types/enhancement-options').OptionSelection[];
+  enhancementSelections?: OptionSelection[];
   enhancementEffects?: {
     atmosphere?: string[];
     themes?: string[];

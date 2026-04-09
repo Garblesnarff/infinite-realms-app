@@ -11,9 +11,9 @@
  * @author AI Dungeon Master Team
  */
 
+import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { llmApiClient } from '@/services/llm-api-client';
 
 export interface VoiceProfile {
   id?: string;

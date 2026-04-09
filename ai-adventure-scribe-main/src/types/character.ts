@@ -1,3 +1,4 @@
+import type { OptionSelection } from './enhancement-options';
 import type { Condition } from '@/types/combat';
 
 export interface Ability {
@@ -217,7 +218,7 @@ export interface Character {
   bonds?: string[];
   flaws?: string[];
   // Enhancement system integration
-  enhancementSelections?: import('./enhancement-options').OptionSelection[];
+  enhancementSelections?: OptionSelection[];
   enhancementEffects?: {
     traits?: string[];
     skillBonus?: string[];

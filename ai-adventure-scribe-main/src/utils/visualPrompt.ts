@@ -3,11 +3,11 @@ export interface VisualPromptExtraction {
   prompt: string | null;
 }
 
-const VISUAL_PROMPT_FENCE = /```\s*VISUAL[_\-\s]*PROMPT\s*\n([\s\S]*?)```/i;
-const VISUAL_PROMPT_FENCE_GLOBAL = /```\s*VISUAL[_\-\s]*PROMPT\s*\n([\s\S]*?)```/gi;
-const VISUAL_PROMPT_INLINE = /(?:^|\n)[ \t]*VISUAL[ _\-]*PROMPT\s*:?[ \t]*(.+?)(?:\r?\n|$)/i;
+const VISUAL_PROMPT_FENCE = /```\s*VISUAL[_-\s]*PROMPT\s*\n([\s\S]*?)```/i;
+const VISUAL_PROMPT_FENCE_GLOBAL = /```\s*VISUAL[_-\s]*PROMPT\s*\n([\s\S]*?)```/gi;
+const VISUAL_PROMPT_INLINE = /(?:^|\n)[ \t]*VISUAL[ _-]*PROMPT\s*:?[ \t]*(.+?)(?:\r?\n|$)/i;
 const VISUAL_PROMPT_INLINE_GLOBAL =
-  /(?:^|\n)[ \t]*VISUAL[ _\-]*PROMPT\s*:?[ \t]*(.+?)(?:\r?\n|$)/gi;
+  /(?:^|\n)[ \t]*VISUAL[ _-]*PROMPT\s*:?[ \t]*(.+?)(?:\r?\n|$)/gi;
 
 const normalizeWhitespace = (text: string) =>
   text
@@ -41,7 +41,7 @@ export const extractVisualPrompt = (text: string): VisualPromptExtraction => {
     .replace(VISUAL_PROMPT_INLINE_GLOBAL, '');
 
   // Safety net: strip any remaining visual prompt lines to avoid leaking markers.
-  working = working.replace(/^[ \t]*VISUAL[ _\-]*PROMPT.*$/gim, '');
+  working = working.replace(/^[ \t]*VISUAL[ _-]*PROMPT.*$/gim, '');
 
   return {
     cleaned: normalizeWhitespace(working),

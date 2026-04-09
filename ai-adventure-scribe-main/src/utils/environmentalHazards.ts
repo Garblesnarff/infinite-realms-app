@@ -5,6 +5,7 @@
  */
 
 import type { Character } from '@/types/character';
+import type { ConditionName } from '@/types/combat';
 import type {
   EnvironmentalHazard,
   HazardDetectionResult,
@@ -133,7 +134,7 @@ export function interactWithHazard(
   const damage = hazard.damage ? calculateHazardDamage(hazard, saved) : 0;
 
   // Check for condition application
-  const conditionsApplied: import('@/types/combat').ConditionName[] = [];
+  const conditionsApplied: ConditionName[] = [];
   if (hazard.conditions && !saved) {
     conditionsApplied.push(...hazard.conditions.map((c) => c.name));
   }

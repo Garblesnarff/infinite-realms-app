@@ -7,7 +7,6 @@
  * @module utils/fog-calculations
  */
 
-
 import type { Point2D, VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 

@@ -57,7 +57,7 @@ export interface CrashDetection {
 export function getMemoryStats(): MemoryStats | null {
   // @ts-ignore - performance.memory is Chrome-specific
   if (typeof performance !== 'undefined' && performance.memory) {
-    // @ts-ignore
+    // @ts-ignore -- performance.memory is a Chrome-specific non-standard extension
     const memory = performance.memory;
     const usedMB = Math.round(memory.usedJSHeapSize / 1024 / 1024);
     const totalMB = Math.round(memory.totalJSHeapSize / 1024 / 1024);

@@ -12,8 +12,8 @@ import { buildCampaignDescriptionPrompt, buildCampaignNamePrompt } from './share
 
 import type { CampaignParams } from './shared/types';
 
+import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
-import { llmApiClient } from '@/services/llm-api-client';
 
 /**
  * Generate a campaign description using AI

@@ -118,8 +118,8 @@ export class AIService {
   /**
    * Get Gemini API manager statistics (for debugging)
    */
-  static getApiStats(): any {
-    const { getApiStats: getStats } = require('./api-manager');
+  static async getApiStats(): Promise<any> {
+    const { getApiStats: getStats } = await import('./api-manager');
     return getStats();
   }
 }

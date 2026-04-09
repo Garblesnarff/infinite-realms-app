@@ -16,7 +16,7 @@ describe('network utilities', () => {
 
     it('should return true if window is undefined (SSR)', () => {
       const originalWindow = global.window;
-      // @ts-ignore
+      // @ts-ignore -- deleting global.window to simulate SSR environment in test
       delete global.window;
       expect(isOnline()).toBe(true);
       global.window = originalWindow;

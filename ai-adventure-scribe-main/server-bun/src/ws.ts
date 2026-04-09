@@ -266,7 +266,7 @@ async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
 
     // Handle different Foundry VTT message types
     switch (msg.type) {
-      case 'scene:join':
+      case 'scene:join': {
         // Join the scene room
         joinRoom(sceneRoomId, ws);
 
@@ -292,6 +292,7 @@ async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
           usersCount: usersInScene.length
         }, 'ws.scene_join');
         break;
+      }
 
       case 'scene:leave':
         allowedScenes.delete(msg.sceneId);

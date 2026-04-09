@@ -5,6 +5,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
+import { getClassSpells } from '@/data/spellOptions';
+
 /**
  * Spell Selection Integration Tests
  *
@@ -199,7 +201,6 @@ const MockSpellSelection: React.FC<{ character: Character | null }> = ({ charact
   const [schoolFilter, setSchoolFilter] = React.useState<string[]>([]);
 
   // Mock spell data
-  const { getClassSpells } = require('@/data/spellOptions');
   const availableSpells = character?.class
     ? getClassSpells(character.class.name)
     : { cantrips: [], spells: [] };

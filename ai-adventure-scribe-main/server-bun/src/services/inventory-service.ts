@@ -261,6 +261,7 @@ export class InventoryService {
     userId: string,
     preFetchedItem?: InventoryItem
   ): Promise<UseConsumableResult> {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
     return InventoryConsumableService.useConsumable(input, userId, preFetchedItem);
   }
 
@@ -274,6 +275,7 @@ export class InventoryService {
     ammoType: string,
     count: number = 1
   ): Promise<UseConsumableResult> {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- server-side class method, not a React hook
     return InventoryConsumableService.useAmmunition(characterId, userId, ammoType, count);
   }
 

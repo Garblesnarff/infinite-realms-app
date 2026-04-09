@@ -288,7 +288,7 @@ export class DndApiClient {
   }
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    let lastError: Error;
+    let lastError: Error = new Error('No attempts made');
 
     for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
       try {
@@ -325,7 +325,7 @@ export class DndApiClient {
       }
     }
 
-    throw lastError!;
+    throw lastError;
   }
 
   private sleep(ms: number): Promise<void> {
