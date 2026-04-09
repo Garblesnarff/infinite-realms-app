@@ -18,7 +18,6 @@
 
 import type {
   ApiErrorResponse,
-  ApiError,
   CombatState,
   AttackRequest,
   AttackResult,
@@ -31,13 +30,11 @@ import type {
   CreateItemRequest,
   EncumbranceStatus,
   ProgressionStatus,
-  AwardXPRequest,
   AwardXPResult,
   LevelUpRequest,
   LevelUpResult,
   CharacterFeature,
   SpellSlot,
-  UseSpellSlotRequest,
   UseSpellSlotResult,
 } from './client-types';
 

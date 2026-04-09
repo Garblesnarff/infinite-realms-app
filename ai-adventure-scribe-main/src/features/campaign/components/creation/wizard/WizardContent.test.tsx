@@ -1,18 +1,15 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { MemoryRouter, useNavigate } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
 // WizardContent will be imported dynamically later
 // import WizardContent from './WizardContent';
 // Constants will be mocked with vi.doMock, so no direct import needed for it here for mocking purposes.
 // import * as Constants from './constants';
-import { useCampaignSave } from './useCampaignSave';
 // Validation will be mocked with vi.mock as it doesn't have hoisting issues with its dependencies.
-import * as Validation from './validation';
 
-import { useToast } from '@/components/ui/use-toast';
-import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
+import { CampaignProvider } from '@/contexts/CampaignContext';
 
 // Define Mocks for Step Components globally
 const MockStep1 = vi.fn(() => <div data-testid="mock-step-1">Step 1 Content</div>);
@@ -25,10 +22,10 @@ const mockWizardStepsArray = [
 ];
 
 // Mock validation functions and capture them (vi.mock is fine here)
-const mockValidateGenreSelection = vi.fn((campaign, toastFn) => true);
-const mockValidateCampaignParameters = vi.fn((campaign, toastFn) => true);
-const mockValidateBasicDetails = vi.fn((campaign, toastFn) => true);
-const mockValidateCompleteCampaign = vi.fn((campaign, toastFn) => true);
+const mockValidateGenreSelection = vi.fn((_campaign, _toastFn) => true);
+const mockValidateCampaignParameters = vi.fn((_campaign, _toastFn) => true);
+const mockValidateBasicDetails = vi.fn((_campaign, _toastFn) => true);
+const mockValidateCompleteCampaign = vi.fn((_campaign, _toastFn) => true);
 
 vi.mock('./validation', () => ({
   validateGenreSelection: mockValidateGenreSelection,

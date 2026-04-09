@@ -8,7 +8,6 @@
 import { MessageCircle, ExternalLink, Heart } from 'lucide-react';
 import React from 'react';
 
-import { Button } from '@/components/ui/button';
 import { launchPageContent } from '@/data/launchPageContent';
 
 export const FooterSection: React.FC = () => {

@@ -1,4 +1,4 @@
-import { Upload, Image as ImageIcon, X, Plus, FolderOpen } from 'lucide-react';
+import { Upload, Image as ImageIcon, FolderOpen } from 'lucide-react';
 import React, { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBlogMedia, useUploadBlogMedia } from '@/hooks/blog/useBlogMedia';
 
-interface MediaFile extends File {
+interface _MediaFile extends File {
   preview?: string;
   uploadedUrl?: string;
 }

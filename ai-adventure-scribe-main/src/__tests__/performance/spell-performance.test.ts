@@ -217,7 +217,7 @@ describe('Spell System Performance Tests', () => {
         const startTime = performance.now();
 
         // Simulate spell filtering operation
-        const filtered = dataset.filter(
+        const _filtered = dataset.filter(
           (spell) => spell.school === 'Evocation' && spell.level <= 3 && spell.verbal === true,
         );
 
@@ -392,7 +392,7 @@ describe('Spell System Performance Tests', () => {
 
       const startTime = performance.now();
 
-      const result = validateSpellSelection(
+      const _result = validateSpellSelection(
         wizardCharacter,
         longSpells.slice(0, 3),
         longSpells.slice(3, 9),
@@ -442,7 +442,7 @@ describe('Spell System Performance Tests', () => {
         () => validateSpellSelection(wizardCharacter, validWizardCantrips, validWizardSpells),
       ];
 
-      featureTests.forEach((test, index) => {
+      featureTests.forEach((test, _index) => {
         const startTime = performance.now();
 
         for (let i = 0; i < 1000; i++) {

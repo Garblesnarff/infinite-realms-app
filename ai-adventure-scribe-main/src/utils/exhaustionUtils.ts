@@ -81,7 +81,7 @@ export function getExhaustionLevel(conditions: Condition[]): number {
  * Apply exhaustion level to participant
  */
 export function applyExhaustion(participant: CombatParticipant, level: number): CombatParticipant {
-  const currentLevel = getExhaustionLevel(participant.conditions);
+  const _currentLevel = getExhaustionLevel(participant.conditions);
   const newLevel = Math.min(6, Math.max(0, level));
 
   if (newLevel === 0) {

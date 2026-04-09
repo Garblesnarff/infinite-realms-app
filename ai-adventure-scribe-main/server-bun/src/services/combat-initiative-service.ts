@@ -22,16 +22,13 @@ import {
   gameSessions,
   campaigns,
   characters,
-  type CombatEncounter,
   type CombatParticipant,
 } from '../../../db/schema/index';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
 
 import type {
-  CombatState,
   CreateParticipantInput,
   InitiativeRoll,
-  TurnOrderEntry,
   AdvanceTurnResult,
 } from '../types/combat.js';
 

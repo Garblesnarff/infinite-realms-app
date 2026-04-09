@@ -8,15 +8,6 @@ import type { Equipment } from '@/data/equipmentOptions';
 import type { CombatParticipant } from '@/types/combat';
 
 
-type WeaponLike = {
-  name: string;
-  damage?: string;
-  damageType?: string;
-  properties?: string[];
-  weight?: number;
-  value?: number;
-};
-
 /**
  * Creates default light weapons for two-weapon fighting
  */

@@ -10,7 +10,7 @@
  * Ported from /server/src/routes/v1/class-features.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest, type AuthUser } from '../../lib/auth.js';

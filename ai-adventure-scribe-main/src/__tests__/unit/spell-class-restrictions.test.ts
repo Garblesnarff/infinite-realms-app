@@ -11,7 +11,7 @@ import {
   createMockCharacter,
 } from '@/__tests__/helpers/spell-test-helpers';
 import { spellApi } from '@/services/spellApi';
-import { validateSpellSelection, getSpellcastingInfo } from '@/utils/spell-validation';
+import { validateSpellSelection } from '@/utils/spell-validation';
 
 /**
  * Core Class Spell Restriction Tests
@@ -286,7 +286,7 @@ describe('Spell Class Restriction Enforcement', () => {
       const wizardCharacter = createMockCharacter('Test Wizard', mockWizard, mockHuman);
 
       // Mock API to allow only wizard spells
-      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, className) => {
+      vi.mocked(spellApi.validateSpellForClass).mockImplementation(async (spellId, _className) => {
         const wizardSpells = [
           'mage-hand',
           'prestidigitation',

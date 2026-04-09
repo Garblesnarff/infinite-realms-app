@@ -30,22 +30,26 @@ vi.mock('@/integrations/supabase/client', () => {
   };
 });
 
-// Mock LLM API client (llmApiClient)
-vi.mock('@/services/llm-api-client', () => ({
-  llmApiClient: {
-    generateText: vi.fn(async () => {
-      return JSON.stringify({
-        voice_style: 'gruff',
-        speech_patterns: ['uses contractions', 'speaks directly'],
-        vocabulary_level: 'average',
-        tone: 'serious',
-        quirks: ['clears throat before speaking'],
-        example_phrases: ['Yeah, I reckon', "Ain't no problem"],
-        consistency_score: 0.85,
-      });
-    }),
-  },
-}));
+// Mock LLM API client (llmApiClient) — service imports from @/infrastructure/api
+vi.mock('@/infrastructure/api', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    llmApiClient: {
+      generateText: vi.fn(async () => {
+        return JSON.stringify({
+          voice_style: 'gruff',
+          speech_patterns: ['uses contractions', 'speaks directly'],
+          vocabulary_level: 'average',
+          tone: 'serious',
+          quirks: ['clears throat before speaking'],
+          example_phrases: ['Yeah, I reckon', "Ain't no problem"],
+          consistency_score: 0.85,
+        });
+      }),
+    },
+  };
+});
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -73,7 +77,7 @@ describe('VoiceProfileService', () => {
     supabaseMock.setData(null);
     supabaseMock.setError(null);
 
-    const llmModule = await import('@/services/llm-api-client');
+    const llmModule = await import('@/infrastructure/api');
     llmApiClient = llmModule.llmApiClient;
 
     const voiceModule = await import('@/services/voice-profile-service');

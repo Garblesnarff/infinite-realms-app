@@ -13,7 +13,6 @@ import {
   mockForestGnomeSubrace,
   createMockCharacter,
 } from '@/__tests__/helpers/spell-test-helpers';
-import { Character } from '@/types/character';
 import {
   validateSpellSelection,
   getRacialSpells,
@@ -472,7 +471,7 @@ describe('Racial Spell Integration Edge Cases', () => {
         },
       };
 
-      const modernCharacter = createMockCharacter(
+      const _modernCharacter = createMockCharacter(
         'Modern High Elf',
         mockFighter,
         mockElf,
@@ -493,7 +492,7 @@ describe('Racial Spell Integration Edge Cases', () => {
         // Missing spell data
       };
 
-      const incompleteCharacter = createMockCharacter(
+      const _incompleteCharacter = createMockCharacter(
         'Incomplete',
         mockFighter,
         mockElf,
@@ -522,7 +521,7 @@ describe('Racial Spell Integration Edge Cases', () => {
           .map((_, i) => `test-spell-${i}`),
       };
 
-      const manySpellsCharacter = createMockCharacter(
+      const _manySpellsCharacter = createMockCharacter(
         'Many Spells',
         mockWizard,
         mockElf,

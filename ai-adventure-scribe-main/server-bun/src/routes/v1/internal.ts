@@ -8,7 +8,7 @@
  * Ported from /server/src/routes/v1/internal.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
 
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
@@ -98,7 +98,7 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
    */
   .use(requireApiKey)
   .use(hasPermission('create_release_post'))
-  .post('/release-post', async ({ body, apiKey, set }) => {
+  .post('/release-post', async ({ body, apiKey: _apiKey, set }) => {
     try {
       const { version, changelog, commitHash } = body as {
         version?: string;

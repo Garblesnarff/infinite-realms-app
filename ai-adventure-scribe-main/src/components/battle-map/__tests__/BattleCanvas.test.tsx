@@ -1,11 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import { BattleCanvas } from '../BattleCanvas';
 
 // Mock React Three Fiber Canvas component
 vi.mock('@react-three/fiber', () => ({
-  Canvas: ({ children, onCreated, onError, ...props }: any) => (
+  Canvas: ({ children, onCreated: _onCreated, onError: _onError, ...props }: any) => (
     <div data-testid="r3f-canvas" data-props={JSON.stringify(props)}>
       <div data-testid="canvas-children">{children}</div>
     </div>

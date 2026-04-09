@@ -42,10 +42,7 @@ import type {
   CombatEncounter,
   CombatParticipant,
   CombatAction as CombatActionType,
-  Condition,
-  ConditionName,
   CombatContextValue,
-  DamageType,
 } from '@/types/combat';
 
 import { processMovementAction } from '@/utils/movementUtils';

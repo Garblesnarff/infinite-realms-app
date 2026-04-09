@@ -12,15 +12,11 @@ import type { OptionSelection } from '@/types/enhancement-options';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancementPanel } from '@/components/ui/enhancement-panel';
-import { Separator } from '@/components/ui/separator';
 import { useCharacter } from '@/contexts/CharacterContext';
 import {
-  EnhancementOption,
   CHARACTER_ENHANCEMENTS,
-  checkOptionAvailability,
 } from '@/types/enhancement-options';
 
 interface CharacterEnhancementsProps {
@@ -30,7 +26,7 @@ interface CharacterEnhancementsProps {
 export default function CharacterEnhancements({ isOptional = true }: CharacterEnhancementsProps) {
   const { state, dispatch } = useCharacter();
   const [selections, setSelections] = React.useState<OptionSelection[]>([]);
-  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [_isGenerating, setIsGenerating] = React.useState(false);
 
   // Load existing selections from character data
   React.useEffect(() => {

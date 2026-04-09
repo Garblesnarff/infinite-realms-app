@@ -7,4 +7,4 @@
  * @module infrastructure/api/trpc-types
  */
 
-import type { AppRouter } from '../../../server/src/trpc/root.js';
+export type { AppRouter } from '../../../server/src/trpc/root.js';

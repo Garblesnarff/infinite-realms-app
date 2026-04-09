@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Clock, User, Tag, Home } from 'lucide-react';
+import { ArrowLeft, Calendar, Home } from 'lucide-react';
 import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import sanitizeHtml from 'sanitize-html';

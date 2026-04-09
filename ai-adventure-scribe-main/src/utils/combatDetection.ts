@@ -10,8 +10,6 @@ import {
   createCombatParticipantsFromDetection,
 } from './combat/participant-generation';
 
-import type { CombatParticipant } from '@/types/combat';
-
 export { type PlayerCharacterLike, createCombatParticipantsFromDetection };
 
 export interface CombatDetectionResult {

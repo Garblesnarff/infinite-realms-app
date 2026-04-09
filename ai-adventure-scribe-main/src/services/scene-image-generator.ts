@@ -69,7 +69,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
   if (charUrl) {
     try {
       referenceBase64s.push(await fetchImageAsBase64(charUrl));
-    } catch (e) {
+    } catch (_e) {
       logger.warn('[SceneImage] Failed to fetch character reference image');
     }
   }
@@ -93,7 +93,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
       try {
         referenceBase64s.push(await fetchImageAsBase64(asset.url));
         logger.info('[SceneImage] Added asset reference', { type: asset.type, name: asset.name });
-      } catch (e) {
+      } catch (_e) {
         logger.warn('[SceneImage] Failed to fetch asset reference', {
           type: asset.type,
           name: asset.name,
@@ -106,7 +106,7 @@ export async function generateSceneImage(req: SceneImageRequest): Promise<SceneI
   if (referenceBase64s.length === 0 && req.campaign?.background_image) {
     try {
       referenceBase64s.push(await fetchImageAsBase64(req.campaign.background_image));
-    } catch (e) {
+    } catch (_e) {
       logger.warn('[SceneImage] Failed to fetch campaign background');
     }
   }

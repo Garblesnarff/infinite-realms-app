@@ -67,7 +67,7 @@ const BackgroundLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
   );
 };
 
-const GridLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
+const GridLayer: React.FC<{ sceneId: string }> = ({ sceneId: _sceneId }) => {
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Grid will be rendered here */}
@@ -88,7 +88,7 @@ const GridLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
   );
 };
 
-const TokensLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
+const TokensLayer: React.FC<{ sceneId: string }> = ({ sceneId: _sceneId }) => {
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Tokens will be rendered here */}
@@ -99,7 +99,7 @@ const TokensLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
   );
 };
 
-const EffectsLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
+const EffectsLayer: React.FC<{ sceneId: string }> = ({ sceneId: _sceneId }) => {
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Effects will be rendered here */}
@@ -107,7 +107,7 @@ const EffectsLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
   );
 };
 
-const DrawingsLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
+const DrawingsLayer: React.FC<{ sceneId: string }> = ({ sceneId: _sceneId }) => {
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Drawings will be rendered here */}
@@ -115,7 +115,7 @@ const DrawingsLayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
   );
 };
 
-const UILayer: React.FC<{ sceneId: string }> = ({ sceneId }) => {
+const UILayer: React.FC<{ sceneId: string }> = ({ sceneId: _sceneId }) => {
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* UI overlays will be rendered here */}

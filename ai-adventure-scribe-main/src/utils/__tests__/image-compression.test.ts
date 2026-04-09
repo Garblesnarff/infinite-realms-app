@@ -18,7 +18,7 @@ describe('image-compression', () => {
     };
     mockCanvas = {
       getContext: vi.fn(() => mockCtx),
-      toBlob: vi.fn((callback, type, quality) => {
+      toBlob: vi.fn((callback, type, _quality) => {
         callback(new Blob(['mock-image-data'], { type }));
       }),
       width: 0,
@@ -113,7 +113,7 @@ describe('image-compression', () => {
 
       // Mock toBlob to return a large blob first, then a small one
       let callCount = 0;
-      mockCanvas.toBlob = vi.fn((callback, type, quality) => {
+      mockCanvas.toBlob = vi.fn((callback, type, _quality) => {
         callCount++;
         if (callCount === 1) {
           // First call, return large blob (2MB > 1MB limit)

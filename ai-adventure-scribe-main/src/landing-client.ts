@@ -73,7 +73,7 @@ function initWaitlistForms() {
         } else {
           throw new Error('Failed to join waitlist');
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handling
         if (messageEl) {
           messageEl.textContent = 'Something went wrong. Please try again.';

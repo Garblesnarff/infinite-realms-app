@@ -10,7 +10,7 @@
  * Ported from /server/src/routes/v1/admin.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
 
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';

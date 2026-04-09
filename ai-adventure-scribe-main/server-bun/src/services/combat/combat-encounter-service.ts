@@ -7,7 +7,7 @@
  * Extracted from CombatInitiativeService.
  */
 
-import { eq, and, sql, or } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 
 import {
   verifySessionAccess,

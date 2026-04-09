@@ -277,11 +277,9 @@ export function rayLineIntersection(
 
 import {
   polygonBoundingBoxesOverlap,
-  getPolygonBoundingBox,
   isPointInPolygon,
   simplifyPolygon,
   douglasPeucker,
-  perpendicularDistance,
   calculatePolygonArea,
   createCircularPolygon,
   createRectangularPolygon,

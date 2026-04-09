@@ -107,7 +107,7 @@ export function canBeGrappled(target: CombatParticipant): boolean {
 /**
  * Check if grapple can be maintained
  */
-export function canMaintainGrapple(grappler: CombatParticipant, grappledTargetId: string): boolean {
+export function canMaintainGrapple(grappler: CombatParticipant, _grappledTargetId: string): boolean {
   // Must not be incapacitated
   const incapacitatingConditions = ['stunned', 'paralyzed', 'unconscious', 'petrified'];
   const isIncapacitated = grappler.conditions.some((c) =>

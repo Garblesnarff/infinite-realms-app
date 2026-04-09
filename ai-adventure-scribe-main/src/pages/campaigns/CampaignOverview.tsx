@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { isMultiplayerInvitesEnabled } from '@/config/featureFlags';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';

@@ -201,8 +201,8 @@ export function calculateTwoWeaponAttacks(participant: CombatParticipant): {
   totalAttacks: number;
 } {
   const weapons = getEquippedWeapons(participant);
-  const mainWeapon = weapons.mainHand;
-  const offHandWeapon = weapons.offHand;
+  const _mainWeapon = weapons.mainHand;
+  const _offHandWeapon = weapons.offHand;
 
   let mainHandAttacks = 1; // Base action
   let offHandAttacks = 0;

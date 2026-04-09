@@ -53,7 +53,7 @@ const CharacterContext = createContext<{
  */
 export function CharacterProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(characterReducer, initialState);
-  const { toast } = useToast();
+  const { toast: _toast } = useToast();
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers
   const value = useMemo(

@@ -13,8 +13,7 @@ import type {
   HazardManager,
 } from '@/types/environmentalHazards';
 
-import { rollDice, rollSavingThrow, calculateDamage } from '@/utils/diceUtils';
-import { applyExhaustion } from '@/utils/exhaustionUtils';
+import { rollDice, rollSavingThrow } from '@/utils/diceUtils';
 
 /**
  * Detect an environmental hazard

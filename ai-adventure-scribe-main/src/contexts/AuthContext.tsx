@@ -339,13 +339,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id, loading, fetchUserPlan]);
 
   // WorkOS uses hosted UI - these functions redirect to WorkOS
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (_email: string, _password: string) => {
     const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (_email: string, _password: string) => {
     const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };

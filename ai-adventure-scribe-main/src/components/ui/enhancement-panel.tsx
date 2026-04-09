@@ -20,7 +20,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  EnhancementPackage,
   checkOptionAvailability,
   CHARACTER_ENHANCEMENTS,
   CAMPAIGN_ENHANCEMENTS,

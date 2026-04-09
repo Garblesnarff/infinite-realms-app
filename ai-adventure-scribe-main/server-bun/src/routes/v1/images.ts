@@ -143,7 +143,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         return { error: authError || 'Unauthorized' };
       }
 
-      const { prompt, referenceImages, model, quality } = body || {};
+      const { prompt, referenceImages, model, quality: _quality } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;

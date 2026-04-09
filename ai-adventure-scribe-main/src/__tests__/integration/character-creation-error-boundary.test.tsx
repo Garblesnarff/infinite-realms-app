@@ -53,7 +53,7 @@ const queryClient = new QueryClient({
 });
 
 // Component that throws an error for testing
-const ErrorThrowingComponent = () => {
+const _ErrorThrowingComponent = () => {
   throw new Error('Test error in character creation');
 };
 
@@ -97,7 +97,7 @@ describe('Character Creation ErrorBoundary Protection', () => {
 
     // Mock CharacterContext to throw error
     vi.mock('@/contexts/CharacterContext', () => ({
-      CharacterProvider: ({ children }: { children: React.ReactNode }) => {
+      CharacterProvider: ({ children: _children }: { children: React.ReactNode }) => {
         throw new Error('Test error in CharacterContext');
       },
       useCharacter: () => {

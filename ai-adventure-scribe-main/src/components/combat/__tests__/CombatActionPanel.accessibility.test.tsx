@@ -1,10 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import { useId } from 'react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { render } from '@testing-library/react';
+import { vi, describe, it } from 'vitest';
 
 import CombatActionPanel from '../CombatActionPanel';
-
-import { CombatContext } from '@/contexts/CombatContext';
 
 // Mock the context
 const mockState = {

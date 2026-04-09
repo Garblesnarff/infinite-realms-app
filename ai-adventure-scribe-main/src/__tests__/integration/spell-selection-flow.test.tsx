@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -370,7 +370,7 @@ describe('Spell Selection Integration Tests', () => {
   let mockWizard: CharacterClass;
   let mockFighter: CharacterClass;
   let mockRace: CharacterRace;
-  let mockHighElfSubrace: Subrace;
+  let _mockHighElfSubrace: Subrace;
 
   beforeEach(() => {
     // Mock character classes
@@ -419,7 +419,7 @@ describe('Spell Selection Integration Tests', () => {
       languages: ['Common'],
     };
 
-    mockHighElfSubrace = {
+    _mockHighElfSubrace = {
       id: 'high-elf',
       name: 'High Elf',
       description: 'Elves with magical heritage',

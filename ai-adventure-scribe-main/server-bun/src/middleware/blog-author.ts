@@ -89,7 +89,7 @@ export const requireBlogAuthor = new Elysia({ name: 'require-blog-author' })
       }
 
       return { blogRole: role, blogError: null };
-    } catch (err) {
+    } catch (_err) {
       set.status = 500;
       return {
         blogRole: null as BlogRole | null,
@@ -97,7 +97,7 @@ export const requireBlogAuthor = new Elysia({ name: 'require-blog-author' })
       };
     }
   })
-  .onBeforeHandle(({ blogError, set }) => {
+  .onBeforeHandle(({ blogError, set: _set }) => {
     if (blogError) {
       return blogError;
     }

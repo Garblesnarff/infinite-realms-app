@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
 
@@ -43,7 +43,7 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
     isProcessing,
     volume,
     isMuted,
-    isVoiceEnabled,
+    isVoiceEnabled: _isVoiceEnabled,
     speakAISegments,
     speakPlainText,
     pausePlayback,

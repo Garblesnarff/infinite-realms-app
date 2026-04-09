@@ -20,8 +20,7 @@ import type {
 import { SceneCreationWizard } from '@/components/scenes/SceneCreationWizard';
 import { SceneManager } from '@/components/scenes/SceneManager';
 import {
-  SceneTemplateLibrary,
-  BUILT_IN_TEMPLATES
+  SceneTemplateLibrary
 } from '@/components/scenes/SceneTemplateLibrary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

@@ -43,7 +43,7 @@ vi.mock('@/services/spellApi', () => {
 describe('spell-validation async/multiclass utilities', () => {
   let wizard: CharacterClass;
   let fighter: CharacterClass;
-  let warlock: CharacterClass;
+  let _warlock: CharacterClass;
   let human: CharacterRace;
   let tiefling: Subrace;
 
@@ -81,7 +81,7 @@ describe('spell-validation async/multiclass utilities', () => {
       armorProficiencies: [],
       weaponProficiencies: [],
     } as any;
-    warlock = {
+    _warlock = {
       id: 'warlock',
       name: 'Warlock',
       description: 'Pact',

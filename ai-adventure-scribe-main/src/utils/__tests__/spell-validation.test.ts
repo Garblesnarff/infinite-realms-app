@@ -331,7 +331,7 @@ describe('Spell Validation System', () => {
 
   describe('validateSpellSelection', () => {
     let wizardCharacter: Character;
-    let clericCharacter: Character;
+    let _clericCharacter: Character;
     let fighterCharacter: Character;
     let highElfWizard: Character;
 
@@ -352,7 +352,7 @@ describe('Spell Validation System', () => {
         },
       };
 
-      clericCharacter = {
+      _clericCharacter = {
         ...wizardCharacter,
         class: mockCleric,
       };
@@ -431,7 +431,7 @@ describe('Spell Validation System', () => {
       });
 
       it('should reject too many spells known', () => {
-        const result = validateSpellSelection(
+        const _result = validateSpellSelection(
           wizardCharacter,
           ['mage-hand', 'prestidigitation', 'light'],
           Array(7).fill('magic-missile'), // 7 instead of 6, but this would be caught by unique validation

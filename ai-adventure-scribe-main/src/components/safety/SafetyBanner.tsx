@@ -1,4 +1,4 @@
-import { AlertTriangle, PauseCircle, PlayCircle, Shield, Info } from 'lucide-react';
+import { AlertTriangle, PauseCircle, Shield, Info } from 'lucide-react';
 import React from 'react';
 
 import { Card } from '../ui/card';

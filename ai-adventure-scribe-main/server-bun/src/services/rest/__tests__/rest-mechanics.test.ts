@@ -4,7 +4,7 @@
  * Tests the pure D&D 5E rest mechanics.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 import { RestMechanics } from '../rest-mechanics';
 

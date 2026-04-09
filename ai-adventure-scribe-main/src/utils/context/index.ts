@@ -3,7 +3,6 @@ import { buildCharacterContext } from './characterContext';
 import { buildMemoryContext } from './memoryContext';
 
 import logger from '@/lib/logger';
-import { Campaign } from '@/types/campaign';
 
 export { buildCampaignContext } from './campaignContext';
 export { buildCharacterContext } from './characterContext';

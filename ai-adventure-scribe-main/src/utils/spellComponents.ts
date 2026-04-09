@@ -6,7 +6,6 @@
 
 import type { Spell, Character } from '@/types/character';
 
-import { CombatParticipant } from '@/types/combat';
 
 /**
  * Check if a character has the required components for a spell
@@ -125,7 +124,7 @@ export function getSpellPreparationLimit(character: Character): number {
 export function validateSpellCast(
   character: Character,
   spell: Spell,
-  spellSlotLevel?: number,
+  _spellSlotLevel?: number,
 ): {
   canCast: boolean;
   reasons: string[];

@@ -200,7 +200,7 @@ export function BattleCanvas({
  * Logs FPS and performance warnings
  */
 function PerformanceMonitor() {
-  const [fps, setFps] = React.useState(60);
+  const [_fps, setFps] = React.useState(60);
   const lastTime = React.useRef(performance.now());
   const frames = React.useRef(0);
 

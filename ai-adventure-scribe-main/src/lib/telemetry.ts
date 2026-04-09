@@ -200,7 +200,7 @@ export function trackPageLifecycle(sessionId?: string): () => void {
     }
   };
 
-  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  const handleBeforeUnload = (_e: BeforeUnloadEvent) => {
     logger.warn('🚪 Page is unloading (beforeunload)', {
       reason: 'user_closing_tab_or_navigating',
       sessionId,

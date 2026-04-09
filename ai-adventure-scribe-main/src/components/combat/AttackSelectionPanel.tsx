@@ -14,15 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Weapon } from '@/types/combat';
 import {
-  getWeaponAttackBonus,
-  getWeaponDamageBonus,
   rollAttack,
   checkHit,
   calculateAttackDamage,
 } from '@/utils/attackUtils';
-import { rollDice } from '@/utils/diceUtils';
 
 // ===========================
 // Component Props
@@ -262,7 +258,7 @@ const AttackSelectionPanel: React.FC<AttackSelectionPanelProps> = ({
                   </div>
                   {weapon.properties && Object.keys(weapon.properties).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {Object.entries(weapon.properties).map(([key, value]) => (
+                      {Object.entries(weapon.properties).map(([key, _value]) => (
                         <Badge key={key} variant="secondary" className="text-xs py-0 px-1">
                           {key}
                         </Badge>

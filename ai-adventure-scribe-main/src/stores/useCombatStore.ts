@@ -14,7 +14,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-import type { Equipment } from '@/data/equipmentOptions';
 import type {
   CombatState,
   CombatEncounter,
@@ -24,7 +23,6 @@ import type {
   ActionType,
 } from '@/types/combat';
 
-import { Condition, ConditionName, DamageType } from '@/types/combat';
 
 // ===========================
 // Store Interface

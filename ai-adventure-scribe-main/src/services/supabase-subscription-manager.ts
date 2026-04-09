@@ -486,7 +486,7 @@ class SupabaseSubscriptionManager {
   cleanup(): void {
     logger.info('Cleaning up all Supabase subscriptions');
 
-    this.subscriptions.forEach((subscription, tableName) => {
+    this.subscriptions.forEach((subscription, _tableName) => {
       if (subscription.channel) {
         supabase.removeChannel(subscription.channel);
       }

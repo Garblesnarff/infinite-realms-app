@@ -88,7 +88,6 @@ export function getSpellsByIds(spellIds: string[], createFallback: boolean = tru
       .filter((spell): spell is Spell => spell !== null);
 
     const foundCount = spells.length;
-    const requestedCount = spellIds.length;
     const validIdCount = spellIds.filter((id) => id && typeof id === 'string').length;
 
     if (foundCount < validIdCount) {

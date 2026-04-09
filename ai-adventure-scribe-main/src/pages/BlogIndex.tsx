@@ -1,4 +1,4 @@
-import { Calendar, Clock, User, Home } from 'lucide-react';
+import { Home } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
 

@@ -25,7 +25,6 @@ import {
   tokens,
   characters,
   type MeasurementTemplate,
-  type Token,
 } from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 

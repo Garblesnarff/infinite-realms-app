@@ -220,8 +220,8 @@ export function applyGreatWeaponFighting(
  */
 export function canUseProtection(
   participant: CombatParticipant,
-  ally: CombatParticipant,
-  attacker: CombatParticipant,
+  _ally: CombatParticipant,
+  _attacker: CombatParticipant,
 ): {
   canUse: boolean;
   reason?: string;

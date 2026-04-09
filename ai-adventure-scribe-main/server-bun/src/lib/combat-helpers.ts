@@ -8,7 +8,6 @@
 
 import { supabaseService } from './supabase.js';
 import { CombatEncounterService } from '../services/combat/combat-encounter-service.js';
-import { CombatInitiativeService } from '../services/combat-initiative-service.js';
 
 /**
  * Result of verifying encounter ownership

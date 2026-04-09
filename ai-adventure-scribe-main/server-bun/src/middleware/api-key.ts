@@ -90,7 +90,7 @@ export const requireApiKey = new Elysia({ name: 'require-api-key' })
 
     return { apiKey, error: null };
   })
-  .onBeforeHandle(({ apiKey, error, set }) => {
+  .onBeforeHandle(({ apiKey: _apiKey, error, set }) => {
     if (error) {
       set.status = 401;
       return error;

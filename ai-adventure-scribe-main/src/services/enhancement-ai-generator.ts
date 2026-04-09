@@ -10,7 +10,6 @@ import type { Character } from '@/types/character';
 import type { OptionSelection } from '@/types/enhancement-options';
 
 import logger from '@/lib/logger';
-import { EnhancementOption } from '@/types/enhancement-options';
 
 interface AIGenerationContext {
   character?: Character;
@@ -229,7 +228,7 @@ Provide 3-5 specific enhancement suggestions, each on a new line. Focus on:
    */
   private async callGeminiAPI(
     prompt: string,
-    options: { temperature: number; maxTokens: number },
+    _options: { temperature: number; maxTokens: number },
   ): Promise<string> {
     // For now, return mock responses based on prompt content
     // In production, this would make actual API calls to Google Gemini
@@ -277,7 +276,7 @@ Provide 3-5 specific enhancement suggestions, each on a new line. Focus on:
   /**
    * Post-process and clean up AI response
    */
-  private postProcessResponse(response: string, optionId: string): string {
+  private postProcessResponse(response: string, _optionId: string): string {
     // Clean up the response
     let cleaned = response.trim();
 

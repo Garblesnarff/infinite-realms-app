@@ -72,7 +72,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
   const nameInputId = useId();
 
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [_selectedFile, setSelectedFile] = useState<File | null>(null);
   const [characterData, setCharacterData] = useState<CharacterPreview | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importName, setImportName] = useState('');
@@ -127,7 +127,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 
       setValidationError(null);
       return parsed as CharacterPreview;
-    } catch (error) {
+    } catch (_error) {
       setValidationError('Invalid JSON file format');
       return null;
     }

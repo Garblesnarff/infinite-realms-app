@@ -6,10 +6,10 @@ import { useSessionInitialization } from '../game-session/use-session-initializa
 
 const {
   limitMock,
-  orderMock,
-  eqCharacterMock,
-  eqCampaignMock,
-  selectMock,
+  orderMock: _orderMock,
+  eqCharacterMock: _eqCharacterMock,
+  eqCampaignMock: _eqCampaignMock,
+  selectMock: _selectMock,
   fromMock,
 } = vi.hoisted(() => {
   const limit = vi.fn();

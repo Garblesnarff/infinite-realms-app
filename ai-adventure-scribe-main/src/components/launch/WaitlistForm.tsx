@@ -103,7 +103,7 @@ export const WaitlistForm: React.FC<WaitlistFormProps> = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      const _result = await response.json();
 
       setStatus('success');
 

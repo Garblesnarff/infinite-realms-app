@@ -19,11 +19,8 @@ import {
 } from './combat/reactions/reactionUtils';
 import {
   checkShieldSpellOpportunities,
-  canCastShieldSpell,
   checkAbsorbElementsOpportunities,
-  canCastAbsorbElements,
   checkHellishRebukeOpportunities,
-  canCastHellishRebuke,
 } from './combat/reactions/spellReactions';
 
 import type {
@@ -62,7 +59,7 @@ export function checkOpportunityAttacks(
   movingParticipant: CombatParticipant,
   encounter: CombatEncounter,
   fromPosition: string,
-  toPosition: string,
+  _toPosition: string,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
 
@@ -100,7 +97,7 @@ export function checkOpportunityAttacks(
 export function checkCounterspellOpportunities(
   caster: CombatParticipant,
   encounter: CombatEncounter,
-  spellLevel: number,
+  _spellLevel: number,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
 
@@ -336,7 +333,7 @@ export function checkMovementOpportunityAttacks(
   movingParticipant: CombatParticipant,
   encounter: CombatEncounter,
   fromPosition: string,
-  toPosition: string,
+  _toPosition: string,
 ): ReactionOpportunity[] {
   const opportunities: ReactionOpportunity[] = [];
 

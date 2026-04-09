@@ -7,7 +7,7 @@
  */
 
 import type { Equipment } from '@/data/equipmentOptions';
-import type { CombatParticipant, CombatAction, DamageType, DiceRoll } from '@/types/combat';
+import type { CombatParticipant, DamageType, DiceRoll } from '@/types/combat';
 import type { AttackResolution, DamageCalculation, FullAttackResult } from '@/utils/combat/attack-types';
 
 import { calculateProficiencyBonus } from '@/utils/character-calculations';

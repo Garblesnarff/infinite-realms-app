@@ -1,8 +1,5 @@
-import { Wand2, Sparkles, Crown } from 'lucide-react';
 import React from 'react';
 
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { useAutosave } from '@/hooks/useAutosave';
 
 type Props = {
@@ -17,12 +14,12 @@ type Props = {
  * Matches the character creation wizard styling
  */
 const WizardHeader: React.FC<Props> = ({
-  step = 1,
-  totalSteps = 4,
+  _step = 1,
+  _totalSteps = 4,
   autosaveKey = 'campaign-wizard-draft',
   formSnapshot = {},
 }) => {
-  const { status } = useAutosave(autosaveKey, formSnapshot, { delay: 900 });
+  const { status: _status } = useAutosave(autosaveKey, formSnapshot, { delay: 900 });
 
   return (
     <div className="text-center mb-8">

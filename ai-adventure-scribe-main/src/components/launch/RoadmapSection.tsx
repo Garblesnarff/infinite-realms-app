@@ -5,7 +5,7 @@
  * Features: Visual roadmap, status indicators, feature lists per phase
  */
 
-import { CheckCircle, Clock, ArrowRight, Calendar } from 'lucide-react';
+import { CheckCircle, Clock, Calendar } from 'lucide-react';
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';

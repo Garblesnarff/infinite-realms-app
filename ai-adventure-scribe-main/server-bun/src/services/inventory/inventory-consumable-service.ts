@@ -23,7 +23,6 @@ import type {
   UseConsumableInput,
   UseConsumableResult,
   GetUsageHistoryInput,
-  ItemType,
 } from '../../types/inventory.js';
 
 export class InventoryConsumableService {

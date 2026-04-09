@@ -1,7 +1,6 @@
 import { Sword, Shield, Heart, Brain, Users, Eye, Sparkles, Crown, Star } from 'lucide-react';
 import React from 'react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';

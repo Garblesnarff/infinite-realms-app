@@ -11,7 +11,6 @@ import {
   Eye,
   EyeOff,
   Heart,
-  Ear,
   EarOff,
   Sparkles,
   Zap,

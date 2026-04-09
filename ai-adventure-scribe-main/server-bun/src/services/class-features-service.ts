@@ -15,7 +15,6 @@ import { db } from '../../../db/client';
 import {
   classFeaturesLibrary,
   characterFeatures,
-  characterSubclasses,
   featureUsageLog,
   characters,
   type ClassFeatureLibrary,
@@ -23,7 +22,7 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index';
-import { NotFoundError, ConflictError, BusinessLogicError } from '../lib/errors.js';
+import { NotFoundError, ConflictError } from '../lib/errors.js';
 
 import type {
   GrantFeatureInput,

@@ -459,7 +459,7 @@ describe('Spell Validation Performance Tests', () => {
 
   describe('Optimization Verification', () => {
     it('should benefit from spellcasting info caching', () => {
-      const wizardCharacter = createMockCharacter('Cache Test Wizard', mockWizard, mockHuman);
+      const _wizardCharacter = createMockCharacter('Cache Test Wizard', mockWizard, mockHuman);
 
       // First call should establish any caching
       const startTime1 = performance.now();

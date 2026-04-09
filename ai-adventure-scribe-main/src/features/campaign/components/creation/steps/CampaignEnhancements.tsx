@@ -12,15 +12,11 @@ import type { OptionSelection } from '@/types/enhancement-options';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EnhancementPanel } from '@/components/ui/enhancement-panel';
-import { Separator } from '@/components/ui/separator';
 import { useCampaign } from '@/contexts/CampaignContext';
 import {
-  EnhancementOption,
   CAMPAIGN_ENHANCEMENTS,
-  checkOptionAvailability,
 } from '@/types/enhancement-options';
 
 interface CampaignEnhancementsProps {
@@ -30,7 +26,7 @@ interface CampaignEnhancementsProps {
 export default function CampaignEnhancements({ isOptional = true }: CampaignEnhancementsProps) {
   const { state, dispatch } = useCampaign();
   const [selections, setSelections] = React.useState<OptionSelection[]>([]);
-  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [_isGenerating, setIsGenerating] = React.useState(false);
 
   // Load existing selections from campaign data
   React.useEffect(() => {

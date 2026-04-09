@@ -4,9 +4,7 @@ import type { Character } from '@/types/character';
 
 import {
   mockWizard,
-  mockCleric,
   mockSorcerer,
-  mockWarlock,
   mockPaladin,
   mockRanger,
   mockFighter,

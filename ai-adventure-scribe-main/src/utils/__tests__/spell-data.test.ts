@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
 import { cantrips, firstLevelSpells, allSpells } from '@/data/spellOptions';
-import { Spell } from '@/types/character';
 
 /**
  * Spell Data Integrity Tests

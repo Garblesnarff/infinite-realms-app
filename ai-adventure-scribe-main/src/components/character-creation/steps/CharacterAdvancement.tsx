@@ -1,14 +1,13 @@
 import {
   TrendingUp,
   Star,
-  Heart,
   Award,
   ChevronRight,
   Plus,
   AlertCircle,
   Trophy,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 import FeatSelection from './FeatSelection';
 import HitPointsSelection from './HitPointsSelection';
@@ -20,12 +19,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import {
-  getLevelFromExperience,
   getExperienceForLevel,
   getProficiencyBonus,
   canMulticlass,
@@ -42,10 +38,10 @@ const CharacterAdvancement: React.FC = () => {
   const { toast } = useToast();
   const character = state.character;
 
-  const [selectedAdvancement, setSelectedAdvancement] = useState<'level-up' | 'multiclass'>(
+  const [_selectedAdvancement, _setSelectedAdvancement] = useState<'level-up' | 'multiclass'>(
     'level-up',
   );
-  const [selectedMulticlass, setSelectedMulticlass] = useState<string>('');
+  const [_selectedMulticlass, _setSelectedMulticlass] = useState<string>('');
   const [showFeatureSelection, setShowFeatureSelection] = useState(false);
   const [showHitPointsSelection, setShowHitPointsSelection] = useState(false);
 
@@ -59,7 +55,7 @@ const CharacterAdvancement: React.FC = () => {
   const canLevelUp = currentExperience >= experienceNeeded && currentLevel < 20;
 
   // Calculate character's total level for multiclassing
-  const totalLevel = currentLevel; // In full implementation, would sum all class levels
+  const _totalLevel = currentLevel; // In full implementation, would sum all class levels
 
   const newClassFeatures = currentClass ? getClassFeaturesForLevel(currentClass.id, nextLevel) : [];
   const hasAbilityScoreImprovement = newClassFeatures.some(

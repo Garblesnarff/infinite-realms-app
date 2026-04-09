@@ -2,32 +2,11 @@ import { localSpellService } from './localSpellService';
 
 import type { Spell } from '@/types/character';
 
-import { supabase } from '@/integrations/supabase/client';
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
-interface ApiSpell {
-  id: string;
-  name: string;
-  level: number;
-  school: string;
-  ritual: boolean;
-  concentration: boolean;
-  casting_time: string;
-  range_text: string;
-  duration: string;
-  description: string;
-  components_verbal: boolean;
-  components_somatic: boolean;
-  components_material: boolean;
-  material_components?: string;
-  attack_save?: string;
-  damage_effect?: string;
-  available_classes?: string[];
-  source_feature?: string;
-}
 
 interface SpellProgression {
   character_level: number;

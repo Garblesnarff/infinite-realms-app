@@ -170,7 +170,7 @@ export function IndexedDBCleanupCompact() {
     try {
       const deletedCount = await manualCleanup();
       toast.success(`Removed ${deletedCount} old messages`);
-    } catch (err) {
+    } catch (_err) {
       toast.error('Cleanup failed');
     }
   };

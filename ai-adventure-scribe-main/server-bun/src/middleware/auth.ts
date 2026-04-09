@@ -161,7 +161,7 @@ export const requireAuth = new Elysia({ name: 'require-auth' })
       };
     }
   })
-  .onBeforeHandle(({ user, error, set }) => {
+  .onBeforeHandle(({ user: _user, error, set }) => {
     // Short-circuit if auth failed
     if (error) {
       set.status = 401;

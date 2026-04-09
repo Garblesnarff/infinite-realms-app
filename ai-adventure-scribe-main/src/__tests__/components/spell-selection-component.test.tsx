@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -10,8 +10,6 @@ import {
   mockCleric,
   mockFighter,
   mockHuman,
-  mockHighElfSubrace,
-  mockTieflingSubrace,
   createMockCharacter,
 } from '@/__tests__/helpers/spell-test-helpers';
 
@@ -88,7 +86,7 @@ const SpellSelectionComponent: React.FC<{ character: Character }> = ({ character
           }
           setIsLoading(false);
         }, 0);
-      } catch (error) {
+      } catch (_error) {
         setErrors(['Failed to load spells']);
         setIsLoading(false);
       }
@@ -123,7 +121,7 @@ const SpellSelectionComponent: React.FC<{ character: Character }> = ({ character
         }
       });
       setErrors([]);
-    } catch (error) {
+    } catch (_error) {
       setErrors(['Failed to validate spell']);
     }
   };
@@ -154,7 +152,7 @@ const SpellSelectionComponent: React.FC<{ character: Character }> = ({ character
         }
       });
       setErrors([]);
-    } catch (error) {
+    } catch (_error) {
       setErrors(['Failed to validate spell']);
     }
   };
@@ -304,7 +302,7 @@ describe('Spell Selection Component Tests', () => {
 
   describe('Spell Selection Validation', () => {
     it('should prevent wizards from selecting cleric spells through validation', async () => {
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       const wizardCharacter = createMockCharacter('Test Wizard', mockWizard, mockHuman);
 
       // Mock validation to reject cleric spells for wizard
@@ -412,7 +410,7 @@ describe('Spell Selection Component Tests', () => {
       const wizardCharacter = createMockCharacter('Test Wizard', mockWizard, mockHuman);
 
       // Mock validation to reject certain spells
-      mockSpellService.validateSpellForClass.mockImplementation(async (spellId, className) => {
+      mockSpellService.validateSpellForClass.mockImplementation(async (spellId, _className) => {
         if (spellId === 'mage-hand') {
           return { valid: false, error: 'Test validation error' };
         }
@@ -440,7 +438,7 @@ describe('Spell Selection Component Tests', () => {
 
       // Mock validation to initially fail, then succeed
       let shouldFail = true;
-      mockSpellService.validateSpellForClass.mockImplementation(async (spellId, className) => {
+      mockSpellService.validateSpellForClass.mockImplementation(async (spellId, _className) => {
         if (shouldFail && spellId === 'mage-hand') {
           return { valid: false, error: 'Test validation error' };
         }

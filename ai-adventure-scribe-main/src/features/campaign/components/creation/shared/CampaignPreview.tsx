@@ -1,12 +1,9 @@
 import {
   Map,
-  Users,
   Calendar,
   Settings,
   Sparkles,
-  Crown,
   Star,
-  Wand2,
   BookOpen,
 } from 'lucide-react';
 import React from 'react';

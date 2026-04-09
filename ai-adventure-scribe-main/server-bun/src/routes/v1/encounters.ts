@@ -8,7 +8,7 @@
  * Ported from /server/src/routes/v1/encounters.ts
  */
 
-import { Elysia, t } from 'elysia';
+import { Elysia } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';

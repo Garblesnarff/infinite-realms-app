@@ -208,7 +208,7 @@ function isTechnicalIdentifier(word: string): boolean {
  * @param context - Optional context for genre-aware scoring
  * @returns Score (higher is better, can be negative)
  */
-function scoreKeyword(word: string, context?: { genre?: string }): number {
+function scoreKeyword(word: string, _context?: { genre?: string }): number {
   let score = 0;
 
   // +3 for fantasy/RPG terms (dragon, wizard, etc.)

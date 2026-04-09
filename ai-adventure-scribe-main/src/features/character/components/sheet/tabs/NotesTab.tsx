@@ -1,4 +1,4 @@
-import { FileText, Heart, Brain, Link, Frown } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import React, { useState } from 'react';
 
 import PersonalityManager from '../PersonalityManager';
@@ -8,10 +8,7 @@ import EnhancementDetails from './components/EnhancementDetails';
 
 import type { Character } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 

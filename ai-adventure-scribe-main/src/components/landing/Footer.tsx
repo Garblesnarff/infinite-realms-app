@@ -11,7 +11,7 @@
  * - Brand tagline (reinforces identity)
  */
 
-import { Mail, Twitter, MessageCircle, Heart } from 'lucide-react';
+import { Twitter, MessageCircle, Heart } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';

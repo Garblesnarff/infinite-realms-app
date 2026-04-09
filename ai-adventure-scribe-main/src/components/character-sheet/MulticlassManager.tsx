@@ -1,8 +1,6 @@
 import {
   Users,
-  Star,
   Shield,
-  Sword,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -16,7 +14,6 @@ import type { Character, CharacterClass } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import {
   getProficiencyBonus,
@@ -52,7 +49,7 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
   const {
     isProcessing,
     validationResult,
-    validateNewClass,
+    validateNewClass: _validateNewClass,
     addNewClass,
     levelUpSpecificClass,
     getProficiencies,

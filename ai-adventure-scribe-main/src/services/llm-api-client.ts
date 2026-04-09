@@ -1,4 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 

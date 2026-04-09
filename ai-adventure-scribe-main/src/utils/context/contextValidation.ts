@@ -2,7 +2,6 @@ import type { GameContext } from '@/types/game';
 import type { Memory } from '@/types/memory';
 
 import logger from '@/lib/logger';
-import { Campaign } from '@/types/campaign';
 
 /**
  * Validates campaign setting data

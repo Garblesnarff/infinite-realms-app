@@ -43,7 +43,7 @@ export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
       }
 
       return { blogRole: role, blogAdminError: null };
-    } catch (err) {
+    } catch (_err) {
       set.status = 500;
       return {
         blogRole: null as BlogRole | null,
@@ -51,7 +51,7 @@ export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
       };
     }
   })
-  .onBeforeHandle(({ blogAdminError, set }) => {
+  .onBeforeHandle(({ blogAdminError, set: _set }) => {
     if (blogAdminError) {
       return blogAdminError;
     }

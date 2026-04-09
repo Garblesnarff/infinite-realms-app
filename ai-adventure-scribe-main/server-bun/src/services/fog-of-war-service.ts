@@ -10,7 +10,7 @@
 /* eslint-disable max-lines */
 import { randomUUID } from 'crypto';
 
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, fogOfWar, scenes } from '../../../db/schema/index';

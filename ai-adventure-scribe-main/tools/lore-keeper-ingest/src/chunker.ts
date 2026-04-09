@@ -5,7 +5,7 @@
  * Each chunk should be self-contained and answer a specific question.
  */
 
-import type { CampaignChunk, CampaignRule, ChunkType, CampaignFiles } from './types.js';
+import type { CampaignChunk, CampaignRule, CampaignFiles } from './types.js';
 
 const MAX_CHUNK_SIZE = 2000; // Max characters per chunk
 
@@ -239,7 +239,7 @@ function extractNPCs(campaignId: string, content: string): CampaignChunk[] {
 /**
  * Determine NPC tier based on content
  */
-function determineTier(block: string, index: number): 'npc_tier1' | 'npc_tier2' | 'npc_tier3' {
+function determineTier(block: string, _index: number): 'npc_tier1' | 'npc_tier2' | 'npc_tier3' {
   // Tier 1 indicators: extensive description, personality, voice, goals, secrets
   const tier1Indicators = ['personality', 'voice', 'goal', 'secret', 'motivation'];
   const indicatorCount = tier1Indicators.filter(i =>
@@ -556,7 +556,7 @@ function extractEncounters(campaignId: string, content: string): CampaignChunk[]
     const monsterMatches = encounterSection.matchAll(monsterPattern);
 
     for (const match of monsterMatches) {
-      const [, number, name, details] = match;
+      const [, _number, name, details] = match;
       if (!chunks.some(c => c.entityName === name.trim())) {
         chunks.push({
           campaignId,

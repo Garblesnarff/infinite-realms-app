@@ -7,7 +7,7 @@ import type { SpellcastingInfo } from '@/utils/spell-validation/types';
  */
 export function getSpellcastingInfo(
   characterClass: CharacterClass,
-  level: number = 1,
+  _level: number = 1,
 ): SpellcastingInfo | null {
   if (!characterClass.spellcasting) {
     return null;

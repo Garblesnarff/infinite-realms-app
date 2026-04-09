@@ -216,7 +216,7 @@ async function main() {
   }
 
   // Get all campaign folders
-  const campaigns = assets?.filter((a) => a.id === null) || []; // folders have null id
+  const _campaigns = assets?.filter((a) => a.id === null) || []; // folders have null id
 
   let linked = 0;
   let skipped = 0;
