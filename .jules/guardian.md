@@ -187,3 +187,7 @@
 ## 2025-02-14 - [Condition Definitions Coverage]
 **Learning:** Found that `condition-definitions.ts` was completely untested. Testing revealed that the `unconscious` condition implements a catch-all `autoFail: true` for any `rollType` that isn't exactly `defense`, effectively covering actions, saves, and ability checks in one branch.
 **Action:** When testing conditions, ensure to verify all relevant `rollType` values (attack, defense, saves, ability_check) as many conditions have specialized logic for each. Always add new tests to both `include` and `coverage.include` in `vitest.config.ts`.
+
+## 2026-03-24 - [Pathfinding Mode-Awareness & Regex Branch Coverage]
+**Learning:** Found that `calculatePath` in `src/utils/movement-navigation.ts` was not mode-aware, causing flyers to path around walls instead of through them. Also identified uncovered branches in `regex-parser.ts` related to DC context detection in simple skill patterns and non-standard formula fallbacks.
+**Action:** When implementing pathfinding, always ensure the search loop uses the same capability-based mode detection as the reachable area calculation. Use inclusive checks for DC context windows (`text.slice(match.index)`) to ensure nearby DC mentions are captured for skill checks without explicit parentheses.

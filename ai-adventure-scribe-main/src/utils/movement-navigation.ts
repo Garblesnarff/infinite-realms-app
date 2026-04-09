@@ -6,7 +6,6 @@
  * @module utils/movement-navigation
  */
 
-import type { Token } from '@/types/token';
 import {
   GRID_SIZE_FEET,
   getMovementCost,
@@ -17,6 +16,8 @@ import {
   type MovementMode,
   type MovementCapabilities,
 } from './movement-validation';
+
+import type { Token } from '@/types/token';
 
 // ===========================
 // Reachable Squares Calculation
@@ -144,6 +145,11 @@ export function calculatePath(
   gScore.set(`${from.x},${from.y}`, 0);
   fScore.set(`${from.x},${from.y}`, heuristic(from, to));
 
+  // Determine movement mode based on capabilities
+  const canFly = (capabilities?.flySpeed ?? 0) > 0;
+  const canSwim = (capabilities?.swimSpeed ?? 0) > 0;
+  const canClimb = (capabilities?.climbSpeed ?? 0) > 0;
+
   while (openSet.size > 0) {
     // Find node with lowest fScore
     let current: GridCoordinate | null = null;
@@ -184,13 +190,25 @@ export function calculatePath(
     for (const neighbor of neighbors) {
       const neighborKey = `${neighbor.x},${neighbor.y}`;
 
+      // Determine movement mode for this terrain
+      const terrainInfo = terrain?.get(neighborKey);
+      let mode: keyof MovementMode = 'walking';
+
+      if (canFly && terrainInfo?.type !== 'impassable') {
+        mode = 'flying';
+      } else if (terrainInfo?.type === 'water' && canSwim) {
+        mode = 'swimming';
+      } else if (terrainInfo?.type === 'climbing' && canClimb) {
+        mode = 'climbing';
+      }
+
       // Check if movement is blocked
-      if (isMovementBlocked(current, neighbor, walls)) {
+      if (isMovementBlocked(current, neighbor, walls, mode)) {
         continue;
       }
 
       // Calculate tentative gScore
-      const moveCost = getMovementCost(current, neighbor, terrain);
+      const moveCost = getMovementCost(current, neighbor, terrain, mode);
       const tentativeGScore = (gScore.get(currentKey) ?? Infinity) + moveCost;
 
       if (tentativeGScore < (gScore.get(neighborKey) ?? Infinity)) {
