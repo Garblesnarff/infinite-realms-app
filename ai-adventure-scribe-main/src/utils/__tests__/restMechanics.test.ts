@@ -75,7 +75,8 @@ describe('restMechanics', () => {
 
     it('should handle character with no class levels and no total level', () => {
       const character: any = {};
-      expect(calculateMaxHitDice(character)).toBe(0);
+      // Minimum 1 hit die per D&D rules (level defaults to 1, floor(1/2)=0, max(1,0)=1)
+      expect(calculateMaxHitDice(character)).toBe(1);
     });
   });
 
