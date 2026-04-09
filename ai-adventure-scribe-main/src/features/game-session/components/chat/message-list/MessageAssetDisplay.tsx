@@ -353,8 +353,8 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                 <DialogPrimitive.Close
                   className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
                   style={{ zIndex: Z_INDEX.POPOVER }}
-                  aria-label="Close"
-                  title="Close"
+                  aria-label={`Close ${expandedAsset.name} preview`}
+                  title={`Close ${expandedAsset.name} preview`}
                 >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>
@@ -414,8 +414,8 @@ export const MessageAssetDisplay: React.FC<MessageAssetDisplayProps> = ({
                 <DialogPrimitive.Close
                   className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition-colors"
                   style={{ zIndex: Z_INDEX.POPOVER }}
-                  aria-label="Close"
-                  title="Close"
+                  aria-label="Close generated scene preview"
+                  title="Close generated scene preview"
                 >
                   <X className="h-5 w-5" />
                 </DialogPrimitive.Close>

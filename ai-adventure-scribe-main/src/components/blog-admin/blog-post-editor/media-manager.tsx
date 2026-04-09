@@ -185,6 +185,7 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                       onClick={() => setSelectedAsset(asset)}
                       role="button"
                       tabIndex={0}
+                      aria-label={`Select ${asset.name}`}
                       aria-pressed={selectedAsset?.id === asset.id}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -210,8 +211,8 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                                 e.stopPropagation();
                                 handleSelectAsset(asset);
                               }}
-                              aria-label="Select image"
-                              title="Select image"
+                              aria-label={`Select ${asset.name}`}
+                              title={`Select ${asset.name}`}
                             >
                               <ExternalLink className="w-4 h-4" />
                             </Button>
@@ -223,8 +224,8 @@ export const MediaManager: React.FC<MediaManagerProps> = ({
                                 e.stopPropagation();
                                 setDeleteTarget(asset);
                               }}
-                              aria-label="Delete image"
-                              title="Delete image"
+                              aria-label={`Delete ${asset.name}`}
+                              title={`Delete ${asset.name}`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
