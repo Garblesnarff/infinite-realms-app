@@ -87,6 +87,20 @@ describe('character-calculations', () => {
       // We'll see if this test fails.
       expect(calculateHitPoints(veryFrailLevel2)).toBe(2);
     });
+
+    it('should handle level 5 character with extreme negative constitution', () => {
+      const veryFrailCharacter: Character = {
+        level: 5,
+        class: { name: 'Wizard', hitDie: 6 } as any,
+        abilityScores: {
+          constitution: { score: 1, modifier: -5, savingThrow: false },
+        } as any,
+      } as Character;
+      // Level 1: max(1, 6 - 5) = 1
+      // Level 2-5: 4 * max(1, 4 - 5) = 4 * 1 = 4
+      // Total: 1 + 4 = 5
+      expect(calculateHitPoints(veryFrailCharacter)).toBe(5);
+    });
   });
 
   describe('calculateArmorClass', () => {
@@ -125,13 +139,10 @@ describe('character-calculations', () => {
       const monkWithShield = {
         ...baseCharacter,
         class: { name: 'Monk' } as any,
-        equippedShield: 'Shield',
+        equippedShield: 'shield',
       };
       // Monk unarmored defense doesn't work with shields.
-      // Should be 10 + 2 (Dex) + 2 (Shield) = 14?
-      // Actually if they are not using unarmored defense, they use normal AC: 10 + Dex + Shield.
-      // 10 + 2 + 2 = 14.
-      // But the current code doesn't even know about shields.
+      // Should be 10 + 2 (Dex) + 2 (Shield) = 14.
       expect(calculateArmorClass(monkWithShield as Character)).toBe(14);
     });
 
@@ -139,10 +150,87 @@ describe('character-calculations', () => {
       const barbWithShield = {
         ...baseCharacter,
         class: { name: 'Barbarian' } as any,
-        equippedShield: 'Shield',
+        equippedShield: 'shield',
       };
       // 10 + 2 (Dex) + 3 (Con) + 2 (Shield) = 17
       expect(calculateArmorClass(barbWithShield as Character)).toBe(17);
+    });
+
+    it('should calculate AC correctly for Light Armor (Leather Armor)', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'leather-armor',
+        abilityScores: { dexterity: { modifier: 3 } } as any,
+      };
+      // Leather: 11 + 3 (Dex) = 14
+      expect(calculateArmorClass(char as Character)).toBe(14);
+    });
+
+    it('should calculate AC correctly for Medium Armor with Dex cap (Half Plate)', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'half-plate',
+        abilityScores: { dexterity: { modifier: 5 } } as any,
+      };
+      // Half Plate: 15 + min(5, 2) (Dex) = 17
+      expect(calculateArmorClass(char as Character)).toBe(17);
+    });
+
+    it('should calculate AC correctly for Heavy Armor (Plate Armor)', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'plate-armor',
+        abilityScores: { dexterity: { modifier: 5 } } as any,
+      };
+      // Plate: 18 + 0 (No Dex bonus) = 18
+      expect(calculateArmorClass(char as Character)).toBe(18);
+    });
+
+    it('should apply negative Dexterity modifier to Light/Medium armor', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'leather-armor',
+        abilityScores: { dexterity: { modifier: -2 } } as any,
+      };
+      // Leather: 11 - 2 (Dex) = 9
+      expect(calculateArmorClass(char as Character)).toBe(9);
+    });
+
+    it('should NOT apply negative Dexterity modifier to Heavy armor', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'plate-armor',
+        abilityScores: { dexterity: { modifier: -2 } } as any,
+      };
+      // Plate: 18 (Heavy armor ignores Dex)
+      expect(calculateArmorClass(char as Character)).toBe(18);
+    });
+
+    it('should apply shield bonus to armor AC', () => {
+      const char = {
+        ...baseCharacter,
+        equippedArmor: 'leather-armor',
+        equippedShield: 'shield',
+        abilityScores: { dexterity: { modifier: 2 } } as any,
+      };
+      // Leather: 11 + 2 (Dex) + 2 (Shield) = 15
+      expect(calculateArmorClass(char as Character)).toBe(15);
+    });
+
+    it('should ignore Unarmored Defense when wearing armor', () => {
+      const barbarianWithArmor = {
+        ...baseCharacter,
+        class: { name: 'Barbarian' } as any,
+        equippedArmor: 'leather-armor',
+        abilityScores: {
+          dexterity: { modifier: 2 },
+          constitution: { modifier: 3 },
+        } as any,
+      };
+      // Unarmored: 10 + 2 (Dex) + 3 (Con) = 15
+      // With Leather: 11 + 2 (Dex) = 13
+      // Should use Leather.
+      expect(calculateArmorClass(barbarianWithArmor as Character)).toBe(13);
     });
   });
 

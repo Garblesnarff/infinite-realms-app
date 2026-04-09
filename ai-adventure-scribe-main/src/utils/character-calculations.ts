@@ -10,6 +10,8 @@ import {
 
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
+import { allEquipment } from '@/data/equipmentOptions';
+
 
 /**
  * Comprehensive D&D 5e character calculations utility
@@ -94,6 +96,8 @@ export const calculateHitPoints = (character: Character): number => {
   const perSubsequentLevelHP = Math.max(1, Math.floor(hitDie / 2) + 1 + conMod);
   const subsequentLevelsHP = (level - 1) * perSubsequentLevelHP;
 
+  // D&D 5e rule: minimum 1 HP per level TOTAL (level * 1)
+  // Current implementation does Math.max(1, ...) for each level's contribution, which effectively ensures this.
   return firstLevelHP + subsequentLevelsHP;
 };
 
@@ -102,9 +106,15 @@ export const calculateHitPoints = (character: Character): number => {
  */
 export const calculateArmorClass = (character: Character): number => {
   const dexMod = character.abilityScores?.dexterity?.modifier || 0;
-  const hasShield = !!character.equippedShield;
-  const shieldBonus = hasShield ? 2 : 0;
-  const isUnarmored = !character.equippedArmor;
+  const equippedArmor = character.equippedArmor
+    ? allEquipment.find((e) => e.id === character.equippedArmor)
+    : null;
+  const equippedShield = character.equippedShield
+    ? allEquipment.find((e) => e.id === character.equippedShield)
+    : null;
+
+  const shieldBonus = equippedShield?.armorClass?.base || (character.equippedShield ? 2 : 0);
+  const isUnarmored = !equippedArmor;
 
   // Check if character has unarmored defense feature
   const hasUnarmoredDefense =
@@ -124,7 +134,7 @@ export const calculateArmorClass = (character: Character): number => {
       }
       case 'monk': {
         // Monk unarmored defense does NOT work with a shield
-        if (!hasShield) {
+        if (!equippedShield && !character.equippedShield) {
           const wisMod = character.abilityScores.wisdom?.modifier || 0;
           return baseAC + dexMod + wisMod;
         }
@@ -133,8 +143,20 @@ export const calculateArmorClass = (character: Character): number => {
     }
   }
 
-  // Base AC (no armor) = 10 + Dex mod + shield bonus
-  return 10 + dexMod + shieldBonus;
+  // Armor Calculation
+  let baseAC = 10;
+  let effectiveDexMod = dexMod;
+
+  if (equippedArmor && equippedArmor.armorClass) {
+    baseAC = equippedArmor.armorClass.base;
+    if (equippedArmor.armorClass.dexModifier === false) {
+      effectiveDexMod = 0;
+    } else if (equippedArmor.armorClass.maxDexModifier !== undefined) {
+      effectiveDexMod = Math.min(dexMod, equippedArmor.armorClass.maxDexModifier);
+    }
+  }
+
+  return baseAC + effectiveDexMod + shieldBonus;
 };
 
 /**
