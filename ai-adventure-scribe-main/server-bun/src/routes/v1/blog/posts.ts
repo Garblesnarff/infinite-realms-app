@@ -16,6 +16,7 @@ import {
   syncPostRelations,
   deletePostRelations,
   slugNotFoundError,
+  isUuid,
   ensureAuthorExists,
   resolveAuthorIdForRequest,
   normalizeSeoKeywords,
@@ -49,11 +50,41 @@ export const blogPostRoutes = new Elysia()
     const rangeEnd = rangeStart + pageSize - 1;
 
     try {
+      // ⚡ Bolt: Dynamically inject !inner joins for taxonomy filtering to perform
+      // intersection at the database level instead of in-memory.
+      let selectString = BLOG_POST_SUMMARY_SELECT;
+      if (category) {
+        selectString = selectString
+          .replace(/categories:blog_post_categories\s*\(/, 'categories:blog_post_categories!inner (')
+          .replace(/category:blog_categories\s*\(/, 'category:blog_categories!inner (');
+      }
+      if (tag) {
+        selectString = selectString
+          .replace(/tags:blog_post_tags\s*\(/, 'tags:blog_post_tags!inner (')
+          .replace(/tag:blog_tags\s*\(/, 'tag:blog_tags!inner (');
+      }
+
       let dbQuery = supabaseService
         .from('blog_posts')
-        .select(BLOG_POST_SUMMARY_SELECT, { count: 'exact' })
+        .select(selectString, { count: 'exact' })
         .eq('status', 'published')
         .lte('published_at', new Date().toISOString());
+
+      if (category) {
+        if (isUuid(category)) {
+          dbQuery = dbQuery.eq('categories.category_id', category);
+        } else {
+          dbQuery = dbQuery.eq('categories.category.slug', category);
+        }
+      }
+
+      if (tag) {
+        if (isUuid(tag)) {
+          dbQuery = dbQuery.eq('tags.tag_id', tag);
+        } else {
+          dbQuery = dbQuery.eq('tags.tag.slug', tag);
+        }
+      }
 
       if (search) {
         const sanitized = search.trim().toLowerCase();
@@ -72,19 +103,13 @@ export const blogPostRoutes = new Elysia()
       const mapped = (data ?? []).map((row) =>
         mapBlogPost(row as unknown as BlogPostRow, { includeContent: false }),
       );
-      const filtered = mapped.filter((post) => {
-        const categoryOk =
-          !category || post.categories.some((c) => c.slug === category || c.id === category);
-        const tagOk = !tag || post.tags.some((t) => t.slug === tag || t.id === tag);
-        return categoryOk && tagOk;
-      });
 
       return {
-        data: filtered,
+        data: mapped,
         meta: {
           page,
           pageSize,
-          total: category || tag ? filtered.length : (count ?? filtered.length),
+          total: count ?? mapped.length,
         },
       };
     } catch (_error) {
