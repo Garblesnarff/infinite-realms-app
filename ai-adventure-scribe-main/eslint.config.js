@@ -455,6 +455,8 @@ export default tseslint.config(
       'server-bun/src/services/inventory/inventory-consumable-service.ts',
       'server-bun/src/services/inventory/__tests__/inventory-consumable-service.test.ts',
       'server-bun/src/services/token/token-config-service.ts',
+      'server-bun/src/services/class-features-service.ts',
+      'server-bun/src/services/progression/class-feature-usage-service.ts',
     ],
     rules: {
       'max-lines': 'warn',
