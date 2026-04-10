@@ -193,7 +193,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick, orient
 // ===========================
 
 export const Toolbar: React.FC<ToolbarProps> = ({
-  sceneId,
+  sceneId: _sceneId,
   isGM = false,
   orientation = 'vertical',
   position = 'left',

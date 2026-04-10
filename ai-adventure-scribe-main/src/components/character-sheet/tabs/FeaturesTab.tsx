@@ -81,7 +81,7 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
     },
   ];
 
-  const getFeatureIcon = (source: string) => {
+  const _getFeatureIcon = (source: string) => {
     switch (source) {
       case 'race':
         return <Users className="w-4 h-4 text-green-600" />;

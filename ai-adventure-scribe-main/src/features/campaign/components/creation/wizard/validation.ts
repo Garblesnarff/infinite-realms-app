@@ -66,7 +66,7 @@ export const validateCampaignParameters = (campaign: any, toast: any): boolean =
  * @param toast - Toast function for displaying validation messages
  * @returns boolean indicating if validation passed
  */
-export const validateCampaignEnhancements = (campaign: any, toast: any): boolean => {
+export const validateCampaignEnhancements = (_campaign: any, _toast: any): boolean => {
   // Enhancements are optional, so this step always passes validation
   // Users can skip enhancements or select any number they want
   return true;

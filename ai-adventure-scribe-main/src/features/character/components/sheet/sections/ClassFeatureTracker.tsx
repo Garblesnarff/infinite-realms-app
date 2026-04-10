@@ -19,7 +19,7 @@ interface ClassFeatureTrackerProps {
  * ClassFeatureTracker component displays and manages character class feature usage
  * including resources like spell slots, ki points, rages, etc.
  */
-const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate }) => {
+const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate: _onUpdate }) => {
   // Get class features for the character
   const classFeatures = character.class
     ? getClassFeatures(character.class.name, character.level || 1)

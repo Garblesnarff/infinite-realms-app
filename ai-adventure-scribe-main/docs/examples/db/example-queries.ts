@@ -5,7 +5,7 @@
  * These are examples only - not meant to be executed directly.
  */
 
-import { eq, and, desc, like, sql } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 import { db } from './client';
 import { blogPosts, blogAuthors, blogCategories, blogPostCategories, type BlogPost, type NewBlogPost } from './schema';

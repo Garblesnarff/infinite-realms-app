@@ -1,5 +1,5 @@
 import { Package, Coins, Dice1, TrendingUp, Shield, Sword, Shirt } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
 
@@ -160,7 +160,7 @@ const StartingEquipmentSelection: React.FC = () => {
   const applyEquipment = () => {
     if (method === 'package') {
       const startingEquipment = getStartingEquipmentPackage(characterClass.id);
-      const inventory = startingEquipment.map((equipment, index) => ({
+      const inventory = startingEquipment.map((equipment, _index) => ({
         itemId: equipment.id,
         quantity: 1,
         equipped: false,

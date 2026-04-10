@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { expect, test } from 'vitest';
 
-import { Dialog, DialogContent, DialogTrigger } from '../dialog';
-import { Sheet, SheetContent, SheetTrigger } from '../sheet';
+import { Dialog, DialogContent } from '../dialog';
+import { Sheet, SheetContent } from '../sheet';
 
 test('Dialog has Close button with title', () => {
   render(

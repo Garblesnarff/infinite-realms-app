@@ -128,7 +128,7 @@ const CombatTestPageContent: React.FC = () => {
 
   const handleStartTestCombat = async () => {
     // This would normally be provided by the session/campaign context
-    const testSessionId = 'test-session-123';
+    const _testSessionId = 'test-session-123';
 
     try {
       // Start combat with test participants

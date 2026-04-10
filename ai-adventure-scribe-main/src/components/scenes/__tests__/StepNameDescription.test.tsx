@@ -7,7 +7,7 @@ import { StepNameDescription } from '../scene-creation-wizard/StepNameDescriptio
 describe('StepNameDescription Accessibility', () => {
   it('renders with unique IDs and correctly linked labels', () => {
     const onUpdate = vi.fn();
-    const { rerender } = render(
+    const { rerender: _rerender } = render(
       <StepNameDescription
         name=""
         description=""

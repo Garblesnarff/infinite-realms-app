@@ -41,7 +41,7 @@ type AbilityName = keyof typeof character.abilityScores;
  * Abilities & Skills tab with clickable rolls
  * Shows ability scores, modifiers, saves, and skills
  */
-const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate }) => {
+const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpdate }) => {
   const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
 
   // For demo purposes, assume some proficiencies based on class
@@ -133,7 +133,7 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate }) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {Object.entries(character.abilityScores).map(([ability, data]) => {
+          {Object.entries(character.abilityScores).map(([ability, _data]) => {
             const isProficient = proficientSaves.includes(ability as AbilityName);
             const modifier = getSaveModifier(ability as AbilityName);
 

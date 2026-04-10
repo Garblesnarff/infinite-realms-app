@@ -25,7 +25,6 @@ import { Separator } from '@/components/ui/separator';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
-import { consumeMaterialComponents } from '@/utils/spellComponents';
 
 // ===========================
 // Props Interface

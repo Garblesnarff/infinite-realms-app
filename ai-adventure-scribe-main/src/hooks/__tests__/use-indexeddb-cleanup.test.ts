@@ -85,7 +85,7 @@ describe('useIndexedDBCleanup', () => {
     await act(async () => {
       try {
         await result.current.manualCleanup();
-      } catch (e) {
+      } catch (_e) {
         // expected
       }
     });
@@ -117,7 +117,7 @@ describe('useIndexedDBCleanup', () => {
     await act(async () => {
       try {
         await result.current.manualCleanup();
-      } catch (e) {
+      } catch (_e) {
         // expected
       }
     });

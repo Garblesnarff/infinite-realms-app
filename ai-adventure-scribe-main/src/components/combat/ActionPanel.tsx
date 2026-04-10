@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { Separator } from '@/components/ui/separator';
-import { CombatParticipant } from '@/types/combat';
 import { canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';
 import { canUseRacialTrait } from '@/utils/racialTraits';

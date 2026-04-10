@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -125,7 +125,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
       return;
     }
 
-    const rect = panelRef.current.getBoundingClientRect();
+    const _rect = panelRef.current.getBoundingClientRect();
     const containerRect = panelRef.current.parentElement?.getBoundingClientRect();
     if (!containerRect) {
       return;

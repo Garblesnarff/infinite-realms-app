@@ -10,7 +10,6 @@ import type { Mock } from 'vitest';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 // Mocks
 vi.mock('@/contexts/AuthContext', () => ({

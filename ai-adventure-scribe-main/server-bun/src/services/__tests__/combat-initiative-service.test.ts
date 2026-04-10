@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
 import { CombatEncounterService } from '../combat/combat-encounter-service.js';
-import { CombatInitiativeService } from '../combat-initiative-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({

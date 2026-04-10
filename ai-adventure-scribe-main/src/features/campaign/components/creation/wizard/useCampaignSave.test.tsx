@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'; // Added waitFor
+import { act, render, screen, waitFor } from '@testing-library/react'; // Added waitFor
 import React from 'react';
 import { vi } from 'vitest';
 
@@ -56,7 +56,7 @@ const TestComponent: React.FC<{ campaignDataToSave?: Partial<Campaign> }> = ({
           if (campaignDataToSave) {
             try {
               await saveCampaign(campaignDataToSave);
-            } catch (e) {
+            } catch (_e) {
               // Error handling can be tested by checking mocks or error messages if displayed
             }
           }

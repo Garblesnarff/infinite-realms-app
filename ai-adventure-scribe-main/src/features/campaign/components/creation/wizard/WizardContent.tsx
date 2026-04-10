@@ -104,7 +104,7 @@ const WizardContent: React.FC = () => {
   const CurrentStepComponent = wizardSteps[currentStep].component;
 
   const storageKey = 'campaign-wizard-draft-v1';
-  const { status, restore, clear } = useAutosave(storageKey, state.campaign || {}, { delay: 900 });
+  const { status: _status, restore, clear } = useAutosave(storageKey, state.campaign || {}, { delay: 900 });
 
   const hasDraft = !!restore();
 

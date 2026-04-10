@@ -6,7 +6,7 @@
  * Provides attack buttons and visual enemy representation.
  */
 
-import { Sword, Shield, Skull, Zap, Target } from 'lucide-react';
+import { Sword, Skull, Zap, Target } from 'lucide-react';
 import React from 'react';
 
 import HPTracker from './HPTracker';

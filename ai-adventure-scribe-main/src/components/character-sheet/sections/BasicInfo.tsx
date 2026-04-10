@@ -4,7 +4,6 @@ import InspirationTracker from '../InspirationTracker';
 
 import type { Character, Subrace } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { useCharacterStats } from '@/hooks/use-character-stats';

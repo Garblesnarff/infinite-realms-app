@@ -288,7 +288,7 @@ export interface UseTokenDragWithMutationOptions extends UseTokenDragOptions {
 export function useTokenDragWithMutation(
   options: UseTokenDragWithMutationOptions,
 ): UseTokenDragReturn {
-  const { onMutationSuccess, onMutationError, ...dragOptions } = options;
+  const { onMutationSuccess: _onMutationSuccess, onMutationError: _onMutationError, ...dragOptions } = options;
 
   // TODO: Add tRPC mutation hook when tRPC client is configured
   // const moveMutation = trpc.tokens.move.useMutation({

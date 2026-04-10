@@ -5,7 +5,7 @@
  * WorkOS handles all authentication flows including signup, login, and password reset.
  */
 
-import { Loader2, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';

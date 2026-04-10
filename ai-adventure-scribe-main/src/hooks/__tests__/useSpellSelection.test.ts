@@ -294,7 +294,7 @@ const mockSpellData = {
 
 describe('useSpellSelection Hook', () => {
   let mockWizard: CharacterClass;
-  let mockCleric: CharacterClass;
+  let _mockCleric: CharacterClass;
   let mockFighter: CharacterClass;
   let mockRace: CharacterRace;
   let mockHighElfSubrace: Subrace;
@@ -340,7 +340,7 @@ describe('useSpellSelection Hook', () => {
       weaponProficiencies: [],
     };
 
-    mockCleric = {
+    _mockCleric = {
       id: 'cleric',
       name: 'Cleric',
       description: 'Divine spellcaster',

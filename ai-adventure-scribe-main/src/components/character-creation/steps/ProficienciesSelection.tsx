@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { backgrounds } from '@/data/backgroundOptions';
-import { classes } from '@/data/classOptions';
 // import { races } from '@/data/raceOptions'; // Not needed, using state
 
 // Standard D&D 5e languages for choices

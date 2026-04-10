@@ -30,7 +30,7 @@ export const useCampaignSave = () => {
       // First, save the campaign without the background image
       // Extract background_image and map camelCase to snake_case fields
       const {
-        background_image,
+        background_image: _background_image,
         enhancementSelections,
         enhancementEffects,
         ...campaignDataWithoutImage

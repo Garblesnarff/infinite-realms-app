@@ -45,7 +45,7 @@ const extractPersonalityText = (
 const PersonalitySelection: React.FC = () => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
-  const { scrollToNavigation } = useAutoScroll();
+  const { scrollToNavigation: _scrollToNavigation } = useAutoScroll();
 
   /**
    * Updates personality traits (first and second)

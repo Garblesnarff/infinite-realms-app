@@ -61,7 +61,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-let VoiceProfileService: any;
+let _VoiceProfileService: any;
 let voiceProfileService: any;
 let supabaseMock: any;
 let llmApiClient: any;
@@ -81,7 +81,7 @@ describe('VoiceProfileService', () => {
     llmApiClient = llmModule.llmApiClient;
 
     const voiceModule = await import('@/services/voice-profile-service');
-    VoiceProfileService = voiceModule.VoiceProfileService;
+    _VoiceProfileService = voiceModule.VoiceProfileService;
     voiceProfileService = voiceModule.voiceProfileService;
   });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import logger from '@/lib/logger';
  */
 export const MemoryTester: React.FC = () => {
   const { memories, extractMemories } = useMemoryContext();
-  const { messages, sendMessage } = useMessageContext();
+  const { messages: _messages, sendMessage: _sendMessage } = useMessageContext();
   const { toast } = useToast();
   const [testResults, setTestResults] = useState<string[]>([]);
   const [isTestingMemory, setIsTestingMemory] = useState(false);

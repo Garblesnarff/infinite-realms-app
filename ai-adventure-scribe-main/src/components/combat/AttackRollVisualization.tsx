@@ -6,7 +6,7 @@
  * with the enhanced attack system from attackUtils.ts.
  */
 
-import { Swords, Target, Zap, ShieldAlert, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
+import { Swords, Zap, ShieldAlert, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
 import React from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
@@ -14,7 +14,6 @@ import type { DiceRoll, DamageType } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 
 // ===========================

@@ -1,4 +1,4 @@
-import { Zap, Heart, Shield } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
 import type { CombatParticipant } from '@/types/combat';

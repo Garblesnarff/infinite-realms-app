@@ -1,4 +1,4 @@
-import { Sword, Shield, Sparkles, Crown } from 'lucide-react';
+import { Sword, Sparkles, Crown } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import type { CharacterClass } from '@/types/character';
@@ -11,7 +11,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-import { ClassFeature } from '@/types/character';
 
 /**
  * ClassFeatureSelection component for choosing level 1 class features
