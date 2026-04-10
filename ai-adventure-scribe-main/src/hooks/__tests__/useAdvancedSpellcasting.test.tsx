@@ -69,9 +69,10 @@ describe('useAdvancedSpellcasting', () => {
     const { result } = renderHook(() => useAdvancedSpellcasting());
 
     await waitFor(() => {
-      expect(result.current.hasSpellcasting).toBe(false);
+      expect(result.current.isLoadingSpells).toBe(false);
     });
 
+    expect(result.current.hasSpellcasting).toBe(false);
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'UPDATE_CHARACTER',
       payload: { advancedSpellcastingComplete: true },
