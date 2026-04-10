@@ -12,7 +12,8 @@ export const normalizeNarrativeSpacing = (content: string): string =>
     .replace(/\s+([,.;:!?\])])/g, '$1')
     .replace(/\s+([”’])/g, '$1')
     // Remove spaces immediately after curly opening quotes/parens/brackets
-    .replace(/([“‘(\[{])\s+/g, '$1')
+    // eslint-disable-next-line no-useless-escape
+    .replace(/([“’(\[{])\s+/g, '$1')
     // Keep em-dash/appositive phrases tight after tag stripping
     .replace(/([—–-])\s+(\*{1,2})/g, '$1$2')
     .replace(/([—–-])\s+([A-Z“'(])/g, '$1$2')
