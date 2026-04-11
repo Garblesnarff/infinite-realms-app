@@ -78,11 +78,11 @@ const PermissionBadge: React.FC<{ level: PermissionLevel }> = ({ level }) => {
     },
   };
 
-  const { icon: Icon, label, variant } = config[level];
+  const { icon: Icon, label, variant, description } = config[level];
 
   return (
-    <Badge variant={variant} className="gap-1">
-      <Icon className="h-3 w-3" />
+    <Badge variant={variant} className="gap-1" title={description}>
+      <Icon className="h-3 w-3" aria-hidden="true" />
       {label}
     </Badge>
   );
@@ -102,6 +102,7 @@ const SharedCharacterCard: React.FC<{
       {/* Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-10 rounded-lg"
+        aria-hidden="true"
         style={
           character.backgroundImage
             ? { backgroundImage: `url(${character.backgroundImage})` }
@@ -147,7 +148,7 @@ const SharedCharacterCard: React.FC<{
 
         {/* Owner Info */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="h-4 w-4" />
+          <Users className="h-4 w-4" aria-hidden="true" />
           <span>
             Shared by{' '}
             <span className="font-medium text-foreground">
@@ -169,12 +170,12 @@ const SharedCharacterCard: React.FC<{
             className="flex-1"
           >
             View Character
-            <ArrowRight className="ml-2 h-4 w-4" />
+            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => onRemoveSelf(character.id, character.name)}
             className="text-muted-foreground hover:text-destructive"
             aria-label={`Remove my access to ${character.name}`}
@@ -228,9 +229,15 @@ export const SharedCharactersList: React.FC = () => {
 
   // Filter characters by permission level
   const filteredCharacters = useMemo(() => {
-    if (!sharedCharacters) return [];
-    if (filterPermission === 'all') return sharedCharacters;
-    return sharedCharacters.filter((char: any) => char.permissionLevel === filterPermission);
+    if (!sharedCharacters) {
+      return [];
+    }
+    if (filterPermission === 'all') {
+      return sharedCharacters as SharedCharacter[];
+    }
+    return (sharedCharacters as SharedCharacter[]).filter(
+      (char) => char.permissionLevel === filterPermission,
+    );
   }, [sharedCharacters, filterPermission]);
 
   const handleRemoveSelf = (characterId: string, characterName: string): void => {
@@ -278,7 +285,7 @@ export const SharedCharactersList: React.FC = () => {
 
         {/* Filter */}
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Select value={filterPermission} onValueChange={setFilterPermission}>
             <SelectTrigger className="w-40" aria-label="Filter shared characters by permission level">
               <SelectValue />
@@ -314,7 +321,10 @@ export const SharedCharactersList: React.FC = () => {
         </div>
       ) : filteredCharacters.length === 0 ? (
         <Card className="p-12 text-center border-2 border-dashed">
-          <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <Users
+            className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50"
+            aria-hidden="true"
+          />
           <h3 className="font-semibold text-lg mb-2">No Shared Characters</h3>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {filterPermission === 'all'
@@ -329,7 +339,7 @@ export const SharedCharactersList: React.FC = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCharacters.map((character: any) => (
+          {filteredCharacters.map((character) => (
             <SharedCharacterCard
               key={character.id}
               character={character}

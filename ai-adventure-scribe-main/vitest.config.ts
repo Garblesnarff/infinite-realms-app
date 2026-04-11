@@ -32,6 +32,7 @@ export default defineConfig({
       'src/components/character-creation/steps/ability-scores/__tests__/AbilityScoreCard.test.tsx',
       'src/components/character-creation/steps/ability-scores/__tests__/RollDetails.test.tsx',
       'src/components/character-creation/steps/__tests__/RaceSelection.accessibility.test.tsx',
+      'src/components/character-sharing/__tests__/SharedCharactersList.accessibility.test.tsx',
       'src/utils/__tests__/asset-key.test.ts',
       'src/utils/__tests__/edgeFunctionHandler.test.ts',
       'src/utils/__tests__/character-calculations.test.ts',
