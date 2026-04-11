@@ -260,6 +260,7 @@ export default tseslint.config(
       'src/hooks/game-session/use-session-initialization.ts',
       'src/hooks/use-ability-score-selection.ts',
       'src/hooks/use-progressive-voice.ts',
+      'src/hooks/voice/use-voice-processing.ts',
       'src/hooks/use-voice-audio-control.ts',
       'src/services/voice-director.ts',
       'src/services/voice-routing.ts',

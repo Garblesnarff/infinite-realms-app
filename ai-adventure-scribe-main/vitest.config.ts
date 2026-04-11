@@ -501,6 +501,7 @@ export default defineConfig({
         'src/hooks/useSceneWebSocket.ts',
         'src/hooks/useFogWebSocket.ts',
         'src/hooks/use-token-drag.ts',
+        'src/hooks/voice/use-voice-processing.ts',
         'src/hooks/use-voice-audio-control.ts',
         'src/hooks/use-progressive-voice.ts',
         'src/hooks/use-combat-canvas-sync.ts',
