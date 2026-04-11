@@ -294,17 +294,24 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search templates..."
+            aria-label="Search scene templates"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div
+          className="flex gap-2 flex-wrap"
+          role="group"
+          aria-label="Filter templates by category"
+        >
           <Button
             variant={selectedCategory === null ? 'default' : 'outline'}
             size="sm"
             onClick={() => setSelectedCategory(null)}
+            aria-pressed={selectedCategory === null}
+            title="Show all templates"
           >
             All
           </Button>
@@ -315,6 +322,8 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
               size="sm"
               onClick={() => setSelectedCategory(category)}
               className="capitalize"
+              aria-pressed={selectedCategory === category}
+              title={`Show ${category} templates`}
             >
               {category}
             </Button>
@@ -394,6 +403,9 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                     e.stopPropagation();
                     onSelectTemplate?.(template);
                   }}
+                  aria-pressed={isSelected}
+                  aria-label={isSelected ? 'Template selected' : 'Use this template'}
+                  title={isSelected ? 'Template selected' : 'Use this template'}
                 >
                   {isSelected ? 'Selected' : 'Use Template'}
                 </Button>

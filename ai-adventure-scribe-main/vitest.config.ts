@@ -322,6 +322,7 @@ export default defineConfig({
       'src/components/scenes/__tests__/SceneCreationWizardSteps.test.tsx',
       'src/components/scenes/__tests__/StepNameDescription.test.tsx',
       'src/components/scenes/__tests__/SceneSettingsAccessibility.test.tsx',
+      'src/components/scenes/__tests__/SceneTemplateLibrary.accessibility.test.tsx',
       'src/features/character/components/sheet/__tests__/InventoryManager.accessibility.test.tsx',
       'tests/services/voice-profile-service.test.ts',
       'tests/services/voice-consistency-service.test.ts',
