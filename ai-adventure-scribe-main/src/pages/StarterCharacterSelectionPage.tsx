@@ -9,15 +9,15 @@
  * Route: /explore/:slug/choose-character
  */
 
-import { Sparkles, User, ChevronRight, Sword, Heart, BookOpen, Wand2 } from 'lucide-react';
+import { Sparkles, User, ChevronRight } from 'lucide-react';
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import type {
-  StarterCharacterTemplate} from '@/hooks/use-starter-character-templates';
+import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
-import { Badge } from '@/components/ui/badge';
+import { StarterCharacterCard } from '@/components/campaigns/StarterCharacterCard';
+import { StarterCharacterDetails } from '@/components/campaigns/StarterCharacterDetails';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,217 +29,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
-/**
- * Get class icon component
- */
-function getClassIcon(className: string): React.ReactNode {
-  const iconProps = { className: 'w-5 h-5' };
-  switch (className.toLowerCase()) {
-    case 'fighter':
-    case 'ranger':
-    case 'barbarian':
-    case 'paladin':
-      return <Sword {...iconProps} />;
-    case 'cleric':
-    case 'druid':
-      return <Heart {...iconProps} />;
-    case 'wizard':
-    case 'warlock':
-    case 'sorcerer':
-      return <Wand2 {...iconProps} />;
-    case 'bard':
-    case 'rogue':
-      return <BookOpen {...iconProps} />;
-    default:
-      return <User {...iconProps} />;
-  }
-}
-
-/**
- * Get ability modifier from score
- */
-function getModifier(score: number): string {
-  const mod = Math.floor((score - 10) / 2);
-  return mod >= 0 ? `+${mod}` : `${mod}`;
-}
-
-/**
- * Character Card Component
- */
-interface CharacterCardProps {
-  template: StarterCharacterTemplate;
-  isSelected: boolean;
-  onSelect: () => void;
-}
-
-const CharacterCard: React.FC<CharacterCardProps> = ({ template, isSelected, onSelect }) => {
-  return (
-    <button
-      onClick={onSelect}
-      className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200 hover:scale-[1.02] text-left w-full ${
-        isSelected
-          ? 'border-purple-500 bg-purple-500/20 shadow-lg shadow-purple-500/20'
-          : 'border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800/70'
-      }`}
-    >
-      {/* Portrait Placeholder */}
-      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600/30 to-amber-600/30 flex items-center justify-center mb-3 border-2 border-gray-600">
-        {template.portraitUrl ? (
-          <img
-            src={template.portraitUrl}
-            alt={template.name}
-            className="w-full h-full rounded-full object-cover"
-          />
-        ) : (
-          <div className="text-3xl text-gray-400">{getClassIcon(template.class)}</div>
-        )}
-      </div>
-
-      {/* Name and Class */}
-      <h3 className="text-lg font-bold text-white text-center">{template.name}</h3>
-      <p className="text-sm text-purple-300 mb-1">
-        {template.race} {template.class}
-      </p>
-      <p className="text-xs text-gray-400 text-center line-clamp-2">{template.tagline}</p>
-
-      {/* Selection indicator */}
-      {isSelected && (
-        <div className="absolute top-2 right-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-      )}
-    </button>
-  );
-};
-
-/**
- * Character Details Panel
- */
-interface CharacterDetailsPanelProps {
-  template: StarterCharacterTemplate;
-}
-
-const CharacterDetailsPanel: React.FC<CharacterDetailsPanelProps> = ({ template }) => {
-  const { abilityScores, personality } = template;
-
-  return (
-    <div className="bg-gray-800/70 rounded-xl p-6 border border-gray-700">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600/30 to-amber-600/30 flex items-center justify-center border-2 border-purple-500/50">
-          {template.portraitUrl ? (
-            <img
-              src={template.portraitUrl}
-              alt={template.name}
-              className="w-full h-full rounded-full object-cover"
-            />
-          ) : (
-            <div className="text-2xl text-purple-300">{getClassIcon(template.class)}</div>
-          )}
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-white">{template.name}</h2>
-          <p className="text-purple-300">
-            {template.race}
-            {template.subrace && ` (${template.subrace})`} {template.class}
-          </p>
-          {template.background && <p className="text-sm text-gray-400">{template.background}</p>}
-        </div>
-      </div>
-
-      {/* Ability Scores */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-          Ability Scores
-        </h3>
-        <div className="grid grid-cols-6 gap-2">
-          {Object.entries(abilityScores).map(([ability, score]) => (
-            <div
-              key={ability}
-              className="bg-gray-900/50 rounded-lg p-2 text-center border border-gray-700"
-            >
-              <p className="text-xs text-gray-400 uppercase">{ability.slice(0, 3)}</p>
-              <p className="text-lg font-bold text-white">{score}</p>
-              <p className="text-xs text-purple-300">{getModifier(score)}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Backstory */}
-      {template.adaptedBackstory && (
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-            Backstory
-          </h3>
-          <p className="text-gray-300 text-sm leading-relaxed">{template.adaptedBackstory}</p>
-        </div>
-      )}
-
-      {/* Campaign Hook */}
-      {template.campaignHook && (
-        <div className="mb-6 bg-purple-900/20 rounded-lg p-4 border border-purple-500/20">
-          <h3 className="text-sm font-semibold text-purple-300 mb-2">Why You're Here</h3>
-          <p className="text-gray-300 text-sm italic">{template.campaignHook}</p>
-        </div>
-      )}
-
-      {/* Personality */}
-      {personality.traits && personality.traits.length > 0 && (
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-            Personality
-          </h3>
-          <div className="space-y-2">
-            {personality.traits.map((trait, i) => (
-              <p key={i} className="text-sm text-gray-300">
-                • {trait}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Skills & Equipment */}
-      <div className="grid grid-cols-2 gap-4">
-        {template.skills.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-              Skills
-            </h3>
-            <div className="flex flex-wrap gap-1">
-              {template.skills.map((skill) => (
-                <Badge key={skill} variant="secondary" className="text-xs">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-        {template.languages.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-              Languages
-            </h3>
-            <div className="flex flex-wrap gap-1">
-              {template.languages.map((lang) => (
-                <Badge key={lang} variant="outline" className="text-xs">
-                  {lang}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 /**
  * Main Page Component
@@ -434,7 +223,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
               ) : (
                 <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {templates.map((template) => (
-                    <CharacterCard
+                    <StarterCharacterCard
                       key={template.id}
                       template={template}
                       isSelected={selectedTemplate?.id === template.id}
@@ -449,7 +238,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
             <div className="lg:sticky lg:top-24 lg:self-start">
               {selectedTemplate ? (
                 <>
-                  <CharacterDetailsPanel template={selectedTemplate} />
+                  <StarterCharacterDetails template={selectedTemplate} />
                   <div className="mt-4 flex gap-3">
                     <Button
                       onClick={handleStartWithCharacter}
