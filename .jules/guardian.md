@@ -191,3 +191,7 @@
 ## 2026-03-24 - [Pathfinding Mode-Awareness & Regex Branch Coverage]
 **Learning:** Found that `calculatePath` in `src/utils/movement-navigation.ts` was not mode-aware, causing flyers to path around walls instead of through them. Also identified uncovered branches in `regex-parser.ts` related to DC context detection in simple skill patterns and non-standard formula fallbacks.
 **Action:** When implementing pathfinding, always ensure the search loop uses the same capability-based mode detection as the reachable area calculation. Use inclusive checks for DC context windows (`text.slice(match.index)`) to ensure nearby DC mentions are captured for skill checks without explicit parentheses.
+
+## 2026-04-10 - [Multiclass Spell Validation Coverage]
+**Learning:** The `validateMulticlassSpellSelection` utility handles the delegation between single-class and multiclass spellcasting rules. Testing revealed that it correctly generates warnings for multiclass caster levels and Pact Magic slot separation, which are critical D&D 5e mechanics.
+**Action:** When testing multiclass utilities, ensure to mock the `getEnhancedSpellcastingInfo` to return various `multiclassInfo` states (including Pact Magic) to verify that the UI-facing warnings are correctly populated. Always add both the test file and the source module to `vitest.config.ts` to maintain coverage thresholds.
