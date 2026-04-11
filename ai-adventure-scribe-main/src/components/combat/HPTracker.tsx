@@ -18,7 +18,11 @@ interface HPTrackerProps {
   isInteractive?: boolean;
 }
 
-const HPTracker: React.FC<HPTrackerProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders when
+ * the participant's status hasn't changed, which is common in busy combat encounters.
+ */
+const HPTracker: React.FC<HPTrackerProps> = React.memo(({
   participant,
   onDamage,
   onHeal,
@@ -149,6 +153,8 @@ const HPTracker: React.FC<HPTrackerProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+HPTracker.displayName = 'HPTracker';
 
 export default HPTracker;

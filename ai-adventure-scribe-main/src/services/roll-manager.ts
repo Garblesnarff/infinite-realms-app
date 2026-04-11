@@ -139,9 +139,14 @@ export const RollManager = {
   async getRecentRolls(sessionId: string, limit = 50) {
     if (!flagEnabled()) return [] as RollHistoryRow[];
     try {
+      /**
+       * ⚡ Bolt: Using explicit column list to avoid fetching the potentially large
+       * 'meta' JSONB field for every row unless specifically needed.
+       */
+      const ROLL_COLS = 'id, session_id, created_at, kind, purpose, formula, dc, ac, result_total, result_natural, advantage, disadvantage, success';
       const { data, error } = await supabase
         .from('roll_history')
-        .select('*')
+        .select(ROLL_COLS)
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(limit);

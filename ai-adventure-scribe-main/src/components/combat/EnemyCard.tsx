@@ -26,7 +26,11 @@ interface EnemyCardProps {
   onAttack?: (attack: MonsterAttack) => void;
 }
 
-const EnemyCard: React.FC<EnemyCardProps> = ({ enemyId, className = '', onAttack }) => {
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent unnecessary re-renders during combat
+ * state updates when this specific enemy's data hasn't changed.
+ */
+const EnemyCard: React.FC<EnemyCardProps> = React.memo(({ enemyId, className = '', onAttack }) => {
   const { state } = useCombat();
   const { getAssetImageUrl } = useCampaignAssetsContext();
   const enemy = state.activeEncounter?.participants.find((p) => p.id === enemyId);
@@ -166,6 +170,8 @@ const EnemyCard: React.FC<EnemyCardProps> = ({ enemyId, className = '', onAttack
       </CardContent>
     </Card>
   );
-};
+});
+
+EnemyCard.displayName = 'EnemyCard';
 
 export default EnemyCard;

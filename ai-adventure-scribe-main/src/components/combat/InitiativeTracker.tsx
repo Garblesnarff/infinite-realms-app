@@ -62,7 +62,11 @@ interface ParticipantRowProps {
   getAssetImageUrl?: (type: string, key: string) => string | null;
 }
 
-const ParticipantRow: React.FC<ParticipantRowProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent expensive list re-renders when
+ * individual participant status (like HP or conditions) remains the same.
+ */
+const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(({
   participant,
   isCurrentTurn,
   roundNumber: _roundNumber,
@@ -277,7 +281,9 @@ const ParticipantRow: React.FC<ParticipantRowProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ParticipantRow.displayName = 'ParticipantRow';
 
 // ===========================
 // Main Initiative Tracker
@@ -288,7 +294,11 @@ interface InitiativeTrackerProps {
   onAddParticipant?: () => void;
 }
 
-const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent the entire tracker from re-rendering
+ * on every parent state change if the combat state itself is stable.
+ */
+const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
   className = '',
   onAddParticipant,
 }) => {
@@ -420,6 +430,8 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
+
+InitiativeTracker.displayName = 'InitiativeTracker';
 
 export default InitiativeTracker;
