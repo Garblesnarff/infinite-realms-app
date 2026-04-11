@@ -52,16 +52,29 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const { setSceneBackground } = useSceneBackground();
     const hasSetBackgroundRef = useRef(false);
 
-    // Remove roll requests and visual prompt markers from display
-    let cleanContent = removeRollRequestsFromMessage(displayContent);
-    cleanContent = cleanContent.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
+    /**
+     * ⚡ Bolt: Consolidate content processing into a single memoized block.
+     * This avoids redundant regex execution and multiple memoization overheads.
+     */
+    const processed = useMemo(() => {
+      // 1. Remove roll requests and visual prompt markers from display
+      let text = removeRollRequestsFromMessage(displayContent);
+      text = text.replace(/^[\t ]*VISUAL\s+PROMPT:.*$/gim, '').trim();
 
-    // Parse and remove asset tags, extracting referenced assets
-    const { cleanContent: contentWithoutTags, assets: assetTags } = useMemo(
-      () => parseAssetTags(cleanContent),
-      [cleanContent],
-    );
-    cleanContent = contentWithoutTags;
+      // 2. Parse and remove asset tags, extracting referenced assets
+      const { cleanContent, assets: assetTags } = parseAssetTags(text);
+
+      // 3. Format narrative structure (markdown-like emphasis, etc)
+      const narrative = formatNarrative(cleanContent);
+
+      return {
+        ...narrative,
+        assetTags,
+        cleanContent,
+      };
+    }, [displayContent]);
+
+    const { content, charCount, paragraphCount, assetTags, cleanContent } = processed;
 
     // Set scene background based on referenced assets (priority: location > scene > monster > npc)
     useEffect(() => {
@@ -100,11 +113,6 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         hasSetBackgroundRef.current = true;
       }
     }, [assetTags, getAsset, setSceneBackground, isLastInGroup]);
-
-    const { content, charCount, paragraphCount } = useMemo(
-      () => formatNarrative(cleanContent),
-      [cleanContent],
-    );
 
     // Don't render if content is empty after removing roll requests
     if (!cleanContent || cleanContent.length === 0 || !content) {
