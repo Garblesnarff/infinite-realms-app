@@ -195,3 +195,7 @@
 ## 2026-04-10 - [Multiclass Spell Validation Coverage]
 **Learning:** The `validateMulticlassSpellSelection` utility handles the delegation between single-class and multiclass spellcasting rules. Testing revealed that it correctly generates warnings for multiclass caster levels and Pact Magic slot separation, which are critical D&D 5e mechanics.
 **Action:** When testing multiclass utilities, ensure to mock the `getEnhancedSpellcastingInfo` to return various `multiclassInfo` states (including Pact Magic) to verify that the UI-facing warnings are correctly populated. Always add both the test file and the source module to `vitest.config.ts` to maintain coverage thresholds.
+
+## 2026-04-11 - [Dice Utility Coverage & Mocking Improvements]
+**Learning:** Found that `src/utils/diceRolls.ts` had several untested exported functions for detailed roll reporting and rerolling. Also discovered that previous tests were using a risky strategy of replacing the global `Math` object instead of using Vitest's `vi.spyOn(Math, 'random')`.
+**Action:** Use `vi.spyOn(Math, 'random')` for deterministic dice roll testing to avoid global state leakage. Ensure that "detailed" variants of utility functions (which return objects instead of just numbers) have explicit tests for all returned properties.
