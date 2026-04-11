@@ -442,6 +442,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/spell-selection/SpellSelectionTabs.tsx',
       'src/components/battle-map/hotkeys/constants.ts',
       'src/hooks/useSpellSelection.ts',
+      'src/services/supabase-subscription-manager.ts',
       'src/components/spells/SpellFilterPanel.tsx',
       'src/features/character/components/spells/SpellFilterPanel.tsx',
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',

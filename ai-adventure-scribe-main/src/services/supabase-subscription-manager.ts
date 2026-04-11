@@ -1,37 +1,17 @@
-import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { processTableEvent } from '@/services/subscription/event-processor';
+import { handleStatusChange, handleFailure } from '@/services/subscription/status-manager';
+
+import type {
+  PostgresEvent,
+  TableSubscription,
+} from '@/services/subscription/types';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { addNetworkListener, isOffline } from '@/utils/network';
 
-type PostgresEvent = 'INSERT' | 'UPDATE' | 'DELETE';
 
-interface RecordSubscriptionCallback {
-  id: string;
-  recordId: string;
-  imageField: string;
-  callback: (imageUrl: string | null) => void;
-}
-
-interface EventSubscriptionCallback {
-  id: string;
-  events: PostgresEvent[];
-  filter?: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => boolean;
-  callback: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void;
-}
-
-interface TableSubscription {
-  channel: RealtimeChannel | null;
-  recordCallbacks: Map<string, RecordSubscriptionCallback>;
-  eventCallbacks: Map<string, EventSubscriptionCallback>;
-  retryCount: number;
-  isConnected: boolean;
-  isConnecting: boolean;
-  lastRetry: number;
-  connectionTimeoutId: ReturnType<typeof setTimeout> | null;
-  cleanupTimeoutId: ReturnType<typeof setTimeout> | null;
-  disabled: boolean;
-}
 
 /**
  * Centralized Supabase subscription manager
@@ -287,44 +267,7 @@ class SupabaseSubscriptionManager {
     const subscription = this.subscriptions.get(tableName);
     if (!subscription) return;
 
-    const recordId = payload.new?.id ?? payload.old?.id;
-
-    if (recordId) {
-      subscription.recordCallbacks.forEach((callbackData) => {
-        if (callbackData.recordId === recordId) {
-          const newImageUrl = (payload.new ?? {})[callbackData.imageField] as
-            | string
-            | null
-            | undefined;
-          const oldImageUrl = (payload.old ?? {})[callbackData.imageField] as
-            | string
-            | null
-            | undefined;
-
-          if (newImageUrl !== oldImageUrl) {
-            logger.info(`Image updated for ${tableName} ${recordId}: ${newImageUrl}`);
-            callbackData.callback(newImageUrl || null);
-          }
-        }
-      });
-    }
-
-    if (subscription.eventCallbacks.size > 0) {
-      subscription.eventCallbacks.forEach((callbackData) => {
-        const eventType = payload.eventType as PostgresEvent | undefined;
-        if (!eventType || !callbackData.events.includes(eventType)) {
-          return;
-        }
-
-        try {
-          if (!callbackData.filter || callbackData.filter(payload)) {
-            callbackData.callback(payload);
-          }
-        } catch (error) {
-          logger.error(`Error running subscription callback for ${tableName}:`, error);
-        }
-      });
-    }
+    processTableEvent(tableName, payload, subscription);
   }
 
   /**
@@ -334,35 +277,7 @@ class SupabaseSubscriptionManager {
     const subscription = this.subscriptions.get(tableName);
     if (!subscription) return;
 
-    logger.info(`Subscription status for ${tableName}: ${status}`);
-
-    switch (status) {
-      case 'SUBSCRIBED':
-        subscription.isConnected = true;
-        subscription.retryCount = 0;
-        subscription.isConnecting = false;
-        if (subscription.connectionTimeoutId) {
-          clearTimeout(subscription.connectionTimeoutId);
-          subscription.connectionTimeoutId = null;
-        }
-        break;
-
-      case 'CHANNEL_ERROR':
-      case 'TIMED_OUT':
-        subscription.isConnected = false;
-        subscription.isConnecting = false;
-        this.handleConnectionFailure(tableName);
-        break;
-
-      case 'CLOSED':
-        subscription.isConnected = false;
-        subscription.isConnecting = false;
-        if (subscription.connectionTimeoutId) {
-          clearTimeout(subscription.connectionTimeoutId);
-          subscription.connectionTimeoutId = null;
-        }
-        break;
-    }
+    handleStatusChange(tableName, status, subscription, () => this.handleConnectionFailure(tableName));
   }
 
   /**
@@ -372,27 +287,11 @@ class SupabaseSubscriptionManager {
     const subscription = this.subscriptions.get(tableName);
     if (!subscription) return;
 
-    subscription.retryCount++;
-    subscription.isConnected = false;
-    subscription.isConnecting = false;
-
-    if (subscription.retryCount < this.maxRetries) {
-      const delay = this.retryDelay * Math.pow(2, subscription.retryCount - 1);
-      logger.info(
-        `Retrying ${tableName} subscription in ${delay}ms (${subscription.retryCount}/${this.maxRetries})`,
-      );
-
-      setTimeout(() => {
-        this.setupChannel(tableName);
-      }, delay);
-    } else {
-      logger.warn(`Max retries exceeded for ${tableName} subscription`);
-      subscription.disabled = true;
-      if (subscription.connectionTimeoutId) {
-        clearTimeout(subscription.connectionTimeoutId);
-        subscription.connectionTimeoutId = null;
-      }
-    }
+    handleFailure(tableName, subscription, {
+      maxRetries: this.maxRetries,
+      retryDelay: this.retryDelay,
+      retryAction: (t) => this.setupChannel(t),
+    });
   }
 
   private reconnectAll(): void {
