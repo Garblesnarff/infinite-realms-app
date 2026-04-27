@@ -18,11 +18,13 @@ const CampaignCharacterList: React.FC = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['campaign', campaignId, 'characters'],
     queryFn: async () => {
+      // ⚡ Bolt: Optimized character query to exclude high-bandwidth text columns (backstory, traits, etc.)
+      // which are not used by the character card. This significantly reduces payload size for lists.
       const { data, error } = await supabase
         .from('characters')
         .select(
           `
-          id, name, description, race, class, level, image_url, background_image, appearance, personality_traits, backstory_elements, background,
+          id, name, race, class, level, avatar_url, background_image, created_at,
           character_stats!left (
             strength, dexterity, constitution, intelligence, wisdom, charisma,
             max_hit_points, current_hit_points, armor_class
