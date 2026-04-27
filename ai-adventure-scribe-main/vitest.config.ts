@@ -564,6 +564,7 @@ export default defineConfig({
         'server-bun/src/services/rest/rest-mechanics.ts',
         'server-bun/src/services/character-folder-service.ts',
         'server-bun/src/services/token-service.ts',
+        'server-bun/src/services/token/token-link-service.ts',
         'server-bun/src/services/scene-service.ts',
         'server-bun/src/services/character-service.ts',
         'server-bun/src/services/chronicle-generator.ts',
