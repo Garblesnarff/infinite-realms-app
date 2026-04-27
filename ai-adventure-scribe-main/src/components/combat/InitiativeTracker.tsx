@@ -312,7 +312,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Dices className="w-5 h-5" />
+              <Dices className="w-5 h-5" aria-hidden="true" />
               <h3 className="font-semibold">Initiative Tracker</h3>
             </div>
           </div>
@@ -361,7 +361,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
               title="Add participant"
               className="h-8 w-8"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </div>
@@ -375,7 +375,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
             title="Roll initiative for all participants"
             aria-label="Roll initiative for all participants"
           >
-            <Dices className="mr-2 h-4 w-4" />
+            <Dices className="mr-2 h-4 w-4" aria-hidden="true" />
             Roll Initiative
           </Button>
           <Button
@@ -386,7 +386,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
             title="Advance to the next participant's turn"
             aria-label="Advance to the next participant's turn"
           >
-            <ChevronRight className="mr-2 h-4 w-4" />
+            <ChevronRight className="mr-2 h-4 w-4" aria-hidden="true" />
             Next Turn
           </Button>
         </div>
@@ -403,7 +403,7 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
               action={
                 onAddParticipant && (
                   <Button onClick={onAddParticipant} variant="outline" size="sm">
-                    <Plus className="mr-2 h-4 w-4" />
+                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
                     Add Participant
                   </Button>
                 )
