@@ -43,12 +43,15 @@ describe('CharacterPermissionService.listSharedCharacters Optimization', () => {
       },
     ];
 
-    // Setup the chainable mock for db.select().from().innerJoin().where().orderBy()
+    // Setup the chainable mock for db.select().from().innerJoin().leftJoin().where().orderBy()
     const mockWhere = {
       orderBy: vi.fn().mockResolvedValue(mockResults),
     };
-    const mockInnerJoin = {
+    const mockLeftJoin = {
       where: vi.fn().mockReturnValue(mockWhere),
+    };
+    const mockInnerJoin = {
+      leftJoin: vi.fn().mockReturnValue(mockLeftJoin),
     };
     const mockFrom = {
       innerJoin: vi.fn().mockReturnValue(mockInnerJoin),
@@ -65,6 +68,7 @@ describe('CharacterPermissionService.listSharedCharacters Optimization', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
       ...mockResults[0].character,
+      stats: undefined,
       permission: mockResults[0].permission,
     });
 
@@ -72,7 +76,8 @@ describe('CharacterPermissionService.listSharedCharacters Optimization', () => {
     expect(db.select).toHaveBeenCalled();
     expect(mockSelect.from).toHaveBeenCalledWith(characterPermissions);
     expect(mockFrom.innerJoin).toHaveBeenCalledWith(characters, expect.anything());
-    expect(mockInnerJoin.where).toHaveBeenCalled();
+    expect(mockInnerJoin.leftJoin).toHaveBeenCalled();
+    expect(mockLeftJoin.where).toHaveBeenCalled();
     expect(mockWhere.orderBy).toHaveBeenCalled();
   });
 });

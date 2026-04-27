@@ -34,9 +34,14 @@ export class CharacterService {
    * List all characters for a user
    */
   static async listForUser(userId: string): Promise<Character[]> {
+    // ⚡ Bolt: Eager-load characterStats to avoid N+1 queries when displaying
+    // character lists that show HP, ability scores, or modifiers.
     const chars = await db.query.characters.findMany({
       where: or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       orderBy: [desc(characters.createdAt)],
+      with: {
+        stats: true,
+      },
       columns: {
         id: true,
         name: true,

@@ -15,6 +15,7 @@ import { and, desc, eq, exists, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
+  characterStats,
   characters,
 } from '../../../db/schema/index';
 import { InternalServerError } from '../lib/errors.js';
@@ -253,9 +254,9 @@ export class CharacterPermissionService {
    * List all characters shared with a user
    */
   static async listSharedCharacters(userId: string): Promise<Array<Character & { permission: CharacterPermission }>> {
-    // ⚡ Bolt: Consolidated permission check and character retrieval into a single joined query.
-    // This reduces database round-trips from 2 to 1 and improves performance for shared character listings.
-    // We explicitly select only needed columns to avoid fetching heavy fields like backstories or spells.
+    // ⚡ Bolt: Consolidated permission check, character retrieval, and stats into a single joined query.
+    // This eliminates the N+1 problem for shared characters by eager-loading stats (HP, attributes)
+    // needed for the character selection UI.
     const results = await (db as any)
       .select({
         character: {
@@ -270,15 +271,18 @@ export class CharacterPermissionService {
           createdAt: characters.createdAt,
           updatedAt: characters.updatedAt,
         },
+        stats: characterStats,
         permission: characterPermissions,
       })
       .from(characterPermissions)
       .innerJoin(characters, eq(characterPermissions.characterId, characters.id))
+      .leftJoin(characterStats, eq(characters.id, characterStats.characterId))
       .where(eq(characterPermissions.userId, userId))
       .orderBy(desc(characterPermissions.grantedAt));
 
     return results.map((r: any) => ({
       ...r.character,
+      stats: r.stats,
       permission: r.permission,
     }));
   }
