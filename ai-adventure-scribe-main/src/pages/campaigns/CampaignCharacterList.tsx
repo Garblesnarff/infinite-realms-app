@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 import type { Character } from '@/types/character';
 
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MemoizedCharacterCard } from '@/features/character/components/list/character-card';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +15,7 @@ import { subscriptionManager } from '@/services/supabase-subscription-manager';
 
 const CampaignCharacterList: React.FC = () => {
   const { id: campaignId } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery({
@@ -114,7 +117,23 @@ const CampaignCharacterList: React.FC = () => {
   const characters = transformCharacterData(data || []);
 
   if (!characters.length) {
-    return <div className="text-muted-foreground mt-4">No characters in this campaign yet.</div>;
+    return (
+      <EmptyState
+        illustration="no-characters"
+        variant="card"
+        title="No Characters Yet"
+        description="Every epic saga needs its heroes. Create your first character to begin the journey."
+        className="mt-8"
+        action={
+          <Button
+            onClick={() => navigate(`/app/characters/new?campaign=${campaignId}`)}
+            variant="cosmic"
+          >
+            Create Character
+          </Button>
+        }
+      />
+    );
   }
 
   return (
