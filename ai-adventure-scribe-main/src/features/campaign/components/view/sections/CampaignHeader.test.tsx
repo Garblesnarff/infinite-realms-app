@@ -33,8 +33,18 @@ describe('CampaignHeader', () => {
     name: 'Test Campaign',
     genre: 'fantasy',
     created_at: '',
-    user_id: 'user1',
-  } as any;
+    setting: {
+      era: 'medieval',
+      location: 'Sword Coast',
+      atmosphere: 'adventurous',
+    },
+    thematic_elements: {
+      mainThemes: [],
+      recurringMotifs: [],
+      keyLocations: [],
+      importantNPCs: [],
+    },
+  };
 
   it('renders campaign name', () => {
     render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
@@ -43,9 +53,9 @@ describe('CampaignHeader', () => {
 
   it('renders delete button with aria-label and title', () => {
     render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
-    const deleteBtn = screen.getByLabelText('Delete campaign');
+    const deleteBtn = screen.getByLabelText(`Delete campaign: ${mockCampaign.name}`);
     expect(deleteBtn).toBeDefined();
-    expect(deleteBtn.getAttribute('title')).toBe('Delete campaign');
+    expect(deleteBtn.getAttribute('title')).toBe(`Delete campaign: ${mockCampaign.name}`);
   });
 
   it('shows confirmation dialog when delete button is clicked', () => {

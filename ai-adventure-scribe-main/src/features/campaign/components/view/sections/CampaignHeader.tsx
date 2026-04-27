@@ -40,8 +40,8 @@ export const CampaignHeader: React.FC<CampaignHeaderProps> = ({
             variant="destructive"
             size="icon"
             disabled={isDeleting}
-            aria-label="Delete campaign"
-            title="Delete campaign"
+            aria-label={`Delete campaign: ${campaign.name}`}
+            title={`Delete campaign: ${campaign.name}`}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
