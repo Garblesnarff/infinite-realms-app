@@ -34,19 +34,34 @@ export interface FolderWithChildren extends CharacterFolder {
 
 export class CharacterFolderService {
   /**
-   * Build a nested folder structure from flat list
+   * Build a nested folder structure from flat list using Map-based O(N) approach.
+   * ⚡ Bolt: Replaced recursive O(N^2) filter with O(N) grouping.
+   * Preservation of database sorting (sortOrder) is maintained by Map insertion order.
    */
   private static buildFolderTree(
-    folders: CharacterFolder[],
-    parentId: string | null = null
+    folders: (CharacterFolder & { characterCount?: number })[]
   ): FolderWithChildren[] {
-    return folders
-      .filter(folder => folder.parentFolderId === parentId)
-      .map(folder => ({
-        ...folder,
-        children: this.buildFolderTree(folders, folder.id),
-      }))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const folderMap = new Map<string | null, FolderWithChildren[]>();
+    const allFolders: FolderWithChildren[] = folders.map((f) => ({ ...f, children: [] }));
+
+    // Group folders by their parentFolderId
+    for (const folder of allFolders) {
+      const parentId = folder.parentFolderId;
+      let group = folderMap.get(parentId);
+      if (!group) {
+        group = [];
+        folderMap.set(parentId, group);
+      }
+      group.push(folder);
+    }
+
+    // Link children to their parents
+    for (const folder of allFolders) {
+      folder.children = folderMap.get(folder.id) || [];
+    }
+
+    // Return the top-level folders
+    return folderMap.get(null) || [];
   }
 
   /**
@@ -101,7 +116,7 @@ export class CharacterFolderService {
 
     const folderCounts = new Map<string, number>(counts.map((c) => [c.folderId as string, c.count]));
 
-    const foldersWithCounts = folders.map(folder => ({
+    const foldersWithCounts = folders.map((folder) => ({
       ...folder,
       characterCount: folderCounts.get(folder.id) || 0,
     }));
@@ -237,7 +252,11 @@ export class CharacterFolderService {
     }
 
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
-    const { id: _id, userId: _userId, ...safeUpdates } = updates as any;
+    const {
+      id: _id,
+      userId: _userId,
+      ...safeUpdates
+    } = updates as Partial<CharacterFolder>;
 
     const [updated] = await db
       .update(characterFolders)
