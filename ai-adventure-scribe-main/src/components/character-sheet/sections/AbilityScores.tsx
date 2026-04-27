@@ -1,5 +1,5 @@
 import { Save, Loader2 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -32,13 +32,14 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
   const [editedStats, setEditedStats] = useState(stats);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const baseId = useId();
 
   /**
    * Handles changes to ability score inputs
    * @param ability - The ability score being changed
    * @param value - The new value
    */
-  const handleStatChange = (ability: keyof typeof stats, value: string) => {
+  const handleStatChange = (ability: keyof typeof stats, value: string): void => {
     const numValue = parseInt(value) || 0;
     setEditedStats((prev) => ({
       ...prev,
@@ -50,7 +51,7 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
    * Validates ability scores
    * @returns boolean indicating if scores are valid
    */
-  const validateStats = () => {
+  const validateStats = (): boolean => {
     const scores = Object.values(editedStats);
     return scores.every((score) => score >= 3 && score <= 20);
   };
@@ -58,7 +59,7 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
   /**
    * Saves updated ability scores to the database
    */
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     if (!validateStats()) {
       toast({
         title: 'Invalid Ability Scores',
@@ -98,7 +99,13 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
     <Card className="p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Ability Scores</h2>
-        <Button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="flex items-center gap-2"
+          title="Save ability scores"
+          aria-label={isSaving ? 'Saving ability scores...' : 'Save ability scores'}
+        >
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save
         </Button>
@@ -106,11 +113,14 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {Object.entries(editedStats).map(([ability, value]) => (
           <div key={ability} className="space-y-2">
-            <label htmlFor={ability} className="block text-sm font-medium text-gray-700 capitalize">
+            <label
+              htmlFor={`${baseId}-${ability}`}
+              className="block text-sm font-medium text-gray-700 capitalize"
+            >
               {ability}
             </label>
             <Input
-              id={ability}
+              id={`${baseId}-${ability}`}
               type="number"
               min="3"
               max="20"
