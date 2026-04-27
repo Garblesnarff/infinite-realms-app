@@ -11,6 +11,7 @@
 import { sql } from './db.js';
 import { getBearerToken } from './jwt.js';
 import { logger } from './logger.js';
+import { UserPlanCache } from './user-plan-cache.js';
 import { verifyWorkOSToken } from '../services/workos.js';
 
 export interface AuthUser {
@@ -28,10 +29,17 @@ export interface AuthResult {
  * Resolve user's subscription plan from database
  */
 async function resolveUserPlan(userId: string): Promise<string> {
+  // ⚡ Bolt: Check in-memory cache first to avoid redundant O(1) query per request
+  const cachedPlan = UserPlanCache.get(userId);
+  if (cachedPlan) return cachedPlan;
+
   try {
     const rows = await sql`SELECT plan FROM users WHERE id = ${userId} LIMIT 1`;
     if (rows?.[0]?.plan) {
-      return String(rows[0].plan).toLowerCase();
+      const plan = String(rows[0].plan).toLowerCase();
+      // ⚡ Bolt: Cache the result for 5 minutes
+      UserPlanCache.set(userId, plan);
+      return plan;
     }
   } catch (e) {
     logger.warn('Failed to resolve user plan from database:', e);

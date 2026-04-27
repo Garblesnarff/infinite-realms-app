@@ -12,6 +12,7 @@
 import { db } from '../../../db/client';
 import { getBearerToken } from '../lib/jwt.js';
 import { logger } from '../lib/logger.js';
+import { UserPlanCache } from '../lib/user-plan-cache.js';
 import { verifyWorkOSToken } from '../services/workos.js';
 
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
@@ -28,13 +29,14 @@ export interface AuthUser {
 /**
  * Resolves user's subscription plan from database or headers
  */
-async function resolveUserPlan(
-  userId: string,
-  headers: Headers
-): Promise<string> {
+async function resolveUserPlan(userId: string, headers: Headers): Promise<string> {
   // 1) Check for explicit header override (useful for tests)
   const planHeader = headers.get('x-plan');
   if (planHeader && process.env.NODE_ENV !== 'production') return planHeader.toLowerCase();
+
+  // ⚡ Bolt: Check in-memory cache first to avoid redundant O(1) query per request
+  const cachedPlan = UserPlanCache.get(userId);
+  if (cachedPlan) return cachedPlan;
 
   // 2) Try to resolve from Postgres users table using shared Drizzle client
   try {
@@ -45,7 +47,12 @@ async function resolveUserPlan(
       columns: { plan: true },
     });
 
-    if (user?.plan) return user.plan.toLowerCase();
+    if (user?.plan) {
+      const plan = user.plan.toLowerCase();
+      // ⚡ Bolt: Cache the result for 5 minutes
+      UserPlanCache.set(userId, plan);
+      return plan;
+    }
   } catch (error) {
     // Fall through to default, but log the error for diagnostic purposes
     logger.error({ msg: 'Failed to resolve user plan', error });
