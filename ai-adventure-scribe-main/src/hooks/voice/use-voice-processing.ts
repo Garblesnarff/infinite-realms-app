@@ -46,6 +46,9 @@ export const useVoiceProcessing = ({
    */
   const processSegmentsProgressively = React.useCallback(
     async (segments: VoiceSegment[], startIndex: number = 0): Promise<void> => {
+      // ⚡ Capture the current abort signal to avoid race conditions when a new request starts
+      const signal = abortController.current?.signal;
+
       logger.info(
         '🎪 Starting progressive processing of',
         segments.length,
@@ -58,7 +61,7 @@ export const useVoiceProcessing = ({
       for (let i = 0; i < segments.length; i++) {
         const actualIndex = startIndex + i;
         // Check if we should abort
-        if (abortController.current?.signal.aborted) {
+        if (signal?.aborted) {
           logger.info('🛑 Processing aborted at segment', actualIndex + 1, 'due to abort signal');
           break;
         }
