@@ -84,4 +84,18 @@ describe('SharedCharactersList Accessibility', () => {
     const filterIcon = document.querySelector('svg.text-muted-foreground[aria-hidden="true"]');
     expect(filterIcon).toBeInTheDocument();
   });
+
+  it('provides descriptive titles for action buttons', () => {
+    render(
+      <MemoryRouter>
+        <SharedCharactersList />
+      </MemoryRouter>
+    );
+
+    const viewButton = screen.getByRole('button', { name: /View Character/i });
+    expect(viewButton).toHaveAttribute('title', "View Thorin Oakenshield's character sheet");
+
+    const removeButton = screen.getByLabelText(/Remove my access to Thorin Oakenshield/i);
+    expect(removeButton).toHaveAttribute('title', 'Remove my access to Thorin Oakenshield');
+  });
 });

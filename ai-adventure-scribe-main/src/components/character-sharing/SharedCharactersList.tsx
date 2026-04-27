@@ -1,5 +1,5 @@
 import { Users, Eye, Edit, Crown, Filter, X, ArrowRight, UserMinus } from 'lucide-react';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -168,6 +168,7 @@ const SharedCharacterCard: React.FC<{
             size="sm"
             onClick={() => navigate(`/app/character/${character.id}`)}
             className="flex-1"
+            title={`View ${character.name}'s character sheet`}
           >
             View Character
             <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
@@ -181,7 +182,7 @@ const SharedCharacterCard: React.FC<{
             aria-label={`Remove my access to ${character.name}`}
             title={`Remove my access to ${character.name}`}
           >
-            <UserMinus className="h-4 w-4" />
+            <UserMinus className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -196,6 +197,7 @@ export const SharedCharactersList: React.FC = () => {
   const { toast } = useToast();
   const trpc = useTRPC();
   const utils = useTRPCUtils();
+  const filterLabelId = useId();
 
   const [filterPermission, setFilterPermission] = useState<string>('all');
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
@@ -275,7 +277,7 @@ export const SharedCharactersList: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6 text-infinite-purple" />
+            <Users className="h-6 w-6 text-infinite-purple" aria-hidden="true" />
             Shared With Me
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -286,8 +288,14 @@ export const SharedCharactersList: React.FC = () => {
         {/* Filter */}
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <label htmlFor={filterLabelId} className="sr-only">
+            Filter shared characters by permission level
+          </label>
           <Select value={filterPermission} onValueChange={setFilterPermission}>
-            <SelectTrigger className="w-40" aria-label="Filter shared characters by permission level">
+            <SelectTrigger
+              id={filterLabelId}
+              className="w-40"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -306,7 +314,7 @@ export const SharedCharactersList: React.FC = () => {
               aria-label="Clear filter"
               title="Clear filter"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </div>
@@ -360,10 +368,11 @@ export const SharedCharactersList: React.FC = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel title="Cancel and keep access">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmRemoveSelf}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              title={`Confirm removing your access to ${selectedCharacter?.name}`}
             >
               {removeSelfMutation.isPending ? 'Removing...' : 'Remove Access'}
             </AlertDialogAction>
