@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
 import { StarterCharacterCard, getClassIcon } from '../StarterCharacterCard';
 import { StarterCharacterDetails, getModifier } from '../StarterCharacterDetails';
+
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
 const mockTemplate: StarterCharacterTemplate = {

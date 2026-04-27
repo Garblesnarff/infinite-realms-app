@@ -1,16 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+import GrappleActionPanel from '../GrappleActionPanel';
 
 import { useCombat } from '@/contexts/CombatContext';
+import logger from '@/lib/logger';
 import {
   rollGrappleCheck,
   createGrappledCondition,
   getGrappleActionDescription,
 } from '@/utils/grappleUtils';
-import GrappleActionPanel from '../GrappleActionPanel';
-import logger from '@/lib/logger';
 
 // Mock UI components to simplify testing
 vi.mock('@/components/ui/select', () => ({

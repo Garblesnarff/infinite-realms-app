@@ -8,6 +8,7 @@
  */
 
 import { MODEL_ID, VOICE_CONFIGS, CHARACTER_KEYWORDS } from './voice/voice-constants';
+
 import type { VoiceConfig } from './voice/voice-types';
 
 import logger from '@/lib/logger';

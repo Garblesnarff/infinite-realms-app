@@ -1,10 +1,9 @@
 import { BookOpen } from 'lucide-react';
 import React from 'react';
 
-import { SpellCard } from '@/components/character-creation/steps/advanced-spellcasting/SpellCard';
-
 import type { Spell } from '@/types/character';
 
+import { SpellCard } from '@/components/character-creation/steps/advanced-spellcasting/SpellCard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TabsContent } from '@/components/ui/tabs';

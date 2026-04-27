@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable max-lines */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { useVoiceProcessing } from '../use-voice-processing';
+
 import { VoiceDirector } from '@/services/voice-director';
 
 // Mock VoiceDirector

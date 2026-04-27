@@ -9,24 +9,28 @@
  * @module server/services/combat-hp-service
  */
 
-import { and, desc, eq, exists, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
-  combatParticipants,
   combatParticipantStatus,
   combatDamageLog,
-  combatEncounters,
-  gameSessions,
-  campaigns,
-  characters,
-  type CombatParticipant,
-  type CombatParticipantStatus,
-  type CombatDamageLog,
 } from '../../../db/schema/index';
-import { NotFoundError, ValidationError, BusinessLogicError } from '../lib/errors.js';
+import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
+import { verifyEncounterAccess } from './combat/data-access.js';
+import {
+  getParticipantWithFullContext,
+  getParticipantStatusScoped,
+  getDamageLog,
+  getParticipantStatus,
+  initializeParticipantStatus,
+} from './combat/hp-data-access.js';
 
+import type {
+  CombatParticipantStatus,
+  CombatDamageLog,
+} from '../../../db/schema/index';
 import type {
   DamageResult,
   HealingResult,
@@ -39,144 +43,6 @@ import type {
  * Combat HP Service
  */
 export class CombatHPService {
-  /**
-   * Verify encounter ownership through its session's campaign/character links.
-   * Throws NOT_FOUND for both missing and unauthorized access.
-   */
-  private static async verifyEncounterAccess(encounterId: string, userId: string): Promise<void> {
-    const [result] = await db
-      .select({ id: combatEncounters.id })
-      .from(combatEncounters)
-      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-      .where(and(
-        eq(combatEncounters.id, encounterId),
-        or(
-          eq(campaigns.userId, userId),
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId)
-        )
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Combat encounter', encounterId);
-    }
-  }
-
-  /**
-   * Get participant with full context (status, encounter, and authorization) in a single query.
-   * ⚡ Bolt: Consolidated 2-3 query patterns into one round-trip.
-   */
-  private static async getParticipantWithFullContext(
-    participantId: string,
-    encounterId: string,
-    userId?: string
-  ): Promise<{ participant: CombatParticipant; status: CombatParticipantStatus; currentRound: number }> {
-    const [result] = await (db as any)
-      .select({
-        participant: combatParticipants,
-        status: combatParticipantStatus,
-        currentRound: combatEncounters.currentRound,
-      })
-      .from(combatParticipants)
-      .innerJoin(combatParticipantStatus, eq(combatParticipantStatus.participantId, combatParticipants.id))
-      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-      .where(and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, encounterId),
-        userId
-          ? exists(
-              db.select()
-                .from(gameSessions)
-                .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-                .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-                .where(and(
-                  eq(gameSessions.id, combatEncounters.sessionId),
-                  or(
-                    eq(campaigns.userId, userId),
-                    eq(characters.userId, userId),
-                    eq(characters.ownerId, userId)
-                  )
-                ))
-            )
-          : undefined
-      ))
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundError('Participant', participantId);
-    }
-
-    return result;
-  }
-
-  /**
-   * Fetch participant status, optionally scoped by user ownership.
-   * When userId is provided, unauthorized and missing participants both return null.
-   */
-  private static async getParticipantStatusScoped(
-    participantId: string,
-    userId?: string
-  ): Promise<{ encounterId: string; status: CombatParticipantStatus | null } | null> {
-    if (userId) {
-      const [scopedParticipant] = await (db as any)
-        .select({
-          encounterId: combatParticipants.encounterId,
-          status: combatParticipantStatus,
-        })
-        .from(combatParticipants)
-        .leftJoin(combatParticipantStatus, eq(combatParticipantStatus.participantId, combatParticipants.id))
-        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(
-          eq(combatParticipants.id, participantId),
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
-        .limit(1);
-
-      if (!scopedParticipant) {
-        return null;
-      }
-
-      return {
-        encounterId: scopedParticipant.encounterId,
-        status: scopedParticipant.status,
-      };
-    }
-
-    const participant = await db.query.combatParticipants.findFirst({
-      where: eq(combatParticipants.id, participantId),
-      with: {
-        status: true,
-      },
-    });
-
-    if (!participant) {
-      return null;
-    }
-
-    return {
-      encounterId: participant.encounterId,
-      status: participant.status || null,
-    };
-  }
-
-  /**
-   * Apply damage to a participant with D&D 5E rules
-   * - Temp HP shields damage before real HP
-   * - Resistance = half damage (round down)
-   * - Vulnerability = double damage
-   * - Immunity = 0 damage
-   * - Massive damage (damage >= max HP while at 0 HP) = instant death
-   */
   /**
    * Apply damage to a participant with D&D 5E rules.
    * ⚡ Bolt: Supports optional pre-fetched participant data (including status and encounter)
@@ -203,7 +69,7 @@ export class CombatHPService {
           status: preFetchedParticipant.status,
           currentRound: preFetchedParticipant.encounter?.currentRound || 1,
         }
-      : await this.getParticipantWithFullContext(participantId, encounterId, userId);
+      : await getParticipantWithFullContext(participantId, encounterId, userId);
 
     if (!status) {
       throw new BusinessLogicError('Participant has no status record', { participantId });
@@ -268,7 +134,7 @@ export class CombatHPService {
     }
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await this.getParticipantWithFullContext(participantId, encounterId, userId);
+    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     // Delegate to HPMechanics
     const result = HPMechanics.calculateHealingResult(
@@ -312,7 +178,7 @@ export class CombatHPService {
     }
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await this.getParticipantWithFullContext(participantId, encounterId, userId);
+    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     const oldTempHp = status.tempHp;
 
@@ -355,7 +221,7 @@ export class CombatHPService {
     }
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await this.getParticipantWithFullContext(participantId, encounterId, userId);
+    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     if (status.isConscious) {
       throw new BusinessLogicError('Cannot roll death save for conscious participant', { participantId });
@@ -383,7 +249,7 @@ export class CombatHPService {
    * Check if a participant is conscious
    */
   static async checkConscious(participantId: string, userId?: string): Promise<boolean> {
-    const participant = await this.getParticipantStatusScoped(participantId, userId);
+    const participant = await getParticipantStatusScoped(participantId, userId);
 
     if (!participant || !participant.status) {
       throw new NotFoundError('Participant', participantId);
@@ -394,7 +260,6 @@ export class CombatHPService {
 
   /**
    * Get damage log for an encounter or specific participant.
-   * ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
    */
   static async getDamageLog(
     encounterId: string,
@@ -402,48 +267,7 @@ export class CombatHPService {
     round?: number,
     userId?: string
   ): Promise<CombatDamageLog[]> {
-    const conditions = [eq(combatDamageLog.encounterId, encounterId)];
-
-    if (participantId) {
-      conditions.push(eq(combatDamageLog.participantId, participantId));
-    }
-
-    if (round !== undefined) {
-      conditions.push(eq(combatDamageLog.roundNumber, round));
-    }
-
-    if (userId) {
-      const results = await (db as any)
-        .select({ log: combatDamageLog })
-        .from(combatDamageLog)
-        .innerJoin(combatEncounters, eq(combatDamageLog.encounterId, combatEncounters.id))
-        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(
-          ...conditions,
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
-        .orderBy(desc(combatDamageLog.createdAt));
-
-      // If results are empty, verify encounter access to maintain standard error behavior (masking)
-      if (results.length === 0) {
-        await this.verifyEncounterAccess(encounterId, userId);
-      }
-
-      return results.map((r: any) => r.log);
-    }
-
-    const logs = await db.query.combatDamageLog.findMany({
-      where: conditions.length > 1 ? and(...conditions) : conditions[0],
-      orderBy: [desc(combatDamageLog.createdAt)],
-    });
-
-    return logs;
+    return getDamageLog(encounterId, participantId, round, userId);
   }
 
   /**
@@ -453,13 +277,7 @@ export class CombatHPService {
     participantId: string,
     userId?: string
   ): Promise<CombatParticipantStatus | null> {
-    const participant = await this.getParticipantStatusScoped(participantId, userId);
-
-    if (!participant) {
-      return null;
-    }
-
-    return participant.status || null;
+    return getParticipantStatus(participantId, userId);
   }
 
   /**
@@ -470,24 +288,7 @@ export class CombatHPService {
     maxHp: number,
     currentHp?: number
   ): Promise<CombatParticipantStatus> {
-    const [status] = await db
-      .insert(combatParticipantStatus)
-      .values({
-        participantId,
-        maxHp,
-        currentHp: currentHp !== undefined ? currentHp : maxHp,
-        tempHp: 0,
-        isConscious: true,
-        deathSavesSuccesses: 0,
-        deathSavesFailures: 0,
-      })
-      .returning();
-
-    if (!status) {
-      throw new NotFoundError('Failed to initialize participant status', participantId);
-    }
-
-    return status;
+    return initializeParticipantStatus(participantId, maxHp, currentHp);
   }
 
   /**
@@ -508,7 +309,7 @@ export class CombatHPService {
     userId?: string
   ): Promise<StabilizationResult> {
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
-    const { status } = await this.getParticipantWithFullContext(participantId, encounterId, userId);
+    const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
     // Can only stabilize unconscious creatures at 0 HP
     if (status.isConscious || status.currentHp > 0) {

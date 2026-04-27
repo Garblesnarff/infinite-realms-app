@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateMulticlassSpellSelection } from '../validator-multiclass';
+
 import { getEnhancedSpellcastingInfo } from '../utils';
+import { validateMulticlassSpellSelection } from '../validator-multiclass';
 import { validateSpellSelection } from '../validator-sync';
+
 import type { Character } from '@/types/character';
 
 // Mock dependencies

@@ -580,6 +580,7 @@ export default defineConfig({
         'server-bun/src/trpc/routers/__tests__/chronicle-security.test.ts',
         'server-bun/src/services/progression-service.ts',
         'server-bun/src/services/combat-hp-service.ts',
+        'server-bun/src/services/combat/hp-data-access.ts',
         'server-bun/src/services/combat/hp-mechanics.ts',
         'server-bun/src/trpc/routers/blog-helpers.ts',
         'server-bun/src/trpc/routers/blog-taxonomy.ts',

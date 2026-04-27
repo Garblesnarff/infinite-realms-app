@@ -5,7 +5,6 @@ import { MetamagicTab } from '@/components/character-creation/steps/advanced-spe
 import { PactMagicTab } from '@/components/character-creation/steps/advanced-spellcasting/PactMagicTab';
 import { PreparationTab } from '@/components/character-creation/steps/advanced-spellcasting/PreparationTab';
 import { RitualTab } from '@/components/character-creation/steps/advanced-spellcasting/RitualTab';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

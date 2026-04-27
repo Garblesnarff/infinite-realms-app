@@ -1,5 +1,3 @@
-import { processTableEvent } from '@/services/subscription/event-processor';
-import { handleStatusChange, handleFailure } from '@/services/subscription/status-manager';
 
 import type {
   PostgresEvent,
@@ -9,6 +7,8 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { processTableEvent } from '@/services/subscription/event-processor';
+import { handleStatusChange, handleFailure } from '@/services/subscription/status-manager';
 import { addNetworkListener, isOffline } from '@/utils/network';
 
 
