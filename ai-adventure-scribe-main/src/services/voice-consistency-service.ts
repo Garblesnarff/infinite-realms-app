@@ -15,7 +15,7 @@
 import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
 
-import type { VoiceConfig } from './voice-mapper';
+import type { VoiceConfig } from './voice/voice-types';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';

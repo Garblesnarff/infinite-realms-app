@@ -7,270 +7,14 @@
  * @author AI Dungeon Master Team
  */
 
-import type { VoiceSettings } from './dialogue-parser';
+import { MODEL_ID, VOICE_CONFIGS, CHARACTER_KEYWORDS } from './voice/voice-constants';
+import type { VoiceConfig } from './voice/voice-types';
 
 import logger from '@/lib/logger';
 
-export interface VoiceConfig {
-  id: string;
-  name: string;
-  description: string;
-  model: string;
-  settings: VoiceSettings;
-  category: 'narrator' | 'hero' | 'villain' | 'creature' | 'npc' | 'child' | 'elder';
-}
+export type { VoiceConfig };
 
 export class VoiceMapper {
-  // ElevenLabs Flash v2.5 model - cheapest at 0.5 credits per character
-  private static readonly MODEL_ID = 'eleven_flash_v2_5';
-
-  // Available voice configurations
-  private static readonly VOICE_CONFIGS: Record<string, VoiceConfig> = {
-    // Main Narrator - Default DM voice
-    narrator: {
-      id: 'bIHbv24MWmeRgasZH58o', // Will - premade voice
-      name: 'Will',
-      description: 'Main DM narrator voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'narrator',
-      settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.1,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Heroes and Good Characters
-    hero_male: {
-      id: 'GBv7mTt0atIp3Br8iCZE', // Thomas - premade voice
-      name: 'Thomas',
-      description: 'Noble male hero voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'hero',
-      settings: {
-        stability: 0.6,
-        similarity_boost: 0.8,
-        style: 0.2,
-        use_speaker_boost: true,
-      },
-    },
-
-    hero_female: {
-      id: 'BlgEcC0TfWpBak7FmvHW', // Fena - Young sassy girl character
-      name: 'Fena',
-      description: 'Young female hero voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'hero',
-      settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.3,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Villains and Evil Characters
-    villain_male: {
-      id: '2gPFXx8pN3Avh27Dw5Ma', // Oxley - Evil Character
-      name: 'Oxley',
-      description: 'Ominous male villain voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'villain',
-      settings: {
-        stability: 0.7,
-        similarity_boost: 0.9,
-        style: 0.4,
-        use_speaker_boost: true,
-      },
-    },
-
-    villain_female: {
-      id: 'flHkNRp1BlvT73UL6gyz', // Jessica Anne Bogart - Character and Animation
-      name: 'Jessica Anne Bogart',
-      description: 'Wickedly eloquent female villain voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'villain',
-      settings: {
-        stability: 0.8,
-        similarity_boost: 0.85,
-        style: 0.5,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Creatures and Monsters
-    monster: {
-      id: 'cPoqAvGWCPfCfyPMwe4z', // Kallixis - Monster & Deep
-      name: 'Kallixis',
-      description: 'Deep ancient malevolence voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'creature',
-      settings: {
-        stability: 0.9,
-        similarity_boost: 0.7,
-        style: 0.1,
-        use_speaker_boost: false,
-      },
-    },
-
-    goblin: {
-      id: 'dfZGXKiIzjizWtJ0NgPy', // Michael Mouse - High Energy Comic Character
-      name: 'Michael Mouse',
-      description: 'High-pitched comic character for goblins',
-      model: VoiceMapper.MODEL_ID,
-      category: 'creature',
-      settings: {
-        stability: 0.3,
-        similarity_boost: 0.6,
-        style: 0.6,
-        use_speaker_boost: true,
-      },
-    },
-
-    // NPCs
-    guard: {
-      id: 'GBv7mTt0atIp3Br8iCZE', // Thomas - reused for authority figures
-      name: 'Thomas',
-      description: 'Authoritative guard voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'npc',
-      settings: {
-        stability: 0.8,
-        similarity_boost: 0.7,
-        style: 0.1,
-        use_speaker_boost: true,
-      },
-    },
-
-    merchant: {
-      id: 'g2W4HAjKvdW93AmsjsOx', // Nathan - Funny Cartoon Character
-      name: 'Nathan',
-      description: 'Friendly merchant voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'npc',
-      settings: {
-        stability: 0.4,
-        similarity_boost: 0.8,
-        style: 0.4,
-        use_speaker_boost: true,
-      },
-    },
-
-    innkeeper: {
-      id: 'pMsXgVXv3BLzUgSXRplE', // Serena - premade voice
-      name: 'Serena',
-      description: 'Warm innkeeper voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'npc',
-      settings: {
-        stability: 0.6,
-        similarity_boost: 0.8,
-        style: 0.2,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Children
-    child: {
-      id: 'ha06sua2KFh5KIb2atMC', // Silly Billy - Cartoon Character
-      name: 'Silly Billy',
-      description: 'Light & cute cartoon voice for children',
-      model: VoiceMapper.MODEL_ID,
-      category: 'child',
-      settings: {
-        stability: 0.3,
-        similarity_boost: 0.7,
-        style: 0.5,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Elders and Wise Characters
-    elder: {
-      id: 'yoZ06aMxZJJ28mfd3POQ', // Sam - premade voice
-      name: 'Sam',
-      description: 'Wise elder voice',
-      model: VoiceMapper.MODEL_ID,
-      category: 'elder',
-      settings: {
-        stability: 0.8,
-        similarity_boost: 0.8,
-        style: 0.1,
-        use_speaker_boost: true,
-      },
-    },
-
-    // Default fallback
-    default: {
-      id: 'bIHbv24MWmeRgasZH58o', // Will - same as narrator
-      name: 'Will',
-      description: 'Default voice for unknown characters',
-      model: VoiceMapper.MODEL_ID,
-      category: 'npc',
-      settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.1,
-        use_speaker_boost: true,
-      },
-    },
-  };
-
-  // Character type keywords for automatic mapping
-  private static readonly CHARACTER_KEYWORDS = {
-    villain: [
-      'villain',
-      'evil',
-      'dark lord',
-      'necromancer',
-      'demon',
-      'devil',
-      'cultist',
-      'bandit leader',
-      'witch',
-      'warlock',
-    ],
-    monster: [
-      'dragon',
-      'demon',
-      'ancient',
-      'beast',
-      'lich',
-      'vampire lord',
-      'giant',
-      'titan',
-      'elemental',
-    ],
-    goblin: ['goblin', 'imp', 'sprite', 'fairy', 'pixie', 'gnome', 'halfling', 'kobold'],
-    guard: ['guard', 'soldier', 'captain', 'sergeant', 'knight', 'paladin', 'sheriff', 'watchman'],
-    merchant: ['merchant', 'trader', 'shopkeeper', 'vendor', 'peddler', 'salesman', 'fence'],
-    innkeeper: ['innkeeper', 'barkeep', 'bartender', 'tavern keeper', 'proprietor', 'host'],
-    child: ['child', 'kid', 'boy', 'girl', 'young', 'orphan', 'student', 'apprentice'],
-    elder: [
-      'elder',
-      'sage',
-      'wizard',
-      'priest',
-      'hermit',
-      'scholar',
-      'old man',
-      'old woman',
-      'grandmother',
-      'grandfather',
-      'thorne',
-    ],
-    hero_male: ['hero', 'champion', 'warrior', 'fighter', 'ranger', 'rogue', 'bard'],
-    hero_female: [
-      'heroine',
-      'warrior woman',
-      'ranger woman',
-      'female fighter',
-      'sorceress',
-      'priestess',
-    ],
-  };
-
   /**
    * Get voice configuration for a character
    */
@@ -279,7 +23,7 @@ export class VoiceMapper {
 
     if (!character || character === 'unknown') {
       logger.info('↪️ Using default voice (no character name)');
-      return this.VOICE_CONFIGS.default;
+      return VOICE_CONFIGS.default;
     }
 
     const cleanCharacter = character.toLowerCase().trim();
@@ -293,10 +37,10 @@ export class VoiceMapper {
     }
 
     // Then, try keyword matching
-    for (const [voiceType, keywords] of Object.entries(this.CHARACTER_KEYWORDS)) {
+    for (const [voiceType, keywords] of Object.entries(CHARACTER_KEYWORDS)) {
       for (const keyword of keywords) {
         if (cleanCharacter.includes(keyword)) {
-          const voiceConfig = this.VOICE_CONFIGS[voiceType];
+          const voiceConfig = VOICE_CONFIGS[voiceType];
           if (voiceConfig) {
             logger.info(
               `🎯 Keyword match found: "${keyword}" -> ${voiceType} -> ${voiceConfig.name} (${voiceConfig.id})`,
@@ -311,7 +55,7 @@ export class VoiceMapper {
 
     // Finally, use smart classification for unknown characters
     const classifiedType = this.classifyCharacter(cleanCharacter);
-    const voiceConfig = this.VOICE_CONFIGS[classifiedType] || this.VOICE_CONFIGS.default;
+    const voiceConfig = VOICE_CONFIGS[classifiedType] || VOICE_CONFIGS.default;
     logger.info(
       `🤖 Smart classification: "${cleanCharacter}" -> ${classifiedType} -> ${voiceConfig.name} (${voiceConfig.id})`,
     );
@@ -326,14 +70,14 @@ export class VoiceMapper {
    * Get voice configuration for narration
    */
   static getNarratorVoice(): VoiceConfig {
-    return this.VOICE_CONFIGS.narrator;
+    return VOICE_CONFIGS.narrator;
   }
 
   /**
    * Get all available voice configurations
    */
   static getAllVoices(): Record<string, VoiceConfig> {
-    return { ...this.VOICE_CONFIGS };
+    return { ...VOICE_CONFIGS };
   }
 
   /**
@@ -377,7 +121,7 @@ export class VoiceMapper {
     try {
       const saved = JSON.parse(localStorage.getItem('character-voice-mappings') || '{}');
       const voiceType = saved[character];
-      return voiceType ? this.VOICE_CONFIGS[voiceType] : null;
+      return voiceType ? VOICE_CONFIGS[voiceType] : null;
     } catch (error) {
       logger.warn('Failed to load character voice mapping:', error);
       return null;
@@ -388,7 +132,7 @@ export class VoiceMapper {
    * Update voice configuration for a specific character
    */
   static updateCharacterVoice(character: string, voiceType: string): boolean {
-    if (!this.VOICE_CONFIGS[voiceType]) {
+    if (!VOICE_CONFIGS[voiceType]) {
       return false;
     }
 
@@ -452,7 +196,7 @@ export class VoiceMapper {
   static getVoiceCategories(): Record<string, VoiceConfig[]> {
     const categories: Record<string, VoiceConfig[]> = {};
 
-    Object.values(this.VOICE_CONFIGS).forEach((voice) => {
+    Object.values(VOICE_CONFIGS).forEach((voice) => {
       if (!categories[voice.category]) {
         categories[voice.category] = [];
       }
