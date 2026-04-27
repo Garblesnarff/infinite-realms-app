@@ -1,13 +1,14 @@
-import { Sparkles, BookOpen, Clock, Zap, Star, Scroll, Crown, Shield } from 'lucide-react';
+import { Sparkles, Crown, Shield } from 'lucide-react';
 import React from 'react';
 
-import type { Spell } from '@/types/character';
+import { MetamagicTab } from '@/components/character-creation/steps/advanced-spellcasting/MetamagicTab';
+import { PactMagicTab } from '@/components/character-creation/steps/advanced-spellcasting/PactMagicTab';
+import { PreparationTab } from '@/components/character-creation/steps/advanced-spellcasting/PreparationTab';
+import { RitualTab } from '@/components/character-creation/steps/advanced-spellcasting/RitualTab';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { metamagicOptions } from '@/data/spellcastingFeatures';
 import { useAdvancedSpellcasting } from '@/hooks/useAdvancedSpellcasting';
 
@@ -77,51 +78,6 @@ const AdvancedSpellcastingSelection: React.FC = () => {
     );
   }
 
-  const getSpellCard = (
-    spell: Spell,
-    isSelected: boolean,
-    onSelectionChange: (id: string, checked: boolean) => void,
-    disabled: boolean = false,
-  ): React.ReactNode => (
-    <div
-      key={spell.id}
-      className={`p-3 border rounded-lg cursor-pointer transition-all ${
-        isSelected ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      onClick={() => !disabled && onSelectionChange(spell.id, !isSelected)}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium">{spell.name}</span>
-            <Badge variant="outline" className="text-xs">
-              Level {spell.level}
-            </Badge>
-            {spell.ritual && (
-              <Badge variant="secondary" className="text-xs">
-                Ritual
-              </Badge>
-            )}
-            {spell.concentration && (
-              <Badge variant="secondary" className="text-xs">
-                Concentration
-              </Badge>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mb-2">
-            {spell.school} • {spell.castingTime} • {spell.range}
-          </p>
-          <p className="text-sm">{spell.description}</p>
-        </div>
-        <Checkbox
-          checked={isSelected}
-          disabled={disabled}
-          onCheckedChange={(checked) => onSelectionChange(spell.id, checked === true)}
-        />
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -187,256 +143,42 @@ const AdvancedSpellcastingSelection: React.FC = () => {
 
         {/* Spell Preparation Tab */}
         {canPrepareSpells && (
-          <TabsContent value="preparation">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-blue-500" />
-                  Spell Preparation
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Choose {maxPreparedSpells} spells to prepare. You can change your prepared spells
-                  after a long rest.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Spells Prepared</span>
-                    <Badge variant="outline">
-                      {preparedSpells.length} / {maxPreparedSpells}
-                    </Badge>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${(preparedSpells.length / maxPreparedSpells) * 100}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {availableSpells.map((spell) =>
-                    getSpellCard(
-                      spell,
-                      preparedSpells.includes(spell.id),
-                      handleSpellPreparation,
-                      !preparedSpells.includes(spell.id) &&
-                        preparedSpells.length >= maxPreparedSpells,
-                    ),
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <PreparationTab
+            preparedSpells={preparedSpells}
+            maxPreparedSpells={maxPreparedSpells}
+            availableSpells={availableSpells}
+            handleSpellPreparation={handleSpellPreparation}
+          />
         )}
 
         {/* Pact Magic Tab */}
         {usesPactMagic && (
-          <TabsContent value="pact">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-purple-500" />
-                  Pact Magic
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Choose {maxPactSpells} spells known. Your pact magic slots recharge on short
-                  rests.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="text-center p-3 border rounded">
-                    <div className="text-2xl font-bold">{pactProgression?.pactSlots || 0}</div>
-                    <div className="text-xs text-muted-foreground">Pact Magic Slots</div>
-                  </div>
-                  <div className="text-center p-3 border rounded">
-                    <div className="text-2xl font-bold">{pactProgression?.pactSlotLevel || 1}</div>
-                    <div className="text-xs text-muted-foreground">Slot Level</div>
-                  </div>
-                  <div className="text-center p-3 border rounded">
-                    <div className="text-2xl font-bold">{maxPactSpells}</div>
-                    <div className="text-xs text-muted-foreground">Spells Known</div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Spells Known</span>
-                    <Badge variant="outline">
-                      {pactMagicSpells.length} / {maxPactSpells}
-                    </Badge>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${(pactMagicSpells.length / maxPactSpells) * 100}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {availableSpells
-                    .filter((spell: Spell) => spell.level <= (pactProgression?.pactSlotLevel || 1))
-                    .map((spell: Spell) =>
-                      getSpellCard(
-                        spell,
-                        pactMagicSpells.includes(spell.id),
-                        handlePactSpellSelection,
-                        !pactMagicSpells.includes(spell.id) &&
-                          pactMagicSpells.length >= maxPactSpells,
-                      ),
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <PactMagicTab
+            pactMagicSpells={pactMagicSpells}
+            maxPactSpells={maxPactSpells}
+            availableSpells={availableSpells}
+            pactProgression={pactProgression}
+            handlePactSpellSelection={handlePactSpellSelection}
+          />
         )}
 
         {/* Metamagic Tab */}
         {usesMetamagic && (
-          <TabsContent value="metamagic">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-gold-500" />
-                  Metamagic
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Choose {maxMetamagicOptions} metamagic options. You have {sorceryPoints} sorcery
-                  points to fuel them.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div className="text-center p-3 border rounded">
-                    <div className="text-2xl font-bold">{sorceryPoints}</div>
-                    <div className="text-xs text-muted-foreground">Sorcery Points</div>
-                  </div>
-                  <div className="text-center p-3 border rounded">
-                    <div className="text-2xl font-bold">{maxMetamagicOptions}</div>
-                    <div className="text-xs text-muted-foreground">Options Known</div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Metamagic Options</span>
-                    <Badge variant="outline">
-                      {selectedMetamagic.length} / {maxMetamagicOptions}
-                    </Badge>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{
-                        width: `${(selectedMetamagic.length / maxMetamagicOptions) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {metamagicOptions.map((option) => (
-                    <div
-                      key={option.id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                        selectedMetamagic.includes(option.id)
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted hover:border-primary/50'
-                      } ${
-                        !selectedMetamagic.includes(option.id) &&
-                        selectedMetamagic.length >= maxMetamagicOptions
-                          ? 'opacity-50 cursor-not-allowed'
-                          : ''
-                      }`}
-                      onClick={() =>
-                        handleMetamagicSelection(option.id, !selectedMetamagic.includes(option.id))
-                      }
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium">{option.name}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {option.sorceryPointCost} SP
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{option.description}</p>
-                        </div>
-                        <Checkbox
-                          checked={selectedMetamagic.includes(option.id)}
-                          disabled={
-                            !selectedMetamagic.includes(option.id) &&
-                            selectedMetamagic.length >= maxMetamagicOptions
-                          }
-                          onCheckedChange={(checked) =>
-                            handleMetamagicSelection(option.id, checked === true)
-                          }
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <MetamagicTab
+            selectedMetamagic={selectedMetamagic}
+            maxMetamagicOptions={maxMetamagicOptions}
+            sorceryPoints={sorceryPoints}
+            metamagicOptions={metamagicOptions}
+            handleMetamagicSelection={handleMetamagicSelection}
+          />
         )}
 
         {/* Ritual Casting Tab */}
         {usesRitualCasting && (
-          <TabsContent value="ritual">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-indigo-500" />
-                  Ritual Casting
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  You can cast spells with the ritual tag as rituals, taking an extra 10 minutes but
-                  not expending a spell slot.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <div className="flex items-center gap-2">
-                    <Scroll className="w-4 h-4" />
-                    <span className="text-sm font-medium">Available Ritual Spells</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {characterClass?.id === 'wizard'
-                      ? 'You can cast any ritual spell in your spellbook without preparing it.'
-                      : 'You can cast ritual spells you have prepared without expending spell slots.'}
-                  </p>
-                </div>
-
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {availableRitualSpells.map((spell: Spell) => (
-                    <div key={spell.id} className="p-3 border rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">{spell.name}</span>
-                            <Badge variant="outline" className="text-xs">
-                              Level {spell.level}
-                            </Badge>
-                            <Badge variant="secondary" className="text-xs">
-                              Ritual
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {spell.school} • {spell.castingTime} (+10 min as ritual) • {spell.range}
-                          </p>
-                          <p className="text-sm">{spell.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <RitualTab
+            characterClassId={characterClass?.id}
+            availableRitualSpells={availableRitualSpells}
+          />
         )}
       </Tabs>
 
