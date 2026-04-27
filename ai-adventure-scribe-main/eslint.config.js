@@ -319,6 +319,7 @@ export default tseslint.config(
       'server-bun/src/services/spell-slots/spell-slot-mechanics.ts',
       'server-bun/src/services/rest-service.ts',
       'server-bun/src/services/rest/rest-hit-dice-service.ts',
+      'server-bun/src/ws.ts',
       'server-bun/src/services/combat-hp-service.ts',
       'server-bun/src/services/combat/hp-data-access.ts',
       'server-bun/src/services/combat/hp-mechanics.ts',
