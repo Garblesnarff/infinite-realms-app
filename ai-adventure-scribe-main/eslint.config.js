@@ -316,6 +316,7 @@ export default tseslint.config(
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
       'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       'server-bun/src/services/spell-slots-service.ts',
+      'server-bun/src/services/spell-slots/spell-slot-data-access.ts',
       'server-bun/src/services/spell-slots/spell-slot-mechanics.ts',
       'server-bun/src/services/rest-service.ts',
       'server-bun/src/services/rest/rest-hit-dice-service.ts',
