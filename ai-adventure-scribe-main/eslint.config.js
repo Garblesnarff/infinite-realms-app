@@ -471,6 +471,7 @@ export default tseslint.config(
       'server-bun/src/services/token/token-link-service.ts',
       'server-bun/src/services/class-features-service.ts',
       'server-bun/src/services/progression/class-feature-usage-service.ts',
+      'server-bun/src/services/session-service.ts',
     ],
     rules: {
       'max-lines': 'warn',

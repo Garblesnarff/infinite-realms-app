@@ -6,53 +6,21 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, isNull, desc, asc, sql, or, exists, type SQL } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, or } from 'drizzle-orm';
 
+import { getOwnershipCondition } from './session/session-authorization.js';
+import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
-import { gameSessions, dialogueHistory, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index';
-import { InternalServerError, NotFoundError } from '../lib/errors.js';
+import { gameSessions, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index';
+import { NotFoundError } from '../lib/errors.js';
 
-/**
- * Message with pagination metadata
- */
-export interface MessagePage {
-  messages: DialogueHistory[];
-  hasMore: boolean;
-  total: number;
-}
+export { type MessagePage };
 
 /**
  * Session Service
  * Provides type-safe database operations for game sessions and messages
  */
 export class SessionService {
-  /**
-   * Helper to build ownership condition for a session
-   */
-  private static getOwnershipCondition(userId: string): SQL | undefined {
-    return or(
-      exists(
-        db.select()
-          .from(campaigns)
-          .where(and(
-            eq(campaigns.id, gameSessions.campaignId),
-            eq(campaigns.userId, userId)
-          ))
-      ),
-      exists(
-        db.select()
-          .from(characters)
-          .where(and(
-            eq(characters.id, gameSessions.characterId),
-            or(
-              eq(characters.userId, userId),
-              eq(characters.ownerId, userId)
-            )
-          ))
-      )
-    );
-  }
-
   /**
    * Create a new game session
    */
@@ -152,7 +120,7 @@ export class SessionService {
     const session = await db.query.gameSessions.findFirst({
       where: and(
         eq(gameSessions.id, sessionId),
-        this.getOwnershipCondition(userId)
+        getOwnershipCondition(userId)
       ),
     });
 
@@ -162,6 +130,7 @@ export class SessionService {
 
   /**
    * Get session with message history
+   * Delegates to SessionMessageService.
    */
   static async getSessionWithMessages(
     sessionId: string,
@@ -175,50 +144,7 @@ export class SessionService {
     messages: DialogueHistory[];
     total: number;
   }> {
-    const limit = options?.limit || 50;
-    const offset = options?.offset || 0;
-
-    // ⚡ Bolt: Parallelize session fetch and combined message/count query to reduce total latency.
-    // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
-    const [session, messagesWithCount] = await Promise.all([
-      db.query.gameSessions.findFirst({
-        where: and(
-          eq(gameSessions.id, sessionId),
-          this.getOwnershipCondition(userId)
-        ),
-        columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
-      }),
-      db
-        .select({
-          message: dialogueHistory,
-          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
-        })
-        .from(dialogueHistory)
-        .where(and(
-          eq(dialogueHistory.sessionId, sessionId),
-          // 🛡️ Sentinel: Incorporate ownership check directly into the dialogue history query
-          // for defense-in-depth, ensuring no messages are leaked even if session check is bypassed.
-          exists(
-            db.select()
-              .from(gameSessions)
-              .where(and(
-                eq(gameSessions.id, dialogueHistory.sessionId),
-                this.getOwnershipCondition(userId)
-              ))
-          )
-        ))
-        .orderBy(asc(dialogueHistory.timestamp))
-        .limit(limit)
-        .offset(offset),
-    ]);
-
-    if (!session) throw new NotFoundError('Session', sessionId);
-
-    return {
-      session,
-      messages: messagesWithCount.map((r) => r.message),
-      total: messagesWithCount[0]?.totalCount || 0,
-    };
+    return SessionMessageService.getSessionWithMessages(sessionId, userId, options);
   }
 
   /**
@@ -239,7 +165,7 @@ export class SessionService {
     }
 
     // Add ownership check
-    conditions.push(this.getOwnershipCondition(userId));
+    conditions.push(getOwnershipCondition(userId));
 
     const session = await db.query.gameSessions.findFirst({
       where: and(...conditions),
@@ -287,7 +213,7 @@ export class SessionService {
       })
       .where(and(
         eq(gameSessions.id, sessionId),
-        this.getOwnershipCondition(userId)
+        getOwnershipCondition(userId)
       ))
       .returning();
 
@@ -313,7 +239,7 @@ export class SessionService {
       })
       .where(and(
         eq(gameSessions.id, sessionId),
-        this.getOwnershipCondition(userId)
+        getOwnershipCondition(userId)
       ))
       .returning();
 
@@ -323,6 +249,7 @@ export class SessionService {
 
   /**
    * Add message to session
+   * Delegates to SessionMessageService.
    */
   static async addMessage(data: {
     sessionId: string;
@@ -332,33 +259,12 @@ export class SessionService {
     context?: Record<string, unknown>;
     images?: unknown[];
   }, userId: string): Promise<DialogueHistory> {
-    // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
-    // This ensures that messages can only be added to sessions the user is authorized to access.
-    const [msg] = await db
-      .insert(dialogueHistory)
-      .select(
-        db.select({
-          sessionId: sql`${data.sessionId}`,
-          speakerType: sql`${data.speakerType}`,
-          speakerId: sql`${data.speakerId || null}`,
-          message: sql`${data.message}`,
-          context: sql`${data.context || null}`,
-          timestamp: sql`NOW()`,
-        })
-        .from(gameSessions)
-        .where(and(
-          eq(gameSessions.id, data.sessionId),
-          this.getOwnershipCondition(userId)
-        ))
-      )
-      .returning();
-
-    if (!msg) throw new InternalServerError('Failed to add message');
-    return msg;
+    return SessionMessageService.addMessage(data, userId);
   }
 
   /**
    * Get recent messages for session (paginated)
+   * Delegates to SessionMessageService.
    */
   static async getRecentMessages(
     sessionId: string,
@@ -366,50 +272,7 @@ export class SessionService {
     limit: number = 50,
     offset: number = 0
   ): Promise<MessagePage> {
-    // ⚡ Bolt: Parallelize session verification and combined message/count query to reduce total latency.
-    // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
-    const [session, messagesWithCount] = await Promise.all([
-      db.query.gameSessions.findFirst({
-        where: and(
-          eq(gameSessions.id, sessionId),
-          this.getOwnershipCondition(userId)
-        ),
-        columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
-      }),
-      db
-        .select({
-          message: dialogueHistory,
-          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
-        })
-        .from(dialogueHistory)
-        .where(and(
-          eq(dialogueHistory.sessionId, sessionId),
-          // 🛡️ Sentinel: Incorporate ownership check directly into the dialogue history query
-          // for defense-in-depth, ensuring no messages are leaked even if session check is bypassed.
-          exists(
-            db.select()
-              .from(gameSessions)
-              .where(and(
-                eq(gameSessions.id, dialogueHistory.sessionId),
-                this.getOwnershipCondition(userId)
-              ))
-          )
-        ))
-        .orderBy(desc(dialogueHistory.timestamp))
-        .limit(limit)
-        .offset(offset),
-    ]);
-
-    if (!session) throw new NotFoundError('Session', sessionId);
-
-    const total = messagesWithCount[0]?.totalCount || 0;
-    const hasMore = offset + limit < total;
-
-    return {
-      messages: messagesWithCount.map((r) => r.message).reverse(), // Reverse to get oldest to newest for display
-      hasMore,
-      total,
-    };
+    return SessionMessageService.getRecentMessages(sessionId, userId, limit, offset);
   }
 
   /**
@@ -426,7 +289,7 @@ export class SessionService {
     return await db.query.gameSessions.findMany({
       where: and(
         eq(gameSessions.campaignId, campaignId),
-        this.getOwnershipCondition(userId)
+        getOwnershipCondition(userId)
       ),
       columns: {
         id: true,
@@ -465,7 +328,7 @@ export class SessionService {
     const session = await db.query.gameSessions.findFirst({
       where: and(
         eq(gameSessions.id, sessionId),
-        this.getOwnershipCondition(userId)
+        getOwnershipCondition(userId)
       ),
       columns: { sessionNotes: true },
     });

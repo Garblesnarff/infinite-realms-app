@@ -560,6 +560,8 @@ export default defineConfig({
         'server-bun/src/services/combat-attack-service.ts',
         'server-bun/src/services/fog-of-war-service.ts',
         'server-bun/src/services/session-service.ts',
+        'server-bun/src/services/session/session-message-service.ts',
+        'server-bun/src/services/session/session-authorization.ts',
         'server-bun/src/services/exhaustion-service.ts',
         'server-bun/src/services/rest-service.ts',
         'server-bun/src/services/rest/rest-mechanics.ts',
