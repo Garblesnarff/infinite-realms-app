@@ -55,16 +55,29 @@ export const StarterCharacterDetails: React.FC<StarterCharacterDetailsProps> = (
           Ability Scores
         </h3>
         <div className="grid grid-cols-6 gap-2">
-          {Object.entries(abilityScores).map(([ability, score]) => (
-            <div
-              key={ability}
-              className="bg-gray-900/50 rounded-lg p-2 text-center border border-gray-700"
-            >
-              <p className="text-xs text-gray-400 uppercase">{ability.slice(0, 3)}</p>
-              <p className="text-lg font-bold text-white">{score}</p>
-              <p className="text-xs text-purple-300">{getModifier(score)}</p>
-            </div>
-          ))}
+          {Object.entries(abilityScores).map(([ability, score]) => {
+            const modifier = getModifier(score);
+            const label = `${ability}: ${score}, modifier ${modifier}`;
+            return (
+              <div
+                key={ability}
+                role="group"
+                aria-label={label}
+                title={label}
+                className="bg-gray-900/50 rounded-lg p-2 text-center border border-gray-700"
+              >
+                <p className="text-xs text-gray-400 uppercase" aria-hidden="true">
+                  {ability.slice(0, 3)}
+                </p>
+                <p className="text-lg font-bold text-white" aria-hidden="true">
+                  {score}
+                </p>
+                <p className="text-xs text-purple-300" aria-hidden="true">
+                  {modifier}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
