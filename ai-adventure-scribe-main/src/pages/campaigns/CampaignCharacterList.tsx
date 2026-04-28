@@ -108,13 +108,9 @@ const CampaignCharacterList: React.FC = () => {
     );
   }
 
-  const transformCharacterData = (rawData: any[]): Partial<Character>[] => {
-    return rawData.map((char) => ({
-      ...char,
-    }));
-  };
-
-  const characters = transformCharacterData(data || []);
+  // ⚡ Bolt: Removed redundant transformCharacterData function that performed
+  // an unnecessary shallow copy of the character array on every render.
+  const characters = (data || []) as Partial<Character>[];
 
   if (!characters.length) {
     return (

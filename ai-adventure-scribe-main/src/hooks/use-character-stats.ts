@@ -9,6 +9,28 @@ import { calculateAllCharacterStats } from '@/utils/character-calculations';
 import { calculateRacialBonuses, getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
 
 /**
+ * ⚡ Bolt: Hoisted constants to module scope to avoid re-allocation during render
+ * and optimize lookup performance in character hooks.
+ */
+const SPELLCASTING_CLASSES = new Set([
+  'Wizard',
+  'Sorcerer',
+  'Warlock',
+  'Bard',
+  'Cleric',
+  'Druid',
+  'Paladin',
+  'Ranger',
+  'Eldritch Knight',
+  'Arcane Trickster',
+]);
+
+const XP_THRESHOLDS = [
+  0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000,
+  195000, 225000, 265000, 305000, 355000,
+];
+
+/**
  * Hook for calculating and memoizing character statistics
  * Provides real-time D&D 5e calculations for character sheets
  */
@@ -51,21 +73,8 @@ export const useCharacterStatValue = <K extends keyof CharacterStats>(
 export const useIsSpellcaster = (character: Character | null): boolean => {
   return useMemo(() => {
     if (!character?.class) return false;
-
-    const spellcastingClasses = [
-      'Wizard',
-      'Sorcerer',
-      'Warlock',
-      'Bard',
-      'Cleric',
-      'Druid',
-      'Paladin',
-      'Ranger',
-      'Eldritch Knight',
-      'Arcane Trickster',
-    ];
-
-    return spellcastingClasses.includes(character.class.name);
+    // ⚡ Bolt: Using Set.has for O(1) lookup complexity instead of O(N).
+    return SPELLCASTING_CLASSES.has(character.class.name);
   }, [character?.class]);
 };
 
@@ -79,14 +88,8 @@ export const useLevelProgression = (character: Character | null) => {
     const currentLevel = character.level || 1;
     const currentXP = character.experience || 0;
 
-    // D&D 5e XP thresholds
-    const xpThresholds = [
-      0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000,
-      165000, 195000, 225000, 265000, 305000, 355000,
-    ];
-
-    const nextLevelXP = xpThresholds[currentLevel] || xpThresholds[19];
-    const previousLevelXP = xpThresholds[currentLevel - 1] || 0;
+    const nextLevelXP = XP_THRESHOLDS[currentLevel] || XP_THRESHOLDS[19];
+    const previousLevelXP = XP_THRESHOLDS[currentLevel - 1] || 0;
     const progressXP = currentXP - previousLevelXP;
     const requiredXP = nextLevelXP - previousLevelXP;
     const progressPercent = currentLevel >= 20 ? 100 : (progressXP / requiredXP) * 100;
