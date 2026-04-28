@@ -475,6 +475,7 @@ export default tseslint.config(
       'server-bun/src/services/progression/class-feature-usage-service.ts',
       'server-bun/src/services/session-service.ts',
       'src/components/character-creation/steps/StartingEquipmentSelection.tsx',
+      'src/stores/useCombatStore.ts',
     ],
     rules: {
       'max-lines': 'warn',
