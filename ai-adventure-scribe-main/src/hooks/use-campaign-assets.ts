@@ -72,12 +72,14 @@ export function useCampaignAssets(
           supabase
             .from('starter_character_templates')
             .select('template_key, name, tagline, portrait_url')
-            .eq('starter_campaign_id', starterCampaignId),
+            .eq('starter_campaign_id', starterCampaignId)
+            .not('portrait_url', 'is', null),
           supabase
             .from('campaign_chunks')
             .select('entity_name, chunk_type, metadata')
             .eq('campaign_id', starterCampaignId)
-            .not('entity_name', 'is', null),
+            .not('entity_name', 'is', null)
+            .not('metadata->image_url', 'is', null),
           supabase
             .from('starter_campaigns')
             .select('title, cover_image_url, banner_image_url')
