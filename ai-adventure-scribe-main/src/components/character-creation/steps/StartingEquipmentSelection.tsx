@@ -1,5 +1,5 @@
 import { Package, Coins, Dice1, TrendingUp, Shield, Sword, Shirt } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
 
@@ -126,6 +126,9 @@ const calculateEstimatedACFromEquipment = (
 const StartingEquipmentSelection: React.FC = () => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
+  const titleId = useId();
+  const packageId = useId();
+  const goldId = useId();
   const character = state.character;
   const characterClass = character?.class;
 
@@ -157,7 +160,7 @@ const StartingEquipmentSelection: React.FC = () => {
   if (!characterClass) {
     return (
       <div className="text-center space-y-4">
-        <Package className="w-16 h-16 mx-auto text-muted-foreground" />
+        <Package className="w-16 h-16 mx-auto text-muted-foreground" aria-hidden="true" />
         <h2 className="text-2xl font-bold">Class Required</h2>
         <p className="text-muted-foreground">
           Please select a class first to determine starting equipment.
@@ -272,19 +275,20 @@ const StartingEquipmentSelection: React.FC = () => {
       {/* Method Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Equipment Method</CardTitle>
+          <CardTitle id={titleId}>Equipment Method</CardTitle>
         </CardHeader>
         <CardContent>
           <RadioGroup
             value={method}
             onValueChange={(value: 'package' | 'gold') => setMethod(value)}
+            aria-labelledby={titleId}
           >
             <div className="space-y-3">
               <div className="flex items-center space-x-2 p-4 border rounded hover:border-primary transition-colors cursor-pointer">
-                <RadioGroupItem value="package" id="package" />
+                <RadioGroupItem value="package" id={packageId} />
                 <div className="flex-1">
-                  <Label htmlFor="package" className="flex items-center gap-2 cursor-pointer">
-                    <Package className="w-5 h-5 text-blue-500" />
+                  <Label htmlFor={packageId} className="flex items-center gap-2 cursor-pointer">
+                    <Package className="w-5 h-5 text-blue-500" aria-hidden="true" />
                     <div>
                       <div className="font-medium">Equipment Package</div>
                       <div className="text-sm text-muted-foreground">
@@ -297,10 +301,10 @@ const StartingEquipmentSelection: React.FC = () => {
               </div>
 
               <div className="flex items-center space-x-2 p-4 border rounded hover:border-primary transition-colors cursor-pointer">
-                <RadioGroupItem value="gold" id="gold" />
+                <RadioGroupItem value="gold" id={goldId} />
                 <div className="flex-1">
-                  <Label htmlFor="gold" className="flex items-center gap-2 cursor-pointer">
-                    <Coins className="w-5 h-5 text-yellow-500" />
+                  <Label htmlFor={goldId} className="flex items-center gap-2 cursor-pointer">
+                    <Coins className="w-5 h-5 text-yellow-500" aria-hidden="true" />
                     <div>
                       <div className="font-medium">Starting Gold</div>
                       <div className="text-sm text-muted-foreground">
@@ -321,7 +325,7 @@ const StartingEquipmentSelection: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-blue-500" />
+              <Package className="w-5 h-5 text-blue-500" aria-hidden="true" />
               {characterClass.name} Equipment Package
             </CardTitle>
           </CardHeader>
@@ -348,13 +352,17 @@ const StartingEquipmentSelection: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {startingEquipment.map((equipment, index) => (
                   <div key={index} className="flex items-center gap-2 p-2 border rounded text-sm">
-                    {equipment.category === 'weapon' && <Sword className="w-4 h-4 text-red-500" />}
-                    {equipment.category === 'armor' && <Shirt className="w-4 h-4 text-blue-500" />}
+                    {equipment.category === 'weapon' && (
+                      <Sword className="w-4 h-4 text-red-500" aria-hidden="true" />
+                    )}
+                    {equipment.category === 'armor' && (
+                      <Shirt className="w-4 h-4 text-blue-500" aria-hidden="true" />
+                    )}
                     {equipment.category === 'shield' && (
-                      <Shield className="w-4 h-4 text-gray-500" />
+                      <Shield className="w-4 h-4 text-gray-500" aria-hidden="true" />
                     )}
                     {!['weapon', 'armor', 'shield'].includes(equipment.category) && (
-                      <Package className="w-4 h-4 text-green-500" />
+                      <Package className="w-4 h-4 text-green-500" aria-hidden="true" />
                     )}
                     <span>{equipment.name}</span>
                   </div>
@@ -370,14 +378,14 @@ const StartingEquipmentSelection: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Coins className="w-5 h-5 text-yellow-500" />
+              <Coins className="w-5 h-5 text-yellow-500" aria-hidden="true" />
               Starting Gold
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-center space-y-4">
               <div className="p-6 border-2 border-dashed rounded-lg">
-                <Dice1 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <Dice1 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" aria-hidden="true" />
                 <div className="text-lg font-medium mb-2">
                   Roll {goldData?.dice} × {goldData?.multiplier}
                 </div>
@@ -400,7 +408,7 @@ const StartingEquipmentSelection: React.FC = () => {
                   </div>
                 ) : (
                   <Button onClick={rollStartingGold} size="lg">
-                    <Dice1 className="w-4 h-4 mr-2" />
+                    <Dice1 className="w-4 h-4 mr-2" aria-hidden="true" />
                     Roll for Gold
                   </Button>
                 )}
@@ -417,8 +425,17 @@ const StartingEquipmentSelection: React.FC = () => {
 
       {/* Apply Button */}
       <div className="flex justify-center">
-        <Button onClick={applyEquipment} size="lg" disabled={method === 'gold' && !hasRolledGold}>
-          <TrendingUp className="w-4 h-4 mr-2" />
+        <Button
+          onClick={applyEquipment}
+          size="lg"
+          disabled={method === 'gold' && !hasRolledGold}
+          title={
+            method === 'gold' && !hasRolledGold
+              ? 'Roll for starting gold before applying'
+              : 'Apply selection to your character'
+          }
+        >
+          <TrendingUp className="w-4 h-4 mr-2" aria-hidden="true" />
           Apply {method === 'package' ? 'Equipment Package' : 'Starting Gold'}
         </Button>
       </div>
