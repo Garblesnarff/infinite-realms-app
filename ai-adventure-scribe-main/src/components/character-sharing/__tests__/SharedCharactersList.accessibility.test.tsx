@@ -92,7 +92,7 @@ describe('SharedCharactersList Accessibility', () => {
       </MemoryRouter>
     );
 
-    const viewButton = screen.getByRole('button', { name: /View Character/i });
+    const viewButton = screen.getByLabelText(/View Thorin Oakenshield's character sheet/i);
     expect(viewButton).toHaveAttribute('title', "View Thorin Oakenshield's character sheet");
 
     const removeButton = screen.getByLabelText(/Remove my access to Thorin Oakenshield/i);

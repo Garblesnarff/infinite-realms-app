@@ -123,6 +123,7 @@ const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(({
     <div
       className={rowClasses}
       onClick={() => onSelectParticipant?.(participant.id)}
+      title="Select participant to view details"
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
@@ -344,7 +345,11 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-base font-semibold tracking-tight">Initiative Order</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div
+              className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
               <Badge variant="secondary" className="text-[0.65rem] uppercase tracking-wide">
                 Round {activeEncounter.currentRound}
               </Badge>

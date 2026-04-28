@@ -169,6 +169,7 @@ const SharedCharacterCard: React.FC<{
             onClick={() => navigate(`/app/character/${character.id}`)}
             className="flex-1"
             title={`View ${character.name}'s character sheet`}
+            aria-label={`View ${character.name}'s character sheet`}
           >
             View Character
             <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
@@ -295,6 +296,7 @@ export const SharedCharactersList: React.FC = () => {
             <SelectTrigger
               id={filterLabelId}
               className="w-40"
+              title="Filter by permission level"
             >
               <SelectValue />
             </SelectTrigger>
@@ -373,6 +375,7 @@ export const SharedCharactersList: React.FC = () => {
               onClick={confirmRemoveSelf}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               title={`Confirm removing your access to ${selectedCharacter?.name}`}
+              aria-label={`Confirm removing your access to ${selectedCharacter?.name}`}
             >
               {removeSelfMutation.isPending ? 'Removing...' : 'Remove Access'}
             </AlertDialogAction>
