@@ -233,23 +233,38 @@ export class LoreKeeperService {
       return { npcs: [], locations: [], factions: [], items: [], monsters: [] };
     }
 
-    // Deduplicate by entity_name
-    const seenNames = new Set<string>();
-    const dedupedData = (data || []).filter((row) => {
-      if (!row.entity_name || seenNames.has(row.entity_name)) return false;
-      seenNames.add(row.entity_name);
-      return true;
-    });
-
-    const chunks = dedupedData.map(this.mapChunkRow);
-
-    return {
-      npcs: chunks.filter((c) => ['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(c.chunkType)),
-      locations: chunks.filter((c) => c.chunkType === 'location'),
-      factions: chunks.filter((c) => c.chunkType === 'faction'),
-      items: chunks.filter((c) => c.chunkType === 'item'),
-      monsters: chunks.filter((c) => c.chunkType === 'monster'),
+    // ⚡ Bolt: Optimized to deduplicate, map, and group entities in a single O(N) pass.
+    // This replaces multiple redundant filter/map iterations (O(7N)) with one efficient loop.
+    const entities = {
+      npcs: [] as CampaignChunk[],
+      locations: [] as CampaignChunk[],
+      factions: [] as CampaignChunk[],
+      items: [] as CampaignChunk[],
+      monsters: [] as CampaignChunk[],
     };
+
+    const seenNames = new Set<string>();
+
+    for (const row of data || []) {
+      if (!row.entity_name || seenNames.has(row.entity_name)) continue;
+      seenNames.add(row.entity_name);
+
+      const chunk = this.mapChunkRow(row);
+
+      if (['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(chunk.chunkType)) {
+        entities.npcs.push(chunk);
+      } else if (chunk.chunkType === 'location') {
+        entities.locations.push(chunk);
+      } else if (chunk.chunkType === 'faction') {
+        entities.factions.push(chunk);
+      } else if (chunk.chunkType === 'item') {
+        entities.items.push(chunk);
+      } else if (chunk.chunkType === 'monster') {
+        entities.monsters.push(chunk);
+      }
+    }
+
+    return entities;
   }
 
   /**
