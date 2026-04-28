@@ -14,6 +14,112 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { startingGoldByClass, allEquipment, calculateArmorClass } from '@/data/equipmentOptions';
 
 /**
+ * ⚡ Bolt: Static equipment lookup map for O(1) performance.
+ * Replaces O(N) linear searches during equipment processing.
+ */
+const EQUIPMENT_LOOKUP = new Map(allEquipment.map((eq) => [eq.id, eq]));
+
+/**
+ * ⚡ Bolt: Class-based starting equipment packages hoisted to prevent re-allocation.
+ */
+const STARTING_PACKAGES: Record<string, string[]> = {
+  fighter: [
+    'chain-mail',
+    'shield',
+    'longsword',
+    'handaxe',
+    'handaxe',
+    'light-crossbow',
+    'explorers-pack',
+  ],
+  wizard: ['dagger', 'quarterstaff', 'component-pouch', 'scholars-pack', 'spellbook'],
+  rogue: ['leather-armor', 'shortsword', 'shortsword', 'thieves-tools', 'shortbow', 'burglars-pack'],
+  cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow', 'priests-pack', 'holy-symbol'],
+  barbarian: ['leather-armor', 'shield', 'handaxe', 'handaxe', 'javelin', 'javelin', 'explorers-pack'],
+  bard: ['leather-armor', 'dagger', 'rapier', 'lute', 'entertainers-pack'],
+  druid: ['leather-armor', 'shield', 'scimitar', 'shield', 'explorers-pack', 'druidcraft-focus'],
+  monk: [
+    'shortsword',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'dart',
+    'explorers-pack',
+  ],
+  paladin: [
+    'chain-mail',
+    'shield',
+    'longsword',
+    'javelin',
+    'javelin',
+    'javelin',
+    'javelin',
+    'javelin',
+    'priests-pack',
+    'holy-symbol',
+  ],
+  ranger: ['leather-armor', 'shortsword', 'shortsword', 'longbow', 'explorers-pack'],
+  sorcerer: ['dagger', 'dagger', 'component-pouch', 'light-crossbow', 'dungeoneer-pack'],
+  warlock: ['leather-armor', 'dagger', 'simple-weapon', 'light-crossbow', 'scholars-pack'],
+};
+
+/**
+ * ⚡ Bolt: Pure helper function to get starting equipment package.
+ */
+const getStartingEquipmentPackage = (classId: string): Equipment[] => {
+  const equipmentIds = STARTING_PACKAGES[classId] || [];
+  return equipmentIds.map((id) => {
+    const item = EQUIPMENT_LOOKUP.get(id);
+    return (
+      item || {
+        id,
+        name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+        category: 'gear' as const,
+        cost: { amount: 0, currency: 'gp' as const },
+        description: `Starting ${classId} equipment`,
+      }
+    );
+  });
+};
+
+/**
+ * ⚡ Bolt: Pure helper to calculate estimated AC from equipment.
+ */
+const calculateEstimatedACFromEquipment = (
+  startingEquipment: Equipment[],
+  character: {
+    abilityScores?: {
+      dexterity?: { modifier: number };
+      constitution?: { modifier: number };
+      wisdom?: { modifier: number };
+    };
+  } | null,
+  characterClass: { name: string },
+): number => {
+  const armor = startingEquipment.find((eq) => eq.category === 'armor');
+  const shield = startingEquipment.find((eq) => eq.category === 'shield');
+  const dexMod = character?.abilityScores?.dexterity?.modifier || 0;
+  const conMod = character?.abilityScores?.constitution?.modifier || 0;
+  const wisMod = character?.abilityScores?.wisdom?.modifier || 0;
+
+  return calculateArmorClass(
+    armor || null,
+    shield || null,
+    dexMod,
+    0, // otherBonuses
+    characterClass.name,
+    conMod,
+    wisMod,
+  );
+};
+
+/**
  * Starting Equipment Selection component for character creation
  * Allows choosing between equipment packages or starting gold
  */
@@ -26,6 +132,27 @@ const StartingEquipmentSelection: React.FC = () => {
   const [method, setMethod] = useState<'package' | 'gold'>('package');
   const [rolledGold, setRolledGold] = useState<number>(0);
   const [hasRolledGold, setHasRolledGold] = useState(false);
+
+  /**
+   * ⚡ Bolt: Memoized starting equipment calculation.
+   * Moved before early return to satisfy react-hooks/rules-of-hooks.
+   */
+  const startingEquipment = React.useMemo(
+    () => (characterClass ? getStartingEquipmentPackage(characterClass.id) : []),
+    [characterClass],
+  );
+
+  /**
+   * ⚡ Bolt: Memoized estimated AC calculation using pure hoisted helper.
+   * Moved before early return to satisfy react-hooks/rules-of-hooks.
+   */
+  const estimatedACValue = React.useMemo(
+    () =>
+      characterClass
+        ? calculateEstimatedACFromEquipment(startingEquipment, character, characterClass)
+        : 10,
+    [startingEquipment, character, characterClass],
+  );
 
   if (!characterClass) {
     return (
@@ -42,97 +169,9 @@ const StartingEquipmentSelection: React.FC = () => {
   const goldData = startingGoldByClass[characterClass.id];
 
   /**
-   * Class-based starting equipment packages
-   */
-  const getStartingEquipmentPackage = (classId: string): Equipment[] => {
-    const packages: Record<string, string[]> = {
-      fighter: [
-        'chain-mail',
-        'shield',
-        'longsword',
-        'handaxe',
-        'handaxe',
-        'light-crossbow',
-        'explorers-pack',
-      ],
-      wizard: ['dagger', 'quarterstaff', 'component-pouch', 'scholars-pack', 'spellbook'],
-      rogue: [
-        'leather-armor',
-        'shortsword',
-        'shortsword',
-        'thieves-tools',
-        'shortbow',
-        'burglars-pack',
-      ],
-      cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow', 'priests-pack', 'holy-symbol'],
-      barbarian: [
-        'leather-armor',
-        'shield',
-        'handaxe',
-        'handaxe',
-        'javelin',
-        'javelin',
-        'explorers-pack',
-      ],
-      bard: ['leather-armor', 'dagger', 'rapier', 'lute', 'entertainers-pack'],
-      druid: [
-        'leather-armor',
-        'shield',
-        'scimitar',
-        'shield',
-        'explorers-pack',
-        'druidcraft-focus',
-      ],
-      monk: [
-        'shortsword',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'dart',
-        'explorers-pack',
-      ],
-      paladin: [
-        'chain-mail',
-        'shield',
-        'longsword',
-        'javelin',
-        'javelin',
-        'javelin',
-        'javelin',
-        'javelin',
-        'priests-pack',
-        'holy-symbol',
-      ],
-      ranger: ['leather-armor', 'shortsword', 'shortsword', 'longbow', 'explorers-pack'],
-      sorcerer: ['dagger', 'dagger', 'component-pouch', 'light-crossbow', 'dungeoneer-pack'],
-      warlock: ['leather-armor', 'dagger', 'simple-weapon', 'light-crossbow', 'scholars-pack'],
-    };
-
-    const equipmentIds = packages[classId] || [];
-    return equipmentIds.map((id) => {
-      const item = allEquipment.find((eq) => eq.id === id);
-      return (
-        item || {
-          id,
-          name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-          category: 'gear' as const,
-          cost: { amount: 0, currency: 'gp' as const },
-          description: `Starting ${classId} equipment`,
-        }
-      );
-    });
-  };
-
-  /**
    * Roll for starting gold
    */
-  const rollStartingGold = () => {
+  const rollStartingGold = (): void => {
     if (!goldData) return;
 
     // Simple dice roll simulation - in a real app you'd use proper dice rolling
@@ -157,9 +196,8 @@ const StartingEquipmentSelection: React.FC = () => {
   /**
    * Apply equipment selection
    */
-  const applyEquipment = () => {
+  const applyEquipment = (): void => {
     if (method === 'package') {
-      const startingEquipment = getStartingEquipmentPackage(characterClass.id);
       const inventory = startingEquipment.map((equipment, _index) => ({
         itemId: equipment.id,
         quantity: 1,
@@ -167,8 +205,9 @@ const StartingEquipmentSelection: React.FC = () => {
       }));
 
       // Auto-equip appropriate items
+      // ⚡ Bolt: Use EQUIPMENT_LOOKUP for O(1) retrieval in the map loop.
       const equippedInventory = inventory.map((item) => {
-        const equipment = allEquipment.find((eq) => eq.id === item.itemId);
+        const equipment = EQUIPMENT_LOOKUP.get(item.itemId);
         const shouldEquip =
           equipment &&
           (equipment.category === 'armor' ||
@@ -176,7 +215,7 @@ const StartingEquipmentSelection: React.FC = () => {
             (equipment.category === 'weapon' &&
               inventory
                 .filter((i) => {
-                  const eq = allEquipment.find((e) => e.id === i.itemId);
+                  const eq = EQUIPMENT_LOOKUP.get(i.itemId);
                   return eq?.category === 'weapon';
                 })
                 .indexOf(item) < 2)); // Equip first 2 weapons
@@ -219,27 +258,6 @@ const StartingEquipmentSelection: React.FC = () => {
         description: `Started with ${rolledGold} gp to purchase equipment.`,
       });
     }
-  };
-
-  const startingEquipment = getStartingEquipmentPackage(characterClass.id);
-
-  // Calculate estimated AC from starting equipment with unarmored defense support
-  const estimatedAC = () => {
-    const armor = startingEquipment.find((eq) => eq.category === 'armor');
-    const shield = startingEquipment.find((eq) => eq.category === 'shield');
-    const dexMod = character?.abilityScores?.dexterity?.modifier || 0;
-    const conMod = character?.abilityScores?.constitution?.modifier || 0;
-    const wisMod = character?.abilityScores?.wisdom?.modifier || 0;
-
-    return calculateArmorClass(
-      armor || null,
-      shield || null,
-      dexMod,
-      0, // otherBonuses
-      characterClass.name,
-      conMod,
-      wisMod,
-    );
   };
 
   return (
@@ -310,7 +328,7 @@ const StartingEquipmentSelection: React.FC = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="text-center p-3 border rounded">
-                <div className="text-2xl font-bold text-blue-600">{estimatedAC()}</div>
+                <div className="text-2xl font-bold text-blue-600">{estimatedACValue}</div>
                 <div className="text-xs text-muted-foreground">Estimated AC</div>
               </div>
               <div className="text-center p-3 border rounded">
