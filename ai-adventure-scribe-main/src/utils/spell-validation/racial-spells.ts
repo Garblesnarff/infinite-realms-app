@@ -6,6 +6,7 @@ import type { Subrace } from '@/types/character';
 export function getRacialSpells(
   race: string,
   subrace?: Subrace,
+  level: number = 1,
 ): { cantrips: string[]; spells: string[]; bonusCantrips: number; bonusCantripSource?: string } {
   // Default empty response
   const result = {
@@ -21,6 +22,8 @@ export function getRacialSpells(
       result.cantrips = [...subrace.cantrips];
     }
     if (subrace.spells) {
+      // Traditionally racial spells from data are unlocked at specific levels
+      // For now, if level is not specified we assume level 1
       result.spells = [...subrace.spells];
     }
     if (subrace.bonusCantrip) {
@@ -29,10 +32,16 @@ export function getRacialSpells(
     }
   }
 
-  // Fallback to hardcoded mapping for backwards compatibility
+  // Fallback to hardcoded mapping for backwards compatibility and level-based unlocks
   const racialSpells: Record<
     string,
-    { cantrips: string[]; spells: string[]; bonusCantrips?: number; bonusCantripSource?: string }
+    {
+      cantrips: string[];
+      spells: string[];
+      bonusCantrips?: number;
+      bonusCantripSource?: string;
+      levelUnlocks?: Array<{ level: number; spells?: string[]; cantrips?: string[] }>;
+    }
   > = {
     'High Elf': {
       cantrips: [],
@@ -42,7 +51,11 @@ export function getRacialSpells(
     },
     Drow: {
       cantrips: ['dancing-lights'],
-      spells: [], // Gets Faerie Fire and Darkness at higher levels
+      spells: [],
+      levelUnlocks: [
+        { level: 3, spells: ['faerie-fire'] },
+        { level: 5, spells: ['darkness'] },
+      ],
     },
     'Forest Gnome': {
       cantrips: ['minor-illusion'],
@@ -50,36 +63,51 @@ export function getRacialSpells(
     },
     Tiefling: {
       cantrips: ['thaumaturgy'],
-      spells: [], // Gets Hellish Rebuke at 3rd level, Darkness at 5th level
+      spells: [],
+      levelUnlocks: [
+        { level: 3, spells: ['hellish-rebuke'] },
+        { level: 5, spells: ['darkness'] },
+      ],
     },
+  };
+
+  // Helper to apply fallback data
+  const applyFallback = (key: string) => {
+    const fallback = racialSpells[key];
+    if (!fallback) return;
+
+    if (result.cantrips.length === 0 && fallback.cantrips) {
+      result.cantrips = [...fallback.cantrips];
+    }
+    if (result.spells.length === 0 && fallback.spells) {
+      result.spells = [...fallback.spells];
+    }
+    if (result.bonusCantrips === 0 && fallback.bonusCantrips) {
+      result.bonusCantrips = fallback.bonusCantrips;
+      result.bonusCantripSource = fallback.bonusCantripSource;
+    }
+
+    // Apply level-based unlocks
+    if (fallback.levelUnlocks) {
+      fallback.levelUnlocks.forEach((unlock) => {
+        if (level >= unlock.level) {
+          if (unlock.spells) {
+            result.spells = [...new Set([...result.spells, ...unlock.spells])];
+          }
+          if (unlock.cantrips) {
+            result.cantrips = [...new Set([...result.cantrips, ...unlock.cantrips])];
+          }
+        }
+      });
+    }
   };
 
   // Check subrace first, then race for fallback
   const subraceKey = subrace?.name;
   if (subraceKey && racialSpells[subraceKey]) {
-    const fallback = racialSpells[subraceKey];
-    if (result.cantrips.length === 0 && fallback.cantrips) {
-      result.cantrips = [...fallback.cantrips];
-    }
-    if (result.spells.length === 0 && fallback.spells) {
-      result.spells = [...fallback.spells];
-    }
-    if (result.bonusCantrips === 0 && fallback.bonusCantrips) {
-      result.bonusCantrips = fallback.bonusCantrips;
-      result.bonusCantripSource = fallback.bonusCantripSource;
-    }
+    applyFallback(subraceKey);
   } else if (racialSpells[race]) {
-    const fallback = racialSpells[race];
-    if (result.cantrips.length === 0 && fallback.cantrips) {
-      result.cantrips = [...fallback.cantrips];
-    }
-    if (result.spells.length === 0 && fallback.spells) {
-      result.spells = [...fallback.spells];
-    }
-    if (result.bonusCantrips === 0 && fallback.bonusCantrips) {
-      result.bonusCantrips = fallback.bonusCantrips;
-      result.bonusCantripSource = fallback.bonusCantripSource;
-    }
+    applyFallback(race);
   }
 
   return result;

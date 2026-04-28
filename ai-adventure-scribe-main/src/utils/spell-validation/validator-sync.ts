@@ -31,18 +31,23 @@ export function validateSpellSelection(
     return { valid: errors.length === 0, errors, warnings };
   }
 
+  const characterLevel = character.level || 1;
+  const racialSpells = getRacialSpells(
+    character.race?.name || '',
+    character.subrace || undefined,
+    characterLevel,
+  );
+
   // Early return for non-spellcasters - but check racial spells first
   if (!character.class?.spellcasting) {
-    const racialSpells = getRacialSpells(
-      character.race?.name || '',
-      character.subrace || undefined,
-    );
-    const hasRacialSpells = racialSpells.cantrips.length > 0 || racialSpells.bonusCantrips > 0;
+    const hasRacialSpells = racialSpells.cantrips.length > 0 ||
+                            racialSpells.bonusCantrips > 0 ||
+                            racialSpells.spells.length > 0;
 
     if (!hasRacialSpells && (cantrips.length > 0 || spells.length > 0)) {
       errors.push({
         type: 'LEVEL_REQUIREMENT',
-        message: `${character.class?.name} is not a spellcasting class at level 1`,
+        message: `${character.class?.name || 'Character'} is not a spellcasting class`,
       });
     } else if (hasRacialSpells) {
       // Validate only racial spells for non-spellcasters
@@ -64,10 +69,7 @@ export function validateSpellSelection(
 
         if (racialSpells.bonusCantrips > 0 && racialSpells.bonusCantripSource) {
           if (racialSpells.bonusCantripSource === 'wizard') {
-            // For validation during character creation, we'll use a simplified approach
-            // This will need to be updated to use async API calls in the future
-            // For now, we'll assume any cantrip ID is valid if it's from the wizard source
-            isValidBonusCantrip = true; // Placeholder - will be replaced with API validation
+            isValidBonusCantrip = getClassSpells('Wizard').cantrips.some(s => s.id === cantripId);
           }
         }
 
@@ -80,34 +82,69 @@ export function validateSpellSelection(
         }
       });
 
-      if (spells.length > 0) {
+      // Validate racial spells (like Tiefling Darkness/Hellish Rebuke)
+      const expectedRacialSpells = racialSpells.spells.length;
+      if (spells.length !== expectedRacialSpells) {
         errors.push({
-          type: 'LEVEL_REQUIREMENT',
-          message: `${character.class?.name} cannot cast spells at level ${character.level || 1}`,
+          type: 'COUNT_MISMATCH',
+          message: `Expected ${expectedRacialSpells} racial spells, but got ${spells.length}`,
+          expected: expectedRacialSpells,
+          actual: spells.length,
         });
       }
+
+      spells.forEach((spellId) => {
+        if (!racialSpells.spells.includes(spellId)) {
+          errors.push({
+            type: 'INVALID_SPELL',
+            message: `${spellId} is not a valid racial spell for ${character.race?.name}`,
+            spellId,
+          });
+        }
+      });
     }
 
     return { valid: errors.length === 0, errors, warnings };
   }
 
   // Now check if this is a spellcaster at this level
-  const spellcastingInfo = getSpellcastingInfo(character.class, character.level || 1);
+  const spellcastingInfo = getSpellcastingInfo(character.class, characterLevel);
   if (
     !spellcastingInfo ||
-    (spellcastingInfo.cantripsKnown === 0 && spellcastingInfo.spellsKnown === 0)
+    (spellcastingInfo.cantripsKnown === 0 &&
+     spellcastingInfo.spellsKnown === 0 &&
+     (spellcastingInfo.spellsPrepared === undefined || spellcastingInfo.spellsPrepared === 0))
   ) {
-    // This should not happen since we handled non-spellcasters above
+    // If they have racial spells, they still need to be validated
+    const hasRacialSpells = racialSpells.cantrips.length > 0 ||
+                            racialSpells.bonusCantrips > 0 ||
+                            racialSpells.spells.length > 0;
+
+    if (hasRacialSpells) {
+        // Fall back to same racial-only validation logic as above
+        // We'll repeat it here for clarity in this branch
+        const expectedCantrips = racialSpells.cantrips.length + racialSpells.bonusCantrips;
+        if (cantrips.length !== expectedCantrips) {
+            errors.push({ type: 'COUNT_MISMATCH', expected: expectedCantrips, actual: cantrips.length });
+        }
+        const expectedSpells = racialSpells.spells.length;
+        if (spells.length !== expectedSpells) {
+            errors.push({ type: 'COUNT_MISMATCH', expected: expectedSpells, actual: spells.length });
+        }
+    } else if (cantrips.length > 0 || spells.length > 0) {
+      errors.push({
+        type: 'LEVEL_REQUIREMENT',
+        message: `${character.class.name} is not a spellcasting class at level ${characterLevel}`,
+      });
+    }
     return { valid: errors.length === 0, errors, warnings };
   }
 
   // Local availability from static spell data for deterministic validation
-  const classLists = getClassSpells(character.class.name);
+  const className = character.class.name;
+  const classLists = getClassSpells(className);
   const availableCantripIds: string[] = classLists.cantrips.map((s) => s.id);
   const availableSpellIds: string[] = classLists.spells.map((s) => s.id);
-
-  // Get racial bonus spells
-  const racialSpells = getRacialSpells(character.race?.name || '', character.subrace || undefined);
 
   // Validate cantrip count
   const expectedCantrips = spellcastingInfo.cantripsKnown;
@@ -141,30 +178,46 @@ export function validateSpellSelection(
 
     errors.push({
       type: 'INVALID_SPELL',
-      message: `${cantripId} is not available as a cantrip for ${character.class?.name}`,
+      message: `${cantripId} is not available as a cantrip for ${className}`,
       spellId: cantripId,
     });
   });
 
-  // Validate spell count
+  // Validate spell count (Known or Prepared)
+  let expectedClassSpells = 0;
+  let validationType: 'spellsKnown' | 'spellsPrepared' = 'spellsKnown';
+
   if (spellcastingInfo.spellsKnown !== undefined && spellcastingInfo.spellsKnown > 0) {
-    const expectedSpells = spellcastingInfo.spellsKnown;
-    if (spells.length !== expectedSpells) {
-      errors.push({
-        type: 'COUNT_MISMATCH',
-        message: `Expected ${expectedSpells} spells known, but got ${spells.length}`,
-        expected: expectedSpells,
-        actual: spells.length,
-      });
-    }
+    expectedClassSpells = spellcastingInfo.spellsKnown;
+    validationType = 'spellsKnown';
+  } else if (spellcastingInfo.spellsPrepared !== undefined && spellcastingInfo.spellsPrepared > 0) {
+    const ability = spellcastingInfo.spellcastingAbility;
+    const modifier = character.abilityScores?.[ability]?.modifier || 0;
+    expectedClassSpells = Math.max(1, spellcastingInfo.spellsPrepared + modifier);
+    validationType = 'spellsPrepared';
   }
 
-  // Validate each selected spell against class list
+  const racialSpellsCount = racialSpells.spells.length;
+  const totalExpectedSpells = expectedClassSpells + racialSpellsCount;
+
+  if (spells.length !== totalExpectedSpells) {
+    errors.push({
+      type: 'COUNT_MISMATCH',
+      message: `Expected ${totalExpectedSpells} spells ${validationType === 'spellsKnown' ? 'known' : 'prepared'} (${expectedClassSpells} class + ${racialSpellsCount} racial), but got ${spells.length}`,
+      expected: totalExpectedSpells,
+      actual: spells.length,
+    });
+  }
+
+  // Validate each selected spell against class list and racial list
   spells.forEach((spellId) => {
-    if (!availableSpellIds.includes(spellId)) {
+    const isRacialSpell = racialSpells.spells.includes(spellId);
+    const isClassSpell = availableSpellIds.includes(spellId);
+
+    if (!isRacialSpell && !isClassSpell) {
       errors.push({
         type: 'INVALID_SPELL',
-        message: `${spellId} is not available as a 1st level spell for ${character.class.name}`,
+        message: `${spellId} is not available as a 1st level spell for ${className}`,
         spellId,
       });
     }
