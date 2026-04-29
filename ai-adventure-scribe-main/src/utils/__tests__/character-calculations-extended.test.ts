@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
+
 import {
   calculateArmorClass,
   calculateProficiencyBonus,
   getSpellcastingAbility
 } from '../character-calculations';
+
 import type { Character } from '@/types/character';
 
 describe('character-calculations extended', () => {

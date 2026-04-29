@@ -15,11 +15,14 @@
  * - Responsive design (mobile/desktop)
  */
 
-import { ArrowLeft, Settings as SettingsIcon, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import { BattleCanvas } from '@/components/battle-map/BattleCanvas';
+import { BattleMapError } from '@/components/battle-map/BattleMapError';
+import { BattleMapHeader } from '@/components/battle-map/BattleMapHeader';
+import { BattleMapLoading } from '@/components/battle-map/BattleMapLoading';
 import { HotkeyGuide } from '@/components/battle-map/HotkeyGuide';
 import { LayersPanel } from '@/components/battle-map/LayersPanel';
 import { PerformanceMonitor } from '@/components/battle-map/PerformanceMonitor';
@@ -28,17 +31,7 @@ import { Toolbar } from '@/components/battle-map/Toolbar';
 import { ToolOptionsPanel } from '@/components/battle-map/ToolOptionsPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
@@ -205,27 +198,7 @@ export const BattleMapPage: React.FC = () => {
   // ===========================
 
   if (isLoadingScene) {
-    return (
-      <div className="min-h-screen flex flex-col bg-background">
-        {/* Header Skeleton */}
-        <div className="h-14 border-b flex items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-          <Skeleton className="h-8 w-24" />
-        </div>
-
-        {/* Canvas Skeleton */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <Skeleton className="h-12 w-12 rounded-full mx-auto" />
-            <Skeleton className="h-4 w-48 mx-auto" />
-            <Skeleton className="h-4 w-32 mx-auto" />
-          </div>
-        </div>
-      </div>
-    );
+    return <BattleMapLoading />;
   }
 
   // ===========================
@@ -233,39 +206,12 @@ export const BattleMapPage: React.FC = () => {
   // ===========================
 
   if (sceneError || !scene) {
-    const errorMessage = sceneError?.message || 'Scene not found';
-    const isPermissionError =
-      errorMessage.toLowerCase().includes('permission') ||
-      errorMessage.toLowerCase().includes('forbidden') ||
-      errorMessage.toLowerCase().includes('access');
-
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="max-w-lg w-full">
-          <CardHeader>
-            <CardTitle className="text-destructive">
-              {isPermissionError ? 'Access Denied' : 'Scene Not Found'}
-            </CardTitle>
-            <CardDescription>
-              {isPermissionError
-                ? "You don't have permission to view this scene."
-                : 'The scene you are looking for does not exist or has been deleted.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{errorMessage}</p>
-            <div className="flex gap-2">
-              <Button onClick={handleBackToScenes} variant="outline" className="flex-1">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Scenes
-              </Button>
-              <Button onClick={handleBackToCampaign} className="flex-1">
-                Back to Campaign
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <BattleMapError
+        message={sceneError?.message}
+        onBackToScenes={handleBackToScenes}
+        onBackToCampaign={handleBackToCampaign}
+      />
     );
   }
 
@@ -276,103 +222,18 @@ export const BattleMapPage: React.FC = () => {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       {/* Top Navigation Bar */}
-      <div
-        className="absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between px-4"
-        style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
-      >
-        {/* Breadcrumbs */}
-        <nav
-          className="flex items-center gap-2 text-sm text-muted-foreground"
-          aria-label="Breadcrumb"
-        >
-          <button
-            type="button"
-            onClick={() => navigate('/app/campaigns')}
-            className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-            aria-label="Back to Campaigns"
-            title="Back to Campaigns"
-          >
-            Campaigns
-          </button>
-          <span aria-hidden="true">/</span>
-          <button
-            type="button"
-            onClick={handleBackToCampaign}
-            className="hover:text-foreground transition-colors max-w-[150px] truncate focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-            aria-label={campaign?.name ? `Back to ${campaign.name}` : 'Back to Campaign'}
-            title={campaign?.name ? `Back to ${campaign.name}` : 'Back to Campaign'}
-          >
-            {campaign?.name || 'Campaign'}
-          </button>
-          <span aria-hidden="true">/</span>
-          <button
-            type="button"
-            onClick={handleBackToScenes}
-            className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-            aria-label="Back to Scenes"
-            title="Back to Scenes"
-          >
-            Scenes
-          </button>
-          <span aria-hidden="true">/</span>
-          <span
-            className="text-foreground font-medium max-w-[200px] truncate"
-            aria-current="page"
-          >
-            {scene.name}
-          </span>
-        </nav>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {/* Mobile: Layers Panel Toggle */}
-          {isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleLayersPanel}
-              aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-              aria-pressed={showLayersPanel}
-              aria-expanded={showLayersPanel}
-              aria-haspopup="dialog"
-              title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
-
-          {/* Settings Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Open Settings" title="Open Settings">
-                <SettingsIcon className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>View Settings</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem
-                checked={showPerformanceMonitor}
-                onCheckedChange={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
-              >
-                Performance Monitor
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuItem onClick={() => setShowHotkeyGuide(true)}>
-                Keyboard Shortcuts
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem checked={showLayersPanel} onCheckedChange={toggleLayersPanel}>
-                Layers Panel
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleBackToScenes}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Scenes
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <BattleMapHeader
+        campaignName={campaign?.name}
+        sceneName={scene.name}
+        isMobile={isMobile}
+        showLayersPanel={showLayersPanel}
+        toggleLayersPanel={toggleLayersPanel}
+        showPerformanceMonitor={showPerformanceMonitor}
+        setShowPerformanceMonitor={setShowPerformanceMonitor}
+        setShowHotkeyGuide={setShowHotkeyGuide}
+        onBackToScenes={handleBackToScenes}
+        onBackToCampaign={handleBackToCampaign}
+      />
 
       {/* Main Content Area */}
       <div className="absolute top-14 left-0 right-0 bottom-0 flex">

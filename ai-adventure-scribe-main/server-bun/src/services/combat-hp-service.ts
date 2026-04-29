@@ -17,7 +17,6 @@ import {
   combatDamageLog,
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
-import { HPMechanics } from './combat/hp-mechanics.js';
 import { verifyEncounterAccess } from './combat/data-access.js';
 import {
   getParticipantWithFullContext,
@@ -26,6 +25,7 @@ import {
   getParticipantStatus,
   initializeParticipantStatus,
 } from './combat/hp-data-access.js';
+import { HPMechanics } from './combat/hp-mechanics.js';
 
 import type {
   CombatParticipantStatus,

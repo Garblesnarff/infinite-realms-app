@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+
 import StartingEquipmentSelection from '../StartingEquipmentSelection';
-import { CharacterProvider } from '@/contexts/CharacterContext';
+
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { CharacterProvider } from '@/contexts/CharacterContext';
 
 // Mock the context and hooks
 vi.mock('@/contexts/CharacterContext', () => ({

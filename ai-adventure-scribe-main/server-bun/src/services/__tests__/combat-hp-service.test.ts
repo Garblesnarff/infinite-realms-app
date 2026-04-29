@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError, BusinessLogicError } from '../../lib/errors.js';
-import { CombatHPService } from '../combat-hp-service.js';
 import * as HPDataAccess from '../combat/hp-data-access.js';
+import { CombatHPService } from '../combat-hp-service.js';
 
 // Mock state for query builder
 const mockState = {

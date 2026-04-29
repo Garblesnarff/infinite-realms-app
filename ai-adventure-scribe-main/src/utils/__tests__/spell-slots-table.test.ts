@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { fullCasterProgression } from '../spell-slots-table';
 
 describe('spell-slots-table', () => {
