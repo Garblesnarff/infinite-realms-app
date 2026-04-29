@@ -25,7 +25,7 @@
  */
 
 // SDK Imports
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Project Imports
@@ -288,25 +288,33 @@ export const useCharacterData = (characterId: string | undefined) => {
    * Validates character ID and handles invalid cases
    * @param id - Character ID to validate
    * @returns Boolean indicating if ID is valid
+   *
+   * ⚡ Bolt: Wrapped in useCallback to stabilize identity across renders.
    */
-  const validateCharacterId = (id: string | undefined): boolean => {
-    if (!id || !isValidUUID(id)) {
-      toast({
-        title: 'Invalid Character',
-        description: 'The character ID is invalid. Redirecting to characters page.',
-        variant: 'destructive',
-      });
-      navigate('/app/characters');
-      return false;
-    }
-    return true;
-  };
+  const validateCharacterId = useCallback(
+    (id: string | undefined): boolean => {
+      if (!id || !isValidUUID(id)) {
+        toast({
+          title: 'Invalid Character',
+          description: 'The character ID is invalid. Redirecting to characters page.',
+          variant: 'destructive',
+        });
+        navigate('/app/characters');
+        return false;
+      }
+      return true;
+    },
+    [toast, navigate],
+  );
 
   /**
    * Fetches character data from Supabase
    * Includes basic info, stats, and equipment
+   *
+   * ⚡ Bolt: Wrapped in useCallback to stabilize identity and prevent unnecessary re-fetches
+   * when parent components re-render or unrelated state changes.
    */
-  const fetchCharacter = async () => {
+  const fetchCharacter = useCallback(async () => {
     if (!validateCharacterId(characterId)) return;
 
     try {
@@ -386,12 +394,13 @@ export const useCharacterData = (characterId: string | undefined) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [characterId, user, toast, navigate, validateCharacterId]);
 
-  // Fetch character data on mount or when characterId changes
+  // Fetch character data on mount or when dependencies change
+  // ⚡ Bolt: Now only depends on the stable fetchCharacter callback.
   useEffect(() => {
     fetchCharacter();
-  }, [characterId, navigate, toast, user]);
+  }, [fetchCharacter]);
 
   return { character, loading, refetch: fetchCharacter };
 };
