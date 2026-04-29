@@ -34,13 +34,22 @@ describe('CombatStatus', () => {
     activeEncounter: null,
   };
 
-  it('renders exploration phase by default', () => {
+  it('renders exploration phase by default with accessibility attributes', () => {
     vi.mocked(useGame).mockReturnValue({ state: mockGameState } as any);
     vi.mocked(useCombat).mockReturnValue({ state: mockCombatState } as any);
 
     render(<CombatStatus />);
 
     expect(screen.getByText('Exploration')).toBeDefined();
+
+    // Check for status role and live region
+    const statusContainer = screen.getByRole('status');
+    expect(statusContainer).toBeDefined();
+    expect(statusContainer.getAttribute('aria-live')).toBe('polite');
+    expect(statusContainer.getAttribute('aria-atomic')).toBe('true');
+
+    // Check for phase group label
+    expect(screen.getByLabelText('Current phase: Exploration')).toBeDefined();
   });
 
   it('displays different phases correctly', () => {
@@ -63,7 +72,7 @@ describe('CombatStatus', () => {
     });
   });
 
-  it('displays active participant info when in combat', () => {
+  it('displays active participant info when in combat with accessibility labels', () => {
     const combatEncounter = {
       participants: [
         {
@@ -90,12 +99,13 @@ describe('CombatStatus', () => {
     render(<CombatStatus />);
 
     expect(screen.getByText('Hero')).toBeDefined();
-    expect(screen.getByText('Init 15')).toBeDefined();
-    expect(screen.getByText('20/20')).toBeDefined();
-    expect(screen.getByText('Round 1')).toBeDefined();
+    expect(screen.getByLabelText('Active turn: Hero')).toBeDefined();
+    expect(screen.getByLabelText('Initiative: 15')).toBeDefined();
+    expect(screen.getByLabelText('Health: 20 of 20')).toBeDefined();
+    expect(screen.getByLabelText('Combat Round 1')).toBeDefined();
   });
 
-  it('displays pending rolls count', () => {
+  it('displays pending rolls count with accessibility label', () => {
     const gameStateWithRolls = {
       ...mockGameState,
       diceRollQueue: {
@@ -113,6 +123,7 @@ describe('CombatStatus', () => {
     render(<CombatStatus />);
 
     expect(screen.getByText('2 rolls pending')).toBeDefined();
+    expect(screen.getByLabelText('Pending dice rolls')).toBeDefined();
   });
 
   it('handles unknown phase', () => {
