@@ -7,6 +7,11 @@ import type { Equipment } from './types';
 
 const all: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear];
 
+/**
+ * ⚡ Bolt: Local O(1) equipment lookup Map.
+ */
+const EQUIPMENT_LOOKUP = new Map(all.map((eq) => [eq.id, eq] as const));
+
 export function calculateArmorClass(
   equippedArmor: Equipment | null,
   equippedShield: Equipment | null,
@@ -96,10 +101,11 @@ export function getStartingEquipment(className: string): Equipment[] {
     warlock: ['leather-armor', 'dagger', 'light-crossbow'],
   };
   const equipmentIds = packages[classId] || [];
-  const lookup = new Map(all.map((eq) => [eq.id, eq] as const));
+
+  // ⚡ Bolt: Using pre-calculated Map to avoid O(N) allocation on every call.
   return equipmentIds.map(
     (id) =>
-      lookup.get(id) || {
+      EQUIPMENT_LOOKUP.get(id) || {
         id,
         name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
         category: 'gear' as const,

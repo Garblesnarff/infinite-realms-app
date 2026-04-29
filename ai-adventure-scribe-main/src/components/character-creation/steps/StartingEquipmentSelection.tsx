@@ -11,13 +11,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { startingGoldByClass, allEquipment, calculateArmorClass } from '@/data/equipmentOptions';
-
-/**
- * ⚡ Bolt: Static equipment lookup map for O(1) performance.
- * Replaces O(N) linear searches during equipment processing.
- */
-const EQUIPMENT_LOOKUP = new Map(allEquipment.map((eq) => [eq.id, eq]));
+import {
+  startingGoldByClass,
+  calculateArmorClass,
+  EQUIPMENT_LOOKUP,
+} from '@/data/equipmentOptions';
 
 /**
  * ⚡ Bolt: Class-based starting equipment packages hoisted to prevent re-allocation.

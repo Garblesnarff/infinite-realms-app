@@ -4,7 +4,7 @@ export { weapons } from './equipment/weapons';
 export { armor } from './equipment/armor';
 export { shields } from './equipment/shields';
 export { adventuringGear } from './equipment/gear';
-export { allEquipment } from './equipment';
+export { allEquipment, EQUIPMENT_LOOKUP } from './equipment';
 export {
   calculateArmorClass,
   getEquipmentByCategory,

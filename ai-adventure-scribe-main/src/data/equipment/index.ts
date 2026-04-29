@@ -12,3 +12,11 @@ import { weapons } from './weapons';
 import type { Equipment } from './types';
 
 export const allEquipment: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear];
+
+/**
+ * ⚡ Bolt: Shared O(1) equipment lookup Map.
+ * Used to avoid O(N) linear searches across the application.
+ */
+export const EQUIPMENT_LOOKUP = new Map<string, Equipment>(
+  allEquipment.map((eq) => [eq.id, eq])
+);

@@ -10,7 +10,7 @@ import {
 
 import type { Character, CharacterClass, CharacterRace, Subrace } from '@/types/character';
 
-import { allEquipment } from '@/data/equipmentOptions';
+import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
 
 
 /**
@@ -107,10 +107,10 @@ export const calculateHitPoints = (character: Character): number => {
 export const calculateArmorClass = (character: Character): number => {
   const dexMod = character.abilityScores?.dexterity?.modifier || 0;
   const equippedArmor = character.equippedArmor
-    ? allEquipment.find((e) => e.id === character.equippedArmor)
+    ? EQUIPMENT_LOOKUP.get(character.equippedArmor)
     : null;
   const equippedShield = character.equippedShield
-    ? allEquipment.find((e) => e.id === character.equippedShield)
+    ? EQUIPMENT_LOOKUP.get(character.equippedShield)
     : null;
 
   const shieldBonus = equippedShield?.armorClass?.base || (character.equippedShield ? 2 : 0);
