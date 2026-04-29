@@ -394,6 +394,7 @@ export default tseslint.config(
       'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
       'src/features/game-session/components/chat/ChatInput.tsx',
       'src/features/game-session/components/chat/DiceRollRequest.tsx',
+      'src/features/game-session/components/chat/SimpleGameChat.tsx',
       'src/features/game-session/hooks/use-dice-roll-request.ts',
       'src/components/spells/SpellCard.tsx',
       'src/features/character/components/spells/SpellCard.tsx',
