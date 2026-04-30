@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 import { CampaignSidePanel } from '../CampaignSidePanel';
 
@@ -14,7 +14,7 @@ interface GameLeftPanelProps {
   onToggle: () => void;
 }
 
-export const GameLeftPanel: React.FC<GameLeftPanelProps> = ({ isCollapsed, onToggle }) => {
+export const GameLeftPanel: React.FC<GameLeftPanelProps> = memo(({ isCollapsed, onToggle }) => {
   if (isCollapsed) return null;
 
   return (
@@ -22,4 +22,6 @@ export const GameLeftPanel: React.FC<GameLeftPanelProps> = ({ isCollapsed, onTog
       <CampaignSidePanel isCollapsed={false} onToggle={onToggle} />
     </div>
   );
-};
+});
+
+GameLeftPanel.displayName = 'GameLeftPanel';

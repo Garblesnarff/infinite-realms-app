@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
 
@@ -18,25 +18,29 @@ interface GamePanelControlsProps {
   onSceneBlurbToggle: () => void;
 }
 
-export const GamePanelControls: React.FC<GamePanelControlsProps> = ({
-  isLeftCollapsed,
-  isRightCollapsed,
-  showSceneBlurb,
-  onLeftToggle,
-  onRightToggle,
-  onSceneBlurbToggle,
-}) => {
-  return (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={onLeftToggle} title="Toggle campaign panel">
-        {isLeftCollapsed ? 'Show Campaign' : 'Hide Campaign'}
-      </Button>
-      <Button variant="outline" size="sm" onClick={onRightToggle} title="Toggle character panel">
-        {isRightCollapsed ? 'Show Character' : 'Hide Character'}
-      </Button>
-      <Button variant="outline" size="sm" onClick={onSceneBlurbToggle} title="Toggle scene blurb">
-        {showSceneBlurb ? 'Hide Blurb' : 'Show Blurb'}
-      </Button>
-    </div>
-  );
-};
+export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
+  ({
+    isLeftCollapsed,
+    isRightCollapsed,
+    showSceneBlurb,
+    onLeftToggle,
+    onRightToggle,
+    onSceneBlurbToggle,
+  }) => {
+    return (
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onLeftToggle} title="Toggle campaign panel">
+          {isLeftCollapsed ? 'Show Campaign' : 'Hide Campaign'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onRightToggle} title="Toggle character panel">
+          {isRightCollapsed ? 'Show Character' : 'Hide Character'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onSceneBlurbToggle} title="Toggle scene blurb">
+          {showSceneBlurb ? 'Hide Blurb' : 'Show Blurb'}
+        </Button>
+      </div>
+    );
+  },
+);
+
+GamePanelControls.displayName = 'GamePanelControls';
