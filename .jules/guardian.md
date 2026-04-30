@@ -199,3 +199,7 @@
 ## 2026-04-11 - [Dice Utility Coverage & Mocking Improvements]
 **Learning:** Found that `src/utils/diceRolls.ts` had several untested exported functions for detailed roll reporting and rerolling. Also discovered that previous tests were using a risky strategy of replacing the global `Math` object instead of using Vitest's `vi.spyOn(Math, 'random')`.
 **Action:** Use `vi.spyOn(Math, 'random')` for deterministic dice roll testing to avoid global state leakage. Ensure that "detailed" variants of utility functions (which return objects instead of just numbers) have explicit tests for all returned properties.
+
+## 2026-04-30 - [ChatInput Component Coverage]
+**Learning:** Testing the `ChatInput` component revealed nuances in `user-event` (v14+) keyboard mapping. For Shift+Enter, the pattern `{Shift>}{Enter}{/Shift}` is required to correctly simulate holding the shift key. Also, when mocking specialized UI components like `Textarea`, using `React.forwardRef` is essential to maintain compatibility with internal `useRef` usage in the component under test.
+**Action:** Use `user.keyboard('{Shift>}{Enter}{/Shift}')` for Shift+Enter sequences. Always wrap functional component mocks in `React.forwardRef` if the original component expects a ref.
