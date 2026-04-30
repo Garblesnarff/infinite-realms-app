@@ -1,4 +1,4 @@
-import { Dice6, Heart, Shield, Zap, Plus, X } from 'lucide-react';
+import { Dice6, Heart, Shield, Zap, Plus, Minus, X } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -57,9 +57,12 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
           style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
         >
           <Button
+            type="button"
             onClick={onToggle}
             size="sm"
             aria-label="Open Quick Actions"
+            aria-expanded={false}
+            title="Open Quick Actions"
             className={`rounded-full p-3 h-auto w-auto shadow-xl border-2 transition-all duration-300 hover:scale-110 hover-glow focus-glow ${
               combatMode
                 ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
@@ -68,7 +71,10 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
           >
             <Plus className="h-5 w-5" />
             {/* Activity indicator */}
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-infinite-gold rounded-full animate-pulse"></div>
+            <div
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 w-3 h-3 bg-infinite-gold rounded-full animate-pulse"
+            ></div>
           </Button>
         </div>
       );
@@ -84,24 +90,32 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
           <div className="p-3 border-b border-white/10 bg-gradient-to-r from-infinite-purple/10 to-infinite-teal/10">
             <div className="flex items-center justify-between">
               <h4 className="font-display font-semibold text-sm text-card-foreground">
-                🎲 Quick Actions
+                <span aria-hidden="true">🎲</span> Quick Actions
               </h4>
               <div className="flex gap-1">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsExpanded(!isExpanded)}
                   aria-label={isExpanded ? 'Collapse actions' : 'Expand actions'}
                   aria-pressed={isExpanded}
+                  title={isExpanded ? 'Collapse actions' : 'Expand actions'}
                   className="h-6 w-6 p-0 rounded-full hover:bg-infinite-purple/20"
                 >
-                  {isExpanded ? '−' : '+'}
+                  {isExpanded ? (
+                    <Minus className="h-3 w-3" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
                 </Button>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={onToggle}
                   aria-label="Close Quick Actions"
+                  title="Close Quick Actions"
                   className="h-6 w-6 p-0 rounded-full hover:bg-red-500/20"
                 >
                   <X className="h-3 w-3" />
@@ -112,19 +126,35 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
 
           {/* Quick Stats */}
           <div className="p-3 border-b border-white/10">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 rounded-lg bg-red-500/10 border border-red-400/20">
-                <Heart className="h-4 w-4 mx-auto text-red-400 mb-1" />
+            <div
+              role="group"
+              aria-label="Character stats summary"
+              className="grid grid-cols-3 gap-2 text-center"
+            >
+              <div
+                role="group"
+                aria-label={`Hit Points: ${maxHp}`}
+                className="p-2 rounded-lg bg-red-500/10 border border-red-400/20"
+              >
+                <Heart aria-hidden="true" className="h-4 w-4 mx-auto text-red-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">{maxHp}</div>
                 <div className="text-[10px] text-muted-foreground">HP</div>
               </div>
-              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-400/20">
-                <Shield className="h-4 w-4 mx-auto text-blue-400 mb-1" />
+              <div
+                role="group"
+                aria-label={`Armor Class: ${armorClass}`}
+                className="p-2 rounded-lg bg-blue-500/10 border border-blue-400/20"
+              >
+                <Shield aria-hidden="true" className="h-4 w-4 mx-auto text-blue-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">{armorClass}</div>
                 <div className="text-[10px] text-muted-foreground">AC</div>
               </div>
-              <div className="p-2 rounded-lg bg-green-500/10 border border-green-400/20">
-                <Zap className="h-4 w-4 mx-auto text-green-400 mb-1" />
+              <div
+                role="group"
+                aria-label={`Proficiency Bonus: +${proficiency}`}
+                className="p-2 rounded-lg bg-green-500/10 border border-green-400/20"
+              >
+                <Zap aria-hidden="true" className="h-4 w-4 mx-auto text-green-400 mb-1" />
                 <div className="text-xs font-bold text-card-foreground">+{proficiency}</div>
                 <div className="text-[10px] text-muted-foreground">PROF</div>
               </div>
@@ -135,9 +165,11 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
           <div className="p-3">
             <div className="space-y-2">
               <Button
+                type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => handleQuickRoll('d20')}
+                title="Roll a d20"
                 className="w-full justify-start h-8 text-xs hover:bg-infinite-purple/10"
               >
                 <Dice6 className="h-3 w-3 mr-2" />
@@ -147,17 +179,21 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               {combatMode && (
                 <>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => handleQuickRoll('initiative')}
+                    title="Roll Initiative"
                     className="w-full justify-start h-8 text-xs hover:bg-red-500/10"
                   >
                     ⚡ Initiative
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => handleQuickRoll('attack')}
+                    title="Make an Attack Roll"
                     className="w-full justify-start h-8 text-xs hover:bg-orange-500/10"
                   >
                     ⚔️ Attack Roll
@@ -168,25 +204,31 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = React.mem
               {isExpanded && (
                 <>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => handleQuickRoll('perception')}
+                    title="Make a Perception check"
                     className="w-full justify-start h-8 text-xs hover:bg-infinite-teal/10"
                   >
                     👁️ Perception
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => handleQuickRoll('stealth')}
+                    title="Make a Stealth check"
                     className="w-full justify-start h-8 text-xs hover:bg-purple-500/10"
                   >
                     🥷 Stealth
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="outline"
                     onClick={() => handleQuickRoll('investigation')}
+                    title="Make an Investigation check"
                     className="w-full justify-start h-8 text-xs hover:bg-blue-500/10"
                   >
                     🔍 Investigation

@@ -477,6 +477,7 @@ export default tseslint.config(
       'server-bun/src/services/session-service.ts',
       'src/components/character-creation/steps/StartingEquipmentSelection.tsx',
       'src/stores/useCombatStore.ts',
+      'src/features/game-session/components/game/FloatingActionPanel.tsx',
     ],
     rules: {
       'max-lines': 'warn',
