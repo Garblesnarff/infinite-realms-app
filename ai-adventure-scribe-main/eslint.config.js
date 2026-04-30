@@ -476,6 +476,8 @@ export default tseslint.config(
       'server-bun/src/services/progression/class-feature-usage-service.ts',
       'server-bun/src/services/session-service.ts',
       'src/components/character-creation/steps/StartingEquipmentSelection.tsx',
+      'src/components/character-creation/steps/PersonalitySelection.tsx',
+      'src/components/character-creation/steps/personality/use-personality-selection.ts',
       'src/stores/useCombatStore.ts',
       'src/features/game-session/components/game/FloatingActionPanel.tsx',
     ],

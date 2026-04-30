@@ -1,228 +1,30 @@
 import { Shuffle, Heart, Crown, Shield, Zap, Sparkles } from 'lucide-react';
 import React from 'react';
 
-import type { PersonalityElement } from '@/services/personalityService';
+import { usePersonalitySelection } from './personality/use-personality-selection';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
-import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-import logger from '@/lib/logger';
-import { personalityService } from '@/services/personalityService';
-
-/**
- * Safely extract text from a PersonalityElement based on field type
- * Uses fallback logic: tries field-specific property first, then 'text', then empty string
- * @param element - The personality element from the API
- * @param fieldType - Type of field to extract
- * @returns The extracted text or empty string if not found
- */
-const extractPersonalityText = (
-  element: PersonalityElement,
-  fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws',
-): string => {
-  switch (fieldType) {
-    case 'traits':
-      return element.text ?? '';
-    case 'ideals':
-      return element.ideal ?? element.text ?? '';
-    case 'bonds':
-      return element.bond ?? element.text ?? '';
-    case 'flaws':
-      return element.flaw ?? element.text ?? '';
-    default:
-      return element.text ?? '';
-  }
-};
 
 /**
  * PersonalitySelection component for character creation
  * Handles input of personality traits, ideals, bonds, and flaws with randomization
  */
 const PersonalitySelection: React.FC = () => {
-  const { state, dispatch } = useCharacter();
-  const { toast } = useToast();
+  const {
+    state,
+    selectedBackground,
+    handlePersonalityTraitsChange,
+    handleIdealChange,
+    handleBondChange,
+    handleFlawChange,
+    handleRandomize,
+    handleRandomizeAll,
+  } = usePersonalitySelection();
   const { scrollToNavigation: _scrollToNavigation } = useAutoScroll();
-
-  /**
-   * Updates personality traits (first and second)
-   * @param traits - Array of two trait strings
-   */
-  const handlePersonalityTraitsChange = (traits: string[]) => {
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { personalityTraits: traits },
-    });
-  };
-
-  /**
-   * Updates ideals (single string as array)
-   * @param ideal - Ideal string
-   */
-  const handleIdealChange = (ideal: string) => {
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { ideals: [ideal] },
-    });
-  };
-
-  /**
-   * Updates bonds (single string as array)
-   * @param bond - Bond string
-   */
-  const handleBondChange = (bond: string) => {
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { bonds: [bond] },
-    });
-  };
-
-  /**
-   * Updates flaws (single string as array)
-   * @param flaw - Flaw string
-   */
-  const handleFlawChange = (flaw: string) => {
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { flaws: [flaw] },
-    });
-  };
-
-  /**
-   * Randomizes a specific personality field
-   * @param fieldType - Type of field to randomize
-   * @param index - Index for traits (0 or 1)
-   */
-  const handleRandomize = async (
-    fieldType: 'traits' | 'ideals' | 'bonds' | 'flaws',
-    index?: number,
-  ) => {
-    try {
-      const options = {
-        background: selectedBackground?.id,
-        alignment: state.character?.alignment,
-      };
-
-      const element = await personalityService.getRandomPersonalityElement(fieldType, options);
-
-      // Extract the text using helper function with fallback logic
-      const randomText = extractPersonalityText(element, fieldType);
-
-      // Validate we got actual text
-      if (!randomText) {
-        logger.warn(`No text extracted for ${fieldType}:`, element);
-        toast({
-          title: 'Error',
-          description: 'Failed to randomize. Please try again.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Update the appropriate field
-      switch (fieldType) {
-        case 'traits':
-          if (index !== undefined) {
-            const currentTraits = state.character?.personalityTraits || ['', ''];
-            const newTraits = [...currentTraits];
-            newTraits[index] = randomText;
-            handlePersonalityTraitsChange(newTraits);
-          }
-          break;
-        case 'ideals':
-          handleIdealChange(randomText);
-          break;
-        case 'bonds':
-          handleBondChange(randomText);
-          break;
-        case 'flaws':
-          handleFlawChange(randomText);
-          break;
-      }
-
-      toast({
-        title: 'Randomized!',
-        description: `Generated a random ${fieldType.slice(0, -1)} for your character.`,
-        duration: 1500,
-      });
-    } catch (error) {
-      logger.error('Error randomizing personality element:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to randomize. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  /**
-   * Randomizes all personality fields at once
-   */
-  const handleRandomizeAll = async () => {
-    try {
-      const options = {
-        background: selectedBackground?.id,
-        alignment: state.character?.alignment,
-      };
-
-      const batchData = await personalityService.getBatchRandomPersonality(options);
-
-      // Update all personality fields with the batch results using helper function
-      if (batchData.traits && batchData.traits2) {
-        const trait1 = extractPersonalityText(batchData.traits, 'traits');
-        const trait2 = extractPersonalityText(batchData.traits2, 'traits');
-        if (trait1 && trait2) {
-          handlePersonalityTraitsChange([trait1, trait2]);
-        }
-      } else if (batchData.traits) {
-        // Fallback if only one trait is returned
-        const trait1 = extractPersonalityText(batchData.traits, 'traits');
-        if (trait1) {
-          const currentTraits = state.character?.personalityTraits || ['', ''];
-          handlePersonalityTraitsChange([trait1, currentTraits[1]]);
-        }
-      }
-
-      if (batchData.ideals) {
-        const idealText = extractPersonalityText(batchData.ideals, 'ideals');
-        if (idealText) {
-          handleIdealChange(idealText);
-        }
-      }
-
-      if (batchData.bonds) {
-        const bondText = extractPersonalityText(batchData.bonds, 'bonds');
-        if (bondText) {
-          handleBondChange(bondText);
-        }
-      }
-
-      if (batchData.flaws) {
-        const flawText = extractPersonalityText(batchData.flaws, 'flaws');
-        if (flawText) {
-          handleFlawChange(flawText);
-        }
-      }
-
-      toast({
-        title: 'All Randomized!',
-        description: 'Generated a complete personality for your character.',
-        duration: 2000,
-      });
-    } catch (error) {
-      logger.error('Error randomizing all personality elements:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to randomize all fields. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const selectedBackground = state.character?.background;
 
   return (
     <div className="space-y-8">
