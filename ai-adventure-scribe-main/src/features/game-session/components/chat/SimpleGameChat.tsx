@@ -35,10 +35,17 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
   } = useSimpleGameSession(campaignId, characterId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
+  const currentMessageRef = useRef(currentMessage);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ⚡ Bolt: Keep ref in sync with state for use in callbacks without dependency churn.
+  // This allows sendMessage to have a stable identity while the user types.
+  useEffect(() => {
+    currentMessageRef.current = currentMessage;
+  }, [currentMessage]);
   const navigate = useNavigate();
 
   // Scroll to bottom when messages change
@@ -173,14 +180,17 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
         e.preventDefault();
       }
 
-      if (!currentMessage.trim() || !session?.id || isSending) {
+      // ⚡ Bolt: Use ref for currentMessage to keep callback identity stable during typing.
+      const messageContent = currentMessageRef.current.trim();
+
+      if (!messageContent || !session?.id || isSending) {
         return;
       }
 
       const userMessage: ChatMessage = {
         id: `temp-${Date.now()}`,
         role: 'user',
-        content: currentMessage.trim(),
+        content: messageContent,
         timestamp: new Date(),
       };
 
@@ -274,7 +284,7 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
       }
     },
     [
-      currentMessage,
+      campaignId,
       session?.id,
       session?.starter_campaign_id,
       isSending,
