@@ -94,6 +94,7 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
           className="flex items-center gap-2"
           role="group"
           aria-label={`Current phase: ${phaseInfo.label}`}
+          title={`Phase: ${phaseInfo.label}`}
         >
           <div className={`p-1.5 rounded-full ${phaseInfo.color} text-white`}>
             <PhaseIcon className="w-4 h-4" aria-hidden="true" />

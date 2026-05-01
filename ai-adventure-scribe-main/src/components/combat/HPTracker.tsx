@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { getHPColor } from '@/utils/hp-utils';
+import { getHPColor, getHPStatusDescription } from '@/utils/hp-utils';
 
 interface HPTrackerProps {
   participant: CombatParticipant;
@@ -67,8 +67,12 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
         <div className="flex justify-between items-center">
           <span className="font-semibold">{participant.name}</span>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-sm">
-              <Shield className="w-4 h-4" />
+            <div
+              className="flex items-center gap-1 text-sm cursor-help"
+              aria-label={`Armor Class: ${armorClass}`}
+              title={`Armor Class: ${armorClass}`}
+            >
+              <Shield className="w-4 h-4" aria-hidden="true" />
               <span>AC: {armorClass}</span>
             </div>
           </div>
@@ -77,7 +81,7 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
         <div>
           <div className="flex justify-between items-center text-sm mb-1">
             <span className="flex items-center gap-1">
-              <Heart className="w-4 h-4" />
+              <Heart className="w-4 h-4" aria-hidden="true" />
               HP
             </span>
             {showHPDetails ? (
@@ -88,15 +92,21 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
                 )}
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground">Status Unknown</span>
+              <span className="text-sm text-muted-foreground">
+                {getHPStatusDescription(hpPercent)}
+              </span>
             )}
           </div>
           <Progress
             value={hpPercent}
             className="h-2"
             indicatorClassName={getHPColor(hpPercent)}
-            aria-label={`${participant.name} health: ${hpString}`}
-            title={hpString}
+            aria-label={
+              showHPDetails
+                ? `${participant.name} health: ${hpString}`
+                : `${participant.name} health: ${getHPStatusDescription(hpPercent)}`
+            }
+            title={showHPDetails ? hpString : getHPStatusDescription(hpPercent)}
           />
         </div>
 

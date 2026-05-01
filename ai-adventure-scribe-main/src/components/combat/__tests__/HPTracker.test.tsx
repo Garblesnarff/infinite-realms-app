@@ -4,12 +4,14 @@ import { vi, describe, it, expect } from 'vitest';
 
 import HPTracker from '../HPTracker';
 
+import type { CombatParticipant } from '@/types/combat';
+
 describe('HPTracker', () => {
   const participant = {
     id: 'p1',
     name: 'Thorin Ironforge',
     participantType: 'player',
-    initiative: 18,
+    initiative: { value: 18 },
     armorClass: 16,
     maxHitPoints: 45,
     currentHitPoints: 45,
@@ -20,7 +22,7 @@ describe('HPTracker', () => {
     bonusActionTaken: false,
     reactionTaken: false,
     movementUsed: 0,
-  } as any;
+  } as unknown as CombatParticipant;
 
   const defaultProps = {
     participant,
@@ -83,5 +85,41 @@ describe('HPTracker', () => {
     fireEvent.change(healInput, { target: { value: '5' } });
     fireEvent.click(healButton);
     expect(defaultProps.onHeal).toHaveBeenCalledWith('p1', 5);
+  });
+
+  it('hides exact HP and shows semantic status when showHPDetails is false', () => {
+    const hiddenProps = {
+      ...defaultProps,
+      showHPDetails: false,
+    };
+    render(<HPTracker {...hiddenProps} />);
+
+    // Exact HP numbers should NOT be visible
+    expect(screen.queryByText('45 / 45')).not.toBeInTheDocument();
+
+    // Semantic status should be visible (45/45 is 100%, which is "Healthy")
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
+
+    // Progress bar aria-label should use semantic status
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Healthy');
+    expect(progress).toHaveAttribute('title', 'Healthy');
+  });
+
+  it('shows "Near Death" semantic status when HP is low and hidden', () => {
+    const woundedParticipant = {
+      ...participant,
+      currentHitPoints: 5, // ~11% of 45
+    };
+    const hiddenProps = {
+      ...defaultProps,
+      participant: woundedParticipant,
+      showHPDetails: false,
+    };
+    render(<HPTracker {...hiddenProps} />);
+
+    expect(screen.getByText('Near Death')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Near Death');
   });
 });
