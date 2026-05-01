@@ -83,7 +83,7 @@ describe('CombatStatus', () => {
         }
       ],
       currentTurnParticipantId: 'p1',
-      round: 1
+      currentRound: 1
     };
 
     vi.mocked(useGame).mockReturnValue({

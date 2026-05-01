@@ -113,19 +113,25 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
               role="group"
               aria-label={`Active turn: ${currentTurn.name}`}
             >
-              <Clock className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+              <Clock
+                className="w-3 h-3 text-muted-foreground cursor-help"
+                aria-hidden="true"
+                title="Current turn"
+              />
               <span className="text-sm font-medium">{currentTurn.name}</span>
               <Badge
                 variant="outline"
-                className="text-xs"
+                className="text-xs cursor-help"
                 aria-label={`Initiative: ${currentTurn.initiative}`}
+                title={`Initiative: ${currentTurn.initiative}`}
               >
                 Init {currentTurn.initiative}
               </Badge>
               {currentTurn.hp && (
                 <div
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 cursor-help"
                   aria-label={`Health: ${currentTurn.hp.current} of ${currentTurn.hp.maximum}`}
+                  title={`Health: ${currentTurn.hp.current}/${currentTurn.hp.maximum}`}
                 >
                   <Heart className="w-3 h-3 text-red-500" aria-hidden="true" />
                   <span className="text-xs">
@@ -151,17 +157,18 @@ export const CombatStatus: React.FC<CombatStatusProps> = React.memo(({ className
         )}
 
         {/* Combat Round Counter */}
-        {combatState.isInCombat && combatState.activeEncounter?.round && (
+        {combatState.isInCombat && combatState.activeEncounter?.currentRound && (
           <>
             <div className="h-4 w-px bg-border" aria-hidden="true" />
             <div
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 cursor-help"
               role="group"
-              aria-label={`Combat Round ${combatState.activeEncounter.round}`}
+              aria-label={`Combat Round ${combatState.activeEncounter.currentRound}`}
+              title={`Combat Round ${combatState.activeEncounter.currentRound}`}
             >
               <Shield className="w-3 h-3 text-orange-500" aria-hidden="true" />
               <span className="text-xs text-muted-foreground">
-                Round {combatState.activeEncounter.round}
+                Round {combatState.activeEncounter.currentRound}
               </span>
             </div>
           </>
