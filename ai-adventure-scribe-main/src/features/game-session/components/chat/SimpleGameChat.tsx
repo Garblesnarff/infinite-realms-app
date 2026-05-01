@@ -34,18 +34,22 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
     endSession,
   } = useSimpleGameSession(campaignId, characterId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef(messages);
   const [currentMessage, setCurrentMessage] = useState('');
   const currentMessageRef = useRef(currentMessage);
   const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(isSending);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ⚡ Bolt: Keep ref in sync with state for use in callbacks without dependency churn.
-  // This allows sendMessage to have a stable identity while the user types.
+  // ⚡ Bolt: Keep refs in sync with state for use in callbacks without dependency churn.
+  // This allows sendMessage to have a stable identity throughout the session.
   useEffect(() => {
     currentMessageRef.current = currentMessage;
-  }, [currentMessage]);
+    messagesRef.current = messages;
+    isSendingRef.current = isSending;
+  }, [currentMessage, messages, isSending]);
   const navigate = useNavigate();
 
   // Scroll to bottom when messages change
@@ -180,10 +184,13 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
         e.preventDefault();
       }
 
-      // ⚡ Bolt: Use ref for currentMessage to keep callback identity stable during typing.
+      // ⚡ Bolt: Use refs for high-frequency state to keep callback identity stable.
+      // This prevents O(N) re-renders of the entire chat list when sending or receiving messages.
       const messageContent = currentMessageRef.current.trim();
+      const currentMessages = messagesRef.current;
+      const isAlreadySending = isSendingRef.current;
 
-      if (!messageContent || !session?.id || isSending) {
+      if (!messageContent || !session?.id || isAlreadySending) {
         return;
       }
 
@@ -223,7 +230,7 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
         const aiResponse = await AIService.chatWithDM({
           message: userMessage.content,
           context,
-          conversationHistory: messages,
+          conversationHistory: currentMessages,
           onStream: (chunk: string) => {
             setStreamingMessage((prev) => prev + chunk);
           },
@@ -287,11 +294,9 @@ export const SimpleGameChat: React.FC<SimpleGameChatProps> = ({
       campaignId,
       session?.id,
       session?.starter_campaign_id,
-      isSending,
       characterId,
       campaignDetails,
       characterDetails,
-      messages,
     ],
   );
 

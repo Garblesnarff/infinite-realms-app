@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 import type { ChatMessage, GameContext, NarrationSegment } from '@/services/ai-service';
 
@@ -43,7 +43,16 @@ export const useChatHistory = ({
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 } => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef(messages);
   const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(isSending);
+
+  // ⚡ Bolt: Keep refs in sync with state to stabilize callback identities.
+  // This prevents mass re-renders in the chat UI when messages are sent or received.
+  useEffect(() => {
+    messagesRef.current = messages;
+    isSendingRef.current = isSending;
+  }, [messages, isSending]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
 
@@ -295,7 +304,10 @@ export const useChatHistory = ({
    */
   const sendMessage = useCallback(
     async (message: ChatMessage | string): Promise<void> => {
-      if (!sessionId || isSending) return;
+      const isAlreadySending = isSendingRef.current;
+      const currentMessages = messagesRef.current;
+
+      if (!sessionId || isAlreadySending) return;
 
       const messageContent = typeof message === 'string' ? message : message.content;
       if (!messageContent.trim()) return;
@@ -310,7 +322,7 @@ export const useChatHistory = ({
         timestamp: new Date(),
       };
 
-      const updatedMessages = [...messages, userMessage];
+      const updatedMessages = [...currentMessages, userMessage];
       setMessages(updatedMessages);
 
       // Save user message to database
@@ -392,15 +404,13 @@ export const useChatHistory = ({
         });
 
         // Restore messages on failure
-        setMessages(messages);
+        setMessages(currentMessages);
       } finally {
         setIsSending(false);
       }
     },
     [
       sessionId,
-      messages,
-      isSending,
       campaignId,
       characterId,
       campaignDetails,
