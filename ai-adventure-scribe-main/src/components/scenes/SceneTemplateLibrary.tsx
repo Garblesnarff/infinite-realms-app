@@ -286,12 +286,22 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
     return matchesSearch && matchesCategory;
   });
 
+  const handleKeyDown = (e: React.KeyboardEvent, template: SceneTemplate) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelectTemplate?.(template);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             placeholder="Search templates..."
             aria-label="Search scene templates"
@@ -332,7 +342,11 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
       </div>
 
       {/* Template Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        role="radiogroup"
+        aria-label="Scene templates"
+      >
         {filteredTemplates.map((template) => {
           const isSelected = template.id === selectedTemplateId;
 
@@ -340,17 +354,27 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
             <Card
               key={template.id}
               variant="parchment"
+              role="radio"
+              aria-checked={isSelected}
+              tabIndex={0}
+              aria-label={template.name}
               className={cn(
-                'cursor-pointer transition-all hover:scale-[1.02]',
+                'cursor-pointer transition-all hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
                 isSelected && 'ring-2 ring-electricCyan shadow-lg shadow-electricCyan/50',
               )}
               onClick={() => onSelectTemplate?.(template)}
+              onKeyDown={(e) => handleKeyDown(e, template)}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="text-5xl mb-2">{template.thumbnailEmoji}</div>
+                  <div className="text-5xl mb-2" aria-hidden="true">
+                    {template.thumbnailEmoji}
+                  </div>
                   {isSelected && (
-                    <div className="bg-electricCyan text-white rounded-full p-1">
+                    <div
+                      className="bg-electricCyan text-white rounded-full p-1"
+                      aria-hidden="true"
+                    >
                       <Check className="h-4 w-4" />
                     </div>
                   )}
@@ -399,6 +423,8 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                 <Button
                   variant={isSelected ? 'default' : 'outline'}
                   className="w-full"
+                  tabIndex={-1}
+                  aria-hidden="true"
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectTemplate?.(template);
@@ -417,8 +443,15 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
 
       {/* Empty State */}
       {filteredTemplates.length === 0 && (
-        <Card variant="parchment" className="p-12 text-center">
-          <div className="text-6xl mb-4">🔍</div>
+        <Card
+          variant="parchment"
+          className="p-12 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="text-6xl mb-4" aria-hidden="true">
+            🔍
+          </div>
           <CardTitle className="mb-2">No Templates Found</CardTitle>
           <CardDescription>Try adjusting your search or filter to find templates.</CardDescription>
         </Card>

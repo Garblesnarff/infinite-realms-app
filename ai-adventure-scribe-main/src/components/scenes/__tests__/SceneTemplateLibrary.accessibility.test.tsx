@@ -33,30 +33,49 @@ describe('SceneTemplateLibrary Accessibility', () => {
     expect(allButton).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('has accessible template selection buttons', () => {
+  it('has accessible template selection radios in a radiogroup', () => {
     const onSelectTemplate = vi.fn();
     render(<SceneTemplateLibrary onSelectTemplate={onSelectTemplate} />);
 
-    // Find all "Use Template" buttons
-    const selectionButtons = screen.getAllByRole('button', { name: /use this template/i });
-    expect(selectionButtons.length).toBeGreaterThan(0);
+    // Check radiogroup
+    const radiogroup = screen.getByRole('radiogroup', { name: /scene templates/i });
+    expect(radiogroup).toBeInTheDocument();
 
-    const firstButton = selectionButtons[0];
-    expect(firstButton).toHaveAttribute('aria-pressed', 'false');
-    expect(firstButton).toHaveAttribute('title', 'Use this template');
+    // Find all radio options
+    const radioOptions = screen.getAllByRole('radio');
+    expect(radioOptions.length).toBeGreaterThan(0);
 
-    // Click the button
-    fireEvent.click(firstButton);
+    const firstRadio = radioOptions[0];
+    expect(firstRadio).toHaveAttribute('aria-checked', 'false');
+    expect(firstRadio).toHaveAttribute('tabIndex', '0');
+
+    // Click the radio card
+    fireEvent.click(firstRadio);
     expect(onSelectTemplate).toHaveBeenCalled();
+  });
+
+  it('supports keyboard interaction (Space and Enter) on template cards', () => {
+    const onSelectTemplate = vi.fn();
+    render(<SceneTemplateLibrary onSelectTemplate={onSelectTemplate} />);
+
+    const radioOptions = screen.getAllByRole('radio');
+    const firstRadio = radioOptions[0];
+
+    // Space key
+    fireEvent.keyDown(firstRadio, { key: ' ', code: 'Space' });
+    expect(onSelectTemplate).toHaveBeenCalledTimes(1);
+
+    // Enter key
+    fireEvent.keyDown(firstRadio, { key: 'Enter', code: 'Enter' });
+    expect(onSelectTemplate).toHaveBeenCalledTimes(2);
   });
 
   it('shows selected state correctly when selectedTemplateId is provided', () => {
     render(<SceneTemplateLibrary selectedTemplateId="tavern" />);
 
-    // The Tavern button should be in selected state
-    const tavernButton = screen.getByRole('button', { name: /template selected/i });
-    expect(tavernButton).toBeInTheDocument();
-    expect(tavernButton).toHaveAttribute('aria-pressed', 'true');
-    expect(tavernButton).toHaveAttribute('title', 'Template selected');
+    // The Tavern radio should be in checked state
+    const tavernRadio = screen.getByRole('radio', { name: /tavern interior/i });
+    expect(tavernRadio).toBeInTheDocument();
+    expect(tavernRadio).toHaveAttribute('aria-checked', 'true');
   });
 });
