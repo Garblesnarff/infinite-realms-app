@@ -141,3 +141,7 @@
 ## 2026-04-15 - Descriptive ARIA Labels in Lists
 **Learning:** Generic `aria-label` and `title` attributes (e.g., "Revoke access") in repetitive lists can be ambiguous for screen reader users and confusing in multi-item views. Including the item's name or a unique identifier in the label (e.g., "Revoke access for [User Name]") provides immediate context and improves navigation.
 **Action:** Always use template literals to include contextually relevant identifiers in `aria-label` and `title` attributes for per-item actions in lists or grids.
+
+## 2025-05-02 - Battle Map UX and Accessibility Refinement
+**Learning:** Redundant `title` attributes on buttons wrapped in Radix `Tooltip` components cause "double tooltips" (native browser + custom UI), which is distracting and unprofessional. Including keyboard shortcuts directly in the `aria-label` (e.g., "Select (S)") provides immediate, high-value context for screen reader users without requiring them to find the shortcut elsewhere.
+**Action:** Always remove native `title` attributes when using custom Tooltip components. Use template literals to include shortcuts in `aria-label` for toolbar-style actions.

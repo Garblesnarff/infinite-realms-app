@@ -167,9 +167,8 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick, orient
               isActive && 'bg-primary text-primary-foreground',
               !isActive && 'hover:bg-accent hover:text-accent-foreground',
             )}
-            aria-label={tool.label}
+            aria-label={`${tool.label} (${tool.shortcut})`}
             aria-pressed={isActive}
-            title={tool.label}
           >
             <Icon className="h-5 w-5" />
           </Button>
@@ -351,7 +350,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       size="icon"
                       onClick={onHelpClick}
                       aria-label="Help"
-                      title="Help"
                     >
                       <HelpCircle className="h-5 w-5" />
                     </Button>
@@ -375,7 +373,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       size="icon"
                       onClick={onSettingsClick}
                       aria-label="Settings"
-                      title="Settings"
                     >
                       <Grid3x3 className="h-5 w-5" />
                     </Button>

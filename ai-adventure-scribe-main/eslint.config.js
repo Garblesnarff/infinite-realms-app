@@ -297,6 +297,7 @@ export default tseslint.config(
       'src/components/battle-map/QuickActionMenu.tsx',
       'src/components/battle-map/hooks/use-quick-action-menu.ts',
       'src/components/battle-map/ToolOptionsPanel.tsx',
+      'src/components/battle-map/Toolbar.tsx',
       'src/examples/vision-system-usage.tsx',
       'server-bun/src/services/inventory-service.ts',
       'server-bun/src/routes/v1/inventory.ts',

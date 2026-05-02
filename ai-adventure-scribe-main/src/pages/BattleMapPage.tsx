@@ -250,20 +250,15 @@ export const BattleMapPage: React.FC = () => {
           />
 
           {/* Toolbar - Positioned on left side */}
-          <div
-            className="absolute left-4 top-1/2 -translate-y-1/2"
-            style={{ zIndex: Z_INDEX.STICKY }}
-          >
-            <Toolbar
-              sceneId={sceneId}
-              isGM={isGM}
-              orientation="vertical"
-              position="left"
-              showHelp={true}
-              onHelpClick={handleHelpClick}
-              onSettingsClick={handleSettingsClick}
-            />
-          </div>
+          <Toolbar
+            sceneId={sceneId}
+            isGM={isGM}
+            orientation="vertical"
+            position="left"
+            showHelp={true}
+            onHelpClick={handleHelpClick}
+            onSettingsClick={handleSettingsClick}
+          />
 
           {/* Tool Options Panel - Positioned below toolbar when active */}
           {(selectedTool === 'wall' || selectedTool === 'fog-brush' || selectedTool === 'draw') && (

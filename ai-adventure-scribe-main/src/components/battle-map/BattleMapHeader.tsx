@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings as SettingsIcon, Menu } from 'lucide-react';
+import { ArrowLeft, Settings as SettingsIcon, Layers } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -105,10 +105,9 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
             aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
             aria-pressed={showLayersPanel}
             aria-expanded={showLayersPanel}
-            aria-haspopup="dialog"
             title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
           >
-            <Menu className="h-4 w-4" />
+            <Layers className="h-4 w-4" />
           </Button>
         )}
 
