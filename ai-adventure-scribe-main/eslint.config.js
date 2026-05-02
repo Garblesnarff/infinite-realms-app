@@ -449,7 +449,7 @@ export default tseslint.config(
       'src/components/blog-admin/blog-post-editor/blog-post-editor.tsx',
       'src/components/blog-admin/blog-post-editor/use-blog-post-editor.ts',
       'server-bun/src/services/blog-service.ts',
-      'src/components/combat/InitiativeTracker.tsx',
+      'src/components/combat/ParticipantRow.tsx',
       'src/features/campaign/hooks/use-character-selection.ts',
       'src/components/character-creation/steps/PhysicalStep.tsx',
       'src/components/character-creation/steps/SpellSelection.tsx',

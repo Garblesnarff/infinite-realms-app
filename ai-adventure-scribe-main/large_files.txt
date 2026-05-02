@@ -1,496 +1,499 @@
-total
-src/integrations/supabase/database.types.ts
-src/integrations/supabase/types/database.ts
-src/agents/__tests__/rules-interpreter-agent.test.ts
-src/hooks/__tests__/useSpellSelection.test.ts
-src/agents/services/memory/__tests__/memory-repository.test.ts
-src/__tests__/integration/spell-selection-flow.test.tsx
-src/hooks/__tests__/use-combat-mechanics.test.ts
-src/__tests__/accessibility/spell-selection-accessibility.test.tsx
-src/agents/services/memory/__tests__/memory-service-integration.test.ts
-src/utils/__tests__/spell-validation.test.ts
-src/agents/__tests__/dungeon-master-agent.test.ts
-src/test/combat-roll-flow.test.ts
-src/__tests__/helpers/spell-test-helpers.ts
-src/agents/services/memory/__tests__/memory-performance.test.ts
-src/agents/messaging/__tests__/messaging-integration.test.ts
-src/features/character/components/spells/__tests__/SpellCard.test.tsx
-src/components/spells/__tests__/SpellCard.test.tsx
-src/types/combat.ts
-src/features/game-session/components/chat/message-list/__tests__/use-message-dice-rolls.test.ts
-src/__tests__/edge-cases/racial-spell-integration.test.ts
-src/hooks/__tests__/use-combat-actions.test.ts
-src/agents/services/memory/__tests__/semantic-search.test.ts
-src/data/levelProgression.ts
-src/services/combat/__tests__/damage-integrator.test.ts
-src/services/ai/__tests__/dm-response-processor.test.ts
-src/__tests__/components/spell-selection-component.test.tsx
-src/types/enhancement-options.ts
-src/agents/messaging/services/__tests__/sync.test.ts
-src/__tests__/edge-cases/multiclass-spell-validation.test.ts
-src/agents/messaging/services/__tests__/persistence.test.ts
-src/agents/messaging/services/__tests__/connection.test.ts
-src/data/classOptions.ts
-src/__tests__/performance/spell-validation-performance.test.ts
-src/utils/__tests__/spell-preparation.test.ts
-src/components/battle-map/__tests__/Token.test.tsx
-src/data/featOptions.ts
-src/utils/lighting-integration.ts
-src/hooks/__tests__/useAdvancedSpellcasting.test.tsx
-src/components/ui/sidebar.tsx
-src/hooks/game-session/__tests__/use-session-management.test.ts
-src/components/game/__tests__/DiceRollRequest.test.tsx
-src/hooks/__tests__/use-character-save.test.tsx
-src/hooks/game/__tests__/use-dice-roll-request.test.ts
-src/utils/__tests__/character-calculations.test.ts
-src/pages/BattleMapPage.tsx
-src/components/ui/enhancement-panel.tsx
-src/components/blog-admin/blog-post-editor/blog-post-editor.tsx
-src/agents/services/lore-keeper/LoreKeeperService.ts
-src/hooks/__tests__/use-simple-game-session.test.ts
-src/features/game-session/components/game/MemoryPanel.tsx
-src/components/character-creation/steps/PersonalitySelection.tsx
-src/hooks/__tests__/use-initial-greeting.test.tsx
-src/utils/condition-definitions.ts
-src/hooks/use-combat-ai-integration.ts
-src/features/character/components/list/character-card.tsx
-src/components/ui/option-selector.tsx
-src/__tests__/performance/spell-performance.test.ts
-src/features/game-session/components/chat/SimpleGameChat.tsx
-src/hooks/use-combat-actions.ts
-src/services/combat/CombatSequenceValidator.ts
-src/agents/messaging/services/__tests__/queue.test.ts
-src/components/battle-map/__tests__/BattleCanvas.test.tsx
-src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx
-src/components/battle-map/VisionPolygon.tsx
-src/test/test-utils.tsx
-src/components/character-sharing/ShareCharacterDialog.tsx
-src/components/character-creation/steps/StartingEquipmentSelection.tsx
-src/__tests__/unit/spell-class-restrictions.test.ts
-src/types/character.ts
-src/features/safety/SafetyCommandProcessor.ts
-src/workers/vision-worker.ts
-src/data/spells/level1/wizard.ts
-src/contexts/CombatContext.tsx
-src/components/combat/InitiativeTracker.tsx
-src/hooks/__tests__/use-ability-score-selection.test.ts
-src/components/battle-map/Toolbar.tsx
-src/components/character-creation/steps/EnhancedPersonalitySelection.tsx
-src/utils/combatDetection.ts
-src/utils/performance/culling.ts
-src/utils/__tests__/reactionSystem.test.ts
-src/components/scenes/MapUploader.tsx
-src/components/game/NPCRollDisplay.tsx
-src/components/scenes/SceneTemplateLibrary.tsx
-src/utils/attackUtils.ts
-src/features/game-session/components/audio/ProgressiveVoicePlayer.tsx
-src/contexts/AuthContext.tsx
-src/components/character-folders/FolderTree.tsx
-src/components/combat/hooks/useCombatHandlers.ts
-src/hooks/use-initial-greeting.ts
-src/utils/roll-request/regex-parser.ts
-src/utils/__tests__/fog-calculations.test.ts
-src/features/game-session/hooks/use-chat-history.ts
-src/utils/classFeatures.ts
-src/utils/character-calculations.ts
-src/services/voice-consistency-service.ts
-src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx
-src/utils/__tests__/multiclassing.test.ts
-src/components/battle-map/LayersPanel.tsx
-src/utils/magicItemEffects.ts
-src/components/character-sheet/tabs/EnhancedSpellsTab.tsx
-src/shaders/light-blend.tsx
-src/features/character/components/sheet/InventoryManager.tsx
-src/utils/downtimeActivities.ts
-src/utils/__tests__/restMechanics.test.ts
-src/hooks/use-drawing-tool.ts
-src/features/character/components/sheet/MulticlassManager.tsx
-src/contexts/character/character-reducer.ts
-src/components/character-sheet/MulticlassManager.tsx
-src/agents/dungeon-master-agent.ts
-src/services/voice-routing.ts
-src/services/supabase-subscription-manager.ts
-src/utils/__tests__/magicItemEffects.test.ts
-src/utils/__tests__/attackUtils.test.ts
-src/services/ai/prompts/character-description-prompts.ts
-src/pages/CampaignDetailPage.tsx
-src/features/character/components/sheet/sections/ClassFeatureTracker.tsx
-src/components/character-sheet/sections/ClassFeatureTracker.tsx
-src/types/drawing.ts
-src/features/character/components/sheet/ExperienceManager.tsx
-src/services/blog/blog-service.ts
-src/hooks/use-ability-score-selection.ts
-src/hooks/__tests__/use-image-hot-loading.test.ts
-src/features/character/components/sheet/tabs/InventoryTab.tsx
-src/components/combat/CombatInterface.tsx
-src/components/character-sheet/ExperienceManager.tsx
-src/types/token.ts
-src/services/world-builders/world-builder-service.ts
-src/components/combat/CombatMessage.tsx
-src/hooks/__tests__/useAvailableSpells.test.ts
-src/features/character/hooks/use-character-data.ts
-src/utils/image-label-generator.ts
-src/services/combat/damage-integrator.ts
-src/hooks/use-character-data.ts
-src/components/character-creation/steps/FeatSelection.tsx
-src/services/ai/shared/verbalized-sampling.ts
-src/utils/spatial-partitioning.ts
-src/utils/multiclassing.ts
-src/features/game-session/components/game/message/use-message-handler-logic.ts
-src/components/blog-admin/blog-posts-list.tsx
-src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx
-src/components/character-sharing/SharedCharactersList.tsx
-src/services/ai/prompts/combat-rules-prompts.ts
-src/components/scenes/SceneCreationWizard.tsx
-src/services/world-builders/location-generator.ts
-src/features/game-session/components/chat/message-list/use-message-dice-rolls.ts
-src/components/combat/AttackSelectionPanel.tsx
-src/utils/__tests__/classFeatures.test.ts
-src/services/ai/dm-response-processor.ts
-src/features/campaign/components/list/campaign-card.tsx
-src/pages/AccountPage.tsx
-src/components/character-creation/steps/CharacterAdvancement.tsx
-src/utils/vision-worker-manager.ts
-src/features/character/components/list/character-list.tsx
-src/components/battle-map/CameraController.tsx
-src/services/world-builders/quest-generator.ts
-src/components/character-creation/steps/HitPointsSelection.tsx
-src/features/game-session/components/game/CompactCharacterHeader.tsx
-src/features/character/components/sheet/PersonalityManager.tsx
-src/components/character-sheet/tabs/SpellsTab.tsx
-src/components/character-sheet/PersonalityManager.tsx
-src/utils/fightingStyles.ts
-src/utils/__tests__/spell-validation-async.test.ts
-src/features/character/components/sheet/tabs/SpellsTab.tsx
-src/components/blog-admin/blog-category-manager.tsx
-src/features/game-session/components/chat/chat/DMChatBubble.tsx
-src/utils/fog-calculations.ts
-src/utils/environmentalHazards.ts
-src/hooks/__tests__/use-voice-audio-control.test.ts
-src/__tests__/summary/spell-validation-test-suite.test.ts
-src/utils/reactionTriggers.ts
-src/hooks/use-hotkeys.ts
-src/features/game-session/components/dice/Dice3DSection.tsx
-src/agents/services/memory/__tests__/embedding.test.ts
-src/hooks/__tests__/use-messages.test.tsx
-src/utils/template-calculations.ts
-src/hooks/use-combat-mechanics.ts
-src/components/character-creation/steps/character-finalization/use-character-finalization.ts
-src/utils/sentence-segmenter.ts
-src/utils/__tests__/spellComponents.test.ts
-src/pages/SceneManagementPage.tsx
-src/features/character/components/sheet/tabs/components/CombatVitals.tsx
-src/utils/characterModifiers.ts
-src/hooks/useSpellSelection.ts
-src/features/character/components/spells/SpellFilterPanel.tsx
-src/components/spells/SpellFilterPanel.tsx
-src/hooks/use-ai-response.ts
-src/components/scenes/SceneSettings.tsx
-src/utils/massCombat.ts
-src/utils/__tests__/massCombat.test.ts
-src/services/character-loader.ts
-src/features/campaign/components/view/SimpleCampaignView.tsx
-src/utils/__tests__/vision-calculations.test.ts
-src/features/game-session/components/game/game-content/GameMainContent.tsx
-src/services/prompts/character-prompt-extractors.ts
-src/hooks/use-combat-canvas-sync.ts
-src/features/game-session/components/dice/DiceRollEmbed.tsx
-src/data/backgroundOptions.ts
-src/components/blog-admin/blog-tag-manager.tsx
-src/utils/restMechanics.ts
-src/components/character-creation/steps/CharacterFinalization.tsx
-src/utils/raycasting.ts
-src/utils/__tests__/image-label-generator.test.ts
-src/hooks/memory/__tests__/useMemoryCreation.test.tsx
-src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx
-src/data/personalityOptions.ts
-src/utils/performance/lod.ts
-src/hooks/__tests__/useFogWebSocket.test.ts
-src/utils/drawing-smoothing.ts
-src/lib/logger.examples.ts
-src/components/character-creation/steps/race-selection/RaceCard.tsx
-src/components/combat/ActionPanel.tsx
-src/hooks/voice/__tests__/use-voice-processing.test.ts
-src/App.tsx
-src/features/campaign/components/list/character-selection-modal.tsx
-src/components/combat/CombatTestPage.tsx
-src/utils/__tests__/environmentalHazards.test.ts
-src/services/dice/DiceEngine.ts
-src/features/character/components/spells/SpellCard.tsx
-src/components/battle-map/PerformanceMonitor.tsx
-src/pages/campaigns/CampaignSessions.tsx
-src/lib/logger.ts
-src/utils/__tests__/template-calculations.test.ts
-src/services/character-image-generator.ts
-src/services/spell-progression-data.ts
-src/hooks/game-session/use-session-initialization.ts
-src/features/character/components/spellcasting/SpellPreparationPanel.tsx
-src/components/spellcasting/SpellPreparationPanel.tsx
-src/components/character-sheet/tabs/components/CharacterOverview.tsx
-src/utils/context/__tests__/context-utils.test.ts
-src/hooks/__tests__/use-character-data.test.ts
-src/hooks/__tests__/use-hotkeys.test.ts
-src/features/game-session/components/game/GameContent.tsx
-src/components/battle-map/QuickActionMenu.tsx
-src/components/blog-admin/blog-post-editor/__tests__/editor-workflow.test.tsx
-src/utils/__tests__/fightingStyles.test.ts
-src/features/character/components/sheet/tabs/components/CharacterOverview.tsx
-src/utils/memory/__tests__/segmentation.test.ts
-src/hooks/use-token-drag.ts
-src/agents/messaging/services/storage/IndexedDBService.ts
-src/hooks/use-character-save.ts
-src/data/launchPageContent.ts
-src/utils/diceUtils.ts
-src/types/massCombat.ts
-src/components/spells/SpellCard.tsx
-src/utils/__tests__/downtimeActivities.test.ts
-src/services/campaign-image-generator.ts
-src/components/game/DiceRollRequest.tsx
-src/components/character-creation/wizard/WizardContent.tsx
-src/components/character-creation/modals/VariantHumanChoice.tsx
-src/features/campaign/components/view/CampaignCharacterSelection.tsx
-src/utils/spellComponents.ts
-src/utils/__tests__/twoWeaponFighting.test.ts
-src/services/__tests__/character-loader.test.ts
-src/contexts/GameContext.tsx
-src/utils/__tests__/spell-management.test.ts
-src/utils/vision-polygon.ts
-src/services/enhancement-ai-generator.ts
-src/hooks/useFogWebSocket.ts
-src/hooks/__tests__/use-drawing-tool.test.tsx
-src/utils/__tests__/condition-definitions.test.ts
-src/stores/useCombatStore.ts
-src/utils/grid-snapping.ts
-src/components/combat/AttackRollVisualization.tsx
-src/hooks/__tests__/use-campaign-assets.test.ts
-src/utils/parseMessageOptions.ts
-src/components/character-creation/steps/PhysicalStep.tsx
-src/utils/__tests__/spell-data.test.ts
-src/lib/telemetry.ts
-src/hooks/game-session/use-session-management.ts
-src/features/game-session/components/chat/message-list/formatNarrative.tsx
-src/hooks/voice/use-voice-processing.ts
-src/hooks/game-session/__tests__/use-session-initialization.test.ts
-src/components/character-creation/steps/RaceSelection.tsx
-src/hooks/__tests__/session-utils.test.ts
-src/features/campaign/components/creation/wizard/WizardContent.test.tsx
-src/components/game/__tests__/NPCRollDisplay.test.tsx
-src/services/combat/__tests__/npc-auto-roller.test.ts
-src/hooks/use-image-hot-loading.ts
-src/hooks/__tests__/use-magic-item-attunement.test.ts
-src/types/scene.ts
-src/services/voice-director.ts
-src/services/ai/narration-service-impl.ts
-src/features/campaign/hooks/use-character-selection.ts
-src/pages/campaigns/CampaignOverview.tsx
-src/features/character/components/sheet/tabs/FeaturesTab.tsx
-src/components/character-sheet/tabs/FeaturesTab.tsx
-src/components/character-import-export/ImportDialog.tsx
-src/utils/__tests__/classMechanics.test.ts
-src/data/spells/level1/bard.ts
-src/components/character-creation/steps/VariantHumanSelection.tsx
-src/components/character-creation/steps/ProficienciesSelection.tsx
-src/services/prompts/characterPrompts.ts
-src/features/character/components/sheet/character-sheet-tabs.tsx
-src/features/character/hooks/use-enhanced-spellcasting.ts
-src/utils/__tests__/characterModifiers.test.ts
-src/contexts/combat/combat-reducer.ts
-src/agents/services/dm-response-generator.ts
-src/utils/spell-preparation.ts
-src/components/scenes/SceneManager.tsx
-src/hooks/__tests__/use-multiclassing.test.ts
-src/hooks/useSceneWebSocket.ts
-src/hooks/__tests__/use-combat-canvas-sync.test.ts
-src/utils/spell-lookup.ts
-src/hooks/useAdvancedSpellcasting.ts
-src/components/launch/WaitlistForm.tsx
-src/components/battle-map/ToolOptionsPanel.tsx
-src/hooks/game-session/session-utils.ts
-src/components/blog-admin/blog-post-editor/media-manager.tsx
-src/utils/__tests__/reactionTriggers.test.ts
-src/services/world-builders/npc-generator.ts
-src/hooks/__tests__/use-message-queue.test.tsx
-src/features/game-session/hooks/use-dice-roll-request.ts
-src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx
-src/components/character-creation/steps/variant-human/use-variant-human-selection.ts
-src/components/character-creation/steps/SpellSelection.tsx
-src/components/character-creation/steps/ClassSelection.tsx
-src/hooks/__tests__/useSceneWebSocket.test.ts
-src/components/combat/SpellCastingPanel.tsx
-src/utils/__tests__/raycasting.test.ts
-src/utils/__tests__/conditionEffects.test.ts
-src/pages/StarterCharacterSelectionPage.tsx
-src/data/spellcastingFeatures.ts
-src/services/passive-skills-service.ts
-src/services/spellApi.ts
-src/hooks/__tests__/use-character-stats.test.ts
-src/features/campaign/components/creation/steps/CampaignEnhancements.tsx
-src/components/ui/character-portrait.tsx
-src/types/downtimeActivities.ts
-src/contexts/combat/action-handlers.ts
-src/utils/__tests__/character-level-utils.test.ts
-src/hooks/__tests__/use-starter-character-templates.test.ts
-src/components/character-creation/wizard/wizard-validators.ts
-src/services/ai/prompts/game-context-prompts.ts
-src/hooks/use-progressive-voice.ts
-src/hooks/__tests__/use-session-initialization.test.ts
-src/components/ui/sidebar-menu.tsx
-src/utils/movement-navigation.ts
-src/utils/condition-icons.ts
-src/features/game-session/hooks/use-game-session.ts
-src/components/character-creation/steps/CharacterEnhancements.tsx
-src/utils/combat/__tests__/attack-narration.test.ts
-src/lib/trpc/.usage-examples.tsx
-src/data/spells/level1/sorcerer.ts
-src/services/llm-api-client.ts
-src/services/combat/__tests__/CombatSequenceValidator.test.ts
-src/utils/twoWeaponFighting.ts
-src/utils/classMechanics.ts
-src/components/character-sheet/tabs/hooks/use-enhanced-spellcasting.ts
-src/utils/__tests__/diceUtils.test.ts
-src/features/game-session/components/chat/message-list/useImageGeneration.ts
-src/contexts/game/game-reducer.ts
-src/hooks/ai/__tests__/session-logger.test.ts
-src/services/voice/voice-constants.ts
-src/hooks/__tests__/useEnvironmentalHazards.test.ts
-src/hooks/use-environmental-hazards.ts
-src/components/ui/selectable-card.tsx
-src/components/combat/ResourceConsumptionPanel.tsx
-src/utils/spell-validation/validator-sync.ts
-src/services/dice/__tests__/DiceEngine.test.ts
-src/hooks/__tests__/use-ai-response.test.ts
-src/utils/polygon-utils.ts
-src/components/character-creation/steps/SubraceSelection.tsx
-src/pages/campaigns/CampaignHub.tsx
-src/components/character-creation/steps/spell-selection/SpellSelectionTabs.tsx
-src/components/character-sheet/character-sheet-tabs.tsx
-src/services/combat/rollStateManager.ts
-src/utils/__tests__/stealthUtils.test.ts
-src/components/character-creation/steps/ClassFeatureSelection.tsx
-src/hooks/__tests__/use-entity-label.test.ts
-src/features/character/components/sheet/tabs/components/EnhancementDetails.tsx
-src/features/campaign/components/creation/wizard/validation.test.ts
-src/components/character-sheet/tabs/components/EnhancementDetails.tsx
-src/utils/movement-validation.ts
-src/utils/vision-calculations.ts
-src/hooks/use-campaign-assets.ts
-src/data/spells/level1/druid.ts
-src/utils/__tests__/vision-worker-manager.test.ts
-src/services/__tests__/analytics.test.ts
-src/features/game-session/components/game/message/__tests__/session-continuity-regression.test.tsx
-src/features/character/components/sheet/tabs/components/EditableDescription.tsx
-src/components/character-sheet/tabs/components/EditableDescription.tsx
-src/utils/context/__tests__/builder.test.ts
-src/utils/roll-request/__tests__/validate.test.ts
-src/services/__tests__/characterSpellApi.test.ts
-src/hooks/use-game-session.ts
-src/hooks/__tests__/use-local-storage.test.ts
-src/data/spells/level1/cleric.ts
-src/components/blog-admin/blog-post-editor/__tests__/form-validation.test.ts
-src/components/ui/fantasy-loader.tsx
-src/utils/__tests__/racialTraits.test.ts
-src/features/character/hooks/use-inventory-manager.ts
-src/components/battle-map/BattleCanvas.tsx
-src/hooks/__tests__/use-combat-ai-integration.test.ts
-src/utils/__tests__/spell-lookup.test.ts
-src/services/world-builders/world-builder-repository.ts
-src/pages/BlogPost.tsx
-src/features/character/hooks/use-personality-manager.ts
-src/components/game/DiceRollMessage.tsx
-src/utils/__tests__/spatial-partitioning.test.ts
-src/hooks/game/use-dice-roll-request.ts
-src/hooks/blog/useBlogTaxonomy.ts
-src/features/game-session/components/chat/ChatInput.tsx
-src/components/character-creation/shared/CharacterPreview.tsx
-src/utils/__tests__/image-compression.test.ts
-src/services/personalityService.ts
-src/lib/telemetry.test.ts
-src/hooks/__tests__/use-progressive-voice.test.ts
-src/features/campaign/components/creation/steps/GenreCard.tsx
-src/components/battle-map/hooks/use-quick-action-menu.ts
-src/utils/__tests__/combatDetection.test.ts
-src/hooks/use-voice-audio-control.ts
-src/components/character-sheet/sections/BasicInfo.tsx
-src/services/ai/__tests__/xml-world-update-accounting.test.ts
-src/features/character/components/sheet/sections/BasicInfo.tsx
-src/data/spells/mappings.ts
-src/components/battle-map/BackgroundImage.tsx
-src/utils/performance/__tests__/culling.test.ts
-src/hooks/memory/__tests__/useMemoryFiltering.test.ts
-src/utils/stealthUtils.ts
-src/utils/conditionEffects.ts
-src/services/ai-service.ts
-src/services/__tests__/voice-routing.test.ts
-src/hooks/__tests__/use-starter-campaigns.test.ts
-src/features/game-session/components/chat/message-list/MessageRenderer.tsx
-src/utils/animations/feedback-variants.ts
-src/utils/__tests__/polygon-utils.test.ts
-src/utils/__tests__/lighting-utils.test.ts
-src/services/character-background-generator.ts
-src/pages/campaigns/SessionCard.tsx
-src/hooks/ai/roll-processor.ts
-src/features/campaign/components/creation/steps/CampaignParameterSection.tsx
-src/components/combat/__tests__/GrappleActionPanel.test.tsx
-src/agents/services/memory/MemoryService.ts
-src/utils/__tests__/exhaustionUtils.test.ts
-src/components/blog-admin/blog-media-manager.tsx
-src/utils/__tests__/drawing-smoothing.test.ts
-src/pages/DiceTest.tsx
-src/types/memory.ts
-src/test/setup.ts
-src/services/__tests__/personalityService.test.ts
-src/features/game-session/components/game/TimelineRail.tsx
-src/features/game-session/components/chat/message-list/DMMessage.tsx
-src/utils/roll-request/__tests__/parse.test.ts
-src/hooks/ai/__tests__/roll-processor.test.ts
-src/components/character-import-export/ExportButton.tsx
-src/hooks/use-multiclassing.ts
-src/utils/spatial/__tests__/aabb.test.ts
-src/features/game-session/components/chat/message-list/MessageListContainer.tsx
-src/workers/vision-raycasting.ts
-src/hooks/use-simple-game-session.ts
-src/components/battle-map/hotkeys/constants.ts
-src/utils/exhaustionUtils.ts
-src/data/spells/cantrips/wizard.ts
-src/components/combat/ConditionApplicationPanel.tsx
-src/components/landing/PricingSection.tsx
-src/components/character-creation/steps/AdvancedSpellcastingSelection.tsx
-src/utils/memory/segmentation.ts
-src/services/world-builders/quest-prompts.ts
-src/features/game-session/components/game/FloatingActionPanel.tsx
-src/components/game/ActionOptions.tsx
-src/components/combat/CombatActionPanel.tsx
-src/blog-client.ts
-src/utils/env-validation.ts
-src/features/character/components/sheet/tabs/AbilitiesTab.tsx
-src/utils/roll-request/checks.ts
-src/utils/context/builder.ts
-src/services/combat/__tests__/rollStateManager.test.ts
-src/utils/__tests__/parseMessageOptions.test.ts
-src/services/voice-mapper.ts
-src/services/scene-image-generator.ts
-src/components/ui/empty-state.tsx
-src/utils/__tests__/safetyCommands.test.ts
-src/services/localSpellService.ts
-src/landing-client.ts
-src/utils/token-sizing.ts
-src/utils/__tests__/error-handler.test.ts
-src/features/character/hooks/__tests__/use-enhanced-spellcasting.test.ts
-src/utils/vision-system-index.ts
-src/pages/BlogIndex.tsx
-src/hooks/__tests__/use-token-drag.test.ts
-src/components/battle-map/HotkeyGuide.tsx
-src/utils/racialTraits.ts
-src/utils/__tests__/vision-polygon-generator.test.ts
-src/hooks/memory/useMemoryCreation.ts
-src/components/character-sheet/tabs/components/__tests__/EditableDescription.accessibility.test.tsx
-src/components/battle-map/LayerManager.tsx
-src/agents/messaging/services/offline/OfflineStateService.ts
-src/utils/performance/__tests__/lod.test.ts
-src/utils/combat/__tests__/ai-narration-utils.test.ts
-src/components/landing/Footer.tsx
-src/components/battle-map/BackgroundPlaceholder.tsx
-src/hooks/__tests__/use-auto-scroll.test.ts
-src/contexts/combat/health-handlers.ts
-src/utils/vision-polygon-generator.ts
-src/hooks/blog/__tests__/useBlogMedia.test.tsx
+ 250391 total
+   2143 src/integrations/supabase/database.types.ts
+   2032 src/integrations/supabase/types/database.ts
+   1464 src/agents/__tests__/rules-interpreter-agent.test.ts
+   1063 src/hooks/__tests__/useSpellSelection.test.ts
+    846 src/agents/services/memory/__tests__/memory-repository.test.ts
+    844 src/__tests__/integration/spell-selection-flow.test.tsx
+    820 src/hooks/__tests__/use-combat-mechanics.test.ts
+    775 src/__tests__/accessibility/spell-selection-accessibility.test.tsx
+    753 src/agents/services/memory/__tests__/memory-service-integration.test.ts
+    750 src/utils/__tests__/spell-validation.test.ts
+    744 src/agents/__tests__/dungeon-master-agent.test.ts
+    732 src/test/combat-roll-flow.test.ts
+    711 src/__tests__/helpers/spell-test-helpers.ts
+    696 src/agents/services/memory/__tests__/memory-performance.test.ts
+    695 src/agents/messaging/__tests__/messaging-integration.test.ts
+    672 src/features/character/components/spells/__tests__/SpellCard.test.tsx
+    672 src/components/spells/__tests__/SpellCard.test.tsx
+    628 src/types/combat.ts
+    628 src/features/game-session/components/chat/message-list/__tests__/use-message-dice-rolls.test.ts
+    619 src/__tests__/edge-cases/racial-spell-integration.test.ts
+    611 src/hooks/__tests__/use-combat-actions.test.ts
+    589 src/agents/services/memory/__tests__/semantic-search.test.ts
+    580 src/data/levelProgression.ts
+    571 src/services/combat/__tests__/damage-integrator.test.ts
+    569 src/services/ai/__tests__/dm-response-processor.test.ts
+    569 src/__tests__/components/spell-selection-component.test.tsx
+    559 src/types/enhancement-options.ts
+    550 src/agents/messaging/services/__tests__/sync.test.ts
+    549 src/__tests__/edge-cases/multiclass-spell-validation.test.ts
+    537 src/agents/messaging/services/__tests__/persistence.test.ts
+    532 src/agents/messaging/services/__tests__/connection.test.ts
+    528 src/data/classOptions.ts
+    510 src/__tests__/performance/spell-validation-performance.test.ts
+    501 src/utils/__tests__/spell-preparation.test.ts
+    500 src/components/battle-map/__tests__/Token.test.tsx
+    495 src/data/featOptions.ts
+    491 src/utils/lighting-integration.ts
+    491 src/hooks/__tests__/useAdvancedSpellcasting.test.tsx
+    491 src/components/ui/sidebar.tsx
+    490 src/hooks/game-session/__tests__/use-session-management.test.ts
+    483 src/components/game/__tests__/DiceRollRequest.test.tsx
+    482 src/hooks/__tests__/use-character-save.test.tsx
+    477 src/hooks/game/__tests__/use-dice-roll-request.test.ts
+    476 src/utils/__tests__/character-calculations.test.ts
+    475 src/components/ui/enhancement-panel.tsx
+    475 src/components/blog-admin/blog-post-editor/blog-post-editor.tsx
+    474 src/agents/services/lore-keeper/LoreKeeperService.ts
+    472 src/hooks/__tests__/use-simple-game-session.test.ts
+    468 src/features/game-session/components/game/MemoryPanel.tsx
+    466 src/hooks/__tests__/use-initial-greeting.test.tsx
+    464 src/components/scenes/SceneTemplateLibrary.tsx
+    462 src/utils/condition-definitions.ts
+    462 src/hooks/use-combat-ai-integration.ts
+    462 src/features/character/components/list/character-card.tsx
+    461 src/components/ui/option-selector.tsx
+    459 src/__tests__/performance/spell-performance.test.ts
+    452 src/hooks/use-combat-actions.ts
+    449 src/services/combat/CombatSequenceValidator.ts
+    449 src/agents/messaging/services/__tests__/queue.test.ts
+    448 src/components/battle-map/__tests__/BattleCanvas.test.tsx
+    447 src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx
+    447 src/components/battle-map/VisionPolygon.tsx
+    446 src/test/test-utils.tsx
+    446 src/components/character-sharing/ShareCharacterDialog.tsx
+    446 src/__tests__/unit/spell-class-restrictions.test.ts
+    445 src/types/character.ts
+    445 src/features/safety/SafetyCommandProcessor.ts
+    444 src/workers/vision-worker.ts
+    444 src/components/character-creation/steps/StartingEquipmentSelection.tsx
+    442 src/data/spells/level1/wizard.ts
+    442 src/contexts/CombatContext.tsx
+    442 src/components/combat/InitiativeTracker.tsx
+    438 src/hooks/__tests__/use-ability-score-selection.test.ts
+    437 src/components/character-creation/steps/EnhancedPersonalitySelection.tsx
+    436 src/utils/combatDetection.ts
+    435 src/components/battle-map/Toolbar.tsx
+    434 src/utils/performance/culling.ts
+    433 src/utils/__tests__/reactionSystem.test.ts
+    433 src/components/scenes/MapUploader.tsx
+    432 src/components/game/NPCRollDisplay.tsx
+    431 src/features/game-session/hooks/use-chat-history.ts
+    430 src/utils/attackUtils.ts
+    430 src/features/game-session/components/audio/ProgressiveVoicePlayer.tsx
+    430 src/contexts/AuthContext.tsx
+    430 src/components/character-folders/FolderTree.tsx
+    427 src/components/combat/hooks/useCombatHandlers.ts
+    425 src/hooks/use-initial-greeting.ts
+    423 src/utils/roll-request/regex-parser.ts
+    422 src/utils/__tests__/fog-calculations.test.ts
+    422 src/components/combat/__tests__/ResourceConsumptionPanel.test.tsx
+    420 src/utils/classFeatures.ts
+    420 src/utils/character-calculations.ts
+    420 src/services/voice-consistency-service.ts
+    420 src/features/character/components/sheet/tabs/EnhancedSpellsTab.tsx
+    419 src/utils/__tests__/multiclassing.test.ts
+    419 src/components/battle-map/LayersPanel.tsx
+    418 src/features/game-session/components/chat/SimpleGameChat.tsx
+    417 src/utils/magicItemEffects.ts
+    415 src/components/character-sheet/tabs/EnhancedSpellsTab.tsx
+    414 src/shaders/light-blend.tsx
+    414 src/features/character/components/sheet/InventoryManager.tsx
+    413 src/utils/downtimeActivities.ts
+    413 src/utils/__tests__/restMechanics.test.ts
+    413 src/hooks/use-drawing-tool.ts
+    413 src/features/character/components/sheet/MulticlassManager.tsx
+    413 src/contexts/character/character-reducer.ts
+    413 src/components/character-sheet/MulticlassManager.tsx
+    413 src/agents/dungeon-master-agent.ts
+    412 src/services/voice-routing.ts
+    412 src/services/supabase-subscription-manager.ts
+    411 src/utils/__tests__/magicItemEffects.test.ts
+    410 src/utils/__tests__/attackUtils.test.ts
+    410 src/services/ai/prompts/character-description-prompts.ts
+    408 src/pages/CampaignDetailPage.tsx
+    407 src/features/character/components/sheet/sections/ClassFeatureTracker.tsx
+    407 src/components/character-sheet/sections/ClassFeatureTracker.tsx
+    406 src/hooks/use-character-data.ts
+    405 src/types/drawing.ts
+    405 src/features/character/components/sheet/ExperienceManager.tsx
+    404 src/services/blog/blog-service.ts
+    403 src/hooks/use-ability-score-selection.ts
+    403 src/hooks/__tests__/use-image-hot-loading.test.ts
+    403 src/features/character/components/sheet/tabs/InventoryTab.tsx
+    402 src/components/combat/CombatInterface.tsx
+    401 src/components/character-sheet/ExperienceManager.tsx
+    400 src/types/token.ts
+    399 src/services/world-builders/world-builder-service.ts
+    399 src/components/combat/CombatMessage.tsx
+    398 src/hooks/__tests__/useAvailableSpells.test.ts
+    398 src/features/character/hooks/use-character-data.ts
+    397 src/utils/image-label-generator.ts
+    397 src/services/combat/damage-integrator.ts
+    396 src/components/character-creation/steps/FeatSelection.tsx
+    393 src/services/ai/shared/verbalized-sampling.ts
+    392 src/utils/spatial-partitioning.ts
+    392 src/utils/multiclassing.ts
+    390 src/features/game-session/components/game/message/use-message-handler-logic.ts
+    390 src/components/blog-admin/blog-posts-list.tsx
+    389 src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx
+    389 src/components/character-sharing/SharedCharactersList.tsx
+    387 src/services/ai/prompts/combat-rules-prompts.ts
+    387 src/components/scenes/SceneCreationWizard.tsx
+    384 src/services/world-builders/location-generator.ts
+    383 src/features/game-session/components/chat/message-list/use-message-dice-rolls.ts
+    383 src/components/combat/AttackSelectionPanel.tsx
+    382 src/utils/__tests__/classFeatures.test.ts
+    382 src/services/ai/dm-response-processor.ts
+    381 src/features/campaign/components/list/campaign-card.tsx
+    379 src/pages/AccountPage.tsx
+    379 src/components/character-creation/steps/CharacterAdvancement.tsx
+    376 src/utils/vision-worker-manager.ts
+    376 src/features/character/components/list/character-list.tsx
+    376 src/components/battle-map/CameraController.tsx
+    374 src/services/world-builders/quest-generator.ts
+    374 src/components/character-creation/steps/HitPointsSelection.tsx
+    372 src/features/game-session/components/game/CompactCharacterHeader.tsx
+    372 src/features/character/components/sheet/PersonalityManager.tsx
+    372 src/components/character-sheet/tabs/SpellsTab.tsx
+    372 src/components/character-sheet/PersonalityManager.tsx
+    371 src/utils/fightingStyles.ts
+    371 src/utils/__tests__/spell-validation-async.test.ts
+    370 src/features/character/components/sheet/tabs/SpellsTab.tsx
+    370 src/components/blog-admin/blog-category-manager.tsx
+    369 src/features/game-session/components/chat/chat/DMChatBubble.tsx
+    368 src/utils/fog-calculations.ts
+    368 src/utils/environmentalHazards.ts
+    368 src/hooks/__tests__/use-voice-audio-control.test.ts
+    368 src/__tests__/summary/spell-validation-test-suite.test.ts
+    366 src/utils/reactionTriggers.ts
+    366 src/hooks/use-hotkeys.ts
+    365 src/features/game-session/components/dice/Dice3DSection.tsx
+    365 src/agents/services/memory/__tests__/embedding.test.ts
+    364 src/hooks/__tests__/use-messages.test.tsx
+    363 src/utils/template-calculations.ts
+    363 src/hooks/use-combat-mechanics.ts
+    362 src/components/character-creation/steps/character-finalization/use-character-finalization.ts
+    359 src/utils/sentence-segmenter.ts
+    359 src/utils/__tests__/spellComponents.test.ts
+    359 src/pages/SceneManagementPage.tsx
+    355 src/features/character/components/sheet/tabs/components/CombatVitals.tsx
+    354 src/utils/characterModifiers.ts
+    354 src/hooks/useSpellSelection.ts
+    353 src/features/character/components/spells/SpellFilterPanel.tsx
+    353 src/components/spells/SpellFilterPanel.tsx
+    352 src/hooks/use-ai-response.ts
+    352 src/components/scenes/SceneSettings.tsx
+    351 src/utils/massCombat.ts
+    351 src/utils/__tests__/massCombat.test.ts
+    350 src/services/character-loader.ts
+    349 src/features/campaign/components/view/SimpleCampaignView.tsx
+    347 src/utils/__tests__/vision-calculations.test.ts
+    347 src/features/game-session/components/game/game-content/GameMainContent.tsx
+    346 src/services/prompts/character-prompt-extractors.ts
+    346 src/hooks/use-combat-canvas-sync.ts
+    346 src/features/game-session/components/dice/DiceRollEmbed.tsx
+    346 src/data/backgroundOptions.ts
+    346 src/components/blog-admin/blog-tag-manager.tsx
+    345 src/utils/restMechanics.ts
+    345 src/components/character-creation/steps/CharacterFinalization.tsx
+    344 src/utils/raycasting.ts
+    344 src/utils/__tests__/image-label-generator.test.ts
+    342 src/hooks/memory/__tests__/useMemoryCreation.test.tsx
+    342 src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx
+    342 src/data/personalityOptions.ts
+    341 src/utils/performance/lod.ts
+    340 src/hooks/__tests__/useFogWebSocket.test.ts
+    339 src/utils/drawing-smoothing.ts
+    339 src/lib/logger.examples.ts
+    339 src/components/character-creation/steps/race-selection/RaceCard.tsx
+    337 src/components/combat/ActionPanel.tsx
+    336 src/hooks/voice/__tests__/use-voice-processing.test.ts
+    336 src/App.tsx
+    334 src/features/campaign/components/list/character-selection-modal.tsx
+    334 src/components/combat/CombatTestPage.tsx
+    332 src/utils/__tests__/environmentalHazards.test.ts
+    332 src/services/dice/DiceEngine.ts
+    332 src/pages/BattleMapPage.tsx
+    332 src/features/character/components/spells/SpellCard.tsx
+    332 src/components/battle-map/PerformanceMonitor.tsx
+    331 src/pages/campaigns/CampaignSessions.tsx
+    329 src/lib/logger.ts
+    328 src/utils/__tests__/template-calculations.test.ts
+    328 src/services/character-image-generator.ts
+    327 src/services/spell-progression-data.ts
+    327 src/hooks/game-session/use-session-initialization.ts
+    327 src/features/character/components/spellcasting/SpellPreparationPanel.tsx
+    327 src/components/spellcasting/SpellPreparationPanel.tsx
+    327 src/components/character-sheet/tabs/components/CharacterOverview.tsx
+    326 src/utils/context/__tests__/context-utils.test.ts
+    326 src/hooks/__tests__/use-character-data.test.ts
+    324 src/hooks/__tests__/use-hotkeys.test.ts
+    324 src/features/game-session/components/game/GameContent.tsx
+    324 src/components/battle-map/QuickActionMenu.tsx
+    323 src/components/blog-admin/blog-post-editor/__tests__/editor-workflow.test.tsx
+    322 src/utils/__tests__/fightingStyles.test.ts
+    322 src/features/character/components/sheet/tabs/components/CharacterOverview.tsx
+    321 src/utils/memory/__tests__/segmentation.test.ts
+    320 src/hooks/use-token-drag.ts
+    320 src/agents/messaging/services/storage/IndexedDBService.ts
+    319 src/hooks/use-character-save.ts
+    319 src/data/launchPageContent.ts
+    318 src/utils/diceUtils.ts
+    318 src/types/massCombat.ts
+    318 src/components/spells/SpellCard.tsx
+    316 src/utils/__tests__/downtimeActivities.test.ts
+    316 src/services/campaign-image-generator.ts
+    316 src/components/game/DiceRollRequest.tsx
+    314 src/components/character-creation/wizard/WizardContent.tsx
+    314 src/components/character-creation/modals/VariantHumanChoice.tsx
+    313 src/features/campaign/components/view/CampaignCharacterSelection.tsx
+    312 src/utils/spellComponents.ts
+    312 src/utils/__tests__/twoWeaponFighting.test.ts
+    312 src/services/__tests__/character-loader.test.ts
+    312 src/contexts/GameContext.tsx
+    311 src/utils/__tests__/spell-management.test.ts
+    309 src/utils/vision-polygon.ts
+    309 src/services/enhancement-ai-generator.ts
+    309 src/hooks/useFogWebSocket.ts
+    309 src/hooks/__tests__/use-drawing-tool.test.tsx
+    308 src/utils/__tests__/condition-definitions.test.ts
+    307 src/stores/useCombatStore.ts
+    306 src/utils/grid-snapping.ts
+    306 src/components/combat/AttackRollVisualization.tsx
+    305 src/hooks/__tests__/use-campaign-assets.test.ts
+    303 src/utils/parseMessageOptions.ts
+    303 src/features/character/hooks/__tests__/use-inventory-manager.test.ts
+    303 src/components/character-creation/steps/PhysicalStep.tsx
+    301 src/utils/__tests__/spell-data.test.ts
+    301 src/lib/telemetry.ts
+    301 src/hooks/game-session/use-session-management.ts
+    301 src/features/game-session/components/chat/message-list/formatNarrative.tsx
+    300 src/hooks/voice/use-voice-processing.ts
+    300 src/hooks/game-session/__tests__/use-session-initialization.test.ts
+    300 src/components/character-creation/steps/RaceSelection.tsx
+    299 src/hooks/__tests__/session-utils.test.ts
+    299 src/features/campaign/components/creation/wizard/WizardContent.test.tsx
+    299 src/components/game/__tests__/NPCRollDisplay.test.tsx
+    298 src/services/combat/__tests__/npc-auto-roller.test.ts
+    298 src/hooks/use-image-hot-loading.ts
+    298 src/hooks/__tests__/use-magic-item-attunement.test.ts
+    297 src/types/scene.ts
+    297 src/services/voice-director.ts
+    297 src/services/ai/narration-service-impl.ts
+    297 src/features/campaign/hooks/use-character-selection.ts
+    296 src/pages/campaigns/CampaignOverview.tsx
+    296 src/features/character/components/sheet/tabs/FeaturesTab.tsx
+    296 src/components/character-sheet/tabs/FeaturesTab.tsx
+    296 src/components/character-import-export/ImportDialog.tsx
+    295 src/utils/__tests__/classMechanics.test.ts
+    295 src/data/spells/level1/bard.ts
+    295 src/components/character-creation/steps/VariantHumanSelection.tsx
+    295 src/components/character-creation/steps/ProficienciesSelection.tsx
+    294 src/services/prompts/characterPrompts.ts
+    294 src/features/character/components/sheet/character-sheet-tabs.tsx
+    293 src/features/character/hooks/use-enhanced-spellcasting.ts
+    292 src/utils/__tests__/characterModifiers.test.ts
+    292 src/contexts/combat/combat-reducer.ts
+    292 src/agents/services/dm-response-generator.ts
+    291 src/utils/spell-preparation.ts
+    291 src/components/scenes/SceneManager.tsx
+    289 src/hooks/__tests__/use-multiclassing.test.ts
+    288 src/hooks/useSceneWebSocket.ts
+    286 src/hooks/__tests__/use-combat-canvas-sync.test.ts
+    285 src/utils/spell-lookup.ts
+    285 src/hooks/useAdvancedSpellcasting.ts
+    285 src/components/launch/WaitlistForm.tsx
+    285 src/components/battle-map/ToolOptionsPanel.tsx
+    283 src/hooks/game-session/session-utils.ts
+    282 src/components/blog-admin/blog-post-editor/media-manager.tsx
+    281 src/utils/__tests__/reactionTriggers.test.ts
+    281 src/services/world-builders/npc-generator.ts
+    279 src/hooks/__tests__/use-message-queue.test.tsx
+    279 src/features/game-session/hooks/use-dice-roll-request.ts
+    279 src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx
+    279 src/components/character-creation/steps/variant-human/use-variant-human-selection.ts
+    279 src/components/character-creation/steps/SpellSelection.tsx
+    279 src/components/character-creation/steps/ClassSelection.tsx
+    278 src/hooks/__tests__/useSceneWebSocket.test.ts
+    278 src/components/combat/SpellCastingPanel.tsx
+    277 src/utils/__tests__/raycasting.test.ts
+    277 src/utils/__tests__/conditionEffects.test.ts
+    276 src/pages/StarterCharacterSelectionPage.tsx
+    276 src/data/spellcastingFeatures.ts
+    271 src/services/passive-skills-service.ts
+    270 src/services/spellApi.ts
+    270 src/hooks/__tests__/use-character-stats.test.ts
+    270 src/features/campaign/components/creation/steps/CampaignEnhancements.tsx
+    270 src/components/ui/character-portrait.tsx
+    270 src/components/character-creation/steps/PersonalitySelection.tsx
+    268 src/types/downtimeActivities.ts
+    268 src/contexts/combat/action-handlers.ts
+    267 src/utils/__tests__/character-level-utils.test.ts
+    267 src/hooks/__tests__/use-starter-character-templates.test.ts
+    266 src/components/character-creation/wizard/wizard-validators.ts
+    265 src/services/ai/prompts/game-context-prompts.ts
+    265 src/hooks/use-progressive-voice.ts
+    265 src/hooks/__tests__/use-session-initialization.test.ts
+    265 src/components/ui/sidebar-menu.tsx
+    264 src/utils/movement-navigation.ts
+    264 src/utils/condition-icons.ts
+    263 src/features/game-session/hooks/use-game-session.ts
+    263 src/components/character-creation/steps/CharacterEnhancements.tsx
+    262 src/utils/combat/__tests__/attack-narration.test.ts
+    262 src/lib/trpc/.usage-examples.tsx
+    262 src/data/spells/level1/sorcerer.ts
+    261 src/services/llm-api-client.ts
+    261 src/services/combat/__tests__/CombatSequenceValidator.test.ts
+    260 src/utils/twoWeaponFighting.ts
+    260 src/utils/classMechanics.ts
+    260 src/components/character-sheet/tabs/hooks/use-enhanced-spellcasting.ts
+    259 src/utils/__tests__/diceUtils.test.ts
+    259 src/features/game-session/components/chat/message-list/useImageGeneration.ts
+    259 src/contexts/game/game-reducer.ts
+    258 src/hooks/ai/__tests__/session-logger.test.ts
+    257 src/services/voice/voice-constants.ts
+    257 src/hooks/__tests__/useEnvironmentalHazards.test.ts
+    256 src/hooks/use-environmental-hazards.ts
+    256 src/features/game-session/components/game/FloatingActionPanel.tsx
+    256 src/components/ui/selectable-card.tsx
+    256 src/components/combat/ResourceConsumptionPanel.tsx
+    255 src/utils/spell-validation/validator-sync.ts
+    255 src/services/dice/__tests__/DiceEngine.test.ts
+    255 src/hooks/__tests__/use-ai-response.test.ts
+    254 src/utils/polygon-utils.ts
+    254 src/components/character-creation/steps/SubraceSelection.tsx
+    253 src/pages/campaigns/CampaignHub.tsx
+    253 src/components/character-creation/steps/spell-selection/SpellSelectionTabs.tsx
+    252 src/components/character-sheet/character-sheet-tabs.tsx
+    251 src/services/combat/rollStateManager.ts
+    250 src/utils/__tests__/stealthUtils.test.ts
+    250 src/components/character-creation/steps/ClassFeatureSelection.tsx
+    249 src/hooks/__tests__/use-entity-label.test.ts
+    249 src/features/character/components/sheet/tabs/components/EnhancementDetails.tsx
+    249 src/features/campaign/components/creation/wizard/validation.test.ts
+    249 src/components/character-sheet/tabs/components/EnhancementDetails.tsx
+    248 src/utils/movement-validation.ts
+    247 src/utils/vision-calculations.ts
+    246 src/hooks/use-campaign-assets.ts
+    246 src/data/spells/level1/druid.ts
+    245 src/utils/__tests__/vision-worker-manager.test.ts
+    245 src/services/__tests__/analytics.test.ts
+    245 src/features/game-session/components/game/message/__tests__/session-continuity-regression.test.tsx
+    245 src/features/character/components/sheet/tabs/components/EditableDescription.tsx
+    245 src/components/character-sheet/tabs/components/EditableDescription.tsx
+    244 src/utils/context/__tests__/builder.test.ts
+    243 src/utils/roll-request/__tests__/validate.test.ts
+    243 src/services/__tests__/characterSpellApi.test.ts
+    242 src/hooks/use-game-session.ts
+    241 src/hooks/__tests__/use-local-storage.test.ts
+    241 src/data/spells/level1/cleric.ts
+    240 src/components/blog-admin/blog-post-editor/__tests__/form-validation.test.ts
+    239 src/components/ui/fantasy-loader.tsx
+    237 src/utils/__tests__/racialTraits.test.ts
+    237 src/features/character/hooks/use-inventory-manager.ts
+    237 src/components/battle-map/BattleCanvas.tsx
+    236 src/hooks/__tests__/use-combat-ai-integration.test.ts
+    235 src/utils/__tests__/spell-lookup.test.ts
+    235 src/services/world-builders/world-builder-repository.ts
+    235 src/pages/BlogPost.tsx
+    235 src/features/character/hooks/use-personality-manager.ts
+    235 src/components/game/DiceRollMessage.tsx
+    234 src/utils/__tests__/spatial-partitioning.test.ts
+    234 src/hooks/game/use-dice-roll-request.ts
+    234 src/hooks/blog/useBlogTaxonomy.ts
+    234 src/features/game-session/components/chat/ChatInput.tsx
+    234 src/components/character-creation/shared/CharacterPreview.tsx
+    233 src/utils/__tests__/image-compression.test.ts
+    233 src/services/personalityService.ts
+    233 src/lib/telemetry.test.ts
+    233 src/hooks/__tests__/use-progressive-voice.test.ts
+    233 src/features/campaign/components/creation/steps/GenreCard.tsx
+    233 src/components/battle-map/hooks/use-quick-action-menu.ts
+    231 src/utils/__tests__/combatDetection.test.ts
+    231 src/hooks/use-voice-audio-control.ts
+    231 src/components/character-sheet/sections/BasicInfo.tsx
+    230 src/services/ai/__tests__/xml-world-update-accounting.test.ts
+    230 src/features/character/components/sheet/sections/BasicInfo.tsx
+    230 src/data/spells/mappings.ts
+    230 src/components/battle-map/BackgroundImage.tsx
+    229 src/utils/performance/__tests__/culling.test.ts
+    229 src/hooks/memory/__tests__/useMemoryFiltering.test.ts
+    228 src/utils/stealthUtils.ts
+    227 src/utils/conditionEffects.ts
+    227 src/services/ai-service.ts
+    226 src/services/__tests__/voice-routing.test.ts
+    226 src/hooks/__tests__/use-starter-campaigns.test.ts
+    226 src/features/game-session/components/chat/message-list/MessageRenderer.tsx
+    226 src/components/character-creation/steps/personality/use-personality-selection.ts
+    225 src/utils/animations/feedback-variants.ts
+    225 src/utils/__tests__/polygon-utils.test.ts
+    225 src/utils/__tests__/lighting-utils.test.ts
+    225 src/services/character-background-generator.ts
+    224 src/pages/campaigns/SessionCard.tsx
+    224 src/hooks/ai/roll-processor.ts
+    224 src/features/campaign/components/creation/steps/CampaignParameterSection.tsx
+    224 src/components/combat/__tests__/GrappleActionPanel.test.tsx
+    224 src/agents/services/memory/MemoryService.ts
+    223 src/utils/__tests__/exhaustionUtils.test.ts
+    223 src/components/blog-admin/blog-media-manager.tsx
+    222 src/utils/__tests__/drawing-smoothing.test.ts
+    222 src/pages/DiceTest.tsx
+    221 src/types/memory.ts
+    221 src/test/setup.ts
+    221 src/services/__tests__/personalityService.test.ts
+    221 src/features/game-session/components/game/TimelineRail.tsx
+    221 src/features/game-session/components/chat/message-list/DMMessage.tsx
+    220 src/utils/roll-request/__tests__/parse.test.ts
+    220 src/hooks/ai/__tests__/roll-processor.test.ts
+    220 src/components/character-import-export/ExportButton.tsx
+    219 src/hooks/use-multiclassing.ts
+    218 src/utils/spatial/__tests__/aabb.test.ts
+    218 src/features/game-session/components/chat/message-list/MessageListContainer.tsx
+    217 src/workers/vision-raycasting.ts
+    217 src/hooks/use-simple-game-session.ts
+    217 src/components/battle-map/hotkeys/constants.ts
+    216 src/utils/exhaustionUtils.ts
+    216 src/data/spells/cantrips/wizard.ts
+    216 src/components/combat/ConditionApplicationPanel.tsx
+    215 src/components/landing/PricingSection.tsx
+    215 src/components/character-creation/steps/AdvancedSpellcastingSelection.tsx
+    214 src/utils/memory/segmentation.ts
+    214 src/services/world-builders/quest-prompts.ts
+    214 src/components/game/ActionOptions.tsx
+    214 src/components/combat/CombatActionPanel.tsx
+    214 src/blog-client.ts
+    213 src/utils/env-validation.ts
+    213 src/features/character/components/sheet/tabs/AbilitiesTab.tsx
+    212 src/utils/roll-request/checks.ts
+    212 src/utils/context/builder.ts
+    212 src/services/combat/__tests__/rollStateManager.test.ts
+    211 src/utils/__tests__/parseMessageOptions.test.ts
+    211 src/services/voice-mapper.ts
+    211 src/services/scene-image-generator.ts
+    211 src/components/ui/empty-state.tsx
+    210 src/utils/__tests__/safetyCommands.test.ts
+    210 src/services/localSpellService.ts
+    210 src/landing-client.ts
+    209 src/utils/token-sizing.ts
+    209 src/utils/__tests__/error-handler.test.ts
+    209 src/features/character/hooks/__tests__/use-enhanced-spellcasting.test.ts
+    208 src/utils/vision-system-index.ts
+    208 src/pages/BlogIndex.tsx
+    208 src/hooks/__tests__/use-token-drag.test.ts
+    208 src/components/battle-map/HotkeyGuide.tsx
+    207 src/utils/racialTraits.ts
+    207 src/utils/__tests__/vision-polygon-generator.test.ts
+    207 src/hooks/memory/useMemoryCreation.ts
+    207 src/components/character-sheet/tabs/components/__tests__/EditableDescription.accessibility.test.tsx
+    207 src/components/battle-map/LayerManager.tsx
+    206 src/agents/messaging/services/offline/OfflineStateService.ts
+    205 src/utils/performance/__tests__/lod.test.ts
+    204 src/utils/combat/__tests__/ai-narration-utils.test.ts
+    204 src/components/landing/Footer.tsx
+    204 src/components/battle-map/BackgroundPlaceholder.tsx
+    202 src/hooks/__tests__/use-auto-scroll.test.ts
+    202 src/contexts/combat/health-handlers.ts
+    201 src/utils/vision-polygon-generator.ts
+    201 src/hooks/blog/__tests__/useBlogMedia.test.tsx
