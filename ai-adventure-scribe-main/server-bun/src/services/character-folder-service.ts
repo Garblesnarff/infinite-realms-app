@@ -14,6 +14,7 @@ import { and, asc, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import {
   characterFolders,
+  characterPermissions,
   characters,
   type CharacterFolder,
 } from '../../../db/schema/index';
@@ -108,7 +109,18 @@ export class CharacterFolderService {
         .where(
           and(
             isNotNull(characters.folderId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            or(
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+              exists(
+                db.select()
+                  .from(characterPermissions)
+                  .where(and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId)
+                  ))
+              )
+            ),
           ),
         )
         .groupBy(characters.folderId),

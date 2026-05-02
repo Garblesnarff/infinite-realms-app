@@ -15,6 +15,7 @@ import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
+  characterPermissions,
   characterSpells,
   characterStats,
   characters,
@@ -66,7 +67,18 @@ export class CharacterService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId)
+              ))
+          )
+        )
       ),
       with: {
         stats: true,
@@ -83,7 +95,18 @@ export class CharacterService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId)
+              ))
+          )
+        )
       ),
       with: {
         campaign: {
@@ -154,7 +177,19 @@ export class CharacterService {
       })
       .where(and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId),
+                inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
+              ))
+          )
+        )
       ))
       .returning();
 
@@ -169,7 +204,19 @@ export class CharacterService {
       .delete(characters)
       .where(and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId),
+                eq(characterPermissions.permissionLevel, 'owner')
+              ))
+          )
+        )
       ))
       .returning({ id: characters.id });
 
@@ -433,7 +480,19 @@ export class CharacterService {
             .from(characters)
             .where(and(
               eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+              or(
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+                exists(
+                  db.select()
+                    .from(characterPermissions)
+                    .where(and(
+                      eq(characterPermissions.characterId, characters.id),
+                      eq(characterPermissions.userId, userId),
+                      inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
+                    ))
+                )
+              )
             ))
         )
       )
@@ -456,7 +515,19 @@ export class CharacterService {
         .from(classSpells)
         .innerJoin(characters, and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db.select()
+                .from(characterPermissions)
+                .where(and(
+                  eq(characterPermissions.characterId, characters.id),
+                  eq(characterPermissions.userId, userId),
+                  inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
+                ))
+            )
+          )
         ))
         .where(and(
           eq(classSpells.classId, classData.id),
@@ -473,7 +544,19 @@ export class CharacterService {
       const characterExists = await db.query.characters.findFirst({
         where: and(
           eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db.select()
+                .from(characterPermissions)
+                .where(and(
+                  eq(characterPermissions.characterId, characters.id),
+                  eq(characterPermissions.userId, userId),
+                  inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
+                ))
+            )
+          )
         ),
         columns: { id: true },
       });
@@ -496,7 +579,18 @@ export class CharacterService {
       .innerJoin(characters, eq(characterSpells.characterId, characters.id))
       .where(and(
         eq(characterSpells.characterId, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          exists(
+            db.select()
+              .from(characterPermissions)
+              .where(and(
+                eq(characterPermissions.characterId, characters.id),
+                eq(characterPermissions.userId, userId)
+              ))
+          )
+        )
       ));
 
     // Update the character table columns directly with aggregated results
