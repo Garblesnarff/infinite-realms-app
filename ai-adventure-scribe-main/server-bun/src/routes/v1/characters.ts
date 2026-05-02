@@ -20,6 +20,7 @@ import { Elysia, t } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 
 import type { Character } from '../../../../db/schema/index';
@@ -269,7 +270,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
         // 🛡️ Sentinel: Call the security-hardened service method which incorporates
         // ownership checks and masks existence.
-        const result = await CharacterService.saveCharacterSpells(
+        const result = await CharacterSpellService.saveCharacterSpells(
           params.id,
           user!.userId,
           spells,

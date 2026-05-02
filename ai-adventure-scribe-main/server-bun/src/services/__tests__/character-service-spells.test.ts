@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
-import { CharacterService } from '../character-service.js';
+import { CharacterSpellService } from '../character/character-spell-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -40,7 +40,7 @@ vi.mock('drizzle-orm', async () => {
   };
 });
 
-describe('CharacterService.saveCharacterSpells', () => {
+describe('CharacterSpellService.saveCharacterSpells', () => {
   const mockUserId = 'user-123';
   const mockCharacterId = 'char-123';
 
@@ -94,7 +94,7 @@ describe('CharacterService.saveCharacterSpells', () => {
     // 3. Ownership check fallback returns null
     (db.query.characters.findFirst as any).mockResolvedValue(null);
 
-    await expect(CharacterService.saveCharacterSpells(mockCharacterId, mockUserId, [], 'Wizard'))
+    await expect(CharacterSpellService.saveCharacterSpells(mockCharacterId, mockUserId, [], 'Wizard'))
       .rejects.toThrow(NotFoundError);
   });
 
@@ -154,7 +154,7 @@ describe('CharacterService.saveCharacterSpells', () => {
       returning: vi.fn().mockResolvedValue([{ id: mockCharacterId }])
     });
 
-    const result = await CharacterService.saveCharacterSpells(mockCharacterId, mockUserId, ['spell-1'], 'Wizard');
+    const result = await CharacterSpellService.saveCharacterSpells(mockCharacterId, mockUserId, ['spell-1'], 'Wizard');
 
     expect(result.success).toBe(true);
     expect(db.delete).toHaveBeenCalled();
