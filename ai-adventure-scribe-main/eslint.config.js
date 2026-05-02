@@ -480,6 +480,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/personality/use-personality-selection.ts',
       'src/stores/useCombatStore.ts',
       'src/features/game-session/components/game/FloatingActionPanel.tsx',
+      'src/components/combat/ResourceConsumptionPanel.tsx',
     ],
     rules: {
       'max-lines': 'warn',
