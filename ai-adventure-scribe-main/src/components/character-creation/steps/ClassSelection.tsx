@@ -106,7 +106,7 @@ const ClassSelection: React.FC = () => {
           return (
             <Card
               key={characterClass.id}
-              className={`group cursor-pointer transition-all duration-300 hover:shadow-2xl border-2 relative overflow-hidden ${
+              className={`group cursor-pointer transition-all duration-300 hover:shadow-2xl border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 isSelected
                   ? 'border-primary ring-4 ring-primary/20 shadow-xl scale-[1.02]'
                   : 'border-border hover:border-primary/50 hover:scale-[1.02]'
@@ -148,7 +148,7 @@ const ClassSelection: React.FC = () => {
                   className="absolute top-4 right-4 bg-primary text-primary-foreground rounded-full p-2 shadow-lg"
                   style={{ zIndex: Z_INDEX.CARD_HOVER }}
                 >
-                  <Check className="w-5 h-5" />
+                  <Check className="w-5 h-5" aria-hidden="true" />
                 </div>
               )}
 
@@ -160,6 +160,7 @@ const ClassSelection: React.FC = () => {
                     >
                       <ClassIcon
                         className={`w-6 h-6 ${characterClass.backgroundImage ? 'text-white' : 'text-primary'}`}
+                        aria-hidden="true"
                       />
                     </div>
                     <CardTitle
@@ -189,7 +190,7 @@ const ClassSelection: React.FC = () => {
                     <span
                       className={`text-sm font-medium flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
                     >
-                      <Heart className="w-4 h-4" />
+                      <Heart className="w-4 h-4" aria-hidden="true" />
                       Hit Die:
                     </span>
                     <Badge
@@ -208,7 +209,7 @@ const ClassSelection: React.FC = () => {
                     <span
                       className={`text-sm font-medium flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
                     >
-                      <Zap className="w-4 h-4" />
+                      <Zap className="w-4 h-4" aria-hidden="true" />
                       Primary Ability:
                     </span>
                     <Badge
@@ -224,7 +225,7 @@ const ClassSelection: React.FC = () => {
                     <div
                       className={`text-sm font-medium mb-2 flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
                     >
-                      <Shield className="w-4 h-4" />
+                      <Shield className="w-4 h-4" aria-hidden="true" />
                       Saving Throws:
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -258,7 +259,7 @@ const ClassSelection: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary/10 rounded-lg">
-                  <Check className="w-5 h-5 text-primary" />
+                  <Check className="w-5 h-5 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Selected Class</p>

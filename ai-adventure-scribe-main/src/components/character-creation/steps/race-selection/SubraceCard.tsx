@@ -17,7 +17,7 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
   return (
     <Card
       key={subrace.id}
-      className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden ${
+      className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-primary ${
         isSelected
           ? 'border-primary bg-primary/5 shadow-lg'
           : 'border-border hover:border-primary/50'
@@ -55,7 +55,7 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
           style={{ zIndex: Z_INDEX.CARD_HOVER }}
         >
           <div className="bg-primary text-primary-foreground rounded-full p-1">
-            <Check className="w-4 h-4" />
+          <Check className="w-4 h-4" aria-hidden="true" />
           </div>
         </div>
       )}
@@ -64,6 +64,7 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
         <div className="flex items-center gap-2">
           <Users
             className={`w-5 h-5 ${subrace.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
+            aria-hidden="true"
           />
           <h3
             className={`text-2xl font-bold ${subrace.backgroundImage ? 'text-white' : ''}`}
@@ -89,6 +90,7 @@ export const SubraceCard: React.FC<SubraceCardProps> = ({ subrace, isSelected, o
             <div className="flex items-center gap-2 mb-2">
               <Zap
                 className={`w-4 h-4 ${subrace.backgroundImage ? 'text-yellow-400' : 'text-orange-500'}`}
+                aria-hidden="true"
               />
               <h4
                 className={`font-semibold ${subrace.backgroundImage ? 'text-white drop-shadow' : ''}`}

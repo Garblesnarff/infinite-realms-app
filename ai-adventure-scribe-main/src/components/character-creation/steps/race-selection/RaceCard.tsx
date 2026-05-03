@@ -39,7 +39,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
   canAddToComparison,
 }) => (
   <Card
-    className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden ${
+    className={`cursor-pointer transition-all hover:shadow-lg border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-primary ${
       isSelected ? 'border-primary bg-primary/5 shadow-lg' : 'border-border hover:border-primary/50'
     }`}
     onClick={() => onSelect(race)}
@@ -73,6 +73,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <Users
               className={`w-5 h-5 flex-shrink-0 ${race.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
+              aria-hidden="true"
             />
             <h3 className="text-xl font-bold truncate">{race.name}</h3>
           </div>
@@ -101,7 +102,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             aria-pressed={isFavorite}
           >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
@@ -115,11 +116,11 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
             aria-label="Add to comparison"
             title="Add to comparison"
           >
-            <Star className="w-4 h-4" />
+            <Star className="w-4 h-4" aria-hidden="true" />
           </Button>
           {isSelected && (
             <div className="bg-primary text-primary-foreground rounded-full p-1">
-              <Check className="w-4 h-4" />
+              <Check className="w-4 h-4" aria-hidden="true" />
             </div>
           )}
         </div>
@@ -145,7 +146,7 @@ export const RaceCardListView: React.FC<RaceCardProps> = ({
  */
 export const RaceCardCompactView: React.FC<RaceCardProps> = ({ race, isSelected, onSelect }) => (
   <Card
-    className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 relative overflow-hidden ${
+    className={`cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-primary ${
       isSelected
         ? 'border-primary bg-primary/5 shadow-lg ring-4 ring-primary/20'
         : 'border-border hover:border-primary/50'
@@ -180,12 +181,13 @@ export const RaceCardCompactView: React.FC<RaceCardProps> = ({ race, isSelected,
         <div className="flex items-center gap-2">
           <Users
             className={`w-5 h-5 ${race.backgroundImage ? 'text-yellow-400' : 'text-primary'}`}
+            aria-hidden="true"
           />
           <h3 className="font-bold text-lg">{race.name}</h3>
         </div>
         {isSelected && (
           <div className="bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
-            <Check className="w-4 h-4" />
+            <Check className="w-4 h-4" aria-hidden="true" />
           </div>
         )}
       </div>
@@ -236,7 +238,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
   onHover,
 }) => (
   <Card
-    className={`race-card group cursor-pointer transition-all hover:shadow-xl border-2 relative overflow-hidden aspect-square ${
+    className={`race-card group cursor-pointer transition-all hover:shadow-xl border-2 relative overflow-hidden aspect-square outline-none focus-visible:ring-2 focus-visible:ring-primary ${
       isSelected ? 'border-primary shadow-lg' : 'border-border/30 hover:border-infinite-purple/50'
     }`}
     aria-label={`Select ${race.name} race`}
@@ -284,7 +286,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
         aria-pressed={isFavorite}
         title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
       >
-        <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`} />
+            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}`} aria-hidden="true" />
       </Button>
       <Button
         variant="ghost"
@@ -298,11 +300,11 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
         aria-label="Add to comparison"
         title="Add to comparison"
       >
-        <Star className="w-4 h-4 text-white" />
+            <Star className="w-4 h-4 text-white" aria-hidden="true" />
       </Button>
       {isSelected && (
         <div className="bg-primary text-primary-foreground rounded-full p-1">
-          <Check className="w-4 h-4" />
+          <Check className="w-4 h-4" aria-hidden="true" />
         </div>
       )}
     </div>
@@ -313,7 +315,7 @@ export const RaceCardGridView: React.FC<RaceCardProps> = ({
       style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
     >
       <div className="flex items-center gap-2 mb-2">
-        <Users className="w-5 h-5 text-yellow-400" />
+        <Users className="w-5 h-5 text-yellow-400" aria-hidden="true" />
         <h3 className="font-bold text-lg text-white">{race.name}</h3>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-2">
