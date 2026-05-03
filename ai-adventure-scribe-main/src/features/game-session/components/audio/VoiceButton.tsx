@@ -28,7 +28,6 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
           className={`transition-colors ${isSpeaking ? 'text-primary' : ''}`}
           onClick={onToggleMute}
           aria-label={isMuted ? 'Unmute' : 'Mute'}
-          title={isMuted ? 'Unmute' : 'Mute'}
           aria-pressed={isMuted}
         >
           {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}

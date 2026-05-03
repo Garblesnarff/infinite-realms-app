@@ -145,3 +145,7 @@
 ## 2025-05-02 - Battle Map UX and Accessibility Refinement
 **Learning:** Redundant `title` attributes on buttons wrapped in Radix `Tooltip` components cause "double tooltips" (native browser + custom UI), which is distracting and unprofessional. Including keyboard shortcuts directly in the `aria-label` (e.g., "Select (S)") provides immediate, high-value context for screen reader users without requiring them to find the shortcut elsewhere.
 **Action:** Always remove native `title` attributes when using custom Tooltip components. Use template literals to include shortcuts in `aria-label` for toolbar-style actions.
+
+## 2026-05-03 - Audio Control Accessibility and UX
+**Learning:** Providing both a `title` attribute and an `aria-label` on a button wrapped in a Radix `Tooltip` causes redundant or clashing information for both sighted and screen reader users. Ensuring icon-only buttons have `type="button"` prevents accidental form submissions in React environments.
+**Action:** Remove redundant `title` attributes when using custom `Tooltip` components. Always add `aria-label`, `aria-pressed` (for toggles), and `type="button"` to icon-only buttons in utility players.

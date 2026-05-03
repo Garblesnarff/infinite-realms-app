@@ -273,11 +273,14 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handlePlayPause}
                   disabled={!isVoiceEnabled || isProcessing || !text}
                   className="h-10 w-10 p-0"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  aria-pressed={isPlaying}
                 >
                   {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 </Button>
@@ -288,11 +291,13 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={stopPlayback}
                   disabled={!isPlaying && !isProcessing}
                   className="h-10 w-10 p-0"
+                  aria-label="Stop"
                 >
                   <Square className="h-4 w-4" />
                 </Button>
@@ -305,10 +310,12 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={retryApiKeyFetch}
                     className="h-10 w-10 p-0 border-orange-300 text-orange-600 hover:bg-orange-50"
+                    aria-label="Retry API key fetch"
                   >
                     <RefreshCw className="h-4 w-4" />
                   </Button>
@@ -321,11 +328,13 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handleTestAudio}
                   disabled={!isVoiceEnabled || isProcessing}
                   className="h-10 w-10 p-0"
+                  aria-label="Test audio"
                 >
                   <TestTube className="h-4 w-4" />
                 </Button>
@@ -337,10 +346,12 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handleClearVoiceMappings}
                   className="h-10 w-10 p-0"
+                  aria-label="Clear voice mappings"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -353,11 +364,13 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={handleRetry}
                     disabled={!isVoiceEnabled || isProcessing}
                     className="h-10 w-10 p-0"
+                    aria-label="Retry"
                   >
                     <RefreshCw className="h-4 w-4" />
                   </Button>
@@ -368,7 +381,15 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
 
             {/* Volume Controls */}
             <div className="flex items-center gap-2 flex-1">
-              <Button variant="ghost" size="sm" onClick={toggleMute} className="h-8 w-8 p-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={toggleMute}
+                className="h-8 w-8 p-0"
+                aria-label={isMuted ? 'Unmute' : 'Mute'}
+                aria-pressed={isMuted}
+              >
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </Button>
 
@@ -379,7 +400,6 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
                 step={0.05}
                 className="flex-1"
                 aria-label="Adjust playback volume"
-                title="Adjust playback volume"
               />
 
               <span className="text-xs text-muted-foreground w-10 text-right">
