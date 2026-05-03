@@ -315,6 +315,7 @@ export default tseslint.config(
       'server-bun/src/services/combat/combat-authorization.ts',
       'src/components/scenes/SceneCreationWizard.tsx',
       'src/components/scenes/SceneTemplateLibrary.tsx',
+      'src/components/scenes/scene-templates.ts',
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
       'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       'server-bun/src/services/spell-slots-service.ts',
