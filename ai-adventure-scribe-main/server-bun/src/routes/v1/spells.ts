@@ -15,12 +15,10 @@
 
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { inArray } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
-import { db } from '../../../../db/client';
-import { classes } from '../../../../db/schema/index';
 import {
+  allSpells,
   getClassSpells,
   getSpellById,
   getSpellsByLevel,
@@ -58,7 +56,8 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
     try {
       let spells: any[];
 
-      // Get spells by class if specified
+      // ⚡ Bolt: Optimized spell retrieval path.
+      // Use pre-calculated allSpells instead of manual O(Classes * Spells) aggregation.
       if (className) {
         const classSpells = getClassSpells(className);
         spells = [...classSpells.cantrips, ...classSpells.spells];
@@ -69,62 +68,32 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       } else if (school) {
         spells = getSpellsBySchool(school);
       } else {
-        // Get all spells - combine cantrips and level 1+ spells from all classes
-        const bardSpells = getClassSpells('Bard');
-        const druidSpells = getClassSpells('Druid');
-        const clericSpells = getClassSpells('Cleric');
-        const sorcererSpells = getClassSpells('Sorcerer');
-        const warlockSpells = getClassSpells('Warlock');
-        const wizardSpells = getClassSpells('Wizard');
-
-        // Combine all unique spells
-        const allClassSpells = [
-          ...bardSpells.cantrips, ...bardSpells.spells,
-          ...druidSpells.cantrips, ...druidSpells.spells,
-          ...clericSpells.cantrips, ...clericSpells.spells,
-          ...sorcererSpells.cantrips, ...sorcererSpells.spells,
-          ...warlockSpells.cantrips, ...warlockSpells.spells,
-          ...wizardSpells.cantrips, ...wizardSpells.spells,
-        ];
-
-        // ⚡ Bolt: Use a Map for O(N) de-duplication instead of O(N^2) filter/findIndex.
-        // This is significantly faster for large spell lists.
-        const uniqueSpellsMap = new Map();
-        allClassSpells.forEach((spell) => {
-          uniqueSpellsMap.set(spell.id, spell);
-        });
-
-        spells = Array.from(uniqueSpellsMap.values());
+        spells = allSpells;
       }
 
-      // Apply additional filters
-      let filteredSpells = spells;
+      // ⚡ Bolt: Consolidate component filtering into a set for O(1) lookup.
+      const componentSet = components
+        ? new Set(components.split(',').map((c) => c.trim().toUpperCase()))
+        : null;
 
-      // Filter by ritual
-      if (ritual !== undefined) {
-        const isRitual = ritual === 'true';
-        filteredSpells = filteredSpells.filter((spell) => spell.ritual === isRitual);
-      }
+      // ⚡ Bolt: Combine multiple filter passes into a single O(N) traversal.
+      const filteredSpells = spells.filter((spell) => {
+        if (ritual !== undefined && spell.ritual !== (ritual === 'true')) {
+          return false;
+        }
 
-      // Filter by components
-      if (components) {
-        const componentArray = components.split(',');
-        componentArray.forEach((component) => {
-          switch (component.trim().toUpperCase()) {
-            case 'V':
-              filteredSpells = filteredSpells.filter((spell) => spell.verbal);
-              break;
-            case 'S':
-              filteredSpells = filteredSpells.filter((spell) => spell.somatic);
-              break;
-            case 'M':
-              filteredSpells = filteredSpells.filter((spell) => spell.material);
-              break;
-          }
-        });
-      }
+        if (componentSet) {
+          if (componentSet.has('V') && !spell.verbal) return false;
+          if (componentSet.has('S') && !spell.somatic) return false;
+          if (componentSet.has('M') && !spell.material) return false;
+        }
+
+        return true;
+      });
 
       // Sort by level then name
+      // NOTE: We keep sorting here because filtered results might need re-sorting
+      // if derived from multiple sources, though allSpells is likely already sorted.
       filteredSpells.sort((a, b) => {
         if (a.level !== b.level) {
           return a.level - b.level;
@@ -323,17 +292,9 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       let totalCasterLevel = 0;
       let pactMagicSlots = { level: 0, slots: 0 };
 
-      // ⚡ Bolt: Batch fetch class caster types instead of O(N) database queries.
-      const classNames = classLevels.map((cl) => cl.className);
-      const classesData = await db
-        .select({
-          name: classes.name,
-          casterType: classes.casterType,
-        })
-        .from(classes)
-        .where(inArray(classes.name, classNames));
-
-      const casterTypeMap = new Map(classesData.map((c) => [c.name, c.casterType]));
+      // ⚡ Bolt: Use static spellcastingClasses data instead of database query.
+      // This eliminates a database round-trip for multiclass calculations.
+      const casterTypeMap = new Map(spellcastingClasses.map((c) => [c.name, c.caster_type]));
 
       for (const classLevel of classLevels) {
         const { className, level } = classLevel;
