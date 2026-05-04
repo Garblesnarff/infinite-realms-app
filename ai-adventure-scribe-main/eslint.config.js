@@ -345,6 +345,7 @@ export default tseslint.config(
       'src/utils/movement-validation.ts',
       'src/utils/movement-navigation.ts',
       'src/hooks/use-combat-actions.ts',
+      'src/hooks/combat/use-combat-action-handlers.ts',
       'src/hooks/use-combat-ai-integration.ts',
       'src/hooks/combat/use-combat-detection.ts',
       'src/components/combat/hooks/useCombatHandlers.ts',
