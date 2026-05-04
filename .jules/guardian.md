@@ -203,3 +203,7 @@
 ## 2026-04-30 - [ChatInput Component Coverage]
 **Learning:** Testing the `ChatInput` component revealed nuances in `user-event` (v14+) keyboard mapping. For Shift+Enter, the pattern `{Shift>}{Enter}{/Shift}` is required to correctly simulate holding the shift key. Also, when mocking specialized UI components like `Textarea`, using `React.forwardRef` is essential to maintain compatibility with internal `useRef` usage in the component under test.
 **Action:** Use `user.keyboard('{Shift>}{Enter}{/Shift}')` for Shift+Enter sequences. Always wrap functional component mocks in `React.forwardRef` if the original component expects a ref.
+
+## 2026-05-20 - [SpellApi Service Coverage & Singleton Mocking]
+**Learning:** The `SpellApiService` is exported as a singleton and maintains internal state (`useLocalFallback`). Tests must manually reset this state in `beforeEach` to ensure isolation. Also confirmed that `spellApi` maps server-side snake_case-adjacent responses to camelCase frontend models, often providing defaults for optional fields like `materialComponents`.
+**Action:** When testing singletons with internal state, use type casting `(service as any).property = value` in `beforeEach` to reset state. Ensure that `vitest.config.ts` is updated in both `include` and `coverage.include` for new service tests. Add large test files to `eslint.config.js`'s `max-lines` override list to maintain lint compliance.

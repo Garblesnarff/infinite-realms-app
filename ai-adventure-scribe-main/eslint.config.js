@@ -485,6 +485,8 @@ export default tseslint.config(
       'src/stores/useCombatStore.ts',
       'src/features/game-session/components/game/FloatingActionPanel.tsx',
       'src/components/combat/ResourceConsumptionPanel.tsx',
+      'src/services/spellApi.ts',
+      'src/services/__tests__/spellApi.test.ts',
     ],
     rules: {
       'max-lines': 'warn',

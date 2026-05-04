@@ -24,6 +24,7 @@ export default defineConfig({
     },
     css: true, // If you have CSS imports in components
     include: [
+      'src/services/__tests__/spellApi.test.ts',
       'src/lib/logger.test.ts',
       'src/lib/telemetry.test.ts',
       'src/lib/utils.test.ts',
@@ -382,6 +383,7 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       all: false,
       include: [
+        'src/services/spellApi.ts',
         'src/lib/logger.ts',
         'src/lib/telemetry.ts',
         'src/utils/characterModifiers.ts',
