@@ -80,11 +80,15 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
     const tableName = TABLE_MAP[type as PersonalityType];
 
     try {
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
-      let queryBuilder = supabase.from(tableName).select(COLUMN_MAP[type as PersonalityType]);
+      // ⚡ Bolt: Optimized to use random offset pattern instead of fetching all rows.
+      // This reduces data transfer from O(N) to O(1) for large personality tables.
+
+      // 1. Get total count of matching rows (O(1) metadata operation)
+      let countQuery = supabase
+        .from(tableName)
+        .select('id', { count: 'exact', head: true });
 
       // Add background filter if provided (only for traits table)
-      // SECURITY: Validate background parameter to prevent injection
       if (background && typeof background === 'string' && tableName === 'personality_traits') {
         const validBackground = /^[a-zA-Z0-9_-]+$/.test(background);
         if (!validBackground) {
@@ -94,27 +98,44 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
             message: 'Background must contain only alphanumeric characters, hyphens, and underscores',
           };
         }
-        queryBuilder = queryBuilder.or(`background.eq.${background},background.is.null`);
+        countQuery = countQuery.or(`background.eq.${background},background.is.null`);
       }
 
-      const { data, error } = await queryBuilder;
+      const { count, error: countError } = await countQuery;
 
-      if (error) {
-        logger.error({ msg: `Error fetching random ${type}`, error });
+      if (countError) {
+        logger.error({ msg: `Error counting random ${type}`, error: countError });
         set.status = 500;
         return { error: 'Database error', message: `Failed to fetch ${type}` };
       }
 
-      if (!data || data.length === 0) {
+      if (count === null || count === 0) {
         set.status = 404;
         return { error: 'No data found', message: `No ${type} found matching the criteria` };
       }
 
-      // Return a random item from the results
-      const randomIndex = Math.floor(Math.random() * data.length);
-      const randomItem = data[randomIndex];
+      // 2. Generate random offset and fetch exactly one row (O(1) bandwidth)
+      const randomIndex = Math.floor(Math.random() * count);
+      let dataQuery = supabase
+        .from(tableName)
+        .select(COLUMN_MAP[type as PersonalityType]);
 
-      return { success: true, data: randomItem };
+      // Re-apply filters to ensure random item belongs to the requested subset
+      if (background && typeof background === 'string' && tableName === 'personality_traits') {
+        dataQuery = dataQuery.or(`background.eq.${background},background.is.null`);
+      }
+
+      const { data, error } = await dataQuery
+        .range(randomIndex, randomIndex)
+        .single();
+
+      if (error) {
+        logger.error({ msg: `Error fetching random ${type} at offset ${randomIndex}`, error });
+        set.status = 500;
+        return { error: 'Database error', message: `Failed to fetch ${type}` };
+      }
+
+      return { success: true, data };
     } catch (e) {
       logger.error({ msg: `Error in GET /personality/random/${type}`, error: e });
       set.status = 500;
@@ -138,45 +159,82 @@ export const personalityRoutes = new Elysia({ prefix: '/v1/personality' })
     try {
       const results: Record<string, PersonalityRow> = {};
 
-      // ⚡ Bolt: Parallelize all database queries using Promise.all to reduce total latency.
-      // Replaced sequential O(N) loop with O(1) concurrent execution.
-      // Also used explicit columns instead of select('*') to minimize bandwidth usage.
-      const fetchPromises = VALID_TYPES.map(async (type) => {
-        const tableName = TABLE_MAP[type];
-        let queryBuilder = supabase.from(tableName).select(COLUMN_MAP[type]);
+      // ⚡ Bolt: Optimized with random offset pattern across all types to avoid fetching all rows.
+      // O(N) row fetch → O(1) targeted row fetch.
 
-        // Add background filter if provided (only for traits table)
+      // 1. Fetch counts for all types in parallel (metadata only)
+      const countPromises = VALID_TYPES.map(async (type) => {
+        const tableName = TABLE_MAP[type];
+        let query = supabase.from(tableName).select('id', { count: 'exact', head: true });
+
         if (background && typeof background === 'string' && tableName === 'personality_traits') {
           const validBackground = /^[a-zA-Z0-9_-]+$/.test(background);
           if (!validBackground) {
-             throw new Error('Invalid background parameter');
+            throw new Error('Invalid background parameter');
           }
-          queryBuilder = queryBuilder.or(`background.eq.${background},background.is.null`);
+          query = query.or(`background.eq.${background},background.is.null`);
         }
 
-        const { data, error } = await queryBuilder;
+        const { count, error } = await query;
         if (error) throw error;
-        return { type, data: data as PersonalityRow[] };
+        return { type, count: count ?? 0 };
       });
 
-      const responses = await Promise.all(fetchPromises);
+      const counts = await Promise.all(countPromises);
 
-      responses.forEach(({ type, data }) => {
-        if (data && data.length > 0) {
-          const firstIndex = Math.floor(Math.random() * data.length);
-          results[type] = data[firstIndex];
+      // 2. Fetch targeted random rows in parallel
+      const rowPromises = counts.map(async ({ type, count }) => {
+        if (count === 0) return { type, data: null };
 
-          // For traits, get a second random trait
-          if (type === 'traits' && data.length > 1) {
-            let secondRandomIndex;
-            do {
-              secondRandomIndex = Math.floor(Math.random() * data.length);
-            } while (secondRandomIndex === firstIndex);
+        const tableName = TABLE_MAP[type];
+        const offset = Math.floor(Math.random() * count);
 
-            // Re-use results from traits query for efficiency
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (results as any).traits2 = data[secondRandomIndex];
+        let query = supabase.from(tableName).select(COLUMN_MAP[type]);
+
+        // Re-apply filters to ensures random items belong to the requested subset
+        if (background && typeof background === 'string' && tableName === 'personality_traits') {
+          query = query.or(`background.eq.${background},background.is.null`);
+        }
+
+        const { data, error } = await query
+          .range(offset, offset)
+          .single();
+
+        if (error) throw error;
+
+        // Special case: for traits, we want a second random trait
+        if (type === 'traits' && count >= 2) {
+          let offset2;
+          do {
+            offset2 = Math.floor(Math.random() * count);
+          } while (offset2 === offset);
+
+          // Build a fresh query for the second trait to ensure filter state is clean
+          let query2 = supabase.from(tableName).select(COLUMN_MAP[type]);
+          if (background && typeof background === 'string') {
+            query2 = query2.or(`background.eq.${background},background.is.null`);
           }
+
+          const { data: data2, error: error2 } = await query2
+            .range(offset2, offset2)
+            .single();
+
+          if (error2) throw error2;
+          return { type, data, data2 };
+        }
+
+        return { type, data };
+      });
+
+      const rowResponses = await Promise.all(rowPromises);
+
+      rowResponses.forEach((res) => {
+        if (res.data) {
+          results[res.type] = res.data as PersonalityRow;
+        }
+        if (res.type === 'traits' && (res as any).data2) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (results as any).traits2 = (res as any).data2;
         }
       });
 
