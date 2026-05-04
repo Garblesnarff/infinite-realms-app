@@ -457,6 +457,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/PhysicalStep.tsx',
       'src/components/character-creation/steps/SpellSelection.tsx',
       'src/components/character-creation/steps/spell-selection/SpellSelectionTabs.tsx',
+      'src/components/combat/ActionPanel.tsx',
       'src/components/battle-map/hotkeys/constants.ts',
       'src/hooks/useSpellSelection.ts',
       'src/services/supabase-subscription-manager.ts',
