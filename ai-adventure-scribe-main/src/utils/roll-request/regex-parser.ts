@@ -26,7 +26,7 @@ const WEAPON_HINT_PATTERN =
   /\b(?:with|using|wielding|firing|shooting|from)\s+(?:your|my|the)?\s*([A-Za-z][\w' -]{2,40})/gi;
 
 /** AC pattern used around attack phrases */
-const AC_TAIL_PATTERN = /(ac|armor\s*class)\s*[:=]?\s*(\d{1,2})/i;
+const AC_TAIL_PATTERN = /(ac|armor\s*class)\s*(?:is|[:=])?\s*(\d{1,2})/i;
 
 /** Spell attack detection patterns */
 const SPELL_ATTACK_PATTERNS = [
@@ -105,7 +105,7 @@ const DAMAGE_PATTERNS = [
 
 /** Generic roll requests with explicit dice */
 const GENERIC_ROLL_PATTERN =
-  /(?:please\s+)?roll\s+([\dd+\s-]+)(?:\s+for\s+([^(\n.]+?))?(?:\s+\((?:[^)]*?\b(?:dc|DC)\s*(\d+)|[^)]*?\bAC\s*(\d+))\))?(?:\s|$|\.)/gi;
+  /(?:please\s+)?roll\s+([\dd+\s-]+)(?:\s+for\s+([^(\n.]+?))?(?:\s+\(([^)]+)\))?(?:\s|$|\.)/gi;
 
 /**
  * Main regex-based parsing orchestrator
@@ -234,7 +234,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     requests.push({
       type: 'check',
       formula: '1d20+modifier',
-      purpose: `${skill.charAt(0).toUpperCase() + skill.slice(1)} check`,
+      purpose: `${skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} check`,
       dc,
       originalText: match[0],
       confidence: 0.92,
@@ -253,7 +253,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     requests.push({
       type: 'skill_check',
       formula: '1d20+modifier',
-      purpose: `${skill.charAt(0).toUpperCase() + skill.slice(1)} check`,
+      purpose: `${skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} check`,
       dc,
       originalText: match[0],
       confidence: 0.9,
@@ -274,7 +274,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     requests.push({
       type: 'skill_check',
       formula: '1d20+modifier',
-      purpose: `${skill.charAt(0).toUpperCase() + skill.slice(1)} check`,
+      purpose: `${skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} check`,
       dc,
       originalText: match[0],
       confidence: 0.95,
@@ -294,7 +294,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     requests.push({
       type: 'skill_check',
       formula: '1d20+modifier',
-      purpose: `${skill.charAt(0).toUpperCase() + skill.slice(1)} check`,
+      purpose: `${skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} check`,
       dc,
       originalText: match[0],
       confidence: 0.93,
@@ -314,7 +314,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     requests.push({
       type: 'skill_check',
       formula: '1d20+modifier',
-      purpose: `${skill.charAt(0).toUpperCase() + skill.slice(1)} check`,
+      purpose: `${skill.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} check`,
       dc,
       originalText: match[0],
       confidence: 0.92,
@@ -324,7 +324,7 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
   // Enhanced damage rolls
   DAMAGE_PATTERNS.forEach((pattern, index) => {
     pattern.lastIndex = 0;
-    while ((match = pattern.exec(message)) !== null) {
+    while ((match = pattern.exec(text)) !== null) {
       let formula = '1d6';
       let confidence = 0.85;
       let purpose = 'Damage roll';
@@ -348,8 +348,16 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
     const formula = match[1].trim();
     const rawPurpose = match[2]?.trim();
     const purpose = rawPurpose ? rawPurpose.charAt(0).toUpperCase() + rawPurpose.slice(1) : 'Dice roll';
-    const dc = match[3] ? parseInt(match[3]) : undefined;
-    const ac = match[4] ? parseInt(match[4]) : undefined;
+
+    // Parse AC/DC from parentheses content
+    let dc: number | undefined;
+    let ac: number | undefined;
+    if (match[3]) {
+      const dcMatch = /(?:dc|difficulty\s*class)\s*(\d+)/i.exec(match[3]);
+      if (dcMatch) dc = parseInt(dcMatch[1], 10);
+      const acMatch = /(?:ac|armor\s*class)\s*(\d+)/i.exec(match[3]);
+      if (acMatch) ac = parseInt(acMatch[1], 10);
+    }
 
     let type: RollRequest['type'] = 'check';
     if (purpose.toLowerCase().includes('attack')) type = 'attack';
@@ -383,6 +391,8 @@ export function parseRegexRollRequests(message: string): ParsedRollRequest[] {
 
 /** Normalize dice formula to standard format */
 export function normalizeFormula(formula: string): string {
+  if (!formula) return '1d20';
+
   let normalized = formula
     .replace(/\s+/g, '')
     .toLowerCase()
@@ -391,6 +401,10 @@ export function normalizeFormula(formula: string): string {
     .replace(/--/g, '-')
     .replace(/\+$/, '')
     .replace(/-$/, '');
+
+  if (normalized.startsWith('d')) {
+    normalized = '1' + normalized;
+  }
 
   if (!/^\d*d\d+/.test(normalized)) {
     if (/^[+-]?\d+$/.test(normalized)) {

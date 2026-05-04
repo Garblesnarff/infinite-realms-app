@@ -469,6 +469,7 @@ export default tseslint.config(
       'src/components/game/DiceRollRequest.tsx',
       'src/components/game/DiceRollMessage.tsx',
       'src/utils/roll-request/regex-parser.ts',
+      'src/utils/roll-request/__tests__/regex-parser.test.ts',
       'src/hooks/game/use-dice-roll-request.ts',
       'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
       'server-bun/src/services/inventory/inventory-consumable-service.ts',
