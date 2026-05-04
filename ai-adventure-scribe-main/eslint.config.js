@@ -300,6 +300,7 @@ export default tseslint.config(
       'src/components/battle-map/Toolbar.tsx',
       'src/examples/vision-system-usage.tsx',
       'server-bun/src/services/inventory-service.ts',
+      'server-bun/src/services/inventory/inventory-data-access.ts',
       'server-bun/src/routes/v1/inventory.ts',
       'server-bun/src/services/character-folder-service.ts',
       'server-bun/src/services/progression-service.ts',
