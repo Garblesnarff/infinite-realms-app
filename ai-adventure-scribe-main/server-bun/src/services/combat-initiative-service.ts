@@ -6,7 +6,7 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql, or } from 'drizzle-orm';
+import { eq, and, sql, or, exists, asc } from 'drizzle-orm';
 
 import {
   verifyEncounterAccess,
@@ -244,25 +244,56 @@ export class CombatInitiativeService {
     encounterId: string,
     userId?: string,
   ): Promise<CombatParticipant | null> {
-    if (userId) {
+    // ⚡ Bolt: Consolidated ownership verification and participant retrieval into a single joined query.
+    // By joining participants directly on turnOrder = currentTurnOrder, we reduce database round-trips
+    // from ~2 to 1 and avoid loading the entire participant list into memory.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [result] = await (db as any)
+      .select({
+        participant: combatParticipants,
+      })
+      .from(combatParticipants)
+      .innerJoin(
+        combatEncounters,
+        and(
+          eq(combatParticipants.encounterId, combatEncounters.id),
+          eq(combatParticipants.turnOrder, combatEncounters.currentTurnOrder),
+        ),
+      )
+      .where(
+        and(
+          eq(combatEncounters.id, encounterId),
+          eq(combatParticipants.isActive, true),
+          userId
+            ? exists(
+                db
+                  .select()
+                  .from(gameSessions)
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(gameSessions.id, combatEncounters.sessionId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : undefined,
+        ),
+      )
+      .limit(1);
+
+    if (!result && userId) {
+      // ⚡ Bolt: If no result found, verify access to maintain standard error behavior (masking)
+      // while keeping the happy path O(1).
       await verifyEncounterAccess(encounterId, userId);
     }
 
-    const encounterWithParticipants = await db.query.combatEncounters.findFirst({
-      where: (ce, { eq }) => eq(ce.id, encounterId),
-      with: {
-        participants: {
-          where: (cp, { eq }) => eq(cp.isActive, true),
-          orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
-        },
-      },
-    });
-
-    if (!encounterWithParticipants || encounterWithParticipants.participants.length === 0) {
-      return null;
-    }
-
-    return encounterWithParticipants.participants[encounterWithParticipants.currentTurnOrder] || null;
+    return result?.participant || null;
   }
 
   /**
