@@ -13,6 +13,7 @@ import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon';
 
+import logger from '@/lib/logger';
 import { getVisionColor, getVisionOpacity } from '@/utils/vision-calculations';
 import { calculateVisionPolygon, mergeVisionPolygons } from '@/utils/vision-polygon';
 
@@ -67,98 +68,101 @@ interface VisionMaskProps {
  *   showBoundary={false}
  * />
  * ```
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
  */
-export const VisionPolygon: React.FC<VisionPolygonProps> = ({
-  tokens,
-  walls,
-  range,
-  showBoundary = false,
-  useWorker = false,
-  color,
-  opacity,
-  isGMView = false,
-}) => {
-  const [polygon, setPolygon] = useState<VisionPolygonType | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-  const requestIdRef = useRef(0);
+export const VisionPolygon: React.FC<VisionPolygonProps> = React.memo(
+  ({
+    tokens,
+    walls,
+    range,
+    showBoundary = false,
+    useWorker = false,
+    color,
+    opacity,
+    isGMView = false,
+  }) => {
+    const [polygon, setPolygon] = useState<VisionPolygonType | null>(null);
+    const workerRef = useRef<Worker | null>(null);
+    const requestIdRef = useRef(0);
 
-  // Normalize tokens to array
-  const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
+    // ⚡ Bolt: Normalize and memoize tokens to array to stabilize reference for useEffect.
+    const tokenArray = useMemo(() => (Array.isArray(tokens) ? tokens : [tokens]), [tokens]);
 
-  // Calculate vision polygon
-  useEffect(() => {
-    if (isGMView) {
-      // GM sees everything, no vision restrictions
-      setPolygon(null);
-      return;
-    }
+    // Calculate vision polygon
+    useEffect(() => {
+      if (isGMView) {
+        // GM sees everything, no vision restrictions
+        setPolygon(null);
+        return;
+      }
 
-    if (useWorker && typeof Worker !== 'undefined') {
-      // Use Web Worker for heavy calculations
-      if (!workerRef.current) {
-        // Create worker (path needs to be adjusted based on build config)
-        try {
-          workerRef.current = new Worker(
-            new URL('../../workers/vision-worker.ts', import.meta.url),
-          );
+      if (useWorker && typeof Worker !== 'undefined') {
+        // Use Web Worker for heavy calculations
+        if (!workerRef.current) {
+          // Create worker (path needs to be adjusted based on build config)
+          try {
+            workerRef.current = new Worker(
+              new URL('../../workers/vision-worker.ts', import.meta.url),
+            );
 
-          workerRef.current.onmessage = (event) => {
-            const response = event.data;
+            workerRef.current.onmessage = (event) => {
+              const response = event.data;
 
-            if (response.type === 'MULTI_VISION_RESULT') {
-              const polygons = Object.values(response.payload.polygons);
-              if (polygons.length > 0) {
-                const merged = mergeVisionPolygons(polygons as VisionPolygonType[]);
-                setPolygon(merged);
+              if (response.type === 'MULTI_VISION_RESULT') {
+                const polygons = Object.values(response.payload.polygons);
+                if (polygons.length > 0) {
+                  const merged = mergeVisionPolygons(polygons as VisionPolygonType[]);
+                  setPolygon(merged);
+                }
+              } else if (response.type === 'ERROR') {
+                logger.error('Vision worker error:', response.payload.error);
+                // Fallback to synchronous calculation
+                calculateSync();
               }
-            } else if (response.type === 'ERROR') {
-              console.error('Vision worker error:', response.payload.error);
-              // Fallback to synchronous calculation
-              calculateSync();
-            }
-          };
-        } catch (error) {
-          console.warn('Failed to create vision worker, using sync calculation:', error);
-          calculateSync();
-          return;
+            };
+          } catch (error) {
+            logger.warn('Failed to create vision worker, using sync calculation:', error);
+            calculateSync();
+            return;
+          }
+        }
+
+        // Send calculation request
+        const requestId = `req-${++requestIdRef.current}`;
+        workerRef.current.postMessage({
+          type: 'CALCULATE_MULTI_VISION',
+          payload: {
+            tokens: tokenArray,
+            walls,
+            range,
+          },
+          requestId,
+        });
+      } else {
+        // Synchronous calculation
+        calculateSync();
+      }
+
+      function calculateSync(): void {
+        if (tokenArray.length === 1) {
+          const poly = calculateVisionPolygon(tokenArray[0], walls, range);
+          setPolygon(poly);
+        } else {
+          const polygons = tokenArray.map((token) => calculateVisionPolygon(token, walls, range));
+          const merged = mergeVisionPolygons(polygons);
+          setPolygon(merged);
         }
       }
 
-      // Send calculation request
-      const requestId = `req-${++requestIdRef.current}`;
-      workerRef.current.postMessage({
-        type: 'CALCULATE_MULTI_VISION',
-        payload: {
-          tokens: tokenArray,
-          walls,
-          range,
-        },
-        requestId,
-      });
-    } else {
-      // Synchronous calculation
-      calculateSync();
-    }
-
-    function calculateSync() {
-      if (tokenArray.length === 1) {
-        const poly = calculateVisionPolygon(tokenArray[0], walls, range);
-        setPolygon(poly);
-      } else {
-        const polygons = tokenArray.map((token) => calculateVisionPolygon(token, walls, range));
-        const merged = mergeVisionPolygons(polygons);
-        setPolygon(merged);
-      }
-    }
-
-    // Cleanup worker on unmount
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-    };
-  }, [tokens, walls, range, useWorker, isGMView, tokenArray]);
+      // Cleanup worker on unmount
+      return () => {
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
+      };
+    }, [isGMView, useWorker, tokenArray, walls, range]);
 
   // Determine visual properties
   const visionColor = useMemo(() => {
@@ -218,7 +222,7 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
       )}
     </g>
   );
-};
+});
 
 // ===========================
 // Fog of War Mask Component
@@ -239,14 +243,11 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = ({
  *   fogOpacity={0.8}
  * />
  * ```
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
  */
-export const FogOfWarMask: React.FC<VisionMaskProps> = ({
-  polygons,
-  canvasWidth,
-  canvasHeight,
-  fogColor = '#000000',
-  fogOpacity = 0.85,
-}) => {
+export const FogOfWarMask: React.FC<VisionMaskProps> = React.memo(
+  ({ polygons, canvasWidth, canvasHeight, fogColor = '#000000', fogOpacity = 0.85 }) => {
   const maskId = useMemo(() => `fog-mask-${Math.random().toString(36).substr(2, 9)}`, []);
 
   // Create paths for all vision polygons
@@ -263,34 +264,35 @@ export const FogOfWarMask: React.FC<VisionMaskProps> = ({
       });
   }, [polygons]);
 
-  return (
-    <g className="fog-of-war">
-      <defs>
-        <mask id={maskId}>
-          {/* White background = show fog */}
-          <rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="white" />
+    return (
+      <g className="fog-of-war">
+        <defs>
+          <mask id={maskId}>
+            {/* White background = show fog */}
+            <rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="white" />
 
-          {/* Black areas = hide fog (visible areas) */}
-          {visionPaths.map(({ path, key }) => (
-            <path key={key} d={path} fill="black" />
-          ))}
-        </mask>
-      </defs>
+            {/* Black areas = hide fog (visible areas) */}
+            {visionPaths.map(({ path, key }) => (
+              <path key={key} d={path} fill="black" />
+            ))}
+          </mask>
+        </defs>
 
-      {/* Fog layer with mask applied */}
-      <rect
-        x={0}
-        y={0}
-        width={canvasWidth}
-        height={canvasHeight}
-        fill={fogColor}
-        fillOpacity={fogOpacity}
-        mask={`url(#${maskId})`}
-        pointerEvents="none"
-      />
-    </g>
-  );
-};
+        {/* Fog layer with mask applied */}
+        <rect
+          x={0}
+          y={0}
+          width={canvasWidth}
+          height={canvasHeight}
+          fill={fogColor}
+          fillOpacity={fogOpacity}
+          mask={`url(#${maskId})`}
+          pointerEvents="none"
+        />
+      </g>
+    );
+  },
+);
 
 // ===========================
 // Vision Boundary (Debug Component)
@@ -306,40 +308,40 @@ interface VisionBoundaryProps {
  * Show vision range boundary (debug/GM tool)
  *
  * Renders a simple circle showing maximum vision range
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
  */
-export const VisionBoundary: React.FC<VisionBoundaryProps> = ({
-  token,
-  range,
-  color = '#ffffff',
-}) => {
+export const VisionBoundary: React.FC<VisionBoundaryProps> = React.memo(
+  ({ token, range, color = '#ffffff' }) => {
   const effectiveRange = range !== undefined ? range : token.vision.range * 20;
 
   if (!token.vision.enabled || effectiveRange === 0) {
     return null;
   }
 
-  return (
-    <g className="vision-boundary">
-      {/* Full circle for 360° vision */}
-      {token.vision.angle >= 360 ? (
-        <circle
-          cx={token.x}
-          cy={token.y}
-          r={effectiveRange}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-          strokeOpacity={0.3}
-          strokeDasharray="5,5"
-          pointerEvents="none"
-        />
-      ) : (
-        /* Arc for limited vision cone */
-        <VisionConeArc token={token} range={effectiveRange} color={color} />
-      )}
-    </g>
-  );
-};
+    return (
+      <g className="vision-boundary">
+        {/* Full circle for 360° vision */}
+        {token.vision.angle >= 360 ? (
+          <circle
+            cx={token.x}
+            cy={token.y}
+            r={effectiveRange}
+            fill="none"
+            stroke={color}
+            strokeWidth={2}
+            strokeOpacity={0.3}
+            strokeDasharray="5,5"
+            pointerEvents="none"
+          />
+        ) : (
+          /* Arc for limited vision cone */
+          <VisionConeArc token={token} range={effectiveRange} color={color} />
+        )}
+      </g>
+    );
+  },
+);
 
 // ===========================
 // Vision Cone Arc Component
@@ -353,8 +355,10 @@ interface VisionConeArcProps {
 
 /**
  * Render vision cone arc for limited-angle vision
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
  */
-const VisionConeArc: React.FC<VisionConeArcProps> = ({ token, range, color }) => {
+const VisionConeArc: React.FC<VisionConeArcProps> = React.memo(({ token, range, color }) => {
   const pathData = useMemo(() => {
     const halfAngle = (token.vision.angle / 2) * (Math.PI / 180);
     const centerAngle = token.rotation * (Math.PI / 180);
@@ -388,7 +392,7 @@ const VisionConeArc: React.FC<VisionConeArcProps> = ({ token, range, color }) =>
       pointerEvents="none"
     />
   );
-};
+});
 
 // ===========================
 // Utility Hook
