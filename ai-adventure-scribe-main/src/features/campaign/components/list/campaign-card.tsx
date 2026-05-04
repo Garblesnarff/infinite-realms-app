@@ -265,6 +265,8 @@ const CampaignCardComponent = ({
               <Button
                 size="sm"
                 className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
+                aria-label={`Play campaign: ${campaign.name}`}
+                title={`Play campaign: ${campaign.name}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCharacterModal(true);
@@ -277,6 +279,8 @@ const CampaignCardComponent = ({
                 size="sm"
                 variant="outline"
                 className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
+                aria-label={`Enter campaign management: ${campaign.name}`}
+                title={`Enter campaign management: ${campaign.name}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate(`/app/campaigns/${campaign.id}`);
@@ -288,8 +292,8 @@ const CampaignCardComponent = ({
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
-                aria-label="Delete campaign"
-                title="Delete campaign"
+                aria-label={`Delete campaign: ${campaign.name}`}
+                title={`Delete campaign: ${campaign.name}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDeleteClick();
@@ -309,7 +313,8 @@ const CampaignCardComponent = ({
           <Button
             size="sm"
             className="bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
-            aria-label="Play campaign"
+            aria-label={`Play campaign: ${campaign.name}`}
+            title={`Play campaign: ${campaign.name}`}
             onClick={(e) => {
               e.stopPropagation();
               setShowCharacterModal(true);
@@ -322,7 +327,8 @@ const CampaignCardComponent = ({
             size="sm"
             variant="outline"
             className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
-            aria-label="Enter campaign"
+            aria-label={`Enter campaign: ${campaign.name}`}
+            title={`Enter campaign: ${campaign.name}`}
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/app/campaigns/${campaign.id}`);
