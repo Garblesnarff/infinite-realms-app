@@ -20,7 +20,6 @@ import {
 } from '../../../../db/schema/index';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 import {
-  canManagePost,
   normalizeStatusFields,
   resolveAuthorId,
   syncPostRelations,
@@ -34,7 +33,7 @@ import {
 /**
  * Fetch categories and tags for multiple posts in batch to avoid N+1 queries
  */
-async function fetchPostsRelations(ctx: any, postIds: string[]) {
+async function fetchPostsRelations(ctx: { db: any }, postIds: string[]) {
   if (postIds.length === 0) return {};
 
   const catSelect = {
@@ -184,7 +183,7 @@ export const blogPostsRouter = router({
   getBySlug: publicProcedure.input(z.object({ slug: z.string().min(1) })).query(async ({ input, ctx }) => {
     // ⚡ Bolt: COLLAPSED 3 QUERIES INTO 1.
     // Use a single relational query to fetch post, author, categories, and tags in one round-trip.
-    const post = await ctx.db.query.blogPosts.findFirst({
+    const post: any = await ctx.db.query.blogPosts.findFirst({
       where: and(eq(blogPosts.slug, input.slug), eq(blogPosts.status, 'published')),
       with: {
         author: true,
@@ -246,27 +245,24 @@ export const blogPostsRouter = router({
       const { id, updates } = input;
       const { categoryIds, tagIds, ...postUpdates } = updates;
 
-      const [existingPost] = await ctx.db
-        .select({ id: blogPosts.id, authorId: blogPosts.authorId })
-        .from(blogPosts)
-        .where(eq(blogPosts.id, id))
+      const isAdmin = ctx.user.plan === 'admin';
+      const [userAuthor] = await ctx.db
+        .select({ id: blogAuthors.id })
+        .from(blogAuthors)
+        .where(eq(blogAuthors.userId, ctx.user.userId))
         .limit(1);
+      const userAuthorId = userAuthor?.id || null;
 
-      if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
-
-      const { canManage, userAuthorId, isAdmin } = await canManagePost(
-        ctx,
-        id,
-        existingPost.authorId,
-      );
-      if (!canManage) {
-        // Mask unauthorized access as not found to avoid disclosing post existence.
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      if (!isAdmin && !userAuthorId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You must have an author profile to manage posts',
+        });
       }
 
       if (postUpdates.authorId !== undefined) {
         if (!isAdmin) {
-          if (postUpdates.authorId !== existingPost.authorId) {
+          if (postUpdates.authorId !== userAuthorId) {
             throw new TRPCError({
               code: 'FORBIDDEN',
               message: 'Only admins can reassign post authors',
@@ -306,7 +302,7 @@ export const blogPostsRouter = router({
         .where(
           and(
             eq(blogPosts.id, id),
-            userAuthorId && !isAdmin ? eq(blogPosts.authorId, userAuthorId) : undefined,
+            !isAdmin && userAuthorId ? eq(blogPosts.authorId, userAuthorId) : undefined,
           ),
         )
         .returning();
@@ -328,22 +324,19 @@ export const blogPostsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      const [existingPost] = await ctx.db
-        .select({ id: blogPosts.id, authorId: blogPosts.authorId })
-        .from(blogPosts)
-        .where(eq(blogPosts.id, input.id))
+      const isAdmin = ctx.user.plan === 'admin';
+      const [userAuthor] = await ctx.db
+        .select({ id: blogAuthors.id })
+        .from(blogAuthors)
+        .where(eq(blogAuthors.userId, ctx.user.userId))
         .limit(1);
+      const userAuthorId = userAuthor?.id || null;
 
-      if (!existingPost) throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
-
-      const { canManage, userAuthorId, isAdmin } = await canManagePost(
-        ctx,
-        input.id,
-        existingPost.authorId,
-      );
-      if (!canManage) {
-        // Mask unauthorized access as not found to avoid disclosing post existence.
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Blog post not found' });
+      if (!isAdmin && !userAuthorId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You must have an author profile to manage posts',
+        });
       }
 
       // 🛡️ Sentinel: Atomic delete with ownership check in WHERE clause.
@@ -352,7 +345,7 @@ export const blogPostsRouter = router({
         .where(
           and(
             eq(blogPosts.id, input.id),
-            userAuthorId && !isAdmin ? eq(blogPosts.authorId, userAuthorId) : undefined,
+            !isAdmin && userAuthorId ? eq(blogPosts.authorId, userAuthorId) : undefined,
           ),
         )
         .returning();
