@@ -1,5 +1,5 @@
 import { TrendingUp, Plus, Minus, Star, Trophy, Calendar, Target } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 
 import type { Character } from '@/types/character';
 
@@ -35,6 +35,8 @@ interface ExperienceEntry {
  */
 const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpdate }) => {
   const { toast } = useToast();
+  const historyId = useId();
+  const historyTitleId = useId();
 
   const [experienceAmount, setExperienceAmount] = useState<number>(0);
   const [experienceSource, setExperienceSource] = useState<string>('');
@@ -201,7 +203,11 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
               <span>Level {currentLevel}</span>
               <span>{currentLevel >= 20 ? 'Max Level Reached' : `Level ${nextLevel}`}</span>
             </div>
-            <Progress value={progressToNextLevel} className="h-3" aria-label="Experience progress" />
+            <Progress
+              value={progressToNextLevel}
+              className="h-3"
+              aria-label={`${Math.round(progressToNextLevel)}% toward level ${nextLevel}`}
+            />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{previousLevelXP.toLocaleString()} XP</span>
               <span>
@@ -215,7 +221,11 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
 
           {/* Level Check Warning */}
           {calculatedLevel > currentLevel && (
-            <div className="mt-4 p-3 bg-electricCyan/10 border border-electricCyan/40 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-shadow">
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-4 p-3 bg-electricCyan/10 border border-electricCyan/40 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-shadow"
+            >
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 text-electricCyan" aria-hidden="true" />
                 <HexagonalBadge
@@ -314,6 +324,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
                 onClick={() => setToLevel(level)}
                 disabled={level === currentLevel}
                 aria-label={`Set experience to level ${level}`}
+                title={`Set experience to level ${level}`}
               >
                 {level}
               </Button>
@@ -354,7 +365,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle id={historyTitleId} className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-indigo-500" aria-hidden="true" />
               Experience History
             </CardTitle>
@@ -364,6 +375,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
               size="sm"
               onClick={() => setShowHistory(!showHistory)}
               aria-expanded={showHistory}
+              aria-controls={historyId}
               title={showHistory ? 'Hide history' : 'Show history'}
             >
               {showHistory ? 'Hide' : 'Show'} History
@@ -371,7 +383,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
           </div>
         </CardHeader>
         {showHistory && (
-          <CardContent>
+          <CardContent id={historyId} role="region" aria-labelledby={historyTitleId}>
             <div className="space-y-3">
               {experienceHistory.length > 0 ? (
                 experienceHistory.map((entry) => (
