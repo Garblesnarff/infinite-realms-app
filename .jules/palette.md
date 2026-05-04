@@ -149,3 +149,7 @@
 ## 2026-05-03 - Audio Control Accessibility and UX
 **Learning:** Providing both a `title` attribute and an `aria-label` on a button wrapped in a Radix `Tooltip` causes redundant or clashing information for both sighted and screen reader users. Ensuring icon-only buttons have `type="button"` prevents accidental form submissions in React environments.
 **Action:** Remove redundant `title` attributes when using custom `Tooltip` components. Always add `aria-label`, `aria-pressed` (for toggles), and `type="button"` to icon-only buttons in utility players.
+
+## 2026-05-03 - Layers Panel Accessibility and Visual Affordance
+**Learning:** Truncated names in sidebars (like layer names) need tooltips to be discoverable on desktop. Descriptive ARIA labels on repetitive controls (like opacity sliders) should include the item name for context. Quick actions benefit from icons to align with individual item controls.
+**Action:** Add `title` tooltips to truncated labels. Use template literals for `aria-label` on sliders. Apply icons to functional buttons and mark decorative ones as `aria-hidden="true"`.

@@ -13,7 +13,7 @@
  * - Uses Shadcn UI components (Sheet, Slider, Switch)
  */
 
-import { Eye, EyeOff, Lock, Unlock, Layers } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Layers, RotateCcw } from 'lucide-react';
 import React, { useId, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -154,7 +154,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
                 backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.7)`,
               }}
             />
-            <span className="font-medium text-sm truncate">{layer.name}</span>
+            <span className="font-medium text-sm truncate" title={layer.name}>
+              {layer.name}
+            </span>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -169,9 +171,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
               title={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
             >
               {visible ? (
-                <Eye className="h-4 w-4" />
+                <Eye className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground" />
+                <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               )}
             </Button>
 
@@ -186,9 +188,9 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
               title={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
             >
               {locked ? (
-                <Lock className="h-4 w-4" />
+                <Lock className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <Unlock className="h-4 w-4 text-muted-foreground" />
+                <Unlock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -213,6 +215,7 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
               onValueCommit={handleOpacityCommit}
               className="w-full"
               disabled={!visible}
+              aria-label={`${layer.name} layer opacity`}
             />
           </div>
         )}
@@ -295,7 +298,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
           title="Open layers panel"
           aria-label="Open layers panel"
         >
-          <Layers className="h-5 w-5" />
+          <Layers className="h-5 w-5" aria-hidden="true" />
         </Button>
       </SheetTrigger>
 
@@ -313,15 +316,15 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
             <p className="mb-2 font-medium text-foreground">Layer Controls:</p>
             <ul className="space-y-1 text-xs">
               <li className="flex items-center gap-2">
-                <Eye className="h-3 w-3" />
+                <Eye className="h-3 w-3" aria-hidden="true" />
                 <span>Toggle layer visibility</span>
               </li>
               <li className="flex items-center gap-2">
-                <Lock className="h-3 w-3" />
+                <Lock className="h-3 w-3" aria-hidden="true" />
                 <span>Lock layer to prevent interactions</span>
               </li>
               <li className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-muted rounded-sm" />
+                <span className="w-3 h-3 bg-muted rounded-sm" aria-hidden="true" />
                 <span>Adjust opacity with slider</span>
               </li>
             </ul>
@@ -348,12 +351,15 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                     <div className="flex items-center gap-2">
                       <div
                         className="w-3 h-3 rounded-sm"
+                        aria-hidden="true"
                         style={{
                           backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.3)`,
                         }}
                       />
-                      <span>{layer.name}</span>
-                      <span className="text-xs">(Not initialized)</span>
+                      <span title={layer.name} className="truncate max-w-[150px]">
+                        {layer.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">(Not initialized)</span>
                     </div>
                   </div>
                 );
@@ -377,7 +383,11 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Quick Actions
             </h3>
-            <div className="flex flex-wrap gap-2">
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Layer quick actions"
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -386,6 +396,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                 title="Show all map layers"
                 aria-label="Show all map layers"
               >
+                <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                 Show All
               </Button>
               <Button
@@ -396,6 +407,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                 title="Hide all map layers"
                 aria-label="Hide all map layers"
               >
+                <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
                 Hide All
               </Button>
               <Button
@@ -406,6 +418,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                 title="Reset layers to default visibility and opacity"
                 aria-label="Reset layers to default visibility and opacity"
               >
+                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                 Reset
               </Button>
             </div>
