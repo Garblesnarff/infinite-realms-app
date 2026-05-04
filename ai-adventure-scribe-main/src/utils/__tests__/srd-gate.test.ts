@@ -4,6 +4,7 @@ import {
   ensureSrdEntity,
   filterToSrd,
   getCanonicalSrdName,
+  getSrdEntries,
   isSrdEntity,
   listSrdCategories,
   validateSrdEntities,
@@ -29,6 +30,13 @@ describe('srdGate', () => {
     expect(getCanonicalSrdName('monsters', '  vampire  mist   form  ')).toBe('Vampire, Mist Form');
   });
 
+  it('handles parenthesized annotations correctly', () => {
+    // This currently fails because normalizeName replaces '(' and ')' with spaces
+    // before stripAnnotations is called on the already-normalized key.
+    expect(getCanonicalSrdName('classes', 'Wizard (Evocation)')).toBe('Wizard');
+    expect(getCanonicalSrdName('spells', 'Magic Missile (Level 1)')).toBe('Magic Missile');
+  });
+
   it('rejects non-SRD entities', () => {
     expect(isSrdEntity('classes', 'Artificer')).toBe(false);
     expect(getCanonicalSrdName('classes', 'Artificer')).toBeNull();
@@ -50,5 +58,20 @@ describe('srdGate', () => {
 
   it('throws a descriptive error when ensureSrdEntity fails', () => {
     expect(() => ensureSrdEntity('classes', 'Artificer')).toThrowError(SrdViolationError);
+  });
+
+  it('getSrdEntries returns entries or empty array', () => {
+    expect(getSrdEntries('classes').length).toBeGreaterThan(0);
+    // @ts-expect-error - Testing invalid category
+    expect(getSrdEntries('invalid')).toEqual([]);
+  });
+
+  it('getCanonicalSrdName handles null/empty/invalid inputs', () => {
+    // @ts-expect-error - Testing null input
+    expect(getCanonicalSrdName('classes', null)).toBeNull();
+    expect(getCanonicalSrdName('classes', '')).toBeNull();
+    expect(getCanonicalSrdName('classes', '   ')).toBeNull();
+    // @ts-expect-error - Testing invalid category
+    expect(getCanonicalSrdName('invalid', 'Wizard')).toBeNull();
   });
 });

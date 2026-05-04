@@ -416,6 +416,7 @@ export default defineConfig({
         'src/utils/animations/utilities.ts',
         'src/utils/rest/hit-dice.ts',
         'src/utils/rest/exhaustion.ts',
+        'src/utils/srd/srdGate.ts',
         'src/utils/rest/__tests__/hit-dice.test.ts',
         'src/utils/rest/__tests__/exhaustion.test.ts',
         'src/utils/__tests__/character-calculations-extended.test.ts',

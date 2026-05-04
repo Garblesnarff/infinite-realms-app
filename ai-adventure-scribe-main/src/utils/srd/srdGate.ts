@@ -60,9 +60,13 @@ export function getCanonicalSrdName(
   if (directMatch) return directMatch;
 
   // Try matching after stripping common annotations such as parentheses or variant labels.
-  const stripped = stripAnnotations(key);
-  if (stripped !== key) {
-    const strippedMatch = lookup.get(stripped);
+  // We apply stripAnnotations to the original candidate and then normalize it,
+  // because normalizeName replaces parentheses with spaces.
+  const strippedCandidate = stripAnnotations(candidate);
+  const strippedKey = normalizeName(strippedCandidate);
+
+  if (strippedKey !== key) {
+    const strippedMatch = lookup.get(strippedKey);
     if (strippedMatch) return strippedMatch;
   }
 
