@@ -28,7 +28,7 @@ describe('MessageMetadata', () => {
 
     expect(getByText('Mysterious')).toBeDefined();
     expect(getByText('Dark Dungeon')).toBeDefined();
-    expect(getByText(/05:00/)).toBeDefined();
+    expect(getByText(/10:00/)).toBeDefined();
   });
 
   it('renders correctly for player messages', () => {
