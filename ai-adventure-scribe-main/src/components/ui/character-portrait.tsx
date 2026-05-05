@@ -149,7 +149,12 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
         {/* Level Badge */}
         {level !== undefined && (
           <div className="absolute top-1 left-1" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
-            <Badge variant="purple" className="text-xs font-bold px-1.5 py-0.5">
+            <Badge
+              variant="purple"
+              className="text-xs font-bold px-1.5 py-0.5"
+              aria-label={`Level ${level}`}
+              title={`Level ${level}`}
+            >
               {level}
             </Badge>
           </div>
@@ -163,22 +168,38 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
           >
             <div className="flex items-center justify-around gap-1 text-white text-[0.625rem]">
               {hp !== undefined && maxHp !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <Heart className={cn('h-3 w-3', hpColor)} fill="currentColor" />
+                <div
+                  className="flex items-center gap-0.5"
+                  aria-label={`HP: ${hp}/${maxHp}`}
+                  title={`HP: ${hp}/${maxHp}`}
+                >
+                  <Heart
+                    className={cn('h-3 w-3', hpColor)}
+                    fill="currentColor"
+                    aria-hidden="true"
+                  />
                   <span className="font-semibold tabular-nums">
                     {hp}/{maxHp}
                   </span>
                 </div>
               )}
               {ac !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <Shield className="h-3 w-3 text-blue-400" />
+                <div
+                  className="flex items-center gap-0.5"
+                  aria-label={`Armor Class: ${ac}`}
+                  title={`Armor Class: ${ac}`}
+                >
+                  <Shield className="h-3 w-3 text-blue-400" aria-hidden="true" />
                   <span className="font-semibold tabular-nums">{ac}</span>
                 </div>
               )}
               {initiative !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <Zap className="h-3 w-3 text-yellow-400" />
+                <div
+                  className="flex items-center gap-0.5"
+                  aria-label={`Initiative: +${initiative}`}
+                  title={`Initiative: +${initiative}`}
+                >
+                  <Zap className="h-3 w-3 text-yellow-400" aria-hidden="true" />
                   <span className="font-semibold tabular-nums">+{initiative}</span>
                 </div>
               )}
@@ -193,7 +214,12 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
             style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
           >
             {status.slice(0, 3).map((effect, index) => (
-              <Badge key={index} variant="warning" className="text-[0.625rem] px-1 py-0">
+              <Badge
+                key={index}
+                variant="warning"
+                className="text-[0.625rem] px-1 py-0"
+                aria-label={`Status: ${effect}`}
+              >
                 {effect}
               </Badge>
             ))}
