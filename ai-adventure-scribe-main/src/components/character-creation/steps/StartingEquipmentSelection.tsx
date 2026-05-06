@@ -1,121 +1,22 @@
-import { Package, Coins, Dice1, TrendingUp, Shield, Sword, Shirt } from 'lucide-react';
+import { Package, Coins, TrendingUp } from 'lucide-react';
 import React, { useState, useId } from 'react';
 
-import type { Equipment } from '@/data/equipmentOptions';
+import { EquipmentPackagePreview } from './equipment-selection/EquipmentPackagePreview';
+import {
+  getStartingEquipmentPackage,
+  calculateEstimatedACFromEquipment,
+} from './equipment-selection/EquipmentSelectionUtils';
+import { StartingGoldOption } from './equipment-selection/StartingGoldOption';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
-import {
-  startingGoldByClass,
-  calculateArmorClass,
-  EQUIPMENT_LOOKUP,
-} from '@/data/equipmentOptions';
+import { startingGoldByClass, EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
 
-/**
- * ⚡ Bolt: Class-based starting equipment packages hoisted to prevent re-allocation.
- */
-const STARTING_PACKAGES: Record<string, string[]> = {
-  fighter: [
-    'chain-mail',
-    'shield',
-    'longsword',
-    'handaxe',
-    'handaxe',
-    'light-crossbow',
-    'explorers-pack',
-  ],
-  wizard: ['dagger', 'quarterstaff', 'component-pouch', 'scholars-pack', 'spellbook'],
-  rogue: ['leather-armor', 'shortsword', 'shortsword', 'thieves-tools', 'shortbow', 'burglars-pack'],
-  cleric: ['chain-shirt', 'shield', 'mace', 'light-crossbow', 'priests-pack', 'holy-symbol'],
-  barbarian: ['leather-armor', 'shield', 'handaxe', 'handaxe', 'javelin', 'javelin', 'explorers-pack'],
-  bard: ['leather-armor', 'dagger', 'rapier', 'lute', 'entertainers-pack'],
-  druid: ['leather-armor', 'shield', 'scimitar', 'shield', 'explorers-pack', 'druidcraft-focus'],
-  monk: [
-    'shortsword',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'dart',
-    'explorers-pack',
-  ],
-  paladin: [
-    'chain-mail',
-    'shield',
-    'longsword',
-    'javelin',
-    'javelin',
-    'javelin',
-    'javelin',
-    'javelin',
-    'priests-pack',
-    'holy-symbol',
-  ],
-  ranger: ['leather-armor', 'shortsword', 'shortsword', 'longbow', 'explorers-pack'],
-  sorcerer: ['dagger', 'dagger', 'component-pouch', 'light-crossbow', 'dungeoneer-pack'],
-  warlock: ['leather-armor', 'dagger', 'simple-weapon', 'light-crossbow', 'scholars-pack'],
-};
-
-/**
- * ⚡ Bolt: Pure helper function to get starting equipment package.
- */
-const getStartingEquipmentPackage = (classId: string): Equipment[] => {
-  const equipmentIds = STARTING_PACKAGES[classId] || [];
-  return equipmentIds.map((id) => {
-    const item = EQUIPMENT_LOOKUP.get(id);
-    return (
-      item || {
-        id,
-        name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        category: 'gear' as const,
-        cost: { amount: 0, currency: 'gp' as const },
-        description: `Starting ${classId} equipment`,
-      }
-    );
-  });
-};
-
-/**
- * ⚡ Bolt: Pure helper to calculate estimated AC from equipment.
- */
-const calculateEstimatedACFromEquipment = (
-  startingEquipment: Equipment[],
-  character: {
-    abilityScores?: {
-      dexterity?: { modifier: number };
-      constitution?: { modifier: number };
-      wisdom?: { modifier: number };
-    };
-  } | null,
-  characterClass: { name: string },
-): number => {
-  const armor = startingEquipment.find((eq) => eq.category === 'armor');
-  const shield = startingEquipment.find((eq) => eq.category === 'shield');
-  const dexMod = character?.abilityScores?.dexterity?.modifier || 0;
-  const conMod = character?.abilityScores?.constitution?.modifier || 0;
-  const wisMod = character?.abilityScores?.wisdom?.modifier || 0;
-
-  return calculateArmorClass(
-    armor || null,
-    shield || null,
-    dexMod,
-    0, // otherBonuses
-    characterClass.name,
-    conMod,
-    wisMod,
-  );
-};
 
 /**
  * Starting Equipment Selection component for character creation
@@ -320,105 +221,25 @@ const StartingEquipmentSelection: React.FC = () => {
 
       {/* Equipment Package Preview */}
       {method === 'package' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-blue-500" aria-hidden="true" />
-              {characterClass.name} Equipment Package
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-3 border rounded">
-                <div className="text-2xl font-bold text-blue-600">{estimatedACValue}</div>
-                <div className="text-xs text-muted-foreground">Estimated AC</div>
-              </div>
-              <div className="text-center p-3 border rounded">
-                <div className="text-2xl font-bold">{startingEquipment.length}</div>
-                <div className="text-xs text-muted-foreground">Items Included</div>
-              </div>
-              <div className="text-center p-3 border rounded">
-                <div className="text-2xl font-bold">0</div>
-                <div className="text-xs text-muted-foreground">Starting Gold</div>
-              </div>
-            </div>
-
-            <Separator className="mb-4" />
-
-            <div className="space-y-3">
-              <h4 className="font-medium">Equipment Included:</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {startingEquipment.map((equipment, index) => (
-                  <div key={index} className="flex items-center gap-2 p-2 border rounded text-sm">
-                    {equipment.category === 'weapon' && (
-                      <Sword className="w-4 h-4 text-red-500" aria-hidden="true" />
-                    )}
-                    {equipment.category === 'armor' && (
-                      <Shirt className="w-4 h-4 text-blue-500" aria-hidden="true" />
-                    )}
-                    {equipment.category === 'shield' && (
-                      <Shield className="w-4 h-4 text-gray-500" aria-hidden="true" />
-                    )}
-                    {!['weapon', 'armor', 'shield'].includes(equipment.category) && (
-                      <Package className="w-4 h-4 text-green-500" aria-hidden="true" />
-                    )}
-                    <span>{equipment.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <EquipmentPackagePreview
+          className={characterClass.name}
+          estimatedACValue={estimatedACValue}
+          startingEquipment={startingEquipment}
+        />
       )}
 
       {/* Starting Gold Option */}
       {method === 'gold' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Coins className="w-5 h-5 text-yellow-500" aria-hidden="true" />
-              Starting Gold
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center space-y-4">
-              <div className="p-6 border-2 border-dashed rounded-lg">
-                <Dice1 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" aria-hidden="true" />
-                <div className="text-lg font-medium mb-2">
-                  Roll {goldData?.dice} × {goldData?.multiplier}
-                </div>
-                <div className="text-sm text-muted-foreground mb-4">
-                  Average: {goldData?.average} gp
-                </div>
-
-                {hasRolledGold ? (
-                  <div className="space-y-2">
-                    <div className="text-3xl font-bold text-yellow-600">{rolledGold} gp</div>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setHasRolledGold(false);
-                        setRolledGold(0);
-                      }}
-                    >
-                      Roll Again
-                    </Button>
-                  </div>
-                ) : (
-                  <Button onClick={rollStartingGold} size="lg">
-                    <Dice1 className="w-4 h-4 mr-2" aria-hidden="true" />
-                    Roll for Gold
-                  </Button>
-                )}
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                With starting gold, you'll need to purchase all equipment from the shop. This allows
-                for complete customization but requires more planning.
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StartingGoldOption
+          goldData={goldData}
+          hasRolledGold={hasRolledGold}
+          rolledGold={rolledGold}
+          onRollGold={rollStartingGold}
+          onResetRoll={() => {
+            setHasRolledGold(false);
+            setRolledGold(0);
+          }}
+        />
       )}
 
       {/* Apply Button */}
