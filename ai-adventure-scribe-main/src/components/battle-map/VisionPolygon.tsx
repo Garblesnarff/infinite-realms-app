@@ -9,6 +9,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
+import { FogOfWarMask } from './vision/FogOfWarMask';
+import { useVisionPolygon } from './vision/use-vision-polygon';
+import { VisionBoundary } from './vision/VisionBoundary';
+
 import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon';
@@ -16,6 +20,12 @@ import type { VisionPolygon as VisionPolygonType } from '@/utils/vision-polygon'
 import logger from '@/lib/logger';
 import { getVisionColor, getVisionOpacity } from '@/utils/vision-calculations';
 import { calculateVisionPolygon, mergeVisionPolygons } from '@/utils/vision-polygon';
+
+
+// Re-export for backward compatibility
+export { FogOfWarMask, VisionBoundary, useVisionPolygon };
+export type { VisionMaskProps } from './vision/FogOfWarMask';
+export type { VisionBoundaryProps } from './vision/VisionBoundary';
 
 // ===========================
 // Types
@@ -38,18 +48,6 @@ interface VisionPolygonProps {
   opacity?: number;
   /** Whether this is GM view (sees all) */
   isGMView?: boolean;
-}
-
-interface VisionMaskProps {
-  /** Vision polygons to render as fog mask */
-  polygons: VisionPolygonType[];
-  /** Canvas dimensions */
-  canvasWidth: number;
-  canvasHeight: number;
-  /** Fog color */
-  fogColor?: string;
-  /** Fog opacity */
-  fogOpacity?: number;
 }
 
 // ===========================
@@ -164,285 +162,66 @@ export const VisionPolygon: React.FC<VisionPolygonProps> = React.memo(
       };
     }, [isGMView, useWorker, tokenArray, walls, range]);
 
-  // Determine visual properties
-  const visionColor = useMemo(() => {
-    if (color) return color;
-    if (!polygon) return '#ffffff';
-    return getVisionColor(polygon.visionMode);
-  }, [color, polygon]);
+    // Determine visual properties
+    const visionColor = useMemo(() => {
+      if (color) return color;
+      if (!polygon) return '#ffffff';
+      return getVisionColor(polygon.visionMode);
+    }, [color, polygon]);
 
-  const visionOpacity = useMemo(() => {
-    if (opacity !== undefined) return opacity;
-    if (!polygon) return 0.15;
-    return getVisionOpacity(polygon.visionMode);
-  }, [opacity, polygon]);
+    const visionOpacity = useMemo(() => {
+      if (opacity !== undefined) return opacity;
+      if (!polygon) return 0.15;
+      return getVisionOpacity(polygon.visionMode);
+    }, [opacity, polygon]);
 
-  // Create SVG path from polygon points
-  const pathData = useMemo(() => {
-    if (!polygon || !polygon.points.length) return '';
+    // Create SVG path from polygon points
+    const pathData = useMemo(() => {
+      if (!polygon || !polygon.points.length) return '';
 
-    const points = polygon.points;
-    let path = `M ${points[0].x} ${points[0].y}`;
+      const points = polygon.points;
+      let path = `M ${points[0].x} ${points[0].y}`;
 
-    for (let i = 1; i < points.length; i++) {
-      path += ` L ${points[i].x} ${points[i].y}`;
+      for (let i = 1; i < points.length; i++) {
+        path += ` L ${points[i].x} ${points[i].y}`;
+      }
+
+      path += ' Z'; // Close path
+      return path;
+    }, [polygon]);
+
+    // Don't render if no polygon or GM view
+    if (!polygon || polygon.points.length === 0 || isGMView) {
+      return null;
     }
 
-    path += ' Z'; // Close path
-    return path;
-  }, [polygon]);
-
-  // Don't render if no polygon or GM view
-  if (!polygon || polygon.points.length === 0 || isGMView) {
-    return null;
-  }
-
-  return (
-    <g className="vision-polygon">
-      {/* Visible area fill */}
-      <path
-        d={pathData}
-        fill={visionColor}
-        fillOpacity={visionOpacity}
-        stroke="none"
-        pointerEvents="none"
-      />
-
-      {/* Optional boundary (debug/GM view) */}
-      {showBoundary && (
+    return (
+      <g className="vision-polygon">
+        {/* Visible area fill */}
         <path
           d={pathData}
-          fill="none"
-          stroke={visionColor}
-          strokeWidth={2}
-          strokeOpacity={0.5}
-          strokeDasharray="5,5"
+          fill={visionColor}
+          fillOpacity={visionOpacity}
+          stroke="none"
           pointerEvents="none"
         />
-      )}
-    </g>
-  );
-});
 
-// ===========================
-// Fog of War Mask Component
-// ===========================
-
-/**
- * Render fog of war as inverted mask of vision polygons
- *
- * Uses SVG masking to show fog everywhere except visible areas.
- *
- * @example
- * ```tsx
- * <FogOfWarMask
- *   polygons={visionPolygons}
- *   canvasWidth={2000}
- *   canvasHeight={2000}
- *   fogColor="#000000"
- *   fogOpacity={0.8}
- * />
- * ```
- *
- * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
- */
-export const FogOfWarMask: React.FC<VisionMaskProps> = React.memo(
-  ({ polygons, canvasWidth, canvasHeight, fogColor = '#000000', fogOpacity = 0.85 }) => {
-  const maskId = useMemo(() => `fog-mask-${Math.random().toString(36).substr(2, 9)}`, []);
-
-  // Create paths for all vision polygons
-  const visionPaths = useMemo(() => {
-    return polygons
-      .filter((p) => p.points.length > 0)
-      .map((polygon, index) => {
-        let path = `M ${polygon.points[0].x} ${polygon.points[0].y}`;
-        for (let i = 1; i < polygon.points.length; i++) {
-          path += ` L ${polygon.points[i].x} ${polygon.points[i].y}`;
-        }
-        path += ' Z';
-        return { path, key: `vision-${index}` };
-      });
-  }, [polygons]);
-
-    return (
-      <g className="fog-of-war">
-        <defs>
-          <mask id={maskId}>
-            {/* White background = show fog */}
-            <rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill="white" />
-
-            {/* Black areas = hide fog (visible areas) */}
-            {visionPaths.map(({ path, key }) => (
-              <path key={key} d={path} fill="black" />
-            ))}
-          </mask>
-        </defs>
-
-        {/* Fog layer with mask applied */}
-        <rect
-          x={0}
-          y={0}
-          width={canvasWidth}
-          height={canvasHeight}
-          fill={fogColor}
-          fillOpacity={fogOpacity}
-          mask={`url(#${maskId})`}
-          pointerEvents="none"
-        />
-      </g>
-    );
-  },
-);
-
-// ===========================
-// Vision Boundary (Debug Component)
-// ===========================
-
-interface VisionBoundaryProps {
-  token: Token;
-  range?: number;
-  color?: string;
-}
-
-/**
- * Show vision range boundary (debug/GM tool)
- *
- * Renders a simple circle showing maximum vision range
- *
- * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
- */
-export const VisionBoundary: React.FC<VisionBoundaryProps> = React.memo(
-  ({ token, range, color = '#ffffff' }) => {
-  const effectiveRange = range !== undefined ? range : token.vision.range * 20;
-
-  if (!token.vision.enabled || effectiveRange === 0) {
-    return null;
-  }
-
-    return (
-      <g className="vision-boundary">
-        {/* Full circle for 360° vision */}
-        {token.vision.angle >= 360 ? (
-          <circle
-            cx={token.x}
-            cy={token.y}
-            r={effectiveRange}
+        {/* Optional boundary (debug/GM view) */}
+        {showBoundary && (
+          <path
+            d={pathData}
             fill="none"
-            stroke={color}
+            stroke={visionColor}
             strokeWidth={2}
-            strokeOpacity={0.3}
+            strokeOpacity={0.5}
             strokeDasharray="5,5"
             pointerEvents="none"
           />
-        ) : (
-          /* Arc for limited vision cone */
-          <VisionConeArc token={token} range={effectiveRange} color={color} />
         )}
       </g>
     );
   },
 );
-
-// ===========================
-// Vision Cone Arc Component
-// ===========================
-
-interface VisionConeArcProps {
-  token: Token;
-  range: number;
-  color: string;
-}
-
-/**
- * Render vision cone arc for limited-angle vision
- *
- * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders.
- */
-const VisionConeArc: React.FC<VisionConeArcProps> = React.memo(({ token, range, color }) => {
-  const pathData = useMemo(() => {
-    const halfAngle = (token.vision.angle / 2) * (Math.PI / 180);
-    const centerAngle = token.rotation * (Math.PI / 180);
-
-    const startAngle = centerAngle - halfAngle;
-    const endAngle = centerAngle + halfAngle;
-
-    const startX = token.x + Math.cos(startAngle) * range;
-    const startY = token.y + Math.sin(startAngle) * range;
-    const endX = token.x + Math.cos(endAngle) * range;
-    const endY = token.y + Math.sin(endAngle) * range;
-
-    const largeArcFlag = token.vision.angle > 180 ? 1 : 0;
-
-    return `
-      M ${token.x} ${token.y}
-      L ${startX} ${startY}
-      A ${range} ${range} 0 ${largeArcFlag} 1 ${endX} ${endY}
-      Z
-    `;
-  }, [token, range]);
-
-  return (
-    <path
-      d={pathData}
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeOpacity={0.3}
-      strokeDasharray="5,5"
-      pointerEvents="none"
-    />
-  );
-});
-
-// ===========================
-// Utility Hook
-// ===========================
-
-/**
- * Hook to calculate and cache vision polygons
- *
- * @example
- * ```tsx
- * const { polygon, isCalculating } = useVisionPolygon(token, walls, range);
- * ```
- */
-export function useVisionPolygon(
-  token: Token | null,
-  walls: VisionBlocker[],
-  range?: number,
-): {
-  polygon: VisionPolygonType | null;
-  isCalculating: boolean;
-} {
-  const [polygon, setPolygon] = useState<VisionPolygonType | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
-
-  useEffect(() => {
-    if (!token) {
-      setPolygon(null);
-      return;
-    }
-
-    setIsCalculating(true);
-
-    // Use requestIdleCallback for non-blocking calculation
-    const handle = requestIdleCallback(
-      () => {
-        const poly = calculateVisionPolygon(token, walls, range);
-        setPolygon(poly);
-        setIsCalculating(false);
-      },
-      { timeout: 100 },
-    );
-
-    return () => {
-      cancelIdleCallback(handle);
-      setIsCalculating(false);
-    };
-  }, [token, walls, range]);
-
-  return { polygon, isCalculating };
-}
 
 // ===========================
 // Default Export
