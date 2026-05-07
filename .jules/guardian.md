@@ -207,3 +207,7 @@
 ## 2026-05-20 - [SpellApi Service Coverage & Singleton Mocking]
 **Learning:** The `SpellApiService` is exported as a singleton and maintains internal state (`useLocalFallback`). Tests must manually reset this state in `beforeEach` to ensure isolation. Also confirmed that `spellApi` maps server-side snake_case-adjacent responses to camelCase frontend models, often providing defaults for optional fields like `materialComponents`.
 **Action:** When testing singletons with internal state, use type casting `(service as any).property = value` in `beforeEach` to reset state. Ensure that `vitest.config.ts` is updated in both `include` and `coverage.include` for new service tests. Add large test files to `eslint.config.js`'s `max-lines` override list to maintain lint compliance.
+
+## 2026-02-27 - [AI Context Builder Coverage]
+**Learning:** Found that ContextBuilder in src/services/ai/context-builder.ts was completely untested despite being the primary orchestrator for AI prompts. Testing revealed that it correctly switches between opening scene logic and regular narrative flow based on the isFirstMessage flag, and integrates combat/voice contexts conditionally.
+**Action:** Always include both the test file and the source module in vitest.config.ts's explicit include and coverage.include arrays to ensure visibility. Use mocked prompt builders to focus on the orchestration logic of the builder itself.
