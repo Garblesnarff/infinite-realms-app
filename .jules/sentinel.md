@@ -77,3 +77,8 @@
 **Vulnerability:** The `verifySessionOwnership` helper in the chronicles router performed ownership checks in application logic after fetching the session, leading to existence leakage. Additionally, several chronicle-related procedures lacked `userId` filtering, allowing users sharing a session to see or overwrite each other's chronicles (IDOR).
 **Learning:** Shared resources (like game sessions) require consistent ownership verification across all routers. Even if a session is shared, sub-resources tied to it (like chronicles) may still be user-specific and must be explicitly scoped to `userId` to prevent IDOR and race conditions.
 **Prevention:** Incorporate ownership verification (`campaigns.userId`, `characters.userId/ownerId`) directly into SQL `WHERE` clauses for all session-linked queries. Ensure all user-specific data is scoped by `userId` even when accessing via a shared parent ID.
+
+## 2026-02-16 - [IDOR and RLS Bypass in Combat HP Service]
+**Vulnerability:** `CombatHPService` modification methods used a "check-then-act" pattern, where database updates didn't incorporate ownership checks into their `WHERE` clauses, relying solely on pre-flight validation. This created a race condition and IDOR risk.
+**Learning:** Even with centralized route protection (`onBeforeHandle`), the service layer must implement defense-in-depth by ensuring every database operation is atomic and explicitly scoped to the authenticated user's permissions.
+**Prevention:** Always use `UPDATE ... WHERE EXISTS` or `INSERT ... SELECT` patterns that join with parent campaigns/characters to verify `userId` or `ownerId` in a single round-trip. Centralize these filters in service-level helpers to ensure consistency.

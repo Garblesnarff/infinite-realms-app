@@ -70,7 +70,7 @@ export const damageRoutes = new Elysia()
         return { error: 'damageAmount must be non-negative' };
       }
 
-      // ⚡ Bolt: Skips redundant authorization in applyDamage as verifyEncounterOwnership already verified access.
+      // 🛡️ Sentinel: Pass user.userId to applyDamage for defense-in-depth atomic ownership verification.
       const result = await CombatHPService.applyDamage(
         participantId,
         params.encounterId,
@@ -82,7 +82,7 @@ export const damageRoutes = new Elysia()
           ignoreResistances,
           ignoreImmunities,
         },
-        undefined // skip redundant auth
+        user.userId
       );
 
       return result;
@@ -122,13 +122,13 @@ export const damageRoutes = new Elysia()
         return { error: 'healingAmount must be non-negative' };
       }
 
-      // ⚡ Bolt: Skips redundant authorization in healDamage as verifyEncounterOwnership already verified access.
+      // 🛡️ Sentinel: Pass user.userId to healDamage for defense-in-depth atomic ownership verification.
       const result = await CombatHPService.healDamage(
         participantId,
         params.encounterId,
         healingAmount,
         sourceDescription,
-        undefined // skip redundant auth
+        user.userId
       );
 
       return result;
@@ -168,8 +168,8 @@ export const damageRoutes = new Elysia()
         return { error: 'tempHp must be non-negative' };
       }
 
-      // ⚡ Bolt: Skips redundant authorization in setTempHP as verifyEncounterOwnership already verified access.
-      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp, undefined);
+      // 🛡️ Sentinel: Pass user.userId to setTempHP for defense-in-depth atomic ownership verification.
+      const result = await CombatHPService.setTempHP(participantId, params.encounterId, tempHp, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Set temp HP error', error: e });
@@ -207,8 +207,8 @@ export const damageRoutes = new Elysia()
         return { error: 'roll must be between 1 and 20' };
       }
 
-      // ⚡ Bolt: Skips redundant authorization in rollDeathSave as verifyEncounterOwnership already verified access.
-      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, undefined);
+      // 🛡️ Sentinel: Pass user.userId to rollDeathSave for defense-in-depth atomic ownership verification.
+      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });
@@ -238,12 +238,12 @@ export const damageRoutes = new Elysia()
       const roundStr = query.round as string | undefined;
       const roundNum = roundStr !== undefined ? parseInt(roundStr, 10) : undefined;
 
-      // ⚡ Bolt: Skips redundant authorization in getDamageLog as verifyEncounterOwnership already verified access.
+      // 🛡️ Sentinel: Pass user.userId to getDamageLog for defense-in-depth atomic ownership verification.
       const damageLog = await CombatHPService.getDamageLog(
         params.encounterId,
         participantId,
         roundNum,
-        undefined // skip redundant auth
+        user.userId
       );
 
       return damageLog;

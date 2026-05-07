@@ -187,7 +187,7 @@ export class CombatAttackService {
 
     // Apply damage to target HP
     try {
-      // ⚡ Bolt: Skips redundant authorization in applyDamage as targetData already verified access.
+      // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
       const hpResult = await CombatHPService.applyDamage(
         targetId,
         encounterId,
@@ -199,7 +199,7 @@ export class CombatAttackService {
           ignoreResistances: true, // Already applied in damage calculation
           ignoreImmunities: true, // Already applied in damage calculation
         },
-        undefined, // skip redundant auth
+        userId,
         targetParticipant,
       );
 
@@ -323,7 +323,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
-            // ⚡ Bolt: Skips N+1 redundant auth queries by passing undefined for userId.
+            // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
             const hpResult = await CombatHPService.applyDamage(
               targetId,
               encounterId,
@@ -335,7 +335,7 @@ export class CombatAttackService {
                 ignoreResistances: true, // Already applied in damage calculation
                 ignoreImmunities: true, // Already applied in damage calculation
               },
-              undefined, // skip redundant auth
+              userId,
               targetParticipant,
             );
 
@@ -391,7 +391,7 @@ export class CombatAttackService {
 
           // Apply damage to target HP
           try {
-            // ⚡ Bolt: Skips N+1 redundant auth queries by passing undefined for userId.
+            // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
             const hpResult = await CombatHPService.applyDamage(
               targetId,
               encounterId,
@@ -403,7 +403,7 @@ export class CombatAttackService {
                 ignoreResistances: true, // Already applied in damage calculation
                 ignoreImmunities: true, // Already applied in damage calculation
               },
-              undefined, // skip redundant auth
+              userId,
               targetParticipant,
             );
 

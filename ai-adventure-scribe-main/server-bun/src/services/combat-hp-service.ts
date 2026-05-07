@@ -9,15 +9,19 @@
  * @module server/services/combat-hp-service
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, exists, or, sql } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import {
   combatParticipantStatus,
   combatDamageLog,
+  combatParticipants,
+  combatEncounters,
+  gameSessions,
+  campaigns,
+  characters,
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
-import { verifyEncounterAccess } from './combat/data-access.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -43,6 +47,38 @@ import type {
  * Combat HP Service
  */
 export class CombatHPService {
+  /**
+   * Helper to build a subquery filter that verifies a user owns the encounter
+   * associated with a participant.
+   * 🛡️ Sentinel: Centralized ownership verification to prevent IDOR and existence leakage.
+   */
+  private static getEncounterOwnershipFilter(
+    participantId: string,
+    encounterId: string,
+    userId: string,
+  ): any {
+    return exists(
+      db
+        .select()
+        .from(combatParticipants)
+        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+        .where(
+          and(
+            eq(combatParticipants.id, participantId),
+            eq(combatParticipants.encounterId, encounterId),
+            or(
+              eq(campaigns.userId, userId),
+              eq(characters.userId, userId),
+              eq(characters.ownerId, userId),
+            ),
+          ),
+        ),
+    );
+  }
+
   /**
    * Apply damage to a participant with D&D 5E rules.
    * ⚡ Bolt: Supports optional pre-fetched participant data (including status and encounter)
@@ -87,6 +123,7 @@ export class CombatHPService {
       options
     );
 
+    // 🛡️ Sentinel: Refactored to use atomic updates with existence checks for defense-in-depth.
     // ⚡ Bolt: Parallelize status update and damage logging to reduce sequential database round-trips.
     const updatePromise = db
       .update(combatParticipantStatus)
@@ -97,22 +134,52 @@ export class CombatHPService {
         deathSavesFailures: result.newDeathSavesFailures,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+        ),
+      );
 
     let logPromise = Promise.resolve() as any;
     if (damageAmount > 0) {
-      logPromise = db.insert(combatDamageLog).values({
-        encounterId,
-        participantId,
-        damageAmount: result.modifiedDamage,
-        damageType: damageType || 'untyped',
-        sourceParticipantId: sourceParticipantId || null,
-        sourceDescription: sourceDescription || null,
-        roundNumber: currentRound,
-      });
+      logPromise = db.insert(combatDamageLog).select(
+        db
+          .select({
+            encounterId: sql`${encounterId}`,
+            participantId: sql`${participantId}`,
+            damageAmount: sql`${result.modifiedDamage}`,
+            damageType: sql`${damageType || 'untyped'}`,
+            sourceParticipantId: sql`${sourceParticipantId || null}`,
+            sourceDescription: sql`${sourceDescription || null}`,
+            roundNumber: sql`${currentRound}`,
+          })
+          .from(combatParticipants)
+          .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+          .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+          .where(
+            and(
+              eq(combatParticipants.id, participantId),
+              eq(combatParticipants.encounterId, encounterId),
+              userId
+                ? or(
+                    eq(campaigns.userId, userId),
+                    eq(characters.userId, userId),
+                    eq(characters.ownerId, userId),
+                  )
+                : sql`true`,
+            ),
+          ),
+      );
     }
 
-    await Promise.all([updatePromise, logPromise]);
+    const [updateResult] = await Promise.all([updatePromise.returning(), logPromise]);
+
+    if (userId && (!updateResult || updateResult.length === 0)) {
+      throw new NotFoundError('Participant', participantId);
+    }
 
     return result;
   }
@@ -147,8 +214,8 @@ export class CombatHPService {
     const deathSavesSuccesses = result.wasRevived ? 0 : status.deathSavesSuccesses;
     const deathSavesFailures = result.wasRevived ? 0 : status.deathSavesFailures;
 
-    // Update status
-    await db
+    // 🛡️ Sentinel: Atomic update with ownership check
+    const [updated] = await db
       .update(combatParticipantStatus)
       .set({
         currentHp: result.newCurrentHp,
@@ -157,7 +224,17 @@ export class CombatHPService {
         deathSavesFailures,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+        ),
+      )
+      .returning();
+
+    if (userId && !updated) {
+      throw new NotFoundError('Participant', participantId);
+    }
 
     return result;
   }
@@ -185,14 +262,24 @@ export class CombatHPService {
     // Temp HP doesn't stack - use higher value
     const newTempHp = Math.max(oldTempHp, tempHpAmount);
 
-    // Update status
-    await db
+    // 🛡️ Sentinel: Atomic update with ownership check
+    const [updated] = await db
       .update(combatParticipantStatus)
       .set({
         tempHp: newTempHp,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+        ),
+      )
+      .returning();
+
+    if (userId && !updated) {
+      throw new NotFoundError('Participant', participantId);
+    }
 
     return {
       participantId,
@@ -230,8 +317,8 @@ export class CombatHPService {
     // Delegate logic to HPMechanics
     const result = HPMechanics.resolveDeathSave(participantId, status, roll);
 
-    // Update status
-    await db
+    // 🛡️ Sentinel: Atomic update with ownership check
+    const [updated] = await db
       .update(combatParticipantStatus)
       .set({
         currentHp: result.newCurrentHp,
@@ -240,7 +327,17 @@ export class CombatHPService {
         isConscious: result.wasRevived,
         updatedAt: new Date(),
       })
-      .where(eq(combatParticipantStatus.participantId, participantId));
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+        ),
+      )
+      .returning();
+
+    if (userId && !updated) {
+      throw new NotFoundError('Participant', participantId);
+    }
 
     return result;
   }
@@ -325,8 +422,9 @@ export class CombatHPService {
     const result = HPMechanics.resolveStabilization(participantId, roll, modifier);
 
     if (result.success) {
+      // 🛡️ Sentinel: Atomic update with ownership check
       // Stabilize: clear death saves, mark as stable (still unconscious at 0 HP)
-      await db
+      const [updated] = await db
         .update(combatParticipantStatus)
         .set({
           deathSavesSuccesses: 0,
@@ -335,7 +433,17 @@ export class CombatHPService {
           // The creature is stable but still unconscious
           updatedAt: new Date(),
         })
-        .where(eq(combatParticipantStatus.participantId, participantId));
+        .where(
+          and(
+            eq(combatParticipantStatus.participantId, participantId),
+            userId ? this.getEncounterOwnershipFilter(participantId, encounterId, userId) : sql`true`,
+          ),
+        )
+        .returning();
+
+      if (userId && !updated) {
+        throw new NotFoundError('Participant', participantId);
+      }
     }
 
     return result;
