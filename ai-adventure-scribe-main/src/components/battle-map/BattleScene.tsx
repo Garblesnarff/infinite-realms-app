@@ -13,6 +13,7 @@ import React from 'react';
 import { BackgroundImage } from './BackgroundImage';
 
 import { useSceneData } from '@/hooks/use-scene-data';
+import { type Scene } from '@/types/scene';
 
 /**
  * Props for BattleScene component
@@ -21,7 +22,7 @@ export interface BattleSceneProps {
   /** ID of the scene to display */
   sceneId: string;
   /** Callback when scene data is loaded */
-  onSceneLoaded?: (scene: any) => void;
+  onSceneLoaded?: (scene: Scene) => void;
   /** Whether to show loading state */
   showLoading?: boolean;
 }
@@ -45,74 +46,80 @@ export interface BattleSceneProps {
  * </Canvas>
  * ```
  */
-export function BattleScene({ sceneId, onSceneLoaded, showLoading = true }: BattleSceneProps) {
-  const { scene, isLoading, error, width, height, gridSize, backgroundImageUrl, settings } =
-    useSceneData({ sceneId });
+/**
+ * ⚡ Bolt: Optimized with React.memo to prevent expensive 3D scene-graph re-renders
+ * when the parent component updates with unrelated state changes.
+ */
+export const BattleScene: React.FC<BattleSceneProps> = React.memo(
+  ({ sceneId, onSceneLoaded, showLoading = true }) => {
+    const { scene, isLoading, error, width, height, gridSize, backgroundImageUrl, settings } =
+      useSceneData({ sceneId });
 
-  // Notify parent when scene is loaded
-  React.useEffect(() => {
-    if (scene && onSceneLoaded) {
-      onSceneLoaded(scene);
+    // Notify parent when scene is loaded
+    React.useEffect(() => {
+      if (scene && onSceneLoaded) {
+        onSceneLoaded(scene);
+      }
+    }, [scene, onSceneLoaded]);
+
+    // Loading state - render placeholder
+    if (isLoading && showLoading) {
+      return (
+        <group>
+          {/* Simple loading indicator plane */}
+          <mesh position={[0, 0, -0.1]}>
+            <planeGeometry args={[1000, 1000]} />
+            <meshBasicMaterial color="#1a1a2e" opacity={0.95} transparent />
+          </mesh>
+        </group>
+      );
     }
-  }, [scene, onSceneLoaded]);
 
-  // Loading state - render placeholder
-  if (isLoading && showLoading) {
+    // Error state
+    if (error) {
+      return (
+        <group>
+          {/* Error indicator plane */}
+          <mesh position={[0, 0, -0.1]}>
+            <planeGeometry args={[1000, 600]} />
+            <meshBasicMaterial color="#ff6b6b" opacity={0.3} transparent />
+          </mesh>
+        </group>
+      );
+    }
+
+    // No scene data
+    if (!scene || !width || !height || !gridSize) {
+      return null;
+    }
+
     return (
-      <group>
-        {/* Simple loading indicator plane */}
-        <mesh position={[0, 0, -0.1]}>
-          <planeGeometry args={[1000, 1000]} />
-          <meshBasicMaterial color="#1a1a2e" opacity={0.95} transparent />
-        </mesh>
+      <group name="battle-scene">
+        {/* Background Image Layer */}
+        {backgroundImageUrl && (
+          <BackgroundImage
+            imageUrl={backgroundImageUrl}
+            width={width}
+            height={height}
+            gridSize={gridSize}
+            opacity={settings?.gridOpacity ? parseFloat(String(settings.gridOpacity)) : 1}
+          />
+        )}
+
+        {/* Future layers will be added here:
+         * - Grid Layer (from scene settings)
+         * - Tokens Layer (from tokens router)
+         * - Drawings Layer (from drawings router)
+         * - Effects Layer
+         * - Fog of War Layer (from fog-of-war router)
+         * - Vision Blockers Layer (from vision-blockers router)
+         * - Measurements Layer (from measurements router)
+         * - UI Layer
+         */}
       </group>
     );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <group>
-        {/* Error indicator plane */}
-        <mesh position={[0, 0, -0.1]}>
-          <planeGeometry args={[1000, 600]} />
-          <meshBasicMaterial color="#ff6b6b" opacity={0.3} transparent />
-        </mesh>
-      </group>
-    );
-  }
-
-  // No scene data
-  if (!scene || !width || !height || !gridSize) {
-    return null;
-  }
-
-  return (
-    <group name="battle-scene">
-      {/* Background Image Layer */}
-      {backgroundImageUrl && (
-        <BackgroundImage
-          imageUrl={backgroundImageUrl}
-          width={width}
-          height={height}
-          gridSize={gridSize}
-          opacity={settings?.gridOpacity ? parseFloat(String(settings.gridOpacity)) : 1}
-        />
-      )}
-
-      {/* Future layers will be added here:
-       * - Grid Layer (from scene settings)
-       * - Tokens Layer (from tokens router)
-       * - Drawings Layer (from drawings router)
-       * - Effects Layer
-       * - Fog of War Layer (from fog-of-war router)
-       * - Vision Blockers Layer (from vision-blockers router)
-       * - Measurements Layer (from measurements router)
-       * - UI Layer
-       */}
-    </group>
-  );
-}
+  },
+);
 
 /**
  * Loading Indicator Component

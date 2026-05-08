@@ -7,6 +7,8 @@
  * @module hooks/use-scene-data
  */
 
+import { useMemo } from 'react';
+
 import { trpc } from '@/infrastructure/api';
 
 /**
@@ -53,19 +55,24 @@ export function useSceneData({ sceneId, enabled = true }: UseSceneDataProps) {
     },
   );
 
-  return {
-    scene,
-    isLoading,
-    isRefetching,
-    error,
-    refetch,
-    // Convenience accessors
-    settings: scene?.settings,
-    layers: scene?.layers,
-    width: scene?.width,
-    height: scene?.height,
-    gridSize: scene?.gridSize,
-    gridType: scene?.gridType,
-    backgroundImageUrl: scene?.backgroundImageUrl,
-  };
+  // ⚡ Bolt: Memoize the return object to ensure stable references for downstream
+  // components and effects, preventing unnecessary re-renders when data is stale or refetching.
+  return useMemo(
+    () => ({
+      scene,
+      isLoading,
+      isRefetching,
+      error,
+      refetch,
+      // Convenience accessors
+      settings: scene?.settings,
+      layers: scene?.layers,
+      width: scene?.width,
+      height: scene?.height,
+      gridSize: scene?.gridSize,
+      gridType: scene?.gridType,
+      backgroundImageUrl: scene?.backgroundImageUrl,
+    }),
+    [scene, isLoading, isRefetching, error, refetch],
+  );
 }
