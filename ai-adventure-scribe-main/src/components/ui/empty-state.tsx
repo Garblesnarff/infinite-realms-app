@@ -127,6 +127,8 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         <motion.div
           className="mb-4 flex items-center justify-center"
           variants={animate ? itemVariants : undefined}
+          whileHover={{ scale: 1.05 }}
+          aria-hidden="true"
         >
           {icon ? (
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted text-muted-foreground">
