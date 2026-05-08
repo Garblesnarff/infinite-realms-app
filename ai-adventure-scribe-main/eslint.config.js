@@ -274,6 +274,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/variant-human/use-variant-human-selection.ts',
       'src/components/ui/sidebar.tsx', // 490 lines
       'src/components/ui/sidebar-menu.tsx', // 264 lines
+      'src/components/ui/option-selector/OptionInput.tsx',
       'src/services/ai/prompts/game-context-prompts.ts',
       'src/services/ai/prompts/combat-rules-prompts.ts',
       'src/services/ai/prompts/character-description-prompts.ts',
