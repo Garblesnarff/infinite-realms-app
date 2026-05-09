@@ -1,4 +1,4 @@
-import { Copy, Eye, MoreVertical, Trash2 } from 'lucide-react';
+import { Check, Copy, Edit, Eye, MoreVertical, Trash2 } from 'lucide-react';
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -73,7 +73,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         )}
         {scene.isActive && (
           <Badge className="absolute top-2 left-2 bg-electricCyan text-white">
-            <Eye className="mr-1 h-3 w-3" />
+            <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
             Active
           </Badge>
         )}
@@ -83,7 +83,9 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate">{scene.name}</CardTitle>
+            <CardTitle className="text-lg truncate" title={scene.name}>
+              {scene.name}
+            </CardTitle>
             <CardDescription className="text-xs mt-1">
               {scene.width} × {scene.height} squares
             </CardDescription>
@@ -98,7 +100,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                 aria-label={`Open menu for ${scene.name}`}
                 title={`Open menu for ${scene.name}`}
               >
-                <MoreVertical className="h-4 w-4" />
+                <MoreVertical className="h-4 w-4" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -108,7 +110,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                   onViewScene?.(scene.id);
                 }}
               >
-                <Eye className="mr-2 h-4 w-4" />
+                <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                 View Scene
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -117,6 +119,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                   onEditScene?.(scene.id);
                 }}
               >
+                <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
                 Edit
               </DropdownMenuItem>
               {!scene.isActive && (
@@ -126,6 +129,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                     onSetActive(scene.id);
                   }}
                 >
+                  <Check className="mr-2 h-4 w-4" aria-hidden="true" />
                   Set as Active
                 </DropdownMenuItem>
               )}
@@ -135,7 +139,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                   onDuplicate(scene);
                 }}
               >
-                <Copy className="mr-2 h-4 w-4" />
+                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
                 Duplicate
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -145,7 +149,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                   onDelete(scene.id);
                 }}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>

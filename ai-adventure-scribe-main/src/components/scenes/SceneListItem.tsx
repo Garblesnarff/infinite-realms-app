@@ -1,4 +1,4 @@
-import { Copy, Eye, MoreVertical, Trash2 } from 'lucide-react';
+import { Check, Copy, Edit, Eye, MoreVertical, Trash2 } from 'lucide-react';
 import React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -71,10 +71,12 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         {/* Details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-lg font-semibold truncate">{scene.name}</h3>
+            <h3 className="text-lg font-semibold truncate" title={scene.name}>
+              {scene.name}
+            </h3>
             {scene.isActive && (
               <Badge className="bg-electricCyan text-white">
-                <Eye className="mr-1 h-3 w-3" />
+                <Eye className="mr-1 h-3 w-3" aria-hidden="true" />
                 Active
               </Badge>
             )}
@@ -99,7 +101,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
               aria-label={`Open menu for ${scene.name}`}
               title={`Open menu for ${scene.name}`}
             >
-              <MoreVertical className="h-4 w-4" />
+              <MoreVertical className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -109,7 +111,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
                 onViewScene?.(scene.id);
               }}
             >
-              <Eye className="mr-2 h-4 w-4" />
+              <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
               View Scene
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -118,6 +120,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
                 onEditScene?.(scene.id);
               }}
             >
+              <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
               Edit
             </DropdownMenuItem>
             {!scene.isActive && (
@@ -127,6 +130,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
                   onSetActive(scene.id);
                 }}
               >
+                <Check className="mr-2 h-4 w-4" aria-hidden="true" />
                 Set as Active
               </DropdownMenuItem>
             )}
@@ -136,7 +140,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
                 onDuplicate(scene);
               }}
             >
-              <Copy className="mr-2 h-4 w-4" />
+              <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
               Duplicate
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -146,7 +150,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
                 onDelete(scene.id);
               }}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
