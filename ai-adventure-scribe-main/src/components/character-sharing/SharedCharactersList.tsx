@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Select,
   SelectContent,
@@ -198,7 +199,7 @@ export const SharedCharactersList: React.FC = () => {
   const { toast } = useToast();
   const trpc = useTRPC();
   const utils = useTRPCUtils();
-  const filterLabelId = useId();
+  const filterSelectId = useId();
 
   const [filterPermission, setFilterPermission] = useState<string>('all');
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
@@ -289,15 +290,11 @@ export const SharedCharactersList: React.FC = () => {
         {/* Filter */}
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <label htmlFor={filterLabelId} className="sr-only">
+          <label htmlFor={filterSelectId} className="sr-only">
             Filter shared characters by permission level
           </label>
           <Select value={filterPermission} onValueChange={setFilterPermission}>
-            <SelectTrigger
-              id={filterLabelId}
-              className="w-40"
-              title="Filter by permission level"
-            >
+            <SelectTrigger id={filterSelectId} className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -330,23 +327,23 @@ export const SharedCharactersList: React.FC = () => {
           ))}
         </div>
       ) : filteredCharacters.length === 0 ? (
-        <Card className="p-12 text-center border-2 border-dashed">
-          <Users
-            className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50"
-            aria-hidden="true"
-          />
-          <h3 className="font-semibold text-lg mb-2">No Shared Characters</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            {filterPermission === 'all'
+        <EmptyState
+          illustration="no-characters"
+          variant="card"
+          title="No Shared Characters"
+          description={
+            filterPermission === 'all'
               ? "You don't have any shared characters yet. When others share characters with you, they'll appear here."
-              : `No characters shared with ${filterPermission} permission.`}
-          </p>
-          {filterPermission !== 'all' && (
-            <Button variant="outline" onClick={() => setFilterPermission('all')} className="mt-4">
-              Clear Filter
-            </Button>
-          )}
-        </Card>
+              : `No characters shared with ${filterPermission} permission.`
+          }
+          action={
+            filterPermission !== 'all' ? (
+              <Button variant="outline" onClick={() => setFilterPermission('all')}>
+                Clear Filter
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCharacters.map((character) => (
