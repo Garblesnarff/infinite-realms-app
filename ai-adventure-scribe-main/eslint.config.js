@@ -452,6 +452,7 @@ export default tseslint.config(
       'src/utils/__tests__/stealthUtils.test.ts',
       'src/components/character-sharing/ShareCharacterDialog.tsx',
       'src/components/character-sharing/SharedCharactersList.tsx',
+      'src/components/character-folders/FolderTree.tsx',
       'src/components/spellcasting/SpellPreparationPanel.tsx',
       'src/features/character/components/spellcasting/SpellPreparationPanel.tsx',
       'src/components/blog-admin/blog-post-editor/blog-post-editor.tsx',

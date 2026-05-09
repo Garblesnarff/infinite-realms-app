@@ -141,6 +141,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
         {/* Expand/Collapse Icon */}
         {hasChildren && (
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-4 w-4 p-0 hover:bg-accent rounded"
@@ -153,9 +154,9 @@ const FolderItem: React.FC<FolderItemProps> = ({
             }}
           >
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             )}
           </Button>
         )}
@@ -164,14 +165,16 @@ const FolderItem: React.FC<FolderItemProps> = ({
         {/* Folder Icon with Color */}
         <div className="flex-shrink-0" style={{ color: folder.color || undefined }}>
           {isExpanded && hasChildren ? (
-            <FolderOpen className="h-5 w-5" />
+            <FolderOpen className="h-5 w-5" aria-hidden="true" />
           ) : (
-            <Folder className="h-5 w-5" />
+            <Folder className="h-5 w-5" aria-hidden="true" />
           )}
         </div>
 
         {/* Folder Name */}
-        <span className="flex-1 text-sm font-medium truncate">{folder.name}</span>
+        <span className="flex-1 text-sm font-medium truncate" title={folder.name}>
+          {folder.name}
+        </span>
 
         {/* Character Count Badge */}
         {folder.characterCount > 0 && (
@@ -179,6 +182,7 @@ const FolderItem: React.FC<FolderItemProps> = ({
             variant="secondary"
             className="text-xs"
             aria-label={`${folder.characterCount} characters`}
+            title={`${folder.characterCount} characters in this folder`}
           >
             {folder.characterCount}
           </Badge>
@@ -188,13 +192,14 @@ const FolderItem: React.FC<FolderItemProps> = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
               aria-label={`Actions for ${folder.name} folder`}
               title={`Actions for ${folder.name} folder`}
             >
-              <MoreVertical className="h-4 w-4" />
+              <MoreVertical className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -231,9 +236,9 @@ const FolderItem: React.FC<FolderItemProps> = ({
       </div>
 
       {/* Nested Children */}
-      {isExpanded && hasChildren && (
+      {isExpanded && hasChildren && folder.children && (
         <div className="mt-1">
-          {folder.children!.map((child) => (
+          {folder.children.map((child) => (
             <FolderItem
               key={child.id}
               folder={child}
@@ -270,7 +275,14 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   const { data: folders, isLoading, error } = trpc.characterFolders.list.useQuery();
 
   // Build folder tree structure
-  const buildTree = useCallback((folders: any[]): FolderNode[] => {
+  const buildTree = useCallback((folders: {
+    id: string;
+    name: string;
+    color?: string | null;
+    icon?: string | null;
+    parentFolderId?: string | null;
+    characterCount?: number | null;
+  }[]): FolderNode[] => {
     if (!folders) return [];
 
     const folderMap = new Map<string, FolderNode>();
@@ -293,8 +305,8 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     folderMap.forEach((folder) => {
       if (folder.parentFolderId) {
         const parent = folderMap.get(folder.parentFolderId);
-        if (parent) {
-          parent.children!.push(folder);
+        if (parent && parent.children) {
+          parent.children.push(folder);
         }
       } else {
         rootFolders.push(folder);
@@ -355,13 +367,15 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         <h3 className="text-sm font-semibold text-foreground">Folders</h3>
         {onCreateFolder && (
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={onCreateFolder}
             className="h-8 gap-2"
             title="Create a new character folder"
+            aria-label="Create a new character folder"
           >
-            <FolderPlus className="h-4 w-4" />
+            <FolderPlus className="h-4 w-4" aria-hidden="true" />
             New Folder
           </Button>
         )}
@@ -387,7 +401,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
           }
         }}
       >
-        <FolderOpen className="h-5 w-5 text-infinite-teal" />
+        <FolderOpen className="h-5 w-5 text-infinite-teal" aria-hidden="true" />
         <span className="flex-1 text-sm font-medium">All Characters</span>
       </div>
 
