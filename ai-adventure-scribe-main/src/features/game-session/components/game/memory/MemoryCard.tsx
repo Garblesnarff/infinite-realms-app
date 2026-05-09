@@ -15,7 +15,7 @@ interface MemoryCardProps {
  * Displays individual memory entries with their associated icons and metadata
  * @param {Memory} memory - The memory object to display
  */
-export const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
+export const MemoryCard: React.FC<MemoryCardProps> = React.memo(({ memory }) => {
   const category = MEMORY_CATEGORIES.find((cat) => cat.type === memory.type);
 
   return (
@@ -37,4 +37,4 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
       </div>
     </Card>
   );
-};
+});

@@ -17,11 +17,12 @@ interface MemoryFilterProps {
  * @param {string | null} selectedType - Currently selected memory type
  * @param {Function} onTypeSelect - Callback for when a type is selected
  */
-export const MemoryFilter: React.FC<MemoryFilterProps> = ({ selectedType, onTypeSelect }) => {
-  // Validate that the selected type is a valid MemoryType
-  const _isValidSelectedType = selectedType && isValidMemoryType(selectedType);
-  return (
-    <div className="p-4 border-b flex gap-2 overflow-x-auto">
+export const MemoryFilter: React.FC<MemoryFilterProps> = React.memo(
+  ({ selectedType, onTypeSelect }) => {
+    // Validate that the selected type is a valid MemoryType
+    const _isValidSelectedType = selectedType && isValidMemoryType(selectedType);
+    return (
+      <div className="p-4 border-b flex gap-2 overflow-x-auto">
       <Button
         variant={!selectedType ? 'default' : 'outline'}
         size="sm"
@@ -44,5 +45,6 @@ export const MemoryFilter: React.FC<MemoryFilterProps> = ({ selectedType, onType
         </Button>
       ))}
     </div>
-  );
-};
+    );
+  },
+);

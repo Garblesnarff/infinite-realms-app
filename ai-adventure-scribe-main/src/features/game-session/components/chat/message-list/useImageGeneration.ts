@@ -230,12 +230,22 @@ export const useImageGeneration = ({
     if (!isAuto || !sessionId) return;
     if (getCap(sessionId) >= (Number.isFinite(MAX) ? MAX : 3)) return;
 
-    const reversed = [...messages].map((m, idx) => ({ m, idx })).reverse();
-    const lastDmEntry = reversed.find((e) => e.m.sender === 'dm');
-    const lastDm = lastDmEntry?.m;
+    // ⚡ Bolt: Using a single backward for loop to find the last DM message
+    // instead of creating multiple intermediate arrays via map/reverse.
+    // This reduces O(N) space complexity to O(1).
+    let lastDm = null;
+    let lastDmIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === 'dm') {
+        lastDm = messages[i];
+        lastDmIdx = i;
+        break;
+      }
+    }
+
     if (!lastDm) return;
 
-    const msgId = lastDm.id || lastDm.timestamp || `${lastDmEntry?.idx}`;
+    const msgId = lastDm.id || lastDm.timestamp || `${lastDmIdx}`;
     if (alreadyTriggered(sessionId, String(msgId))) return;
     if (generatingFor.has(String(msgId))) return;
 
