@@ -25,6 +25,7 @@ export default defineConfig({
     css: true, // If you have CSS imports in components
     include: [
       'src/services/__tests__/spellApi.test.ts',
+      'src/services/__tests__/gallery-service.test.ts',
       'src/lib/logger.test.ts',
       'src/lib/telemetry.test.ts',
       'src/lib/utils.test.ts',
@@ -391,6 +392,7 @@ export default defineConfig({
       all: false,
       include: [
         'src/services/spellApi.ts',
+        'src/services/gallery-service.ts',
         'src/lib/logger.ts',
         'src/lib/telemetry.ts',
         'src/utils/characterModifiers.ts',
