@@ -51,9 +51,19 @@ export const useDynamicOptions = ({
       optionsTimerRef.current = null;
     }
 
-    const reversed = [...messages].map((m, idx) => ({ m, idx })).reverse();
-    const lastDmEntry = reversed.find((e) => e.m.sender === 'dm');
-    const lastDm = lastDmEntry?.m;
+    // ⚡ Bolt: Using a single backward for loop to find the last DM message
+    // instead of creating multiple intermediate arrays via map/reverse.
+    // This reduces O(N) space complexity to O(1).
+    let lastDm = null;
+    let lastDmIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === 'dm') {
+        lastDm = messages[i];
+        lastDmIdx = i;
+        break;
+      }
+    }
+
     if (!lastDm) {
       setDynamicOptions(null);
       return;
@@ -77,7 +87,15 @@ export const useDynamicOptions = ({
         const optionsEndpoint = configuredBaseUrl
           ? `${configuredBaseUrl.replace(/\/+$/, '')}/dm/options`
           : '/dm/options';
-        const lastPlayer = [...messages].reverse().find((m) => m.sender === 'player');
+        // ⚡ Bolt: Using O(N) backward traversal instead of [...array].reverse().find()
+        // to avoid unnecessary O(N) memory allocation and GC pressure.
+        let lastPlayer = null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].sender === 'player') {
+            lastPlayer = messages[i];
+            break;
+          }
+        }
         const history = messages.slice(Math.max(0, messages.length - 8)).map((m) => ({
           role: m.sender === 'player' ? 'user' : m.sender === 'dm' ? 'assistant' : 'system',
           content: m.text,
@@ -132,7 +150,7 @@ export const useDynamicOptions = ({
         const hasPending = !!getCurrentDiceRoll();
 
         if (opts.length && !(isGeneric && hasPending)) {
-          const dmIdx = lastDmEntry?.idx ?? messages.length - 1;
+          const dmIdx = lastDmIdx !== -1 ? lastDmIdx : messages.length - 1;
           const key = lastDm.id || lastDm.timestamp || `idx-${dmIdx}`;
           setDynamicOptions({ key, lines: opts });
         } else {
