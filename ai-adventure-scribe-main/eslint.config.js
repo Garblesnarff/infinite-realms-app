@@ -497,6 +497,7 @@ export default tseslint.config(
       'src/components/combat/ResourceConsumptionPanel.tsx',
       'src/services/spellApi.ts',
       'src/services/__tests__/spellApi.test.ts',
+      'src/services/__tests__/passive-skills-service.test.ts',
     ],
     rules: {
       'max-lines': 'warn',
