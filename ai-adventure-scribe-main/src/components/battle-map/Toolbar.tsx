@@ -170,7 +170,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ tool, isActive, onClick, orient
             aria-label={`${tool.label} (${tool.shortcut})`}
             aria-pressed={isActive}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-5 w-5" aria-hidden="true" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side={orientation === 'vertical' ? 'right' : 'bottom'}>
@@ -349,9 +349,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       variant="ghost"
                       size="icon"
                       onClick={onHelpClick}
-                      aria-label="Help"
+                      aria-label="Keyboard Shortcuts"
                     >
-                      <HelpCircle className="h-5 w-5" />
+                      <HelpCircle className="h-5 w-5" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side={orientation === 'vertical' ? 'right' : 'bottom'}>
@@ -374,7 +374,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                       onClick={onSettingsClick}
                       aria-label="Settings"
                     >
-                      <Grid3x3 className="h-5 w-5" />
+                      <Grid3x3 className="h-5 w-5" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side={orientation === 'vertical' ? 'right' : 'bottom'}>

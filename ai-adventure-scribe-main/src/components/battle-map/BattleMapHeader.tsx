@@ -107,7 +107,7 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
             aria-expanded={showLayersPanel}
             title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
           >
-            <Layers className="h-4 w-4" />
+            <Layers className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
 
@@ -115,7 +115,7 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Open Settings" title="Open Settings">
-              <SettingsIcon className="h-4 w-4" />
+              <SettingsIcon className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -136,7 +136,7 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
             </DropdownMenuCheckboxItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onBackToScenes}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Back to Scenes
             </DropdownMenuItem>
           </DropdownMenuContent>
