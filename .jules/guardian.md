@@ -211,3 +211,7 @@
 ## 2026-02-27 - [AI Context Builder Coverage]
 **Learning:** Found that ContextBuilder in src/services/ai/context-builder.ts was completely untested despite being the primary orchestrator for AI prompts. Testing revealed that it correctly switches between opening scene logic and regular narrative flow based on the isFirstMessage flag, and integrates combat/voice contexts conditionally.
 **Action:** Always include both the test file and the source module in vitest.config.ts's explicit include and coverage.include arrays to ensure visibility. Use mocked prompt builders to focus on the orchestration logic of the builder itself.
+
+## 2026-05-12 - [conversation-service Coverage & Bug Fix]
+**Learning:** Found that `saveChatMessage` in `conversation-service.ts` had a redundant try-catch block causing double-logging of errors. Also noticed `getConversationHistory` was missing `sequence_number` in its select clause, despite using it for ordering.
+**Action:** Implement unit tests with Supabase chain mocks. Remove the redundant try-catch to ensure single-point error logging. Standardize select clauses across AI services.

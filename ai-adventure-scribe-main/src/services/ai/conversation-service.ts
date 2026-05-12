@@ -38,23 +38,18 @@ export async function saveChatMessage(params: {
   speakerId?: string;
   id?: string;
 }): Promise<void> {
-  try {
-    const messageId = params.id || crypto.randomUUID();
-    const { error } = await supabase.from('dialogue_history').insert({
-      id: messageId,
-      session_id: params.sessionId,
-      speaker_type: params.role,
-      speaker_id: params.speakerId,
-      message: params.content,
-    });
+  const messageId = params.id || crypto.randomUUID();
+  const { error } = await supabase.from('dialogue_history').insert({
+    id: messageId,
+    session_id: params.sessionId,
+    speaker_type: params.role,
+    speaker_id: params.speakerId,
+    message: params.content,
+  });
 
-    if (error) {
-      logger.error('Error saving chat message:', error);
-      throw new Error('Failed to save chat message');
-    }
-  } catch (error) {
+  if (error) {
     logger.error('Error saving chat message:', error);
-    throw error;
+    throw new Error('Failed to save chat message');
   }
 }
 
@@ -77,9 +72,10 @@ export async function getConversationHistory(sessionId: string): Promise<ChatMes
   try {
     // ⚡ Bolt: Use explicit column selection to avoid over-fetching large JSONB columns (context, images)
     // that are not needed for the ChatMessage mapping.
+    // Added sequence_number to select to match chat-persistence.ts and ensure consistency.
     const { data, error } = await supabase
       .from('dialogue_history')
-      .select('id, speaker_type, message, created_at')
+      .select('id, speaker_type, message, created_at, sequence_number')
       .eq('session_id', sessionId)
       .order('sequence_number', { ascending: true });
 
