@@ -1,5 +1,5 @@
 import { AlertTriangle, PauseCircle, Shield, Info } from 'lucide-react';
-import React from 'react';
+import React, { memo } from 'react';
 
 import { Card } from '../ui/card';
 
@@ -15,7 +15,11 @@ interface SafetyBannerProps {
   showSafetyInfo?: boolean;
 }
 
-export const SafetyBanner: React.FC<SafetyBannerProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo as a pure UI component to prevent redundant updates
+ * when the parent GameMainContent re-renders.
+ */
+export const SafetyBanner: React.FC<SafetyBannerProps> = memo(({
   isPaused = false,
   lastSafetyCommand,
   contentWarnings = [],
@@ -190,4 +194,4 @@ export const SafetyBanner: React.FC<SafetyBannerProps> = ({
   }
 
   return null;
-};
+});

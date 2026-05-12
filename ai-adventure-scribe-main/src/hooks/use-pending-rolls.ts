@@ -24,45 +24,13 @@ export const usePendingRolls = () => {
       };
     }
 
-    // Find the most recent DM message
-    const dmMessages = messages.filter((m) => m.sender === 'dm');
-    if (dmMessages.length === 0) {
-      return {
-        hasPendingRolls: false,
-        pendingRequests: [],
-        lastDMMessage: null,
-      };
-    }
-
-    const lastDMMessage = dmMessages[dmMessages.length - 1];
-
-    // Check if there have been any player responses after the last DM message
-    const lastDMMessageIndex = messages?.findIndex((m) => m === lastDMMessage) ?? -1;
-    const playerResponsesAfter =
-      lastDMMessageIndex >= 0
-        ? (messages?.slice(lastDMMessageIndex + 1) ?? []).filter((m) => m.sender === 'player')
-        : [];
-
-    // Parse roll requests from the last DM message
-    const rollRequests = parseRollRequests(lastDMMessage.text);
-
-    // Check if the last player message overall was a dice roll
-    // This handles the case where:
-    //   1. DM requests roll
-    //   2. Player rolls
-    //   3. AI incorrectly requests ANOTHER roll (bug we're mitigating)
-    // In step 3, playerResponsesAfter is empty (no messages after buggy AI response),
-    // but lastPlayerMessage IS a dice roll, so we suppress the notification.
-    //
-    // Tradeoff: If AI correctly requests a NEW roll immediately after player rolls,
-    // we'd briefly suppress that too. But the dice UI remains available, and once
-    // the player takes any other action, normal behavior resumes.
-    const playerMessages = messages.filter((m) => m.sender === 'player');
-    const lastPlayerMessage =
-      playerMessages.length > 0 ? playerMessages[playerMessages.length - 1] : null;
+    // ⚡ Bolt: Optimized to find messages in a single O(N) backward pass instead of multiple filters
+    let lastDMMessage = null;
+    let lastPlayerMessage = null;
+    let hasPlayerDiceRollAfterLastDM = false;
 
     // Detect dice roll patterns in player message
-    const isDiceRollMessage = (msg: typeof lastPlayerMessage): boolean => {
+    const isDiceRollMessage = (msg: (typeof messages)[0] | null): boolean => {
       if (!msg) return false;
       if (msg.context?.intent === 'dice_roll') return true;
       const text = msg.text || '';
@@ -73,16 +41,44 @@ export const usePendingRolls = () => {
       );
     };
 
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+
+      if (msg.sender === 'player') {
+        const isRoll = isDiceRollMessage(msg);
+        if (!lastPlayerMessage) {
+          lastPlayerMessage = msg;
+        }
+        if (!lastDMMessage && isRoll) {
+          // Since we are going backwards and haven't hit a DM message yet,
+          // this player message is chronologically AFTER the last DM message.
+          hasPlayerDiceRollAfterLastDM = true;
+        }
+      } else if (msg.sender === 'dm' && !lastDMMessage) {
+        lastDMMessage = msg;
+      }
+
+      // We can stop once we've found the last DM message AND the last player message
+      if (lastDMMessage && lastPlayerMessage) break;
+    }
+
+    if (!lastDMMessage) {
+      return {
+        hasPendingRolls: false,
+        pendingRequests: [],
+        lastDMMessage: null,
+      };
+    }
+
+    // Parse roll requests from the last DM message
+    const rollRequests = parseRollRequests(lastDMMessage.text);
+
+    // Check if the last player message overall was a dice roll (mitigates buggy AI re-requesting)
     const wasJustDiceRoll = isDiceRollMessage(lastPlayerMessage);
 
     // Pending if: roll requests exist AND player hasn't responded with a dice roll
-    // Two checks needed:
-    //   1. wasJustDiceRoll - catches buggy "AI requests roll right after player rolled"
-    //   2. playerResponsesAfter - catches normal "player rolled after DM requested"
     const hasPendingRolls =
-      rollRequests.length > 0 &&
-      !wasJustDiceRoll &&
-      !playerResponsesAfter.some((msg) => isDiceRollMessage(msg));
+      rollRequests.length > 0 && !wasJustDiceRoll && !hasPlayerDiceRollAfterLastDM;
 
     return {
       hasPendingRolls,

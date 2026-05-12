@@ -1,5 +1,5 @@
 import { Dice6, Sword, X } from 'lucide-react';
-import React from 'react';
+import React, { memo } from 'react';
 
 import { ChatInput } from '../../chat/ChatInput';
 import { MessageList } from '../../chat/MessageList';
@@ -52,7 +52,13 @@ interface GameMainContentProps {
   showSafetyInfo: boolean;
 }
 
-export const GameMainContent: React.FC<GameMainContentProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the main game area.
+ * Since this component sits between the three primary layout panels, memoization
+ * is critical for maintaining UI responsiveness during side panel toggles or
+ * atmospheric background transitions.
+ */
+export const GameMainContent: React.FC<GameMainContentProps> = memo(({
   sessionId,
   campaignIdForHandler,
   characterIdForHandler,
@@ -344,4 +350,4 @@ export const GameMainContent: React.FC<GameMainContentProps> = ({
       </Card>
     </div>
   );
-};
+});
