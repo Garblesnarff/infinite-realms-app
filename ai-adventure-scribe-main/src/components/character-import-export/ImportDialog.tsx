@@ -218,7 +218,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+            <Upload className="h-5 w-5" aria-hidden="true" />
             Import Character
           </DialogTitle>
           <DialogDescription>
@@ -247,12 +247,13 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
               aria-live="polite"
               className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
             >
-              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div className="flex-1">
                 <div className="font-semibold text-sm text-destructive">Validation Error</div>
                 <div className="text-sm text-destructive/80 mt-1">{validationError}</div>
               </div>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 onClick={clearValidationError}
@@ -260,7 +261,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                 aria-label="Clear validation error"
                 title="Clear validation error"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           )}

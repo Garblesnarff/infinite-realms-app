@@ -54,11 +54,11 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         className="hidden"
       />
 
-      <FileJson className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+      <FileJson className="h-16 w-16 mx-auto mb-4 text-muted-foreground" aria-hidden="true" />
       <h3 className="font-semibold text-lg mb-2">Drop your character file here</h3>
       <p className="text-sm text-muted-foreground mb-4">or click to browse for a JSON file</p>
       <Button variant="outline" type="button" tabIndex={-1}>
-        <Upload className="mr-2 h-4 w-4" />
+        <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
         Choose File
       </Button>
     </div>

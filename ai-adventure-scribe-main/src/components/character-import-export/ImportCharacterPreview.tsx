@@ -61,6 +61,7 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
           </div>
         </div>
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           onClick={onClear}
@@ -82,9 +83,11 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
         <div className="space-y-3">
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-xs text-muted-foreground mb-1">Name</div>
-              <div className="font-medium">{characterData.character.name}</div>
+              <div className="font-medium truncate" title={characterData.character.name}>
+                {characterData.character.name}
+              </div>
             </div>
             {characterData.character.race && (
               <div>
@@ -129,8 +132,15 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
               <div className="text-xs text-muted-foreground mb-2">Ability Scores</div>
               <div className="grid grid-cols-6 gap-2" role="group" aria-label="Ability Scores">
                 {Object.entries(characterData.stats).map(([stat, value]) => (
-                  <div key={stat} className="text-center p-2 bg-background rounded border">
-                    <div className="text-xs font-medium uppercase">{stat.slice(0, 3)}</div>
+                  <div
+                    key={stat}
+                    className="text-center p-2 bg-background rounded border"
+                    aria-label={`${stat}: ${value || 10}`}
+                  >
+                    <div className="text-xs font-medium uppercase" aria-hidden="true">
+                      {stat.slice(0, 3)}
+                    </div>
+                    <span className="sr-only">{stat}</span>
                     <div className="text-sm font-bold">{value || 10}</div>
                   </div>
                 ))}
