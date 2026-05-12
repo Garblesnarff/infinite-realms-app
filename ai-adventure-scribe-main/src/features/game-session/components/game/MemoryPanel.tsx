@@ -1,5 +1,5 @@
 import { List, ChevronDown, ChevronUp, User, Sword, Menu, ChevronLeft } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
@@ -23,8 +23,8 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
+import { usePanelResize } from '@/features/game-session/hooks/use-panel-resize';
 import { useMemoryFiltering } from '@/hooks/memory/useMemoryFiltering';
-import { useLocalStorage } from '@/hooks/use-local-storage';
 import { analytics } from '@/services/analytics';
 
 interface MemoryPanelProps {
@@ -58,100 +58,25 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   const { id: routeCampaignId } = useParams<{ id: string }>();
   const isInCombat = combatMode || combatState.isInCombat;
 
-  // Refs for resizable functionality
-  const panelRef = useRef<HTMLDivElement>(null);
-  const dragHandleRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-
-  // Persistent state using type-safe localStorage hook
-  type GameSidePanelState = {
-    isExpanded: boolean;
-    activeTab: 'character' | 'memory' | 'combat';
-    panelWidth: string;
-  };
-
-  const [panelState, setPanelState] = useLocalStorage<GameSidePanelState>('gameSidePanelState', {
-    isExpanded: true,
-    activeTab: 'character',
-    panelWidth: '340px',
-  });
+  // Use extracted panel resize and state hook
+  const {
+    isExpanded,
+    setIsExpanded,
+    activeTab,
+    setActiveTab,
+    panelWidth,
+    panelRef,
+    dragHandleRef,
+    isDraggingRef,
+    startDrag,
+    handleDrag,
+    stopDrag,
+  } = usePanelResize();
 
   // Local state
-  const [isExpanded, setIsExpanded] = useState(panelState.isExpanded);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'character' | 'memory' | 'combat'>(
-    panelState.activeTab,
-  );
   const [localSessionNotes, setLocalSessionNotes] = useState('');
-  const [panelWidth, setPanelWidth] = useState(panelState.panelWidth);
   const sessionNotesId = useId();
-
-  // Sync panel width with ref on mount
-  useEffect(() => {
-    if (panelRef.current) {
-      panelRef.current.style.width = panelWidth;
-    }
-  }, []);
-
-  // Save state to localStorage on changes
-  useEffect(() => {
-    setPanelState((previousState) => {
-      if (
-        previousState?.isExpanded === isExpanded &&
-        previousState?.activeTab === activeTab &&
-        previousState?.panelWidth === panelWidth
-      ) {
-        return previousState;
-      }
-
-      return {
-        isExpanded,
-        activeTab,
-        panelWidth,
-      };
-    });
-  }, [isExpanded, activeTab, panelWidth, setPanelState]);
-
-  // Resizable drag functionality
-  const startDrag = useCallback((e: React.MouseEvent) => {
-    isDraggingRef.current = true;
-    document.addEventListener('mousemove', handleDrag);
-    document.addEventListener('mouseup', stopDrag);
-    e.preventDefault();
-  }, []);
-
-  const handleDrag = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current || !panelRef.current) {
-      return;
-    }
-
-    const _rect = panelRef.current.getBoundingClientRect();
-    const containerRect = panelRef.current.parentElement?.getBoundingClientRect();
-    if (!containerRect) {
-      return;
-    }
-
-    let newWidth = e.clientX - containerRect.left;
-    // Enforce new constraints 280-400px
-    newWidth = Math.max(280, Math.min(400, newWidth));
-
-    setPanelWidth(`${newWidth}px`);
-    panelRef.current.style.width = `${newWidth}px`;
-  }, []);
-
-  const stopDrag = useCallback(() => {
-    isDraggingRef.current = false;
-    document.removeEventListener('mousemove', handleDrag);
-    document.removeEventListener('mouseup', stopDrag);
-  }, [handleDrag]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', handleDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-  }, [handleDrag, stopDrag]);
 
   // Mobile drawer state
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -168,7 +93,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   }, [sessionData?.session_notes]);
 
   // Toggle mobile drawer
-  const toggleMobileDrawer = () => setIsMobileDrawerOpen(!isMobileDrawerOpen);
+  const toggleMobileDrawer = (): void => setIsMobileDrawerOpen(!isMobileDrawerOpen);
 
   // Collapsed state rendering - mobile vs desktop
   if (isCollapsed) {
@@ -271,13 +196,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
     );
   }
 
-  const handleSaveNotes = () => {
+  const handleSaveNotes = (): void => {
     if (sessionData) {
       updateGameSessionState({ session_notes: localSessionNotes });
     }
   };
 
-  const handleTabChange = (value: 'character' | 'memory' | 'combat') => {
+  const handleTabChange = (value: 'character' | 'memory' | 'combat'): void => {
     setActiveTab(value);
     // Auto-expand when switching tabs
     setIsExpanded(true);
@@ -393,7 +318,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
           <div className="flex-grow flex flex-col overflow-hidden">
             <Tabs
               value={activeTab}
-              onValueChange={(value) => handleTabChange(value as any)}
+              onValueChange={(value) => handleTabChange(value as 'character' | 'memory' | 'combat')}
               className="flex flex-col h-full"
             >
               <TabsContent value="character" className="flex-1 p-0 mt-0 border-0 bg-background">
