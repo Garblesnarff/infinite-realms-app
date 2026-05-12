@@ -2,6 +2,7 @@ import { Heart, Shield, Zap, Sword } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { useCharacter } from '@/contexts/CharacterContext';
+import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 /**
  * StatBadge - Internal component for individual stat badges
@@ -47,56 +48,17 @@ export const StatsBar: React.FC = React.memo(() => {
   const character = characterState.character;
 
   // ⚡ Bolt: Memoize stat calculations to prevent redundant processing on every render.
-  // These calculations are O(1) but can be called frequently during hot path UI updates.
+  // Using centralized calculateAllCharacterStats for consistency and correctness.
   const stats = useMemo(() => {
     if (!character) return null;
-
-    // Calculate HP (same logic as CompactCharacterHeader)
-    const maxHp = Math.max(
-      1,
-      character.level * (character.class?.hitDie || 8) +
-        character.abilityScores.constitution.modifier * character.level,
-    );
-
-    const armorClass = (() => {
-      let ac = 10 + character.abilityScores.dexterity.modifier;
-      const hasUnarmoredDefense =
-        character.class &&
-        (character.class.name.toLowerCase() === 'barbarian' ||
-          character.class.name.toLowerCase() === 'monk');
-      const isWearingArmor =
-        character.equippedArmor !== undefined && character.equippedArmor !== '';
-
-      if (hasUnarmoredDefense && !isWearingArmor && character.class) {
-        switch (character.class.name.toLowerCase()) {
-          case 'barbarian':
-            ac =
-              10 +
-              character.abilityScores.dexterity.modifier +
-              character.abilityScores.constitution.modifier;
-            break;
-          case 'monk':
-            ac =
-              10 +
-              character.abilityScores.dexterity.modifier +
-              character.abilityScores.wisdom.modifier;
-            break;
-        }
-      }
-      return ac;
-    })();
-
-    const proficiency = Math.floor((character.level - 1) / 4) + 2;
-    const initiative = character.abilityScores.dexterity.modifier;
-
-    return { maxHp, armorClass, proficiency, initiative };
+    return calculateAllCharacterStats(character);
   }, [character]);
 
   if (!character || !stats) {
     return null;
   }
 
-  const { maxHp, armorClass, proficiency, initiative } = stats;
+  const { hitPoints: maxHp, armorClass, proficiencyBonus: proficiency, initiative } = stats;
 
   return (
     <div className="flex items-center gap-4 mt-2 mb-4 p-2 bg-muted/50 rounded-lg">
