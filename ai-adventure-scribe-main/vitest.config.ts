@@ -368,6 +368,7 @@ export default defineConfig({
       'src/services/ai-execution/__tests__/LocalFallbackStrategy.test.ts',
       'src/utils/performance/__tests__/lod.test.ts',
       'src/utils/performance/__tests__/culling.test.ts',
+      'src/features/safety/__tests__/SafetyCommandProcessor.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -726,6 +727,7 @@ export default defineConfig({
         'src/services/blog/blog-service.ts',
         'src/services/blog/blog-media-service.ts',
         'src/utils/multiclass/spellcasting.ts',
+        'src/features/safety/SafetyCommandProcessor.ts',
       ],
       exclude: [
         '**/__tests__/**',
