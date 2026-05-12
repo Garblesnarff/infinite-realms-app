@@ -262,14 +262,14 @@ export const BattleMapPage: React.FC = () => {
 
           {/* Tool Options Panel - Positioned below toolbar when active */}
           {(selectedTool === 'wall' || selectedTool === 'fog-brush' || selectedTool === 'draw') && (
-            <div className="absolute left-4 bottom-4" style={{ zIndex: Z_INDEX.STICKY }}>
+            <div className="absolute left-4 bottom-4" style={{ zIndex: Z_INDEX.FLOATING_PANEL }}>
               <ToolOptionsPanel sceneId={sceneId} />
             </div>
           )}
 
           {/* Performance Monitor - Top left corner */}
           {showPerformanceMonitor && (
-            <div className="absolute top-4 left-20" style={{ zIndex: Z_INDEX.STICKY }}>
+            <div className="absolute top-4 left-20" style={{ zIndex: Z_INDEX.FLOATING_PANEL }}>
               <PerformanceMonitor />
             </div>
           )}
@@ -288,7 +288,7 @@ export const BattleMapPage: React.FC = () => {
                 'absolute top-4 transition-all',
                 showLayersPanel ? 'right-80' : 'right-4',
               )}
-              style={{ zIndex: Z_INDEX.STICKY }}
+              style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
             >
               {showLayersPanel ? (
                 <ChevronRight className="h-4 w-4" />

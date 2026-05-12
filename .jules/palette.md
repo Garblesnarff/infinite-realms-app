@@ -153,3 +153,7 @@
 ## 2026-05-03 - Layers Panel Accessibility and Visual Affordance
 **Learning:** Truncated names in sidebars (like layer names) need tooltips to be discoverable on desktop. Descriptive ARIA labels on repetitive controls (like opacity sliders) should include the item name for context. Quick actions benefit from icons to align with individual item controls.
 **Action:** Add `title` tooltips to truncated labels. Use template literals for `aria-label` on sliders. Apply icons to functional buttons and mark decorative ones as `aria-hidden="true"`.
+
+## 2026-02-24 - Battle Map Z-Index and Header Accessibility
+**Learning:** Floating UI elements in the Battle Map (like Tool Options and Performance Monitor) should be grouped in the same Z-index layer as the main Toolbar (Z_INDEX.FLOATING_PANEL) to ensure consistent stacking behavior. Native 'title' attributes on buttons wrapped in Tooltips cause distracting "double tooltips".
+**Action:** Migrate map-floating controls from STICKY to FLOATING_PANEL. Use Tooltip components for icon-only header buttons and ensure aria-labels are descriptive (e.g., "Open View Settings" instead of just "Settings").

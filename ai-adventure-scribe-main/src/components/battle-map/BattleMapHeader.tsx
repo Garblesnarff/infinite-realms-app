@@ -12,6 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 
 interface BattleMapHeaderProps {
@@ -113,11 +119,25 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
 
         {/* Settings Dropdown */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Open Settings" title="Open Settings">
-              <SettingsIcon className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Open View Settings"
+                    type="button"
+                  >
+                    <SettingsIcon className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent align="end">
+                <p>Open View Settings</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>View Settings</DropdownMenuLabel>
             <DropdownMenuSeparator />
