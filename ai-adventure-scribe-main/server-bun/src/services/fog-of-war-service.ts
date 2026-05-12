@@ -7,10 +7,10 @@
  * @module server/services/fog-of-war-service
  */
 
-/* eslint-disable max-lines */
+/* eslint-disable max-lines, @typescript-eslint/no-explicit-any */
 import { randomUUID } from 'crypto';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, exists, or, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
 import { characters, fogOfWar, scenes } from '../../../db/schema/index';
@@ -45,55 +45,93 @@ export type BroadcastCallback = (message: unknown) => void;
 
 export class FogOfWarService {
   /**
-   * Internal helper to verify scene access and target user permissions
+   * Internal helper to build authorization logic for both DM and players.
+   * 🛡️ Sentinel: Centralized ownership verification to prevent IDOR and existence leakage.
+   */
+  private static getAccessConditions(
+    sceneId: string,
+    targetUserId: string,
+    requesterId: string,
+  ): SQL {
+    return and(
+      eq(scenes.id, sceneId),
+      or(
+        // Case 1: Requester is target and (is scene owner or is campaign participant)
+        and(
+          eq(sql`${targetUserId}`, requesterId),
+          or(
+            eq(scenes.userId, requesterId),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.campaignId, scenes.campaignId),
+                    or(
+                      eq(characters.userId, requesterId),
+                      eq(characters.ownerId, requesterId),
+                    ),
+                  ),
+                ),
+            ),
+          ),
+        ),
+        // Case 2: Requester is scene owner and target is campaign participant
+        and(
+          eq(scenes.userId, requesterId),
+          exists(
+            db
+              .select()
+              .from(characters)
+              .where(
+                and(
+                  eq(characters.campaignId, scenes.campaignId),
+                  or(
+                    eq(characters.userId, targetUserId),
+                    eq(characters.ownerId, targetUserId),
+                  ),
+                ),
+              ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Helper to build a subquery filter that verifies a requester has access to
+   * manage fog of war for a target user in a specific scene.
+   */
+  private static getAccessFilter(
+    sceneId: string,
+    targetUserId: string,
+    requesterId: string,
+  ): any {
+    return exists(
+      db
+        .select()
+        .from(scenes)
+        .where(this.getAccessConditions(sceneId, targetUserId, requesterId)),
+    );
+  }
+
+  /**
+   * Internal helper to verify scene access and target user permissions.
+   * Throws NotFoundError if access is denied.
    */
   private static async verifyAccess(
     sceneId: string,
     targetUserId: string,
-    requesterId: string
+    requesterId: string,
   ): Promise<void> {
-    // ⚡ Bolt: Consolidated multiple authorization queries into a single joined query with EXISTS subqueries.
-    // This reduces database round-trips from up to 3 down to 1 for EVERY fog of war operation.
-    const [result] = await (db as any)
-      .select({
-        sceneOwnerId: scenes.userId,
-        campaignId: scenes.campaignId,
-        isRequesterParticipant: sql<boolean>`EXISTS (
-          SELECT 1 FROM ${characters} c
-          WHERE c.campaign_id = ${scenes.campaignId}
-            AND (c.user_id = ${requesterId} OR c.owner_id = ${requesterId})
-        )`,
-        isTargetParticipant: sql<boolean>`EXISTS (
-          SELECT 1 FROM ${characters} c
-          WHERE c.campaign_id = ${scenes.campaignId}
-            AND (c.user_id = ${targetUserId} OR c.owner_id = ${targetUserId})
-        )`,
-      })
+    const [result] = await db
+      .select({ id: scenes.id })
       .from(scenes)
-      .where(eq(scenes.id, sceneId))
+      .where(this.getAccessConditions(sceneId, targetUserId, requesterId))
       .limit(1);
 
     if (!result) {
-      throw new NotFoundError('Scene', sceneId);
-    }
-
-    // Authorization logic:
-    // - Requester is the scene owner
-    // - OR requester is the target user AND has a character in the scene's campaign
-    const isTarget = requesterId === targetUserId;
-    const isOwner = requesterId === result.sceneOwnerId;
-
-    // Scene owner may manage another user's fog only if that user participates in the campaign.
-    if (isOwner) {
-      if (!isTarget && !result.isTargetParticipant) {
-        throw new NotFoundError('Scene', sceneId);
-      }
-      return;
-    }
-
-    // Non-owner can only access their own fog if they are a participant.
-    if (!isTarget || !result.isRequesterParticipant) {
-      // Throw NOT_FOUND to avoid leaking association existence
       throw new NotFoundError('Scene', sceneId);
     }
   }
@@ -106,13 +144,21 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<RevealedArea[]> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
+    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
+    // This reduces round-trips and ensures defense-in-depth even if pre-flight check fails.
     const fogRecord = await db.query.fogOfWar.findFirst({
-      where: and(eq(fogOfWar.sceneId, sceneId), eq(fogOfWar.userId, userId)),
+      where: and(
+        eq(fogOfWar.sceneId, sceneId),
+        eq(fogOfWar.userId, userId),
+        this.getAccessFilter(sceneId, userId, requesterId)
+      ),
     });
 
     if (!fogRecord) {
+      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
+      // If unauthorized, verifyAccess will throw NotFoundError.
+      await this.verifyAccess(sceneId, userId, requesterId);
+
       // No fog of war record yet - return empty array
       return [];
     }
@@ -148,8 +194,6 @@ export class FogOfWarService {
     inputs: RevealAreaInput[],
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea[]> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
     if (inputs.length === 0) {
       return [];
     }
@@ -179,24 +223,36 @@ export class FogOfWarService {
       });
     }
 
-    // ⚡ Bolt: Optimized N+1 query pattern by replacing read-modify-write with a single atomic UPSERT.
-    // This uses SQL jsonb_concat (||) to append new areas directly in the database,
-    // which eliminates a round-trip and prevents race conditions between concurrent reveals.
-    await db
+    // 🛡️ Sentinel: Refactored to use atomic UPSERT ... SELECT for ownership verification.
+    // This ensures that fog of war can only be modified for authorized scenes/users in a single round-trip.
+    // 🛡️ Sentinel (Fix): Incorporated specific sceneId filter into inner select to prevent unconstrained row insertion.
+    const [upsertResult] = await db
       .insert(fogOfWar)
-      .values({
-        sceneId,
-        userId,
-        revealedAreas: newAreas,
-        updatedAt: new Date(),
-      })
+      .select(
+        db
+          .select({
+            sceneId: sql`${sceneId}`,
+            userId: sql`${userId}`,
+            revealedAreas: sql`${JSON.stringify(newAreas)}::jsonb`,
+            updatedAt: sql`NOW()`,
+          })
+          .from(scenes)
+          .where(this.getAccessConditions(sceneId, userId, requesterId))
+      )
       .onConflictDoUpdate({
         target: [fogOfWar.sceneId, fogOfWar.userId],
         set: {
           revealedAreas: sql`${fogOfWar.revealedAreas} || ${JSON.stringify(newAreas)}::jsonb`,
           updatedAt: new Date(),
         },
-      });
+        where: this.getAccessFilter(fogOfWar.sceneId, fogOfWar.userId, requesterId)
+      })
+      .returning();
+
+    if (!upsertResult) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Scene', sceneId);
+    }
 
     // Broadcast to WebSocket if callback provided
     if (broadcast) {
@@ -225,16 +281,18 @@ export class FogOfWarService {
     areaId: string,
     broadcast?: BroadcastCallback
   ): Promise<boolean> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
+    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
+        eq(fogOfWar.userId, userId),
+        this.getAccessFilter(sceneId, userId, requesterId)
       ),
     });
 
     if (!existingRecord) {
+      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
+      await this.verifyAccess(sceneId, userId, requesterId);
       return false;
     }
 
@@ -247,7 +305,8 @@ export class FogOfWarService {
       return false;
     }
 
-    await db
+    // 🛡️ Sentinel: Atomic update with ownership check for defense-in-depth.
+    const [updated] = await db
       .update(fogOfWar)
       .set({
         revealedAreas: filteredAreas,
@@ -257,9 +316,16 @@ export class FogOfWarService {
         and(
           eq(fogOfWar.id, existingRecord.id),
           eq(fogOfWar.sceneId, sceneId),
-          eq(fogOfWar.userId, userId)
+          eq(fogOfWar.userId, userId),
+          this.getAccessFilter(sceneId, userId, requesterId)
         )
-      );
+      )
+      .returning();
+
+    if (!updated) {
+      // Should rarely happen if fetch succeeded, but masks existence if it does.
+      throw new NotFoundError('Scene', sceneId);
+    }
 
     // Broadcast to WebSocket if callback provided
     if (broadcast && concealedArea) {
@@ -288,20 +354,22 @@ export class FogOfWarService {
     areaIds: string[],
     broadcast?: BroadcastCallback
   ): Promise<RevealedArea[]> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
     if (areaIds.length === 0) {
       return [];
     }
 
+    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
+        eq(fogOfWar.userId, userId),
+        this.getAccessFilter(sceneId, userId, requesterId)
       ),
     });
 
     if (!existingRecord) {
+      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
+      await this.verifyAccess(sceneId, userId, requesterId);
       return [];
     }
 
@@ -314,7 +382,8 @@ export class FogOfWarService {
       return [];
     }
 
-    await db
+    // 🛡️ Sentinel: Atomic update with ownership check for defense-in-depth.
+    const [updated] = await db
       .update(fogOfWar)
       .set({
         revealedAreas: remainingAreas,
@@ -324,9 +393,15 @@ export class FogOfWarService {
         and(
           eq(fogOfWar.id, existingRecord.id),
           eq(fogOfWar.sceneId, sceneId),
-          eq(fogOfWar.userId, userId)
+          eq(fogOfWar.userId, userId),
+          this.getAccessFilter(sceneId, userId, requesterId)
         )
-      );
+      )
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundError('Scene', sceneId);
+    }
 
     // Broadcast to WebSocket if callback provided
     if (broadcast) {
@@ -353,21 +428,8 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<void> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
-    const existingRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
-    });
-
-    if (!existingRecord) {
-      // Nothing to reset
-      return;
-    }
-
-    await db
+    // 🛡️ Sentinel: Refactored to use a single atomic UPDATE statement with inline ownership verification.
+    const [updated] = await db
       .update(fogOfWar)
       .set({
         revealedAreas: [],
@@ -375,11 +437,17 @@ export class FogOfWarService {
       })
       .where(
         and(
-          eq(fogOfWar.id, existingRecord.id),
           eq(fogOfWar.sceneId, sceneId),
-          eq(fogOfWar.userId, userId)
+          eq(fogOfWar.userId, userId),
+          this.getAccessFilter(sceneId, userId, requesterId)
         )
-      );
+      )
+      .returning({ id: fogOfWar.id });
+
+    if (!updated) {
+      // 🛡️ Sentinel: Verify access to maintain standard error behavior.
+      await this.verifyAccess(sceneId, userId, requesterId);
+    }
   }
 
   /**
@@ -392,16 +460,18 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<RevealedArea[]> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
+    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
     const existingRecord = await db.query.fogOfWar.findFirst({
       where: and(
         eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
+        eq(fogOfWar.userId, userId),
+        this.getAccessFilter(sceneId, userId, requesterId)
       ),
     });
 
     if (!existingRecord) {
+      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
+      await this.verifyAccess(sceneId, userId, requesterId);
       return [];
     }
 
@@ -419,7 +489,8 @@ export class FogOfWarService {
 
     // Update if we removed any duplicates
     if (mergedAreas.length !== currentAreas.length) {
-      await db
+      // 🛡️ Sentinel: Atomic update with ownership check for defense-in-depth.
+      const [updated] = await db
         .update(fogOfWar)
         .set({
           revealedAreas: mergedAreas,
@@ -429,9 +500,15 @@ export class FogOfWarService {
           and(
             eq(fogOfWar.id, existingRecord.id),
             eq(fogOfWar.sceneId, sceneId),
-            eq(fogOfWar.userId, userId)
+            eq(fogOfWar.userId, userId),
+            this.getAccessFilter(sceneId, userId, requesterId)
           )
-        );
+        )
+        .returning();
+
+      if (!updated) {
+        throw new NotFoundError('Scene', sceneId);
+      }
     }
 
     return mergedAreas;
@@ -445,11 +522,19 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<FogOfWar | null> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
+    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
     const record = await db.query.fogOfWar.findFirst({
-      where: and(eq(fogOfWar.sceneId, sceneId), eq(fogOfWar.userId, userId)),
+      where: and(
+        eq(fogOfWar.sceneId, sceneId),
+        eq(fogOfWar.userId, userId),
+        this.getAccessFilter(sceneId, userId, requesterId)
+      ),
     });
+
+    if (!record) {
+      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
+      await this.verifyAccess(sceneId, userId, requesterId);
+    }
 
     return record || null;
   }
@@ -462,28 +547,23 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<boolean> {
-    await this.verifyAccess(sceneId, userId, requesterId);
-
-    const existingRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId)
-      ),
-    });
-
-    if (!existingRecord) {
-      return false;
-    }
-
-    await db
+    // 🛡️ Sentinel: Refactored to use a single atomic DELETE statement with inline ownership verification.
+    const result = await db
       .delete(fogOfWar)
       .where(
         and(
-          eq(fogOfWar.id, existingRecord.id),
           eq(fogOfWar.sceneId, sceneId),
-          eq(fogOfWar.userId, userId)
+          eq(fogOfWar.userId, userId),
+          this.getAccessFilter(sceneId, userId, requesterId)
         )
-      );
+      )
+      .returning({ id: fogOfWar.id });
+
+    if (result.length === 0) {
+      // 🛡️ Sentinel: If no row was deleted, verify access to distinguish between "unauthorized" and "not found".
+      await this.verifyAccess(sceneId, userId, requesterId);
+      return false;
+    }
 
     return true;
   }

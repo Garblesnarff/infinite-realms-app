@@ -33,6 +33,7 @@ vi.mock('../../../../db/client', () => {
       limit: vi.fn(() => mock),
       returning: vi.fn(() => mock),
       values: vi.fn(() => mock),
+      select: vi.fn(() => mock),
       set: vi.fn(() => mock),
       onConflictDoUpdate: vi.fn(() => mock),
     };
@@ -56,6 +57,7 @@ vi.mock('drizzle-orm', async () => {
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     or: vi.fn((...args) => ({ type: 'or', args })),
     sql: vi.fn((strings, ...values) => ({ type: 'sql', strings, values })),
+    exists: vi.fn((...args) => ({ type: 'exists', args })),
   };
 });
 
@@ -70,21 +72,17 @@ describe('FogOfWarService', () => {
 
   describe('verifyAccess (internal)', () => {
     it('should allow access if requester is the scene owner', async () => {
-      // Mock the consolidated authorization query
+      // Mock the authorization query to return a row (access granted)
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{
-        sceneOwnerId: mockUserId,
-        campaignId: 'camp-123',
-        isRequesterParticipant: true,
-        isTargetParticipant: true
-      }]);
+      mockSelectBuilder.limit.mockResolvedValue([{ id: mockSceneId }]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       // We call a method that uses verifyAccess internally
       await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
     });
 
-    it('should throw NotFoundError if scene does not exist', async () => {
+    it('should throw NotFoundError if scene does not exist or access is denied', async () => {
+      // Mock the authorization query to return no rows (access denied or not found)
       const mockSelectBuilder = (db as any).select();
       mockSelectBuilder.limit.mockResolvedValue([]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
@@ -94,25 +92,16 @@ describe('FogOfWarService', () => {
 
     it('should allow access if requester is target and is a participant', async () => {
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{
-        sceneOwnerId: 'different-owner',
-        campaignId: 'camp-123',
-        isRequesterParticipant: true,
-        isTargetParticipant: true
-      }]);
+      mockSelectBuilder.limit.mockResolvedValue([{ id: mockSceneId }]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).resolves.toBeDefined();
     });
 
     it('should deny access if requester is target but not a participant', async () => {
+      // Access conditions pushed to SQL, so non-matching rows return empty array
       const mockSelectBuilder = (db as any).select();
-      mockSelectBuilder.limit.mockResolvedValue([{
-        sceneOwnerId: 'different-owner',
-        campaignId: 'camp-123',
-        isRequesterParticipant: false,
-        isTargetParticipant: false
-      }]);
+      mockSelectBuilder.limit.mockResolvedValue([]);
       (db as any).select.mockReturnValue(mockSelectBuilder);
 
       await expect(FogOfWarService.getRevealedAreas(mockSceneId, mockUserId, mockUserId)).rejects.toThrow('Scene not found');
@@ -134,7 +123,9 @@ describe('FogOfWarService', () => {
       // Mock the UPSERT
       const mockInsertBuilder = (db as any).insert();
       mockInsertBuilder.values.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.select.mockReturnValue(mockInsertBuilder);
       mockInsertBuilder.onConflictDoUpdate.mockReturnValue(mockInsertBuilder);
+      mockInsertBuilder.returning.mockResolvedValue([{ id: 'upserted-id' }]);
       (db as any).insert.mockReturnValue(mockInsertBuilder);
 
       const mockInput = {

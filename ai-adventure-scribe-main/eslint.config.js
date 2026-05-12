@@ -491,6 +491,7 @@ export default tseslint.config(
       'server-bun/src/services/class-features-service.ts',
       'server-bun/src/services/progression/class-feature-usage-service.ts',
       'server-bun/src/services/session-service.ts',
+      'server-bun/src/services/fog-of-war-service.ts',
       'src/components/character-creation/steps/StartingEquipmentSelection.tsx',
       'src/components/character-creation/steps/PersonalitySelection.tsx',
       'src/components/character-creation/steps/personality/use-personality-selection.ts',
