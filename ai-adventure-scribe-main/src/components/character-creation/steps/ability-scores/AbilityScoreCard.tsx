@@ -50,6 +50,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
 
         <div className="flex items-center justify-between">
           <Button
+            type="button"
             variant="outline"
             size="icon"
             onClick={() => onDecrease(ability)}
@@ -58,7 +59,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
             aria-label={`Decrease ${ability}`}
             title={`Decrease ${ability}`}
           >
-            <Minus className="h-4 w-4" />
+            <Minus className="h-4 w-4" aria-hidden="true" />
           </Button>
 
           <div className="text-center space-y-1">
@@ -68,11 +69,17 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                 variant="outline"
                 className="bg-green-50 text-green-700 border-green-300"
                 title="Racial ability score bonus"
+                aria-label={`+${racialBonus} racial bonus to ${ability}`}
               >
                 {formatRacialBonus(racialBonus)} racial
               </Badge>
             )}
-            <div className="text-3xl font-bold">{finalScore}</div>
+            <div
+              className="text-3xl font-bold"
+              aria-label={`Final ${ability} score: ${finalScore}`}
+            >
+              {finalScore}
+            </div>
             <div
               className={`text-sm font-medium ${
                 modifier > 0
@@ -81,6 +88,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                     ? 'text-red-600'
                     : 'text-muted-foreground'
               }`}
+              aria-label={`${ability} modifier: ${modifier >= 0 ? '+' : ''}${modifier}`}
             >
               {modifier >= 0 ? '+' : ''}
               {modifier}
@@ -88,6 +96,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
           </div>
 
           <Button
+            type="button"
             variant="outline"
             size="icon"
             onClick={() => onIncrease(ability)}
@@ -96,7 +105,7 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
             aria-label={`Increase ${ability}`}
             title={`Increase ${ability}`}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
 

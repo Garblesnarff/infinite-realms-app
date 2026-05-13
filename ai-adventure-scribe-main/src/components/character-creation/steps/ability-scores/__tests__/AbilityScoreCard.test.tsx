@@ -4,15 +4,18 @@ import { vi, describe, it, expect } from 'vitest';
 
 import AbilityScoreCard from '../AbilityScoreCard';
 
+import type { Method } from '@/hooks/use-ability-score-selection';
+import type { AbilityScores } from '@/types/character';
+
 describe('AbilityScoreCard', () => {
   const defaultProps = {
-    ability: 'strength' as any,
+    ability: 'strength' as keyof AbilityScores,
     baseScore: 10,
     racialBonus: 2,
     finalScore: 12,
     modifier: 1,
     description: 'Strength measures bodily power.',
-    method: 'pointBuy' as any,
+    method: 'pointBuy' as Method,
     remainingPoints: 27,
     nextCost: 1,
     onIncrease: vi.fn(),
@@ -35,11 +38,18 @@ describe('AbilityScoreCard', () => {
 
     expect(decreaseBtn).toHaveAttribute('title', 'Decrease strength');
     expect(increaseBtn).toHaveAttribute('title', 'Increase strength');
+    expect(decreaseBtn).toHaveAttribute('type', 'button');
+    expect(increaseBtn).toHaveAttribute('type', 'button');
+
+    // Check for final score and modifier accessibility
+    expect(screen.getByLabelText(/final strength score: 12/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/strength modifier: \+1/i)).toBeInTheDocument();
 
     // Check for racial bonus badge and its title
     const racialBadge = screen.getByText(/\+2 racial/i);
     expect(racialBadge).toBeInTheDocument();
     expect(racialBadge).toHaveAttribute('title', 'Racial ability score bonus');
+    expect(racialBadge).toHaveAttribute('aria-label', '+2 racial bonus to strength');
   });
 
   it('calls onIncrease and onDecrease handlers', () => {
