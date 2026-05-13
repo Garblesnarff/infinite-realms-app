@@ -27,6 +27,31 @@ interface UseMessageHandlerLogicProps {
   onAIResponse?: (message: ChatMessage) => Promise<void>;
 }
 
+/**
+ * ⚡ Bolt: Static configuration and helper functions hoisted outside the hook
+ * to reduce render cycle overhead and stabilize identity.
+ */
+const headerMode = String(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
+).toLowerCase();
+
+const toHeaderExcerpt = (raw: string, limit = 220) => {
+  if (!raw) return '';
+  const cleaned = raw
+    .replace(/^VISUAL\s+PROMPT:.*$/gim, '')
+    .replace(/^\s*[A-F]\.\s.*$/gim, '')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const sentences = cleaned.split(/(?<=[.!?])\s+/);
+  let out = sentences.slice(0, 2).join(' ');
+  if (out.length > limit) {
+    out = out.slice(0, limit).replace(/[ ,;:]+\S*$/, '') + '…';
+  }
+  return out;
+};
+
 export const useMessageHandlerLogic = ({
   sessionId,
   campaignId,
@@ -52,11 +77,6 @@ export const useMessageHandlerLogic = ({
     onAIResponse,
   });
 
-  const headerMode = String(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
-  ).toLowerCase();
-
   // Refs to track current values for async operations
   const turnCountRef = React.useRef(turnCount);
   const messagesRef = React.useRef(messages);
@@ -81,22 +101,6 @@ export const useMessageHandlerLogic = ({
   React.useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  const toHeaderExcerpt = React.useCallback((raw: string, limit = 220) => {
-    if (!raw) return '';
-    const cleaned = raw
-      .replace(/^VISUAL\s+PROMPT:.*$/gim, '')
-      .replace(/^\s*[A-F]\.\s.*$/gim, '')
-      .replace(/\*\*|__|`/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const sentences = cleaned.split(/(?<=[.!?])\s+/);
-    let out = sentences.slice(0, 2).join(' ');
-    if (out.length > limit) {
-      out = out.slice(0, limit).replace(/[ ,;:]+\S*$/, '') + '…';
-    }
-    return out;
-  }, []);
 
   // Assuming validateSession is still relevant or adapted
   const validateSession = useSessionValidator({ sessionId, campaignId, characterId });
