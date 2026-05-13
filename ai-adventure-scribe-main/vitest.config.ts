@@ -371,6 +371,7 @@ export default defineConfig({
       'src/utils/performance/__tests__/lod.test.ts',
       'src/utils/performance/__tests__/culling.test.ts',
       'src/features/safety/__tests__/SafetyCommandProcessor.test.ts',
+      'src/features/game-session/hooks/__tests__/use-panel-resize.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -732,6 +733,7 @@ export default defineConfig({
         'src/services/blog/blog-media-service.ts',
         'src/utils/multiclass/spellcasting.ts',
         'src/features/safety/SafetyCommandProcessor.ts',
+        'src/features/game-session/hooks/use-panel-resize.ts',
       ],
       exclude: [
         '**/__tests__/**',
