@@ -1,18 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { useChatPersistence } from './use-chat-persistence';
 
 import type { ChatMessage, GameContext, NarrationSegment } from '@/services/ai-service';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { handleAsyncError } from '@/utils/error-handler';
-
-interface DialogueHistoryRow {
-  id: string;
-  speaker_type: string;
-  message: string;
-  timestamp: string;
-}
 
 interface UseChatHistoryParams {
   sessionId: string | undefined;
@@ -42,7 +36,16 @@ export const useChatHistory = ({
   sendMessage: (message: ChatMessage | string) => Promise<void>;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 } => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const {
+    messages,
+    setMessages,
+    isLoadingHistory,
+    hasLoadedHistory,
+    setHasLoadedHistory,
+    saveMessageToDatabase,
+    fetchHistory,
+  } = useChatPersistence(sessionId);
+
   const messagesRef = useRef(messages);
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(isSending);
@@ -53,95 +56,6 @@ export const useChatHistory = ({
     messagesRef.current = messages;
     isSendingRef.current = isSending;
   }, [messages, isSending]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
-
-  /**
-   * Wait for a message to exist in the database with retry logic
-   * Handles potential transaction commit delays in distributed databases
-   */
-  const waitForMessageToExist = useCallback(
-    async (messageId: string, maxRetries = 5, initialDelay = 100): Promise<boolean> => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const { data, error } = await supabase
-          .from('dialogue_history')
-          .select('id')
-          .eq('id', messageId)
-          .maybeSingle();
-
-        if (!error && data) {
-          logger.debug(`[useChatHistory] ✅ Message verified in database after ${attempt} retries`);
-          return true;
-        }
-
-        if (attempt < maxRetries - 1) {
-          const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff
-          logger.debug(
-            `[useChatHistory] ⏳ Message not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-      }
-
-      logger.error(`[useChatHistory] ❌ Message verification failed after ${maxRetries} retries`);
-      return false;
-    },
-    [],
-  );
-
-  /**
-   * Save a message to the database
-   * Returns true if save and verification succeeded, false otherwise
-   */
-  const saveMessageToDatabase = useCallback(
-    async (message: ChatMessage, sid: string): Promise<boolean> => {
-      logger.debug('[useChatHistory] Saving message to database:', {
-        messageId: message.id,
-        sessionId: sid,
-        timestamp: new Date().toISOString(),
-      });
-
-      try {
-        const { error } = await supabase.from('dialogue_history').insert({
-          id: message.id,
-          session_id: sid,
-          speaker_type:
-            message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
-          message: message.content,
-          timestamp: message.timestamp.toISOString(),
-        });
-
-        if (error) {
-          logger.error('[useChatHistory] ❌ Database insert FAILED:', { error });
-          throw error;
-        }
-
-        logger.debug('[useChatHistory] Database insert promise resolved, verifying...');
-
-        // Verify the message actually exists in the database
-        const verified = await waitForMessageToExist(message.id);
-
-        if (!verified) {
-          logger.error('[useChatHistory] ❌ Message verification failed');
-          return false;
-        }
-
-        logger.debug('[useChatHistory] ✅ Message saved and verified:', { messageId: message.id });
-        return true;
-      } catch (error) {
-        logger.error('[useChatHistory] Exception during save:', { error });
-        handleAsyncError(error, {
-          userMessage: 'Failed to save message',
-          logLevel: 'warn',
-          showToast: false,
-          context: { location: 'useChatHistory.saveMessageToDatabase', sessionId: sid },
-        });
-        // Don't throw here to avoid breaking the UI flow
-        return false;
-      }
-    },
-    [waitForMessageToExist],
-  );
 
   /**
    * Generate an opening message for a new session
@@ -223,6 +137,7 @@ export const useChatHistory = ({
     characterDetails,
     saveMessageToDatabase,
     onMessageReceived,
+    setMessages,
   ]);
 
   /**
@@ -231,66 +146,26 @@ export const useChatHistory = ({
   const loadHistory = useCallback(async () => {
     if (!sessionId || hasLoadedHistory) return;
 
-    setIsLoadingHistory(true);
-    try {
-      logger.info('📚 Loading conversation history for session:', sessionId);
+    const history = await fetchHistory();
 
-      // Load message history from dialogue_history table
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
-      // of the heavy JSONB 'context' column which is not displayed in the chat history.
-      const { data: historyData, error: historyError } = await supabase
-        .from('dialogue_history')
-        .select('id, speaker_type, message, timestamp')
-        .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: true });
-
-      if (historyError) {
-        logger.error('Error loading history:', historyError);
-        throw historyError;
-      }
-
-      if (historyData && historyData.length > 0) {
-        logger.info(`📚 Loaded ${historyData.length} messages from history`);
-
-        // Convert database messages to ChatMessage format
-        const loadedMessages: ChatMessage[] = (historyData as unknown as DialogueHistoryRow[]).map(
-          (msg) => ({
-            id: msg.id,
-            role:
-              msg.speaker_type === 'dm'
-                ? 'assistant'
-                : msg.speaker_type === 'player'
-                  ? 'user'
-                  : 'assistant',
-            content: msg.message,
-            timestamp: new Date(msg.timestamp),
-            // Note: Historical messages may not have narrationSegments
-            narrationSegments: undefined,
-          }),
-        );
-
-        setMessages(loadedMessages);
-        setHasLoadedHistory(true);
-      } else {
-        logger.info('📚 No message history found, generating opening message');
-        // If no messages exist, generate an opening message
-        await generateOpeningMessage();
-        setHasLoadedHistory(true);
-      }
-    } catch (error) {
-      handleAsyncError(error, {
-        userMessage: 'Failed to load history',
-        logLevel: 'warn',
-        showToast: false,
-        context: { location: 'useChatHistory.loadHistory', sessionId },
-      });
-      // Fallback to generating opening message if history loading fails
+    if (history === null) {
+      // Error occurred, but we already handled it with handleAsyncError
+      // Fallback to generating opening message
       await generateOpeningMessage();
       setHasLoadedHistory(true);
-    } finally {
-      setIsLoadingHistory(false);
+      return;
     }
-  }, [sessionId, hasLoadedHistory, generateOpeningMessage]);
+
+    if (history.length > 0) {
+      setMessages(history);
+      setHasLoadedHistory(true);
+    } else {
+      logger.info('📚 No message history found, generating opening message');
+      // If no messages exist, generate an opening message
+      await generateOpeningMessage();
+      setHasLoadedHistory(true);
+    }
+  }, [sessionId, hasLoadedHistory, fetchHistory, generateOpeningMessage, setMessages, setHasLoadedHistory]);
 
   // Load history when session is available and we haven't loaded it yet
   useEffect(() => {
@@ -417,6 +292,7 @@ export const useChatHistory = ({
       characterDetails,
       saveMessageToDatabase,
       onMessageReceived,
+      setMessages,
     ],
   );
 
