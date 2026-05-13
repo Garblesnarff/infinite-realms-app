@@ -34,8 +34,11 @@ export const FogOptions: React.FC<FogOptionsProps> = ({
         <Label htmlFor={brushModeId} className="text-sm">
           Brush Mode
         </Label>
-        <Select value={brushMode} onValueChange={(value: any) => setBrushMode(value)}>
-          <SelectTrigger id={brushModeId} className="w-full" title="Brush mode">
+        <Select
+          value={brushMode}
+          onValueChange={(value) => setBrushMode(value as 'reveal' | 'conceal')}
+        >
+          <SelectTrigger id={brushModeId} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -67,6 +70,7 @@ export const FogOptions: React.FC<FogOptionsProps> = ({
           max={200}
           step={10}
           className="w-full"
+          aria-label="Brush Size"
         />
         <span className="text-xs text-muted-foreground">{brushSize}px</span>
       </div>
