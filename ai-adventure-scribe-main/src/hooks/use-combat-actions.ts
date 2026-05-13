@@ -47,16 +47,21 @@ export const useCombatActions = (_isDM: boolean = false) => {
   const [isStartingCombat, setIsStartingCombat] = useState(false);
 
   // Get player characters and potential enemies
-  // ⚡ Bolt: Memoize participant lists and turn state to prevent redundant filtering and calculations on every render.
-  const playerParticipants = useMemo(
-    () => activeEncounter?.participants.filter((p) => p.participantType === 'player') || [],
-    [activeEncounter?.participants],
-  );
+  // ⚡ Bolt: Consolidated participant filtering into a single useMemo with a single O(N) pass
+  // to reduce hook overhead and redundant iterations.
+  const { playerParticipants, enemyParticipants } = useMemo(() => {
+    const players: CombatParticipant[] = [];
+    const monsters: CombatParticipant[] = [];
 
-  const enemyParticipants = useMemo(
-    () => activeEncounter?.participants.filter((p) => p.participantType === 'monster') || [],
-    [activeEncounter?.participants],
-  );
+    if (activeEncounter?.participants) {
+      for (const p of activeEncounter.participants) {
+        if (p.participantType === 'player') players.push(p);
+        else if (p.participantType === 'monster') monsters.push(p);
+      }
+    }
+
+    return { playerParticipants: players, enemyParticipants: monsters };
+  }, [activeEncounter?.participants]);
 
   const playerCharacterId = characterState.character?.id;
 
