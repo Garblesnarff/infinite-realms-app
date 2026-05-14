@@ -32,10 +32,14 @@ export interface UseAvailableSpellsReturn {
  * unnecessary useCallback overhead and simplify dependency tracking for pure logic.
  */
 const filterSpells = (spells: Spell[], searchTerm: string, filters: SpellFilters): Spell[] => {
+  // ⚡ Bolt: Hoist search term lowercasing and school lookup set outside the loop
+  // to avoid redundant O(N) work and reduce complexity of the filter operation.
+  const searchLower = searchTerm.toLowerCase();
+  const schoolSet = filters.schools.length > 0 ? new Set(filters.schools) : null;
+
   return spells.filter((spell) => {
     // Search term filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
+    if (searchLower) {
       const matchesSearch =
         spell.name.toLowerCase().includes(searchLower) ||
         spell.description.toLowerCase().includes(searchLower) ||
@@ -45,7 +49,7 @@ const filterSpells = (spells: Spell[], searchTerm: string, filters: SpellFilters
     }
 
     // School filter
-    if (filters.schools.length > 0 && !filters.schools.includes(spell.school)) {
+    if (schoolSet && !schoolSet.has(spell.school)) {
       return false;
     }
 
