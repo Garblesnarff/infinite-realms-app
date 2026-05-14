@@ -11,6 +11,7 @@ import {
   type CombatValidationResult,
   type CombatStateProvider,
 } from './CombatResponseValidator';
+import { CombatActionTracker } from './CombatActionTracker';
 import { CombatTurnManager, type InitiativeEntry, type TurnOrder } from './CombatTurnManager';
 
 import logger from '@/lib/logger';
@@ -32,17 +33,10 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 export class CombatSequenceValidator implements CombatStateProvider {
   private static instance: CombatSequenceValidator;
   private turnManager: CombatTurnManager = new CombatTurnManager();
+  private actionTracker: CombatActionTracker = new CombatActionTracker();
   private responseValidator: CombatResponseValidator;
   private combatPhases: Map<string, CombatPhase[]> = new Map();
   private activeCombats: Set<string> = new Set();
-  private pendingAttacks: Map<
-    string,
-    { weaponName: string; targetAC?: number; timestamp: number }
-  > = new Map();
-  private awaitingDamage: Map<
-    string,
-    { attackRollId: string; isCritical: boolean; weaponName: string }
-  > = new Map();
   private lastActivityTimestamp: Map<string, number> = new Map();
   private lastCleanupAt = 0;
 
@@ -138,10 +132,13 @@ export class CombatSequenceValidator implements CombatStateProvider {
     weaponName: string,
     targetAC?: number,
   ): string {
-    const attackId = `${combatId}_${actorId}_${Date.now()}`;
-    this.pendingAttacks.set(attackId, { weaponName, targetAC, timestamp: Date.now() });
+    const attackId = this.actionTracker.recordAttackRequest(
+      combatId,
+      actorId,
+      weaponName,
+      targetAC,
+    );
     this.addPhase(combatId, 'attack', actorId, `Attack with ${weaponName}`);
-    logger.info(`⚔️ Attack request recorded: ${attackId}`);
     return attackId;
   }
 
@@ -155,46 +152,7 @@ export class CombatSequenceValidator implements CombatStateProvider {
     actorId?: string,
     actorName?: string,
   ): boolean {
-    const attack = this.pendingAttacks.get(attackId);
-    if (!attack) return false;
-
-    const actualAC = targetAC || attack.targetAC;
-    if (!actualAC) return false;
-
-    const isHit = result >= actualAC;
-    const isCritical = result === 20;
-
-    if (isHit) {
-      this.awaitingDamage.set(attackId, {
-        attackRollId: attackId,
-        isCritical,
-        weaponName: attack.weaponName,
-      });
-    }
-
-    // Record attack action for audit if we have actor info
-    if (actorId && actorName) {
-      const combatId = attackId.split('_')[0]; // Extract combat ID from attack ID
-      combatAuditSystem.recordAction({
-        combatId,
-        actorId,
-        actorName,
-        actionType: 'attack_roll',
-        phase: 'turn',
-        data: {
-          formula: '1d20+modifier', // Generic - would need character data for specifics
-          result,
-          targetAC: actualAC,
-          success: isHit,
-          critical: isCritical,
-          description: `Attack with ${attack.weaponName}: ${result} vs AC ${actualAC} = ${isHit ? 'HIT' : 'MISS'}${isCritical ? ' (CRITICAL!)' : ''}`,
-        },
-      });
-    }
-
-    this.pendingAttacks.delete(attackId);
-    logger.info(`🎯 Attack result: ${result} vs AC ${actualAC} = ${isHit ? 'HIT' : 'MISS'}`);
-    return isHit;
+    return this.actionTracker.recordAttackResult(attackId, result, targetAC, actorId, actorName);
   }
 
   /**
@@ -207,28 +165,7 @@ export class CombatSequenceValidator implements CombatStateProvider {
     actorId?: string,
     actorName?: string,
   ): void {
-    const damageInfo = this.awaitingDamage.get(attackId);
-
-    // Record damage action for audit if we have actor info
-    if (actorId && actorName && damageInfo) {
-      const combatId = attackId.split('_')[0]; // Extract combat ID from attack ID
-      combatAuditSystem.recordAction({
-        combatId,
-        actorId,
-        actorName,
-        actionType: 'damage_roll',
-        phase: 'turn',
-        data: {
-          formula: formula || 'dice+modifier',
-          result: damage,
-          critical: damageInfo.isCritical,
-          description: `${damageInfo.isCritical ? 'Critical d' : 'D'}amage with ${damageInfo.weaponName}: ${damage}${formula ? ` (${formula})` : ''}`,
-        },
-      });
-    }
-
-    this.awaitingDamage.delete(attackId);
-    logger.info(`💥 Damage recorded: ${damage} for attack ${attackId}`);
+    this.actionTracker.recordDamageRoll(attackId, damage, formula, actorId, actorName);
   }
 
   /**
@@ -262,34 +199,19 @@ export class CombatSequenceValidator implements CombatStateProvider {
    * Check if combat is awaiting damage roll
    */
   isAwaitingDamage(combatId?: string): boolean {
-    if (!combatId) return this.awaitingDamage.size > 0;
-
-    for (const [attackId] of this.awaitingDamage) {
-      if (attackId.startsWith(combatId)) return true;
-    }
-    return false;
+    return this.actionTracker.isAwaitingDamage(combatId);
   }
 
   /**
    * Get awaiting damage info
    */
   getAwaitingDamage(combatId?: string): { weaponName: string; isCritical: boolean } | null {
-    for (const [attackId, damage] of this.awaitingDamage) {
-      if (!combatId || attackId.startsWith(combatId)) {
-        return { weaponName: damage.weaponName, isCritical: damage.isCritical };
-      }
-    }
-    return null;
+    return this.actionTracker.getAwaitingDamage(combatId);
   }
 
   // CombatStateProvider implementation
   hasPendingAttack(combatId?: string): boolean {
-    if (!combatId) return this.pendingAttacks.size > 0;
-
-    for (const [attackId] of this.pendingAttacks) {
-      if (attackId.startsWith(combatId)) return true;
-    }
-    return false;
+    return this.actionTracker.hasPendingAttack(combatId);
   }
 
   hasInitiativeBeenRolled(combatId: string): boolean {
@@ -340,19 +262,8 @@ export class CombatSequenceValidator implements CombatStateProvider {
         this.combatPhases.delete(combatId);
         this.lastActivityTimestamp.delete(combatId);
 
-        // Clean up pending attacks for this combat
-        for (const [attackId] of this.pendingAttacks) {
-          if (attackId.startsWith(combatId)) {
-            this.pendingAttacks.delete(attackId);
-          }
-        }
-
-        // Clean up awaiting damage for this combat
-        for (const [attackId] of this.awaitingDamage) {
-          if (attackId.startsWith(combatId)) {
-            this.awaitingDamage.delete(attackId);
-          }
-        }
+        // Clean up action state for this combat
+        this.actionTracker.clearActionState(combatId);
 
         cleanedCount++;
       }
@@ -370,8 +281,7 @@ export class CombatSequenceValidator implements CombatStateProvider {
     this.combatPhases.clear();
     this.activeCombats.clear();
     this.turnManager.clearAllState();
-    this.pendingAttacks.clear();
-    this.awaitingDamage.clear();
+    this.actionTracker.clearAllState();
     this.lastActivityTimestamp.clear();
     combatAuditSystem.clearAuditData();
   }
@@ -385,22 +295,9 @@ export class CombatSequenceValidator implements CombatStateProvider {
 
     this.activeCombats.delete(combatId);
     this.turnManager.clearEncounterState(combatId);
+    this.actionTracker.clearActionState(combatId);
     this.combatPhases.delete(combatId);
     this.lastActivityTimestamp.delete(combatId);
-
-    // Clean up any pending attacks for this combat
-    for (const [attackId] of this.pendingAttacks) {
-      if (attackId.startsWith(combatId)) {
-        this.pendingAttacks.delete(attackId);
-      }
-    }
-
-    // Clean up any awaiting damage for this combat
-    for (const [attackId] of this.awaitingDamage) {
-      if (attackId.startsWith(combatId)) {
-        this.awaitingDamage.delete(attackId);
-      }
-    }
 
     logger.info(`⚔️ Combat ${combatId} ended`);
     logger.info(`📊 Final compliance score: ${auditReport.complianceScore}%`);
