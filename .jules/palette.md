@@ -157,3 +157,7 @@
 ## 2026-02-24 - Battle Map Z-Index and Header Accessibility
 **Learning:** Floating UI elements in the Battle Map (like Tool Options and Performance Monitor) should be grouped in the same Z-index layer as the main Toolbar (Z_INDEX.FLOATING_PANEL) to ensure consistent stacking behavior. Native 'title' attributes on buttons wrapped in Tooltips cause distracting "double tooltips".
 **Action:** Migrate map-floating controls from STICKY to FLOATING_PANEL. Use Tooltip components for icon-only header buttons and ensure aria-labels are descriptive (e.g., "Open View Settings" instead of just "Settings").
+
+## 2026-06-12 - Dice Suggestion Keyboard Navigation and Listbox Accessibility
+**Learning:** Interactive listbox suggestions (like dice commands in `ChatInput.tsx`) that only support mouse clicks are inaccessible to keyboard-only and screen reader users. Implementing standard keyboard navigation (`ArrowUp`/`ArrowDown` for cyclic navigation, `Enter` for selection, and `Escape` for dismissal) provides a significant UX improvement for power users.
+**Action:** Always implement full keyboard navigation for custom autocomplete or suggestion listboxes. Use `selectedIndex` state to track the active item, apply visual highlighting, and use `aria-selected` for accessibility. Ensure `e.preventDefault()` is used on navigation keys to prevent cursor movement or unintended form submission.

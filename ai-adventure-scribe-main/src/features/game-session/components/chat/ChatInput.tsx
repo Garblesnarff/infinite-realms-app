@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Z_INDEX } from '@/constants/z-index';
+import { cn } from '@/lib/utils';
 import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceCommandParser';
 
 interface ChatInputProps {
@@ -26,6 +27,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDiceSuggestions, setShowDiceSuggestions] = useState(false);
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsHeaderId = useId();
 
@@ -48,8 +50,10 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
     if (isDiceCommand) {
       const suggestions = getDiceCommandSuggestions(input);
       setDiceSuggestions(suggestions);
+      setSelectedIndex(0);
     } else {
       setDiceSuggestions([]);
+      setSelectedIndex(0);
     }
   }, [input]);
 
@@ -86,6 +90,30 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
    * Handle keyboard shortcuts
    */
   const handleKeyDown = (e: React.KeyboardEvent): void => {
+    // Handle dice suggestion navigation
+    if (showDiceSuggestions && diceSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev + 1) % diceSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 + diceSuggestions.length) % diceSuggestions.length);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSuggestionClick(diceSuggestions[selectedIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowDiceSuggestions(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter') {
       if (e.shiftKey) {
         // Shift+Enter for new line
@@ -179,10 +207,13 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                     <button
                       key={index}
                       onClick={() => handleSuggestionClick(suggestion)}
-                      className="w-full text-left px-2 py-1 text-sm hover:bg-blue-50 rounded font-mono"
+                      className={cn(
+                        'w-full text-left px-2 py-1 text-sm rounded font-mono transition-colors',
+                        index === selectedIndex ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50',
+                      )}
                       disabled={isDisabled}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={index === selectedIndex}
                     >
                       {suggestion}
                     </button>

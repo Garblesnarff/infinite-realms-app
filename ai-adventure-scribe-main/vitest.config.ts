@@ -134,6 +134,7 @@ export default defineConfig({
       'src/features/game-session/components/chat/message-list/__tests__/DynamicOptionsSection.test.tsx',
       'src/features/game-session/components/chat/__tests__/SimpleMessageList.test.tsx',
       'src/features/game-session/components/chat/__tests__/ChatInput.test.tsx',
+      'src/features/game-session/components/chat/__tests__/ChatInputKeyboardNav.test.tsx',
       'src/features/game-session/utils/__tests__/parse-asset-tags.test.ts',
       'src/agents/__tests__/encounter-validation.test.ts',
       'src/agents/__tests__/encounter-validator-party.test.ts',
