@@ -9,6 +9,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { getParticipantStatus } from '@/services/combat/damage-integrator';
+import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 // ⚡ Bolt: Move helper functions and static constants outside the component definition
 // to avoid re-creation on every render.
@@ -36,7 +37,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
   // ⚡ Bolt: Wrap character initialization in useMemo to avoid re-calculating dependency objects
   const character = useMemo(
-    () => characterState.character || ({} as any),
+    () => (characterState.character || {}) as Record<string, unknown>,
     [characterState.character],
   );
 
@@ -51,9 +52,11 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
   // Fetch combat HP if character is in an active combat
   useEffect(() => {
-    if (!character?.id) return;
+    if (!character?.id) {
+      return;
+    }
 
-    async function fetchCombatStatus() {
+    const fetchCombatStatus = async (): Promise<void> => {
       try {
         // Find active combat encounter for this character
         const { data: participant, error } = await supabase
@@ -115,7 +118,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
 
           // ⚡ Bolt: Use data from payload directly to avoid redundant network request.
           // This eliminates one network round-trip per HP update.
-          const newData = payload.new as any;
+          const newData = payload.new as Record<string, unknown>;
           if (newData) {
             setCombatHP({
               current_hp: newData.current_hp,
@@ -145,40 +148,16 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
   }, [character, combatHP]);
 
   // ⚡ Bolt: Memoize all derived stats to prevent recalculation on every render.
-  // This ensures pure UI updates don't trigger expensive D&D calculations.
+  // Using centralized calculateAllCharacterStats for consistency and correctness.
   const stats = useMemo(() => {
     if (!characterState.character) return null;
 
-    const char = characterState.character;
-    const lvl = char.level ?? 1;
-    const hitDie = char.class?.hitDie ?? 8;
-    const conMod = char.abilityScores?.constitution?.modifier ?? 0;
-    const dexMod = char.abilityScores?.dexterity?.modifier ?? 0;
-    const wisMod = char.abilityScores?.wisdom?.modifier ?? 0;
-
-    // Calculate HP (max HP formula from character sheet)
-    const maxHp = Math.max(1, lvl * hitDie + conMod * lvl);
-
-    // Calculate AC with unarmored defense support
-    let armorClass = 10 + dexMod;
-    const className = (char.class?.name ?? '').toString().toLowerCase();
-    const hasUnarmoredDefense = className === 'barbarian' || className === 'monk';
-    const isWearingArmor = !!char.equippedArmor;
-
-    if (hasUnarmoredDefense && !isWearingArmor) {
-      if (className === 'barbarian') {
-        armorClass = 10 + dexMod + conMod;
-      } else if (className === 'monk') {
-        armorClass = 10 + dexMod + wisMod;
-      }
-    }
-
-    const proficiency = Math.floor((lvl - 1) / 4) + 2;
+    const charStats = calculateAllCharacterStats(characterState.character);
 
     return {
-      maxHp,
-      armorClass,
-      proficiency,
+      maxHp: charStats.hitPoints,
+      armorClass: charStats.armorClass,
+      proficiency: charStats.proficiencyBonus,
     };
   }, [characterState.character]);
 

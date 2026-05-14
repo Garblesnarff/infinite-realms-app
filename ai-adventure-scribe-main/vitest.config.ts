@@ -372,6 +372,7 @@ export default defineConfig({
       'src/utils/performance/__tests__/culling.test.ts',
       'src/features/safety/__tests__/SafetyCommandProcessor.test.ts',
       'src/features/game-session/hooks/__tests__/use-panel-resize.test.ts',
+      'src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -734,6 +735,7 @@ export default defineConfig({
         'src/utils/multiclass/spellcasting.ts',
         'src/features/safety/SafetyCommandProcessor.ts',
         'src/features/game-session/hooks/use-panel-resize.ts',
+        'src/features/game-session/components/game/CompactCharacterHeader.tsx',
       ],
       exclude: [
         '**/__tests__/**',
