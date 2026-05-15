@@ -161,3 +161,7 @@
 ## 2026-06-12 - Dice Suggestion Keyboard Navigation and Listbox Accessibility
 **Learning:** Interactive listbox suggestions (like dice commands in `ChatInput.tsx`) that only support mouse clicks are inaccessible to keyboard-only and screen reader users. Implementing standard keyboard navigation (`ArrowUp`/`ArrowDown` for cyclic navigation, `Enter` for selection, and `Escape` for dismissal) provides a significant UX improvement for power users.
 **Action:** Always implement full keyboard navigation for custom autocomplete or suggestion listboxes. Use `selectedIndex` state to track the active item, apply visual highlighting, and use `aria-selected` for accessibility. Ensure `e.preventDefault()` is used on navigation keys to prevent cursor movement or unintended form submission.
+
+## 2026-06-25 - User Search Keyboard Navigation and Screen Reader Accessibility
+**Learning:** For interactive search suggestions, implementing keyboard navigation (Arrow keys, Enter, Escape) is not enough for full accessibility. Adding 'aria-activedescendant' on the search input, combined with unique IDs on suggestion options, ensures that screen readers announce the currently highlighted item as the user navigates. Using a short delay in 'onBlur' allows mouse clicks on suggestions to register before the list is dismissed.
+**Action:** Always pair keyboard navigation logic with 'aria-activedescendant' and unique option IDs. Use 'useId' for stable ID prefixes. Implement 'onBlur' with a 'setTimeout' delay when suggestions are dismissible by losing focus.

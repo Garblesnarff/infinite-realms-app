@@ -60,9 +60,12 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
   const permissionSelectId = useId();
   const resultsListboxId = useId();
   const peopleHeadingId = useId();
+  const suggestionIdPrefix = useId();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>(PermissionLevel.VIEWER);
   const [canControlToken, setCanControlToken] = useState(false);
   const [canEditSheet, setCanEditSheet] = useState(false);
@@ -178,6 +181,35 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
       user.email.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const handleSelectUser = (user: { id: string; name: string }): void => {
+    setSelectedUserId(user.id);
+    setSearchQuery(user.name);
+    setShowSuggestions(false);
+    setSelectedIndex(0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      setSearchQuery('');
+      setSelectedIndex(0);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (!showSuggestions || filteredUsers.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % filteredUsers.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length);
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleSelectUser(filteredUsers[selectedIndex]);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -206,16 +238,32 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                   id={userSearchId}
                   placeholder="Search by name or email..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSelectedIndex(0);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => {
+                    // Small delay to allow click event to fire on suggestions
+                    setTimeout(() => setShowSuggestions(false), 200);
+                  }}
+                  onKeyDown={handleKeyDown}
                   className="pl-10"
-                  aria-controls={searchQuery ? resultsListboxId : undefined}
+                  aria-controls={showSuggestions ? resultsListboxId : undefined}
                   aria-haspopup="listbox"
-                  aria-expanded={Boolean(searchQuery)}
+                  aria-expanded={showSuggestions}
+                  aria-autocomplete="list"
+                  aria-activedescendant={
+                    showSuggestions && filteredUsers.length > 0
+                      ? `${suggestionIdPrefix}-${selectedIndex}`
+                      : undefined
+                  }
                 />
               </div>
 
               {/* User suggestions */}
-              {searchQuery && (
+              {showSuggestions && searchQuery && (
                 <div
                   id={resultsListboxId}
                   className="border rounded-md max-h-48 overflow-auto"
@@ -223,22 +271,21 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                   aria-label="User suggestions"
                 >
                   {filteredUsers.length > 0 ? (
-                    filteredUsers.map((user) => (
+                    filteredUsers.map((user, index) => (
                       <button
                         key={user.id}
+                        id={`${suggestionIdPrefix}-${index}`}
                         type="button"
                         role="option"
-                        aria-selected={selectedUserId === user.id}
+                        aria-selected={index === selectedIndex}
+                        tabIndex={-1}
                         title={`Select ${user.name}`}
                         aria-label={`Select ${user.name}`}
                         className={cn(
                           'w-full px-3 py-2 text-left transition-colors flex items-center justify-between outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
-                          selectedUserId === user.id ? 'bg-accent' : 'hover:bg-accent',
+                          index === selectedIndex ? 'bg-accent' : 'hover:bg-accent',
                         )}
-                        onClick={() => {
-                          setSelectedUserId(user.id);
-                          setSearchQuery(user.name);
-                        }}
+                        onClick={() => handleSelectUser(user)}
                       >
                         <div className="flex items-center justify-between w-full">
                           <div>

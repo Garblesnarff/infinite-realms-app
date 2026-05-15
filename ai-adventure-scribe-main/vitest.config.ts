@@ -37,6 +37,7 @@ export default defineConfig({
       'src/components/character-creation/steps/__tests__/RaceSelection.accessibility.test.tsx',
       'src/components/character-creation/steps/__tests__/StartingEquipmentSelection.accessibility.test.tsx',
       'src/components/character-sharing/__tests__/SharedCharactersList.accessibility.test.tsx',
+      'src/components/character-sharing/__tests__/ShareCharacterDialog.keyboard.test.tsx',
       'src/components/campaigns/__tests__/StarterCharacterAccessibility.test.tsx',
       'src/components/ui/__tests__/character-portrait.accessibility.test.tsx',
       'src/utils/__tests__/asset-key.test.ts',
@@ -741,6 +742,7 @@ export default defineConfig({
         'src/features/game-session/hooks/use-panel-resize.ts',
         'src/features/game-session/components/game/CompactCharacterHeader.tsx',
         'src/features/game-session/components/game/FloatingActionPanel.tsx',
+        'src/components/character-sharing/ShareCharacterDialog.tsx',
       ],
       exclude: [
         '**/__tests__/**',
