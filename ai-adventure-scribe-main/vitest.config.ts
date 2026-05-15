@@ -377,6 +377,7 @@ export default defineConfig({
       'src/features/game-session/hooks/__tests__/use-panel-resize.test.ts',
       'src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx',
       'src/features/game-session/components/game/__tests__/FloatingActionPanel.test.tsx',
+      'src/features/game-session/components/game/__tests__/GameSidePanel.test.tsx',
     ],
     exclude: [
       'node_modules/**',
@@ -744,6 +745,8 @@ export default defineConfig({
         'src/features/game-session/hooks/use-panel-resize.ts',
         'src/features/game-session/components/game/CompactCharacterHeader.tsx',
         'src/features/game-session/components/game/FloatingActionPanel.tsx',
+        'src/features/game-session/components/game/MemoryPanel.tsx',
+        'src/features/game-session/components/game/GameSidePanelContent.tsx',
         'src/components/character-sharing/ShareCharacterDialog.tsx',
       ],
       exclude: [
