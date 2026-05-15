@@ -24,7 +24,6 @@ import {
   getCreatureStats,
   getCreatureStatsBatch,
   createWeaponAttack,
-  getParticipantInEncounter,
 } from './data-access.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
 import { aggregateResistances } from './resistance-resolver.js';
@@ -98,18 +97,23 @@ export class CombatAttackService {
       distanceInFeet,
     } = input;
 
-    // ⚡ Bolt: Removed redundant verifyEncounterAccess call as authorization is handled
-    // within getParticipantWithStats and getWeaponAttack. Parallelizing these fetches
-    // reduces database round-trips from 4 down to 2.
-    // 🛡️ Sentinel: Also verify that the requester owns the attacker to prevent IDOR.
-    const [targetData, weapon, _attacker] = await Promise.all([
-      getParticipantWithStats(targetId, encounterId, userId),
+    // ⚡ Bolt: Batch fetch both attacker and target with their stats in a single query.
+    // This reduces database round-trips from 3 down to 2 (1 for participants, 1 for weapon).
+    // Authorization is handled atomically within getParticipantsWithStatsBatch.
+    const [participantDataMap, weapon] = await Promise.all([
+      getParticipantsWithStatsBatch([attackerId, targetId], encounterId, userId),
       weaponId ? getWeaponAttack(weaponId, userId) : Promise.resolve(null),
-      getParticipantInEncounter(attackerId, encounterId, userId),
     ]);
+
+    const targetData = participantDataMap.get(targetId);
+    const attackerData = participantDataMap.get(attackerId);
 
     if (!targetData) {
       throw new NotFoundError('Target participant', targetId);
+    }
+
+    if (!attackerData) {
+      throw new NotFoundError('Attacker participant', attackerId);
     }
 
     const { participant: targetParticipant, stats: targetStats } = targetData;
@@ -250,19 +254,26 @@ export class CombatAttackService {
       distanceByTargetId,
     } = input;
 
-    // ⚡ Bolt: Parallelize caster validation and batch target fetching to reduce sequential round-trips.
-    // Removed initial verifyEncounterAccess as getParticipantsWithStatsBatch handles authorization.
-    // 🛡️ Sentinel: Pass userId to getParticipantInEncounter to verify caster ownership.
-    const [_, allTargetData] = await Promise.all([
-      getParticipantInEncounter(casterId, encounterId, userId),
-      getParticipantsWithStatsBatch(targetIds, encounterId, userId),
-    ]);
+    // ⚡ Bolt: Batch fetch both caster and all targets with their stats in a single query.
+    // This reduces database round-trips from 2 to 1 for participant data.
+    // Authorization is handled atomically within getParticipantsWithStatsBatch.
+    const allParticipantIds = Array.from(new Set([casterId, ...targetIds]));
+    const allParticipantDataMap = await getParticipantsWithStatsBatch(
+      allParticipantIds,
+      encounterId,
+      userId,
+    );
+
+    // 🛡️ Sentinel: Verify caster existence and ownership
+    if (!allParticipantDataMap.has(casterId)) {
+      throw new NotFoundError('Caster participant', casterId);
+    }
 
     const results: AttackResult[] = [];
 
     // Parallelize spell resolution for all targets using the pre-fetched data map.
     const resolutionPromises = targetIds.map(async (targetId) => {
-      const targetData = allTargetData.get(targetId);
+      const targetData = allParticipantDataMap.get(targetId);
       if (!targetData) {
         return null;
       }
