@@ -315,6 +315,7 @@ export const getRaceSkillProficiencies = (
 /**
  * Calculate saving throw modifiers
  * ⚡ Bolt: Added optional profBonus to avoid redundant calculations.
+ * ⚡ Bolt: Optimized proficiency lookup using a Set for O(1) complexity.
  */
 export const calculateSavingThrowModifiers = (
   character: Character,
@@ -323,11 +324,14 @@ export const calculateSavingThrowModifiers = (
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
   const classProficiencies = getClassSavingThrowProficiencies(character.class);
 
+  // ⚡ Bolt: Use a Set for O(1) lookups instead of O(N) array includes in the loop.
+  const profSet = new Set(classProficiencies);
+
   const savingThrows: CharacterStats['savingThrowModifiers'] = {};
 
   if (character.abilityScores) {
     Object.entries(character.abilityScores).forEach(([ability, data]) => {
-      const proficient = classProficiencies.includes(ability);
+      const proficient = profSet.has(ability);
       savingThrows[ability] = {
         modifier: data.modifier + (proficient ? pb : 0),
         proficient,
