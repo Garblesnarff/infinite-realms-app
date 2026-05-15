@@ -5,13 +5,8 @@ import type {
   SafetyCommandResponse} from '@/features/safety/types';
 import type { ChatMessage } from '@/types/game';
 
-import {
-  SafetyCommandProcessor,
-  SAFETY_ENABLED,
-} from '@/features/safety/SafetyCommandProcessor';
-import {
-  SAFETY_TRIGGER_WORDS,
-} from '@/features/safety/types';
+import { SafetyCommandProcessor } from '@/features/safety/SafetyCommandProcessor';
+import { SAFETY_ENABLED, SAFETY_TRIGGER_WORDS } from '@/features/safety/types';
 import logger from '@/lib/logger';
 
 // Re-export types for backward compatibility

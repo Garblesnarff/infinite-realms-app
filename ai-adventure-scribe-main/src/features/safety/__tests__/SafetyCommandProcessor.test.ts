@@ -2,7 +2,9 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { SafetyCommandProcessor, SAFETY_ENABLED } from '../SafetyCommandProcessor';
+import { SafetyCommandProcessor } from '../SafetyCommandProcessor';
+import { SafetyAuditService } from '../SafetyAuditService';
+import { SAFETY_ENABLED } from '../types';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -213,7 +215,7 @@ describe('SafetyCommandProcessor', () => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('No userId provided for audit log'));
     });
 
-    it('should log successfully if userId is provided via private method call', async () => {
+    it('should log successfully if userId is provided via SafetyAuditService', async () => {
         const command: any = {
           type: 'x_card',
           triggeredBy: 'explicit_command',
@@ -222,8 +224,7 @@ describe('SafetyCommandProcessor', () => {
 
         mockSupabaseChain.insert.mockResolvedValueOnce({ error: null });
 
-        // Use any to access private method
-        await (processor as any).logSafetyEvent(command, 'player msg', 'ai msg', {}, 'user-123');
+        await SafetyAuditService.logSafetyEvent(sessionId, command, 'player msg', 'ai msg', {}, 'user-123');
 
         expect(supabase.from).toHaveBeenCalledWith('safety_audit_trail');
         expect(mockSupabaseChain.insert).toHaveBeenCalledWith(expect.objectContaining({

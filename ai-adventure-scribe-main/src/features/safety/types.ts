@@ -39,6 +39,10 @@ export interface SafetyCommandResponse {
   shouldProcessNormal?: boolean;
 }
 
+export const SAFETY_ENABLED =
+  String(import.meta.env.VITE_ENABLE_SAFETY_GUARDS ?? '').toLowerCase() === 'true' ||
+  import.meta.env.MODE === 'test';
+
 // Safety trigger words based on the implementation plan
 export const SAFETY_TRIGGER_WORDS = {
   x_card: [

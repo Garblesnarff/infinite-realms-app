@@ -453,6 +453,7 @@ export default tseslint.config(
       'src/components/character-sheet/PersonalityManager.tsx',
       'src/utils/stealthUtils.ts',
       'src/utils/__tests__/stealthUtils.test.ts',
+      'src/features/safety/SafetyCommandProcessor.ts',
       'src/components/character-sharing/ShareCharacterDialog.tsx',
       'src/components/character-sharing/SharedCharactersList.tsx',
       'src/components/character-folders/FolderTree.tsx',

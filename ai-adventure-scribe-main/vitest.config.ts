@@ -739,6 +739,8 @@ export default defineConfig({
         'src/services/blog/blog-media-service.ts',
         'src/utils/multiclass/spellcasting.ts',
         'src/features/safety/SafetyCommandProcessor.ts',
+        'src/features/safety/SafetyAuditService.ts',
+        'src/features/safety/SafetyResponseFactory.ts',
         'src/features/game-session/hooks/use-panel-resize.ts',
         'src/features/game-session/components/game/CompactCharacterHeader.tsx',
         'src/features/game-session/components/game/FloatingActionPanel.tsx',
