@@ -104,17 +104,26 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
       <div className="flex items-center gap-2">
         {/* Mobile: Layers Panel Toggle */}
         {isMobile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleLayersPanel}
-            aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-            aria-pressed={showLayersPanel}
-            aria-expanded={showLayersPanel}
-            title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-          >
-            <Layers className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  type="button"
+                  onClick={toggleLayersPanel}
+                  aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
+                  aria-pressed={showLayersPanel}
+                  aria-expanded={showLayersPanel}
+                >
+                  <Layers className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{showLayersPanel ? 'Hide Layers' : 'Show Layers'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
 
         {/* Settings Dropdown */}

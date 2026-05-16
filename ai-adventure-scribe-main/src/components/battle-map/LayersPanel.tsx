@@ -164,6 +164,7 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
             <Button
               variant="ghost"
               size="icon"
+              type="button"
               className="h-8 w-8"
               onClick={handleVisibilityToggle}
               aria-label={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
@@ -181,6 +182,7 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
             <Button
               variant="ghost"
               size="icon"
+              type="button"
               className="h-8 w-8"
               onClick={handleLockToggle}
               aria-label={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}

@@ -32,6 +32,7 @@ import { ToolOptionsPanel } from '@/components/battle-map/ToolOptionsPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHotkeys, BATTLE_MAP_HOTKEYS, createHotkeyFromPreset } from '@/hooks/use-hotkeys';
@@ -276,26 +277,35 @@ export const BattleMapPage: React.FC = () => {
 
           {/* Layers Panel Toggle (Desktop) */}
           {!isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleLayersPanel}
-              aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-              aria-pressed={showLayersPanel}
-              aria-expanded={showLayersPanel}
-              title={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
-              className={cn(
-                'absolute top-4 transition-all',
-                showLayersPanel ? 'right-80' : 'right-4',
-              )}
-              style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
-            >
-              {showLayersPanel ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={toggleLayersPanel}
+                    aria-label={showLayersPanel ? 'Hide Layers' : 'Show Layers'}
+                    aria-pressed={showLayersPanel}
+                    aria-expanded={showLayersPanel}
+                    className={cn(
+                      'absolute top-4 transition-all',
+                      showLayersPanel ? 'right-80' : 'right-4',
+                    )}
+                    style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
+                  >
+                    {showLayersPanel ? (
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>{showLayersPanel ? 'Hide Layers' : 'Show Layers'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
 
