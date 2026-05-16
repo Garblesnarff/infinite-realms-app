@@ -215,3 +215,7 @@
 ## 2026-05-12 - [conversation-service Coverage & Bug Fix]
 **Learning:** Found that `saveChatMessage` in `conversation-service.ts` had a redundant try-catch block causing double-logging of errors. Also noticed `getConversationHistory` was missing `sequence_number` in its select clause, despite using it for ordering.
 **Action:** Implement unit tests with Supabase chain mocks. Remove the redundant try-catch to ensure single-point error logging. Standardize select clauses across AI services.
+
+## 2024-05-16 - [Chat Hooks Coverage & Logger Mocking]
+**Learning:** Implemented tests for `useChatHistory` and `useChatPersistence`. Discovered that when mocking `@/lib/logger`, assertions must match the import style. If using `import logger from '@/lib/logger'`, the mock should be accessed as `logger.info` rather than `logger.default.info` in tests if the mock setup returns an object that represents the default export. Also verified that `useChatPersistence` uses an exponential backoff for message verification which requires `vi.useFakeTimers()` and `vi.advanceTimersByTime()` for reliable testing.
+**Action:** When mocking utilities with both default and named exports, ensure the mock structure in `vi.mock` matches the expected consumer's usage. Always add both the test file and the source module to `vitest.config.ts` to maintain coverage thresholds.
