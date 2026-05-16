@@ -393,6 +393,7 @@ export default tseslint.config(
       'src/hooks/ai/roll-processor.ts',
       'src/hooks/use-ai-response.ts',
       'src/hooks/use-initial-greeting.ts',
+      'src/utils/game-session/initial-greeting-memories.ts',
       'src/services/combat/CombatSequenceValidator.ts',
       'src/services/combat/CombatResponseValidator.ts',
       'src/services/dice/DiceEngine.ts',
