@@ -8,6 +8,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { getHPColor, getHPStatusDescription } from '@/utils/hp-utils';
 
 interface HPTrackerProps {
@@ -63,20 +69,28 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
 
   return (
     <Card>
-      <CardContent className="p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <span className="font-semibold">{participant.name}</span>
-          <div className="flex items-center gap-4">
-            <div
-              className="flex items-center gap-1 text-sm cursor-help"
-              aria-label={`Armor Class: ${armorClass}`}
-              title={`Armor Class: ${armorClass}`}
-            >
-              <Shield className="w-4 h-4" aria-hidden="true" />
-              <span>AC: {armorClass}</span>
+      <TooltipProvider>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="font-semibold">{participant.name}</span>
+            <div className="flex items-center gap-4">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex items-center gap-1 text-sm cursor-help outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                    aria-label={`Armor Class: ${armorClass}`}
+                    tabIndex={0}
+                  >
+                    <Shield className="w-4 h-4" aria-hidden="true" />
+                    <span>AC: {armorClass}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Armor Class: {armorClass}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
-        </div>
 
         <div>
           <div className="flex justify-between items-center text-sm mb-1">
@@ -85,14 +99,14 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
               HP
             </span>
             {showHPDetails ? (
-              <span>
+              <span aria-live="polite">
                 {currentHitPoints} / {maxHitPoints}
                 {temporaryHitPoints > 0 && (
                   <span className="text-blue-500"> + {temporaryHitPoints}</span>
                 )}
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground" aria-live="polite">
                 {getHPStatusDescription(hpPercent)}
               </span>
             )}
@@ -124,16 +138,23 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
                 onChange={(e) => setDamageAmount(e.target.value)}
                 className="h-8"
               />
-              <Button
-                onClick={handleDamage}
-                size="sm"
-                variant="destructive"
-                className="h-8"
-                aria-label={`Apply damage to ${participant.name}`}
-                title={`Apply damage to ${participant.name}`}
-              >
-                <MinusCircle className="w-4 h-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={handleDamage}
+                    size="sm"
+                    variant="destructive"
+                    className="h-8"
+                    aria-label={`Apply damage to ${participant.name}`}
+                  >
+                    <MinusCircle className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Apply damage to {participant.name}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             <div className="flex-1 flex gap-1">
               <Label htmlFor={healInputId} className="sr-only">
@@ -147,20 +168,28 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
                 onChange={(e) => setHealAmount(e.target.value)}
                 className="h-8"
               />
-              <Button
-                onClick={handleHeal}
-                size="sm"
-                variant="secondary"
-                className="h-8"
-                aria-label={`Apply healing to ${participant.name}`}
-                title={`Apply healing to ${participant.name}`}
-              >
-                <PlusCircle className="w-4 h-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={handleHeal}
+                    size="sm"
+                    variant="secondary"
+                    className="h-8"
+                    aria-label={`Apply healing to ${participant.name}`}
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Apply healing to {participant.name}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      </TooltipProvider>
     </Card>
   );
 });

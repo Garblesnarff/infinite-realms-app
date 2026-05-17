@@ -53,7 +53,7 @@ describe('HPTracker', () => {
 
     // Damage button should have descriptive labels
     const damageButton = screen.getByRole('button', { name: /apply damage to thorin ironforge/i });
-    expect(damageButton).toHaveAttribute('title', 'Apply damage to Thorin Ironforge');
+    expect(damageButton).not.toHaveAttribute('title');
 
     // Check for heal input and label
     const healInput = screen.getByPlaceholderText('Heal');
@@ -66,7 +66,11 @@ describe('HPTracker', () => {
 
     // Heal button should have descriptive labels
     const healButton = screen.getByRole('button', { name: /apply healing to thorin ironforge/i });
-    expect(healButton).toHaveAttribute('title', 'Apply healing to Thorin Ironforge');
+    expect(healButton).not.toHaveAttribute('title');
+
+    // Check for aria-live="polite" on HP displays
+    const hpDisplay = screen.getByText(/45 \/ 45/);
+    expect(hpDisplay).toHaveAttribute('aria-live', 'polite');
   });
 
   it('calls onDamage and onHeal handlers with correct values', () => {
@@ -98,7 +102,9 @@ describe('HPTracker', () => {
     expect(screen.queryByText('45 / 45')).not.toBeInTheDocument();
 
     // Semantic status should be visible (45/45 is 100%, which is "Healthy")
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
+    const status = screen.getByText('Healthy');
+    expect(status).toBeInTheDocument();
+    expect(status).toHaveAttribute('aria-live', 'polite');
 
     // Progress bar aria-label should use semantic status
     const progress = screen.getByRole('progressbar');
