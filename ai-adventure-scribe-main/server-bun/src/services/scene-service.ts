@@ -166,26 +166,27 @@ export class SceneService {
       throw new NotFoundError('Campaign', data.campaignId);
     }
 
-    // Create default layers
+    // ⚡ Bolt: Parallelize default layers and settings insertions to reduce database round-trips.
+    // These operations are independent and can be executed concurrently.
     const layerValues = DEFAULT_LAYERS.map((layer) => ({
       ...layer,
       sceneId: scene.id,
     }));
 
-    await db.insert(sceneLayers).values(layerValues);
-
-    // Create default scene settings
-    await db.insert(sceneSettings).values({
-      sceneId: scene.id,
-      enableFogOfWar: false,
-      enableDynamicLighting: false,
-      snapToGrid: true,
-      gridOpacity: '0.30',
-      ambientLightLevel: '1.00',
-      darknessLevel: '0.00',
-      weatherEffects: null,
-      timeOfDay: null,
-    });
+    await Promise.all([
+      db.insert(sceneLayers).values(layerValues),
+      db.insert(sceneSettings).values({
+        sceneId: scene.id,
+        enableFogOfWar: false,
+        enableDynamicLighting: false,
+        snapToGrid: true,
+        gridOpacity: '0.30',
+        ambientLightLevel: '1.00',
+        darknessLevel: '0.00',
+        weatherEffects: null,
+        timeOfDay: null,
+      }),
+    ]);
 
     return scene;
   }
