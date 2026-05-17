@@ -374,6 +374,7 @@ export default tseslint.config(
       'src/components/character-creation/steps/race-selection/use-race-selection.ts',
       'src/components/character-creation/steps/RaceSelection.tsx',
       'src/components/character-creation/steps/ClassSelection.tsx',
+      'src/components/character-creation/steps/AbilityScoresSelection.tsx',
       'src/components/character-creation/steps/AdvancedSpellcastingSelection.tsx',
       'server-bun/src/services/llm-provider-service.ts',
       'server-bun/src/services/scene-service.ts',

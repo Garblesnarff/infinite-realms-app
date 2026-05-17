@@ -28,16 +28,23 @@ describe('RollDetails', () => {
     expect(screen.getByText(/current roll details/i)).toBeInTheDocument();
 
     // Check for "Reroll" button
-    const rerollBtn = screen.getByRole('button', { name: /reroll/i });
+    const rerollBtn = screen.getByRole('button', { name: /reroll strength/i });
     expect(rerollBtn).toBeInTheDocument();
     expect(rerollBtn).toHaveAttribute('title', 'Reroll strength');
+    expect(rerollBtn).toHaveAttribute('type', 'button');
 
-    // Check for rolls
+    // Check for rolls with aria-labels
+    expect(screen.getByLabelText('Rolled 4')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rolled 5')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rolled 6')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rolled 1, dropped')).toBeInTheDocument();
+
+    // Check for rolls text content
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();
 
-    // Check for dropped roll (variant="destructive" which usually has a specific class or can be inferred)
+    // Check for dropped roll
     const droppedRoll = screen.getByText('1');
     expect(droppedRoll).toBeInTheDocument();
   });

@@ -78,8 +78,14 @@ const AbilityScoresSelection: React.FC = () => {
               <div className="text-lg">
                 Points Remaining: <Badge variant="outline">{remainingPoints}</Badge>
               </div>
-              <Button onClick={handleReset} variant="ghost" size="sm">
-                <RotateCcw className="w-4 h-4 mr-1" />
+              <Button
+                type="button"
+                onClick={handleReset}
+                variant="ghost"
+                size="sm"
+                title="Reset ability scores"
+              >
+                <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
                 Reset
               </Button>
             </div>
@@ -100,7 +106,12 @@ const AbilityScoresSelection: React.FC = () => {
                   </Badge>
                 ))}
               </div>
-              <Button onClick={handleStandardArray} variant="default">
+              <Button
+                type="button"
+                onClick={handleStandardArray}
+                variant="default"
+                title="Apply the standard array of scores (15, 14, 13, 12, 10, 8)"
+              >
                 Apply Standard Array
               </Button>
             </div>
@@ -115,14 +126,25 @@ const AbilityScoresSelection: React.FC = () => {
             </p>
             <div className="flex items-center justify-between">
               <div className="flex gap-2">
-                <Button onClick={handleRollScores} variant="default">
-                  <Shuffle className="w-4 h-4 mr-1" />
+                <Button
+                  type="button"
+                  onClick={handleRollScores}
+                  variant="default"
+                  title="Roll new scores for all abilities"
+                >
+                  <Shuffle className="w-4 h-4 mr-1" aria-hidden="true" />
                   Roll New Scores
                 </Button>
                 <DiceRoller dice="4d6" label="Example Roll" />
               </div>
-              <Button onClick={handleReset} variant="ghost" size="sm">
-                <RotateCcw className="w-4 h-4 mr-1" />
+              <Button
+                type="button"
+                onClick={handleReset}
+                variant="ghost"
+                size="sm"
+                title="Reset ability scores"
+              >
+                <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
                 Reset
               </Button>
             </div>
