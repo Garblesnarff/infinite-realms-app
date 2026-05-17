@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { getHPColor } from '../hp-utils';
+import { getHPColor, getHPStatusDescription } from '../hp-utils';
 
 describe('getHPColor', () => {
   it('returns bg-red-500 for HP <= 25%', () => {
@@ -19,5 +19,27 @@ describe('getHPColor', () => {
     expect(getHPColor(51)).toBe('bg-green-500');
     expect(getHPColor(75)).toBe('bg-green-500');
     expect(getHPColor(100)).toBe('bg-green-500');
+  });
+});
+
+describe('getHPStatusDescription', () => {
+  it('returns Unconscious for HP <= 0%', () => {
+    expect(getHPStatusDescription(0)).toBe('Unconscious');
+    expect(getHPStatusDescription(-5)).toBe('Unconscious');
+  });
+
+  it('returns Near Death for HP > 0% and <= 25%', () => {
+    expect(getHPStatusDescription(1)).toBe('Near Death');
+    expect(getHPStatusDescription(25)).toBe('Near Death');
+  });
+
+  it('returns Bloodied for HP > 25% and <= 50%', () => {
+    expect(getHPStatusDescription(26)).toBe('Bloodied');
+    expect(getHPStatusDescription(50)).toBe('Bloodied');
+  });
+
+  it('returns Healthy for HP > 50%', () => {
+    expect(getHPStatusDescription(51)).toBe('Healthy');
+    expect(getHPStatusDescription(100)).toBe('Healthy');
   });
 });
