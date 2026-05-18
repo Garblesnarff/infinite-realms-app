@@ -1,34 +1,20 @@
-/* eslint-disable max-lines */
 import {
-  Play,
-  Pause,
-  Square,
-  Volume2,
-  VolumeX,
   Users,
-  Settings,
   AlertCircle,
-  RefreshCw,
-  Trash2,
-  TestTube,
 } from 'lucide-react';
 import React from 'react';
 
 import { VoicePlaybackStatus } from './VoicePlaybackStatus';
+import { VoicePlayerControls } from './VoicePlayerControls';
 import { VoiceSegmentsPreview } from './VoiceSegmentsPreview';
-import { VoiceStatusAlerts } from './VoiceStatusAlerts';
 
 import type { NarrationSegment } from '@/hooks/use-ai-response';
-import type { AISegment } from '@/services/voice-routing';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
@@ -40,15 +26,6 @@ interface ProgressiveVoicePlayerProps {
   className?: string;
 }
 
-// Helper function to convert NarrationSegments to AISegments
-const convertNarrationToAISegments = (narrationSegments: NarrationSegment[]): AISegment[] => {
-  return narrationSegments.map((segment) => ({
-    type: (['dm', 'narration'].includes(segment.type) ? 'dm' : 'character') as 'dm' | 'character',
-    text: segment.text,
-    character: segment.character,
-    voice_category: segment.voice_category,
-  }));
-};
 
 /**
  * ProgressiveVoicePlayer Component
@@ -89,15 +66,10 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
     'progressive-voice-user-interacted',
     false,
   );
-  const [autoPlayEnabled, setAutoPlayEnabled] = useLocalStorage(
-    'progressive-voice-auto-play',
-    false,
-  ); // DISABLED by default: Auto-play causes browser policy violations
-
-  // Auto-play functionality DISABLED to prevent browser policy issues
-  const [lastText, setLastText] = React.useState('');
 
   // Simple text change tracking (auto-play disabled)
+  const [lastText, setLastText] = React.useState('');
+
   React.useEffect(() => {
     if (text && text !== lastText && text.trim()) {
       setLastText(text);
@@ -105,115 +77,20 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
         textLength: text.length,
         hasNarrationSegments: !!(narrationSegments && narrationSegments.length > 0),
         narrationSegmentsLength: narrationSegments?.length || 0,
-        narrationSegmentsType: typeof narrationSegments,
-        narrationSegmentsFirst: narrationSegments?.[0],
-        rawNarrationSegments: narrationSegments,
       });
     }
   }, [text, narrationSegments, lastText]);
 
-  const handlePlayPause = React.useCallback(() => {
-    // Initialize audio context during user interaction for browser autoplay compliance
-    initializeAudioContext();
+  const getSegmentTypeIcon = (type: string): string => {
+    return type === 'character' ? '💬' : '📖';
+  };
 
-    // Mark that user has interacted
-    if (!hasUserInteracted) {
-      setHasUserInteracted(true);
-    }
-
-    if (isPlaying) {
-      stopPlayback();
-    } else if (!isProcessing) {
-      logger.info('🎵 Manual play initiated');
-      logger.debug('🔍 Debugging narration segments for manual play:', {
-        hasNarrationSegments: !!(narrationSegments && narrationSegments.length > 0),
-        narrationSegmentsLength: narrationSegments?.length || 0,
-        narrationSegmentsType: typeof narrationSegments,
-        rawNarrationSegments: narrationSegments,
-      });
-
-      if (narrationSegments && narrationSegments.length > 0) {
-        logger.debug('🎭 Manual play with AI segments');
-        const aiSegments = convertNarrationToAISegments(narrationSegments);
-        logger.debug('🔄 Converted AI segments:', aiSegments);
-        speakAISegments(aiSegments);
-      } else {
-        logger.debug('📝 Manual play with plain text fallback');
-        speakPlainText(text);
-      }
-    }
-  }, [
-    isPlaying,
-    isProcessing,
-    stopPlayback,
-    speakAISegments,
-    speakPlainText,
-    text,
-    narrationSegments,
-    hasUserInteracted,
-    initializeAudioContext,
-    setHasUserInteracted,
-  ]);
-
-  const _handleAutoPlayToggle = React.useCallback(() => {
-    setAutoPlayEnabled(!autoPlayEnabled);
-  }, [autoPlayEnabled, setAutoPlayEnabled]);
-
-  const handleRetry = React.useCallback(() => {
-    if (text && isVoiceEnabled && !isProcessing) {
-      if (narrationSegments && narrationSegments.length > 0) {
-        logger.debug('🔄 Retrying with AI segments');
-        const aiSegments = convertNarrationToAISegments(narrationSegments);
-        speakAISegments(aiSegments);
-      } else {
-        logger.debug('🔄 Retrying with plain text');
-        speakPlainText(text);
-      }
-    }
-  }, [text, narrationSegments, isVoiceEnabled, isProcessing, speakAISegments, speakPlainText]);
-
-  const handleTestAudio = React.useCallback(async () => {
-    logger.info('🧪 Testing audio with simple text...');
-
-    // Mark user interaction
-    if (!hasUserInteracted) {
-      setHasUserInteracted(true);
-    }
-
-    // Test with simple DM narration
-    const testSegments = [
-      {
-        type: 'dm' as const,
-        text: 'This is a test of the audio system.',
-        character: undefined,
-        voice_category: undefined,
-      },
-    ];
-
-    await speakAISegments(testSegments);
-  }, [speakAISegments, hasUserInteracted]);
-
-  const handleClearVoiceMappings = React.useCallback(() => {
-    logger.info('🔧 Clearing voice mappings...');
-    clearCharacterVoiceMappings();
-  }, [clearCharacterVoiceMappings]);
-
-  const handleVolumeChange = React.useCallback(
-    (values: number[]) => {
-      setVolume(values[0]);
-    },
-    [setVolume],
-  );
-
-  const calculateProgress = () => {
+  const calculateProgress = (): number => {
     if (segments.length === 0) return 0;
     if (!isPlaying && !isProcessing) return 0;
     return ((currentSegmentIndex + 1) / segments.length) * 100;
   };
 
-  const getSegmentTypeIcon = (type: string) => {
-    return type === 'character' ? '💬' : '📖';
-  };
 
   if (!isEnabled || !text) {
     return null;
@@ -252,7 +129,6 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
               )}
             </div>
             <div className="flex items-center gap-4">
-              {/* Auto-play toggle HIDDEN - auto-play disabled */}
               <div className="flex items-center gap-2">
                 <Switch
                   id="progressive-voice-enabled"
@@ -268,163 +144,29 @@ export const ProgressiveVoicePlayer: React.FC<ProgressiveVoicePlayerProps> = ({
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Main Controls */}
-          <div className="flex items-center gap-3">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePlayPause}
-                  disabled={!isVoiceEnabled || isProcessing || !text}
-                  className="h-10 w-10 p-0"
-                  aria-label={isPlaying ? 'Pause' : 'Play'}
-                  aria-pressed={isPlaying}
-                >
-                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{isPlaying ? 'Pause' : 'Play'}</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={stopPlayback}
-                  disabled={!isPlaying && !isProcessing}
-                  className="h-10 w-10 p-0"
-                  aria-label="Stop"
-                >
-                  <Square className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Stop</TooltipContent>
-            </Tooltip>
-
-            {/* Retry API Key Button */}
-            {!apiKey && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={retryApiKeyFetch}
-                    className="h-10 w-10 p-0 border-orange-300 text-orange-600 hover:bg-orange-50"
-                    aria-label="Retry API key fetch"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Retry API key fetch</TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* Test Audio Button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestAudio}
-                  disabled={!isVoiceEnabled || isProcessing}
-                  className="h-10 w-10 p-0"
-                  aria-label="Test audio"
-                >
-                  <TestTube className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Test audio</TooltipContent>
-            </Tooltip>
-
-            {/* Clear Voice Mappings Button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearVoiceMappings}
-                  className="h-10 w-10 p-0"
-                  aria-label="Clear voice mappings"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Clear voice mappings</TooltipContent>
-            </Tooltip>
-
-            {/* Retry Button */}
-            {error && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetry}
-                    disabled={!isVoiceEnabled || isProcessing}
-                    className="h-10 w-10 p-0"
-                    aria-label="Retry"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Retry</TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* Volume Controls */}
-            <div className="flex items-center gap-2 flex-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={toggleMute}
-                className="h-8 w-8 p-0"
-                aria-label={isMuted ? 'Unmute' : 'Mute'}
-                aria-pressed={isMuted}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-
-              <Slider
-                value={[isMuted ? 0 : volume]}
-                onValueChange={handleVolumeChange}
-                max={1}
-                step={0.05}
-                className="flex-1"
-                aria-label="Adjust playback volume"
-              />
-
-              <span className="text-xs text-muted-foreground w-10 text-right">
-                {Math.round((isMuted ? 0 : volume) * 100)}%
-              </span>
-            </div>
-
-            <Collapsible open={showSegments} onOpenChange={setShowSegments}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Segments ({segments.length})
-                </Button>
-              </CollapsibleTrigger>
-            </Collapsible>
-          </div>
-
-          <VoiceStatusAlerts
-            error={error}
+          <VoicePlayerControls
+            text={text}
+            narrationSegments={narrationSegments}
+            isVoiceEnabled={isVoiceEnabled}
             isProcessing={isProcessing}
-            apiKey={apiKey}
-            hasUserInteracted={hasUserInteracted}
             isPlaying={isPlaying}
+            stopPlayback={stopPlayback}
+            apiKey={apiKey}
             retryApiKeyFetch={retryApiKeyFetch}
-            handleRetry={handleRetry}
+            error={error}
+            isMuted={isMuted}
+            volume={volume}
+            toggleMute={toggleMute}
+            setVolume={setVolume}
+            showSegments={showSegments}
+            setShowSegments={setShowSegments}
+            segments={segments}
+            initializeAudioContext={initializeAudioContext}
+            hasUserInteracted={hasUserInteracted}
+            setHasUserInteracted={setHasUserInteracted}
+            speakAISegments={speakAISegments}
+            speakPlainText={speakPlainText}
+            clearCharacterVoiceMappings={clearCharacterVoiceMappings}
           />
 
           <VoicePlaybackStatus
