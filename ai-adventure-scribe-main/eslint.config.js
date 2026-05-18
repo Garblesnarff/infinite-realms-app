@@ -320,6 +320,7 @@ export default tseslint.config(
       'src/components/scenes/SceneTemplateLibrary.tsx',
       'src/components/scenes/scene-templates.ts',
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
+      'src/features/campaign/components/creation/steps/GenreCard.tsx',
       'src/features/campaign/components/creation/steps/GenreSelection.tsx',
       'server-bun/src/services/spell-slots-service.ts',
       'server-bun/src/services/spell-slots/spell-slot-data-access.ts',
