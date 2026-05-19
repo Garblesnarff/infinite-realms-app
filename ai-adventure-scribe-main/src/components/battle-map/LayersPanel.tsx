@@ -218,6 +218,7 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
               className="w-full"
               disabled={!visible}
               aria-label={`${layer.name} layer opacity`}
+              getAriaValueText={(value) => `${Math.round(value * 100)}%`}
             />
           </div>
         )}

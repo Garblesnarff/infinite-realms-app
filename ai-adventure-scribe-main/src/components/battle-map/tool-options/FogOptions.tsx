@@ -71,6 +71,7 @@ export const FogOptions: React.FC<FogOptionsProps> = ({
           step={10}
           className="w-full"
           aria-label="Brush Size"
+          getAriaValueText={(value) => `${value}px`}
         />
         <span className="text-xs text-muted-foreground">{brushSize}px</span>
       </div>

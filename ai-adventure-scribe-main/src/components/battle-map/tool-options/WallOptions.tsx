@@ -86,6 +86,7 @@ export const WallOptions: React.FC<WallOptionsProps> = ({
           step={1}
           className="w-full"
           aria-label="Wall Stroke Width"
+          getAriaValueText={(value) => `${value}px`}
         />
         <span className="text-xs text-muted-foreground">{strokeWidth}px</span>
       </div>

@@ -189,6 +189,7 @@ const PhysicalStep: React.FC = () => {
               onValueChange={handleHeightChange}
               className="py-4"
               aria-label="Height"
+              getAriaValueText={formatHeight}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Min: {formatHeight(heightRange[0])}</span>
@@ -219,6 +220,7 @@ const PhysicalStep: React.FC = () => {
               onValueChange={handleWeightChange}
               className="py-4"
               aria-label="Weight"
+              getAriaValueText={formatWeight}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Min: {formatWeight(weightRange[0])}</span>

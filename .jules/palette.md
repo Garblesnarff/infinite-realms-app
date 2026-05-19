@@ -165,3 +165,7 @@
 ## 2026-06-25 - User Search Keyboard Navigation and Screen Reader Accessibility
 **Learning:** For interactive search suggestions, implementing keyboard navigation (Arrow keys, Enter, Escape) is not enough for full accessibility. Adding 'aria-activedescendant' on the search input, combined with unique IDs on suggestion options, ensures that screen readers announce the currently highlighted item as the user navigates. Using a short delay in 'onBlur' allows mouse clicks on suggestions to register before the list is dismissed.
 **Action:** Always pair keyboard navigation logic with 'aria-activedescendant' and unique option IDs. Use 'useId' for stable ID prefixes. Implement 'onBlur' with a 'setTimeout' delay when suggestions are dismissible by losing focus.
+
+## 2026-07-15 - Slider Accessibility with aria-valuetext
+**Learning:** For Shadcn/Radix Slider components, visual labels and numeric percentages are often not enough for screen readers to provide meaningful context during adjustment. Implementing `getAriaValueText` on the `Slider` (and passing it down to the `Thumb`'s `aria-valuetext` attribute) allows screen readers to announce human-readable values like "80%" or "10px" instead of raw numbers.
+**Action:** Enhance standard `Slider` components to support a `getAriaValueText` prop. Always provide this prop at call sites where the numeric value has a unit or specific context.
