@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useId, useCallback } from 'react';
 
 import { CombatSummary } from './CombatSummary';
 import { CompactCharacterHeader } from './CompactCharacterHeader';
@@ -61,11 +61,11 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
   }) => {
     const sessionNotesId = useId();
 
-    const handleSaveNotes = (): void => {
+    const handleSaveNotes = useCallback((): void => {
       if (sessionData) {
         updateGameSessionState({ session_notes: localSessionNotes });
       }
-    };
+    }, [sessionData, updateGameSessionState, localSessionNotes]);
 
     return (
       <div className="flex flex-col h-full bg-background">

@@ -1,5 +1,5 @@
 import { List, ChevronDown, ChevronUp, User, Sword, Menu, ChevronLeft } from 'lucide-react';
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
@@ -43,7 +43,7 @@ interface GameSidePanelProps extends MemoryPanelProps {
  * Main component for displaying and managing game memories and session notes
  * Provides filtering, sorting, and collapsible functionality
  */
-export const GameSidePanel: React.FC<GameSidePanelProps> = ({
+export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(({
   sessionData,
   updateGameSessionState,
   combatMode,
@@ -82,18 +82,42 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const isMobile = window.innerWidth < 1024; // lg breakpoint
 
-  // Get filtered and sorted memories using custom hook (must be called unconditionally)
-  const sortedMemories = useMemoryFiltering(memories, {
+  // ⚡ Bolt: Memoize filter options to prevent redundant re-filtering on every render.
+  const filterOptions = useMemo(() => ({
     types: selectedType ? [selectedType as MemoryType] : undefined,
-  });
+  }), [selectedType]);
+
+  // Get filtered and sorted memories using custom hook (must be called unconditionally)
+  const sortedMemories = useMemoryFiltering(memories, filterOptions);
 
   // Sync local notes from session state (unconditional hook)
   useEffect(() => {
     setLocalSessionNotes(sessionData?.session_notes || '');
   }, [sessionData?.session_notes]);
 
-  // Toggle mobile drawer
-  const toggleMobileDrawer = (): void => setIsMobileDrawerOpen(!isMobileDrawerOpen);
+  // ⚡ Bolt: Stabilize event handlers to prevent unnecessary re-renders of children.
+  const toggleMobileDrawer = useCallback((): void => {
+    setIsMobileDrawerOpen(prev => !prev);
+  }, []);
+
+  const handleSaveNotes = useCallback((): void => {
+    if (sessionData) {
+      updateGameSessionState({ session_notes: localSessionNotes });
+    }
+  }, [sessionData, updateGameSessionState, localSessionNotes]);
+
+  const handleTabChange = useCallback((value: 'character' | 'memory' | 'combat'): void => {
+    setActiveTab(value);
+    // Auto-expand when switching tabs
+    setIsExpanded(true);
+
+    // Stabilize analytics call by using current state values
+    const artStyle = analytics.detectArtStyle({
+      characterTheme: characterState?.character?.theme,
+      campaignGenre: campaignState?.campaign?.genre,
+    });
+    analytics.campaignTabViewed(value, { campaignId: routeCampaignId, artStyle });
+  }, [setActiveTab, setIsExpanded, characterState?.character?.theme, campaignState?.campaign?.genre, routeCampaignId]);
 
   // Collapsed state rendering - mobile vs desktop
   if (isCollapsed) {
@@ -195,23 +219,6 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
       </div>
     );
   }
-
-  const handleSaveNotes = (): void => {
-    if (sessionData) {
-      updateGameSessionState({ session_notes: localSessionNotes });
-    }
-  };
-
-  const handleTabChange = (value: 'character' | 'memory' | 'combat'): void => {
-    setActiveTab(value);
-    // Auto-expand when switching tabs
-    setIsExpanded(true);
-    const artStyle = analytics.detectArtStyle({
-      characterTheme: characterState?.character?.theme,
-      campaignGenre: campaignState?.campaign?.genre,
-    });
-    analytics.campaignTabViewed(value, { campaignId: routeCampaignId, artStyle });
-  };
 
   return (
     <div
@@ -389,5 +396,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = ({
       </Card>
     </div>
   );
-};
+});
+
+GameSidePanel.displayName = 'GameSidePanel';
 
