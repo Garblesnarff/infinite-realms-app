@@ -219,3 +219,7 @@
 ## 2024-05-16 - [Chat Hooks Coverage & Logger Mocking]
 **Learning:** Implemented tests for `useChatHistory` and `useChatPersistence`. Discovered that when mocking `@/lib/logger`, assertions must match the import style. If using `import logger from '@/lib/logger'`, the mock should be accessed as `logger.info` rather than `logger.default.info` in tests if the mock setup returns an object that represents the default export. Also verified that `useChatPersistence` uses an exponential backoff for message verification which requires `vi.useFakeTimers()` and `vi.advanceTimersByTime()` for reliable testing.
 **Action:** When mocking utilities with both default and named exports, ensure the mock structure in `vi.mock` matches the expected consumer's usage. Always add both the test file and the source module to `vitest.config.ts` to maintain coverage thresholds.
+
+## 2026-05-20 - [Lighting Mechanics Coverage & Bug Fixes]
+**Learning:** Implemented comprehensive unit tests for `src/utils/lighting/mechanics.ts` in `src/utils/lighting/__tests__/mechanics.test.ts`. Found two bugs: (1) one-sided shadows caused by an incorrect dot product check in `castShadowFromSegment`, and (2) an off-by-one error in `calculateAmbientOcclusion` that skipped the closing segment of polygon walls. Achieved 100% statement and line coverage.
+**Action:** Always include both the test file and the source module in `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Use `await import()` inside `async it` blocks to localized behavior changes for global mocks.
