@@ -1,7 +1,8 @@
 /* eslint-disable max-lines */
 import { describe, it, expect } from 'vitest';
 
-import { parseRegexRollRequests, normalizeFormula } from '../regex-parser';
+import { normalizeFormula } from '../formula-utils';
+import { parseRegexRollRequests } from '../regex-parser';
 
 describe('regex-parser', () => {
   describe('parseRegexRollRequests', () => {

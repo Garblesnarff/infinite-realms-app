@@ -4,9 +4,10 @@
  * Uses structured parsing for ROLL_REQUESTS_V1 blocks and regex for natural language fallback.
  */
 
-import { parseRegexRollRequests, normalizeFormula } from './regex-parser';
+import { normalizeFormula } from './formula-utils';
+import { parseRegexRollRequests } from './regex-parser';
 
-import type { ParsedRollRequest } from './regex-parser';
+import type { ParsedRollRequest } from './regex-patterns';
 import type { RollRequest } from '@/types/roll-request';
 
 // Re-export for backward compatibility
@@ -39,15 +40,15 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
           if (roll.type && roll.formula && purposeValue) {
             requests.push({
               type: roll.type as RollRequest['type'],
-              formula: roll.formula,
+              formula: roll.formula as string,
               purpose: purposeValue,
-              dc: roll.dc,
-              ac: roll.ac,
-              advantage: roll.advantage,
-              disadvantage: roll.disadvantage,
+              dc: (roll.dc as number) ?? undefined,
+              ac: (roll.ac as number) ?? undefined,
+              advantage: (roll.advantage as boolean) ?? undefined,
+              disadvantage: (roll.disadvantage as boolean) ?? undefined,
               // Additional fields for damage_taken type
-              target: roll.target,
-              damageType: roll.damageType as string | undefined,
+              target: (roll.target as string) ?? undefined,
+              damageType: (roll.damageType as string) ?? undefined,
               originalText: `ROLL_REQUESTS_V1: ${purposeValue}`,
               confidence: 1.0, // Structured data is highest confidence
             });
