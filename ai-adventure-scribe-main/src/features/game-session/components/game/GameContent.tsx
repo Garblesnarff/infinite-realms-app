@@ -67,6 +67,11 @@ const GameContent: React.FC = () => {
     );
   }, []);
 
+  // ⚡ Bolt: Stable callback for scene blurb toggle
+  const handleSceneBlurbToggle = useCallback(() => {
+    setShowSceneBlurb((v) => !v);
+  }, [setShowSceneBlurb]);
+
   // Combine loading states
   const combinedIsLoading = isLoading || sessionState === 'loading';
   const combinedError = error || (sessionState === 'error' ? 'Error with game session.' : null);
@@ -130,7 +135,7 @@ const GameContent: React.FC = () => {
         handleAIResponse={handleAIResponse}
         isDM={isDM}
         showSceneBlurb={showSceneBlurb}
-        setShowSceneBlurb={setShowSceneBlurb}
+        onSceneBlurbToggle={handleSceneBlurbToggle}
       />
     </GameProviders>
   );
@@ -150,7 +155,7 @@ interface GameContentInnerProps {
   handleAIResponse: (message: any) => Promise<void>;
   isDM: boolean;
   showSceneBlurb: boolean;
-  setShowSceneBlurb: (v: boolean) => void;
+  onSceneBlurbToggle: () => void;
 }
 
 const GameContentInner: React.FC<GameContentInnerProps> = ({
@@ -163,7 +168,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   combatMode,
   isDM,
   showSceneBlurb,
-  setShowSceneBlurb,
+  onSceneBlurbToggle,
   handleAIResponse,
 }) => {
   const getDefaultLeftCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1200;
@@ -293,6 +298,11 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
     prevInCombatRef.current = combatState.isInCombat;
   }, [combatState.isInCombat, combatState.activeEncounter, sendMessage]);
 
+  // ⚡ Bolt: Stable callback for scene blurb toggle
+  const handleSceneBlurbToggle = useCallback(() => {
+    onSceneBlurbToggle();
+  }, [onSceneBlurbToggle]);
+
   return (
     <GameLayout
       sessionId={sessionId}
@@ -305,7 +315,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
       setIsLeftCollapsed={setIsLeftCollapsed}
       setIsRightCollapsed={setIsRightCollapsed}
       showSceneBlurb={showSceneBlurb}
-      setShowSceneBlurb={setShowSceneBlurb}
+      onSceneBlurbToggle={handleSceneBlurbToggle}
       combatMode={combatMode}
       showTracker={showTracker}
       setShowTracker={setShowTracker}
