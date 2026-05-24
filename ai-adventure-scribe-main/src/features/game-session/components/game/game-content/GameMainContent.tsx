@@ -8,6 +8,8 @@ import { StatsBar } from '../StatsBar';
 import { TimelineRail } from '../TimelineRail';
 import { GamePanelControls } from './GamePanelControls';
 
+import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
+
 import { CombatStatus } from '@/components/combat/CombatStatus';
 import { SafetyBanner } from '@/components/safety/SafetyBanner';
 import { Button } from '@/components/ui/button';
@@ -29,10 +31,10 @@ interface GameMainContentProps {
   sessionId: string;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
-  sessionData: Record<string, unknown>;
-  updateGameSessionState: (state: unknown) => void;
+  sessionData: ExtendedGameSession;
+  updateGameSessionState: (newState: SessionStateUpdater) => Promise<void> | void;
   showSceneBlurb: boolean;
-  setShowSceneBlurb: (v: boolean) => void;
+  onSceneBlurbToggle: () => void;
   isLeftCollapsed: boolean;
   isRightCollapsed: boolean;
   onLeftToggle: () => void;
@@ -65,7 +67,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
   sessionData,
   updateGameSessionState,
   showSceneBlurb,
-  setShowSceneBlurb,
+  onSceneBlurbToggle,
   isLeftCollapsed,
   isRightCollapsed,
   onLeftToggle,
@@ -144,7 +146,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
                   {showSceneBlurb && (
                     <div className="flex-1 hidden xl:block">
                       <p className="text-narrative text-muted-foreground leading-relaxed text-xs line-clamp-2">
-                        {stripAssetTags(sessionData.current_scene_description) ||
+                        {stripAssetTags(sessionData.current_scene_description || '') ||
                           'Your infinite story unfolds across realms of endless possibility...'}
                       </p>
                     </div>
@@ -182,7 +184,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
                 showSceneBlurb={showSceneBlurb}
                 onLeftToggle={onLeftToggle}
                 onRightToggle={onRightToggle}
-                onSceneBlurbToggle={() => setShowSceneBlurb(!showSceneBlurb)}
+                onSceneBlurbToggle={onSceneBlurbToggle}
               />
               <Button
                 variant={showTracker ? 'destructive' : 'outline'}

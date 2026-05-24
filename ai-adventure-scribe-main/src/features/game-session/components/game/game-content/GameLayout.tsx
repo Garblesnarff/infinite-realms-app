@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useLayoutEffect, useState, useCallback, memo } from 'react';
 
 
 import { GameCombatSheet } from './GameCombatSheet';
@@ -6,6 +6,8 @@ import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { FloatingActionPanel } from '../FloatingActionPanel';
+
+import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
 import { Z_INDEX } from '@/constants/z-index';
 import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
@@ -22,20 +24,20 @@ interface GameLayoutProps {
   sessionId: string;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
-  sessionData: any;
-  updateGameSessionState: any;
+  sessionData: ExtendedGameSession;
+  updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
   isLeftCollapsed: boolean;
   isRightCollapsed: boolean;
-  setIsLeftCollapsed: (v: boolean) => void;
-  setIsRightCollapsed: (v: boolean) => void;
+  setIsLeftCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void;
+  setIsRightCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void;
   showSceneBlurb: boolean;
-  setShowSceneBlurb: (v: boolean) => void;
+  onSceneBlurbToggle: () => void;
   combatMode: boolean;
   showTracker: boolean;
   setShowTracker: (v: boolean) => void;
   isCombatDetected: boolean;
   isGeneratingGreeting: boolean;
-  innerHandleAIResponse: (message: any) => Promise<void>;
+  innerHandleAIResponse: (message: unknown) => Promise<void>;
   isDM: boolean;
   lastSafetyCommand?: {
     type: 'x_card' | 'veil' | 'pause' | 'resume';
@@ -47,7 +49,12 @@ interface GameLayoutProps {
   showSafetyInfo: boolean;
 }
 
-export const GameLayout: React.FC<GameLayoutProps> = ({
+/**
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the entire layout.
+ * Optimized with useCallback for stable handlers to ensure memoized children
+ * (LeftPanel, RightPanel, etc.) don't re-render unless their specific props change.
+ */
+export const GameLayout: React.FC<GameLayoutProps> = memo(({
   sessionId,
   campaignIdForHandler,
   characterIdForHandler,
@@ -58,7 +65,7 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
   setIsLeftCollapsed,
   setIsRightCollapsed,
   showSceneBlurb,
-  setShowSceneBlurb,
+  onSceneBlurbToggle,
   combatMode,
   showTracker,
   setShowTracker,
@@ -75,9 +82,26 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
   const [isFloatingPanelVisible, setIsFloatingPanelVisible] = useState(false);
   const { currentBackgroundUrl, isTransitioning } = useSceneBackground();
 
+  // ⚡ Bolt: Stable callbacks for UI toggles to prevent child re-renders
+  const handleLeftToggle = useCallback((): void => {
+    setIsLeftCollapsed((v) => !v);
+  }, [setIsLeftCollapsed]);
+
+  const handleRightToggle = useCallback((): void => {
+    setIsRightCollapsed((v) => !v);
+  }, [setIsRightCollapsed]);
+
+  const handleLeftClose = useCallback((): void => {
+    setIsLeftCollapsed(true);
+  }, [setIsLeftCollapsed]);
+
+  const handleFloatingPanelToggle = useCallback((): void => {
+    setIsFloatingPanelVisible((v) => !v);
+  }, []);
+
   // Measure sticky nav + breadcrumbs height to constrain viewport
   useLayoutEffect(() => {
-    const calc = () => {
+    const calc = (): void => {
       const nav = document.getElementById('app-nav')?.offsetHeight || 0;
       const crumbs = document.getElementById('app-breadcrumbs')?.offsetHeight || 0;
       setTopOffset(nav + crumbs);
@@ -88,7 +112,7 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
   }, []);
 
   return (
-    <div className="bg-background relative" style={{ ['--top-offset' as any]: `${topOffset}px` }}>
+    <div className="bg-background relative" style={{ ['--top-offset' as string]: `${topOffset}px` }}>
       {/* Scene background layer */}
       {currentBackgroundUrl && (
         <div
@@ -123,7 +147,7 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
           }`}
         >
           {/* Left Campaign Panel */}
-          <GameLeftPanel isCollapsed={isLeftCollapsed} onToggle={() => setIsLeftCollapsed(true)} />
+          <GameLeftPanel isCollapsed={isLeftCollapsed} onToggle={handleLeftClose} />
 
           {/* Main Content Area */}
           <GameMainContent
@@ -133,11 +157,11 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
             sessionData={sessionData}
             updateGameSessionState={updateGameSessionState}
             showSceneBlurb={showSceneBlurb}
-            setShowSceneBlurb={setShowSceneBlurb}
+            onSceneBlurbToggle={onSceneBlurbToggle}
             isLeftCollapsed={isLeftCollapsed}
             isRightCollapsed={isRightCollapsed}
-            onLeftToggle={() => setIsLeftCollapsed(!isLeftCollapsed)}
-            onRightToggle={() => setIsRightCollapsed(!isRightCollapsed)}
+            onLeftToggle={handleLeftToggle}
+            onRightToggle={handleRightToggle}
             showTracker={showTracker}
             setShowTracker={setShowTracker}
             isCombatDetected={isCombatDetected}
@@ -156,14 +180,14 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
               sessionData={sessionData}
               updateGameSessionState={updateGameSessionState}
               combatMode={combatMode}
-              onToggle={() => setIsRightCollapsed(!isRightCollapsed)}
+              onToggle={handleRightToggle}
             />
           </div>
 
           {/* Floating Action Panel for Quick RPG Actions */}
           <FloatingActionPanel
             isVisible={isFloatingPanelVisible}
-            onToggle={() => setIsFloatingPanelVisible(!isFloatingPanelVisible)}
+            onToggle={handleFloatingPanelToggle}
             combatMode={combatMode}
           />
 
@@ -173,4 +197,6 @@ export const GameLayout: React.FC<GameLayoutProps> = ({
       </div>
     </div>
   );
-};
+});
+
+GameLayout.displayName = 'GameLayout';
