@@ -23,6 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
@@ -82,10 +88,21 @@ const PermissionBadge: React.FC<{ level: PermissionLevel }> = ({ level }) => {
   const { icon: Icon, label, variant, description } = config[level];
 
   return (
-    <Badge variant={variant} className="gap-1" title={description}>
-      <Icon className="h-3 w-3" aria-hidden="true" />
-      {label}
-    </Badge>
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Badge
+          variant={variant}
+          className="gap-1 cursor-help focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none"
+          tabIndex={0}
+        >
+          <Icon className="h-3 w-3" aria-hidden="true" />
+          {label}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{description}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -122,7 +139,7 @@ const SharedCharacterCard: React.FC<{
             />
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-lg truncate">{character.name}</h3>
+            <h3 className="font-semibold text-lg truncate" title={character.name}>{character.name}</h3>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {character.race && <span>{character.race}</span>}
               {character.class && (
@@ -165,27 +182,41 @@ const SharedCharacterCard: React.FC<{
 
         {/* Actions */}
         <div className="flex items-center gap-2 pt-2">
-          <Button
-            size="sm"
-            onClick={() => navigate(`/app/character/${character.id}`)}
-            className="flex-1"
-            title={`View ${character.name}'s character sheet`}
-            aria-label={`View ${character.name}'s character sheet`}
-          >
-            View Character
-            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemoveSelf(character.id, character.name)}
-            className="text-muted-foreground hover:text-destructive"
-            aria-label={`Remove my access to ${character.name}`}
-            title={`Remove my access to ${character.name}`}
-          >
-            <UserMinus className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => navigate(`/app/character/${character.id}`)}
+                className="flex-1"
+                aria-label={`View ${character.name}'s character sheet`}
+              >
+                View Character
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View {character.name}'s character sheet</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onRemoveSelf(character.id, character.name)}
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={`Remove my access to ${character.name}`}
+              >
+                <UserMinus className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Remove my access to {character.name}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </Card>
@@ -274,8 +305,9 @@ export const SharedCharactersList: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -305,16 +337,23 @@ export const SharedCharactersList: React.FC = () => {
             </SelectContent>
           </Select>
           {filterPermission !== 'all' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setFilterPermission('all')}
-              className="h-8 w-8"
-              aria-label="Clear filter"
-              title="Clear filter"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setFilterPermission('all')}
+                  className="h-8 w-8"
+                  aria-label="Clear filter"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Clear filter</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -367,19 +406,33 @@ export const SharedCharactersList: React.FC = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel title="Cancel and keep access">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmRemoveSelf}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              title={`Confirm removing your access to ${selectedCharacter?.name}`}
-              aria-label={`Confirm removing your access to ${selectedCharacter?.name}`}
-            >
-              {removeSelfMutation.isPending ? 'Removing...' : 'Remove Access'}
-            </AlertDialogAction>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel and keep access</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <AlertDialogAction
+                  onClick={confirmRemoveSelf}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  aria-label={`Confirm removing your access to ${selectedCharacter?.name}`}
+                >
+                  {removeSelfMutation.isPending ? 'Removing...' : 'Remove Access'}
+                </AlertDialogAction>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Confirm removing your access to {selectedCharacter?.name}</p>
+              </TooltipContent>
+            </Tooltip>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </TooltipProvider>
   );
 };
 
