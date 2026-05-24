@@ -332,6 +332,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
                   max={200}
                   step={1}
                   aria-label="Scale percentage"
+                  getAriaValueText={(value) => `${value}%`}
                 />
               </div>
 
@@ -352,6 +353,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
                   max={500}
                   step={1}
                   aria-label="Horizontal offset in pixels"
+                  getAriaValueText={(value) => `${value}px`}
                 />
               </div>
 
@@ -372,6 +374,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
                   max={500}
                   step={1}
                   aria-label="Vertical offset in pixels"
+                  getAriaValueText={(value) => `${value}px`}
                 />
               </div>
 

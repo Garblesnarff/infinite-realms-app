@@ -51,6 +51,7 @@ export const DrawOptions: React.FC<DrawOptionsProps> = ({
           step={1}
           className="w-full"
           aria-label="Stroke Width"
+          getAriaValueText={(value) => `${value}px`}
         />
         <span className="text-xs text-muted-foreground">{strokeWidth}px</span>
       </div>
@@ -92,6 +93,7 @@ export const DrawOptions: React.FC<DrawOptionsProps> = ({
               step={5}
               className="w-full"
               aria-label="Fill Opacity"
+              getAriaValueText={(value) => `${Math.round(value)}%`}
             />
             <span className="text-xs text-muted-foreground">{Math.round(fillOpacity * 100)}%</span>
           </div>

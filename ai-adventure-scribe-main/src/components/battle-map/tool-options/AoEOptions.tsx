@@ -99,6 +99,7 @@ export const AoEOptions: React.FC<AoEOptionsProps> = ({
           step={5}
           className="w-full"
           aria-label="Template Opacity"
+          getAriaValueText={(value) => `${Math.round(value)}%`}
         />
         <span className="text-xs text-muted-foreground">{Math.round(fillOpacity * 100)}%</span>
       </div>
