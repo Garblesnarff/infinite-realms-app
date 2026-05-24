@@ -31,6 +31,12 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Slider } from '@/components/ui/slider';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { trpc } from '@/lib/trpc';
 import { useBattleMapStore } from '@/stores/useBattleMapStore';
 
@@ -150,51 +156,71 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <div
               className="w-3 h-3 rounded-sm shrink-0"
+              aria-hidden="true"
               style={{
                 backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.7)`,
               }}
             />
-            <span className="font-medium text-sm truncate" title={layer.name}>
-              {layer.name}
-            </span>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span className="font-medium text-sm truncate cursor-help">
+                  {layer.name}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{layer.name}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
             {/* Visibility Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              type="button"
-              className="h-8 w-8"
-              onClick={handleVisibilityToggle}
-              aria-label={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
-              aria-pressed={visible}
-              title={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
-            >
-              {visible ? (
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              )}
-            </Button>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  type="button"
+                  className="h-8 w-8"
+                  onClick={handleVisibilityToggle}
+                  aria-label={visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
+                  aria-pressed={visible}
+                >
+                  {visible ? (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}</p>
+              </TooltipContent>
+            </Tooltip>
 
             {/* Lock Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              type="button"
-              className="h-8 w-8"
-              onClick={handleLockToggle}
-              aria-label={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
-              aria-pressed={locked}
-              title={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
-            >
-              {locked ? (
-                <Lock className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Unlock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              )}
-            </Button>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  type="button"
+                  className="h-8 w-8"
+                  onClick={handleLockToggle}
+                  aria-label={locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
+                  aria-pressed={locked}
+                >
+                  {locked ? (
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Unlock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>{locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -205,7 +231,7 @@ const LayerControlItem: React.FC<LayerControlItemProps> = React.memo(
               <Label htmlFor={opacityId} className="cursor-pointer">
                 Opacity
               </Label>
-              <span>{Math.round(opacity * 100)}%</span>
+              <span aria-live="polite">{Math.round(opacity * 100)}%</span>
             </div>
             <Slider
               id={opacityId}
@@ -293,17 +319,25 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
 
     return (
       <Sheet open={actualOpen} onOpenChange={actualOnOpenChange}>
-        <SheetTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-10 w-10"
-          title="Open layers panel"
-          aria-label="Open layers panel"
-        >
-          <Layers className="h-5 w-5" aria-hidden="true" />
-        </Button>
-      </SheetTrigger>
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  aria-label="Open layers panel"
+                >
+                  <Layers className="h-5 w-5" aria-hidden="true" />
+                </Button>
+              </SheetTrigger>
+            </TooltipTrigger>
+            <TooltipContent side={side === 'left' ? 'right' : 'left'}>
+              <p>Open layers panel</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
       <SheetContent side={side} className="w-[350px] sm:w-[400px] overflow-y-auto">
         <SheetHeader>
@@ -359,9 +393,16 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                           backgroundColor: `hsla(${layer.zIndex * 60}, 70%, 50%, 0.3)`,
                         }}
                       />
-                      <span title={layer.name} className="truncate max-w-[150px]">
-                        {layer.name}
-                      </span>
+                      <Tooltip delayDuration={300}>
+                        <TooltipTrigger asChild>
+                          <span className="truncate max-w-[150px] cursor-help">
+                            {layer.name}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>{layer.name}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <span className="text-xs text-muted-foreground">(Not initialized)</span>
                     </div>
                   </div>
@@ -391,39 +432,59 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
               role="group"
               aria-label="Layer quick actions"
             >
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleShowAll}
-                title="Show all map layers"
-                aria-label="Show all map layers"
-              >
-                <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
-                Show All
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleHideAll}
-                title="Hide all map layers"
-                aria-label="Hide all map layers"
-              >
-                <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
-                Hide All
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleReset}
-                title="Reset layers to default visibility and opacity"
-                aria-label="Reset layers to default visibility and opacity"
-              >
-                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-                Reset
-              </Button>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShowAll}
+                    aria-label="Show all map layers"
+                  >
+                    <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Show All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Show all map layers</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleHideAll}
+                    aria-label="Hide all map layers"
+                  >
+                    <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Hide All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Hide all map layers</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReset}
+                    aria-label="Reset layers to default visibility and opacity"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Reset
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Reset layers to default visibility and opacity</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
