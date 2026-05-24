@@ -14,6 +14,7 @@ import Breadcrumbs from './shared/components/layout/breadcrumbs';
 import Navigation from './shared/components/layout/navigation';
 import { RouteLoading } from './shared/components/RouteLoading';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { ProtectedRoute } from '@/features/auth';
 
@@ -65,6 +66,7 @@ function App() {
           <TRPCProvider>
             <CharacterProvider>
               <CampaignProvider>
+                <TooltipProvider delayDuration={300}>
                 <Router
                   future={{
                     v7_startTransition: true,
@@ -324,6 +326,7 @@ function App() {
                     <Toaster />
                   </div>
                 </Router>
+                </TooltipProvider>
               </CampaignProvider>
             </CharacterProvider>
           </TRPCProvider>
