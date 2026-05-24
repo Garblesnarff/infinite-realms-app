@@ -45,6 +45,7 @@ const RollDetails: React.FC<RollDetailsProps> = ({
                       key={i}
                       variant={roll === detail.dropped ? 'destructive' : 'secondary'}
                       className="text-xs px-1 py-0 min-w-[1.5rem] h-5"
+                      aria-label={`Rolled ${roll}${roll === detail.dropped ? ', dropped' : ''}`}
                     >
                       {roll}
                     </Badge>
@@ -56,13 +57,15 @@ const RollDetails: React.FC<RollDetailsProps> = ({
                 <Badge variant="outline">{detail.total}</Badge>
               </div>
               <Button
+                type="button"
                 onClick={() => onRerollSingle(index)}
                 variant="ghost"
                 size="sm"
                 className="w-full mt-1 h-6 text-xs gap-1"
+                aria-label={`Reroll ${ability}`}
                 title={`Reroll ${ability}`}
               >
-                <RotateCcw className="h-3 w-3" />
+                <RotateCcw className="h-3 w-3" aria-hidden="true" />
                 Reroll
               </Button>
             </div>
