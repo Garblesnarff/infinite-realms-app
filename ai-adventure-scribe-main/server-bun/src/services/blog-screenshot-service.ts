@@ -230,9 +230,12 @@ export class BlogScreenshotService {
    * Get the current baseline screenshot for a page
    */
   static async getBaseline(key: string): Promise<Screenshot | null> {
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    const BASELINE_COLS = 'page_key, screenshot_path, captured_at, commit_hash';
+
     const { data, error } = await supabase
       .from('blog_baseline_screenshots')
-      .select('*')
+      .select(BASELINE_COLS)
       .eq('page_key', key)
       .single();
 
