@@ -21,7 +21,10 @@ export const ListGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, onG
       isSelected ? 'border-primary bg-primary/5 shadow-lg' : 'border-border hover:border-primary/50'
     }`}
     onClick={() => onGenreChange(genre.value)}
-    role="button"
+    role="radio"
+    aria-checked={isSelected}
+    aria-label={`${genre.label}: ${genre.description}`}
+    title={genre.label}
     tabIndex={0}
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') onGenreChange(genre.value);
@@ -48,7 +51,13 @@ export const ListGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, onG
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <RadioGroupItem value={genre.value} id={genre.value} className="text-blue-600" />
+          <RadioGroupItem
+            value={genre.value}
+            id={genre.value}
+            className="text-blue-600"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
           <div className={`flex items-center ${genre.colorClass}`}>
             {genre.icon}
             <Label htmlFor={genre.value} className="font-medium cursor-pointer leading-tight ml-2">
@@ -89,7 +98,10 @@ export const CompactGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, 
       isSelected ? 'border-primary bg-primary/5 shadow-lg' : 'border-border hover:border-primary/50'
     }`}
     onClick={() => onGenreChange(genre.value)}
-    role="button"
+    role="radio"
+    aria-checked={isSelected}
+    aria-label={`${genre.label}: ${genre.description}`}
+    title={genre.label}
     tabIndex={0}
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') onGenreChange(genre.value);
@@ -115,7 +127,13 @@ export const CompactGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, 
       style={{ zIndex: Z_INDEX.DROPDOWN }}
     >
       <div className="flex items-center gap-2">
-        <RadioGroupItem value={genre.value} id={genre.value} className="text-blue-600" />
+        <RadioGroupItem
+          value={genre.value}
+          id={genre.value}
+          className="text-blue-600"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <div className={`flex items-center ${genre.colorClass}`}>
           {genre.icon}
           <Label htmlFor={genre.value} className="font-medium cursor-pointer leading-tight ml-2">
@@ -179,12 +197,22 @@ export const GridGenreCard: React.FC<GridGenreCardProps> = ({
     onClick={() => onGenreChange(genre.value)}
     onMouseEnter={() => setHovered(genre.value)}
     onMouseLeave={() => setHovered(null)}
-    role="button"
+    role="radio"
+    aria-checked={isSelected}
+    aria-label={`${genre.label}: ${genre.description}`}
+    title={genre.label}
     tabIndex={0}
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') onGenreChange(genre.value);
     }}
   >
+    <RadioGroupItem
+      value={genre.value}
+      id={genre.value}
+      className="sr-only"
+      tabIndex={-1}
+      aria-hidden="true"
+    />
     <div
       className="absolute inset-0"
       style={{ boxShadow: 'inset 0 0 60px 20px rgba(0, 0, 0, 0.3)' }}

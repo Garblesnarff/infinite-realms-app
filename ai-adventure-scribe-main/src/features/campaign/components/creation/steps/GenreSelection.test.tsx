@@ -51,28 +51,26 @@ describe('GenreSelection', () => {
     mockCampaignState.campaign.genre = 'dark-fantasy';
     render(<GenreSelection isLoading={false} />);
 
-    // Check a few genres are rendered by their label text
-    expect(screen.getByLabelText('Traditional Fantasy')).toBeInTheDocument();
-    expect(screen.getByLabelText('Dark Fantasy')).toBeInTheDocument();
-    expect(screen.getByLabelText('Science Fantasy')).toBeInTheDocument(); // Corrected "Science Fiction" to "Science Fantasy"
+    // Check a few genres are rendered by their accessible name (which includes description now)
+    expect(screen.getByRole('radio', { name: /Traditional Fantasy/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Dark Fantasy/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Science Fantasy/ })).toBeInTheDocument();
 
     // Assert the correct radio item is checked
-    const darkFantasyRadioItem = screen.getByRole('radio', { name: 'Dark Fantasy' });
-    expect(darkFantasyRadioItem).toBeChecked();
+    const darkFantasyRadioItem = screen.getByRole('radio', { name: /Dark Fantasy/ });
+    expect(darkFantasyRadioItem).toHaveAttribute('aria-checked', 'true');
 
-    // Also, can verify other items are not checked if necessary
-    const traditionalFantasyRadioItem = screen.getByRole('radio', { name: 'Traditional Fantasy' });
-    expect(traditionalFantasyRadioItem).not.toBeChecked();
+    // Also, can verify other items are not checked
+    const traditionalFantasyRadioItem = screen.getByRole('radio', { name: /Traditional Fantasy/ });
+    expect(traditionalFantasyRadioItem).toHaveAttribute('aria-checked', 'false');
   });
 
   it('should call dispatch with updated genre when a new genre is selected', () => {
     render(<GenreSelection isLoading={false} />);
 
-    // Find the label for "Science Fantasy" and click it.
-    // The actual clickable element might be the Card or a RadioGroupItem associated with the label.
-    // In shadcn/ui, clicking the Label associated with a RadioGroupItem usually checks it.
-    const scienceFantasyLabel = screen.getByLabelText('Science Fantasy');
-    fireEvent.click(scienceFantasyLabel);
+    // Find the radio for "Science Fantasy" and click it.
+    const scienceFantasyRadio = screen.getByRole('radio', { name: /Science Fantasy/ });
+    fireEvent.click(scienceFantasyRadio);
 
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'UPDATE_CAMPAIGN',
@@ -84,25 +82,15 @@ describe('GenreSelection', () => {
     mockCampaignState.campaign.genre = 'steampunk';
     render(<GenreSelection isLoading={false} />);
 
-    // Find the RadioGroupItem by its associated Label text, then find its parent Card.
-    // The RadioGroupItem itself should have role="radio" and be checked.
-    const steampunkRadioItem = screen.getByRole('radio', { name: 'Steampunk' });
-    expect(steampunkRadioItem).toBeChecked();
-
-    // The Card is an ancestor of the RadioGroupItem.
-    // We need to find the Card element that contains this radio item.
-    // Assuming the Card component is identifiable by a class that includes 'border-2' (common for shadcn cards)
-    // and is a div.
-    const steampunkCard = steampunkRadioItem.closest('div[class*="border-2"]');
+    // The card itself is now the radio item
+    const steampunkCard = screen.getByRole('radio', { name: /Steampunk/ });
+    expect(steampunkCard).toHaveAttribute('aria-checked', 'true');
     expect(steampunkCard).toHaveClass('border-primary');
 
     // Verify another card is not highlighted
-    const traditionalFantasyRadioItem = screen.getByRole('radio', { name: 'Traditional Fantasy' });
-    expect(traditionalFantasyRadioItem).not.toBeChecked();
-    const traditionalFantasyCard = traditionalFantasyRadioItem.closest('div[class*="border-2"]');
+    const traditionalFantasyCard = screen.getByRole('radio', { name: /Traditional Fantasy/ });
+    expect(traditionalFantasyCard).toHaveAttribute('aria-checked', 'false');
     expect(traditionalFantasyCard).not.toHaveClass('border-primary');
-    // Default border might be border-transparent or similar, check actual implementation if needed
-    // For now, just checking it's not border-primary is sufficient contrast.
   });
 
   it('should have accessible view mode buttons', () => {
