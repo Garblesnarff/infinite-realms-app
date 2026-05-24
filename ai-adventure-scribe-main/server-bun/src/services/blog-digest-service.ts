@@ -102,9 +102,12 @@ export class BlogDigestService {
   static async getUnprocessedCommits(since?: Date): Promise<CommitRecord[]> {
     const sinceDate = since || new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    const COMMIT_COLS = 'id, commit_hash, commit_message, author, files_changed, pr_number, pr_title, committed_at';
+
     const { data, error } = await supabase
       .from('blog_digest_queue')
-      .select('*')
+      .select(COMMIT_COLS)
       .eq('processed', false)
       .gte('committed_at', sinceDate.toISOString())
       .order('committed_at', { ascending: true });
@@ -327,25 +330,25 @@ Return ONLY valid JSON, no markdown.`;
 
     logger.info({ commitCount: commits.length }, 'Found commits for digest');
 
-    // Analyze commits
-    const analysis = await this.analyzeCommits(commits);
-    logger.info(
-      { analysis: { title: analysis.title, majorFeature: !!analysis.majorFeature } },
-      'Commits analyzed',
-    );
-
     // Get latest commit hash for screenshots
     const latestCommit = commits[commits.length - 1].commit_hash;
 
-    // Capture screenshots (if not dry run)
-    let screenshots: string[] = [];
-    if (!dryRun) {
-      try {
-        screenshots = await BlogScreenshotService.captureForDigest(latestCommit);
-      } catch (err) {
-        logger.warn({ error: err }, 'Screenshot capture failed, continuing without screenshots');
-      }
-    }
+    // ⚡ Bolt: Parallelize commit analysis and screenshot capture to reduce total processing time.
+    // Both are heavy I/O operations (AI API call and Puppeteer browser automation).
+    const [analysis, screenshots] = await Promise.all([
+      this.analyzeCommits(commits),
+      !dryRun
+        ? BlogScreenshotService.captureForDigest(latestCommit).catch((err) => {
+            logger.warn({ error: err }, 'Screenshot capture failed, continuing without screenshots');
+            return [];
+          })
+        : Promise.resolve([]),
+    ]);
+
+    logger.info(
+      { analysis: { title: analysis.title, majorFeature: !!analysis.majorFeature } },
+      'Commits analyzed and screenshots captured',
+    );
 
     // Generate hero image
     let heroImageUrl: string | undefined;
