@@ -3,6 +3,12 @@ import React, { useState, useRef, useEffect, useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 import { mightBeDiceCommand, getDiceCommandSuggestions } from '@/utils/diceCommandParser';
@@ -129,43 +135,64 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
   const canSend = input.trim().length > 0 && !isDisabled;
 
   return (
-    <div className="px-4 pb-4">
-      <div className="chat-composer transition-all duration-300 focus-within:ring-2 focus-within:ring-infinite-purple/30 focus-within:ring-offset-2 focus-within:ring-offset-background rounded-2xl bg-card/90 border border-border/60 hover:border-border hover:shadow-lg">
-        <div className="flex items-end gap-3 p-3">
-          {/* Enhanced Quick action buttons with better touch targets */}
-          <div className="flex items-center gap-1 pb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
-              disabled={isDisabled}
-              aria-label="Attach file"
-              title="Attach file"
-            >
-              <Paperclip className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
-              disabled={isDisabled}
-              aria-label="Insert emoji"
-              title="Insert emoji"
-            >
-              <Smile className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleQuickDiceRoll}
-              className="h-10 w-10 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
-              disabled={isDisabled}
-              title="Quick dice roll (1d20)"
-              aria-label="Quick dice roll (1d20)"
-            >
-              <Dice6 className="h-5 w-5" />
-            </Button>
-          </div>
+    <TooltipProvider>
+      <div className="px-4 pb-4">
+        <div className="chat-composer transition-all duration-300 focus-within:ring-2 focus-within:ring-infinite-purple/30 focus-within:ring-offset-2 focus-within:ring-offset-background rounded-2xl bg-card/90 border border-border/60 hover:border-border hover:shadow-lg">
+          <div className="flex items-end gap-3 p-3">
+            {/* Enhanced Quick action buttons with better touch targets */}
+            <div className="flex items-center gap-1 pb-1">
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    disabled={isDisabled}
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Attach file</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    disabled={isDisabled}
+                    aria-label="Insert emoji"
+                  >
+                    <Smile className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Insert emoji</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleQuickDiceRoll}
+                    className="h-10 w-10 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg min-h-[44px] min-w-[44px] touch-manipulation"
+                    disabled={isDisabled}
+                    aria-label="Quick dice roll (1d20)"
+                  >
+                    <Dice6 className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Quick dice roll (1d20)</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
 
           {/* Input area */}
           <div className="flex-1 relative">
@@ -190,7 +217,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
             {/* Dice command suggestions */}
             {showDiceSuggestions && diceSuggestions.length > 0 && (
               <div
-                className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto"
+                className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto"
                 style={{ zIndex: Z_INDEX.DROPDOWN }}
                 role="listbox"
                 aria-labelledby={suggestionsHeaderId}
@@ -198,7 +225,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                 <div className="p-2">
                   <div
                     id={suggestionsHeaderId}
-                    className="text-xs text-gray-500 mb-2 flex items-center gap-1"
+                    className="text-xs text-muted-foreground mb-2 flex items-center gap-1"
                   >
                     <Dice6 className="w-3 h-3" aria-hidden="true" />
                     Dice Roll Suggestions
@@ -206,10 +233,13 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                   {diceSuggestions.map((suggestion, index) => (
                     <button
                       key={index}
+                      type="button"
                       onClick={() => handleSuggestionClick(suggestion)}
                       className={cn(
                         'w-full text-left px-2 py-1 text-sm rounded font-mono transition-colors',
-                        index === selectedIndex ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50',
+                        index === selectedIndex
+                          ? 'bg-accent text-accent-foreground'
+                          : 'hover:bg-accent/50',
                       )}
                       disabled={isDisabled}
                       role="option"
@@ -223,43 +253,50 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
             )}
           </div>
 
-          {/* Enhanced Send button with better touch targets */}
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSend}
-            className={`h-12 w-12 p-0 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] touch-manipulation ${
-              canSend
-                ? 'bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-            aria-label={isDisabled ? 'Sending message...' : 'Send message'}
-            title={isDisabled ? 'Sending message...' : 'Send message'}
-          >
-            {!canSend && isDisabled ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
+            {/* Enhanced Send button with better touch targets */}
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!canSend}
+                  className={`h-12 w-12 p-0 rounded-xl transition-all duration-200 min-h-[48px] min-w-[48px] touch-manipulation ${
+                    canSend
+                      ? 'bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                  aria-label={isDisabled ? 'Sending message...' : 'Send message'}
+                >
+                  {!canSend && isDisabled ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="end">
+                <p>{isDisabled ? 'Sending message...' : 'Send message'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
-        {/* Helper text */}
-        <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
-          <span>
-            {showDiceSuggestions ? (
-              <>
-                Type <code className="bg-gray-100 px-1 rounded">/roll 1d20</code> for dice rolls
-              </>
-            ) : (
-              <>
-                Press Enter to send, Shift+Enter for new line •{' '}
-                <code className="bg-gray-100 px-1 rounded">/roll</code> for dice
-              </>
-            )}
-          </span>
-          {isExpanded && <span className="text-gray-500">{input.length}/1000 characters</span>}
+          {/* Helper text */}
+          <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
+            <span>
+              {showDiceSuggestions ? (
+                <>
+                  Type <code className="bg-gray-100 px-1 rounded">/roll 1d20</code> for dice rolls
+                </>
+              ) : (
+                <>
+                  Press Enter to send, Shift+Enter for new line •{' '}
+                  <code className="bg-gray-100 px-1 rounded">/roll</code> for dice
+                </>
+              )}
+            </span>
+            {isExpanded && <span className="text-gray-500">{input.length}/1000 characters</span>}
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 });
