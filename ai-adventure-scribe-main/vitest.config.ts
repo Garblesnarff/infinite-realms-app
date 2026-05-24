@@ -383,6 +383,7 @@ export default defineConfig({
       'src/features/game-session/components/game/__tests__/FloatingActionPanel.test.tsx',
       'src/features/game-session/components/game/__tests__/GameSidePanel.test.tsx',
       'src/features/game-session/components/game/__tests__/CombatSummary.test.tsx',
+      'src/utils/lighting/__tests__/mechanics.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -757,6 +758,7 @@ export default defineConfig({
         'src/features/game-session/components/game/GameSidePanelContent.tsx',
         'src/features/game-session/components/game/CombatSummary.tsx',
         'src/components/character-sharing/ShareCharacterDialog.tsx',
+        'src/utils/lighting/mechanics.ts',
       ],
       exclude: [
         '**/__tests__/**',

@@ -87,17 +87,7 @@ function castShadowFromSegment(
   const toStart = { x: segmentStart.x - lightPos.x, y: segmentStart.y - lightPos.y };
   const toEnd = { x: segmentEnd.x - lightPos.x, y: segmentEnd.y - lightPos.y };
 
-  // Wall normal (perpendicular)
-  const wallDx = segmentEnd.x - segmentStart.x;
-  const wallDy = segmentEnd.y - segmentStart.y;
-  const normalX = -wallDy;
-  const normalY = wallDx;
 
-  // Check if wall faces away from light (casts shadow)
-  const dotProduct = toStart.x * normalX + toStart.y * normalY;
-  if (dotProduct > 0) {
-    return null; // Wall faces light, no shadow on this side
-  }
 
   // Project segment endpoints away from light
   const startLength = Math.sqrt(toStart.x * toStart.x + toStart.y * toStart.y);
@@ -161,13 +151,21 @@ export function calculateAmbientOcclusion(
         for (const wall of walls) {
           if (!wall.blocksLight) continue;
 
-          for (let j = 0; j < wall.points.length - 1; j++) {
+          for (let j = 0; j < wall.points.length; j++) {
+            const p1 = wall.points[j];
+            const p2 = wall.points[(j + 1) % wall.points.length];
+
+            // Only check closing segment if it's a polygon
+            if (j === wall.points.length - 1 && wall.points.length <= 2) {
+              continue;
+            }
+
             if (
               lineSegmentsIntersect(
                 { x: worldX, y: worldY },
                 { x: sampleX, y: sampleY },
-                wall.points[j],
-                wall.points[j + 1],
+                p1,
+                p2,
               )
             ) {
               isBlocked = true;
