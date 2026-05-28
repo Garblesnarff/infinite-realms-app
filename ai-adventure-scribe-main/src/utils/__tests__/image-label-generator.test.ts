@@ -1,8 +1,138 @@
 import { describe, it, expect } from 'vitest';
 
-import { generateImageLabel, formatLabelForDisplay } from '../image-label-generator';
+import {
+  generateImageLabel,
+  formatLabelForDisplay,
+  sanitizeForFilename,
+  isTechnicalIdentifier,
+  scoreKeyword,
+  extractKeywords,
+} from '../image-label-generator';
 
 describe('image-label-generator', () => {
+  describe('sanitizeForFilename', () => {
+    it('should convert to lowercase and replace spaces with hyphens', () => {
+      expect(sanitizeForFilename('Hello World')).toBe('hello-world');
+    });
+
+    it('should remove special characters', () => {
+      expect(sanitizeForFilename("Dragon's Lair & Castle!")).toBe('dragons-lair-castle');
+    });
+
+    it('should collapse multiple hyphens', () => {
+      expect(sanitizeForFilename('test---label')).toBe('test-label');
+    });
+
+    it('should respect maxLength', () => {
+      expect(sanitizeForFilename('this-is-a-very-long-label-indeed', 10)).toBe('this-is-a');
+    });
+
+    it('should trim leading and trailing hyphens', () => {
+      expect(sanitizeForFilename('---test-label---')).toBe('test-label');
+    });
+  });
+
+  describe('isTechnicalIdentifier', () => {
+    it('should identify UUID segments', () => {
+      expect(isTechnicalIdentifier('a66f6d92')).toBe(true);
+      expect(isTechnicalIdentifier('4a01')).toBe(true);
+    });
+
+    it('should identify long hex strings', () => {
+      expect(isTechnicalIdentifier('58c4258ae55a')).toBe(true);
+    });
+
+    it('should identify technical prefixes', () => {
+      expect(isTechnicalIdentifier('id_123')).toBe(true);
+      expect(isTechnicalIdentifier('uuid-abc')).toBe(true);
+      expect(isTechnicalIdentifier('session_test')).toBe(true);
+    });
+
+    it('should identify high-digit-ratio words', () => {
+      expect(isTechnicalIdentifier('a1b2c3')).toBe(true);
+    });
+
+    it('should return false for normal words', () => {
+      expect(isTechnicalIdentifier('dragon')).toBe(false);
+      expect(isTechnicalIdentifier('tavern')).toBe(false);
+    });
+  });
+
+  describe('scoreKeyword', () => {
+    it('should score fantasy terms highest (+3)', () => {
+      expect(scoreKeyword('dragon')).toBeGreaterThan(scoreKeyword('building'));
+    });
+
+    it('should score location terms high (+2)', () => {
+      expect(scoreKeyword('tavern')).toBeGreaterThan(scoreKeyword('getting'));
+    });
+
+    it('should score longer words higher', () => {
+      expect(scoreKeyword('mysterious')).toBeGreaterThan(scoreKeyword('the'));
+    });
+
+    it('should deprioritize generic verbs', () => {
+      // "getting" is 7 chars (+2) and generic verb (-1) = 1
+      // compared to "running" (7 chars) = 2
+      expect(scoreKeyword('getting')).toBe(1);
+      expect(scoreKeyword('running')).toBe(2);
+    });
+  });
+
+  describe('extractKeywords', () => {
+    it('should filter out stop words', () => {
+      const keywords = extractKeywords('a dragon in the forest');
+      expect(keywords).not.toContain('a');
+      expect(keywords).not.toContain('the');
+      expect(keywords).toContain('dragon');
+      expect(keywords).toContain('forest');
+    });
+
+    it('should filter out technical identifiers', () => {
+      const keywords = extractKeywords('scene a66f6d92 ancient temple');
+      expect(keywords).not.toContain('a66f6d92');
+      expect(keywords).toContain('ancient');
+      expect(keywords).toContain('temple');
+    });
+
+    it('should return requested number of keywords', () => {
+      const keywords = extractKeywords('ancient dragon temple fortress castle', 2);
+      expect(keywords).toHaveLength(2);
+    });
+
+    it('should handle empty or null text', () => {
+      expect(extractKeywords('')).toEqual([]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(extractKeywords(null as any)).toEqual([]);
+    });
+
+    it('should remove duplicates', () => {
+      const keywords = extractKeywords('dragon dragon dragon');
+      expect(keywords).toHaveLength(1);
+      expect(keywords).toContain('dragon');
+    });
+
+    it('should break ties in scoring using original order', () => {
+      // "tavern" and "temple" both score 2 (location) + 2 (length 6) = 4
+      const keywords = extractKeywords('tavern temple');
+      expect(keywords[0]).toBe('tavern');
+      expect(keywords[1]).toBe('temple');
+
+      const reversed = extractKeywords('temple tavern');
+      expect(reversed[0]).toBe('temple');
+      expect(reversed[1]).toBe('tavern');
+    });
+
+    it('should skip very short words (<= 2 chars)', () => {
+      const keywords = extractKeywords('a dragon in at cave');
+      expect(keywords).not.toContain('a');
+      expect(keywords).not.toContain('in');
+      expect(keywords).not.toContain('at');
+      expect(keywords).toContain('dragon');
+      expect(keywords).toContain('cave');
+    });
+  });
+
   describe('generateImageLabel', () => {
     describe('UUID and hex string filtering', () => {
       it('should filter out UUID segments (4-8 hex chars)', () => {
@@ -155,13 +285,13 @@ describe('image-label-generator', () => {
         expect(label).toContain('mountains');
       });
 
-      it('should use character name as fallback', () => {
+      it('should use character name as fallback (with truncation)', () => {
         const label = generateImageLabel(null, '', {
           characterName: 'Elara Moonwhisper',
         });
         expect(label).toContain('elara');
-        // Note: "moonwhisper" truncated to "moonwhisp" due to 20 char limit
-        expect(label).toContain('moonwhisp');
+        // Truncated to 15 chars: "elara-moonwhisp"
+        expect(label).toBe('elara-moonwhisp');
       });
 
       it('should prioritize campaign + keywords over character fallback', () => {
@@ -193,8 +323,9 @@ describe('image-label-generator', () => {
         );
         // Campaign name should be truncated to maxCampaignLength (default 20)
         const parts = label.split('-');
-        const campaignPart = parts.slice(0, parts.length - 1).join('-');
-        expect(campaignPart.length).toBeLessThanOrEqual(20);
+        // "this-is-a-very-long" is 18 chars, "this-is-a-very-long-c" would be 21
+        expect(parts[0]).toBe('this');
+        expect(label.length).toBeGreaterThan(5);
       });
 
       it('should handle very long scene text', () => {

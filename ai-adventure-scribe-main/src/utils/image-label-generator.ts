@@ -176,7 +176,7 @@ const GENERIC_VERBS = new Set([
  * - Replaces spaces with hyphens
  * - Limits length
  */
-function sanitizeForFilename(text: string, maxLength: number = 20): string {
+export function sanitizeForFilename(text: string, maxLength: number = 20): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '') // Remove special chars except spaces and hyphens
@@ -191,7 +191,7 @@ function sanitizeForFilename(text: string, maxLength: number = 20): string {
  * Checks if a word is a technical identifier that should be filtered out.
  * Filters UUID segments, hex strings, technical prefixes, and high-digit-ratio words.
  */
-function isTechnicalIdentifier(word: string): boolean {
+export function isTechnicalIdentifier(word: string): boolean {
   return (
     UUID_SEGMENT_PATTERN.test(word) ||
     HEX_STRING_PATTERN.test(word) ||
@@ -208,7 +208,7 @@ function isTechnicalIdentifier(word: string): boolean {
  * @param context - Optional context for genre-aware scoring
  * @returns Score (higher is better, can be negative)
  */
-function scoreKeyword(word: string, _context?: { genre?: string }): number {
+export function scoreKeyword(word: string, _context?: { genre?: string }): number {
   let score = 0;
 
   // +3 for fantasy/RPG terms (dragon, wizard, etc.)
@@ -248,7 +248,7 @@ function scoreKeyword(word: string, _context?: { genre?: string }): number {
  * @param context - Optional context for genre-aware scoring
  * @returns Array of scored and filtered keywords
  */
-function extractKeywords(
+export function extractKeywords(
   text: string,
   maxKeywords: number = 4,
   context?: { genre?: string },

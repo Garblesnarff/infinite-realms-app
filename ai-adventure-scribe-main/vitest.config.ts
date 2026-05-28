@@ -427,6 +427,7 @@ export default defineConfig({
         'src/utils/character-calculations.ts',
         'src/utils/hp-utils.ts',
         'src/utils/image-compression.ts',
+        'src/utils/image-label-generator.ts',
         'src/utils/condition-icons.ts',
         'src/utils/condition-definitions.ts',
         'src/utils/conditionEffects.ts',
