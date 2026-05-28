@@ -20,6 +20,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 
@@ -145,18 +150,24 @@ export const FolderItem: React.FC<FolderItemProps> = ({
 
         {/* Context Menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-              aria-label={`Actions for ${folder.name} folder`}
-              title={`Actions for ${folder.name} folder`}
-            >
-              <MoreVertical className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                  aria-label={`Actions for ${folder.name} folder`}
+                >
+                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Actions for {folder.name} folder</p>
+            </TooltipContent>
+          </Tooltip>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={(e) => {

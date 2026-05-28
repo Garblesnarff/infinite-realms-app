@@ -21,6 +21,12 @@ import { FolderItem } from './FolderItem';
 import type { FolderNode, FolderTreeProps } from './types';
 
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useTRPC } from '@/infrastructure/api/trpc-hooks';
 import { cn } from '@/lib/utils';
 
@@ -134,25 +140,32 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
   }
 
   return (
-    <div className="w-full">
-      {/* Header with Create Button */}
-      <div className="flex items-center justify-between mb-4 px-3">
-        <h3 className="text-sm font-semibold text-foreground">Folders</h3>
-        {onCreateFolder && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onCreateFolder}
-            className="h-8 gap-2"
-            title="Create a new character folder"
-            aria-label="Create a new character folder"
-          >
-            <FolderPlus className="h-4 w-4" aria-hidden="true" />
-            New Folder
-          </Button>
-        )}
-      </div>
+    <TooltipProvider>
+      <div className="w-full">
+        {/* Header with Create Button */}
+        <div className="flex items-center justify-between mb-4 px-3">
+          <h3 className="text-sm font-semibold text-foreground">Folders</h3>
+          {onCreateFolder && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCreateFolder}
+                  className="h-8 gap-2"
+                  aria-label="Create a new character folder"
+                >
+                  <FolderPlus className="h-4 w-4" aria-hidden="true" />
+                  New Folder
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Create a new character folder</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
 
       {/* All Characters (Root) */}
       <div
@@ -211,6 +224,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 };
 
