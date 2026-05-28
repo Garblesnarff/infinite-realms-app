@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import logger from '@/lib/logger';
 
 export interface Character {
   id: string;
@@ -102,7 +103,7 @@ export function useCharacterSelection({
         .maybeSingle();
 
       if (error) {
-        console.error('Error checking starter campaign link:', error);
+        logger.error('Error checking starter campaign link:', error);
         return null;
       }
 
@@ -124,7 +125,7 @@ export function useCharacterSelection({
         .order('display_order');
 
       if (error) {
-        console.error('Error fetching templates:', error);
+        logger.error('Error fetching templates:', error);
         return [];
       }
 
@@ -195,7 +196,7 @@ export function useCharacterSelection({
         .single();
 
       if (charError) {
-        console.error('Error creating character:', charError);
+        logger.error('Error creating character:', charError);
         throw charError;
       }
 
@@ -223,7 +224,7 @@ export function useCharacterSelection({
       });
 
       if (statsError) {
-        console.error('Error creating character stats:', statsError);
+        logger.error('Error creating character stats:', statsError);
         // Don't throw - character was created, stats are optional
       }
 
@@ -241,7 +242,7 @@ export function useCharacterSelection({
         );
       }, 0);
     } catch (err) {
-      console.error('Error starting with character:', err);
+      logger.error('Error starting with character:', err);
       toast({
         title: 'Error',
         description: 'Failed to create character. Please try again.',
@@ -275,12 +276,15 @@ export function useCharacterSelection({
     onClose();
   };
 
-  // Helper function to calculate ability modifier
-  const getModifier = (score?: number): string => {
+  /**
+   * Helper function to calculate ability modifier.
+   * ⚡ Bolt: Wrapped in useCallback with empty dependency array to stabilize identity.
+   */
+  const getModifier = useCallback((score?: number): string => {
     if (!score) return '+0';
     const mod = Math.floor((score - 10) / 2);
     return mod >= 0 ? `+${mod}` : `${mod}`;
-  };
+  }, []);
 
   return {
     isCreating,
