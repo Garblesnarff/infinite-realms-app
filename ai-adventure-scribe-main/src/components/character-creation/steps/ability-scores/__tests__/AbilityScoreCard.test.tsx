@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { vi, describe, it, expect } from 'vitest';
 
@@ -6,6 +6,8 @@ import AbilityScoreCard from '../AbilityScoreCard';
 
 import type { Method } from '@/hooks/use-ability-score-selection';
 import type { AbilityScores } from '@/types/character';
+
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 describe('AbilityScoreCard', () => {
   const defaultProps = {
@@ -22,8 +24,16 @@ describe('AbilityScoreCard', () => {
     onDecrease: vi.fn(),
   };
 
+  const renderWithProvider = (props = defaultProps): ReturnType<typeof render> => {
+    return render(
+      <TooltipProvider>
+        <AbilityScoreCard {...props} />
+      </TooltipProvider>,
+    );
+  };
+
   it('renders correctly with icons and tooltips', () => {
-    render(<AbilityScoreCard {...defaultProps} />);
+    renderWithProvider();
 
     // Check for title and description
     // Using getAllByText because "strength" appears in the header and in the button aria-labels/titles
@@ -32,7 +42,7 @@ describe('AbilityScoreCard', () => {
     expect(screen.getByText(/strength measures bodily power/i)).toBeInTheDocument();
 
     // Check for icons in buttons (by role/aria-label and checking for presence of SVG-like children is complex,
-    // but we can verify the title and aria-label)
+    // but we can verify the aria-label and title)
     const decreaseBtn = screen.getByRole('button', { name: /decrease strength/i });
     const increaseBtn = screen.getByRole('button', { name: /increase strength/i });
 
@@ -53,7 +63,7 @@ describe('AbilityScoreCard', () => {
   });
 
   it('calls onIncrease and onDecrease handlers', () => {
-    render(<AbilityScoreCard {...defaultProps} />);
+    renderWithProvider();
 
     const decreaseBtn = screen.getByRole('button', { name: /decrease strength/i });
     const increaseBtn = screen.getByRole('button', { name: /increase strength/i });
@@ -66,16 +76,64 @@ describe('AbilityScoreCard', () => {
   });
 
   it('disables buttons correctly', () => {
-    const { rerender } = render(<AbilityScoreCard {...defaultProps} baseScore={8} />);
+    const { rerender } = render(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} baseScore={8} />
+      </TooltipProvider>,
+    );
     const decreaseBtn = screen.getByRole('button', { name: /decrease strength/i });
     expect(decreaseBtn).toBeDisabled();
 
-    rerender(<AbilityScoreCard {...defaultProps} baseScore={15} />);
+    rerender(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} baseScore={15} />
+      </TooltipProvider>,
+    );
     const increaseBtn = screen.getByRole('button', { name: /increase strength/i });
     expect(increaseBtn).toBeDisabled();
 
-    rerender(<AbilityScoreCard {...defaultProps} method="standardArray" />);
+    rerender(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} method="standardArray" />
+      </TooltipProvider>,
+    );
     expect(screen.getByRole('button', { name: /decrease strength/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /increase strength/i })).toBeDisabled();
+  });
+
+  it('shows appropriate tooltip text when disabled', () => {
+    // Check minimum score reach
+    const { rerender } = renderWithProvider({ ...defaultProps, baseScore: 8 });
+    const decreaseBtn = screen.getByRole('button', { name: /decrease strength/i });
+    expect(decreaseBtn).toHaveAttribute('title', 'Minimum score (8) reached');
+
+    // Check maximum score reach
+    rerender(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} baseScore={15} />
+      </TooltipProvider>,
+    );
+    const increaseBtn = screen.getByRole('button', { name: /increase strength/i });
+    expect(increaseBtn).toHaveAttribute('title', 'Maximum score (15) reached');
+
+    // Check insufficient points
+    rerender(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} remainingPoints={0} nextCost={1} />
+      </TooltipProvider>,
+    );
+    const increaseBtnNoPoints = screen.getByRole('button', { name: /increase strength/i });
+    expect(increaseBtnNoPoints).toHaveAttribute('title', 'Insufficient points remaining');
+
+    // Check non-pointBuy method
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    rerender(
+      <TooltipProvider>
+        <AbilityScoreCard {...defaultProps} method={'standardArray' as any} />
+      </TooltipProvider>,
+    );
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const decreaseBtnNoAdjust = screen.getByRole('button', { name: /decrease strength/i });
+    expect(decreaseBtnNoAdjust).toHaveAttribute('title', 'Change method to Point Buy to adjust');
   });
 });

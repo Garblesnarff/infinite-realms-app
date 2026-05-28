@@ -7,6 +7,7 @@ import type { AbilityScores } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatRacialBonus } from '@/utils/racialAbilityBonuses';
 
 interface AbilityScoreCardProps {
@@ -40,6 +41,22 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
   onIncrease,
   onDecrease,
 }) => {
+  const getDecreaseTooltip = (): string => {
+    if (method !== 'pointBuy') return 'Change method to Point Buy to adjust';
+    if (baseScore === 8) return 'Minimum score (8) reached';
+    return `Decrease ${ability}`;
+  };
+
+  const getIncreaseTooltip = (): string => {
+    if (method !== 'pointBuy') return 'Change method to Point Buy to adjust';
+    if (baseScore === 15) return 'Maximum score (15) reached';
+    if (remainingPoints < nextCost) return 'Insufficient points remaining';
+    return `Increase ${ability}`;
+  };
+
+  const isDecreaseDisabled = method !== 'pointBuy' || baseScore === 8;
+  const isIncreaseDisabled = method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost;
+
   return (
     <Card className="p-4 hover:shadow-md transition-shadow">
       <div className="space-y-3">
@@ -49,18 +66,27 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
         </div>
 
         <div className="flex items-center justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => onDecrease(ability)}
-            disabled={method !== 'pointBuy' || baseScore === 8}
-            className="h-8 w-8"
-            aria-label={`Decrease ${ability}`}
-            title={`Decrease ${ability}`}
-          >
-            <Minus className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className={isDecreaseDisabled ? 'cursor-not-allowed' : ''}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onDecrease(ability)}
+                  disabled={isDecreaseDisabled}
+                  className="h-8 w-8"
+                  aria-label={`Decrease ${ability}`}
+                  title={getDecreaseTooltip()}
+                >
+                  <Minus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{getDecreaseTooltip()}</p>
+            </TooltipContent>
+          </Tooltip>
 
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">Base: {baseScore}</div>
@@ -95,18 +121,27 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => onIncrease(ability)}
-            disabled={method !== 'pointBuy' || baseScore === 15 || remainingPoints < nextCost}
-            className="h-8 w-8"
-            aria-label={`Increase ${ability}`}
-            title={`Increase ${ability}`}
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className={isIncreaseDisabled ? 'cursor-not-allowed' : ''}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onIncrease(ability)}
+                  disabled={isIncreaseDisabled}
+                  className="h-8 w-8"
+                  aria-label={`Increase ${ability}`}
+                  title={getIncreaseTooltip()}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{getIncreaseTooltip()}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {method === 'pointBuy' && baseScore < 15 && (
