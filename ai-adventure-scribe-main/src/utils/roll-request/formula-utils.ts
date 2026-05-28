@@ -10,7 +10,7 @@ export function normalizeFormula(formula: string): string {
   let normalized = formula
     .replace(/\s+/g, '')
     .toLowerCase()
-    .replace(/modifier/g, '')
+    .replace(/(?<![+\-*/])modifier/g, '')
     .replace(/\+\+/g, '+')
     .replace(/--/g, '-')
     .replace(/\+$/, '')

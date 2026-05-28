@@ -223,3 +223,7 @@
 ## 2026-05-20 - [Lighting Mechanics Coverage & Bug Fixes]
 **Learning:** Implemented comprehensive unit tests for `src/utils/lighting/mechanics.ts` in `src/utils/lighting/__tests__/mechanics.test.ts`. Found two bugs: (1) one-sided shadows caused by an incorrect dot product check in `castShadowFromSegment`, and (2) an off-by-one error in `calculateAmbientOcclusion` that skipped the closing segment of polygon walls. Achieved 100% statement and line coverage.
 **Action:** Always include both the test file and the source module in `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Use `await import()` inside `async it` blocks to localized behavior changes for global mocks.
+
+## 2026-05-28 - [Dice Formula Normalization & Idempotency Fix]
+**Learning:** Found that `normalizeFormula` in `src/utils/roll-request/formula-utils.ts` was not idempotent. When a formula already contained `+modifier` (a standard internal representation), a second pass would aggressively strip the `modifier` keyword, leaving a trailing operator that was then also stripped, effectively reverting the formula to `1d20`.
+**Action:** Use negative lookbehind in regex (`(?<![+\-*/])modifier`) to ensure keywords are only stripped when they are NOT part of a valid mathematical expression. Always test for idempotency (repeated function calls) when implementing normalization utilities.
