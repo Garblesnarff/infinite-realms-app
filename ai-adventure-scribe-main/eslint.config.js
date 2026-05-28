@@ -357,6 +357,7 @@ export default tseslint.config(
       'src/hooks/use-combat-mechanics.ts',
       'src/utils/reactionTriggers.ts',
       'src/components/battle-map/LayersPanel.tsx',
+      'src/components/battle-map/LayerControlItem.tsx',
       'src/components/battle-map/TokenConditionIcons.tsx',
       'src/components/battle-map/VisionRange.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
