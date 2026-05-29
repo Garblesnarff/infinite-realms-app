@@ -4,6 +4,11 @@ import React, { useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export interface CharacterPreview {
   version: string;
@@ -60,17 +65,23 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
             Character data is valid and ready to import
           </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onClear}
-          className="h-6 w-6"
-          aria-label="Remove selected file"
-          title="Remove selected file"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClear}
+              className="h-6 w-6"
+              aria-label="Remove selected file"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Remove selected file</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Character Info */}

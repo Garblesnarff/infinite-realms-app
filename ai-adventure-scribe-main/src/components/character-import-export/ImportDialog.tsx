@@ -27,6 +27,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 
@@ -252,17 +257,23 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
                 <div className="font-semibold text-sm text-destructive">Validation Error</div>
                 <div className="text-sm text-destructive/80 mt-1">{validationError}</div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={clearValidationError}
-                className="h-6 w-6"
-                aria-label="Clear validation error"
-                title="Clear validation error"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearValidationError}
+                    className="h-6 w-6"
+                    aria-label="Clear validation error"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Clear validation error</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
 
