@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import logger from '@/lib/logger';
 
@@ -38,7 +38,8 @@ export function useAutosave<T>(
     };
   }, [storageKey, value, delay]);
 
-  function restore(): T | null {
+  // ⚡ Bolt: Wrap helper functions in useCallback to stabilize identities
+  const restore = useCallback((): T | null => {
     try {
       const raw = localStorage.getItem(storageKey);
       return raw ? (JSON.parse(raw) as T) : null;
@@ -46,16 +47,24 @@ export function useAutosave<T>(
       logger.error('Autosave restore failed', err);
       return null;
     }
-  }
+  }, [storageKey]);
 
-  function clear(): void {
+  const clear = useCallback((): void => {
     try {
       localStorage.removeItem(storageKey);
       setStatus('idle');
     } catch (err) {
       logger.error('Autosave clear failed', err);
     }
-  }
+  }, [storageKey]);
 
-  return { status, restore, clear };
+  // ⚡ Bolt: Memoize the returned object to prevent unnecessary re-renders in consumers
+  return useMemo(
+    () => ({
+      status,
+      restore,
+      clear,
+    }),
+    [status, restore, clear],
+  );
 }
