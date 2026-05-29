@@ -24,6 +24,7 @@ export default defineConfig({
     },
     css: true, // If you have CSS imports in components
     include: [
+      'src/services/__tests__/ai-service.test.ts',
       'src/services/__tests__/spellApi.test.ts',
       'src/services/__tests__/gallery-service.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',
@@ -499,6 +500,8 @@ export default defineConfig({
         'src/services/ai/campaign-generator.ts',
         'src/services/ai/conversation-service.ts',
         'src/services/ai/context-builder.ts',
+        'src/services/ai/chat-persistence.ts',
+        'src/services/ai/dm-response-processor.ts',
         'src/services/ai/xml-parser.ts',
         'src/services/ai/npc-roll-handler.ts',
         'src/components/spells/SpellCard.tsx',
