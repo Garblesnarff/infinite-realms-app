@@ -17,6 +17,9 @@ import { supabaseService } from '../../../lib/supabase.js';
 
 import type { BlogTagRow, BlogTag } from './types.js';
 
+// Explicit column list to avoid over-fetching
+const TAG_COLS = 'id, name, slug, description';
+
 export const blogTagRoutes = new Elysia()
 
   /**
@@ -26,7 +29,7 @@ export const blogTagRoutes = new Elysia()
     try {
       const { data, error } = await supabaseService
         .from('blog_tags')
-        .select('*')
+        .select(TAG_COLS)
         .order('name', { ascending: true });
       if (error) throw error;
       const tags = (data ?? [])
@@ -65,7 +68,7 @@ export const blogTagRoutes = new Elysia()
           slug: payload.slug,
           description: payload.description ?? null,
         })
-        .select('*')
+        .select(TAG_COLS)
         .single();
 
       if (error || !data) {
@@ -118,7 +121,7 @@ export const blogTagRoutes = new Elysia()
         .from('blog_tags')
         .update(updatePayload)
         .eq('id', id)
-        .select('*')
+        .select(TAG_COLS)
         .single();
 
       if (error || !data) {
