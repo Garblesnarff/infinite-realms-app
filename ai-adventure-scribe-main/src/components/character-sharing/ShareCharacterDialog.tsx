@@ -33,6 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { PermissionLevel } from '@/types/character';
 
@@ -88,6 +94,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      <TooltipProvider>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -155,7 +162,6 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                         role="option"
                         aria-selected={index === selectedIndex}
                         tabIndex={-1}
-                        title={`Select ${user.name}`}
                         aria-label={`Select ${user.name}`}
                         className={cn(
                           'w-full px-3 py-2 text-left transition-colors flex items-center justify-between outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
@@ -318,13 +324,22 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                               handleUpdatePermission(permission.userId, value as PermissionLevel)
                             }
                           >
-                            <SelectTrigger
-                              className="w-32"
-                              aria-label={`Change permission level for ${permission.userName || permission.userId}`}
-                              title={`Change permission level for ${permission.userName || permission.userId}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <SelectTrigger
+                                  className="w-32"
+                                  aria-label={`Change permission level for ${permission.userName || permission.userId}`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  Change permission level for{' '}
+                                  {permission.userName || permission.userId}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
                             <SelectContent>
                               <SelectItem value={PermissionLevel.VIEWER}>Viewer</SelectItem>
                               <SelectItem value={PermissionLevel.EDITOR}>Editor</SelectItem>
@@ -332,18 +347,24 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
                             </SelectContent>
                           </Select>
 
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRevoke(permission.userId)}
-                            disabled={revokeMutation.isPending}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            aria-label={`Revoke access for ${permission.userName || permission.userId}`}
-                            title={`Revoke access for ${permission.userName || permission.userId}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRevoke(permission.userId)}
+                                disabled={revokeMutation.isPending}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                aria-label={`Revoke access for ${permission.userName || permission.userId}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Revoke access for {permission.userName || permission.userId}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     ),
@@ -362,6 +383,7 @@ export const ShareCharacterDialog: React.FC<ShareCharacterDialogProps> = ({
           </div>
         </div>
       </DialogContent>
+      </TooltipProvider>
     </Dialog>
   );
 };
