@@ -228,10 +228,17 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
           </span>
         </div>
-        <Button type="button" onClick={onCreateScene} variant="cosmic">
-          <Plus className="mr-2 h-4 w-4" />
-          Create New Scene
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button type="button" onClick={onCreateScene} variant="cosmic">
+              <Plus className="mr-2 h-4 w-4" />
+              Create New Scene
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Add a new battle map to this campaign</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Empty state */}
@@ -242,10 +249,17 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
           title="No Scenes Yet"
           description="Create your first scene to bring your campaign to life with interactive battle maps."
           action={
-            <Button type="button" onClick={onCreateScene} variant="cosmic">
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Scene
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" onClick={onCreateScene} variant="cosmic">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create First Scene
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Begin by adding your first battle map</p>
+              </TooltipContent>
+            </Tooltip>
           }
         />
       )}

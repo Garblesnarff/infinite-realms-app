@@ -39,24 +39,25 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
   onDelete,
 }) => {
   return (
-    <Card
-      variant="parchment"
-      role="button"
-      tabIndex={0}
-      className={cn(
-        'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
-        scene.isActive && 'ring-2 ring-electricCyan',
-      )}
-      onClick={() => onViewScene?.(scene.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onViewScene?.(scene.id);
-        }
-      }}
-      aria-label={`View scene: ${scene.name}`}
-      title={`View scene: ${scene.name}`}
-    >
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Card
+          variant="parchment"
+          role="button"
+          tabIndex={0}
+          className={cn(
+            'overflow-hidden transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
+            scene.isActive && 'ring-2 ring-electricCyan',
+          )}
+          onClick={() => onViewScene?.(scene.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onViewScene?.(scene.id);
+            }
+          }}
+          aria-label={`View scene: ${scene.name}`}
+        >
       <div className="flex items-center gap-4 p-4">
         {/* Thumbnail */}
         <div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded overflow-hidden flex-shrink-0">
@@ -168,5 +169,10 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         </DropdownMenu>
       </div>
     </Card>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>View scene: {scene.name}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 };
