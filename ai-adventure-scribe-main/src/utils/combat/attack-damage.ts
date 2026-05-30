@@ -30,20 +30,14 @@ export function calculateAttackDamage(
   if (!weapon) {
     // Unarmed strike
     damageRolls = rollDamage('1d4', criticalHit, {});
-    baseDamage = damageRolls.reduce(
-      (sum, roll) =>
-        sum + roll.results.reduce((rSum, r) => rSum + r, 0) + roll.modifier * roll.count,
-      0,
-    );
+    baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
+    // Unarmed strikes use STR modifier
+    baseDamage += getAbilityModifier(attacker, 'strength');
     damageType = 'bludgeoning';
   } else if (weapon.damage) {
     // Weapon damage
     damageRolls = rollDamage(weapon.damage.dice, criticalHit, {});
-    baseDamage = damageRolls.reduce(
-      (sum, roll) =>
-        sum + roll.results.reduce((rSum, r) => rSum + r, 0) + roll.modifier * roll.count,
-      0,
-    );
+    baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
     damageType = weapon.damage.type;
 
     // Add ability modifiers
@@ -68,20 +62,30 @@ export function calculateAttackDamage(
 
   // Add Divine Smite damage
   if (options.divineSmiteLevel) {
-    const smiteRoll = rollDamage(`1d8+${options.divineSmiteLevel - 1}`, false, {});
+    // Divine Smite: (level + 1)d8, max 5d8 (for 4th level slot or higher)
+    const smiteDiceCount = Math.min(5, options.divineSmiteLevel + 1);
+    const smiteRoll = rollDamage(`${smiteDiceCount}d8`, criticalHit, {});
     damageRolls = [...damageRolls, ...smiteRoll];
-    damageType = 'radiant'; // Divine smite is radiant damage
+    baseDamage += smiteRoll.reduce((sum, roll) => sum + roll.total, 0);
+    damageType = 'radiant'; // Switch to radiant as it's often more relevant for smites
   }
 
   // Add Sneak Attack damage
   if (options.sneakAttack) {
     const sneakDice = getSneakAttackDice(attacker.level || 1);
-    const sneakRoll = rollDamage(sneakDice, false, {});
+    const sneakRoll = rollDamage(sneakDice, criticalHit, {});
     damageRolls = [...damageRolls, ...sneakRoll];
+    baseDamage += sneakRoll.reduce((sum, roll) => sum + roll.total, 0);
   }
 
   // Add Barbarian Rage damage bonus
-  if (attacker.isRaging && attacker.characterClass === 'barbarian') {
+  if (
+    attacker.isRaging &&
+    attacker.characterClass === 'barbarian' &&
+    weapon &&
+    !weapon.range && // Must be melee weapon
+    getAbilityModifier(attacker, 'strength') >= getAbilityModifier(attacker, 'dexterity') // Must use STR
+  ) {
     // D&D 5e Rage bonus: +2 (lvl 1-8), +3 (lvl 9-15), +4 (lvl 16+)
     let rageBonus = 2;
     const level = attacker.level || 1;
@@ -118,6 +122,14 @@ export function calculateAttackDamage(
  * Uses default values for common abilities if not specified
  */
 export function getAbilityModifier(participant: CombatParticipant, ability: string): number {
+  // Check if participant has the property directly (common for some participant objects)
+  const abilityName = ability.toLowerCase();
+  const participantValue = (participant as Record<string, unknown>)[abilityName];
+
+  if (typeof participantValue === 'number') {
+    return Math.floor((participantValue - 10) / 2);
+  }
+
   // Default ability scores for basic combat
   const defaultAbilityScores: { [key: string]: number } = {
     strength: 14, // Average human
@@ -129,7 +141,7 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
   };
 
   // Get modifier from default scores (floor of (score-10)/2)
-  const score = defaultAbilityScores[ability.toLowerCase()] || 12;
+  const score = defaultAbilityScores[abilityName] || 12;
   return Math.floor((score - 10) / 2);
 }
 
@@ -169,6 +181,6 @@ export function getSpellcastingAbility(attacker: CombatParticipant): number {
  * Get sneak attack dice for rogue level
  */
 export function getSneakAttackDice(level: number): string {
-  const dice = Math.ceil((level + 1) / 2); // 1d6 at lvl 1-2, 2d6 at 3-4, etc.
+  const dice = Math.ceil(level / 2); // 1d6 at lvl 1-2, 2d6 at 3-4, 5d6 at 9-10
   return `${dice}d6`;
 }
