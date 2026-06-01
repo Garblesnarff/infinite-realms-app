@@ -153,7 +153,7 @@ export class TokenService {
               data.actorId
                 ? exists(
                     db
-                      .select()
+                      .select({ one: sql`1` })
                       .from(characters)
                       .where(
                         and(
@@ -209,7 +209,7 @@ export class TokenService {
           eq(tokens.id, tokenId),
           exists(
             db
-              .select()
+              .select({ one: sql`1` })
               .from(scenes)
               .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
           ),
@@ -237,7 +237,7 @@ export class TokenService {
           eq(tokens.id, tokenId),
           exists(
             db
-              .select()
+              .select({ one: sql`1` })
               .from(scenes)
               .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
           ),

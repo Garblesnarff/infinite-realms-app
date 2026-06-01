@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { eq, and, or, exists } from 'drizzle-orm';
+import { eq, and, or, exists, sql } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import {
@@ -60,14 +60,14 @@ export class TokenLinkService {
           // Scene ownership check
           exists(
             db
-              .select()
+              .select({ one: sql`1` })
               .from(scenes)
               .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
           ),
           // Character ownership check
           exists(
             db
-              .select()
+              .select({ one: sql`1` })
               .from(characters)
               .where(
                 and(
@@ -122,7 +122,7 @@ export class TokenLinkService {
             eq(characterTokens.tokenId, tokenId),
             exists(
               db
-                .select()
+                .select({ one: sql`1` })
                 .from(characters)
                 .where(
                   and(
@@ -144,13 +144,13 @@ export class TokenLinkService {
             eq(tokens.actorId, characterId),
             exists(
               db
-                .select()
+                .select({ one: sql`1` })
                 .from(scenes)
                 .where(and(eq(scenes.id, tokens.sceneId), eq(scenes.userId, userId))),
             ),
             exists(
               db
-                .select()
+                .select({ one: sql`1` })
                 .from(characters)
                 .where(
                   and(

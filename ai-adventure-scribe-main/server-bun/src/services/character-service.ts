@@ -68,7 +68,7 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),
@@ -96,7 +96,7 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),
@@ -178,7 +178,7 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),
@@ -205,7 +205,7 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),

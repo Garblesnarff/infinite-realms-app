@@ -72,7 +72,7 @@ export class CharacterSpellService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),
@@ -154,7 +154,7 @@ export class CharacterSpellService {
         eq(characterSpells.characterId, characterId),
         eq(characterSpells.sourceClassId, classData.id),
         exists(
-          db.select()
+          db.select({ one: sql`1` })
             .from(characters)
             .where(and(
               eq(characters.id, characterId),
@@ -162,7 +162,7 @@ export class CharacterSpellService {
                 eq(characters.userId, userId),
                 eq(characters.ownerId, userId),
                 exists(
-                  db.select()
+                  db.select({ one: sql`1` })
                     .from(characterPermissions)
                     .where(and(
                       eq(characterPermissions.characterId, characters.id),
@@ -197,7 +197,7 @@ export class CharacterSpellService {
             eq(characters.userId, userId),
             eq(characters.ownerId, userId),
             exists(
-              db.select()
+              db.select({ one: sql`1` })
                 .from(characterPermissions)
                 .where(and(
                   eq(characterPermissions.characterId, characters.id),
@@ -226,7 +226,7 @@ export class CharacterSpellService {
             eq(characters.userId, userId),
             eq(characters.ownerId, userId),
             exists(
-              db.select()
+              db.select({ one: sql`1` })
                 .from(characterPermissions)
                 .where(and(
                   eq(characterPermissions.characterId, characters.id),
@@ -261,7 +261,7 @@ export class CharacterSpellService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select()
+            db.select({ one: sql`1` })
               .from(characterPermissions)
               .where(and(
                 eq(characterPermissions.characterId, characters.id),
