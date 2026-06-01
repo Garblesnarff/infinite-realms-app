@@ -25,6 +25,7 @@ export default defineConfig({
     css: true, // If you have CSS imports in components
     include: [
       'src/services/__tests__/ai-service.test.ts',
+      'src/services/__tests__/session-state-service.test.ts',
       'src/services/__tests__/spellApi.test.ts',
       'src/services/__tests__/gallery-service.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',
@@ -500,6 +501,7 @@ export default defineConfig({
         'src/utils/memory/selection.ts',
         'src/utils/memory/segmentation.ts',
         'src/services/ai-service.ts',
+      'src/services/session-state-service.ts',
         'src/services/ai/campaign-generator.ts',
         'src/services/ai/narration-service-impl.ts',
         'src/services/ai/conversation-service.ts',

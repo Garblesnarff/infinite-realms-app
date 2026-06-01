@@ -227,3 +227,7 @@
 ## 2026-05-28 - [Dice Formula Normalization & Idempotency Fix]
 **Learning:** Found that `normalizeFormula` in `src/utils/roll-request/formula-utils.ts` was not idempotent. When a formula already contained `+modifier` (a standard internal representation), a second pass would aggressively strip the `modifier` keyword, leaving a trailing operator that was then also stripped, effectively reverting the formula to `1d20`.
 **Action:** Use negative lookbehind in regex (`(?<![+\-*/])modifier`) to ensure keywords are only stripped when they are NOT part of a valid mathematical expression. Always test for idempotency (repeated function calls) when implementing normalization utilities.
+
+## 2024-05-24 - [Session State Service Coverage]
+**Learning:** Added comprehensive tests for `SessionStateService`. Found that achieving 100% branch coverage required specifically testing the case where `combatLog` is missing from the state returned by Supabase, as the `||` operator in `const existing = current.combatLog || [];` creates a branch. Also confirmed that mocking static class methods with `vi.spyOn` is effective for testing methods that depend on other methods in the same class (e.g., `updateState` calling `getState`).
+**Action:** When testing services with JSONB columns, always test scenarios with missing or null fields to verify fallback logic. Use `vi.setSystemTime` to stabilize ISO strings in persisted state. Ensure new tests and modules are added to `vitest.config.ts`'s explicit `include` and `coverage.include` arrays.
