@@ -11,11 +11,11 @@ import { ChevronRight, Dices, Plus } from 'lucide-react';
 import React from 'react';
 
 import { ParticipantRow } from '@/components/combat/ParticipantRow';
-
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCombat } from '@/contexts/CombatContext';
@@ -92,43 +92,56 @@ const InitiativeTracker: React.FC<InitiativeTrackerProps> = React.memo(({
             </div>
           </div>
           {onAddParticipant && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onAddParticipant}
-              aria-label="Add participant"
-              title="Add participant"
-              className="h-8 w-8"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onAddParticipant}
+                  aria-label="Add participant"
+                  className="h-8 w-8"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Add participant</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={rollInitiative}
-            className="flex-1 min-w-[140px] sm:flex-none"
-            title="Roll initiative for all participants"
-            aria-label="Roll initiative for all participants"
-          >
-            <Dices className="mr-2 h-4 w-4" aria-hidden="true" />
-            Roll Initiative
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={nextTurn}
-            className="flex-1 min-w-[140px]"
-            title="Advance to the next participant's turn"
-            aria-label="Advance to the next participant's turn"
-          >
-            <ChevronRight className="mr-2 h-4 w-4" aria-hidden="true" />
-            Next Turn
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={rollInitiative}
+                className="flex-1 min-w-[140px] sm:flex-none"
+                aria-label="Roll initiative for all participants"
+              >
+                <Dices className="mr-2 h-4 w-4" aria-hidden="true" />
+                Roll Initiative
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Roll initiative for all participants</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                onClick={nextTurn}
+                className="flex-1 min-w-[140px]"
+                aria-label="Advance to the next participant's turn"
+              >
+                <ChevronRight className="mr-2 h-4 w-4" aria-hidden="true" />
+                Next Turn
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Advance to the next participant's turn</TooltipContent>
+          </Tooltip>
         </div>
       </CardHeader>
 

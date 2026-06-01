@@ -5,6 +5,7 @@ import type { CombatParticipant, ConditionName } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { getHPColor } from '@/utils/hp-utils';
 
@@ -74,18 +75,37 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(({
   const portraitUrl = participant.portraitUrl || getAssetImageUrl?.(assetType, assetKey);
 
   const getParticipantTypeIcon = (): React.ReactNode => {
+    let icon = null;
+    let label = '';
+
     switch (participant.participantType) {
       case 'player':
-        return <Shield className="w-4 h-4 text-blue-500" aria-label="Player" title="Player" />;
+        icon = <Shield className="w-4 h-4 text-blue-500" aria-label="Player" />;
+        label = 'Player';
+        break;
       case 'npc':
-        return <Heart className="w-4 h-4 text-green-500" aria-label="NPC" title="NPC" />;
+        icon = <Heart className="w-4 h-4 text-green-500" aria-label="NPC" />;
+        label = 'NPC';
+        break;
       case 'enemy':
-        return <Sword className="w-4 h-4 text-red-500" aria-label="Enemy" title="Enemy" />;
+        icon = <Sword className="w-4 h-4 text-red-500" aria-label="Enemy" />;
+        label = 'Enemy';
+        break;
       case 'monster':
-        return <Sword className="w-4 h-4 text-red-500" aria-label="Monster" title="Monster" />;
+        icon = <Sword className="w-4 h-4 text-red-500" aria-label="Monster" />;
+        label = 'Monster';
+        break;
       default:
-        return <UserX className="w-4 h-4 text-gray-500" aria-label="Unknown" title="Unknown" />;
+        icon = <UserX className="w-4 h-4 text-gray-500" aria-label="Unknown" />;
+        label = 'Unknown';
     }
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{icon}</TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    );
   };
 
   const rowClasses = cn(
@@ -250,15 +270,18 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(({
 
               const conditionLabel = `${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`;
               return (
-                <div
-                  key={index}
-                  className={`rounded-full p-1 text-white ${colorClass}`}
-                  title={conditionLabel}
-                  aria-label={conditionLabel}
-                  role="img"
-                >
-                  <ConditionIcon className="h-3 w-3" />
-                </div>
+                <Tooltip key={index}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={`rounded-full p-1 text-white ${colorClass}`}
+                      aria-label={conditionLabel}
+                      role="img"
+                    >
+                      <ConditionIcon className="h-3 w-3" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{conditionLabel}</TooltipContent>
+                </Tooltip>
               );
             })}
           </div>
