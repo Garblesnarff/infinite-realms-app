@@ -79,7 +79,6 @@ export const FolderItem: React.FC<FolderItemProps> = ({
         tabIndex={0}
         aria-selected={isSelected}
         aria-label={`Select folder: ${folder.name}`}
-        title={`Select folder: ${folder.name}`}
         className={cn(
           'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
           isSelected && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
@@ -100,25 +99,33 @@ export const FolderItem: React.FC<FolderItemProps> = ({
       >
         {/* Expand/Collapse Icon */}
         {hasChildren && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-4 w-4 p-0 hover:bg-accent rounded"
-            aria-label={isExpanded ? `Collapse ${folder.name} folder` : `Expand ${folder.name} folder`}
-            title={isExpanded ? `Collapse ${folder.name} folder` : `Expand ${folder.name} folder`}
-            aria-expanded={isExpanded}
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            )}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 p-0 hover:bg-accent rounded"
+                aria-label={
+                  isExpanded ? `Collapse ${folder.name} folder` : `Expand ${folder.name} folder`
+                }
+                aria-expanded={isExpanded}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isExpanded ? 'Collapse' : 'Expand'} Folder</p>
+            </TooltipContent>
+          </Tooltip>
         )}
         {!hasChildren && <div className="w-4" />}
 
