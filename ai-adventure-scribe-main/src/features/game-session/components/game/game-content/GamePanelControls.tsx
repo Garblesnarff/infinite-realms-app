@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /**
  * GamePanelControls Component
@@ -29,15 +30,56 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
   }) => {
     return (
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={onLeftToggle} title="Toggle campaign panel">
-          {isLeftCollapsed ? 'Show Campaign' : 'Hide Campaign'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={onRightToggle} title="Toggle character panel">
-          {isRightCollapsed ? 'Show Character' : 'Hide Character'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={onSceneBlurbToggle} title="Toggle scene blurb">
-          {showSceneBlurb ? 'Hide Blurb' : 'Show Blurb'}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onLeftToggle}
+              aria-pressed={!isLeftCollapsed}
+            >
+              {isLeftCollapsed ? 'Show Campaign' : 'Hide Campaign'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{isLeftCollapsed ? 'Show' : 'Hide'} campaign panel</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRightToggle}
+              aria-pressed={!isRightCollapsed}
+            >
+              {isRightCollapsed ? 'Show Character' : 'Hide Character'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{isRightCollapsed ? 'Show' : 'Hide'} character panel</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onSceneBlurbToggle}
+              aria-pressed={showSceneBlurb}
+            >
+              {showSceneBlurb ? 'Hide Blurb' : 'Show Blurb'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{showSceneBlurb ? 'Hide' : 'Show'} scene blurb</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     );
   },
