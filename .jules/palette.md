@@ -169,3 +169,7 @@
 ## 2026-07-15 - Slider Accessibility with aria-valuetext
 **Learning:** For Shadcn/Radix Slider components, visual labels and numeric percentages are often not enough for screen readers to provide meaningful context during adjustment. Implementing `getAriaValueText` on the `Slider` (and passing it down to the `Thumb`'s `aria-valuetext` attribute) allows screen readers to announce human-readable values like "80%" or "10px" instead of raw numbers.
 **Action:** Enhance standard `Slider` components to support a `getAriaValueText` prop. Always provide this prop at call sites where the numeric value has a unit or specific context.
+
+## 2026-07-20 - Campaign Header Tooltip Enhancement
+**Learning:** Replacing native 'title' attributes with Shadcn Tooltips improves visual consistency. To ensure tooltips trigger on disabled buttons (like during a 'deleting' state), wrap the button and its trigger in a '<span>' element. This preserves hover feedback for all users while avoid 'double tooltips' on desktop.
+**Action:** Always wrap disabled-capable buttons in a '<span>' within 'TooltipTrigger' and remove redundant 'title' attributes when migrating to custom Tooltips.

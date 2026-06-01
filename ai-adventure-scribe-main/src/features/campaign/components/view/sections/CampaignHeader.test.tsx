@@ -27,6 +27,16 @@ vi.mock('@/components/ui/alert-dialog', () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 
+// Mock Tooltip components
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="tooltip-content">{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 describe('CampaignHeader', () => {
   const mockCampaign: Campaign = {
     id: '123',
@@ -51,11 +61,14 @@ describe('CampaignHeader', () => {
     expect(screen.getByText('Test Campaign')).toBeDefined();
   });
 
-  it('renders delete button with aria-label and title', () => {
+  it('renders delete button with aria-label and tooltip content', () => {
     render(<CampaignHeader campaign={mockCampaign} isDeleting={false} onDelete={() => {}} />);
     const deleteBtn = screen.getByLabelText(`Delete campaign: ${mockCampaign.name}`);
     expect(deleteBtn).toBeDefined();
-    expect(deleteBtn.getAttribute('title')).toBe(`Delete campaign: ${mockCampaign.name}`);
+
+    // Verify tooltip content exists in our mock
+    expect(screen.getByTestId('tooltip-content')).toBeDefined();
+    expect(screen.getByText(`Delete campaign: ${mockCampaign.name}`)).toBeDefined();
   });
 
   it('shows confirmation dialog when delete button is clicked', () => {
@@ -81,5 +94,7 @@ describe('CampaignHeader', () => {
   it('shows "Deleting..." when isDeleting is true', () => {
     render(<CampaignHeader campaign={mockCampaign} isDeleting={true} onDelete={() => {}} />);
     expect(screen.getByText('Deleting...')).toBeDefined();
+    // Tooltip should also reflect deleting state
+    expect(screen.getByText('Deleting campaign...')).toBeDefined();
   });
 });

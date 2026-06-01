@@ -15,6 +15,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface CampaignHeaderProps {
   campaign: Campaign;
@@ -35,17 +41,27 @@ export const CampaignHeader: React.FC<CampaignHeaderProps> = ({
       <h1 className="text-3xl font-bold">{campaign.name}</h1>
 
       <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button
-            variant="destructive"
-            size="icon"
-            disabled={isDeleting}
-            aria-label={`Delete campaign: ${campaign.name}`}
-            title={`Delete campaign: ${campaign.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </AlertDialogTrigger>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className={isDeleting ? 'cursor-not-allowed' : ''}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    disabled={isDeleting}
+                    aria-label={`Delete campaign: ${campaign.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isDeleting ? 'Deleting campaign...' : `Delete campaign: ${campaign.name}`}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
