@@ -9,6 +9,7 @@
 
 import { MemoryManager } from '../memory-manager';
 import { voiceConsistencyService } from '../voice-consistency-service';
+import { WorldBuilderService } from '../world-builders';
 import {
   buildDMPersonaPrompt,
   buildGameContextPrompt,
@@ -210,6 +211,12 @@ function parseStructuredResponse(rawResponse: string): AIResponse {
       .replace(/"\s*:\s*"([^"]*?)"\s*([,}])/g, '":"$1"$2');
 
     const structuredResponse = JSON.parse(cleanedResponse);
+
+    // Map snake_case from JSON to camelCase for the AIResponse interface
+    if (structuredResponse.narration_segments && !structuredResponse.narrationSegments) {
+      structuredResponse.narrationSegments = structuredResponse.narration_segments;
+    }
+
     logger.debug('🎭 Successfully parsed structured voice response');
     return structuredResponse;
   } catch (parseError) {

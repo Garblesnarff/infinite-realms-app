@@ -9,6 +9,7 @@
  */
 
 import { MemoryManager } from '../memory-manager';
+import { generateGeminiResponse } from './narration-service-impl';
 import { keyFor, getOrCreateDeduped } from './shared/utils';
 
 import type { Memory } from '../memory-manager';
