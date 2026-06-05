@@ -168,28 +168,34 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
         </div>
 
       {/* All Characters (Root) */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-selected={selectedFolderId === null}
-        aria-label="Show all characters"
-        title="Show all characters"
-        className={cn(
-          'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
-          selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
-          selectedFolderId !== null && 'hover:bg-accent',
-        )}
-        onClick={() => handleSelect(null)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleSelect(null);
-          }
-        }}
-      >
-        <FolderOpen className="h-5 w-5 text-infinite-teal" aria-hidden="true" />
-        <span className="flex-1 text-sm font-medium">All Characters</span>
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-pressed={selectedFolderId === null}
+            aria-label="Show all characters"
+            className={cn(
+              'flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 mb-2 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
+              selectedFolderId === null && 'bg-infinite-purple/10 border-l-2 border-infinite-purple',
+              selectedFolderId !== null && 'hover:bg-accent',
+            )}
+            onClick={() => handleSelect(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleSelect(null);
+              }
+            }}
+          >
+            <FolderOpen className="h-5 w-5 text-infinite-teal" aria-hidden="true" />
+            <span className="flex-1 text-sm font-medium">All Characters</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Show all characters</p>
+        </TooltipContent>
+      </Tooltip>
 
       {/* Folder Tree */}
       {isLoading ? (
