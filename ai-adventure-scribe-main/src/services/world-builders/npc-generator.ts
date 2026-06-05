@@ -21,36 +21,36 @@ export class NPCGenerator {
         maxTokens: 4096,
       });
 
-      try {
-        // Extract JSON from the response
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error('No JSON found in NPC generation response');
-        }
-
-        const npcData = JSON.parse(jsonMatch[0]);
-
-        // Add metadata
-        const npc: GeneratedNPC = {
-          ...npcData,
-          id: undefined, // Will be set when saved
-          metadata: {
-            createdAt: new Date(),
-            campaignId: request.context.campaignId,
-            sessionId: request.context.sessionId,
-            importance: request.importance,
-            narrativeWeight: this.calculateNarrativeWeight(npcData, request),
-            storyArc: request.context.currentStory,
-            locationId: request.location,
-          },
-        };
-
-        logger.info(`👤 Generated NPC: ${npc.name} (${npc.role})`);
-        return npc;
-      } catch (parseError) {
-        logger.error('Failed to parse NPC JSON:', parseError);
-        throw new Error('Failed to generate NPC: Invalid response format');
+      // Extract JSON from the response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in NPC generation response');
       }
+
+      let npcData;
+      try {
+        npcData = JSON.parse(jsonMatch[0]);
+      } catch (_parseError) {
+        throw new Error('Invalid JSON format in NPC response');
+      }
+
+      // Add metadata
+      const npc: GeneratedNPC = {
+        ...npcData,
+        id: undefined, // Will be set when saved
+        metadata: {
+          createdAt: new Date(),
+          campaignId: request.context.campaignId,
+          sessionId: request.context.sessionId,
+          importance: request.importance,
+          narrativeWeight: this.calculateNarrativeWeight(npcData, request),
+          storyArc: request.context.currentStory,
+          locationId: request.location,
+        },
+      };
+
+      logger.info(`👤 Generated NPC: ${npc.name} (${npc.role})`);
+      return npc;
     } catch (error) {
       logger.error('NPC generation failed:', error);
       throw new Error(

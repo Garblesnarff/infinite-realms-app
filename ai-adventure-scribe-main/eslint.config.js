@@ -486,6 +486,8 @@ export default tseslint.config(
       'src/components/game/__tests__/NPCRollDisplay.test.tsx',
       'src/components/game/voice/__tests__/DMMessageVoiceControls.test.tsx',
       'src/contexts/character/character-reducer.ts',
+      'src/services/world-builders/npc-generator.ts',
+      'src/services/world-builders/__tests__/npc-generator.test.ts',
       'src/components/game/DiceRollRequest.tsx',
       'src/components/game/DiceRollMessage.tsx',
       'src/utils/roll-request/regex-parser.ts',
