@@ -4,13 +4,14 @@ import {
   Anchor,
   AlertTriangle,
   Shuffle,
-  Copy,
-  Lightbulb,
   BookOpen,
   Sparkles,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
+import type { BackgroundSuggestions } from '@/components/character-creation/steps/personality/EnhancedPersonalitySuggestions';
+
+import { EnhancedPersonalitySuggestions } from '@/components/character-creation/steps/personality/EnhancedPersonalitySuggestions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,8 +41,8 @@ const EnhancedPersonalitySelection: React.FC = () => {
   const [flaw, setFlaw] = useState<string>(character?.flaws?.[0] || '');
 
   // Get background suggestions
-  const backgroundData = backgrounds.find((bg: any) => bg.id === selectedBackground?.id);
-  const suggestions = backgroundData
+  const backgroundData = backgrounds.find((bg) => bg.id === selectedBackground?.id);
+  const suggestions: BackgroundSuggestions | null = backgroundData
     ? {
         traits: backgroundData.suggestedPersonalityTraits || [],
         ideals: backgroundData.suggestedIdeals || [],
@@ -53,7 +54,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
   /**
    * Apply personality changes to character
    */
-  const applyPersonalityChanges = () => {
+  const applyPersonalityChanges = useCallback(() => {
     dispatch({
       type: 'UPDATE_CHARACTER',
       payload: {
@@ -75,12 +76,12 @@ const EnhancedPersonalitySelection: React.FC = () => {
       title: 'Personality Updated',
       description: "Your character's personality elements have been saved.",
     });
-  };
+  }, [personalityTraits, ideal, bond, flaw, dispatch, toast]);
 
   /**
    * Use a suggested element
    */
-  const applySuggestion = (
+  const handleApplySuggestion = (
     type: 'traits' | 'ideals' | 'bonds' | 'flaws',
     suggestion: string,
     index?: number,
@@ -109,7 +110,9 @@ const EnhancedPersonalitySelection: React.FC = () => {
    * Generate random suggestions from background
    */
   const useRandomSuggestions = () => {
-    if (!suggestions) return;
+    if (!suggestions) {
+      return;
+    }
 
     if (suggestions.traits.length >= 2) {
       const shuffledTraits = [...suggestions.traits].sort(() => Math.random() - 0.5);
@@ -146,47 +149,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [personalityTraits, ideal, bond, flaw]);
-
-  /**
-   * Render suggestion card
-   */
-  const renderSuggestions = (
-    type: 'traits' | 'ideals' | 'bonds' | 'flaws',
-    title: string,
-    suggestions: string[],
-    icon: React.ElementType,
-    colorClass: string,
-  ) => {
-    if (!suggestions || suggestions.length === 0) return null;
-
-    return (
-      <Card className="h-fit">
-        <CardHeader className="pb-3">
-          <CardTitle className={`flex items-center gap-2 text-sm ${colorClass}`}>
-            {React.createElement(icon, { className: 'w-4 h-4' })}
-            {title} Suggestions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {suggestions.slice(0, 3).map((suggestion, index) => (
-              <div
-                key={index}
-                className="p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors group"
-                onClick={() => applySuggestion(type, suggestion, type === 'traits' ? 0 : undefined)}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs flex-1">{suggestion}</p>
-                  <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
+  }, [applyPersonalityChanges]);
 
   if (!selectedBackground) {
     return (
@@ -204,9 +167,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Character Personality</h2>
-        <p className="text-muted-foreground">
-          Define your character's personality using D&D 5E elements
-        </p>
+        <p className="text-muted-foreground">Define your character's personality using D&D 5E elements</p>
         {backgroundData && (
           <Badge variant="outline" className="mt-2">
             {backgroundData.name} Background
@@ -217,11 +178,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
       {/* Quick Actions */}
       {suggestions && (
         <div className="flex justify-center">
-          <Button
-            onClick={useRandomSuggestions}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
+          <Button onClick={useRandomSuggestions} variant="outline" className="flex items-center gap-2">
             <Shuffle className="w-4 h-4" />
             Use Random Suggestions
           </Button>
@@ -322,8 +279,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
                     Bond
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    What connects your character to the world? People, places, or things they care
-                    about.
+                    What connects your character to the world? People, places, or things they care about.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -363,41 +319,7 @@ const EnhancedPersonalitySelection: React.FC = () => {
         </div>
 
         {/* Right Column - Suggestions */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-yellow-500" />
-            Background Suggestions
-          </h3>
-
-          {suggestions ? (
-            <div className="space-y-4">
-              {renderSuggestions(
-                'traits',
-                'Personality Trait',
-                suggestions.traits,
-                Heart,
-                'text-red-500',
-              )}
-              {renderSuggestions('ideals', 'Ideal', suggestions.ideals, Brain, 'text-blue-500')}
-              {renderSuggestions('bonds', 'Bond', suggestions.bonds, Anchor, 'text-green-500')}
-              {renderSuggestions(
-                'flaws',
-                'Flaw',
-                suggestions.flaws,
-                AlertTriangle,
-                'text-orange-500',
-              )}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">
-                  No suggestions available for this background.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        <EnhancedPersonalitySuggestions suggestions={suggestions} onApplySuggestion={handleApplySuggestion} />
       </div>
 
       {/* Inspiration Info */}
@@ -410,16 +332,14 @@ const EnhancedPersonalitySelection: React.FC = () => {
         </CardHeader>
         <CardContent className="text-sm text-gold-600 dark:text-gold-400">
           <p>
-            <strong>Inspiration</strong> is a rule the DM can use to reward you for playing your
-            character in a way that's true to their personality traits, ideals, bonds, and flaws.
-            When you have inspiration, you can spend it to gain advantage on one ability check,
-            attack roll, or saving throw.
+            <strong>Inspiration</strong> is a rule the DM can use to reward you for playing your character in a way that's
+            true to their personality traits, ideals, bonds, and flaws. When you have inspiration, you can spend it to
+            gain advantage on one ability check, attack roll, or saving throw.
           </p>
           <Separator className="my-3 bg-gold-300 dark:bg-gold-700" />
           <p className="text-xs">
-            Your DM tells you how to earn inspiration in the game. Typically, you gain it when you
-            play out your character's personality in a way that creates interesting complications or
-            drives the story forward.
+            Your DM tells you how to earn inspiration in the game. Typically, you gain it when you play out your
+            character's personality in a way that creates interesting complications or drives the story forward.
           </p>
         </CardContent>
       </Card>

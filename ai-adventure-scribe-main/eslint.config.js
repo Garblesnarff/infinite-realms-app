@@ -231,6 +231,7 @@ export default tseslint.config(
       'src/contexts/CombatContext.tsx',
       'src/contexts/combat/health-handlers.ts',
       'src/contexts/combat/combat-reducer.ts',
+      'src/components/character-creation/steps/EnhancedPersonalitySelection.tsx',
       'src/services/ai-service.ts', // 1142 lines
       'src/services/ai/dm-response-processor.ts',
       'src/services/ai/__tests__/dm-response-processor.test.ts',
