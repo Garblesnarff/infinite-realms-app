@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface TypingIndicatorProps {
   isVisible: boolean;
@@ -8,8 +8,11 @@ interface TypingIndicatorProps {
 /**
  * TypingIndicator Component
  * Shows a typing animation when someone is composing a message
+ *
+ * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the
+ * typing animation when the parent chat container updates.
  */
-export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ isVisible, sender = 'DM' }) => {
+export const TypingIndicator: React.FC<TypingIndicatorProps> = memo(({ isVisible, sender = 'DM' }) => {
   if (!isVisible) return null;
 
   return (
@@ -32,4 +35,6 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ isVisible, sen
       </div>
     </div>
   );
-};
+});
+
+TypingIndicator.displayName = 'TypingIndicator';
