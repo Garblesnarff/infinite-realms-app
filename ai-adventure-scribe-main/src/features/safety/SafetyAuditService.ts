@@ -43,7 +43,7 @@ export class SafetyAuditService {
         action_taken: this.getActionTaken(command),
         was_paused_before: sessionState?.is_paused || false,
         is_paused_after:
-          command.type === 'pause'
+          command.type === 'pause' || command.type === 'x_card'
             ? true
             : command.type === 'resume'
               ? false

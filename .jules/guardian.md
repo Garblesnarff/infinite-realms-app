@@ -231,3 +231,7 @@
 ## 2024-05-24 - [Session State Service Coverage]
 **Learning:** Added comprehensive tests for `SessionStateService`. Found that achieving 100% branch coverage required specifically testing the case where `combatLog` is missing from the state returned by Supabase, as the `||` operator in `const existing = current.combatLog || [];` creates a branch. Also confirmed that mocking static class methods with `vi.spyOn` is effective for testing methods that depend on other methods in the same class (e.g., `updateState` calling `getState`).
 **Action:** When testing services with JSONB columns, always test scenarios with missing or null fields to verify fallback logic. Use `vi.setSystemTime` to stabilize ISO strings in persisted state. Ensure new tests and modules are added to `vitest.config.ts`'s explicit `include` and `coverage.include` arrays.
+
+## 2026-06-04 - [Safety Audit Service Coverage & Bug Fix]
+**Learning:** Found that `SafetyAuditService` was missing a pause transition for the `x_card` command in its audit log. Although `SafetyResponseFactory` indicates that `x_card` should pause the game, the audit log was only explicitly setting `is_paused_after` to `true` for the `pause` command type.
+**Action:** Ensure that audit logging logic covers all command types that result in a state change. In `SafetyAuditService`, updated `is_paused_after` calculation to include `x_card`. Verified truncation logic for long messages (1000 chars for messages, 500 for context) in the new test suite.

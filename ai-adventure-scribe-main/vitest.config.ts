@@ -382,6 +382,7 @@ export default defineConfig({
       'src/utils/performance/__tests__/lod.test.ts',
       'src/utils/performance/__tests__/culling.test.ts',
       'src/features/safety/__tests__/SafetyCommandProcessor.test.ts',
+      'src/features/safety/__tests__/SafetyAuditService.test.ts',
       'src/features/game-session/hooks/__tests__/use-panel-resize.test.ts',
       'src/features/game-session/hooks/__tests__/use-chat-history.test.ts',
       'src/features/game-session/hooks/__tests__/use-chat-persistence.test.ts',
