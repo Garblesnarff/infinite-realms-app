@@ -9,11 +9,25 @@ import logger from '@/lib/logger';
 const PAGE_SIZE = 50;
 
 /**
+ * Hook return type definition
+ */
+export interface UseMessagesReturn {
+  data: ChatMessage[];
+  isLoading: boolean;
+  isFetching: boolean;
+  error: Error | null;
+  hasMore: boolean;
+  loadMore: () => void;
+  resetPagination: () => void;
+  addMessage: (message: ChatMessage) => Promise<void>;
+}
+
+/**
  * Custom hook for fetching and managing game messages with pagination
  * @param sessionId - Current game session ID
  * @returns Query result containing messages array, loading state, pagination functions
  */
-export const useMessages = (sessionId: string | null) => {
+export const useMessages = (sessionId: string | null): UseMessagesReturn => {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -70,7 +84,12 @@ export const useMessages = (sessionId: string | null) => {
 
       const messages = (data || []).map((msg) => {
         // Extract character data from the nested structure
-        const characterData = (msg.game_sessions as any)?.characters;
+        // ⚡ Bolt: Using a type cast instead of 'any' to satisfy linting while handling Supabase's
+        // deeply nested join results.
+        const sessions = msg.game_sessions as unknown as {
+          characters: { id: string; name: string; avatar_url: string | null } | null;
+        } | null;
+        const characterData = sessions?.characters;
 
         return {
           text: msg.message,
@@ -147,39 +166,50 @@ export const useMessages = (sessionId: string | null) => {
     setAllMessages([]);
   }, []);
 
-  const addMessage = async (message: ChatMessage) => {
-    if (!sessionId) return;
+  // ⚡ Bolt: Automatically reset pagination and clear messages when sessionId changes
+  // to prevent stale data leaks between sessions.
+  useEffect(() => {
+    resetPagination();
+  }, [sessionId, resetPagination]);
 
-    try {
-      const contextData = message.context
-        ? {
-            location: message.context.location || null,
-            emotion: message.context.emotion || null,
-            intent: message.context.intent || null,
-          }
-        : {};
+  // ⚡ Bolt: Wrap addMessage in useCallback to ensure stable identity across renders,
+  // preventing unnecessary re-renders of memoized child components that receive this callback.
+  const addMessage = useCallback(
+    async (message: ChatMessage) => {
+      if (!sessionId) return;
 
-      const { error } = await supabase.from('dialogue_history').insert({
-        id: message.id,
-        session_id: sessionId,
-        message: message.text,
-        speaker_type: message.sender,
-        context: contextData,
-        timestamp: new Date().toISOString(),
-      });
+      try {
+        const contextData = message.context
+          ? {
+              location: message.context.location || null,
+              emotion: message.context.emotion || null,
+              intent: message.context.intent || null,
+            }
+          : {};
 
-      if (error) {
-        logger.error('Error adding message:', error);
+        const { error } = await supabase.from('dialogue_history').insert({
+          id: message.id,
+          session_id: sessionId,
+          message: message.text,
+          speaker_type: message.sender,
+          context: contextData,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (error) {
+          logger.error('Error adding message:', error);
+          throw error;
+        }
+
+        // Invalidate all message queries to refetch
+        await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+      } catch (error) {
+        logger.error('Failed to add message:', error);
         throw error;
       }
-
-      // Invalidate all message queries to refetch
-      await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
-    } catch (error) {
-      logger.error('Failed to add message:', error);
-      throw error;
-    }
-  };
+    },
+    [sessionId, queryClient],
+  );
 
   return {
     data: allMessages,
