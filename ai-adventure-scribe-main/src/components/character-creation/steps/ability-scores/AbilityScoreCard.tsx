@@ -77,7 +77,6 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                   disabled={isDecreaseDisabled}
                   className="h-8 w-8"
                   aria-label={`Decrease ${ability}`}
-                  title={getDecreaseTooltip()}
                 >
                   <Minus className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -132,7 +131,6 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
                   disabled={isIncreaseDisabled}
                   className="h-8 w-8"
                   aria-label={`Increase ${ability}`}
-                  title={getIncreaseTooltip()}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
