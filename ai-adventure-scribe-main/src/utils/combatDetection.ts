@@ -10,146 +10,25 @@ import {
   createCombatParticipantsFromDetection,
 } from './combat/participant-generation';
 
-export { type PlayerCharacterLike, createCombatParticipantsFromDetection };
+import { detectCombatActions, detectPlayerCombatAction } from '@/utils/combat/detection/actions';
+import { COMBAT_KEYWORDS, ENEMY_TEMPLATES } from '@/utils/combat/detection/constants';
+import {
+  type CombatDetectionResult,
+  type DetectedEnemy,
+  type DetectedCombatAction,
+} from '@/utils/combat/detection/types';
+import { getDiceRollRequirements, shouldEndCombat } from '@/utils/combat/detection/utils';
 
-export interface CombatDetectionResult {
-  isCombat: boolean;
-  combatType: 'initiative' | 'attack' | 'spell_cast' | 'damage_taken' | 'none';
-  confidence: number; // 0-1
-  enemies?: DetectedEnemy[];
-  combatActions?: DetectedCombatAction[];
-  shouldStartCombat: boolean;
-  shouldEndCombat: boolean;
-}
 
-export interface DetectedEnemy {
-  name: string;
-  type: 'mech' | 'humanoid' | 'beast' | 'undead' | 'dragon' | 'construct' | 'unknown';
-  estimatedCR: string;
-  description: string;
-  suggestedHP: number;
-  suggestedAC: number;
-}
-
-export interface DetectedCombatAction {
-  actor: string;
-  action: string;
-  target?: string;
-  weapon?: string;
-  damage?: string;
-  rollNeeded: boolean;
-  rollType: 'attack' | 'damage' | 'save' | 'skill';
-}
-
-/**
- * Combat trigger keywords organized by category
- */
-const COMBAT_KEYWORDS = {
-  // Direct combat initiation
-  initiative: [
-    'roll initiative',
-    'initiative order',
-    'combat begins',
-    'battle starts',
-    'turn order',
-    'who goes first',
-    'initiative count',
-  ],
-
-  // Attack actions
-  attacks: [
-    'attacks',
-    'strikes',
-    'swings',
-    'fires',
-    'shoots',
-    'lunges',
-    'makes an attack',
-    'weapon attack',
-    'melee attack',
-    'ranged attack',
-    'attempts to hit',
-    'tries to strike',
-  ],
-
-  // Spell casting
-  spellcasting: [
-    'casts',
-    'conjures',
-    'invokes',
-    'channels',
-    'spell attack',
-    'magic missile',
-    'fireball',
-    'lightning bolt',
-    'healing word',
-    'sacred flame',
-    'eldritch blast',
-  ],
-
-  // Damage and effects
-  damage: [
-    'takes damage',
-    'deals damage',
-    'damage',
-    'hit points',
-    'HP',
-    'wounded',
-    'injured',
-    'bleeding',
-    'unconscious',
-    'knocked out',
-  ],
-
-  // Combat creatures/enemies
-  enemies: [
-    'mech',
-    'robot',
-    'automaton',
-    'guard',
-    'soldier',
-    'bandit',
-    'goblin',
-    'orc',
-    'troll',
-    'dragon',
-    'skeleton',
-    'zombie',
-    'cultist',
-    'assassin',
-    'warrior',
-  ],
-
-  // Combat ending - ONLY definitive phrases that clearly end combat
-  // Words like "flee", "retreat", "escape" are removed because they can appear
-  // in hypothetical context ("You could flee", "Consider retreating")
-  endings: [
-    'combat ends',
-    'combat has ended',
-    'the battle is over',
-    'battle over',
-    'the fight is over',
-    'enemies defeated',
-    'all enemies defeated',
-    'all enemies dead',
-    'threat eliminated',
-    'threat has been eliminated',
-    'you are victorious',
-    'you have won',
-  ],
-};
-
-/**
- * Enemy stat templates for common creature types
- */
-const ENEMY_TEMPLATES = {
-  mech: { hp: 45, ac: 16, cr: '2' },
-  humanoid: { hp: 25, ac: 14, cr: '1' },
-  beast: { hp: 30, ac: 12, cr: '1' },
-  undead: { hp: 22, ac: 13, cr: '1/2' },
-  dragon: { hp: 200, ac: 18, cr: '10' },
-  construct: { hp: 60, ac: 17, cr: '3' },
-  unknown: { hp: 30, ac: 14, cr: '1' },
+export {
+  type PlayerCharacterLike,
+  createCombatParticipantsFromDetection,
+  type CombatDetectionResult,
+  type DetectedEnemy,
+  type DetectedCombatAction,
+  detectPlayerCombatAction,
+  shouldEndCombat,
+  getDiceRollRequirements,
 };
 
 /**
@@ -164,7 +43,7 @@ export function detectCombatFromText(text: string, _context?: unknown): CombatDe
   let shouldStartCombat = false;
   let hasDirectCombatCue = false;
   let hasExplicitInitiative = false; // NEW: Track explicit initiative keywords separately
-  let shouldEndCombat = false;
+  let shouldEndCombatLocal = false;
 
   // Check for initiative keywords - ONLY these should trigger combat start
   if (COMBAT_KEYWORDS.initiative.some((keyword) => lowerText.includes(keyword))) {
@@ -218,7 +97,7 @@ export function detectCombatFromText(text: string, _context?: unknown): CombatDe
   // Check for combat ending
   if (COMBAT_KEYWORDS.endings.some((keyword) => lowerText.includes(keyword))) {
     combatScore += 0.3;
-    shouldEndCombat = true;
+    shouldEndCombatLocal = true;
     shouldStartCombat = false;
   }
 
@@ -262,175 +141,6 @@ export function detectCombatFromText(text: string, _context?: unknown): CombatDe
     enemies: enemies.length > 0 ? enemies : undefined,
     combatActions: combatActions.length > 0 ? combatActions : undefined,
     shouldStartCombat,
-    shouldEndCombat,
+    shouldEndCombat: shouldEndCombatLocal,
   };
-}
-
-/**
- * Detect specific combat actions that need dice rolls
- */
-function detectCombatActions(text: string): DetectedCombatAction[] {
-  const actions: DetectedCombatAction[] = [];
-  const sentences = text.split(/[.!?]+/);
-
-  for (const sentence of sentences) {
-    const lowerSentence = sentence.toLowerCase().trim();
-
-    // Attack actions
-    if (lowerSentence.includes('attacks') || lowerSentence.includes('strikes')) {
-      const action = extractAction(sentence, 'attack');
-      if (action) actions.push(action);
-    }
-
-    // Spell casting
-    if (lowerSentence.includes('casts') || lowerSentence.includes('spell')) {
-      const action = extractAction(sentence, 'spell');
-      if (action) actions.push(action);
-    }
-
-    // Damage dealing
-    if (lowerSentence.includes('damage') || lowerSentence.includes('hit points')) {
-      const action = extractAction(sentence, 'damage');
-      if (action) actions.push(action);
-    }
-  }
-
-  return actions;
-}
-
-/**
- * Extract combat action details from a sentence
- */
-function extractAction(sentence: string, actionType: string): DetectedCombatAction | null {
-  // Simple extraction - in a real implementation, this could use NLP
-  const words = sentence.split(' ');
-  let actor = 'Unknown';
-  const target = '';
-  let weapon = '';
-
-  // Try to find actor (usually first entity mentioned)
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i].toLowerCase();
-    if (COMBAT_KEYWORDS.enemies.includes(word)) {
-      actor = word.charAt(0).toUpperCase() + word.slice(1);
-      break;
-    }
-  }
-
-  // Try to find weapon
-  const weaponKeywords = ['sword', 'crossbow', 'bow', 'dagger', 'mace', 'weapon', 'claw', 'bite'];
-  for (const weaponWord of weaponKeywords) {
-    if (sentence.toLowerCase().includes(weaponWord)) {
-      weapon = weaponWord;
-      break;
-    }
-  }
-
-  // Determine roll type
-  let rollType: DetectedCombatAction['rollType'] = 'attack';
-  let rollNeeded = true;
-
-  if (actionType === 'spell') {
-    rollType = 'save';
-  } else if (actionType === 'damage') {
-    rollType = 'damage';
-    rollNeeded = false; // Damage might already be determined
-  }
-
-  return {
-    actor,
-    action: actionType,
-    target,
-    weapon,
-    rollNeeded,
-    rollType,
-  };
-}
-
-/**
- * Detect player combat actions from player input
- */
-export function detectPlayerCombatAction(playerInput: string): DetectedCombatAction | null {
-  const lowerInput = playerInput.toLowerCase();
-
-  // Attack actions
-  if (lowerInput.includes('attack') || lowerInput.includes('hit') || lowerInput.includes('shoot')) {
-    return {
-      actor: 'Player',
-      action: 'attack',
-      rollNeeded: true,
-      rollType: 'attack',
-    };
-  }
-
-  // Spell casting
-  if (lowerInput.includes('cast') || lowerInput.includes('spell')) {
-    return {
-      actor: 'Player',
-      action: 'cast spell',
-      rollNeeded: true,
-      rollType: 'attack',
-    };
-  }
-
-  // Defense actions
-  if (
-    lowerInput.includes('dodge') ||
-    lowerInput.includes('defend') ||
-    lowerInput.includes('block')
-  ) {
-    return {
-      actor: 'Player',
-      action: 'defend',
-      rollNeeded: false,
-      rollType: 'skill',
-    };
-  }
-
-  return null;
-}
-
-/**
- * Check if text indicates combat should end
- */
-export function shouldEndCombat(text: string): boolean {
-  const lowerText = text.toLowerCase();
-  return COMBAT_KEYWORDS.endings.some((keyword) => lowerText.includes(keyword));
-}
-
-/**
- * Extract dice roll requirements from combat actions
- */
-export function getDiceRollRequirements(actions: DetectedCombatAction[]): {
-  attackRolls: number;
-  damageRolls: number;
-  savingThrows: number;
-  skillChecks: number;
-} {
-  let attackRolls = 0;
-  let damageRolls = 0;
-  let savingThrows = 0;
-  let skillChecks = 0;
-
-  for (const action of actions) {
-    if (!action.rollNeeded) continue;
-
-    switch (action.rollType) {
-      case 'attack':
-        attackRolls++;
-        if (action.action === 'attack') damageRolls++; // Attack rolls often need damage rolls
-        break;
-      case 'damage':
-        damageRolls++;
-        break;
-      case 'save':
-        savingThrows++;
-        break;
-      case 'skill':
-        skillChecks++;
-        break;
-    }
-  }
-
-  return { attackRolls, damageRolls, savingThrows, skillChecks };
 }
