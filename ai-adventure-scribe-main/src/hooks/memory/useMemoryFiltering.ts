@@ -131,7 +131,8 @@ export const useMemoryFiltering = (
       if (importanceDiff !== 0) return importanceDiff;
 
       // Secondary sort by creation date
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      // ⚡ Bolt: Use direct string comparison for ISO timestamps to avoid expensive Date object creation.
+      return b.created_at.localeCompare(a.created_at);
     });
   }, [memories, normalizedOptions]);
 };

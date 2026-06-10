@@ -108,11 +108,8 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
       // Defensive sort to guarantee chronological order (oldest first)
       // Even though DB query uses ascending order, we enforce it client-side
       // as a belt-and-suspenders approach for production reliability
-      messages.sort((a, b) => {
-        const timeA = new Date(a.timestamp || 0).getTime();
-        const timeB = new Date(b.timestamp || 0).getTime();
-        return timeA - timeB;
-      });
+      // ⚡ Bolt: Use direct string comparison for ISO timestamps to avoid expensive Date object creation.
+      messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
 
       // Messages are now in chronological order (ascending by timestamp)
       // Display oldest at top, newest at bottom

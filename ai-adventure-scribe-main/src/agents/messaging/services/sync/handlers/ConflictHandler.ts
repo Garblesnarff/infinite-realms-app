@@ -6,8 +6,8 @@ import { logger } from '../../../../../lib/logger';
 export class ConflictHandler {
   private defaultStrategy: ConflictResolutionStrategy = {
     type: 'timestamp',
-    resolve: (messages) =>
-      messages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0],
+    // ⚡ Bolt: Use direct string comparison for ISO timestamps to avoid expensive Date object creation.
+    resolve: (messages) => messages.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0],
   };
 
   public async handleConflict(sequence: MessageSequence): Promise<void> {

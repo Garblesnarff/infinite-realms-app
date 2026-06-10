@@ -109,6 +109,7 @@ export const sortMemoriesByImportance = (memories: Memory[]): Memory[] => {
       return importanceDiff;
     }
     // Secondary sort by recency (newest first)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    // ⚡ Bolt: Use direct string comparison for ISO timestamps to avoid expensive Date object creation.
+    return b.created_at.localeCompare(a.created_at);
   });
 };
