@@ -39,25 +39,31 @@ vi.mock('@/components/ui/slider', () => ({
 
 // Mock Button to just render children and handle clicks
 vi.mock('@/components/ui/button', () => ({
-  Button: ({
-    children,
-    onClick,
-    ariaLabel,
-    title,
-    className,
-    variant: _variant,
-    size: _size,
-    ...props
-  }: any) => (
-    <button
-      onClick={onClick}
-      aria-label={ariaLabel || props['aria-label']}
-      title={title}
-      className={className}
-      {...props}
-    >
-      {children}
-    </button>
+  Button: React.forwardRef<HTMLButtonElement, any>(
+    (
+      {
+        children,
+        onClick,
+        ariaLabel,
+        title,
+        className,
+        variant: _variant,
+        size: _size,
+        ...props
+      },
+      ref,
+    ) => (
+      <button
+        ref={ref}
+        onClick={onClick}
+        aria-label={ariaLabel || props['aria-label']}
+        title={title}
+        className={className}
+        {...props}
+      >
+        {children}
+      </button>
+    ),
   ),
 }));
 

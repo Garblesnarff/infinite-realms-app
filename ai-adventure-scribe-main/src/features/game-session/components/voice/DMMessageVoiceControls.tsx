@@ -5,6 +5,12 @@ import type { NarrationSegment } from '@/hooks/use-ai-response';
 
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useVoiceContext } from '@/contexts/VoiceContext';
 import { cn } from '@/lib/utils';
 import { extractNarrativeContent } from '@/utils/parseMessageOptions';
@@ -18,10 +24,6 @@ interface DMMessageVoiceControlsProps {
 
 /**
  * DMMessageVoiceControls Component
- * Provides playback controls for DM message text-to-speech.
- *
- * ⚡ Bolt: Wrapped in React.memo to prevent redundant re-renders of the voice
- * controls for all messages when only one message changes or the list re-renders.
  */
 export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = React.memo(
   ({ messageId, messageText, narrationSegments, className }) => {
@@ -105,31 +107,41 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
         onClick={(e) => e.stopPropagation()}
       >
         {/* Play/Pause Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-6 w-6 p-0 rounded-full transition-all duration-150',
-            'hover:bg-accent/50 active:scale-95',
-            'text-muted-foreground hover:text-primary',
-            isCurrentlyPlaying && 'text-primary bg-accent/30',
-            // Larger touch target on mobile
-            isTouchDevice && 'h-8 w-8',
-          )}
-          onClick={handlePlayPause}
-          aria-label={
-            isCurrentlyPlaying
-              ? 'Pause reading this message'
-              : 'Play this message with text-to-speech'
-          }
-          aria-pressed={isCurrentlyPlaying}
-        >
-          {isCurrentlyPlaying ? (
-            <Pause className={cn('h-3 w-3', isTouchDevice && 'h-4 w-4')} aria-hidden="true" />
-          ) : (
-            <Play className={cn('h-3 w-3', isTouchDevice && 'h-4 w-4')} aria-hidden="true" />
-          )}
-        </Button>
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-6 w-6 p-0 rounded-full transition-all duration-150',
+                  'hover:bg-accent/50 active:scale-95',
+                  'text-muted-foreground hover:text-primary',
+                  isCurrentlyPlaying && 'text-primary bg-accent/30',
+                  // Larger touch target on mobile
+                  isTouchDevice && 'h-8 w-8',
+                )}
+                onClick={handlePlayPause}
+                aria-label={
+                  isCurrentlyPlaying
+                    ? 'Pause reading this message'
+                    : 'Play this message with text-to-speech'
+                }
+                aria-pressed={isCurrentlyPlaying}
+              >
+                {isCurrentlyPlaying ? (
+                  <Pause className={cn('h-3 w-3', isTouchDevice && 'h-4 w-4')} aria-hidden="true" />
+                ) : (
+                  <Play className={cn('h-3 w-3', isTouchDevice && 'h-4 w-4')} aria-hidden="true" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p>{isCurrentlyPlaying ? 'Pause' : 'Play'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Playing Indicator */}
         {isCurrentlyPlaying && (
@@ -157,21 +169,38 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
             className="flex items-center gap-1 animate-in slide-in-from-right-2 duration-200"
             onMouseEnter={() => setShowVolumeSlider(true)}
             onMouseLeave={() => setShowVolumeSlider(false)}
+            onFocus={() => setShowVolumeSlider(true)}
+            onBlur={(e) => {
+              // Only hide if focus is moving outside the volume control container
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setShowVolumeSlider(false);
+              }
+            }}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 rounded-full text-muted-foreground hover:text-primary"
-              onClick={handleVolumeToggle}
-              aria-label={isMuted ? 'Unmute' : 'Mute'}
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted ? (
-                <VolumeX className="h-3 w-3" aria-hidden="true" />
-              ) : (
-                <Volume2 className="h-3 w-3" aria-hidden="true" />
-              )}
-            </Button>
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 rounded-full text-muted-foreground hover:text-primary"
+                    onClick={handleVolumeToggle}
+                    aria-label={isMuted ? 'Unmute' : 'Mute'}
+                    aria-pressed={isMuted}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="h-3 w-3" aria-hidden="true" />
+                    ) : (
+                      <Volume2 className="h-3 w-3" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{isMuted ? 'Unmute' : 'Mute'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {showVolumeSlider && (
               <div className="w-16">
@@ -182,6 +211,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
                   step={0.05}
                   className="h-4"
                   aria-label="Volume"
+                  getAriaValueText={(v) => `${Math.round(v * 100)}%`}
                 />
               </div>
             )}
