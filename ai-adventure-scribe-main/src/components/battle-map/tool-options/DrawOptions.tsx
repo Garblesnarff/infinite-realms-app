@@ -6,6 +6,11 @@ import { ColorPicker } from './ColorPicker';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface DrawOptionsProps {
   strokeWidth: number;
@@ -59,21 +64,28 @@ export const DrawOptions: React.FC<DrawOptionsProps> = ({
       <ColorPicker label="Stroke Color" value={strokeColor} onChange={setStrokeColor} />
 
       <div className="flex items-center gap-2">
-        <Button
-          variant={fillEnabled ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setFillEnabled(!fillEnabled)}
-          aria-pressed={fillEnabled}
-          aria-label="Toggle Fill"
-          title="Toggle Fill"
-        >
-          {fillEnabled ? (
-            <Eye className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <EyeOff className="h-4 w-4" aria-hidden="true" />
-          )}
-          <span className="ml-2">Fill</span>
-        </Button>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={fillEnabled ? 'default' : 'outline'}
+              size="sm"
+              type="button"
+              onClick={() => setFillEnabled(!fillEnabled)}
+              aria-pressed={fillEnabled}
+              aria-label="Toggle Fill"
+            >
+              {fillEnabled ? (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <EyeOff className="h-4 w-4" aria-hidden="true" />
+              )}
+              <span className="ml-2">Fill</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Toggle Fill</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {fillEnabled && (

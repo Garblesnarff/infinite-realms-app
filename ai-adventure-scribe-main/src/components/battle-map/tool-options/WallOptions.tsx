@@ -11,6 +11,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface WallOptionsProps {
   wallType: 'solid' | 'door' | 'window' | 'terrain';
@@ -56,21 +61,28 @@ export const WallOptions: React.FC<WallOptionsProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant={snapToGrid ? 'default' : 'outline'}
-          size="sm"
-          onClick={toggleSnapToGrid}
-          aria-pressed={snapToGrid}
-          aria-label="Toggle Snap to Grid"
-          title="Toggle Snap to Grid"
-        >
-          {snapToGrid ? (
-            <Lock className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Unlock className="h-4 w-4" aria-hidden="true" />
-          )}
-          <span className="ml-2">Snap to Grid</span>
-        </Button>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={snapToGrid ? 'default' : 'outline'}
+              size="sm"
+              type="button"
+              onClick={toggleSnapToGrid}
+              aria-pressed={snapToGrid}
+              aria-label="Toggle Snap to Grid"
+            >
+              {snapToGrid ? (
+                <Lock className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Unlock className="h-4 w-4" aria-hidden="true" />
+              )}
+              <span className="ml-2">Snap to Grid</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Toggle Snap to Grid</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="space-y-2">

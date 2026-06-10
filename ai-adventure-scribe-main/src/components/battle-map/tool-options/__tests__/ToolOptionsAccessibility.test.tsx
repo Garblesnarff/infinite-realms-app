@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { DrawOptions } from '../DrawOptions';
 import { AoEOptions } from '../AoEOptions';
 import { WallOptions } from '../WallOptions';
@@ -51,6 +52,7 @@ describe('Battle Map Tool Options Accessibility', () => {
   describe('DrawOptions', () => {
     it('provides descriptive aria-valuetext for sliders', () => {
       render(
+        <TooltipProvider>
         <DrawOptions
           strokeWidth={5}
           setStrokeWidth={vi.fn()}
@@ -65,6 +67,7 @@ describe('Battle Map Tool Options Accessibility', () => {
           strokeWidthId="stroke-width"
           fillOpacityId="fill-opacity"
         />
+        </TooltipProvider>
       );
 
       const strokeSliderRoot = screen.getByLabelText(/stroke width/i);
@@ -101,6 +104,7 @@ describe('Battle Map Tool Options Accessibility', () => {
   describe('WallOptions', () => {
     it('provides descriptive aria-valuetext for stroke width slider', () => {
       render(
+        <TooltipProvider>
         <WallOptions
           wallType="solid"
           setWallType={vi.fn()}
@@ -111,6 +115,7 @@ describe('Battle Map Tool Options Accessibility', () => {
           wallTypeId="wall-type"
           wallStrokeWidthId="wall-stroke-width"
         />
+        </TooltipProvider>
       );
 
       const strokeSliderRoot = screen.getByLabelText(/wall stroke width/i);
