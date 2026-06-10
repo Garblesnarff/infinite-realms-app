@@ -235,3 +235,7 @@
 ## 2026-06-04 - [Safety Audit Service Coverage & Bug Fix]
 **Learning:** Found that `SafetyAuditService` was missing a pause transition for the `x_card` command in its audit log. Although `SafetyResponseFactory` indicates that `x_card` should pause the game, the audit log was only explicitly setting `is_paused_after` to `true` for the `pause` command type.
 **Action:** Ensure that audit logging logic covers all command types that result in a state change. In `SafetyAuditService`, updated `is_paused_after` calculation to include `x_card`. Verified truncation logic for long messages (1000 chars for messages, 500 for context) in the new test suite.
+
+## 2026-02-14 - [Auth TokenService Coverage]
+**Learning:** Found that `TokenService.ts` was completely untested despite handling critical session persistence and JWT logic. Discovered that testing environment-specific code (like `typeof window`) in JSDOM is difficult as `window` is always defined. Also confirmed that strict `import/order` lint rules require local relative imports to be grouped separately from aliased imports.
+**Action:** When testing services that use both `localStorage` and `sessionStorage`, use `vi.stubGlobal` to provide clean mocks for each test. Ensure new tests are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`. Use `npx eslint` on specific files to find and fix import ordering issues before submission.
