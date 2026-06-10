@@ -1,4 +1,4 @@
-import { and, eq, or, exists, type SQL } from 'drizzle-orm';
+import { and, eq, or, exists, sql, type SQL } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
 import { gameSessions, campaigns, characters } from '../../../../db/schema/index';
@@ -10,7 +10,7 @@ import { gameSessions, campaigns, characters } from '../../../../db/schema/index
 export function getOwnershipCondition(userId: string): SQL | undefined {
   return or(
     exists(
-      db.select()
+      db.select({ one: sql`1` })
         .from(campaigns)
         .where(and(
           eq(campaigns.id, gameSessions.campaignId),
@@ -18,7 +18,7 @@ export function getOwnershipCondition(userId: string): SQL | undefined {
         ))
     ),
     exists(
-      db.select()
+      db.select({ one: sql`1` })
         .from(characters)
         .where(and(
           eq(characters.id, gameSessions.characterId),
