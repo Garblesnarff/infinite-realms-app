@@ -321,6 +321,7 @@ export default tseslint.config(
       'src/components/scenes/SceneCreationWizard.tsx',
       'src/components/scenes/SceneTemplateLibrary.tsx',
       'src/components/scenes/scene-templates.ts',
+      'src/components/scenes/MapUploader.tsx',
       'src/features/campaign/components/creation/steps/CampaignParameterSection.tsx',
       'src/features/campaign/components/creation/steps/GenreCard.tsx',
       'src/features/campaign/components/creation/steps/GenreSelection.tsx',

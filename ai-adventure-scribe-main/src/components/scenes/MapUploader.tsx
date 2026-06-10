@@ -10,13 +10,13 @@
  * - Rotation control
  */
 
-import { Upload, X, RotateCw, Grid, Move, ZoomIn } from 'lucide-react';
-import React, { useState, useRef, useCallback, useId } from 'react';
+import { Upload, X } from 'lucide-react';
+import React, { useState, useRef, useCallback } from 'react';
+
+import { MapAdjustmentControls } from './map-uploader/MapAdjustmentControls';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/components/ui/use-toast';
 import { uploadFile, buildTimestampedFilename } from '@/infrastructure/storage/supabase-storage';
 import { cn } from '@/lib/utils';
@@ -52,9 +52,6 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
   const [offsetY, setOffsetY] = useState([0]);
   const [rotation, setRotation] = useState(0);
 
-  const scaleId = useId();
-  const offsetXId = useId();
-  const offsetYId = useId();
   const [showGrid, setShowGrid] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,27 +74,30 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     e.stopPropagation();
   }, []);
 
-  const validateFile = (file: File): boolean => {
-    if (!SUPPORTED_FORMATS.includes(file.type)) {
-      toast({
-        title: 'Invalid File Type',
-        description: 'Please upload a PNG, JPG, or WebP image.',
-        variant: 'destructive',
-      });
-      return false;
-    }
+  const validateFile = useCallback(
+    (file: File): boolean => {
+      if (!SUPPORTED_FORMATS.includes(file.type)) {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Please upload a PNG, JPG, or WebP image.',
+          variant: 'destructive',
+        });
+        return false;
+      }
 
-    if (file.size > MAX_FILE_SIZE) {
-      toast({
-        title: 'File Too Large',
-        description: 'Please upload an image smaller than 10MB.',
-        variant: 'destructive',
-      });
-      return false;
-    }
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: 'File Too Large',
+          description: 'Please upload an image smaller than 10MB.',
+          variant: 'destructive',
+        });
+        return false;
+      }
 
-    return true;
-  };
+      return true;
+    },
+    [toast],
+  );
 
   const handleFile = useCallback(
     (file: File) => {
@@ -119,7 +119,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
         description: 'Adjust the image using the controls below, then click Upload.',
       });
     },
-    [toast],
+    [toast, validateFile],
   );
 
   const handleDrop = useCallback(
@@ -146,7 +146,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     [handleFile],
   );
 
-  const handleUpload = async () => {
+  const handleUpload = async (): Promise<void> => {
     if (!imageFile) {
       toast({
         title: 'No Image Selected',
@@ -192,7 +192,7 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     }
   };
 
-  const handleClear = () => {
+  const handleClear = (): void => {
     setPreviewUrl(null);
     setImageFile(null);
     setScale([100]);
@@ -202,10 +202,6 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
   };
 
   return (
@@ -293,114 +289,18 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
             </CardContent>
           </Card>
 
-          {/* Adjustment Controls */}
-          <Card variant="parchment">
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold">Image Adjustments</h4>
-                <div className="flex gap-2" role="group" aria-label="Image adjustment tools">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowGrid(!showGrid)}
-                    aria-pressed={showGrid}
-                  >
-                    <Grid className="mr-2 h-4 w-4" />
-                    {showGrid ? 'Hide Grid' : 'Show Grid'}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleRotate}>
-                    <RotateCw className="mr-2 h-4 w-4" />
-                    Rotate
-                  </Button>
-                </div>
-              </div>
-
-              {/* Scale */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={scaleId} className="flex items-center gap-2">
-                    <ZoomIn className="h-4 w-4" />
-                    Scale
-                  </Label>
-                  <span className="text-sm text-muted-foreground">{scale[0]}%</span>
-                </div>
-                <Slider
-                  id={scaleId}
-                  value={scale}
-                  onValueChange={setScale}
-                  min={10}
-                  max={200}
-                  step={1}
-                  aria-label="Scale percentage"
-                  getAriaValueText={(value) => `${value}%`}
-                />
-              </div>
-
-              {/* Offset X */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={offsetXId} className="flex items-center gap-2">
-                    <Move className="h-4 w-4" />
-                    Horizontal Offset
-                  </Label>
-                  <span className="text-sm text-muted-foreground">{offsetX[0]}px</span>
-                </div>
-                <Slider
-                  id={offsetXId}
-                  value={offsetX}
-                  onValueChange={setOffsetX}
-                  min={-500}
-                  max={500}
-                  step={1}
-                  aria-label="Horizontal offset in pixels"
-                  getAriaValueText={(value) => `${value}px`}
-                />
-              </div>
-
-              {/* Offset Y */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={offsetYId} className="flex items-center gap-2">
-                    <Move className="h-4 w-4" />
-                    Vertical Offset
-                  </Label>
-                  <span className="text-sm text-muted-foreground">{offsetY[0]}px</span>
-                </div>
-                <Slider
-                  id={offsetYId}
-                  value={offsetY}
-                  onValueChange={setOffsetY}
-                  min={-500}
-                  max={500}
-                  step={1}
-                  aria-label="Vertical offset in pixels"
-                  getAriaValueText={(value) => `${value}px`}
-                />
-              </div>
-
-              {/* Rotation Display */}
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Rotation:</span>
-                  <span className="text-muted-foreground">{rotation}°</span>
-                </div>
-              </div>
-
-              {/* Reset Button */}
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setScale([100]);
-                  setOffsetX([0]);
-                  setOffsetY([0]);
-                  setRotation(0);
-                }}
-              >
-                Reset Adjustments
-              </Button>
-            </CardContent>
-          </Card>
+          <MapAdjustmentControls
+            scale={scale}
+            setScale={setScale}
+            offsetX={offsetX}
+            setOffsetX={setOffsetX}
+            offsetY={offsetY}
+            setOffsetY={setOffsetY}
+            rotation={rotation}
+            setRotation={setRotation}
+            showGrid={showGrid}
+            setShowGrid={setShowGrid}
+          />
 
           {/* Action Buttons */}
           <div className="flex gap-3">
