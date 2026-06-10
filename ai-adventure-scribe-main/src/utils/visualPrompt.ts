@@ -9,7 +9,7 @@ const VISUAL_PROMPT_INLINE = /(?:^|\n)[ \t]*VISUAL[ _-]*PROMPT\s*:?[ \t]*(.+?)(?
 const VISUAL_PROMPT_INLINE_GLOBAL =
   /(?:^|\n)[ \t]*VISUAL[ _-]*PROMPT\s*:?[ \t]*(.+?)(?:\r?\n|$)/gi;
 
-const normalizeWhitespace = (text: string) =>
+const normalizeWhitespace = (text: string): string =>
   text
     .replace(/\s+$/g, '')
     .replace(/\n{3,}/g, '\n\n')
@@ -19,7 +19,7 @@ const normalizeWhitespace = (text: string) =>
  * Extracts a VISUAL PROMPT directive from LLM output while returning cleaned display text.
  * Supports both fenced blocks (preferred) and legacy inline markers.
  */
-export const extractVisualPrompt = (text: string): VisualPromptExtraction => {
+export const extractVisualPrompt = (text: string | null | undefined): VisualPromptExtraction => {
   if (!text) {
     return { cleaned: '', prompt: null };
   }
@@ -37,11 +37,12 @@ export const extractVisualPrompt = (text: string): VisualPromptExtraction => {
   }
 
   let working = text
-    .replace(VISUAL_PROMPT_FENCE_GLOBAL, '')
-    .replace(VISUAL_PROMPT_INLINE_GLOBAL, '');
+    .replace(VISUAL_PROMPT_FENCE_GLOBAL, '\n')
+    .replace(VISUAL_PROMPT_INLINE_GLOBAL, '\n');
 
   // Safety net: strip any remaining visual prompt lines to avoid leaking markers.
-  working = working.replace(/^[ \t]*VISUAL[ _-]*PROMPT.*$/gim, '');
+  // Also handles unclosed fenced blocks that start with backticks.
+  working = working.replace(/^[ \t]*(`{3,})?VISUAL[ _-]*PROMPT.*$/gim, '');
 
   return {
     cleaned: normalizeWhitespace(working),
