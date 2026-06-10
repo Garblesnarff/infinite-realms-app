@@ -74,6 +74,24 @@ describe('SceneSettings Accessibility', () => {
     expect(duskOption).toHaveAttribute('id');
     expect(nightOption).toHaveAttribute('id');
 
+    // Check Sliders - the role 'slider' is on the Root component which has the aria-label
+    // but some implementations might put it elsewhere. Let's find them by aria-label directly.
+    const gridOpacitySlider = screen.getByLabelText(/Grid opacity percentage/i);
+    expect(gridOpacitySlider).toBeInTheDocument();
+
+    // Radix Slider might put aria-valuetext on the thumb, and the role 'slider' might be there too.
+    // Let's check the container or its children.
+    const sliders = screen.getAllByRole('slider');
+
+    const gridOpacityThumb = sliders.find(s => s.getAttribute('aria-valuetext') === '30%');
+    expect(gridOpacityThumb).toBeDefined();
+
+    const ambientLightThumb = sliders.find(s => s.getAttribute('aria-valuetext') === '100%');
+    expect(ambientLightThumb).toBeDefined();
+
+    const darknessThumb = sliders.find(s => s.getAttribute('aria-valuetext') === '0%');
+    expect(darknessThumb).toBeDefined();
+
     // Verify IDs are unique
     const ids = [
       fogOfWarSwitch.id,
@@ -82,7 +100,7 @@ describe('SceneSettings Accessibility', () => {
       dawnOption.id,
       dayOption.id,
       duskOption.id,
-      nightOption.id
+      nightOption.id,
     ];
     const uniqueIds = new Set(ids);
     expect(uniqueIds.size).toBe(ids.length);
