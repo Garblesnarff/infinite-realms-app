@@ -1,10 +1,10 @@
-import { Save, Eye, Send, Calendar, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Save, Eye, Send, Calendar, Loader2 } from 'lucide-react';
 import * as React from 'react';
 
-import { MarkdownEditor } from './markdown-editor';
-import { MediaManager } from './media-manager';
-import { MultiSelect } from './multi-select';
-import { useBlogPostEditor } from './use-blog-post-editor';
+import { EditorSidebar } from '@/components/blog-admin/blog-post-editor/editor-sidebar';
+import { MarkdownEditor } from '@/components/blog-admin/blog-post-editor/markdown-editor';
+import { MediaManager } from '@/components/blog-admin/blog-post-editor/media-manager';
+import { useBlogPostEditor } from '@/components/blog-admin/blog-post-editor/use-blog-post-editor';
 
 import type { BlogPost } from '@/types/blog';
 
@@ -31,15 +31,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
 interface BlogPostEditorProps {
@@ -270,158 +262,13 @@ export const BlogPostEditor: React.FC<BlogPostEditorProps> = ({ post, onSuccess,
               </Card>
             </div>
 
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Publishing</CardTitle>
-                  <CardDescription>Control post visibility and timing</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger aria-label="Select post status">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="draft">Draft</SelectItem>
-                            <SelectItem value="scheduled">Scheduled</SelectItem>
-                            <SelectItem value="published">Published</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {statusValue === 'scheduled' && (
-                    <FormField
-                      control={form.control}
-                      name="scheduledFor"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Scheduled Date *</FormLabel>
-                          <FormControl>
-                            <Input type="datetime-local" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  <FormField
-                    control={form.control}
-                    name="allowComments"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel>Allow Comments</FormLabel>
-                          <FormDescription className="text-xs">
-                            Enable reader comments
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Featured Image</CardTitle>
-                  <CardDescription>Main image for your post</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="coverImageUrl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <div className="space-y-2">
-                            {field.value && (
-                              <div className="relative aspect-video rounded-lg overflow-hidden border">
-                                <img
-                                  src={field.value}
-                                  alt="Cover preview"
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => setMediaManagerOpen(true)}
-                            >
-                              <ImageIcon className="w-4 h-4 mr-2" />
-                              {field.value ? 'Change Image' : 'Select Image'}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Categories & Tags</CardTitle>
-                  <CardDescription>Organize your content</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="categoryIds"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Categories</FormLabel>
-                        <FormControl>
-                          <MultiSelect
-                            options={categoryOptions}
-                            value={field.value || []}
-                            onChange={field.onChange}
-                            placeholder="Select categories..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="tagIds"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tags</FormLabel>
-                        <FormControl>
-                          <MultiSelect
-                            options={tagOptions}
-                            value={field.value || []}
-                            onChange={field.onChange}
-                            placeholder="Select tags..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+            <EditorSidebar
+              form={form}
+              statusValue={statusValue}
+              categoryOptions={categoryOptions}
+              tagOptions={tagOptions}
+              setMediaManagerOpen={setMediaManagerOpen}
+            />
           </div>
         </form>
       </Form>
