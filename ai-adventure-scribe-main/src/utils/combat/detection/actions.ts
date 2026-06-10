@@ -14,19 +14,19 @@ export function detectCombatActions(text: string): DetectedCombatAction[] {
     const lowerSentence = sentence.toLowerCase().trim();
 
     // Attack actions
-    if (lowerSentence.includes('attacks') || lowerSentence.includes('strikes')) {
+    if (COMBAT_KEYWORDS.attacks.some((keyword) => lowerSentence.includes(keyword))) {
       const action = extractAction(sentence, 'attack');
       if (action) actions.push(action);
     }
 
     // Spell casting
-    if (lowerSentence.includes('casts') || lowerSentence.includes('spell')) {
+    if (COMBAT_KEYWORDS.spellcasting.some((keyword) => lowerSentence.includes(keyword))) {
       const action = extractAction(sentence, 'spell');
       if (action) actions.push(action);
     }
 
     // Damage dealing
-    if (lowerSentence.includes('damage') || lowerSentence.includes('hit points')) {
+    if (COMBAT_KEYWORDS.damage.some((keyword) => lowerSentence.includes(keyword))) {
       const action = extractAction(sentence, 'damage');
       if (action) actions.push(action);
     }
@@ -90,6 +90,20 @@ export function extractAction(sentence: string, actionType: string): DetectedCom
 export function detectPlayerCombatAction(playerInput: string): DetectedCombatAction | null {
   const lowerInput = playerInput.toLowerCase();
 
+  // Defense actions - Check defense FIRST to avoid misclassifying "I dodge the attack"
+  if (
+    lowerInput.includes('dodge') ||
+    lowerInput.includes('defend') ||
+    lowerInput.includes('block')
+  ) {
+    return {
+      actor: 'Player',
+      action: 'defend',
+      rollNeeded: false,
+      rollType: 'skill',
+    };
+  }
+
   // Attack actions
   if (lowerInput.includes('attack') || lowerInput.includes('hit') || lowerInput.includes('shoot')) {
     return {
@@ -107,20 +121,6 @@ export function detectPlayerCombatAction(playerInput: string): DetectedCombatAct
       action: 'cast spell',
       rollNeeded: true,
       rollType: 'attack',
-    };
-  }
-
-  // Defense actions
-  if (
-    lowerInput.includes('dodge') ||
-    lowerInput.includes('defend') ||
-    lowerInput.includes('block')
-  ) {
-    return {
-      actor: 'Player',
-      action: 'defend',
-      rollNeeded: false,
-      rollType: 'skill',
     };
   }
 

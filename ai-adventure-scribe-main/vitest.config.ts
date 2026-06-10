@@ -183,6 +183,8 @@ export default defineConfig({
       'src/hooks/__tests__/use-combat-actions.test.ts',
       'src/hooks/combat/__tests__/use-combat-detection.test.ts',
       'src/hooks/combat/__tests__/use-combat-action-handlers.test.ts',
+      'src/utils/combat/detection/__tests__/actions.test.ts',
+      'src/utils/combat/detection/__tests__/utils.test.ts',
       'src/hooks/__tests__/use-character-stats.test.ts',
       'src/hooks/__tests__/use-local-storage.test.ts',
       'src/hooks/__tests__/use-messages.test.tsx',
