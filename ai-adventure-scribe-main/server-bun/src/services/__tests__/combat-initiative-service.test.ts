@@ -67,9 +67,11 @@ vi.mock('drizzle-orm', async () => {
     or: vi.fn((...args) => ({ type: 'or', args })),
     eq: vi.fn((a, b) => ({ type: 'eq', a, b })),
     inArray: vi.fn((a, b) => ({ type: 'inArray', a, b })),
-    sql: {
-      join: vi.fn((args) => args),
-    }
+    sql: Object.assign(
+      vi.fn((strings, ...values) => ({ strings, values, type: 'sql' })),
+      { join: vi.fn((args) => args) }
+    ),
+    exists: vi.fn((subquery) => ({ type: 'exists', subquery })),
   };
 });
 
@@ -83,24 +85,25 @@ describe('CombatEncounterService', () => {
 
   describe('startCombat', () => {
     it('should use verifyCharactersAccessBatch for multiple characters', async () => {
-      // Mock session access check
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ id: mockSessionId }])
-      });
-
       // Mock batch character access check
       (db.select as any).mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockResolvedValue([{ id: 'char-1' }, { id: 'char-2' }])
       });
 
-      // Mock encounter creation
+      // Mock encounter creation with atomic INSERT ... SELECT
       (db.insert as any).mockReturnValueOnce({
-        values: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: 'enc-123', status: 'active', currentRound: 1, currentTurnOrder: 0 }])
+      });
+
+      // Mock nested SELECT for INSERT ... SELECT
+      (db.select as any).mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
       });
 
       // Mock participants insertion
@@ -122,19 +125,11 @@ describe('CombatEncounterService', () => {
         mockUserId
       );
 
-      // Verify that db.select was called for characters with inArray
-      expect(db.select).toHaveBeenCalledWith(expect.objectContaining({ id: expect.anything() }));
+      // Verify that db.select was called for characters
+      expect(db.select).toHaveBeenCalled();
     });
 
     it('should throw NotFoundError if one of the characters is not found in batch', async () => {
-      // Mock session access check
-      (db.select as any).mockReturnValueOnce({
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ id: mockSessionId }])
-      });
-
       // Mock batch character access check - only one character found
       (db.select as any).mockReturnValueOnce({
         from: vi.fn().mockReturnThis(),

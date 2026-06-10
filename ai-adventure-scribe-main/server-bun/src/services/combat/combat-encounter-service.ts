@@ -7,11 +7,9 @@
  * Extracted from CombatInitiativeService.
  */
 
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, sql, exists } from 'drizzle-orm';
 
 import {
-  verifySessionAccess,
-  verifyEncounterAccess,
   verifyCharactersAccessBatch,
   verifyNPCsAccessBatch,
 } from './combat-authorization.js';
@@ -46,45 +44,65 @@ export class CombatEncounterService {
     sessionId: string,
     participantInputs: CreateParticipantInput[],
     surpriseRound: boolean = false,
-    userId?: string
+    userId?: string,
   ): Promise<CombatState> {
     if (userId) {
       const characterIds = [
         ...new Set(
           participantInputs
             .map((input) => input.characterId)
-            .filter((id): id is string => Boolean(id))
+            .filter((id): id is string => Boolean(id)),
         ),
       ];
       const npcIds = [
         ...new Set(
-          participantInputs
-            .map((input) => input.npcId)
-            .filter((id): id is string => Boolean(id))
+          participantInputs.map((input) => input.npcId).filter((id): id is string => Boolean(id)),
         ),
       ];
 
-      // ⚡ Bolt: Parallelize independent authorization checks to reduce database latency
+      // ⚡ Bolt: Parallelize independent authorization checks for participants to reduce database latency.
+      // Session ownership is verified atomically in the subsequent INSERT ... SELECT query.
       await Promise.all([
-        verifySessionAccess(sessionId, userId),
         verifyCharactersAccessBatch(characterIds, userId),
         verifyNPCsAccessBatch(npcIds, userId),
       ]);
     }
 
-    // Create the encounter
+    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for session ownership verification.
+    // This ensures combat encounters can only be started for authorized sessions in a single round-trip,
+    // while masking resource existence and preventing race conditions.
     const [encounter] = await db
       .insert(combatEncounters)
-      .values({
-        sessionId,
-        status: 'active',
-        currentRound: surpriseRound ? 0 : 1,
-        currentTurnOrder: 0,
-      })
+      .select(
+        db
+          .select({
+            sessionId: sql`${sessionId}`,
+            status: sql`${'active'}`,
+            currentRound: sql`${surpriseRound ? 0 : 1}`,
+            currentTurnOrder: sql`0`,
+          })
+          .from(gameSessions)
+          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+          .where(
+            and(
+              eq(gameSessions.id, sessionId),
+              userId
+                ? or(
+                    eq(campaigns.userId, userId),
+                    eq(characters.userId, userId),
+                    eq(characters.ownerId, userId),
+                  )
+                : sql`true`,
+            ),
+          )
+          .limit(1),
+      )
       .returning();
 
     if (!encounter) {
-      throw new InternalServerError('Failed to create combat encounter');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Session', sessionId);
     }
 
     let participants: CombatParticipant[] = [];
@@ -145,10 +163,8 @@ export class CombatEncounterService {
    * @returns Updated encounter
    */
   static async endCombat(encounterId: string, userId?: string): Promise<CombatEncounter> {
-    if (userId) {
-      await verifyEncounterAccess(encounterId, userId);
-    }
-
+    // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
+    // This ensures that combat encounters can only be ended by authorized users in a single round-trip.
     const [updated] = await db
       .update(combatEncounters)
       .set({
@@ -156,10 +172,34 @@ export class CombatEncounterService {
         endedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(combatEncounters.id, encounterId))
+      .where(
+        and(
+          eq(combatEncounters.id, encounterId),
+          userId
+            ? exists(
+                db
+                  .select()
+                  .from(gameSessions)
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(gameSessions.id, combatEncounters.sessionId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
+      )
       .returning();
 
     if (!updated) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
       throw new NotFoundError('Combat encounter', encounterId);
     }
 
@@ -172,13 +212,32 @@ export class CombatEncounterService {
    * @returns Complete combat state with participants and turn order
    */
   static async getCombatState(encounterId: string, userId?: string): Promise<CombatState> {
-    if (userId) {
-      await verifyEncounterAccess(encounterId, userId);
-    }
-
-    // Single relational query to fetch encounter and all participants
+    // 🛡️ Sentinel: Combined authorization and retrieval into a single relational query.
+    // This ensures atomic verification and masks resource existence for unauthorized users.
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
-      where: (ce, { eq }) => eq(ce.id, encounterId),
+      where: (ce, { eq, and, exists }) =>
+        and(
+          eq(ce.id, encounterId),
+          userId
+            ? exists(
+                db
+                  .select()
+                  .from(gameSessions)
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(gameSessions.id, ce.sessionId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
       with: {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
@@ -215,62 +274,64 @@ export class CombatEncounterService {
   /**
    * Get encounter by ID
    */
-  static async getEncounterById(encounterId: string, userId?: string): Promise<CombatEncounter | undefined> {
-    if (userId) {
-      const [result] = await db
-        .select({ encounter: combatEncounters })
-        .from(combatEncounters)
-        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(
+  static async getEncounterById(
+    encounterId: string,
+    userId?: string,
+  ): Promise<CombatEncounter | undefined> {
+    // 🛡️ Sentinel: Refactored to incorporate ownership verification directly into the query
+    // for both authenticated and internal/legacy paths to ensure consistent behavior and existence masking.
+    const [result] = await db
+      .select({ encounter: combatEncounters })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
           eq(combatEncounters.id, encounterId),
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
-        .limit(1);
+          userId
+            ? or(
+                eq(campaigns.userId, userId),
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+              )
+            : sql`true`,
+        ),
+      )
+      .limit(1);
 
-      return result?.encounter;
-    }
-
-    return await db.query.combatEncounters.findFirst({
-      where: (ce, { eq }) => eq(ce.id, encounterId),
-    });
+    return result?.encounter;
   }
 
   /**
    * Get active encounter for a session
    */
-  static async getActiveEncounter(sessionId: string, userId?: string): Promise<CombatEncounter | undefined> {
-    if (userId) {
-      const [result] = await db
-        .select({ encounter: combatEncounters })
-        .from(combatEncounters)
-        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(gameSessions.characterId, characters.id))
-        .where(and(
+  static async getActiveEncounter(
+    sessionId: string,
+    userId?: string,
+  ): Promise<CombatEncounter | undefined> {
+    // 🛡️ Sentinel: Refactored to incorporate ownership verification directly into the query.
+    const [result] = await db
+      .select({ encounter: combatEncounters })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+      .where(
+        and(
           eq(combatEncounters.sessionId, sessionId),
           eq(combatEncounters.status, 'active'),
-          or(
-            eq(campaigns.userId, userId),
-            eq(characters.userId, userId),
-            eq(characters.ownerId, userId)
-          )
-        ))
-        .limit(1);
+          userId
+            ? or(
+                eq(campaigns.userId, userId),
+                eq(characters.userId, userId),
+                eq(characters.ownerId, userId),
+              )
+            : sql`true`,
+        ),
+      )
+      .limit(1);
 
-      return result?.encounter;
-    }
-
-    return await db.query.combatEncounters.findFirst({
-      where: (ce, { eq, and }) => and(
-        eq(ce.sessionId, sessionId),
-        eq(ce.status, 'active')
-      ),
-    });
+    return result?.encounter;
   }
 }
