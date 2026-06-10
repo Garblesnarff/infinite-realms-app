@@ -77,7 +77,7 @@ export const FolderItem: React.FC<FolderItemProps> = ({
       <div
         role="button"
         tabIndex={0}
-        aria-selected={isSelected}
+        aria-pressed={isSelected}
         aria-label={`Select folder: ${folder.name}`}
         className={cn(
           'group flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple',
@@ -139,20 +139,36 @@ export const FolderItem: React.FC<FolderItemProps> = ({
         </div>
 
         {/* Folder Name */}
-        <span className="flex-1 text-sm font-medium truncate" title={folder.name}>
-          {folder.name}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="flex-1 text-sm font-medium truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+              tabIndex={0}
+            >
+              {folder.name}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{folder.name}</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Character Count Badge */}
         {folder.characterCount > 0 && (
-          <Badge
-            variant="secondary"
-            className="text-xs"
-            aria-label={`${folder.characterCount} characters`}
-            title={`${folder.characterCount} characters in this folder`}
-          >
-            {folder.characterCount}
-          </Badge>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="secondary"
+                className="text-xs cursor-help"
+                aria-label={`${folder.characterCount} characters`}
+              >
+                {folder.characterCount}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{folder.characterCount} characters in this folder</p>
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {/* Context Menu */}

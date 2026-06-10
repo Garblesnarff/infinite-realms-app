@@ -201,7 +201,10 @@ export const LayersPanel: React.FC<LayersPanelProps> = React.memo(
                       />
                       <Tooltip delayDuration={300}>
                         <TooltipTrigger asChild>
-                          <span className="truncate max-w-[150px] cursor-help">
+                          <span
+                            className="truncate max-w-[150px] cursor-help outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                            tabIndex={0}
+                          >
                             {layer.name}
                           </span>
                         </TooltipTrigger>
