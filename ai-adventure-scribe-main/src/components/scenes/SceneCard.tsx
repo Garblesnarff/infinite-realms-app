@@ -112,7 +112,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Open menu</p>
+                <p>Open menu for {scene.name}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="end">

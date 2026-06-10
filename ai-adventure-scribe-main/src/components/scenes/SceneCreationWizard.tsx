@@ -21,6 +21,11 @@ import { StepSceneSettings } from './scene-creation-wizard/StepSceneSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { Z_INDEX } from '@/constants/z-index';
 import { trpc } from '@/infrastructure/api/trpc-client';
@@ -224,15 +229,21 @@ export const SceneCreationWizard: React.FC<SceneCreationWizardProps> = ({
               </CardDescription>
             </div>
             {onCancel && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onCancel}
-                aria-label="Close scene creation wizard"
-                title="Close scene creation wizard"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onCancel}
+                    aria-label="Close scene creation wizard"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Close scene creation wizard</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
 

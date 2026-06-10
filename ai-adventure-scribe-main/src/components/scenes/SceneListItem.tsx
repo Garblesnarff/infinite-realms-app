@@ -113,7 +113,7 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Open menu</p>
+              <p>Open menu for {scene.name}</p>
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
