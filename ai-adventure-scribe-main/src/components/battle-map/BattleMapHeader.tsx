@@ -53,58 +53,90 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
   const navigate = useNavigate();
 
   return (
-    <div
-      className="absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between px-4"
-      style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
-    >
-      {/* Breadcrumbs */}
-      <nav
-        className="flex items-center gap-2 text-sm text-muted-foreground"
-        aria-label="Breadcrumb"
+    <TooltipProvider>
+      <div
+        className="absolute top-0 left-0 right-0 h-14 bg-background/95 backdrop-blur-sm border-b flex items-center justify-between px-4"
+        style={{ zIndex: Z_INDEX.FLOATING_PANEL }}
       >
-        <button
-          type="button"
-          onClick={() => navigate('/app/campaigns')}
-          className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-          aria-label="Back to Campaigns"
-          title="Back to Campaigns"
+        {/* Breadcrumbs */}
+        <nav
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          aria-label="Breadcrumb"
         >
-          Campaigns
-        </button>
-        <span aria-hidden="true">/</span>
-        <button
-          type="button"
-          onClick={onBackToCampaign}
-          className="hover:text-foreground transition-colors max-w-[150px] truncate focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-          aria-label={campaignName ? `Back to ${campaignName}` : 'Back to Campaign'}
-          title={campaignName ? `Back to ${campaignName}` : 'Back to Campaign'}
-        >
-          {campaignName || 'Campaign'}
-        </button>
-        <span aria-hidden="true">/</span>
-        <button
-          type="button"
-          onClick={onBackToScenes}
-          className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
-          aria-label="Back to Scenes"
-          title="Back to Scenes"
-        >
-          Scenes
-        </button>
-        <span aria-hidden="true">/</span>
-        <span
-          className="text-foreground font-medium max-w-[200px] truncate"
-          aria-current="page"
-        >
-          {sceneName}
-        </span>
-      </nav>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => navigate('/app/campaigns')}
+                className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+                aria-label="Back to Campaigns"
+              >
+                Campaigns
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Back to Campaigns</p>
+            </TooltipContent>
+          </Tooltip>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        {/* Mobile: Layers Panel Toggle */}
-        {isMobile && (
-          <TooltipProvider>
+          <span aria-hidden="true">/</span>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onBackToCampaign}
+                className="hover:text-foreground transition-colors max-w-[150px] truncate focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+                aria-label={campaignName ? `Back to ${campaignName}` : 'Back to Campaign'}
+              >
+                {campaignName || 'Campaign'}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{campaignName ? `Back to ${campaignName}` : 'Back to Campaign'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <span aria-hidden="true">/</span>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onBackToScenes}
+                className="hover:text-foreground transition-colors focus-visible:text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 rounded-sm"
+                aria-label="Back to Scenes"
+              >
+                Scenes
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Back to Scenes</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <span aria-hidden="true">/</span>
+
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <span
+                className="text-foreground font-medium max-w-[200px] truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                aria-current="page"
+                tabIndex={0}
+              >
+                {sceneName}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{sceneName}</p>
+            </TooltipContent>
+          </Tooltip>
+        </nav>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          {/* Mobile: Layers Panel Toggle */}
+          {isMobile && (
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <Button
@@ -123,12 +155,10 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
                 <p>{showLayersPanel ? 'Hide Layers' : 'Show Layers'}</p>
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-        )}
+          )}
 
-        {/* Settings Dropdown */}
-        <DropdownMenu>
-          <TooltipProvider>
+          {/* Settings Dropdown */}
+          <DropdownMenu>
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
@@ -146,31 +176,31 @@ export const BattleMapHeader: React.FC<BattleMapHeaderProps> = ({
                 <p>Open View Settings</p>
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>View Settings</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={showPerformanceMonitor}
-              onCheckedChange={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
-            >
-              Performance Monitor
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuItem onClick={() => setShowHotkeyGuide(true)}>
-              Keyboard Shortcuts
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked={showLayersPanel} onCheckedChange={toggleLayersPanel}>
-              Layers Panel
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onBackToScenes}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-              Back to Scenes
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>View Settings</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={showPerformanceMonitor}
+                onCheckedChange={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+              >
+                Performance Monitor
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuItem onClick={() => setShowHotkeyGuide(true)}>
+                Keyboard Shortcuts
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem checked={showLayersPanel} onCheckedChange={toggleLayersPanel}>
+                Layers Panel
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onBackToScenes}>
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+                Back to Scenes
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };

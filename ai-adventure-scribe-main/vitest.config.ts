@@ -368,6 +368,7 @@ export default defineConfig({
       'src/components/scenes/__tests__/SceneCreationWizardSteps.test.tsx',
       'src/components/scenes/__tests__/StepNameDescription.test.tsx',
       'src/components/scenes/__tests__/SceneSettingsAccessibility.test.tsx',
+      'src/components/battle-map/__tests__/BattleMapHeaderAccessibility.test.tsx',
       'src/components/battle-map/tool-options/__tests__/ToolOptionsAccessibility.test.tsx',
       'src/components/scenes/__tests__/SceneTemplateLibrary.accessibility.test.tsx',
       'src/features/character/components/sheet/__tests__/InventoryManager.accessibility.test.tsx',
