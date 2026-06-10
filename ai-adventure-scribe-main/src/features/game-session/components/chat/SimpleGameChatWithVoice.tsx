@@ -31,6 +31,12 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
 import { useChatHistory } from '@/features/game-session/hooks/use-chat-history';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -226,27 +232,34 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
       sendMessage={sendMessage}
       queueStatus={isSending ? 'processing' : 'idle'}
     >
-      <div className="space-y-4">
-        <Card className="h-[600px] flex flex-col relative">
-          <CardHeader className="flex-shrink-0 p-4 pb-0">
-            <h3 className="text-lg font-semibold text-foreground opacity-80">
-              Adventure Chronicle
-            </h3>
-          </CardHeader>
+      <TooltipProvider>
+        <div className="space-y-4">
+          <Card className="h-[600px] flex flex-col relative">
+            <CardHeader className="flex-shrink-0 p-4 pb-0">
+              <h3 className="text-lg font-semibold text-foreground opacity-80">
+                Adventure Chronicle
+              </h3>
+            </CardHeader>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleEndSession}
-            className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/5"
-            aria-label="End Adventure"
-            title="End Adventure"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleEndSession}
+                  className="absolute top-3 right-3 h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/5"
+                  aria-label="End Adventure"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <p>End Adventure</p>
+              </TooltipContent>
+            </Tooltip>
 
-          <CardContent className="flex-1 flex flex-col overflow-hidden p-0 pt-2">
+            <CardContent className="flex-1 flex flex-col overflow-hidden p-0 pt-2">
             {/* Messages Area */}
             <ScrollArea className="flex-1 px-6 py-4" aria-label="Chat history">
               <div className="space-y-4 pb-4">
@@ -287,20 +300,26 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
                     maxLength={500}
                   />
                 </div>
-                <Button
-                  type="submit"
-                  disabled={isSending || !currentMessage.trim()}
-                  size="sm"
-                  className="px-4"
-                  aria-label={isSending ? 'Sending...' : 'Send Message'}
-                  title={isSending ? 'Sending...' : 'Send Message'}
-                >
-                  {isSending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="submit"
+                      disabled={isSending || !currentMessage.trim()}
+                      size="sm"
+                      className="px-4"
+                      aria-label={isSending ? 'Sending...' : 'Send Message'}
+                    >
+                      {isSending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isSending ? 'Sending...' : 'Send Message'}</p>
+                  </TooltipContent>
+                </Tooltip>
               </form>
 
               <div className="text-xs text-muted-foreground mt-2 flex items-center justify-between">
@@ -308,9 +327,10 @@ export const SimpleGameChatWithVoice: React.FC<SimpleGameChatWithVoiceProps> = (
                 <span>{currentMessage.length}/500</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TooltipProvider>
 
       {/* NPC Roll Display Popup */}
       {showNPCRolls && currentRoll && (

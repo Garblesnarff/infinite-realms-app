@@ -55,13 +55,13 @@ describe('DMChatBubble Accessibility', () => {
     // Play/Pause button
     const playButton = screen.getByRole('button', { name: /pause narration/i });
     expect(playButton).toBeDefined();
-    expect(playButton.getAttribute('title')).toBe('Pause');
+    // Tooltip replaces native title
     expect(playButton.getAttribute('aria-pressed')).toBe('true');
 
     // Mute button
     const muteButton = screen.getByRole('button', { name: /mute narration/i });
     expect(muteButton).toBeDefined();
-    expect(muteButton.getAttribute('title')).toBe('Mute');
+    // Tooltip replaces native title
     expect(muteButton.getAttribute('aria-pressed')).toBe('false');
 
     // Progress bar

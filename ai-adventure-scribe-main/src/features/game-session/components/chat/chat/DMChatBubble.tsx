@@ -8,6 +8,12 @@ import type { ChatMessage } from '@/services/ai-service';
 
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useProgressiveVoice } from '@/hooks/use-progressive-voice';
 import logger from '@/lib/logger';
@@ -25,7 +31,12 @@ interface DMChatBubbleProps {
 }
 
 // Helper function to convert NarrationSegments to AISegments
-const convertNarrationToAISegments = (narrationSegments: NarrationSegment[]) => {
+const convertNarrationToAISegments = (narrationSegments: NarrationSegment[]): {
+  type: 'dm' | 'character';
+  text: string;
+  character?: string;
+  voice_category?: string;
+}[] => {
   return narrationSegments.map((segment) => ({
     type: segment.type === 'dm' ? 'dm' : ('character' as 'dm' | 'character'),
     text: segment.text,
@@ -84,6 +95,7 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
 
     // Handle option selection
     const handleOptionSelect = React.useCallback(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (option: any) => {
         if (onOptionSelect) {
           const playerMessage = createPlayerMessageFromOption(option);
@@ -140,17 +152,17 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
       initializeAudioContext,
     ]);
 
-    const calculateProgress = () => {
+    const calculateProgress = (): number => {
       if (!isThisMessagePlaying || segments.length === 0) return 0;
       return ((currentSegmentIndex + 1) / segments.length) * 100;
     };
 
-    const formatTime = (segmentIndex: number, totalSegments: number) => {
+    const formatTime = (segmentIndex: number, totalSegments: number): string => {
       // Simple time calculation - could be enhanced with actual audio durations
       const estimatedDuration = totalSegments * 3; // 3 seconds per segment estimate
       const currentTime = segmentIndex * 3;
 
-      const formatSeconds = (seconds: number) => {
+      const formatSeconds = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -161,7 +173,8 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
 
     return (
       <div className="flex justify-start animate-in slide-in-from-left-2 duration-500">
-        <div className="flex max-w-[85%] flex-row items-start">
+        <TooltipProvider>
+          <div className="flex max-w-[85%] flex-row items-start">
           {/* Enhanced DM Avatar */}
           <div className="flex-shrink-0 mr-4 relative" aria-label="Dungeon Master">
             <div
@@ -199,22 +212,28 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
               {isVoiceEnabled && (
                 <div className="flex items-center gap-3 pt-3 border-t border-white/10">
                   {/* Enhanced Play/Pause Button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handlePlayPause}
-                    disabled={isProcessing}
-                    className="h-9 w-9 p-0 rounded-full hover:bg-infinite-purple/20 focus-glow transition-all duration-200 hover:scale-105"
-                    aria-label={isThisMessagePlaying ? 'Pause narration' : 'Play narration'}
-                    title={isThisMessagePlaying ? 'Pause' : 'Play'}
-                    aria-pressed={isThisMessagePlaying}
-                  >
-                    {isThisMessagePlaying ? (
-                      <Pause className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
-                    ) : (
-                      <Play className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
-                    )}
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handlePlayPause}
+                        disabled={isProcessing}
+                        className="h-9 w-9 p-0 rounded-full hover:bg-infinite-purple/20 focus-glow transition-all duration-200 hover:scale-105"
+                        aria-label={isThisMessagePlaying ? 'Pause narration' : 'Play narration'}
+                        aria-pressed={isThisMessagePlaying}
+                      >
+                        {isThisMessagePlaying ? (
+                          <Pause className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
+                        ) : (
+                          <Play className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isThisMessagePlaying ? 'Pause' : 'Play'}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
                   {/* Enhanced Progress Bar */}
                   {isThisMessagePlaying && (
@@ -239,34 +258,46 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
                   )}
 
                   {/* Enhanced Volume Control */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleMute}
-                    className="h-9 w-9 p-0 rounded-full hover:bg-infinite-teal/20 focus-glow transition-all duration-200 hover:scale-105"
-                    aria-label={isMuted ? 'Unmute narration' : 'Mute narration'}
-                    title={isMuted ? 'Unmute' : 'Mute'}
-                    aria-pressed={isMuted}
-                  >
-                    {isMuted ? (
-                      <VolumeX className="h-4 w-4 text-red-400" aria-hidden="true" />
-                    ) : (
-                      <Volume2 className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
-                    )}
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleMute}
+                        className="h-9 w-9 p-0 rounded-full hover:bg-infinite-teal/20 focus-glow transition-all duration-200 hover:scale-105"
+                        aria-label={isMuted ? 'Unmute narration' : 'Mute narration'}
+                        aria-pressed={isMuted}
+                      >
+                        {isMuted ? (
+                          <VolumeX className="h-4 w-4 text-red-400" aria-hidden="true" />
+                        ) : (
+                          <Volume2 className="h-4 w-4 text-infinite-teal" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isMuted ? 'Unmute' : 'Mute'}</p>
+                    </TooltipContent>
+                  </Tooltip>
 
                   {/* Enhanced Error State */}
                   {error && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handlePlayPause}
-                      className="h-9 w-9 p-0 rounded-full hover:bg-destructive/20 text-destructive focus-glow transition-all duration-200 hover:scale-105"
-                      aria-label="Retry narration"
-                      title="Retry"
-                    >
-                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handlePlayPause}
+                          className="h-9 w-9 p-0 rounded-full hover:bg-destructive/20 text-destructive focus-glow transition-all duration-200 hover:scale-105"
+                          aria-label="Retry narration"
+                        >
+                          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Retry</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               )}
@@ -363,7 +394,8 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
             </div>
           </div>
         </div>
-      </div>
+      </TooltipProvider>
+    </div>
     );
   },
 );
