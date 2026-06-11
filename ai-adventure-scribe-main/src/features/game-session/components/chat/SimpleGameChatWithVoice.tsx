@@ -15,7 +15,7 @@ import { DMChatBubble } from './chat/DMChatBubble';
 import type { ChatMessage } from '@/services/ai-service';
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
-import { NPCRollDisplay, useNPCRollQueue } from '@/components/game/NPCRollDisplay';
+import { NPCRollDisplay } from '@/components/game/NPCRollDisplay';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/tooltip';
 import { SimpleMessageProvider } from '@/contexts/SimpleMessageContext';
 import { useChatHistory } from '@/features/game-session/hooks/use-chat-history';
+import { useNPCRollQueue } from '@/hooks/game/use-npc-roll-queue';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useSimpleGameSession } from '@/hooks/use-simple-game-session';
 import logger from '@/lib/logger';

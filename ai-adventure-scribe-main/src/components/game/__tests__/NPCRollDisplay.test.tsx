@@ -3,7 +3,9 @@ import { render, screen, act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { expect, vi, describe, it, beforeEach, afterEach } from 'vitest';
 
-import { NPCRollDisplay, useNPCRollQueue } from '../NPCRollDisplay';
+import { NPCRollDisplay } from '../NPCRollDisplay';
+
+import { useNPCRollQueue } from '@/hooks/game/use-npc-roll-queue';
 
 const baseRequest = {
   actorName: 'Goblins',
