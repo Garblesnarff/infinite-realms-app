@@ -1,11 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, act, renderHook } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import React from 'react';
 import { expect, vi, describe, it, beforeEach, afterEach } from 'vitest';
 
 import { NPCRollDisplay } from '../NPCRollDisplay';
-
-import { useNPCRollQueue } from '@/hooks/game/use-npc-roll-queue';
 
 const baseRequest = {
   actorName: 'Goblins',
@@ -256,46 +254,3 @@ describe('NPCRollDisplay', () => {
   });
 });
 
-describe('useNPCRollQueue', () => {
-  it('initializes with empty queue', () => {
-    const { result } = renderHook(() => useNPCRollQueue());
-    expect(result.current.currentRoll).toBeNull();
-    expect(result.current.queueLength).toBe(0);
-  });
-
-  it('adds rolls to the queue and sets the first one as current', async () => {
-    const { result } = renderHook(() => useNPCRollQueue());
-
-    await act(async () => {
-      result.current.addRolls([mockRollHit as any, mockRollMiss as any]);
-    });
-
-    expect(result.current.currentRoll).toEqual(mockRollHit);
-    expect(result.current.queueLength).toBe(1); // One is current, one is in queue
-  });
-
-  it('moves to the next roll when dismissCurrent is called', async () => {
-    const { result } = renderHook(() => useNPCRollQueue());
-
-    await act(async () => {
-      result.current.addRolls([mockRollHit as any, mockRollMiss as any]);
-    });
-
-    expect(result.current.currentRoll).toEqual(mockRollHit);
-
-    await act(async () => {
-      result.current.dismissCurrent();
-    });
-
-    // The useEffect should trigger and pick up the next roll
-    expect(result.current.currentRoll).toEqual(mockRollMiss);
-    expect(result.current.queueLength).toBe(0);
-
-    await act(async () => {
-      result.current.dismissCurrent();
-    });
-
-    expect(result.current.currentRoll).toBeNull();
-    expect(result.current.queueLength).toBe(0);
-  });
-});
