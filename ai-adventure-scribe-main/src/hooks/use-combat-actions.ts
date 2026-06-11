@@ -46,34 +46,37 @@ export const useCombatActions = (_isDM: boolean = false) => {
   const [showCombatMode, setShowCombatMode] = useState(false);
   const [isStartingCombat, setIsStartingCombat] = useState(false);
 
+  const playerCharacterId = characterState.character?.id;
+
   // Get player characters and potential enemies
-  // ⚡ Bolt: Consolidated participant filtering into a single useMemo with a single O(N) pass
-  // to reduce hook overhead and redundant iterations.
-  const { playerParticipants, enemyParticipants } = useMemo(() => {
+  // ⚡ Bolt: Consolidated participant filtering and turn detection into a single useMemo with
+  // a single O(N) pass to reduce hook overhead and eliminate redundant array iterations.
+  const { playerParticipants, enemyParticipants, isPlayersTurn } = useMemo(() => {
     const players: CombatParticipant[] = [];
     const monsters: CombatParticipant[] = [];
+    let playersTurn = false;
 
     if (activeEncounter?.participants) {
       for (const p of activeEncounter.participants) {
         if (p.participantType === 'player') players.push(p);
         else if (p.participantType === 'monster') monsters.push(p);
+
+        if (
+          activeEncounter.currentTurnParticipantId &&
+          p.id === activeEncounter.currentTurnParticipantId &&
+          p.characterId === playerCharacterId
+        ) {
+          playersTurn = true;
+        }
       }
     }
 
-    return { playerParticipants: players, enemyParticipants: monsters };
-  }, [activeEncounter?.participants]);
-
-  const playerCharacterId = characterState.character?.id;
-
-  const isPlayersTurn = useMemo(
-    () =>
-      Boolean(
-        activeEncounter?.currentTurnParticipantId &&
-        activeEncounter.participants.find((p) => p.id === activeEncounter.currentTurnParticipantId)
-          ?.characterId === playerCharacterId,
-      ),
-    [activeEncounter?.currentTurnParticipantId, activeEncounter?.participants, playerCharacterId],
-  );
+    return {
+      playerParticipants: players,
+      enemyParticipants: monsters,
+      isPlayersTurn: playersTurn,
+    };
+  }, [activeEncounter?.participants, activeEncounter?.currentTurnParticipantId, playerCharacterId]);
 
   // Handle starting combat
   const handleStartCombat = useCallback(async () => {
