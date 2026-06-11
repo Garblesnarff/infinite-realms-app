@@ -396,6 +396,7 @@ export default defineConfig({
       'src/features/game-session/components/game/__tests__/FloatingActionPanel.test.tsx',
       'src/features/game-session/components/game/__tests__/GameSidePanel.test.tsx',
       'src/features/game-session/components/game/__tests__/CombatSummary.test.tsx',
+      'src/features/safety/__tests__/SafetyResponseFactory.test.ts',
       'src/utils/lighting/__tests__/mechanics.test.ts',
     ],
     exclude: [
