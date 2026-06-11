@@ -5,6 +5,7 @@ import { COMBAT_ACTIONS, type ActionDefinition } from './ActionDefinitions';
 import type { CombatParticipant } from '@/types/combat';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CombatActionGridProps {
   currentParticipant?: CombatParticipant;
@@ -57,30 +58,40 @@ export const CombatActionGrid: React.FC<CombatActionGridProps> = React.memo(({
         const ActionIcon = action.icon;
 
         return (
-          <Button
-            key={action.type}
-            variant={available ? 'outline' : 'ghost'}
-            className={`h-auto flex-col space-y-2 p-4 ${
-              !available ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-400'
-            }`}
-            onClick={() => {
-              if (!available) return;
-              onActionClick(action);
-            }}
-            disabled={!available || isSubmitting}
-            title={action.description}
-            aria-label={`${action.name}: ${action.description}${statusText ? `. ${statusText}` : ''}`}
-          >
-            <ActionIcon
-              className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`}
-              aria-hidden="true"
-            />
+          <Tooltip key={action.type}>
+            <TooltipTrigger asChild>
+              <span className="inline-block w-full">
+                <Button
+                  type="button"
+                  variant={available ? 'outline' : 'ghost'}
+                  className={`h-auto w-full flex-col space-y-2 p-4 ${
+                    !available ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-400'
+                  }`}
+                  onClick={() => {
+                    if (!available) return;
+                    onActionClick(action);
+                  }}
+                  disabled={!available || isSubmitting}
+                  aria-label={`${action.name}: ${action.description}${
+                    statusText ? `. ${statusText}` : ''
+                  }`}
+                >
+                  <ActionIcon
+                    className={`w-6 h-6 ${available ? 'text-gray-700' : 'text-gray-400'}`}
+                    aria-hidden="true"
+                  />
 
-            <div className="text-center">
-              <div className="font-medium text-sm">{action.name}</div>
-              {statusText && <div className="text-xs text-red-500 mt-1">{statusText}</div>}
-            </div>
-          </Button>
+                  <div className="text-center">
+                    <div className="font-medium text-sm">{action.name}</div>
+                    {statusText && <div className="text-xs text-red-500 mt-1">{statusText}</div>}
+                  </div>
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{action.description}</p>
+            </TooltipContent>
+          </Tooltip>
         );
       })}
     </div>
