@@ -173,3 +173,7 @@
 ## 2026-07-20 - Campaign Header Tooltip Enhancement
 **Learning:** Replacing native 'title' attributes with Shadcn Tooltips improves visual consistency. To ensure tooltips trigger on disabled buttons (like during a 'deleting' state), wrap the button and its trigger in a '<span>' element. This preserves hover feedback for all users while avoid 'double tooltips' on desktop.
 **Action:** Always wrap disabled-capable buttons in a '<span>' within 'TooltipTrigger' and remove redundant 'title' attributes when migrating to custom Tooltips.
+
+## 2026-06-12 - Dice Roll Request Accessibility and UX
+**Learning:** Essential game interactions like dice roll requests require clear accessible names and state feedback. Combining `aria-label` for screen readers and Shadcn `Tooltip` for sighted users provides a robust experience. Standardizing buttons to `type="button"` prevents accidental form submissions in complex game views.
+**Action:** Replace native `title` with Shadcn `Tooltip`. Ensure all buttons have explicit `type="button"` and descriptive `aria-label`. Wrap interactive groups in `TooltipProvider`.

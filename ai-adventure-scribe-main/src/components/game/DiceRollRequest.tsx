@@ -13,6 +13,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { DiceRollEmbed } from '@/features/game-session/components';
 import { useDiceRollRequest } from '@/hooks/game/use-dice-roll-request';
 import { cn } from '@/lib/utils';
@@ -152,40 +158,59 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
 
             {/* Advantage/Disadvantage Controls */}
             {request.type !== 'damage' && (
-              <div className="flex gap-2 mt-3">
-                <Button
-                  variant={hasAdvantage ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={toggleAdvantage}
-                  aria-pressed={hasAdvantage}
-                  title={hasAdvantage ? 'Disable Advantage' : 'Enable Advantage'}
-                  className={cn(
-                    'text-xs',
-                    hasAdvantage
-                      ? 'bg-green-600 text-white'
-                      : 'text-green-600 border-green-600 hover:bg-green-50',
-                  )}
-                >
-                  <ArrowUp className="w-3 h-3 mr-1" />
-                  Advantage
-                </Button>
-                <Button
-                  variant={hasDisadvantage ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={toggleDisadvantage}
-                  aria-pressed={hasDisadvantage}
-                  title={hasDisadvantage ? 'Disable Disadvantage' : 'Enable Disadvantage'}
-                  className={cn(
-                    'text-xs',
-                    hasDisadvantage
-                      ? 'bg-red-600 text-white'
-                      : 'text-red-600 border-red-600 hover:bg-red-50',
-                  )}
-                >
-                  <ArrowDown className="w-3 h-3 mr-1" />
-                  Disadvantage
-                </Button>
-              </div>
+              <TooltipProvider>
+                <div className="flex gap-2 mt-3" role="group" aria-label="Roll modifiers">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={hasAdvantage ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={toggleAdvantage}
+                        aria-pressed={hasAdvantage}
+                        aria-label={hasAdvantage ? 'Disable Advantage' : 'Enable Advantage'}
+                        className={cn(
+                          'text-xs',
+                          hasAdvantage
+                            ? 'bg-green-600 text-white'
+                            : 'text-green-600 border-green-600 hover:bg-green-50',
+                        )}
+                      >
+                        <ArrowUp className="w-3 h-3 mr-1" aria-hidden="true" />
+                        Advantage
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{hasAdvantage ? 'Disable Advantage' : 'Enable Advantage'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={hasDisadvantage ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={toggleDisadvantage}
+                        aria-pressed={hasDisadvantage}
+                        aria-label={hasDisadvantage ? 'Disable Disadvantage' : 'Enable Disadvantage'}
+                        className={cn(
+                          'text-xs',
+                          hasDisadvantage
+                            ? 'bg-red-600 text-white'
+                            : 'text-red-600 border-red-600 hover:bg-red-50',
+                        )}
+                      >
+                        <ArrowDown className="w-3 h-3 mr-1" aria-hidden="true" />
+                        Disadvantage
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{hasDisadvantage ? 'Disable Disadvantage' : 'Enable Disadvantage'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
             )}
           </div>
 
@@ -213,44 +238,70 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 </div>
               ) : (
                 // Show roll dice button (resolvedFormula is always non-null here)
-                <>
-                  <Button
-                    onClick={handleAutoRoll}
-                    disabled={isRolling}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                    size="lg"
-                    title={`Roll ${rollCalculation.formula} for ${request.purpose}`}
-                    aria-label={`Roll ${rollCalculation.formula} for ${request.purpose}`}
-                  >
-                    <Dice6 className="w-4 h-4 mr-2" />
-                    {isRolling ? 'Rolling...' : 'Roll Dice'}
-                  </Button>
+                <TooltipProvider>
+                  <div className="space-y-3">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={handleAutoRoll}
+                          disabled={isRolling}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                          size="lg"
+                          aria-label={`Roll ${rollCalculation.formula} for ${request.purpose}`}
+                        >
+                          <Dice6 className="w-4 h-4 mr-2" aria-hidden="true" />
+                          {isRolling ? 'Rolling...' : 'Roll Dice'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{`Roll ${rollCalculation.formula} for ${request.purpose}`}</p>
+                      </TooltipContent>
+                    </Tooltip>
 
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setManualMode(true)}
-                      disabled={isRolling}
-                      className="flex-1 text-xs"
-                      size="sm"
-                      title="Roll physical dice and enter result manually"
-                    >
-                      Enter Manually
-                    </Button>
-                    {onCancel && (
-                      <Button
-                        variant="ghost"
-                        onClick={onCancel}
-                        disabled={isRolling}
-                        className="flex-1 text-xs"
-                        size="sm"
-                        title="Dismiss roll request"
-                      >
-                        Cancel
-                      </Button>
-                    )}
+                    <div className="flex gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setManualMode(true)}
+                            disabled={isRolling}
+                            className="flex-1 text-xs"
+                            size="sm"
+                            aria-label="Roll physical dice and enter result manually"
+                          >
+                            Enter Manually
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Roll physical dice and enter result manually</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      {onCancel && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={onCancel}
+                              disabled={isRolling}
+                              className="flex-1 text-xs"
+                              size="sm"
+                              aria-label="Dismiss roll request"
+                            >
+                              Cancel
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Dismiss roll request</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
-                </>
+                </TooltipProvider>
               )}
             </div>
           ) : (
@@ -275,6 +326,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
 
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   onClick={handleManualSubmit}
                   disabled={!manualResult || isNaN(parseInt(manualResult))}
                   className="flex-1"
@@ -284,6 +336,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 {/* Only show "Back to Roll" when user voluntarily entered manual mode */}
                 {manualMode && resolvedFormula !== null && (
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setManualMode(false);
@@ -295,7 +348,13 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   </Button>
                 )}
                 {onCancel && !manualMode && (
-                  <Button variant="ghost" onClick={onCancel} className="flex-1 text-xs" size="sm">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={onCancel}
+                    className="flex-1 text-xs"
+                    size="sm"
+                  >
                     Cancel
                   </Button>
                 )}

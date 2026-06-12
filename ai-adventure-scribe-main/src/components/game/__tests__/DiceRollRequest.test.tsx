@@ -128,33 +128,30 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    const advButton = screen.getByRole('button', { name: /^advantage$/i });
-    const disButton = screen.getByRole('button', { name: /^disadvantage$/i });
+    const advButton = screen.getByRole('button', { name: /Enable Advantage/i });
+    const disButton = screen.getByRole('button', { name: /Enable Disadvantage/i });
 
-    expect(advButton).toHaveAttribute('title', 'Enable Advantage');
-    expect(disButton).toHaveAttribute('title', 'Enable Disadvantage');
+    expect(advButton).toBeInTheDocument();
+    expect(disButton).toBeInTheDocument();
 
     fireEvent.click(advButton);
-    expect(advButton).toHaveAttribute('title', 'Disable Advantage');
+    expect(screen.getByRole('button', { name: /Disable Advantage/i })).toBeInTheDocument();
 
     fireEvent.click(disButton);
-    expect(disButton).toHaveAttribute('title', 'Disable Disadvantage');
-    expect(advButton).toHaveAttribute('aria-pressed', 'false');
-    expect(disButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Disable Disadvantage/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Disable Disadvantage/i })).toHaveAttribute('aria-pressed', 'true');
 
     // Toggle off
-    fireEvent.click(disButton);
-    expect(disButton).toHaveAttribute('aria-pressed', 'false');
-    expect(disButton).toHaveAttribute('title', 'Enable Disadvantage');
+    fireEvent.click(screen.getByRole('button', { name: /Disable Disadvantage/i }));
+    expect(screen.getByRole('button', { name: /Enable Disadvantage/i })).toHaveAttribute('aria-pressed', 'false');
 
     // Toggle advantage on
-    fireEvent.click(advButton);
-    expect(advButton).toHaveAttribute('aria-pressed', 'true');
-    expect(advButton).toHaveAttribute('title', 'Disable Advantage');
+    fireEvent.click(screen.getByRole('button', { name: /Enable Advantage/i }));
+    expect(screen.getByRole('button', { name: /Disable Advantage/i })).toHaveAttribute('aria-pressed', 'true');
     // Toggle advantage off
-    fireEvent.click(advButton);
-    expect(advButton).toHaveAttribute('aria-pressed', 'false');
-    expect(advButton).toHaveAttribute('title', 'Enable Advantage');
+    fireEvent.click(screen.getByRole('button', { name: /Disable Advantage/i }));
+    expect(screen.getByRole('button', { name: /Enable Advantage/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('switches to manual mode, goes back, and submits a result', () => {
@@ -166,7 +163,7 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Enter Manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }));
 
     const input = screen.getByLabelText(/Enter your roll result:/i);
     fireEvent.change(input, { target: { value: '18' } });
@@ -176,7 +173,7 @@ describe('DiceRollRequest', () => {
     expect(screen.queryByLabelText(/Enter your roll result:/i)).not.toBeInTheDocument();
 
     // Go manual again and submit
-    fireEvent.click(screen.getByRole('button', { name: /Enter Manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }));
     const input2 = screen.getByLabelText(/Enter your roll result:/i);
     fireEvent.change(input2, { target: { value: '18' } });
     fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
@@ -238,7 +235,7 @@ describe('DiceRollRequest', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss roll request/i }));
     expect(mockOnCancel).toHaveBeenCalled();
   });
 
