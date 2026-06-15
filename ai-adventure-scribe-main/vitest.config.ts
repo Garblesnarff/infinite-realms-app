@@ -27,6 +27,7 @@ export default defineConfig({
       'src/services/__tests__/ai-service.test.ts',
       'src/services/__tests__/session-state-service.test.ts',
       'src/services/__tests__/spellApi.test.ts',
+      'src/services/__tests__/localSpellService.test.ts',
       'src/services/__tests__/gallery-service.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',
       'src/lib/logger.test.ts',
@@ -426,6 +427,7 @@ export default defineConfig({
       all: false,
       include: [
         'src/services/spellApi.ts',
+        'src/services/localSpellService.ts',
         'src/services/gallery-service.ts',
         'src/services/passive-skills-service.ts',
         'src/lib/logger.ts',

@@ -239,3 +239,7 @@
 ## 2026-02-14 - [Auth TokenService Coverage]
 **Learning:** Found that `TokenService.ts` was completely untested despite handling critical session persistence and JWT logic. Discovered that testing environment-specific code (like `typeof window`) in JSDOM is difficult as `window` is always defined. Also confirmed that strict `import/order` lint rules require local relative imports to be grouped separately from aliased imports.
 **Action:** When testing services that use both `localStorage` and `sessionStorage`, use `vi.stubGlobal` to provide clean mocks for each test. Ensure new tests are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`. Use `npx eslint` on specific files to find and fix import ordering issues before submission.
+
+## 2026-07-26 - [Local Spell Service Coverage & Multiclassing Logic]
+**Learning:** Found that `localSpellService.ts` was completely untested. It contains critical D&D 5e multiclassing logic, including caster level calculations and spell slot tables. Identified that the current implementation of `getMulticlassSpellSlots` is limited to level 5, and anything above that currently fallbacks to level 1 behavior.
+**Action:** Always include both the test file and the source module in `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Added comprehensive tests for all `LocalSpellService` methods, including mixed multiclass scenarios (full, half, third, and pact casters) and spell filtering logic.
