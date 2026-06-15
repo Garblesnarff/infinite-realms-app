@@ -181,3 +181,7 @@
 ## 2026-07-25 - Import Preview Accessibility and Tooltip Standardization
 **Learning:** Truncated character names in preview components often rely on native 'title' attributes, which are inaccessible to keyboard and screen reader users. Standardizing these to Shadcn Tooltips with 'tabIndex={0}' and 'focus-visible' rings ensures parity between mouse and keyboard interaction.
 **Action:** Replace native 'title' with Shadcn 'Tooltip' for truncated text. Ensure interactive non-button elements are focusable and have appropriate focus rings (e.g., 'focus-visible:ring-infinite-purple').
+
+## 2026-03-24 - Truncated Text Tooltip Standardization
+**Learning:** Replacing native 'title' attributes with Shadcn Tooltips on truncated text elements (like character names in lists or cards) requires making the element focusable to ensure parity for keyboard users. Without 'tabIndex={0}', keyboard-only users cannot discover the full content of truncated fields.
+**Action:** Always add 'tabIndex={0}' and 'focus-visible' ring styles when wrapping truncated text elements in custom Tooltips.

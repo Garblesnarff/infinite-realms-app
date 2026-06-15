@@ -111,7 +111,16 @@ export const SharedCharacterCard: React.FC<{
             />
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-lg truncate" title={character.name}>{character.name}</h3>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <h3 className="font-semibold text-lg truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm" tabIndex={0}>
+                  {character.name}
+                </h3>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{character.name}</p>
+              </TooltipContent>
+            </Tooltip>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {character.race && <span>{character.race}</span>}
               {character.class && (
