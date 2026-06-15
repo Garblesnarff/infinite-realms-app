@@ -96,9 +96,19 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0">
               <div className="text-xs text-muted-foreground mb-1">Name</div>
-              <div className="font-medium truncate" title={characterData.character.name}>
-                {characterData.character.name}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="font-medium truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                    tabIndex={0}
+                  >
+                    {characterData.character.name}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{characterData.character.name}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             {characterData.character.race && (
               <div>

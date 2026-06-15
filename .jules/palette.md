@@ -177,3 +177,7 @@
 ## 2026-06-12 - Dice Roll Request Accessibility and UX
 **Learning:** Essential game interactions like dice roll requests require clear accessible names and state feedback. Combining `aria-label` for screen readers and Shadcn `Tooltip` for sighted users provides a robust experience. Standardizing buttons to `type="button"` prevents accidental form submissions in complex game views.
 **Action:** Replace native `title` with Shadcn `Tooltip`. Ensure all buttons have explicit `type="button"` and descriptive `aria-label`. Wrap interactive groups in `TooltipProvider`.
+
+## 2026-07-25 - Import Preview Accessibility and Tooltip Standardization
+**Learning:** Truncated character names in preview components often rely on native 'title' attributes, which are inaccessible to keyboard and screen reader users. Standardizing these to Shadcn Tooltips with 'tabIndex={0}' and 'focus-visible' rings ensures parity between mouse and keyboard interaction.
+**Action:** Replace native 'title' with Shadcn 'Tooltip' for truncated text. Ensure interactive non-button elements are focusable and have appropriate focus rings (e.g., 'focus-visible:ring-infinite-purple').
