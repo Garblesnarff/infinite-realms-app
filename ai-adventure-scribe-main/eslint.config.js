@@ -356,6 +356,7 @@ export default tseslint.config(
       'src/hooks/use-combat-ai-integration.ts',
       'src/hooks/combat/use-combat-detection.ts',
       'src/components/combat/hooks/useCombatHandlers.ts',
+      'src/components/combat/hooks/useCombatAttackHandlers.ts',
       'src/hooks/useAdvancedSpellcasting.ts',
       'src/hooks/use-combat-mechanics.ts',
       'src/utils/reactionTriggers.ts',
