@@ -366,6 +366,8 @@ export default tseslint.config(
       'src/components/battle-map/VisionRange.tsx',
       'src/features/character/components/sheet/character-sheet-tabs.tsx',
       'src/components/character-sheet/character-sheet-tabs.tsx',
+      'src/features/character/components/sheet/MulticlassManager.tsx',
+      'src/components/character-sheet/MulticlassManager.tsx',
       'src/features/character/components/list/character-card.tsx',
       'src/features/character/components/list/CharacterCardHoverContent.tsx',
       'src/components/character-import-export/ImportDialog.tsx',

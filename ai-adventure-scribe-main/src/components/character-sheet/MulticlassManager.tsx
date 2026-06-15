@@ -16,6 +16,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   getProficiencyBonus,
   getAllClassFeaturesUpToLevel,
   getMulticlassProficiencies,
@@ -121,7 +127,8 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       {/* Multiclass Overview */}
       <Card>
         <CardHeader>
@@ -157,15 +164,22 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
                   className="px-3 py-1 flex items-center gap-1"
                 >
                   {cls.className} {cls.level}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-4 w-4 p-0 ml-1"
-                    onClick={() => handleLevelUpClass(cls.classId)}
-                    disabled={isProcessing}
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-4 w-4 p-0 ml-1"
+                        onClick={() => handleLevelUpClass(cls.classId)}
+                        disabled={isProcessing}
+                        aria-label={`Level up ${cls.className}`}
+                        type="button"
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Level up {cls.className}</TooltipContent>
+                  </Tooltip>
                 </Badge>
               ))}
             </div>
@@ -192,8 +206,17 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
                 .map((cls) => (
                   <div
                     key={cls.id}
-                    className="p-3 border rounded-lg cursor-pointer hover:border-primary transition-colors"
+                    className="p-3 border rounded-lg cursor-pointer hover:border-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple"
                     onClick={() => handleAddClass(cls)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleAddClass(cls);
+                      }
+                    }}
+                    aria-label={`Add class: ${cls.name}`}
                   >
                     <div className="font-medium capitalize">{cls.name}</div>
                     <div className="text-sm text-muted-foreground">{cls.hitDie}-sided hit die</div>
@@ -324,8 +347,18 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
           return (
             <Card key={cls.classId}>
               <CardHeader
-                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                className="cursor-pointer hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-infinite-purple"
                 onClick={() => toggleClassExpansion(cls.classId)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleClassExpansion(cls.classId);
+                  }
+                }}
+                aria-expanded={isExpanded}
+                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${cls.className} details`}
               >
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -407,6 +440,7 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
         })}
       </div>
     </div>
+  </TooltipProvider>
   );
 };
 

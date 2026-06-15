@@ -379,6 +379,7 @@ export default defineConfig({
       'src/components/scenes/__tests__/SceneTemplateLibrary.accessibility.test.tsx',
       'src/features/character/components/sheet/__tests__/InventoryManager.accessibility.test.tsx',
       'src/features/character/components/sheet/__tests__/ExperienceManager.accessibility.test.tsx',
+      'src/features/character/components/sheet/__tests__/MulticlassManager.accessibility.test.tsx',
       'tests/services/voice-profile-service.test.ts',
       'tests/services/voice-consistency-service.test.ts',
       'src/hooks/blog/__tests__/useBlogTaxonomy.test.tsx',
@@ -805,6 +806,8 @@ export default defineConfig({
         'src/features/game-session/components/game/GameSidePanelContent.tsx',
         'src/features/game-session/components/game/CombatSummary.tsx',
         'src/components/character-sharing/ShareCharacterDialog.tsx',
+        'src/components/character-sheet/MulticlassManager.tsx',
+        'src/features/character/components/sheet/MulticlassManager.tsx',
         'src/utils/lighting/mechanics.ts',
       ],
       exclude: [
