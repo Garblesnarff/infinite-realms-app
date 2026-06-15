@@ -432,6 +432,7 @@ export default defineConfig({
         'src/services/passive-skills-service.ts',
         'src/lib/logger.ts',
         'src/lib/telemetry.ts',
+        'src/lib/utils.ts',
         'src/utils/characterModifiers.ts',
         'src/utils/character-calculations-data.ts',
         'src/utils/combat/attack-narration.ts',
