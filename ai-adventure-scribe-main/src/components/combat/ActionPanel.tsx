@@ -10,6 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';
 import { canUseRacialTrait } from '@/utils/racialTraits';
@@ -86,23 +91,39 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"
-                role="status"
-                aria-label="Current turn indicator"
-              ></div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="w-3 h-3 bg-amber-500 rounded-full animate-pulse cursor-help focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
+                    role="status"
+                    aria-label="Current turn indicator"
+                    tabIndex={0}
+                  ></div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Current Turn</p>
+                </TooltipContent>
+              </Tooltip>
               <span className="font-semibold">{currentParticipant.name}'s Turn</span>
             </div>
             {showNextTurnButton && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onNextTurn}
-                title="End turn and advance to next participant"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Next Turn
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onNextTurn}
+                    aria-label="Next Turn - End turn and advance to next participant"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Next Turn
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>End turn and advance to next participant</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
 
