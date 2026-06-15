@@ -175,7 +175,8 @@ describe('ChatInput', () => {
     const textarea = screen.getByPlaceholderText(/describe what your character would like to do/i);
 
     const longText = 'a'.repeat(501);
-    await user.type(textarea, longText);
+    await user.click(textarea);
+    await user.paste(longText);
 
     expect(screen.getByText('501/1000')).toBeInTheDocument();
   });

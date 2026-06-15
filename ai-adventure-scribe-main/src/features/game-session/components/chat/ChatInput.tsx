@@ -35,7 +35,9 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
   const [diceSuggestions, setDiceSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const suggestionsHeaderId = useId();
+  const baseId = useId();
+  const suggestionsHeaderId = `${baseId}-header`;
+  const listboxId = `${baseId}-listbox`;
 
   /**
    * Auto-resize textarea based on content and handle dice command suggestions
@@ -205,6 +207,13 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
               className="min-h-[20px] max-h-28 resize-none border-0 shadow-none focus:ring-0 focus:border-0 p-0 text-sm leading-relaxed placeholder:text-gray-600 bg-transparent"
               disabled={isDisabled}
               rows={1}
+              aria-autocomplete="list"
+              aria-controls={showDiceSuggestions ? listboxId : undefined}
+              aria-activedescendant={
+                showDiceSuggestions && diceSuggestions.length > 0
+                  ? `${baseId}-option-${selectedIndex}`
+                  : undefined
+              }
             />
 
             {/* Character count indicator */}
@@ -217,6 +226,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
             {/* Dice command suggestions */}
             {showDiceSuggestions && diceSuggestions.length > 0 && (
               <div
+                id={listboxId}
                 className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto"
                 style={{ zIndex: Z_INDEX.DROPDOWN }}
                 role="listbox"
@@ -233,6 +243,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({ onSendMessage, 
                   {diceSuggestions.map((suggestion, index) => (
                     <button
                       key={index}
+                      id={`${baseId}-option-${index}`}
                       type="button"
                       onClick={() => handleSuggestionClick(suggestion)}
                       className={cn(
