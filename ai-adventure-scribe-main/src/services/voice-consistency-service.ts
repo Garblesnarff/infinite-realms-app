@@ -121,6 +121,13 @@ export class VoiceConsistencyService {
     const existingMappings = await this.getSessionMappings(sessionId);
     const mappingLookup = new Map(existingMappings.map((m) => [m.characterName, m]));
 
+    // ⚡ Bolt: Track appearance counts for aggregation to avoid redundant sequential updates.
+    const updatesNeeded = new Map<string, number>(); // mappingId -> count
+    const insertsNeeded = new Map<
+      string,
+      { characterName: string; voiceCategory: string; voiceId: string; count: number }
+    >();
+
     for (const segment of segments) {
       if (!segment.character) {
         // Narration - use narrator voice
@@ -138,10 +145,6 @@ export class VoiceConsistencyService {
 
       if (existingMapping) {
         // Use existing voice assignment
-        logger.debug(
-          `♻️ Using existing voice for "${cleanCharacter}": ${existingMapping.voiceCategory}`,
-        );
-
         assignments.push({
           character: cleanCharacter,
           voiceCategory: existingMapping.voiceCategory,
@@ -151,15 +154,13 @@ export class VoiceConsistencyService {
           isNewCharacter: false,
         });
 
-        // Update usage
-        await this.updateCharacterUsage(existingMapping.id);
+        // ⚡ Bolt: Aggregate increments for existing characters.
+        updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
       } else {
         // New character - use AI's voice category assignment or fallback
         const voiceCategory = segment.voice_category || this.inferVoiceCategory(cleanCharacter);
         const voiceConfig =
           VoiceMapper.getAllVoices()[voiceCategory] || VoiceMapper.getAllVoices().default;
-
-        logger.info(`✨ New character "${cleanCharacter}" assigned voice: ${voiceCategory}`);
 
         assignments.push({
           character: cleanCharacter,
@@ -168,27 +169,50 @@ export class VoiceConsistencyService {
           isNewCharacter: true,
         });
 
-        // Save new mapping
-        await this.saveCharacterVoiceMapping(
-          sessionId,
-          cleanCharacter,
-          voiceCategory,
-          voiceConfig.id,
-        );
-
-        // Cache the new mapping
-        mappingLookup.set(cleanCharacter, {
-          id: '', // Will be set by database
-          sessionId,
-          characterName: cleanCharacter,
-          voiceCategory,
-          voiceId: voiceConfig.id,
-          firstAppearance: new Date(),
-          lastUsed: new Date(),
-          appearanceCount: 1,
-          metadata: {},
-        });
+        // ⚡ Bolt: Aggregate increments for new characters in this response.
+        const pending = insertsNeeded.get(cleanCharacter);
+        if (pending) {
+          pending.count++;
+        } else {
+          insertsNeeded.set(cleanCharacter, {
+            characterName: cleanCharacter,
+            voiceCategory,
+            voiceId: voiceConfig.id,
+            count: 1,
+          });
+        }
       }
+    }
+
+    // ⚡ Bolt: Execute aggregated database operations in parallel to minimize total latency.
+    const tasks: Promise<unknown>[] = [];
+
+    // Aggregated updates
+    for (const [id, increment] of updatesNeeded.entries()) {
+      // ⚡ Bolt: Use the cached appearanceCount from existingMappings to calculate the new count,
+      // avoiding a redundant SELECT query per unique character.
+      const mapping = existingMappings.find((m) => m.id === id);
+      if (mapping) {
+        const newCount = mapping.appearanceCount + increment;
+        tasks.push(this.updateCharacterUsage(id, newCount));
+      }
+    }
+
+    // Aggregated inserts
+    for (const data of insertsNeeded.values()) {
+      tasks.push(
+        this.saveCharacterVoiceMapping(
+          sessionId,
+          data.characterName,
+          data.voiceCategory,
+          data.voiceId,
+          data.count,
+        ),
+      );
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
     }
 
     logger.info(
@@ -208,15 +232,19 @@ export class VoiceConsistencyService {
       id: string;
       characterName: string;
       voiceCategory: string;
+      voiceId: string | null;
       lastUsed: Date;
       appearanceCount: number;
     }>
   > {
     try {
-      // Query voice mappings directly by session_id
+      // ⚡ Bolt: Using explicit column selection to avoid over-fetching
+      // large JSONB metadata fields when listing mappings.
       const { data, error } = await supabase
         .from('character_voice_mappings')
-        .select('*')
+        .select(
+          'id, character_name, voice_category, voice_id, last_used, updated_at, appearance_count',
+        )
         .eq('session_id', sessionId);
 
       if (error) {
@@ -234,6 +262,7 @@ export class VoiceConsistencyService {
         id: mapping.id,
         characterName: mapping.character_name,
         voiceCategory: mapping.voice_category,
+        voiceId: mapping.voice_id,
         lastUsed: new Date(mapping.last_used || mapping.updated_at || Date.now()),
         appearanceCount: mapping.appearance_count || 1,
       }));
@@ -251,6 +280,7 @@ export class VoiceConsistencyService {
     characterName: string,
     voiceCategory: string,
     voiceId: string,
+    initialCount: number = 1,
   ): Promise<void> {
     try {
       const now = new Date().toISOString();
@@ -259,7 +289,7 @@ export class VoiceConsistencyService {
         character_name: characterName,
         voice_category: voiceCategory,
         voice_id: voiceId,
-        appearance_count: 1,
+        appearance_count: initialCount,
         first_appearance: now,
         last_used: now,
         metadata: {},
@@ -267,7 +297,9 @@ export class VoiceConsistencyService {
 
       if (error) throw error;
 
-      logger.info(`💾 Saved voice mapping: ${characterName} -> ${voiceCategory} (${voiceId})`);
+      logger.info(
+        `💾 Saved voice mapping: ${characterName} -> ${voiceCategory} (count: ${initialCount})`,
+      );
     } catch (error) {
       logger.error('Error saving character voice mapping:', error);
     }
@@ -276,34 +308,24 @@ export class VoiceConsistencyService {
   /**
    * Update character usage statistics
    */
-  private async updateCharacterUsage(mappingId: string): Promise<void> {
+  private async updateCharacterUsage(mappingId: string, newCount: number): Promise<void> {
     try {
-      // First, get the current appearance count
-      const { data: mapping, error: fetchError } = await supabase
-        .from('character_voice_mappings')
-        .select('appearance_count')
-        .eq('id', mappingId)
-        .single();
+      // ⚡ Bolt: Optimized to perform update in a single round-trip by using the pre-calculated count.
+      // This eliminates the redundant SELECT query previously performed here.
+      const now = new Date().toISOString();
 
-      if (fetchError) throw fetchError;
-
-      const currentCount = mapping?.appearance_count || 0;
-
-      // Update with incremented count and new timestamp
       const { error } = await supabase
         .from('character_voice_mappings')
         .update({
-          appearance_count: currentCount + 1,
-          last_used: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          appearance_count: newCount,
+          last_used: now,
+          updated_at: now,
         })
         .eq('id', mappingId);
 
       if (error) throw error;
 
-      logger.debug(
-        `📊 Updated character usage for mapping: ${mappingId} (count: ${currentCount + 1})`,
-      );
+      logger.debug(`📊 Updated usage for mapping: ${mappingId} (count: ${newCount})`);
     } catch (error) {
       logger.error('Error updating character usage:', error);
     }
