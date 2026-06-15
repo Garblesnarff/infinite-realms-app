@@ -175,6 +175,13 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
     async (message: ChatMessage) => {
       if (!sessionId) return;
 
+      // ⚡ Bolt: Optimistically add the message to the local state for zero-latency UI feedback.
+      // This ensures the message appears instantly in the chat list before the DB insert completes.
+      setAllMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+
       try {
         const contextData = message.context
           ? {
@@ -193,14 +200,13 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
           timestamp: new Date().toISOString(),
         });
 
-        if (error) {
-          logger.error('Error adding message:', error);
-          throw error;
-        }
+        if (error) throw error;
 
-        // Invalidate all message queries to refetch
+        // Invalidate all message queries to refetch and sync with DB sequence numbers
         await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
       } catch (error) {
+        // ⚡ Bolt: Rollback optimistic update on error to keep UI in sync with source of truth
+        setAllMessages((prev) => prev.filter((m) => m.id !== message.id));
         logger.error('Failed to add message:', error);
         throw error;
       }

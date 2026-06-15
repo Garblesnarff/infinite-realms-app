@@ -31,13 +31,43 @@ export const useMessageQueue = (sessionId: string | null) => {
    * Generates message IDs on the frontend to avoid race conditions with database replication
    */
   const messageMutation = useMutation({
+    onMutate: async (newMessage: ChatMessage) => {
+      if (!sessionId) return;
+
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['messages', sessionId] });
+
+      // Snapshot the previous value for all pages to allow rollback
+      const queryCache = queryClient.getQueryCache();
+      const queryKeys = queryCache.findAll({ queryKey: ['messages', sessionId] });
+      const previousData = queryKeys.map((query) => ({
+        queryKey: query.queryKey,
+        data: query.state.data,
+      }));
+
+      // ⚡ Bolt: Optimistically update the cache for all active message pages.
+      // This ensures the message appears instantly regardless of which page is currently active.
+      queryKeys.forEach((query) => {
+        queryClient.setQueryData(query.queryKey, (old: { messages: ChatMessage[] } | undefined) => {
+          if (!old || !old.messages) return old;
+          // Check if message already exists
+          if (old.messages.some((m: ChatMessage) => m.id === newMessage.id)) return old;
+          return {
+            ...old,
+            messages: [...old.messages, newMessage],
+          };
+        });
+      });
+
+      return { previousData };
+    },
     mutationFn: async (message: ChatMessage) => {
       let retries = 0;
       let delay = INITIAL_RETRY_DELAY;
 
-      // Generate message ID on frontend to avoid database timing issues
-      const messageId = uuidv4();
-      const now = new Date().toISOString();
+      // Generate message ID on frontend if not provided to avoid database timing issues
+      const messageId = message.id || uuidv4();
+      const now = message.timestamp || new Date().toISOString();
 
       while (retries < MAX_RETRIES) {
         try {
@@ -98,8 +128,16 @@ export const useMessageQueue = (sessionId: string | null) => {
         }
       }
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
       logger.error('Error saving message:', error);
+
+      // ⚡ Bolt: Rollback to the previous state on error to maintain data integrity.
+      if (context?.previousData) {
+        context.previousData.forEach((item) => {
+          queryClient.setQueryData(item.queryKey, item.data);
+        });
+      }
+
       toast({
         title: 'Error',
         description: 'Message will be retried automatically',
@@ -107,7 +145,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       });
     },
     onSuccess: () => {
-      // Invalidate and refetch messages to ensure cache is up-to-date
+      // ⚡ Bolt: Invalidate and refetch messages to ensure cache is up-to-date and sync with DB sequence numbers.
       queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
     },
   });
