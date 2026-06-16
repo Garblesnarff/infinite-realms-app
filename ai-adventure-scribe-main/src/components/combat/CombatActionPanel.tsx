@@ -20,6 +20,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 
 // ===========================
@@ -101,17 +107,24 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
   }, [handleQuickAction]);
 
   return (
-    <Card className={`w-full ${className}`}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Dice6 className="w-5 h-5 text-red-500" />
-            <h3 className="font-semibold text-red-700">Combat Actions</h3>
+    <TooltipProvider>
+      <Card className={`w-full ${className}`}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Dice6 className="w-5 h-5 text-red-500" />
+              <h3 className="font-semibold text-red-700">Combat Actions</h3>
+            </div>
+            {currentParticipant && (
+              <div
+                className="text-sm text-gray-600"
+                role="status"
+                aria-live="polite"
+              >
+                {currentParticipant.name}'s Turn
+              </div>
+            )}
           </div>
-          {currentParticipant && (
-            <div className="text-sm text-gray-600">{currentParticipant.name}'s Turn</div>
-          )}
-        </div>
 
         {/* Action Status */}
         {currentParticipant && (
@@ -142,19 +155,25 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
           {MANAGEMENT_ACTIONS.map((action) => {
             const isActive = selectedManagement === action.type;
             return (
-              <Button
-                key={action.type}
-                variant={isActive ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleManagementSelect(action.type)}
-                className={isActive ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-purple-600'}
-                title={action.description}
-                aria-label={action.name}
-                aria-pressed={isActive}
-              >
-                <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
-                {action.name.replace('Manage ', '')}
-              </Button>
+              <Tooltip key={action.type}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={isActive ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleManagementSelect(action.type)}
+                    className={isActive ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-purple-600'}
+                    aria-label={action.name}
+                    aria-pressed={isActive}
+                  >
+                    <action.icon className="w-4 h-4 mr-1" aria-hidden="true" />
+                    {action.name.replace('Manage ', '')}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{action.description}</p>
+                </TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
@@ -172,7 +191,11 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
               />
             )}
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setSelectedManagement(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectedManagement(null)}
+              >
                 Back to Actions
               </Button>
             </div>
@@ -207,7 +230,8 @@ const CombatActionPanel: React.FC<CombatActionPanelProps> = ({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </TooltipProvider>
   );
 };
 
