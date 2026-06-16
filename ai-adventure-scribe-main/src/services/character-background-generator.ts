@@ -98,6 +98,9 @@ export class CharacterBackgroundGenerator {
     const race = character.race?.name || 'mysterious';
     const characterClass = character.class?.name || 'adventurer';
 
+    const raceLower = race.toLowerCase();
+    const classLower = characterClass.toLowerCase();
+
     if (hasReferenceImage) {
       // Vision-enabled prompt: Use reference character sheet image
       promptParts.push(
@@ -115,15 +118,15 @@ export class CharacterBackgroundGenerator {
       );
 
       // Theme based on race/class
-      if (race.includes('elf')) {
+      if (raceLower.includes('elf')) {
         promptParts.push(
           'Theme: Mystical forest or ancient elven architecture with soft glowing lights',
         );
-      } else if (race.includes('dwarf')) {
+      } else if (raceLower.includes('dwarf')) {
         promptParts.push('Theme: Stone mountain hall or forge with warm torchlight');
-      } else if (characterClass.includes('wizard') || characterClass.includes('sorcerer')) {
+      } else if (classLower.includes('wizard') || classLower.includes('sorcerer')) {
         promptParts.push('Theme: Arcane library or magical ritual circle with floating runes');
-      } else if (characterClass.includes('barbarian') || characterClass.includes('fighter')) {
+      } else if (classLower.includes('barbarian') || classLower.includes('fighter')) {
         promptParts.push('Theme: Rugged wilderness camp or ancient battleground ruins');
       } else {
         promptParts.push('Theme: Classic fantasy landscape with mystical elements');

@@ -243,3 +243,7 @@
 ## 2026-07-26 - [Local Spell Service Coverage & Multiclassing Logic]
 **Learning:** Found that `localSpellService.ts` was completely untested. It contains critical D&D 5e multiclassing logic, including caster level calculations and spell slot tables. Identified that the current implementation of `getMulticlassSpellSlots` is limited to level 5, and anything above that currently fallbacks to level 1 behavior.
 **Action:** Always include both the test file and the source module in `vitest.config.ts`'s explicit `include` and `coverage.include` arrays. Added comprehensive tests for all `LocalSpellService` methods, including mixed multiclass scenarios (full, half, third, and pact casters) and spell filtering logic.
+
+## 2026-06-16 - [Character Background Generator Case-Sensitivity Fix]
+**Learning:** Found that `createImagePrompt` in `character-background-generator.ts` was using case-sensitive checks for character race and class (e.g., `race.includes('elf')`), which failed when character data contained capitalized names like "Elf".
+**Action:** Always use `.toLowerCase()` when performing substring searches on character attributes for heuristic-based logic like prompt generation or theme selection.
