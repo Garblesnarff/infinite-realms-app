@@ -23,8 +23,8 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
         level: 1,
         type: 'bonus_action',
         usesPerRest: 'long',
-        maxUses: level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
-        currentUses: level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        maxUses: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        currentUses: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
       });
 
       features.push({
@@ -134,6 +134,20 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
       });
     }
 
+    if (level >= 3) {
+      features.push({
+        name: 'channel_divinity',
+        description:
+          'You can channel divine energy to fuel magical effects. You start with two such effects: Sacred Weapon and Turn the Unholy.',
+        className: 'paladin',
+        level: 3,
+        type: 'active',
+        usesPerRest: 'short',
+        maxUses: 1,
+        currentUses: 1,
+      });
+    }
+
     return features;
   },
 
@@ -214,6 +228,26 @@ export const CLASS_FEATURES_MAP: Record<string, (level: number) => ClassFeature[
 
     return features;
   },
+
+  druid: (level: number) => {
+    const features: ClassFeature[] = [];
+
+    if (level >= 2) {
+      features.push({
+        name: 'wild_shape',
+        description:
+          'You can use your action to magically assume the shape of a beast that you have seen before.',
+        className: 'druid',
+        level: 2,
+        type: 'active',
+        usesPerRest: 'short',
+        maxUses: level >= 20 ? 999 : 2,
+        currentUses: level >= 20 ? 999 : 2,
+      });
+    }
+
+    return features;
+  },
 };
 
 /**
@@ -251,8 +285,8 @@ export function getInitialCharacterResources(className: string, level: number): 
   switch (className.toLowerCase()) {
     case 'barbarian':
       resources.rages = {
-        max: level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
-        current: level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        max: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
+        current: level >= 20 ? 999 : level < 3 ? 2 : level < 6 ? 3 : level < 12 ? 4 : level < 17 ? 5 : 6,
       };
       break;
 
@@ -291,12 +325,21 @@ export function getInitialCharacterResources(className: string, level: number): 
       }
       break;
 
+    case 'druid':
+      if (level >= 2) {
+        resources.wildShape = {
+          max: level >= 20 ? 999 : 2,
+          current: level >= 20 ? 999 : 2,
+        };
+      }
+      break;
+
     case 'paladin':
       resources.layOnHands = { max: level * 5, current: level * 5 };
-      if (level >= 2) {
+      if (level >= 3) {
         resources.channelDivinity = {
-          max: level < 6 ? 1 : level < 18 ? 2 : 3,
-          current: level < 6 ? 1 : level < 18 ? 2 : 3,
+          max: 1,
+          current: 1,
         };
       }
       break;

@@ -1,114 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 
-import {
-  CLASS_FEATURES_MAP,
-  getHitDie,
-  getInitialCharacterResources
-} from '../class-definitions';
+import { CLASS_FEATURES_MAP, getHitDie, getInitialCharacterResources } from '../class-definitions';
 
 describe('class-definitions', () => {
-  describe('CLASS_FEATURES_MAP', () => {
-    it('should provide barbarian features at different levels and test rage scaling', () => {
-      const level1 = CLASS_FEATURES_MAP.barbarian(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'rage' }),
-        expect.objectContaining({ name: 'unarmored_defense' })
-      ]));
-
-      expect(CLASS_FEATURES_MAP.barbarian(1).find(f => f.name === 'rage')?.maxUses).toBe(2);
-      expect(CLASS_FEATURES_MAP.barbarian(2).find(f => f.name === 'rage')?.maxUses).toBe(2);
-      expect(CLASS_FEATURES_MAP.barbarian(3).find(f => f.name === 'rage')?.maxUses).toBe(3);
-      expect(CLASS_FEATURES_MAP.barbarian(5).find(f => f.name === 'rage')?.maxUses).toBe(3);
-      expect(CLASS_FEATURES_MAP.barbarian(6).find(f => f.name === 'rage')?.maxUses).toBe(4);
-      expect(CLASS_FEATURES_MAP.barbarian(11).find(f => f.name === 'rage')?.maxUses).toBe(4);
-      expect(CLASS_FEATURES_MAP.barbarian(12).find(f => f.name === 'rage')?.maxUses).toBe(5);
-      expect(CLASS_FEATURES_MAP.barbarian(16).find(f => f.name === 'rage')?.maxUses).toBe(5);
-      expect(CLASS_FEATURES_MAP.barbarian(17).find(f => f.name === 'rage')?.maxUses).toBe(6);
-      expect(CLASS_FEATURES_MAP.barbarian(20).find(f => f.name === 'rage')?.maxUses).toBe(6);
-    });
-
-    it('should provide rogue features at different levels', () => {
-      const level1 = CLASS_FEATURES_MAP.rogue(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'sneak_attack' })
-      ]));
-      expect(level1.find(f => f.name === 'uncanny_dodge')).toBeUndefined();
-
-      const level5 = CLASS_FEATURES_MAP.rogue(5);
-      expect(level5).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'sneak_attack' }),
-        expect.objectContaining({ name: 'uncanny_dodge' })
-      ]));
-    });
-
-    it('should provide fighter features at different levels', () => {
-      const level1 = CLASS_FEATURES_MAP.fighter(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'second_wind' })
-      ]));
-
-      const level2 = CLASS_FEATURES_MAP.fighter(2);
-      expect(level2).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'action_surge' })
-      ]));
-      expect(level2.find(f => f.name === 'action_surge')?.maxUses).toBe(1);
-
-      const level17 = CLASS_FEATURES_MAP.fighter(17);
-      expect(level17.find(f => f.name === 'action_surge')?.maxUses).toBe(2);
-    });
-
-    it('should provide paladin features at different levels', () => {
-      const level1 = CLASS_FEATURES_MAP.paladin(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'lay_on_hands' })
-      ]));
-
-      const level2 = CLASS_FEATURES_MAP.paladin(2);
-      expect(level2).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'divine_smite' })
-      ]));
-    });
-
-    it('should provide monk features at different levels', () => {
-      const level1 = CLASS_FEATURES_MAP.monk(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'unarmored_defense' })
-      ]));
-
-      const level3 = CLASS_FEATURES_MAP.monk(3);
-      expect(level3).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'deflect_missiles' })
-      ]));
-    });
-
-    it('should provide bard features and test inspiration scaling', () => {
-      const level1 = CLASS_FEATURES_MAP.bard(1);
-      expect(level1).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'bardic_inspiration' })
-      ]));
-      expect(level1.find(f => f.name === 'bardic_inspiration')?.maxUses).toBe(2);
-      expect(CLASS_FEATURES_MAP.bard(5).find(f => f.name === 'bardic_inspiration')?.maxUses).toBe(3);
-      expect(CLASS_FEATURES_MAP.bard(14).find(f => f.name === 'bardic_inspiration')?.maxUses).toBe(3);
-      expect(CLASS_FEATURES_MAP.bard(15).find(f => f.name === 'bardic_inspiration')?.maxUses).toBe(4);
-    });
-
-    it('should provide cleric features and test channel divinity scaling', () => {
-      const level1 = CLASS_FEATURES_MAP.cleric(1);
-      expect(level1).toHaveLength(0);
-
-      const level2 = CLASS_FEATURES_MAP.cleric(2);
-      expect(level2).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: 'channel_divinity' })
-      ]));
-      expect(level2.find(f => f.name === 'channel_divinity')?.maxUses).toBe(1);
-      expect(CLASS_FEATURES_MAP.cleric(6).find(f => f.name === 'channel_divinity')?.maxUses).toBe(2);
-      expect(CLASS_FEATURES_MAP.cleric(17).find(f => f.name === 'channel_divinity')?.maxUses).toBe(2);
-      expect(CLASS_FEATURES_MAP.cleric(18).find(f => f.name === 'channel_divinity')?.maxUses).toBe(3);
-    });
-  });
-
   describe('getHitDie', () => {
-    it('should return correct hit die for various classes', () => {
+    it('should return correct hit die for all classes', () => {
       expect(getHitDie('barbarian')).toBe(12);
       expect(getHitDie('fighter')).toBe(10);
       expect(getHitDie('paladin')).toBe(10);
@@ -123,65 +20,195 @@ describe('class-definitions', () => {
       expect(getHitDie('wizard')).toBe(6);
     });
 
-    it('should handle unknown classes with default 8', () => {
+    it('should return 8 as default for unknown class', () => {
       expect(getHitDie('commoner')).toBe(8);
+    });
+
+    it('should be case-insensitive', () => {
+      expect(getHitDie('Barbarian')).toBe(12);
+      expect(getHitDie('WIZARD')).toBe(6);
     });
   });
 
   describe('getInitialCharacterResources', () => {
-    it('should initialize barbarian resources and test rage scaling', () => {
-      const res1 = getInitialCharacterResources('barbarian', 1);
-      expect(res1.hitDice?.d12).toBeDefined();
-      expect(res1.rages?.max).toBe(2);
-
-      expect(getInitialCharacterResources('barbarian', 3).rages?.max).toBe(3);
-      expect(getInitialCharacterResources('barbarian', 6).rages?.max).toBe(4);
-      expect(getInitialCharacterResources('barbarian', 12).rages?.max).toBe(5);
-      expect(getInitialCharacterResources('barbarian', 17).rages?.max).toBe(6);
+    it('should initialize hit dice based on level', () => {
+      const resources = getInitialCharacterResources('fighter', 5);
+      expect(resources.hitDice).toEqual({ d10: { max: 5, current: 5 } });
     });
 
-    it('should initialize fighter resources', () => {
-      const res = getInitialCharacterResources('fighter', 2);
-      expect(res.actionSurge?.max).toBe(1);
-      expect(getInitialCharacterResources('fighter', 17).actionSurge?.max).toBe(2);
+    describe('Barbarian Rage scaling', () => {
+      it('should have 2 rages at level 1', () => {
+        expect(getInitialCharacterResources('barbarian', 1).rages?.max).toBe(2);
+      });
+      it('should have 3 rages at level 3', () => {
+        expect(getInitialCharacterResources('barbarian', 3).rages?.max).toBe(3);
+      });
+      it('should have 4 rages at level 6', () => {
+        expect(getInitialCharacterResources('barbarian', 6).rages?.max).toBe(4);
+      });
+      it('should have 5 rages at level 12', () => {
+        expect(getInitialCharacterResources('barbarian', 12).rages?.max).toBe(5);
+      });
+      it('should have 6 rages at level 17', () => {
+        expect(getInitialCharacterResources('barbarian', 17).rages?.max).toBe(6);
+      });
+      it('should have unlimited (999) rages at level 20', () => {
+        expect(getInitialCharacterResources('barbarian', 20).rages?.max).toBe(999);
+      });
     });
 
-    it('should initialize monk resources', () => {
-      const res = getInitialCharacterResources('monk', 2);
-      expect(res.kiPoints?.max).toBe(2);
+    describe('Fighter Action Surge scaling', () => {
+      it('should have 1 action surge at level 2', () => {
+        expect(getInitialCharacterResources('fighter', 2).actionSurge?.max).toBe(1);
+      });
+      it('should have 2 action surges at level 17', () => {
+        expect(getInitialCharacterResources('fighter', 17).actionSurge?.max).toBe(2);
+      });
     });
 
-    it('should initialize sorcerer resources', () => {
-      const res = getInitialCharacterResources('sorcerer', 2);
-      expect(res.sorceryPoints?.max).toBe(2);
+    describe('Monk Ki scaling', () => {
+      it('should have no ki at level 1', () => {
+        expect(getInitialCharacterResources('monk', 1).kiPoints).toBeUndefined();
+      });
+      it('should have level amount of ki at level 2+', () => {
+        expect(getInitialCharacterResources('monk', 2).kiPoints?.max).toBe(2);
+        expect(getInitialCharacterResources('monk', 10).kiPoints?.max).toBe(10);
+      });
     });
 
-    it('should initialize bard resources', () => {
-      const res = getInitialCharacterResources('bard', 1);
-      expect(res.bardic_inspiration?.max).toBe(2);
-      expect(getInitialCharacterResources('bard', 5).bardic_inspiration?.max).toBe(3);
-      expect(getInitialCharacterResources('bard', 15).bardic_inspiration?.max).toBe(4);
+    describe('Sorcerer Sorcery Points scaling', () => {
+      it('should have no sorcery points at level 1', () => {
+        expect(getInitialCharacterResources('sorcerer', 1).sorceryPoints).toBeUndefined();
+      });
+      it('should have level amount of sorcery points at level 2+', () => {
+        expect(getInitialCharacterResources('sorcerer', 2).sorceryPoints?.max).toBe(2);
+        expect(getInitialCharacterResources('sorcerer', 20).sorceryPoints?.max).toBe(20);
+      });
     });
 
-    it('should initialize cleric resources', () => {
-      const res = getInitialCharacterResources('cleric', 2);
-      expect(res.channelDivinity?.max).toBe(1);
-      expect(getInitialCharacterResources('cleric', 6).channelDivinity?.max).toBe(2);
-      expect(getInitialCharacterResources('cleric', 18).channelDivinity?.max).toBe(3);
+    describe('Bardic Inspiration scaling', () => {
+      it('should have 2 at level 1', () => {
+        expect(getInitialCharacterResources('bard', 1).bardic_inspiration?.max).toBe(2);
+      });
+      it('should have 3 at level 5', () => {
+        expect(getInitialCharacterResources('bard', 5).bardic_inspiration?.max).toBe(3);
+      });
+      it('should have 4 at level 15', () => {
+        expect(getInitialCharacterResources('bard', 15).bardic_inspiration?.max).toBe(4);
+      });
     });
 
-    it('should initialize paladin resources', () => {
-      const res = getInitialCharacterResources('paladin', 2);
-      expect(res.layOnHands?.max).toBe(10);
-      expect(res.channelDivinity?.max).toBe(1);
-      expect(getInitialCharacterResources('paladin', 6).channelDivinity?.max).toBe(2);
-      expect(getInitialCharacterResources('paladin', 18).channelDivinity?.max).toBe(3);
+    describe('Cleric Channel Divinity scaling', () => {
+      it('should have none at level 1', () => {
+        expect(getInitialCharacterResources('cleric', 1).channelDivinity).toBeUndefined();
+      });
+      it('should have 1 at level 2', () => {
+        expect(getInitialCharacterResources('cleric', 2).channelDivinity?.max).toBe(1);
+      });
+      it('should have 2 at level 6', () => {
+        expect(getInitialCharacterResources('cleric', 6).channelDivinity?.max).toBe(2);
+      });
+      it('should have 3 at level 18', () => {
+        expect(getInitialCharacterResources('cleric', 18).channelDivinity?.max).toBe(3);
+      });
     });
 
-    it('should handle classes without special resources', () => {
-        const res = getInitialCharacterResources('rogue', 1);
-        expect(res.hitDice?.d8).toBeDefined();
-        expect(Object.keys(res)).toHaveLength(1);
+    describe('Paladin Resource initialization', () => {
+      it('should have level * 5 Lay on Hands', () => {
+        expect(getInitialCharacterResources('paladin', 1).layOnHands?.max).toBe(5);
+        expect(getInitialCharacterResources('paladin', 10).layOnHands?.max).toBe(50);
+      });
+      it('should have no Channel Divinity before level 3', () => {
+        expect(getInitialCharacterResources('paladin', 2).channelDivinity).toBeUndefined();
+      });
+      it('should have exactly 1 Channel Divinity at level 3+', () => {
+        expect(getInitialCharacterResources('paladin', 3).channelDivinity?.max).toBe(1);
+        expect(getInitialCharacterResources('paladin', 20).channelDivinity?.max).toBe(1);
+      });
+    });
+
+    describe('Druid Wild Shape scaling', () => {
+      it('should have none at level 1', () => {
+        expect(getInitialCharacterResources('druid', 1).wildShape).toBeUndefined();
+      });
+      it('should have 2 at level 2', () => {
+        expect(getInitialCharacterResources('druid', 2).wildShape?.max).toBe(2);
+      });
+      it('should have unlimited (999) at level 20', () => {
+        expect(getInitialCharacterResources('druid', 20).wildShape?.max).toBe(999);
+      });
+    });
+  });
+
+  describe('CLASS_FEATURES_MAP', () => {
+    it('should return empty features for unknown class', () => {
+      expect(CLASS_FEATURES_MAP['unknown']).toBeUndefined();
+    });
+
+    it('should return correct features for Barbarian', () => {
+      const getFeatures = CLASS_FEATURES_MAP['barbarian'];
+      const lvl1 = getFeatures(1);
+      expect(lvl1.some(f => f.name === 'rage')).toBe(true);
+      expect(lvl1.some(f => f.name === 'unarmored_defense')).toBe(true);
+
+      const rage = lvl1.find(f => f.name === 'rage');
+      expect(rage?.maxUses).toBe(2);
+
+      const lvl20 = getFeatures(20);
+      const rage20 = lvl20.find(f => f.name === 'rage');
+      expect(rage20?.maxUses).toBe(999); // Unlimited
+    });
+
+    it('should return correct features for Rogue', () => {
+      const getFeatures = CLASS_FEATURES_MAP['rogue'];
+      expect(getFeatures(1).some(f => f.name === 'sneak_attack')).toBe(true);
+      expect(getFeatures(1).some(f => f.name === 'uncanny_dodge')).toBe(false);
+      expect(getFeatures(5).some(f => f.name === 'uncanny_dodge')).toBe(true);
+    });
+
+    it('should return correct features for Fighter', () => {
+      const getFeatures = CLASS_FEATURES_MAP['fighter'];
+      expect(getFeatures(1).some(f => f.name === 'second_wind')).toBe(true);
+      expect(getFeatures(2).some(f => f.name === 'action_surge')).toBe(true);
+    });
+
+    it('should return correct features for Monk', () => {
+      const getFeatures = CLASS_FEATURES_MAP['monk'];
+      expect(getFeatures(1).some(f => f.name === 'unarmored_defense')).toBe(true);
+      expect(getFeatures(2).some(f => f.name === 'ki')).toBe(true);
+      expect(getFeatures(3).some(f => f.name === 'deflect_missiles')).toBe(true);
+    });
+
+    it('should return correct features for Bard', () => {
+      const getFeatures = CLASS_FEATURES_MAP['bard'];
+      expect(getFeatures(1).some(f => f.name === 'bardic_inspiration')).toBe(true);
+    });
+
+    it('should return correct features for Cleric', () => {
+      const getFeatures = CLASS_FEATURES_MAP['cleric'];
+      expect(getFeatures(2).some(f => f.name === 'channel_divinity')).toBe(true);
+    });
+
+    it('should return correct features for Paladin', () => {
+      const getFeatures = CLASS_FEATURES_MAP['paladin'];
+      expect(getFeatures(1).some(f => f.name === 'lay_on_hands')).toBe(true);
+      expect(getFeatures(2).some(f => f.name === 'divine_smite')).toBe(true);
+      expect(getFeatures(3).some(f => f.name === 'channel_divinity')).toBe(true);
+
+      const cd = getFeatures(3).find(f => f.name === 'channel_divinity');
+      expect(cd?.maxUses).toBe(1);
+    });
+
+    it('should return correct features for Druid', () => {
+      const getFeatures = CLASS_FEATURES_MAP['druid'];
+      expect(getFeatures(1).some(f => f.name === 'wild_shape')).toBe(false);
+      expect(getFeatures(2).some(f => f.name === 'wild_shape')).toBe(true);
+
+      const ws2 = getFeatures(2).find(f => f.name === 'wild_shape');
+      expect(ws2?.maxUses).toBe(2);
+
+      const ws20 = getFeatures(20).find(f => f.name === 'wild_shape');
+      expect(ws20?.maxUses).toBe(999);
     });
   });
 });
