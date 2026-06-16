@@ -4,11 +4,7 @@ import React, { useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface CharacterPreview {
   version: string;
@@ -99,7 +95,7 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div
-                    className="font-medium truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                    className="font-medium truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
                     tabIndex={0}
                   >
                     {characterData.character.name}

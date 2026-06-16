@@ -89,7 +89,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate" title={scene.name}>
+            <CardTitle className="text-lg truncate">
               {scene.name}
             </CardTitle>
             <CardDescription className="text-xs mt-1">

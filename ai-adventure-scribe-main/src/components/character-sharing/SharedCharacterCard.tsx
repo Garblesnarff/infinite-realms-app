@@ -7,11 +7,7 @@ import type { PermissionLevel } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /**
  * SharedCharacter Interface
@@ -113,7 +109,10 @@ export const SharedCharacterCard: React.FC<{
           <div className="flex-1 min-w-0">
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
-                <h3 className="font-semibold text-lg truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm" tabIndex={0}>
+                <h3
+                  className="font-semibold text-lg truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+                  tabIndex={0}
+                >
                   {character.name}
                 </h3>
               </TooltipTrigger>

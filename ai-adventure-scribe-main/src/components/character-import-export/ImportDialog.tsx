@@ -30,6 +30,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -220,7 +221,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <TooltipProvider>
+        <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" aria-hidden="true" />
@@ -289,18 +291,19 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleImport}
-            disabled={!characterData || !!validationError || importMutation.isPending}
-          >
-            {importMutation.isPending ? 'Importing...' : 'Import Character'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={!characterData || !!validationError || importMutation.isPending}
+            >
+              {importMutation.isPending ? 'Importing...' : 'Import Character'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </TooltipProvider>
     </Dialog>
   );
 };
