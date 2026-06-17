@@ -6,7 +6,7 @@
  * Handles encounter lifecycle, initiative rolls, and turn advancement.
  */
 
-import { eq, and, sql, or, exists, asc } from 'drizzle-orm';
+import { eq, and, sql, or, exists } from 'drizzle-orm';
 
 import {
   verifyEncounterAccess,
@@ -24,7 +24,7 @@ import {
   characters,
   type CombatParticipant,
 } from '../../../db/schema/index';
-import { NotFoundError, InternalServerError, BusinessLogicError } from '../lib/errors.js';
+import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
 
 import type {
   CreateParticipantInput,
@@ -57,23 +57,48 @@ export class CombatInitiativeService {
     // Roll initiative (d20 + modifier)
     const roll = rollD20();
     const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
+    const participantType = input.characterId ? 'player' : input.npcId ? 'npc' : 'other';
 
+    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for ownership verification.
+    // This ensures participants can only be added to encounters and linked to entities
+    // the user is authorized to access, in a single atomic database round-trip.
     const [participant] = await db
       .insert(combatParticipants)
-      .values({
-        encounterId,
-        characterId: input.characterId || null,
-        npcId: input.npcId || null,
-        name: input.name,
-        initiative,
-        initiativeModifier: input.initiativeModifier,
-        turnOrder: 0, // Will be recalculated
-        participantType: input.characterId ? 'player' : input.npcId ? 'npc' : 'other',
-      })
+      .select(
+        db
+          .select({
+            encounterId: sql`${encounterId}`,
+            characterId: sql`${input.characterId || null}`,
+            npcId: sql`${input.npcId || null}`,
+            name: sql`${input.name}`,
+            initiative: sql`${initiative}`,
+            initiativeModifier: sql`${input.initiativeModifier}`,
+            turnOrder: sql`0`,
+            participantType: sql`${participantType}`,
+          })
+          .from(combatEncounters)
+          .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+          .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+          .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+          .where(
+            and(
+              eq(combatEncounters.id, encounterId),
+              userId
+                ? or(
+                    eq(campaigns.userId, userId),
+                    eq(characters.userId, userId),
+                    eq(characters.ownerId, userId),
+                  )
+                : sql`true`,
+            ),
+          )
+          .limit(1),
+      )
       .returning();
 
     if (!participant) {
-      throw new InternalServerError('Failed to add combat participant');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Combat encounter', encounterId);
     }
 
     return participant;
@@ -114,20 +139,45 @@ export class CombatInitiativeService {
     const total = InitiativeMechanics.calculateInitiative(diceRoll, initiativeModifier);
 
     // Update participant initiative
+    // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
     const [updated] = await db
       .update(combatParticipants)
       .set({
         initiative: total,
         initiativeModifier,
+        updatedAt: new Date(),
       })
-      .where(and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, encounterId)
-      ))
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+          userId
+            ? exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(combatEncounters)
+                  .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(combatEncounters.id, combatParticipants.encounterId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
+      )
       .returning();
 
     if (!updated) {
-      throw new InternalServerError('Failed to update initiative');
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Participant', participantId);
     }
 
     // Recalculate turn order
@@ -315,13 +365,42 @@ export class CombatInitiativeService {
     }
 
     // Update participant initiative
-    await db
+    // 🛡️ Sentinel: Refactored to perform ownership check atomically in the UPDATE query.
+    const [updated] = await db
       .update(combatParticipants)
-      .set({ initiative: newInitiative })
-      .where(and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, encounterId)
-      ));
+      .set({ initiative: newInitiative, updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+          userId
+            ? exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(combatEncounters)
+                  .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(combatEncounters.id, combatParticipants.encounterId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Participant', participantId);
+    }
 
     // Recalculate turn order
     await this.calculateTurnOrder(encounterId);

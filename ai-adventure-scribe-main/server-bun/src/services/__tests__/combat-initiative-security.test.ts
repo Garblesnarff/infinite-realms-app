@@ -177,11 +177,18 @@ describe('CombatInitiativeService Security', () => {
       const qb1 = createMockQueryBuilder([{ id: mockEncounterId }]);
       // 2. Mock NPC access check
       const qb2 = createMockQueryBuilder([{ id: 'npc-good' }]);
+      // 3. Mock nested SELECT for INSERT ... SELECT
+      const qb3 = createMockQueryBuilder([{ id: mockEncounterId }]);
 
-      (db.select as any).mockReturnValueOnce(qb1).mockReturnValueOnce(qb2);
+      (db.select as any)
+        .mockReturnValueOnce(qb1)
+        .mockReturnValueOnce(qb2)
+        .mockReturnValueOnce(qb3);
 
-      // 3. Mock participant insertion
-      const insertQb = createMockQueryBuilder([{ id: 'p3', name: 'Good NPC', npcId: 'npc-good' }]);
+      // 4. Mock participant insertion with atomic INSERT ... SELECT
+      const insertQb = createMockQueryBuilder();
+      insertQb.select = vi.fn().mockReturnThis();
+      insertQb.returning.mockResolvedValue([{ id: 'p3', name: 'Good NPC', npcId: 'npc-good' }]);
       (db.insert as any).mockReturnValueOnce(insertQb);
 
       const result = await CombatInitiativeService.addParticipant(
@@ -214,16 +221,21 @@ describe('CombatInitiativeService Security', () => {
     it('should succeed if the user owns the participant in rollInitiative', async () => {
       // 1. Mock verifyParticipantOwnership - success
       const qb1 = createMockQueryBuilder([{ id: 'my-participant' }]);
-      (db.select as any).mockReturnValueOnce(qb1);
+      // 2. Mock nested SELECT for UPDATE ... WHERE EXISTS
+      const qb2 = createMockQueryBuilder([{ one: 1 }]);
 
-      // 2. Mock participant fetch for the service logic
+      (db.select as any)
+        .mockReturnValueOnce(qb1) // from verifyParticipantOwnership
+        .mockReturnValueOnce(qb2); // from the UPDATE's exists clause
+
+      // 3. Mock participant fetch for the service logic
       (db.query.combatParticipants.findFirst as any).mockResolvedValue({
         id: 'my-participant',
         encounterId: mockEncounterId,
         initiativeModifier: 2,
       });
 
-      // 3. Mock update
+      // 4. Mock update
       const updateQb = createMockQueryBuilder([{ id: 'my-participant' }]);
       (db.update as any).mockReturnValueOnce(updateQb);
 
