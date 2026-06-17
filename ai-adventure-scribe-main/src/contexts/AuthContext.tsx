@@ -7,6 +7,8 @@ import React, {
   useState,
 } from 'react';
 
+import { useBlogRole, type BlogRole } from '@/hooks/auth/use-blog-role';
+import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
 import { resetAuthGate, markAuthReady } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
 import {
@@ -16,10 +18,8 @@ import {
   refreshAccessToken,
   type WorkOSSession,
 } from '@/services/auth/TokenService';
-import { isOffline } from '@/utils/network';
 
-export type BlogRole = 'admin' | 'editor' | 'author' | 'contributor' | 'viewer';
-export type UserPlan = 'free' | 'pro' | 'enterprise';
+export type { BlogRole, UserPlan };
 
 // WorkOS User type (compatible with existing code)
 interface WorkOSUser {
@@ -48,7 +48,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
@@ -60,10 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<WorkOSUser | null>(null);
   const [session, setSession] = useState<WorkOSSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [blogRole, setBlogRole] = useState<BlogRole | null>(null);
-  const [blogRoleLoading, setBlogRoleLoading] = useState(false);
-  const [userPlan, setUserPlan] = useState<UserPlan | null>(null);
-  const [userPlanLoading, setUserPlanLoading] = useState(false);
+
+  // Extract Blog Role and User Plan logic to specialized hooks
+  const { blogRole, blogRoleLoading, isBlogAdmin, refreshBlogRole } = useBlogRole({ user });
+  const { userPlan, userPlanLoading, refreshUserPlan } = useUserPlan({ user, loading });
 
   // Verify session and load user data
   const refreshAuth = useCallback(async () => {
@@ -80,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Verify token and get user data from backend
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
       const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
       const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
         headers: {
@@ -137,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleTokensUpdated = () => {
+    const handleTokensUpdated = (): void => {
       logger.info('Auth tokens updated, refreshing auth state');
       refreshAuth();
     };
@@ -153,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!session?.access_token || !session?.refresh_token) return;
 
-    const checkAndRefresh = async () => {
+    const checkAndRefresh = async (): Promise<void> => {
       if (!session?.access_token || !session?.refresh_token) return;
 
       if (isTokenExpiringSoon(session.access_token)) {
@@ -188,171 +189,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     persistSession(session);
   }, [session]);
 
-  // Clear blog role and user plan when user logs out
-  useEffect(() => {
-    if (!user) {
-      setBlogRole(null);
-      setBlogRoleLoading(false);
-      setUserPlan(null);
-      setUserPlanLoading(false);
-    }
-  }, [user]);
-
-  const fetchBlogRole = useCallback(async () => {
-    setBlogRoleLoading(true);
-    try {
-      // Check for separate blog admin token first (independent of WorkOS auth)
-      const blogAdminToken =
-        sessionStorage.getItem('blog_admin_token') || localStorage.getItem('blog_admin_token');
-      if (blogAdminToken) {
-        try {
-          // Decode JWT to check expiration (server will verify signature)
-          const payload = JSON.parse(atob(blogAdminToken.split('.')[1]));
-          const now = Math.floor(Date.now() / 1000);
-          if (payload.exp > now && payload.type === 'blog_admin' && payload.role === 'admin') {
-            setBlogRole('admin');
-            return;
-          }
-        } catch {
-          // Invalid token, remove it
-          sessionStorage.removeItem('blog_admin_token');
-          localStorage.removeItem('blog_admin_token');
-        }
-      }
-
-      // If no user is logged in via WorkOS, check is complete
-      if (!user) {
-        setBlogRole(null);
-        setBlogRoleLoading(false);
-        return;
-      }
-
-      if (isOffline()) {
-        setBlogRoleLoading(false);
-        return;
-      }
-
-      // Dev override: allow admin access in non-production without email setup
-      const devAdminEmail = (import.meta as any)?.env?.VITE_DEV_BLOG_ADMIN_EMAIL as
-        | string
-        | undefined;
-      const devOverrideRaw = (import.meta as any)?.env?.VITE_BLOG_ADMIN_DEV_OVERRIDE as
-        | string
-        | undefined;
-      const isDev = (import.meta as any)?.env?.MODE !== 'production';
-      const enableDevOverride =
-        devOverrideRaw === 'true' ||
-        devOverrideRaw === '1' ||
-        (devOverrideRaw === undefined && !devAdminEmail);
-      if (isDev && enableDevOverride) {
-        setBlogRole('admin');
-        return;
-      }
-      // If a specific dev admin email is set, grant admin for that user
-      if (
-        isDev &&
-        devAdminEmail &&
-        user.email &&
-        user.email.toLowerCase() === devAdminEmail.toLowerCase()
-      ) {
-        setBlogRole('admin');
-        return;
-      }
-
-      // Default to null if no admin access granted
-      setBlogRole(null);
-    } catch (error) {
-      logger.warn('Failed to load blog role', error);
-      setBlogRole(null);
-    } finally {
-      setBlogRoleLoading(false);
-    }
-  }, [user]);
-
-  const fetchUserPlan = useCallback(async () => {
-    if (!user) {
-      setUserPlan(null);
-      setUserPlanLoading(false);
-      return;
-    }
-
-    // Read token fresh from localStorage to avoid stale closure issues
-    const freshToken = window.localStorage.getItem('workos_access_token');
-    if (!freshToken) {
-      setUserPlan(null);
-      setUserPlanLoading(false);
-      return;
-    }
-
-    if (isOffline()) {
-      setUserPlanLoading(false);
-      return;
-    }
-
-    setUserPlanLoading(true);
-    try {
-      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
-      const response = await fetch(`${apiUrl}/v1/llm/quota`, {
-        headers: {
-          Authorization: `Bearer ${freshToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch user plan');
-      }
-
-      const data = await response.json();
-      setUserPlan((data.plan as UserPlan) || 'free');
-    } catch (error) {
-      logger.warn('Failed to load user plan', error);
-      setUserPlan('free'); // Default to free on error
-    } finally {
-      setUserPlanLoading(false);
-    }
-  }, [user]);
-
-  // Check blog role on mount (for blog admin token) and when user changes
-  useEffect(() => {
-    fetchBlogRole();
-  }, [user?.id]);
-
-  // Re-check blog role when localStorage changes (for blog admin login/logout)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'blog_admin_token') {
-        fetchBlogRole();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchBlogRole]);
-
-  // Fetch user plan only after auth is fully loaded (not during refresh)
-  useEffect(() => {
-    // Don't fetch while still loading/refreshing auth - prevents race condition
-    // where we might use stale tokens
-    if (loading) return;
-    if (!user) return;
-    fetchUserPlan();
-  }, [user?.id, loading, fetchUserPlan]);
-
   // WorkOS uses hosted UI - these functions redirect to WorkOS
-  const signUp = async (_email: string, _password: string) => {
+  const signUp = useCallback(async (_email: string, _password: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
     const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };
-  };
+  }, []);
 
-  const signIn = async (_email: string, _password: string) => {
+  const signIn = useCallback(async (_email: string, _password: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
     const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
       const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
       const accessToken = session?.access_token;
 
@@ -387,11 +241,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logger.error('Error signing out:', error);
       window.location.href = '/';
     }
-  };
+  }, [session?.access_token]);
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
-  // Using useMemo ensures that components consuming this context only re-render
-  // when the actual auth state or user profile data changes.
   const value = useMemo(
     () => ({
       user,
@@ -399,11 +251,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       blogRole,
       blogRoleLoading,
-      isBlogAdmin: blogRole === 'admin',
-      refreshBlogRole: fetchBlogRole,
+      isBlogAdmin,
+      refreshBlogRole,
       userPlan,
       userPlanLoading,
-      refreshUserPlan: fetchUserPlan,
+      refreshUserPlan,
       refreshAuth,
       signUp,
       signIn,
@@ -415,10 +267,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       blogRole,
       blogRoleLoading,
-      fetchBlogRole,
+      isBlogAdmin,
+      refreshBlogRole,
       userPlan,
       userPlanLoading,
-      fetchUserPlan,
+      refreshUserPlan,
       refreshAuth,
       signUp,
       signIn,
