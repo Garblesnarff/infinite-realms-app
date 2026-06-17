@@ -23,6 +23,11 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { usePersonalityManager } from '@/features/character/hooks/use-personality-manager';
 
 interface PersonalityManagerProps {
@@ -131,16 +136,23 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
                 <div className="flex-1">
                   <p className="text-sm">{item}</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removePersonalityElement(type, index)}
-                  className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  aria-label={`Remove ${type}`}
-                  title={`Remove ${type}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removePersonalityElement(type, index)}
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      aria-label={`Remove ${type}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Remove {type}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             ))}
 
@@ -159,15 +171,22 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
                   aria-label={`Add new ${type}`}
                 />
               </div>
-              <Button
-                onClick={() => addPersonalityElement(type, newValue)}
-                disabled={!newValue.trim()}
-                className="mt-auto"
-                aria-label={`Add ${type}`}
-                title={`Add ${type}`}
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={() => addPersonalityElement(type, newValue)}
+                    disabled={!newValue.trim()}
+                    className="mt-auto"
+                    aria-label={`Add ${type}`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Add {type}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </CardContent>
@@ -187,11 +206,20 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
               />
               Inspiration
             </div>
-            <Switch
-              checked={hasInspiration}
-              onCheckedChange={toggleInspiration}
-              aria-label="Toggle inspiration"
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center">
+                  <Switch
+                    checked={hasInspiration}
+                    onCheckedChange={toggleInspiration}
+                    aria-label="Toggle inspiration"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Toggle character inspiration</p>
+              </TooltipContent>
+            </Tooltip>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -233,14 +261,22 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
                   rows={2}
                 />
                 <div className="flex flex-col gap-1">
-                  <Button
-                    size="sm"
-                    onClick={() => awardInspiration(inspirationNotes, 'dm', inspirationNotes)}
-                    disabled={!inspirationNotes.trim() || hasInspiration}
-                  >
-                    <Sparkles className="w-4 h-4 mr-1" />
-                    Award
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => awardInspiration(inspirationNotes, 'dm', inspirationNotes)}
+                        disabled={!inspirationNotes.trim() || hasInspiration}
+                      >
+                        <Sparkles className="w-4 h-4 mr-1" />
+                        Award
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Award inspiration to character</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>
