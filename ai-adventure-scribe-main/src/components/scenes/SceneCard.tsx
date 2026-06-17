@@ -19,6 +19,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -89,9 +90,21 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate">
-              {scene.name}
-            </CardTitle>
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <CardTitle
+                    className="text-lg truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                    tabIndex={0}
+                  >
+                    {scene.name}
+                  </CardTitle>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{scene.name}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <CardDescription className="text-xs mt-1">
               {scene.width} × {scene.height} squares
             </CardDescription>

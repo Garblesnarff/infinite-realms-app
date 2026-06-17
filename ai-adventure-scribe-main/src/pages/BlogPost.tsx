@@ -8,6 +8,12 @@ import type { BlogPost } from '@/types/blog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useBlogPostBySlug } from '@/hooks/blog/useBlogPosts';
 
 // Sanitization options for blog content - allows safe HTML for blog posts
@@ -122,42 +128,65 @@ const BlogPost: React.FC = () => {
       <article className="container mx-auto px-4 py-8">
         {/* Breadcrumb Navigation */}
         <nav className="mb-8" aria-label="Breadcrumb">
-          <ol className="flex items-center space-x-2 text-sm text-slate-400">
-            <li>
-              <Link to="/app" className="hover:text-amber-400 transition-colors">
-                <Home className="h-4 w-4" />
-                <span className="sr-only">Home</span>
-              </Link>
-            </li>
-            <li>
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  fillRule="evenodd"
-                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </li>
-            <li>
-              <Link to="/blog" className="hover:text-amber-400 transition-colors">
-                Blog
-              </Link>
-            </li>
-            <li>
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  fillRule="evenodd"
-                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </li>
-            <li>
-              <span className="text-slate-300 truncate max-w-xs" title={post.title}>
-                {post.title}
-              </span>
-            </li>
-          </ol>
+          <TooltipProvider>
+            <ol className="flex items-center space-x-2 text-sm text-slate-400">
+              <li>
+                <Link to="/app" className="hover:text-amber-400 transition-colors">
+                  <Home className="h-4 w-4" />
+                  <span className="sr-only">Home</span>
+                </Link>
+              </li>
+              <li>
+                <svg
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </li>
+              <li>
+                <Link to="/blog" className="hover:text-amber-400 transition-colors">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <svg
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </li>
+              <li>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="text-slate-300 truncate max-w-xs cursor-default outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-sm"
+                      aria-current="page"
+                      tabIndex={0}
+                    >
+                      {post.title}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{post.title}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </li>
+            </ol>
+          </TooltipProvider>
         </nav>
 
         {/* Article header */}
