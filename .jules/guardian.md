@@ -247,3 +247,7 @@
 ## 2026-06-16 - [Character Background Generator Case-Sensitivity Fix]
 **Learning:** Found that `createImagePrompt` in `character-background-generator.ts` was using case-sensitive checks for character race and class (e.g., `race.includes('elf')`), which failed when character data contained capitalized names like "Elf".
 **Action:** Always use `.toLowerCase()` when performing substring searches on character attributes for heuristic-based logic like prompt generation or theme selection.
+
+## 2026-02-12 - [Supabase Chained Mocks & Type Safety]
+**Learning:** Found that chained Supabase calls (e.g., multiple `.order()` calls) require the mock to return a chainable object (using `.mockReturnThis()`) for all intermediate calls. Also discovered that `LoreKeeperService` was using `any` in its mapping functions, which triggered strict linting errors.
+**Action:** When mocking complex Supabase chains, ensure every method in the chain returns the mock object until the final `.then()` or `.single()`. Always use `Record<string, unknown>` instead of `any` for database row mappings to satisfy `@typescript-eslint/no-explicit-any`.

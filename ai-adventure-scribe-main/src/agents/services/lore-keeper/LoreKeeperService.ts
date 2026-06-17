@@ -301,7 +301,7 @@ export class LoreKeeperService {
         return [];
       }
 
-      return (data || []).map((row: any) => ({
+      return (data || []).map((row: Record<string, unknown> & { similarity: number }) => ({
         ...this.mapChunkRow(row),
         similarity: row.similarity,
       }));
@@ -416,7 +416,7 @@ export class LoreKeeperService {
     return data.embedding.values;
   }
 
-  private mapCampaignRow(row: any): StarterCampaign {
+  private mapCampaignRow(row: Record<string, unknown>): StarterCampaign {
     return {
       id: row.id,
       slug: row.slug,
@@ -436,7 +436,7 @@ export class LoreKeeperService {
     };
   }
 
-  private mapChunkRow(row: any): CampaignChunk {
+  private mapChunkRow(row: Record<string, unknown>): CampaignChunk {
     return {
       id: row.id,
       campaignId: row.campaign_id,
@@ -450,7 +450,7 @@ export class LoreKeeperService {
     };
   }
 
-  private mapRuleRow(row: any): CampaignRule {
+  private mapRuleRow(row: Record<string, unknown>): CampaignRule {
     return {
       id: row.id,
       campaignId: row.campaign_id,

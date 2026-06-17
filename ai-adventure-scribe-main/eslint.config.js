@@ -522,6 +522,8 @@ export default tseslint.config(
       'src/services/spellApi.ts',
       'src/services/__tests__/spellApi.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',
+      'src/agents/services/lore-keeper/LoreKeeperService.ts',
+      'src/agents/services/lore-keeper/__tests__/LoreKeeperService.test.ts',
     ],
     rules: {
       'max-lines': 'warn',
