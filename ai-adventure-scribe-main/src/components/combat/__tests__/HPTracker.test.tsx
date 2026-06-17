@@ -109,7 +109,7 @@ describe('HPTracker', () => {
     // Progress bar aria-label should use semantic status
     const progress = screen.getByRole('progressbar');
     expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Healthy');
-    expect(progress).toHaveAttribute('title', 'Healthy');
+    // Title is removed in favor of Tooltip
   });
 
   it('shows "Near Death" semantic status when HP is low and hidden', () => {

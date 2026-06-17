@@ -111,17 +111,23 @@ const HPTracker: React.FC<HPTrackerProps> = React.memo(({
               </span>
             )}
           </div>
-          <Progress
-            value={hpPercent}
-            className="h-2"
-            indicatorClassName={getHPColor(hpPercent)}
-            aria-label={
-              showHPDetails
-                ? `${participant.name} health: ${hpString}`
-                : `${participant.name} health: ${getHPStatusDescription(hpPercent)}`
-            }
-            title={showHPDetails ? hpString : getHPStatusDescription(hpPercent)}
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Progress
+                value={hpPercent}
+                className="h-2"
+                indicatorClassName={getHPColor(hpPercent)}
+                aria-label={
+                  showHPDetails
+                    ? `${participant.name} health: ${hpString}`
+                    : `${participant.name} health: ${getHPStatusDescription(hpPercent)}`
+                }
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{showHPDetails ? hpString : getHPStatusDescription(hpPercent)}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {isInteractive && (
