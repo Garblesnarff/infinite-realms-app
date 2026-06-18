@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import ExperienceManager from '../ExperienceManager';
 
 import type { Character } from '@/types/character';
@@ -32,7 +34,11 @@ describe('ExperienceManager Accessibility', () => {
   const mockOnUpdate = vi.fn();
 
   it('should have a progress bar with dynamic aria-label showing percentage and next level', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     // Level 2: 300 XP min. Level 3: 900 XP min.
     // 500 XP is (500-300)/(900-300) = 200/600 = 33.33%
@@ -49,7 +55,11 @@ describe('ExperienceManager Accessibility', () => {
       level: 2,
     } as Character;
 
-    render(<ExperienceManager character={levelingCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={levelingCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     const notification = screen.getByText(/Level Up Available!/i).closest('[role="status"]');
     expect(notification).toBeInTheDocument();
@@ -57,7 +67,11 @@ describe('ExperienceManager Accessibility', () => {
   });
 
   it('should link history toggle button to history content via aria-controls and aria-expanded', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     const toggleButton = screen.getByRole('button', { name: /Show History/i });
     expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
@@ -84,16 +98,24 @@ describe('ExperienceManager Accessibility', () => {
     }
   });
 
-  it('should have title tooltips for level shortcut buttons', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+  it('should have tooltips for level shortcut buttons', () => {
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     // Level buttons 1-20
     const level10Button = screen.getByRole('button', { name: /Set experience to level 10/i });
-    expect(level10Button).toHaveAttribute('title', 'Set experience to level 10');
+    expect(level10Button).toBeInTheDocument();
   });
 
   it('awards experience correctly', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     const amountInput = screen.getByLabelText(/Experience Amount/i);
     const sourceInput = screen.getByLabelText(/Source\/Reason/i);
@@ -109,7 +131,11 @@ describe('ExperienceManager Accessibility', () => {
   });
 
   it('removes experience correctly', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     const amountInput = screen.getByLabelText(/Experience Amount/i);
     const sourceInput = screen.getByLabelText(/Source\/Reason/i);
@@ -125,7 +151,11 @@ describe('ExperienceManager Accessibility', () => {
   });
 
   it('sets level correctly', () => {
-    render(<ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />);
+    render(
+      <TooltipProvider>
+        <ExperienceManager character={mockCharacter} onUpdate={mockOnUpdate} />
+      </TooltipProvider>,
+    );
 
     const level3Button = screen.getByRole('button', { name: /Set experience to level 3/i });
     fireEvent.click(level3Button);

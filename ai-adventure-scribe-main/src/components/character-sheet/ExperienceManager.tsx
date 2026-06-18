@@ -6,6 +6,11 @@ import type { Character } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -308,18 +313,23 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
         <CardContent>
           <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
             {Array.from({ length: 20 }, (_, i) => i + 1).map((level) => (
-              <Button
-                key={level}
-                type="button"
-                variant={level === currentLevel ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setToLevel(level)}
-                disabled={level === currentLevel}
-                aria-label={`Set experience to level ${level}`}
-                title={`Set experience to level ${level}`}
-              >
-                {level}
-              </Button>
+              <Tooltip key={level}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={level === currentLevel ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setToLevel(level)}
+                    disabled={level === currentLevel}
+                    aria-label={`Set experience to level ${level}`}
+                  >
+                    {level}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Set experience to level {level}</p>
+                </TooltipContent>
+              </Tooltip>
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
@@ -361,17 +371,24 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
               <Calendar className="w-5 h-5 text-indigo-500" aria-hidden="true" />
               Experience History
             </CardTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHistory(!showHistory)}
-              aria-expanded={showHistory}
-              aria-controls={historyId}
-              title={showHistory ? 'Hide history' : 'Show history'}
-            >
-              {showHistory ? 'Hide' : 'Show'} History
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowHistory(!showHistory)}
+                  aria-expanded={showHistory}
+                  aria-controls={historyId}
+                  aria-label={showHistory ? 'Hide history' : 'Show history'}
+                >
+                  {showHistory ? 'Hide' : 'Show'} History
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{showHistory ? 'Hide history' : 'Show history'}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </CardHeader>
         {showHistory && (

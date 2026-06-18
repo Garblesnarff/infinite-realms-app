@@ -6,6 +6,11 @@ import type { Character } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 
 interface InspirationTrackerProps {
@@ -51,6 +56,11 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
   return (
     <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50 dark:bg-gold-950/20' : ''}`}>
       <CardContent className="p-4">
+        {/* Screen reader announcement for inspiration state */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {hasInspiration ? 'Character has inspiration' : 'Character has no inspiration'}
+        </div>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
@@ -78,24 +88,31 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant={hasInspiration ? 'default' : 'outline'}
-            size="sm"
-            onClick={toggleInspiration}
-            className={hasInspiration ? 'bg-gold-600 hover:bg-gold-700' : ''}
-            aria-pressed={hasInspiration}
-            title={hasInspiration ? 'Use inspiration' : 'Award inspiration'}
-          >
-            {hasInspiration ? (
-              <>
-                <Sparkles className="w-4 h-4 mr-1" />
-                Use
-              </>
-            ) : (
-              'Award'
-            )}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={hasInspiration ? 'default' : 'outline'}
+                size="sm"
+                onClick={toggleInspiration}
+                className={hasInspiration ? 'bg-gold-600 hover:bg-gold-700' : ''}
+                aria-pressed={hasInspiration}
+                aria-label={hasInspiration ? 'Use inspiration' : 'Award inspiration'}
+              >
+                {hasInspiration ? (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    Use
+                  </>
+                ) : (
+                  'Award'
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{hasInspiration ? 'Use inspiration' : 'Award inspiration'}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {hasInspiration && (
