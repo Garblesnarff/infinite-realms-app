@@ -251,3 +251,7 @@
 ## 2026-02-12 - [Supabase Chained Mocks & Type Safety]
 **Learning:** Found that chained Supabase calls (e.g., multiple `.order()` calls) require the mock to return a chainable object (using `.mockReturnThis()`) for all intermediate calls. Also discovered that `LoreKeeperService` was using `any` in its mapping functions, which triggered strict linting errors.
 **Action:** When mocking complex Supabase chains, ensure every method in the chain returns the mock object until the final `.then()` or `.single()`. Always use `Record<string, unknown>` instead of `any` for database row mappings to satisfy `@typescript-eslint/no-explicit-any`.
+
+## 2026-06-25 - [TimelineRail Component Coverage & UI Mocking]
+**Learning:** The `TimelineRail` component relies heavily on browser APIs like `IntersectionObserver`, `requestAnimationFrame`, and `CSS.escape`. In a JSDOM environment, these must be explicitly mocked to test scroll-based interactions and visibility tracking.
+**Action:** Always provide a robust mock for `IntersectionObserver` and stub `requestAnimationFrame` with a `setTimeout` based fallback when testing components with complex scroll behavior. Ensure `CSS.escape` is mocked if the component uses it for dynamic ID selection.
