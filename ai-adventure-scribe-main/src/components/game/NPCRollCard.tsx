@@ -4,6 +4,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface NPCRollCardProps {
@@ -203,18 +209,26 @@ export const NPCRollCard: React.FC<NPCRollCardProps> = React.memo(
                   BEHIND THE DM SCREEN
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="p-1 rounded-full hover:bg-white/10 transition-colors"
-                aria-label="Close Behind the DM Screen popup"
-                title="Close"
-              >
-                <X
-                  className="w-4 h-4 text-amber-600/70 hover:text-amber-600"
-                  aria-hidden="true"
-                />
-              </button>
+              <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onDismiss}
+                      className="p-1 rounded-full hover:bg-white/10 transition-colors"
+                      aria-label="Close Behind the DM Screen popup"
+                    >
+                      <X
+                        className="w-4 h-4 text-amber-600/70 hover:text-amber-600"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>Close</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
