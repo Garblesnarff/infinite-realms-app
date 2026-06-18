@@ -285,6 +285,7 @@ export default tseslint.config(
       'src/utils/raycasting.ts',
       'src/utils/vision-calculations.ts',
       'src/utils/vision-polygon.ts',
+      'src/utils/character/data-transformers.ts',
       'src/utils/image-label-generator.ts',
       'src/utils/performance/culling.ts',
       'src/data/progression-data.ts',

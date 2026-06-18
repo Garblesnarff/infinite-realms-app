@@ -1,0 +1,242 @@
+import type { Character, AbilityScores } from '@/types/character';
+
+import logger from '@/lib/logger';
+
+// ===========================
+// Types
+// ===========================
+
+export interface CharacterStatsRow {
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+}
+
+export interface CharacterEquipmentRow {
+  id: string;
+  item_name: string;
+  quantity?: number;
+  equipped?: boolean;
+  is_magic?: boolean;
+  magic_bonus?: number;
+  magic_properties?: string | null;
+  requires_attunement?: boolean;
+  is_attuned?: boolean;
+  attunement_requirements?: string | null;
+  magic_item_type?: string;
+  magic_item_rarity?: string;
+  magic_effects?: string | null;
+}
+
+export interface CharacterRow {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  race: string;
+  class: string;
+  level: number;
+  background?: string | null;
+  experience_points?: number | null;
+  alignment?: string | null;
+  avatar_url?: string | null;
+  image_url?: string | null;
+  background_image?: string | null;
+  appearance?: string | null;
+  personality_traits?: string | null;
+  backstory_elements?: string | null;
+  vision_types?: string | null;
+  obscurement?: string | null;
+  is_hidden?: boolean | null;
+  stealth_check_bonus?: number | null;
+  cantrips?: string | null;
+  known_spells?: string | null;
+  prepared_spells?: string | null;
+  ritual_spells?: string | null;
+  character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
+  character_equipment?: CharacterEquipmentRow[] | null;
+}
+
+// ===========================
+// Helper Functions
+// ===========================
+
+export const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
+  if (!raw) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    logger.warn('Failed to parse character JSON field', { raw, error });
+    return fallback;
+  }
+};
+
+export const parseSpellListField = (raw: string | null | undefined): string[] => {
+  if (!raw) return [];
+
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith('[')) {
+    const parsed = parseJsonField<string[] | null>(trimmed, null);
+    if (Array.isArray(parsed)) {
+      return parsed.map((id) => String(id).trim()).filter((id) => id.length > 0);
+    }
+  }
+
+  return trimmed
+    .split(',')
+    .map((id: string) => id.trim())
+    .filter((id: string) => id.length > 0);
+};
+
+/**
+ * Transforms database stats into Character ability scores format
+ * @param statsData - Raw stats data from database
+ * @returns Formatted ability scores object
+ */
+export const transformAbilityScores = (
+  statsData: CharacterStatsRow | null | undefined,
+): AbilityScores | null => {
+  if (!statsData) return null;
+
+  return {
+    strength: {
+      score: statsData.strength,
+      modifier: Math.floor((statsData.strength - 10) / 2),
+      savingThrow: false,
+    },
+    dexterity: {
+      score: statsData.dexterity,
+      modifier: Math.floor((statsData.dexterity - 10) / 2),
+      savingThrow: false,
+    },
+    constitution: {
+      score: statsData.constitution,
+      modifier: Math.floor((statsData.constitution - 10) / 2),
+      savingThrow: false,
+    },
+    intelligence: {
+      score: statsData.intelligence,
+      modifier: Math.floor((statsData.intelligence - 10) / 2),
+      savingThrow: false,
+    },
+    wisdom: {
+      score: statsData.wisdom,
+      modifier: Math.floor((statsData.wisdom - 10) / 2),
+      savingThrow: false,
+    },
+    charisma: {
+      score: statsData.charisma,
+      modifier: Math.floor((statsData.charisma - 10) / 2),
+      savingThrow: false,
+    },
+  };
+};
+
+/**
+ * Transforms database character data into Character type
+ * @param characterData - Raw character data from database
+ * @param statsData - Raw stats data from database
+ * @param equipmentData - Raw equipment data from database
+ * @returns Transformed Character object
+ */
+export const transformCharacterData = (
+  characterData: CharacterRow,
+  statsData: CharacterStatsRow | null,
+  equipmentData: CharacterEquipmentRow[] | null,
+): Character => ({
+  id: characterData.id,
+  user_id: characterData.user_id,
+  name: characterData.name,
+  description: characterData.description,
+  race: {
+    id: 'stored',
+    name: characterData.race,
+    description: '',
+    abilityScoreIncrease: {},
+    speed: 30,
+    traits: [],
+    languages: [],
+  },
+  class: {
+    id: 'stored',
+    name: characterData.class,
+    description: '',
+    hitDie: 8,
+    primaryAbility: 'strength',
+    savingThrowProficiencies: [],
+    skillChoices: [],
+    numSkillChoices: 2,
+    classFeatures: [],
+    armorProficiencies: [],
+    weaponProficiencies: [],
+  },
+  level: characterData.level,
+  background: {
+    id: 'stored',
+    name: characterData.background || '',
+    description: '',
+    skillProficiencies: [],
+    toolProficiencies: [],
+    languages: 0,
+    equipment: [],
+    feature: {
+      name: '',
+      description: '',
+    },
+  },
+  abilityScores: transformAbilityScores(statsData) || {
+    strength: { score: 10, modifier: 0, savingThrow: false },
+    dexterity: { score: 10, modifier: 0, savingThrow: false },
+    constitution: { score: 10, modifier: 0, savingThrow: false },
+    intelligence: { score: 10, modifier: 0, savingThrow: false },
+    wisdom: { score: 10, modifier: 0, savingThrow: false },
+    charisma: { score: 10, modifier: 0, savingThrow: false },
+  },
+  equipment: equipmentData?.map((item) => item.item_name) || [],
+  experience: characterData.experience_points || 0,
+  alignment: characterData.alignment || '',
+  // Vision and Stealth
+  visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
+  obscurement: characterData.obscurement || 'clear',
+  isHidden: characterData.is_hidden || false,
+  stealthCheckBonus: characterData.stealth_check_bonus || 0,
+  // Magic Items
+  inventory:
+    equipmentData?.map((item) => ({
+      itemId: item.id,
+      quantity: item.quantity || 1,
+      equipped: item.equipped || false,
+      // Magic item properties
+      isMagic: item.is_magic || false,
+      magicBonus: item.magic_bonus || 0,
+      magicProperties: parseJsonField<string[]>(item.magic_properties, []),
+      requiresAttunement: item.requires_attunement || false,
+      isAttuned: item.is_attuned || false,
+      attunementRequirements: item.attunement_requirements || '',
+      magicItemType: item.magic_item_type || '',
+      magicItemRarity: item.magic_item_rarity || 'common',
+      magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
+    })) || [],
+  // AI-generated fields
+  avatar_url: characterData.avatar_url,
+  image_url: characterData.image_url,
+  appearance: characterData.appearance,
+  personality_traits: characterData.personality_traits,
+  backstory_elements: characterData.backstory_elements,
+  background_image: characterData.background_image || undefined,
+  // Legacy fields
+  personalityTraits: [],
+  ideals: [],
+  bonds: [],
+  flaws: [],
+  // Spell data supports both JSON arrays and legacy comma-separated strings.
+  cantrips: parseSpellListField(characterData.cantrips),
+  knownSpells: parseSpellListField(characterData.known_spells),
+  preparedSpells: parseSpellListField(characterData.prepared_spells),
+  ritualSpells: parseSpellListField(characterData.ritual_spells),
+});
