@@ -185,3 +185,7 @@
 ## 2026-03-24 - Truncated Text Tooltip Standardization
 **Learning:** Replacing native 'title' attributes with Shadcn Tooltips on truncated text elements (like character names in lists or cards) requires making the element focusable to ensure parity for keyboard users. Without 'tabIndex={0}', keyboard-only users cannot discover the full content of truncated fields.
 **Action:** Always add 'tabIndex={0}' and 'focus-visible' ring styles when wrapping truncated text elements in custom Tooltips.
+
+## 2026-07-28 - Character Folder Dialog Tooltip Standardization
+**Learning:** Dialog components that use color pickers (like Create/Edit Folder) often rely on native 'title' attributes for color names, which are inconsistent with the app's Shadcn Tooltip system. Redundant 'title' attributes on 'SelectTrigger' components that already have linked 'Label's cause duplicate announcements in screen readers. Adding tooltips to confirmation/cancel buttons in destructive dialogs (like Delete Folder) provides better context and maintains UX consistency.
+**Action:** Replace native 'title' with Shadcn 'Tooltip' for color swatches. Remove redundant titles on labeled Select triggers. Always add tooltips to action buttons in AlertDialogs for high-stakes operations.

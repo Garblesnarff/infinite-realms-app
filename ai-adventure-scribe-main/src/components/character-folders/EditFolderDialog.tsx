@@ -20,6 +20,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 
@@ -122,24 +128,31 @@ export const EditFolderDialog: React.FC<EditFolderDialogProps> = ({
           {/* Color Picker */}
           <div className="space-y-2">
             <Label id={colorGroupId}>Folder Color</Label>
-            <div className="grid grid-cols-4 gap-2" role="group" aria-labelledby={colorGroupId}>
-              {FOLDER_COLORS.map((colorOption) => (
-                <button
-                  key={colorOption.value}
-                  type="button"
-                  className={`h-10 rounded-md border-2 transition-all ${
-                    color === colorOption.value
-                      ? 'border-foreground scale-110'
-                      : 'border-border hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: colorOption.value }}
-                  onClick={() => setColor(colorOption.value)}
-                  title={colorOption.name}
-                  aria-label={colorOption.name}
-                  aria-pressed={color === colorOption.value}
-                />
-              ))}
-            </div>
+            <TooltipProvider>
+              <div className="grid grid-cols-4 gap-2" role="group" aria-labelledby={colorGroupId}>
+                {FOLDER_COLORS.map((colorOption) => (
+                  <Tooltip key={colorOption.value} delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={`h-10 rounded-md border-2 transition-all ${
+                          color === colorOption.value
+                            ? 'border-foreground scale-110'
+                            : 'border-border hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: colorOption.value }}
+                        onClick={() => setColor(colorOption.value)}
+                        aria-label={colorOption.name}
+                        aria-pressed={color === colorOption.value}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{colorOption.name}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </TooltipProvider>
           </div>
         </div>
 

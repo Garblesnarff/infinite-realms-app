@@ -17,6 +17,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
 
@@ -75,13 +81,30 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleDelete}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {deleteMutation.isPending ? 'Deleting...' : 'Delete Folder'}
-          </AlertDialogAction>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel and keep folder</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  aria-label={`Confirm deleting ${folderName} folder`}
+                >
+                  {deleteMutation.isPending ? 'Deleting...' : 'Delete Folder'}
+                </AlertDialogAction>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Confirm deleting {folderName} folder</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -96,7 +96,7 @@ export const MoveCharactersDialog: React.FC<MoveCharactersDialogProps> = ({
               value={selectedFolderId || 'none'}
               onValueChange={(value) => setSelectedFolderId(value === 'none' ? null : value)}
             >
-              <SelectTrigger id={destinationFolderSelectId} title="Select destination folder">
+              <SelectTrigger id={destinationFolderSelectId}>
                 <SelectValue placeholder="Select a folder..." />
               </SelectTrigger>
               <SelectContent>
