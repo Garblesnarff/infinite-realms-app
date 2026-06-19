@@ -10,6 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useEnhancedSpellcasting } from '@/features/character/hooks/use-enhanced-spellcasting';
 
 interface EnhancedSpellsTabProps {
@@ -73,7 +79,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
   }
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6">
       {/* Spellcasting Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -121,13 +128,21 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Circle className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Spell Slots
                   </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={longRest}
-                    title="Recover all spell slots and sorcery points"
-                  >
-                    Long Rest
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={longRest}
+                        aria-label="Recover all spell slots and sorcery points"
+                      >
+                        Long Rest
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Recover all spell slots and sorcery points</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -139,25 +154,34 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                             {Array.from({ length: slots.total }).map((_, i) => {
                               const isUsed = i < slots.used;
                               return (
-                                <button
-                                  key={i}
-                                  type="button"
-                                  className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
-                                    isUsed
-                                      ? 'bg-gray-300 border-gray-400'
-                                      : 'bg-purple-500 border-purple-600'
-                                  }`}
-                                  onClick={() =>
-                                    isUsed
-                                      ? restoreSpellSlot(parseInt(level))
-                                      : consumeSpellSlot(parseInt(level))
-                                  }
-                                  aria-label={`Level ${level} spell slot ${
-                                    isUsed ? 'expended' : 'available'
-                                  }`}
-                                  title={isUsed ? 'Restore spell slot' : 'Consume spell slot'}
-                                  aria-pressed={!isUsed}
-                                />
+                                <Tooltip key={i}>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                                        isUsed
+                                          ? 'bg-gray-300 border-gray-400'
+                                          : 'bg-purple-500 border-purple-600'
+                                      }`}
+                                      onClick={() =>
+                                        isUsed
+                                          ? restoreSpellSlot(parseInt(level))
+                                          : consumeSpellSlot(parseInt(level))
+                                      }
+                                      aria-label={`Level ${level} spell slot ${
+                                        isUsed ? 'expended' : 'available'
+                                      }`}
+                                      aria-pressed={!isUsed}
+                                    >
+                                      <span className="sr-only">
+                                        {isUsed ? 'Restore spell slot' : 'Consume spell slot'}
+                                      </span>
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{isUsed ? 'Restore spell slot' : 'Consume spell slot'}</p>
+                                  </TooltipContent>
+                                </Tooltip>
                               );
                             })}
                           </div>
@@ -238,13 +262,21 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                     <Zap className="w-5 h-5 text-purple-500" aria-hidden="true" />
                     Pact Magic Slots
                   </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={shortRest}
-                    title="Recover pact magic slots"
-                  >
-                    Short Rest
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={shortRest}
+                        aria-label="Recover pact magic slots"
+                      >
+                        Short Rest
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Recover pact magic slots</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-4">
@@ -254,19 +286,30 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         {Array.from({ length: pactSlots.maximum }).map((_, i) => {
                           const isExpended = i >= pactSlots.current;
                           return (
-                            <button
-                              key={i}
-                              type="button"
-                              className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
-                                isExpended
-                                  ? 'bg-gray-300 border-gray-400'
-                                  : 'bg-purple-500 border-purple-600'
-                              }`}
-                              onClick={consumePactSlot}
-                              aria-label={`Pact magic slot ${isExpended ? 'expended' : 'available'}`}
-                              title={isExpended ? 'Expended' : 'Consume pact slot'}
-                              aria-pressed={!isExpended}
-                            />
+                            <Tooltip key={i}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={`w-8 h-8 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                                    isExpended
+                                      ? 'bg-gray-300 border-gray-400'
+                                      : 'bg-purple-500 border-purple-600'
+                                  }`}
+                                  onClick={consumePactSlot}
+                                  aria-label={`Pact magic slot ${
+                                    isExpended ? 'expended' : 'available'
+                                  }`}
+                                  aria-pressed={!isExpended}
+                                >
+                                  <span className="sr-only">
+                                    {isExpended ? 'Expended' : 'Consume pact slot'}
+                                  </span>
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{isExpended ? 'Expended' : 'Consume pact slot'}</p>
+                              </TooltipContent>
+                            </Tooltip>
                           );
                         })}
                       </div>
@@ -330,13 +373,21 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                         {sorceryPoints.current} / {sorceryPoints.maximum} points remaining
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={longRest}
-                      title="Recover all spell slots and sorcery points"
-                    >
-                      Long Rest
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={longRest}
+                          aria-label="Recover all spell slots and sorcery points"
+                        >
+                          Long Rest
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Recover all spell slots and sorcery points</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </CardContent>
               </Card>
@@ -360,16 +411,23 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
                             </div>
                             <p className="text-sm text-muted-foreground">{option.description}</p>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => spendSorceryPoints(option.sorceryPointCost)}
-                            disabled={sorceryPoints.current < option.sorceryPointCost}
-                            aria-label={`Use ${option.name} metamagic`}
-                            title={`Use ${option.name} metamagic`}
-                          >
-                            Use
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => spendSorceryPoints(option.sorceryPointCost)}
+                                disabled={sorceryPoints.current < option.sorceryPointCost}
+                                aria-label={`Use ${option.name} metamagic`}
+                              >
+                                Use
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Use {option.name} metamagic</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     ))}
@@ -413,7 +471,8 @@ const EnhancedSpellsTab: React.FC<EnhancedSpellsTabProps> = ({ character, onUpda
           </TabsContent>
         )}
       </Tabs>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };
 
