@@ -18,15 +18,15 @@
 /* eslint-disable max-lines */
 import { useState, useCallback, useEffect } from 'react';
 
+import { useDrawingPersistence } from './drawing/use-drawing-persistence';
+
 import type {
   SceneDrawing,
-  CreateDrawingData,
   StrokeConfig,
   FillConfig,
  DrawingType} from '@/types/drawing';
 import type { Point2D } from '@/types/scene';
 
-import { trpc } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { FillType } from '@/types/drawing';
 
@@ -123,9 +123,11 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   const [undoStack, setUndoStack] = useState<SceneDrawing[]>([]);
   const [redoStack, setRedoStack] = useState<SceneDrawing[]>([]);
 
-  // tRPC mutations
-  const createDrawingMutation = trpc.drawings?.create.useMutation();
-  const deleteDrawingMutation = trpc.drawings?.delete.useMutation();
+  // Persistence logic
+  const { saveDrawing, deleteDrawing } = useDrawingPersistence({
+    sceneId,
+    onDrawingDeleted,
+  });
 
   // ===========================
   // Tool Selection
@@ -134,67 +136,6 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   const setActiveTool = useCallback((tool: DrawingType | null) => {
     setState((prev) => ({ ...prev, activeTool: tool, currentDrawing: null }));
   }, []);
-
-  // ===========================
-  // Database Operations
-  // ===========================
-
-  const saveDrawing = useCallback(
-    async (drawing: Partial<SceneDrawing>): Promise<SceneDrawing | null> => {
-      try {
-        if (!createDrawingMutation) {
-          logger.warn('Drawing API not available');
-          return null;
-        }
-
-        const drawingData: CreateDrawingData = {
-          sceneId: drawing.sceneId || sceneId,
-          drawingType: drawing.drawingType!,
-          x: drawing.x || 0,
-          y: drawing.y || 0,
-          width: drawing.width,
-          height: drawing.height,
-          radius: drawing.radius,
-          points: drawing.points,
-          stroke: drawing.stroke,
-          fill: drawing.fill,
-          text: drawing.text,
-          gmOnly: drawing.gmOnly || false,
-          label: drawing.label,
-        };
-
-        const result = await createDrawingMutation.mutateAsync(drawingData);
-        logger.info('Drawing saved', { drawingId: result.id });
-
-        return result as SceneDrawing;
-      } catch (error) {
-        logger.error('Failed to save drawing', { error });
-        return null;
-      }
-    },
-    [sceneId, createDrawingMutation],
-  );
-
-  const deleteDrawing = useCallback(
-    async (drawingId: string): Promise<void> => {
-      try {
-        if (!deleteDrawingMutation) {
-          logger.warn('Drawing API not available');
-          return;
-        }
-
-        await deleteDrawingMutation.mutateAsync({ drawingId });
-        logger.info('Drawing deleted', { drawingId });
-
-        if (onDrawingDeleted) {
-          onDrawingDeleted(drawingId);
-        }
-      } catch (error) {
-        logger.error('Failed to delete drawing', { error });
-      }
-    },
-    [deleteDrawingMutation, onDrawingDeleted],
-  );
 
   // ===========================
   // Drawing Management

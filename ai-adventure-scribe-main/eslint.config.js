@@ -289,6 +289,7 @@ export default tseslint.config(
       'src/utils/image-label-generator.ts',
       'src/utils/performance/culling.ts',
       'src/data/progression-data.ts',
+      'src/hooks/use-drawing-tool.ts', // 354 lines
       'src/components/game/NPCRollCard.tsx',
       'src/utils/lighting-integration.ts',
       'src/utils/fog-calculations.ts',
