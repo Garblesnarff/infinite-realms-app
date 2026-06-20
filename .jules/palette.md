@@ -189,3 +189,7 @@
 ## 2026-07-28 - Character Folder Dialog Tooltip Standardization
 **Learning:** Dialog components that use color pickers (like Create/Edit Folder) often rely on native 'title' attributes for color names, which are inconsistent with the app's Shadcn Tooltip system. Redundant 'title' attributes on 'SelectTrigger' components that already have linked 'Label's cause duplicate announcements in screen readers. Adding tooltips to confirmation/cancel buttons in destructive dialogs (like Delete Folder) provides better context and maintains UX consistency.
 **Action:** Replace native 'title' with Shadcn 'Tooltip' for color swatches. Remove redundant titles on labeled Select triggers. Always add tooltips to action buttons in AlertDialogs for high-stakes operations.
+
+## 2026-06-20 - Spell Filter Badge Tooltips
+**Learning:** Replacing native `title` attributes with Shadcn `Tooltip` components on interactive `Badge` elements (used as filters or removable tags) improves accessibility by providing a clear `aria-label` and avoids the "double tooltip" issue on desktop browsers. Wrapping the component in a `TooltipProvider` with a consistent `delayDuration={300}` ensures a smooth user experience.
+**Action:** Replace native `title` with Shadcn `Tooltip` for all interactive filter badges. Ensure `aria-label` matches the tooltip content for screen reader parity. Use local `TooltipProvider` if a global one is not available or to control timing locally.

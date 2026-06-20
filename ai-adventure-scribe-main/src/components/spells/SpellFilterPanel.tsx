@@ -7,6 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export interface SpellFilters {
   schools: string[];
@@ -138,215 +144,238 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Filter className="w-4 h-4" />
-            Filters
-          </CardTitle>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-xs h-7">
-              <X className="w-3 h-3 mr-1" />
-              Clear All
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* School Filters */}
-        <div className="space-y-2" role="group" aria-labelledby={schoolsLabelId}>
-          <Label id={schoolsLabelId} className="text-sm font-medium">Schools of Magic</Label>
-          <div className="flex flex-wrap gap-2">
-            {availableSchools.map((school) => {
-              const isSelected = filters.schools.includes(school);
-              const colorClass = schoolColors[school] || 'bg-gray-100 text-gray-800';
-
-              return (
-                <Badge
-                  key={school}
-                  variant={isSelected ? 'default' : 'outline'}
-                  className={`cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none ${
-                    isSelected ? colorClass : 'hover:bg-muted'
-                  }`}
-                  onClick={() => toggleSchool(school)}
-                  onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
-                  role="checkbox"
-                  aria-checked={isSelected}
-                  tabIndex={0}
-                  title={`Filter by ${school}`}
-                >
-                  {school}
-                </Badge>
-              );
-            })}
+    <TooltipProvider delayDuration={300}>
+      <Card className={className}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Filter className="w-4 h-4" />
+              Filters
+            </CardTitle>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-xs h-7">
+                <X className="w-3 h-3 mr-1" />
+                Clear All
+              </Button>
+            )}
           </div>
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* School Filters */}
+          <div className="space-y-2" role="group" aria-labelledby={schoolsLabelId}>
+            <Label id={schoolsLabelId} className="text-sm font-medium">Schools of Magic</Label>
+            <div className="flex flex-wrap gap-2">
+              {availableSchools.map((school) => {
+                const isSelected = filters.schools.includes(school);
+                const colorClass = schoolColors[school] || 'bg-gray-100 text-gray-800';
 
-        <Separator />
-
-        {/* Component Filters */}
-        <div className="space-y-3" role="group" aria-labelledby={componentsLabelId}>
-          <Label id={componentsLabelId} className="text-sm font-medium">Components Required</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={verbalId}
-                checked={filters.components.verbal}
-                onCheckedChange={() => toggleComponent('verbal')}
-              />
-              <Label htmlFor={verbalId} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Eye className="w-4 h-4 text-blue-500" />
-                Verbal (V)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={somaticId}
-                checked={filters.components.somatic}
-                onCheckedChange={() => toggleComponent('somatic')}
-              />
-              <Label htmlFor={somaticId} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Hand className="w-4 h-4 text-green-500" />
-                Somatic (S)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={materialId}
-                checked={filters.components.material}
-                onCheckedChange={() => toggleComponent('material')}
-              />
-              <Label htmlFor={materialId} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Gem className="w-4 h-4 text-purple-500" />
-                Material (M)
-              </Label>
-            </div>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Property Filters */}
-        <div className="space-y-3" role="group" aria-labelledby={propertiesLabelId}>
-          <Label id={propertiesLabelId} className="text-sm font-medium">Special Properties</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={concentrationId}
-                checked={filters.properties.concentration}
-                onCheckedChange={() => toggleProperty('concentration')}
-              />
-              <Label
-                htmlFor={concentrationId}
-                className="flex items-center gap-2 text-sm cursor-pointer"
-              >
-                <Timer className="w-4 h-4 text-orange-500" />
-                Concentration
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={ritualId}
-                checked={filters.properties.ritual}
-                onCheckedChange={() => toggleProperty('ritual')}
-              />
-              <Label htmlFor={ritualId} className="flex items-center gap-2 text-sm cursor-pointer">
-                <RotateCcw className="w-4 h-4 text-indigo-500" />
-                Ritual
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id={damageId}
-                checked={filters.properties.damage}
-                onCheckedChange={() => toggleProperty('damage')}
-              />
-              <Label htmlFor={damageId} className="flex items-center gap-2 text-sm cursor-pointer">
-                <Zap className="w-4 h-4 text-red-500" />
-                Deals Damage
-              </Label>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Filters Summary */}
-        {hasActiveFilters && (
-          <>
-            <Separator />
-            <div className="space-y-2" role="group" aria-labelledby={activeFiltersLabelId}>
-              <Label id={activeFiltersLabelId} className="text-sm font-medium">Active Filters</Label>
-              <div className="flex flex-wrap gap-1">
-                {filters.schools.map((school) => (
-                  <Badge
-                    key={school}
-                    variant="secondary"
-                    className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                    onClick={() => toggleSchool(school)}
-                    onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
-                    role="button"
-                    aria-label={`Remove ${school} filter`}
-                    tabIndex={0}
-                    title={`Remove ${school} filter`}
-                  >
-                    {school}
-                    <X className="w-3 h-3 ml-1" />
-                  </Badge>
-                ))}
-                {Object.entries(filters.components).map(
-                  ([component, active]) =>
-                    active && (
+                return (
+                  <Tooltip key={school}>
+                    <TooltipTrigger asChild>
                       <Badge
-                        key={component}
-                        variant="secondary"
-                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                        onClick={() =>
-                          toggleComponent(component as keyof SpellFilters['components'])
-                        }
-                        onKeyDown={(e) =>
-                          handleKeyDown(e, () =>
-                            toggleComponent(component as keyof SpellFilters['components']),
-                          )
-                        }
-                        role="button"
-                        aria-label={`Remove ${component} filter`}
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={`cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none ${
+                          isSelected ? colorClass : 'hover:bg-muted'
+                        }`}
+                        onClick={() => toggleSchool(school)}
+                        onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        aria-label={`Filter by ${school}`}
                         tabIndex={0}
-                        title={`Remove ${component} filter`}
                       >
-                        {component.charAt(0).toUpperCase()}
-                        <X className="w-3 h-3 ml-1" />
+                        {school}
                       </Badge>
-                    ),
-                )}
-                {Object.entries(filters.properties).map(
-                  ([property, active]) =>
-                    active && (
-                      <Badge
-                        key={property}
-                        variant="secondary"
-                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                        onClick={() => toggleProperty(property as keyof SpellFilters['properties'])}
-                        onKeyDown={(e) =>
-                          handleKeyDown(e, () =>
-                            toggleProperty(property as keyof SpellFilters['properties']),
-                          )
-                        }
-                        role="button"
-                        aria-label={`Remove ${property} filter`}
-                        tabIndex={0}
-                        title={`Remove ${property} filter`}
-                      >
-                        {property}
-                        <X className="w-3 h-3 ml-1" />
-                      </Badge>
-                    ),
-                )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Filter by {school}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Component Filters */}
+          <div className="space-y-3" role="group" aria-labelledby={componentsLabelId}>
+            <Label id={componentsLabelId} className="text-sm font-medium">Components Required</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={verbalId}
+                  checked={filters.components.verbal}
+                  onCheckedChange={() => toggleComponent('verbal')}
+                />
+                <Label htmlFor={verbalId} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Eye className="w-4 h-4 text-blue-500" />
+                  Verbal (V)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={somaticId}
+                  checked={filters.components.somatic}
+                  onCheckedChange={() => toggleComponent('somatic')}
+                />
+                <Label htmlFor={somaticId} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Hand className="w-4 h-4 text-green-500" />
+                  Somatic (S)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={materialId}
+                  checked={filters.components.material}
+                  onCheckedChange={() => toggleComponent('material')}
+                />
+                <Label htmlFor={materialId} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Gem className="w-4 h-4 text-purple-500" />
+                  Material (M)
+                </Label>
               </div>
             </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+
+          <Separator />
+
+          {/* Property Filters */}
+          <div className="space-y-3" role="group" aria-labelledby={propertiesLabelId}>
+            <Label id={propertiesLabelId} className="text-sm font-medium">Special Properties</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={concentrationId}
+                  checked={filters.properties.concentration}
+                  onCheckedChange={() => toggleProperty('concentration')}
+                />
+                <Label
+                  htmlFor={concentrationId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
+                  <Timer className="w-4 h-4 text-orange-500" />
+                  Concentration
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={ritualId}
+                  checked={filters.properties.ritual}
+                  onCheckedChange={() => toggleProperty('ritual')}
+                />
+                <Label htmlFor={ritualId} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <RotateCcw className="w-4 h-4 text-indigo-500" />
+                  Ritual
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={damageId}
+                  checked={filters.properties.damage}
+                  onCheckedChange={() => toggleProperty('damage')}
+                />
+                <Label htmlFor={damageId} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Zap className="w-4 h-4 text-red-500" />
+                  Deals Damage
+                </Label>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Filters Summary */}
+          {hasActiveFilters && (
+            <>
+              <Separator />
+              <div className="space-y-2" role="group" aria-labelledby={activeFiltersLabelId}>
+                <Label id={activeFiltersLabelId} className="text-sm font-medium">Active Filters</Label>
+                <div className="flex flex-wrap gap-1">
+                  {filters.schools.map((school) => (
+                  <Tooltip key={school}>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="secondary"
+                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                        onClick={() => toggleSchool(school)}
+                        onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
+                        role="button"
+                        aria-label={`Remove ${school} filter`}
+                        tabIndex={0}
+                      >
+                        {school}
+                        <X className="w-3 h-3 ml-1" />
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove {school} filter</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  ))}
+                  {Object.entries(filters.components).map(
+                    ([component, active]) =>
+                      active && (
+                      <Tooltip key={component}>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                            onClick={() =>
+                              toggleComponent(component as keyof SpellFilters['components'])
+                            }
+                            onKeyDown={(e) =>
+                              handleKeyDown(e, () =>
+                                toggleComponent(component as keyof SpellFilters['components']),
+                              )
+                            }
+                            role="button"
+                            aria-label={`Remove ${component} filter`}
+                            tabIndex={0}
+                          >
+                            {component.charAt(0).toUpperCase()}
+                            <X className="w-3 h-3 ml-1" />
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Remove {component} filter</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      ),
+                  )}
+                  {Object.entries(filters.properties).map(
+                    ([property, active]) =>
+                      active && (
+                      <Tooltip key={property}>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                            onClick={() => toggleProperty(property as keyof SpellFilters['properties'])}
+                            onKeyDown={(e) =>
+                              handleKeyDown(e, () =>
+                                toggleProperty(property as keyof SpellFilters['properties']),
+                              )
+                            }
+                            role="button"
+                            aria-label={`Remove ${property} filter`}
+                            tabIndex={0}
+                          >
+                            {property}
+                            <X className="w-3 h-3 ml-1" />
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Remove {property} filter</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      ),
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 };
 
