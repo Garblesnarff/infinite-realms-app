@@ -130,7 +130,25 @@ export class ConditionLifecycleService {
             UPDATE combat_participant_conditions
             SET is_active = false
             WHERE id IN (${sql.join(supersededIds.map(id => sql`${id}`), sql`, `)})
-              AND participant_id IN (SELECT id FROM combat_participants WHERE encounter_id = ${encounterId})
+              AND participant_id IN (
+                SELECT cp.id FROM combat_participants cp
+                ${
+                  userId
+                    ? sql`
+                JOIN combat_encounters ce ON ce.id = cp.encounter_id
+                JOIN game_sessions gs ON gs.id = ce.session_id
+                LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+                LEFT JOIN characters char ON char.id = gs.character_id
+                `
+                    : sql``
+                }
+                WHERE cp.encounter_id = ${encounterId}
+                ${
+                  userId
+                    ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+                    : sql``
+                }
+              )
           `
         );
       } catch (err) {
@@ -139,6 +157,7 @@ export class ConditionLifecycleService {
     }
 
     // Insert the condition
+    // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for ownership verification.
     const result = await db.execute<Record<string, unknown>>(
       sql`
         INSERT INTO combat_participant_conditions (
@@ -152,7 +171,8 @@ export class ConditionLifecycleService {
           expires_at_round,
           source_description,
           is_active
-        ) VALUES (
+        )
+        SELECT
           ${participantId},
           ${conditionEntry.id},
           ${durationType},
@@ -163,12 +183,33 @@ export class ConditionLifecycleService {
           ${expiresAtRound},
           ${source || null},
           true
-        )
+        FROM combat_participants cp
+        ${
+          userId
+            ? sql`
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        `
+            : sql``
+        }
+        WHERE cp.id = ${participantId} AND cp.encounter_id = ${encounterId}
+        ${
+          userId
+            ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+            : sql``
+        }
         RETURNING *
       `
     );
 
     const participantCondition = result[0] as unknown as ParticipantCondition;
+
+    if (userId && !participantCondition) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Participant in encounter', participantId);
+    }
 
     // Parse mechanical effects
     const condition = ConditionQueryService.parseCondition(conditionEntry);
@@ -190,12 +231,31 @@ export class ConditionLifecycleService {
       await this.verifyEncounterAccess(encounterId, userId);
     }
 
+    // 🛡️ Sentinel: Refactored to use atomic UPDATE with ownership verification.
     const result = await db.execute<Record<string, unknown>>(
       sql`
         UPDATE combat_participant_conditions
         SET is_active = false
         WHERE id = ${conditionId}
-          AND participant_id IN (SELECT id FROM combat_participants WHERE encounter_id = ${encounterId})
+          AND participant_id IN (
+            SELECT cp.id FROM combat_participants cp
+            ${
+              userId
+                ? sql`
+            JOIN combat_encounters ce ON ce.id = cp.encounter_id
+            JOIN game_sessions gs ON gs.id = ce.session_id
+            LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+            LEFT JOIN characters char ON char.id = gs.character_id
+            `
+                : sql``
+            }
+            WHERE cp.encounter_id = ${encounterId}
+            ${
+              userId
+                ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+                : sql``
+            }
+          )
         RETURNING id
       `
     );
@@ -217,12 +277,28 @@ export class ConditionLifecycleService {
     }
 
     // Get the condition and verify encounterId
+    // 🛡️ Sentinel: Refactored to use atomic SELECT with ownership verification.
     const result = await db.execute<Record<string, unknown>>(
       sql`
         SELECT cpc.* FROM combat_participant_conditions cpc
         JOIN combat_participants cp ON cp.id = cpc.participant_id
+        ${
+          userId
+            ? sql`
+        JOIN combat_encounters ce ON ce.id = cp.encounter_id
+        JOIN game_sessions gs ON gs.id = ce.session_id
+        LEFT JOIN campaigns camp ON camp.id = gs.campaign_id
+        LEFT JOIN characters char ON char.id = gs.character_id
+        `
+            : sql``
+        }
         WHERE cpc.id = ${conditionId} AND cpc.is_active = true
           AND cp.encounter_id = ${encounterId}
+          ${
+            userId
+              ? sql`AND (camp.user_id = ${userId} OR char.user_id = ${userId} OR char.owner_id = ${userId})`
+              : sql``
+          }
         LIMIT 1
       `
     );
