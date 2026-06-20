@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { LoreKeeperService, getLoreKeeperService } from '../LoreKeeperService';
+import { mapCampaignRow } from '../data-mapping';
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -298,7 +299,7 @@ describe('LoreKeeperService', () => {
   describe('getCreativeDirection', () => {
     it('should return creative brief', async () => {
       const mockCampaign = { id: mockCampaignId, creative_brief: 'Be scary' };
-      vi.spyOn(service, 'getCampaignOverview').mockResolvedValue(service['mapCampaignRow'](mockCampaign));
+      vi.spyOn(service, 'getCampaignOverview').mockResolvedValue(mapCampaignRow(mockCampaign));
 
       const result = await service.getCreativeDirection(mockCampaignId);
       expect(result).toBe('Be scary');

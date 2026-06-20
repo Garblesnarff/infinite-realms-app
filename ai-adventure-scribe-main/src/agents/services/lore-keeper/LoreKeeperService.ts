@@ -8,75 +8,25 @@
  * For external tools/clients, use the Lore Keeper MCP server instead.
  */
 
+import {
+  CHUNK_COLUMNS,
+  RULE_COLUMNS,
+  CAMPAIGN_COLUMNS,
+  type ChunkType,
+  type StarterCampaign,
+  type CampaignChunk,
+  type CampaignRule,
+  type SearchResult,
+  mapCampaignRow,
+  mapChunkRow,
+  mapRuleRow,
+} from './data-mapping';
+
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 
-// Explicit column lists to avoid over-fetching large vector embeddings
-const CHUNK_COLUMNS =
-  'id, campaign_id, chunk_type, entity_name, parent_entity, content, summary, metadata, sequence_order';
-const RULE_COLUMNS = 'id, campaign_id, rule_type, condition, effect, reversible, priority';
-const CAMPAIGN_COLUMNS =
-  'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, creative_brief, overview, is_complete, is_published, cover_image_url';
-
-// Types
-export type ChunkType =
-  | 'creative_brief'
-  | 'world_building'
-  | 'faction'
-  | 'npc_tier1'
-  | 'npc_tier2'
-  | 'npc_tier3'
-  | 'location'
-  | 'quest_main'
-  | 'quest_side'
-  | 'mechanic'
-  | 'item'
-  | 'encounter'
-  | 'session_outline';
-
-export interface StarterCampaign {
-  id: string;
-  slug: string;
-  title: string;
-  tagline?: string;
-  genre: string[];
-  tone: string[];
-  difficulty: string;
-  levelRange?: string;
-  estimatedSessions?: string;
-  premise: string;
-  creativeBrief?: string;
-  overview?: string;
-  isComplete: boolean;
-  isPublished: boolean;
-  coverImageUrl?: string;
-}
-
-export interface CampaignChunk {
-  id: string;
-  campaignId: string;
-  chunkType: ChunkType;
-  entityName?: string;
-  parentEntity?: string;
-  content: string;
-  summary?: string;
-  metadata: Record<string, unknown>;
-  sequenceOrder?: number;
-}
-
-export interface CampaignRule {
-  id: string;
-  campaignId: string;
-  ruleType: 'causality' | 'mechanic' | 'world_law';
-  condition: string;
-  effect: string;
-  reversible: boolean;
-  priority: number;
-}
-
-export interface SearchResult extends CampaignChunk {
-  similarity: number;
-}
+// Re-export types for backward compatibility
+export type { ChunkType, StarterCampaign, CampaignChunk, CampaignRule, SearchResult };
 
 /**
  * Lore Keeper Service for querying canonical campaign lore
@@ -118,7 +68,7 @@ export class LoreKeeperService {
       return [];
     }
 
-    return (data || []).map(this.mapCampaignRow);
+    return (data || []).map(mapCampaignRow);
   }
 
   /**
@@ -140,7 +90,7 @@ export class LoreKeeperService {
       return null;
     }
 
-    return this.mapCampaignRow(data);
+    return mapCampaignRow(data);
   }
 
   /**
@@ -180,7 +130,7 @@ export class LoreKeeperService {
       return [];
     }
 
-    return (data || []).map(this.mapChunkRow);
+    return (data || []).map(mapChunkRow);
   }
 
   /**
@@ -198,7 +148,7 @@ export class LoreKeeperService {
       return [];
     }
 
-    return (data || []).map(this.mapRuleRow);
+    return (data || []).map(mapRuleRow);
   }
 
   /**
@@ -249,7 +199,7 @@ export class LoreKeeperService {
       if (!row.entity_name || seenNames.has(row.entity_name)) continue;
       seenNames.add(row.entity_name);
 
-      const chunk = this.mapChunkRow(row);
+      const chunk = mapChunkRow(row);
 
       if (['npc_tier1', 'npc_tier2', 'npc_tier3'].includes(chunk.chunkType)) {
         entities.npcs.push(chunk);
@@ -302,7 +252,7 @@ export class LoreKeeperService {
       }
 
       return (data || []).map((row: Record<string, unknown> & { similarity: number }) => ({
-        ...this.mapChunkRow(row),
+        ...mapChunkRow(row),
         similarity: row.similarity,
       }));
     } catch (error) {
@@ -335,7 +285,7 @@ export class LoreKeeperService {
       return [];
     }
 
-    return (data || []).map(this.mapChunkRow);
+    return (data || []).map(mapChunkRow);
   }
 
   /**
@@ -386,7 +336,7 @@ export class LoreKeeperService {
       return null;
     }
 
-    return this.mapChunkRow(data);
+    return mapChunkRow(data);
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
@@ -414,52 +364,6 @@ export class LoreKeeperService {
 
     const data = await response.json();
     return data.embedding.values;
-  }
-
-  private mapCampaignRow(row: Record<string, unknown>): StarterCampaign {
-    return {
-      id: row.id,
-      slug: row.slug,
-      title: row.title,
-      tagline: row.tagline,
-      genre: row.genre,
-      tone: row.tone,
-      difficulty: row.difficulty,
-      levelRange: row.level_range,
-      estimatedSessions: row.estimated_sessions,
-      premise: row.premise,
-      creativeBrief: row.creative_brief,
-      overview: row.overview,
-      isComplete: row.is_complete,
-      isPublished: row.is_published,
-      coverImageUrl: row.cover_image_url,
-    };
-  }
-
-  private mapChunkRow(row: Record<string, unknown>): CampaignChunk {
-    return {
-      id: row.id,
-      campaignId: row.campaign_id,
-      chunkType: row.chunk_type,
-      entityName: row.entity_name,
-      parentEntity: row.parent_entity,
-      content: row.content,
-      summary: row.summary,
-      metadata: row.metadata || {},
-      sequenceOrder: row.sequence_order,
-    };
-  }
-
-  private mapRuleRow(row: Record<string, unknown>): CampaignRule {
-    return {
-      id: row.id,
-      campaignId: row.campaign_id,
-      ruleType: row.rule_type,
-      condition: row.condition,
-      effect: row.effect,
-      reversible: row.reversible,
-      priority: row.priority,
-    };
   }
 }
 
