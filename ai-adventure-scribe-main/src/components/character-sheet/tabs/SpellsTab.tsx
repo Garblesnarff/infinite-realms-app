@@ -10,6 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 import { characterSpellService } from '@/services/characterSpellApi';
 import { getCharacterSpells } from '@/utils/spell-lookup';
@@ -197,175 +203,194 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate: _onUpdate })
   }
 
   return (
-    <div className="space-y-6">
-      {/* Spellcasting Info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">+{spellAttackBonus}</div>
-            <div className="text-sm text-muted-foreground">Spell Attack Bonus</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{spellSaveDC}</div>
-            <div className="text-sm text-muted-foreground">Spell Save DC</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold capitalize">
-              {spellcastingAbility.substring(0, 3)}
-            </div>
-            <div className="text-sm text-muted-foreground">Spellcasting Ability</div>
-          </CardContent>
-        </Card>
-      </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6">
+        {/* Spellcasting Info */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold">+{spellAttackBonus}</div>
+              <div className="text-sm text-muted-foreground">Spell Attack Bonus</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold">{spellSaveDC}</div>
+              <div className="text-sm text-muted-foreground">Spell Save DC</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold capitalize">
+                {spellcastingAbility.substring(0, 3)}
+              </div>
+              <div className="text-sm text-muted-foreground">Spellcasting Ability</div>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Enhanced Spell Category Tabs */}
-      <Tabs defaultValue="cantrips" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg">
-          <TabsTrigger
-            value="cantrips"
-            className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-gold/20 data-[state=active]:to-infinite-gold/10 data-[state=active]:text-infinite-gold data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-gold/25 data-[state=active]:border-2 data-[state=active]:border-infinite-gold/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-infinite-purple/10 hover:text-infinite-purple hover:shadow-md hover:shadow-infinite-purple/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <Wand2 className="w-5 h-5 transition-colors duration-200" />
-            <span className="font-ui tracking-wide">Cantrips</span>
-            <Badge
-              variant="secondary"
-              className="ml-2 px-2 py-1 text-xs font-bold bg-infinite-gold/20 text-infinite-gold border border-infinite-gold/30"
+        {/* Enhanced Spell Category Tabs */}
+        <Tabs defaultValue="cantrips" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg">
+            <TabsTrigger
+              value="cantrips"
+              className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-gold/20 data-[state=active]:to-infinite-gold/10 data-[state=active]:text-infinite-gold data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-gold/25 data-[state=active]:border-2 data-[state=active]:border-infinite-gold/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-infinite-purple/10 hover:text-infinite-purple hover:shadow-md hover:shadow-infinite-purple/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
             >
-              {cantrips.length}
-            </Badge>
-          </TabsTrigger>
+              <Wand2 className="w-5 h-5 transition-colors duration-200" />
+              <span className="font-ui tracking-wide">Cantrips</span>
+              <Badge
+                variant="secondary"
+                className="ml-2 px-2 py-1 text-xs font-bold bg-infinite-gold/20 text-infinite-gold border border-infinite-gold/30"
+              >
+                {cantrips.length}
+              </Badge>
+            </TabsTrigger>
 
-          <TabsTrigger
-            value="spells"
-            className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-purple/20 data-[state=active]:to-infinite-purple/10 data-[state=active]:text-infinite-purple data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-purple/25 data-[state=active]:border-2 data-[state=active]:border-infinite-purple/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-infinite-teal/10 hover:text-infinite-teal hover:shadow-md hover:shadow-infinite-teal/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <Book className="w-5 h-5 transition-colors duration-200" />
-            <span className="font-ui tracking-wide">Spells</span>
-            <Badge
-              variant="secondary"
-              className="ml-2 px-2 py-1 text-xs font-bold bg-infinite-purple/20 text-infinite-purple border border-infinite-purple/30"
+            <TabsTrigger
+              value="spells"
+              className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-purple/20 data-[state=active]:to-infinite-purple/10 data-[state=active]:text-infinite-purple data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-purple/25 data-[state=active]:border-2 data-[state=active]:border-infinite-purple/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-infinite-teal/10 hover:text-infinite-teal hover:shadow-md hover:shadow-infinite-teal/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
             >
-              {leveledSpells.length}
-            </Badge>
-          </TabsTrigger>
+              <Book className="w-5 h-5 transition-colors duration-200" />
+              <span className="font-ui tracking-wide">Spells</span>
+              <Badge
+                variant="secondary"
+                className="ml-2 px-2 py-1 text-xs font-bold bg-infinite-purple/20 text-infinite-purple border border-infinite-purple/30"
+              >
+                {leveledSpells.length}
+              </Badge>
+            </TabsTrigger>
 
-          <TabsTrigger
-            value="slots"
-            className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-teal/20 data-[state=active]:to-infinite-teal/10 data-[state=active]:text-infinite-teal data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-teal/25 data-[state=active]:border-2 data-[state=active]:border-infinite-teal/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-accent/10 hover:text-accent hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-teal/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <Circle className="w-5 h-5 transition-colors duration-200" />
-            <span className="font-ui tracking-wide">Spell Slots</span>
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger
+              value="slots"
+              className="flex items-center gap-3 px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 ease-in-out data-[state=active]:bg-gradient-to-br data-[state=active]:from-infinite-teal/20 data-[state=active]:to-infinite-teal/10 data-[state=active]:text-infinite-teal data-[state=active]:shadow-lg data-[state=active]:shadow-infinite-teal/25 data-[state=active]:border-2 data-[state=active]:border-infinite-teal/30 data-[state=active]:transform data-[state=active]:scale-[1.02] hover:bg-accent/10 hover:text-accent hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-infinite-teal/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <Circle className="w-5 h-5 transition-colors duration-200" />
+              <span className="font-ui tracking-wide">Spell Slots</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="mt-6">
-          <TabsContent value="cantrips" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wand2 className="w-5 h-5 text-blue-500" />
-                  Cantrips
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {cantrips.length === 0 ? (
-                    <div className="text-center py-4 text-muted-foreground">
-                      No cantrips learned yet
-                    </div>
-                  ) : (
-                    cantrips.map((spell) => (
-                      <SpellListItem key={spell.id} spell={spell} isCantrip />
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <div className="mt-6">
+            <TabsContent value="cantrips" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wand2 className="w-5 h-5 text-blue-500" />
+                    Cantrips
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {cantrips.length === 0 ? (
+                      <div className="text-center py-4 text-muted-foreground">
+                        No cantrips learned yet
+                      </div>
+                    ) : (
+                      cantrips.map((spell) => (
+                        <SpellListItem key={spell.id} spell={spell} isCantrip />
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="spells" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Book className="w-5 h-5 text-green-500" />
-                  Spells
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {leveledSpells.length === 0 ? (
-                    <div className="text-center py-4 text-muted-foreground">
-                      No spells learned yet
-                    </div>
-                  ) : (
-                    leveledSpells.map((spell) => <SpellListItem key={spell.id} spell={spell} />)
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <TabsContent value="spells" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Book className="w-5 h-5 text-green-500" />
+                    Spells
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {leveledSpells.length === 0 ? (
+                      <div className="text-center py-4 text-muted-foreground">
+                        No spells learned yet
+                      </div>
+                    ) : (
+                      leveledSpells.map((spell) => <SpellListItem key={spell.id} spell={spell} />)
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="slots" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Circle className="w-5 h-5 text-purple-500" />
-                  Spell Slots
-                </CardTitle>
-                <Button
-                  size="sm"
-                  onClick={longRest}
-                  title="Recover all spell slots"
-                >
-                  Long Rest
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(spellSlots).map(([level, slots]) => (
-                    <div key={level} className="flex items-center gap-4">
-                      <div className="w-16 text-sm font-medium">Level {level}</div>
-                      <div className="flex-1">
-                        <div className="flex gap-1 mb-1">
-                          {Array.from({ length: slots.total }).map((_, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
-                                i < slots.used
-                                  ? 'bg-gray-300 border-gray-400'
-                                  : 'bg-purple-500 border-purple-600'
-                              }`}
-                              onClick={() =>
-                                i < slots.used
-                                  ? restoreSpellSlot(parseInt(level))
-                                  : consumeSpellSlot(parseInt(level))
-                              }
-                              aria-label={`Level ${level} spell slot ${
-                                i < slots.used ? 'expended' : 'available'
-                              }`}
-                              title={i < slots.used ? 'Restore spell slot' : 'Consume spell slot'}
-                              aria-pressed={i >= slots.used}
-                            />
-                          ))}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {slots.total - slots.used} / {slots.total} remaining
+            <TabsContent value="slots" className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Circle className="w-5 h-5 text-purple-500" />
+                    Spell Slots
+                  </CardTitle>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={longRest}
+                        aria-label="Long Rest - Recover all spell slots"
+                      >
+                        Long Rest
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Recover all spell slots</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(spellSlots).map(([level, slots]) => (
+                      <div key={level} className="flex items-center gap-4">
+                        <div className="w-16 text-sm font-medium">Level {level}</div>
+                        <div className="flex-1">
+                          <div className="flex gap-1 mb-1">
+                            {Array.from({ length: slots.total }).map((_, i) => {
+                              const isUsed = i < slots.used;
+                              const actionLabel = isUsed ? 'Restore' : 'Consume';
+                              const stateLabel = isUsed ? 'expended' : 'available';
+
+                              return (
+                                <Tooltip key={i}>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className={`w-6 h-6 rounded border-2 transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 outline-none ${
+                                        isUsed
+                                          ? 'bg-gray-300 border-gray-400'
+                                          : 'bg-purple-500 border-purple-600'
+                                      }`}
+                                      onClick={() =>
+                                        isUsed
+                                          ? restoreSpellSlot(parseInt(level))
+                                          : consumeSpellSlot(parseInt(level))
+                                      }
+                                      aria-label={`${actionLabel} level ${level} spell slot (${stateLabel})`}
+                                      aria-pressed={!isUsed}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{actionLabel} spell slot</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {slots.total - slots.used} / {slots.total} remaining
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </div>
-      </Tabs>
-    </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </div>
+        </Tabs>
+      </div>
+    </TooltipProvider>
   );
 };
 
