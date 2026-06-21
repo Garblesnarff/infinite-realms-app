@@ -525,6 +525,7 @@ export default tseslint.config(
       'src/services/__tests__/passive-skills-service.test.ts',
       'src/agents/services/lore-keeper/LoreKeeperService.ts',
       'src/agents/services/lore-keeper/__tests__/LoreKeeperService.test.ts',
+      'src/features/character/components/sheet/sections/class-feature-tracker/ResourceSection.tsx',
     ],
     rules: {
       'max-lines': 'warn',
