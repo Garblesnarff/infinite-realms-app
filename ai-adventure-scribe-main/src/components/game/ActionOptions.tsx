@@ -4,6 +4,12 @@ import React, { useState, useEffect, useId } from 'react';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 
 interface ActionOptionsProps {
@@ -117,98 +123,105 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     }
 
     return (
-      <div className={`transition-all duration-500 ${className}`}>
-        {/* Show loading dots before options appear */}
-        {!visible && (
-          <div
-            className="flex items-center justify-center py-4"
-            role="status"
-            aria-label="Loading suggested actions"
-          >
-            <div className="flex items-center gap-1">
-              <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-              <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-              <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Option buttons with fade-in animation */}
-        {visible && (
-          <div className="space-y-3 animate-in fade-in-0 duration-500">
+      <TooltipProvider>
+        <div className={`transition-all duration-500 ${className}`}>
+          {/* Show loading dots before options appear */}
+          {!visible && (
             <div
-              id={instructionsId}
-              className="text-xs text-muted-foreground text-center mb-3"
+              className="flex items-center justify-center py-4"
+              role="status"
+              aria-label="Loading suggested actions"
             >
-              What would you like to do?
-            </div>
-
-            <div
-              className="grid gap-3"
-              role="group"
-              aria-labelledby={instructionsId}
-            >
-              {options.map((option, index) => {
-                const IconComponent = getOptionIcon(option.text);
-                const isSelected = selectedOption === option.id;
-                const isDisabled = disabled || (selectedOption && selectedOption !== option.id);
-
-                return (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOptionClick(option)}
-                    disabled={isDisabled}
-                    aria-pressed={isSelected}
-                    title={isSelected ? `Selected: ${option.text}` : `Choose: ${option.text}`}
-                    className={`
-                    flex items-start gap-3 p-4 h-auto text-left justify-start
-                    transition-all duration-200 border-2 rounded-lg
-                    hover:bg-infinite-purple/5 hover:border-infinite-purple/30
-                    focus:ring-2 focus:ring-infinite-purple/50 focus:border-infinite-purple
-                    animate-in fade-in-0 slide-in-from-left-4 duration-300
-                    ${isSelected ? 'bg-infinite-purple/10 border-infinite-purple text-infinite-purple' : ''}
-                    ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                    style={{
-                      animationDelay: `${index * 100}ms`,
-                    }}
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      <IconComponent className="h-4 w-4" aria-hidden="true" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm mb-1">Option {option.number}</div>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {option.text}
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <div className="flex-shrink-0 mt-1">
-                        <div className="w-2 h-2 bg-infinite-purple rounded-full animate-pulse" aria-hidden="true"></div>
-                      </div>
-                    )}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {/* Help text */}
-            {!selectedOption && (
-              <div
-                className="text-xs text-muted-foreground text-center pt-2 opacity-75"
-                title="You can also type your custom action manually"
-              >
-                Or describe your own action in the chat
+              <div className="flex items-center gap-1">
+                <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
+                <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
+                <div className="w-1 h-1 bg-muted-foreground/40 rounded-full animate-pulse"></div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+
+          {/* Option buttons with fade-in animation */}
+          {visible && (
+            <div className="space-y-3 animate-in fade-in-0 duration-500">
+              <div
+                id={instructionsId}
+                className="text-xs text-muted-foreground text-center mb-3"
+              >
+                What would you like to do?
+              </div>
+
+              <div
+                className="grid gap-3"
+                role="group"
+                aria-labelledby={instructionsId}
+              >
+                {options.map((option, index) => {
+                  const IconComponent = getOptionIcon(option.text);
+                  const isSelected = selectedOption === option.id;
+                  const isDisabled = disabled || (selectedOption && selectedOption !== option.id);
+
+                  return (
+                    <Tooltip key={option.id} delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOptionClick(option)}
+                          disabled={isDisabled}
+                          aria-pressed={isSelected}
+                          aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
+                          className={`
+                          flex items-start gap-3 p-4 h-auto text-left justify-start
+                          transition-all duration-200 border-2 rounded-lg
+                          hover:bg-infinite-purple/5 hover:border-infinite-purple/30
+                          focus:ring-2 focus:ring-infinite-purple/50 focus:border-infinite-purple
+                          animate-in fade-in-0 slide-in-from-left-4 duration-300
+                          ${isSelected ? 'bg-infinite-purple/10 border-infinite-purple text-infinite-purple' : ''}
+                          ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+                        `}
+                          style={{
+                            animationDelay: `${index * 100}ms`,
+                          }}
+                        >
+                          <div className="flex-shrink-0 mt-0.5">
+                            <IconComponent className="h-4 w-4" aria-hidden="true" />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm mb-1">Option {option.number}</div>
+                            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {option.text}
+                            </div>
+                          </div>
+
+                          {isSelected && (
+                            <div className="flex-shrink-0 mt-1">
+                              <div className="w-2 h-2 bg-infinite-purple rounded-full animate-pulse" aria-hidden="true"></div>
+                            </div>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p>{isSelected ? `Selected` : `Select this option`}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+
+              {/* Help text */}
+              {!selectedOption && (
+                <div
+                  className="text-xs text-muted-foreground text-center pt-2 opacity-75"
+                >
+                  Or describe your own action in the chat
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </TooltipProvider>
     );
   },
 );

@@ -27,6 +27,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface SceneTemplateLibraryProps {
@@ -70,52 +76,69 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            placeholder="Search templates..."
-            aria-label="Search scene templates"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Search and Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              placeholder="Search templates..."
+              aria-label="Search scene templates"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
-        <div
-          className="flex gap-2 flex-wrap"
-          role="group"
-          aria-label="Filter templates by category"
-        >
-          <Button
-            variant={selectedCategory === null ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSelectedCategory(null)}
-            aria-pressed={selectedCategory === null}
-            title="Show all templates"
+          <div
+            className="flex gap-2 flex-wrap"
+            role="group"
+            aria-label="Filter templates by category"
           >
-            All
-          </Button>
-          {categories.map((category) => (
-            <Button
-              key={category}
-              variant={selectedCategory === category ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategory(category)}
-              className="capitalize"
-              aria-pressed={selectedCategory === category}
-              title={`Show ${category} templates`}
-            >
-              {category}
-            </Button>
-          ))}
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={selectedCategory === null ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedCategory(null)}
+                  aria-pressed={selectedCategory === null}
+                  aria-label="Show all templates"
+                >
+                  All
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Show all templates</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {categories.map((category) => (
+              <Tooltip key={category} delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={selectedCategory === category ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedCategory(category)}
+                    className="capitalize"
+                    aria-pressed={selectedCategory === category}
+                    aria-label={`Show ${category} templates`}
+                  >
+                    {category}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Show {category} templates</p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
         </div>
-      </div>
 
       {/* Template Grid */}
       <div
@@ -195,44 +218,45 @@ export const SceneTemplateLibrary: React.FC<SceneTemplateLibraryProps> = ({
                 </div>
               </CardContent>
 
-              <CardFooter className="pt-0">
-                <Button
-                  variant={isSelected ? 'default' : 'outline'}
-                  className="w-full"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectTemplate?.(template);
-                  }}
-                  aria-pressed={isSelected}
-                  aria-label={isSelected ? 'Template selected' : 'Use this template'}
-                  title={isSelected ? 'Template selected' : 'Use this template'}
-                >
-                  {isSelected ? 'Selected' : 'Use Template'}
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
+                <CardFooter className="pt-0">
+                  <Button
+                    type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    className="w-full"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectTemplate?.(template);
+                    }}
+                    aria-pressed={isSelected}
+                    aria-label={isSelected ? 'Template selected' : 'Use this template'}
+                  >
+                    {isSelected ? 'Selected' : 'Use Template'}
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
 
-      {/* Empty State */}
-      {filteredTemplates.length === 0 && (
-        <Card
-          variant="parchment"
-          className="p-12 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="text-6xl mb-4" aria-hidden="true">
-            🔍
-          </div>
-          <CardTitle className="mb-2">No Templates Found</CardTitle>
-          <CardDescription>Try adjusting your search or filter to find templates.</CardDescription>
-        </Card>
-      )}
-    </div>
+        {/* Empty State */}
+        {filteredTemplates.length === 0 && (
+          <Card
+            variant="parchment"
+            className="p-12 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="text-6xl mb-4" aria-hidden="true">
+              🔍
+            </div>
+            <CardTitle className="mb-2">No Templates Found</CardTitle>
+            <CardDescription>Try adjusting your search or filter to find templates.</CardDescription>
+          </Card>
+        )}
+      </div>
+    </TooltipProvider>
   );
 };
 
