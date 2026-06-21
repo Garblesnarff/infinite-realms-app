@@ -255,3 +255,7 @@
 ## 2026-06-25 - [TimelineRail Component Coverage & UI Mocking]
 **Learning:** The `TimelineRail` component relies heavily on browser APIs like `IntersectionObserver`, `requestAnimationFrame`, and `CSS.escape`. In a JSDOM environment, these must be explicitly mocked to test scroll-based interactions and visibility tracking.
 **Action:** Always provide a robust mock for `IntersectionObserver` and stub `requestAnimationFrame` with a `setTimeout` based fallback when testing components with complex scroll behavior. Ensure `CSS.escape` is mocked if the component uses it for dynamic ID selection.
+
+## 2026-06-21 - [LlmApiClient Coverage & Mocking Patterns]
+**Learning:** Found that LlmApiClient maintains an internal circuit-breaker state (useOfflineFallback) that persists across tests because it's a singleton. Testing it requires manual reset of this private state. Also learned that vi.useFakeTimers() is essential for testing its exponential backoff retry logic for 404 errors during image attachment. When mocking the @/lib/logger, use vi.mock to return an object with both default and logger properties to handle different import styles used in the codebase.
+**Action:** Always reset singleton state in beforeEach using (service as any).property = value. Use await vi.runAllTimersAsync() and await Promise.resolve() to reliably progress async retry loops in tests.
