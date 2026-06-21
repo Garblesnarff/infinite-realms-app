@@ -131,7 +131,7 @@ const RadialActionButton: React.FC<RadialActionButtonProps> = ({
             zIndex: isInteracting ? Z_INDEX.DROPDOWN : undefined,
             animation: `radialAppear 0.3s ease-out ${index * 0.05}s both`,
           }}
-          aria-label={action.label}
+          aria-label={action.shortcut ? `${action.label} (${action.shortcut})` : action.label}
         >
           <Icon className="h-5 w-5" aria-hidden="true" />
           <span className="text-xs font-medium whitespace-nowrap">{action.label}</span>
