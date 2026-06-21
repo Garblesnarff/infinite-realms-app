@@ -1,231 +1,63 @@
-import { TrendingUp, Plus, Minus, Star, Trophy, Calendar, Target } from 'lucide-react';
-import React, { useState, useId } from 'react';
+import { Star } from 'lucide-react';
+import React, { useId } from 'react';
+
+import { ExperienceActions } from './experience/ExperienceActions';
+import { ExperienceHistory } from './experience/ExperienceHistory';
+import { ExperienceOverview } from './experience/ExperienceOverview';
+import { ExperienceQuickLevelSet } from './experience/ExperienceQuickLevelSet';
+import { ExperienceTableReference } from './experience/ExperienceTableReference';
+import { useExperienceManager } from './experience/useExperienceManager';
 
 import type { Character } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/components/ui/use-toast';
-import {
-  getLevelFromExperience,
-  getExperienceForLevel,
-  experienceTable,
-} from '@/data/levelProgression';
+
 
 interface ExperienceManagerProps {
   character: Character;
   onUpdate: (updatedCharacter: Character) => void;
 }
 
-interface ExperienceEntry {
-  id: string;
-  amount: number;
-  source: string;
-  date: string;
-  type: 'gain' | 'loss';
-}
-
 /**
  * ExperienceManager component for tracking and managing character experience
  */
 const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpdate }) => {
-  const { toast } = useToast();
   const historyId = useId();
   const historyTitleId = useId();
 
-  const [experienceAmount, setExperienceAmount] = useState<number>(0);
-  const [experienceSource, setExperienceSource] = useState<string>('');
-  const [showHistory, setShowHistory] = useState(false);
-
-  const currentExperience = character?.experience || 0;
-  const currentLevel = character?.level || 1;
-  const calculatedLevel = getLevelFromExperience(currentExperience);
-
-  const nextLevel = Math.min(20, currentLevel + 1);
-  const nextLevelXP = getExperienceForLevel(nextLevel);
-  const previousLevelXP = getExperienceForLevel(currentLevel);
-
-  const progressToNextLevel =
-    currentLevel >= 20
-      ? 100
-      : ((currentExperience - previousLevelXP) / (nextLevelXP - previousLevelXP)) * 100;
-
-  const experienceNeeded = Math.max(0, nextLevelXP - currentExperience);
-
-  // Mock experience history - in full implementation, this would be stored
-  const experienceHistory: ExperienceEntry[] = [
-    {
-      id: '1',
-      amount: 300,
-      source: 'Defeated goblin patrol',
-      date: '2024-01-15',
-      type: 'gain',
-    },
-    {
-      id: '2',
-      amount: 150,
-      source: 'Solved riddle puzzle',
-      date: '2024-01-16',
-      type: 'gain',
-    },
-    {
-      id: '3',
-      amount: 450,
-      source: 'Completed quest: Save the Village',
-      date: '2024-01-18',
-      type: 'gain',
-    },
-  ];
-
-  /**
-   * Award experience points
-   */
-  const awardExperience = () => {
-    if (experienceAmount <= 0 || !experienceSource.trim()) {
-      toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid experience amount and source.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const newExperience = currentExperience + experienceAmount;
-    const newLevel = getLevelFromExperience(newExperience);
-
-    onUpdate({
-      ...character,
-      experience: newExperience,
-    });
-
-    if (newLevel > currentLevel) {
-      toast({
-        title: 'Level Up Available!',
-        description: `You have enough experience for level ${newLevel}. Visit the advancement section to level up.`,
-      });
-    } else {
-      toast({
-        title: 'Experience Awarded',
-        description: `Gained ${experienceAmount} XP from: ${experienceSource}`,
-      });
-    }
-
-    // Reset form
-    setExperienceAmount(0);
-    setExperienceSource('');
-  };
-
-  /**
-   * Remove experience points
-   */
-  const removeExperience = () => {
-    if (experienceAmount <= 0 || !experienceSource.trim()) {
-      toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid experience amount and source.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const newExperience = Math.max(0, currentExperience - experienceAmount);
-
-    onUpdate({
-      ...character,
-      experience: newExperience,
-    });
-
-    toast({
-      title: 'Experience Removed',
-      description: `Removed ${experienceAmount} XP: ${experienceSource}`,
-    });
-
-    // Reset form
-    setExperienceAmount(0);
-    setExperienceSource('');
-  };
-
-  /**
-   * Set experience to a specific level
-   */
-  const setToLevel = (targetLevel: number) => {
-    const requiredXP = getExperienceForLevel(targetLevel);
-
-    onUpdate({
-      ...character,
-      experience: requiredXP,
-    });
-
-    toast({
-      title: 'Experience Set',
-      description: `Set experience to ${requiredXP.toLocaleString()} XP (Level ${targetLevel}).`,
-    });
-  };
+  const {
+    currentExperience,
+    currentLevel,
+    calculatedLevel,
+    nextLevelXP,
+    previousLevelXP,
+    progressToNextLevel,
+    experienceNeeded,
+    experienceAmount,
+    setExperienceAmount,
+    experienceSource,
+    setExperienceSource,
+    showHistory,
+    setShowHistory,
+    experienceHistory,
+    awardExperience,
+    removeExperience,
+    setToLevel,
+  } = useExperienceManager({ character, onUpdate });
 
   return (
     <div className="space-y-6">
       {/* Current Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-gold-500" aria-hidden="true" />
-            Experience Overview
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-3xl font-bold text-primary">{currentLevel}</div>
-              <div className="text-sm text-muted-foreground">Current Level</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-3xl font-bold">{currentExperience.toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground">Total Experience</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-3xl font-bold text-green-600">
-                {currentLevel >= 20 ? '0' : experienceNeeded.toLocaleString()}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {currentLevel >= 20 ? 'Max Level' : 'XP to Next Level'}
-              </div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Level {currentLevel}</span>
-              <span>{currentLevel >= 20 ? 'Max Level Reached' : `Level ${nextLevel}`}</span>
-            </div>
-            <Progress
-              value={progressToNextLevel}
-              className="h-3"
-              aria-label={`${Math.round(progressToNextLevel)}% toward level ${nextLevel}`}
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{previousLevelXP.toLocaleString()} XP</span>
-              <span>
-                {currentLevel >= 20
-                  ? currentExperience.toLocaleString()
-                  : nextLevelXP.toLocaleString()}{' '}
-                XP
-              </span>
-            </div>
-          </div>
-
-          {/* Level Check Warning */}
-          {calculatedLevel > currentLevel && (
+      <ExperienceOverview
+        currentLevel={currentLevel}
+        currentExperience={currentExperience}
+        experienceNeeded={experienceNeeded}
+        previousLevelXP={previousLevelXP}
+        nextLevelXP={nextLevelXP}
+        progressToNextLevel={progressToNextLevel}
+        calculatedLevel={calculatedLevel}
+        levelUpNode={
+          calculatedLevel > currentLevel ? (
             <div
               role="status"
               aria-live="polite"
@@ -247,186 +79,39 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
                 Advancement section to level up.
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : null
+        }
+      />
 
       {/* Experience Management */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-500" aria-hidden="true" />
-            Manage Experience
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="experience-amount">Experience Amount</Label>
-                <Input
-                  id="experience-amount"
-                  type="number"
-                  min="0"
-                  value={experienceAmount || ''}
-                  onChange={(e) => setExperienceAmount(Number(e.target.value))}
-                  placeholder="Enter XP amount"
-                />
-              </div>
-              <div>
-                <Label htmlFor="experience-source">Source/Reason</Label>
-                <Input
-                  id="experience-source"
-                  type="text"
-                  value={experienceSource}
-                  onChange={(e) => setExperienceSource(e.target.value)}
-                  placeholder="e.g., Defeated dragon, Completed quest"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                onClick={awardExperience}
-                disabled={!experienceAmount || !experienceSource}
-                className="flex-1"
-              >
-                <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-                Award XP
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={removeExperience}
-                disabled={!experienceAmount || !experienceSource}
-                className="flex-1"
-              >
-                <Minus className="w-4 h-4 mr-2" aria-hidden="true" />
-                Remove XP
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExperienceActions
+        experienceAmount={experienceAmount}
+        setExperienceAmount={setExperienceAmount}
+        experienceSource={experienceSource}
+        setExperienceSource={setExperienceSource}
+        awardExperience={awardExperience}
+        removeExperience={removeExperience}
+      />
 
       {/* Level Shortcuts */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-purple-500" aria-hidden="true" />
-            Quick Level Set
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-            {Array.from({ length: 20 }, (_, i) => i + 1).map((level) => (
-              <Tooltip key={level}>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={level === currentLevel ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setToLevel(level)}
-                    disabled={level === currentLevel}
-                    aria-label={`Set experience to level ${level}`}
-                  >
-                    {level}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Set experience to level {level}</p>
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Click a level to set your experience to that level's minimum requirement.
-          </p>
-        </CardContent>
-      </Card>
+      <ExperienceQuickLevelSet
+        currentLevel={currentLevel}
+        setToLevel={setToLevel}
+      />
 
       {/* Experience Table Reference */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-gray-500" aria-hidden="true" />
-            Experience Table
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-            {Object.entries(experienceTable).map(([level, xp]) => (
-              <div
-                key={level}
-                className={`p-2 border rounded text-center ${
-                  Number(level) === currentLevel ? 'bg-primary/10 border-primary' : ''
-                }`}
-              >
-                <div className="font-medium">Level {level}</div>
-                <div className="text-muted-foreground">{xp.toLocaleString()} XP</div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <ExperienceTableReference
+        currentLevel={currentLevel}
+      />
 
       {/* Experience History */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle id={historyTitleId} className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-500" aria-hidden="true" />
-              Experience History
-            </CardTitle>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowHistory(!showHistory)}
-                  aria-expanded={showHistory}
-                  aria-controls={historyId}
-                  aria-label={showHistory ? 'Hide history' : 'Show history'}
-                >
-                  {showHistory ? 'Hide' : 'Show'} History
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{showHistory ? 'Hide history' : 'Show history'}</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </CardHeader>
-        {showHistory && (
-          <CardContent id={historyId} role="region" aria-labelledby={historyTitleId}>
-            <div className="space-y-3">
-              {experienceHistory.length > 0 ? (
-                experienceHistory.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium">{entry.source}</div>
-                      <div className="text-sm text-muted-foreground">{entry.date}</div>
-                    </div>
-                    <Badge variant={entry.type === 'gain' ? 'default' : 'destructive'}>
-                      {entry.type === 'gain' ? '+' : '-'}
-                      {entry.amount} XP
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No experience history available
-                </div>
-              )}
-            </div>
-          </CardContent>
-        )}
-      </Card>
+      <ExperienceHistory
+        showHistory={showHistory}
+        setShowHistory={setShowHistory}
+        experienceHistory={experienceHistory}
+        historyId={historyId}
+        historyTitleId={historyTitleId}
+      />
     </div>
   );
 };
