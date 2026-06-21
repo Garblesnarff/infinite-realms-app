@@ -259,3 +259,7 @@
 ## 2026-06-21 - [LlmApiClient Coverage & Mocking Patterns]
 **Learning:** Found that LlmApiClient maintains an internal circuit-breaker state (useOfflineFallback) that persists across tests because it's a singleton. Testing it requires manual reset of this private state. Also learned that vi.useFakeTimers() is essential for testing its exponential backoff retry logic for 404 errors during image attachment. When mocking the @/lib/logger, use vi.mock to return an object with both default and logger properties to handle different import styles used in the codebase.
 **Action:** Always reset singleton state in beforeEach using (service as any).property = value. Use await vi.runAllTimersAsync() and await Promise.resolve() to reliably progress async retry loops in tests.
+
+## 2026-08-14 - [Response Service Coverage & Thenable Mocks]
+**Learning:** The `EnvironmentGenerator` and `OpportunityGenerator` services were completely untested. Testing `OpportunityGenerator` required mocking Supabase queries that are awaited directly (using `.then()` behavior). Deeply nested tests in `src/agents/services/response/__tests__` must use `../../../../lib/logger` to reach the lib directory.
+**Action:** Use `then: vi.fn().mockImplementation((cb) => cb({ data, error }))` when mocking Supabase clients for direct awaits. Always verify that new tests and source files are registered in both `include` and `coverage.include` in `vitest.config.ts`.
