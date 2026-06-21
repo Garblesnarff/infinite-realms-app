@@ -1,43 +1,16 @@
-import {
-  Package,
-  Shield,
-  Sword,
-  Coins,
-  Plus,
-  Minus,
-  Search,
-  ShoppingCart,
-  Weight,
-  Zap,
-} from 'lucide-react';
+import { Package, Shield, Sword } from 'lucide-react';
 import React from 'react';
 
-
-import type { Equipment } from '@/data/equipmentOptions';
-import type { Currency } from '@/features/character/hooks/use-inventory-manager';
 import type { Character } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  allEquipment,
-  formatCurrency,
-  convertCurrency,
-} from '@/data/equipmentOptions';
+import { allEquipment, type Equipment } from '@/data/equipmentOptions';
 import { useInventoryManager } from '@/features/character/hooks/use-inventory-manager';
 
+import { CurrencySection } from './inventory/CurrencySection';
+import { EquipmentShop } from './inventory/EquipmentShop';
+import { InventoryStats } from './inventory/InventoryStats';
+import { InventoryTabContent } from './inventory/InventoryTabContent';
 
 interface InventoryManagerProps {
   character: Character;
@@ -104,77 +77,17 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
   return (
     <div className="space-y-6">
       {/* Character Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-blue-500" />
-            Combat Stats
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-3 border rounded">
-              <div className="text-2xl font-bold text-blue-600">{calculatedAC}</div>
-              <div className="text-xs text-muted-foreground">Armor Class</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {equippedArmor && `${equippedArmor.name}`}
-                {equippedShield && ` + Shield`}
-              </div>
-            </div>
-            <div className="text-center p-3 border rounded">
-              <div className="text-2xl font-bold">{totalWeight}</div>
-              <div className="text-xs text-muted-foreground">Weight (lbs)</div>
-              <div className="text-xs text-muted-foreground">Capacity: {carryingCapacity}</div>
-            </div>
-            <div className="text-center p-3 border rounded">
-              <div className="text-2xl font-bold">{equippedWeapons.length}</div>
-              <div className="text-xs text-muted-foreground">Equipped Weapons</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <InventoryStats
+        calculatedAC={calculatedAC}
+        equippedArmor={equippedArmor}
+        equippedShield={equippedShield}
+        totalWeight={totalWeight}
+        carryingCapacity={carryingCapacity}
+        equippedWeaponsCount={equippedWeapons.length}
+      />
 
       {/* Currency */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Coins className="w-5 h-5 text-yellow-500" />
-            Currency
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-5 gap-3">
-            {Object.entries(currency).map(([type, amount]) => (
-              <div key={type} className="text-center">
-                <Label htmlFor={`currency-${type}`} className="text-xs uppercase">
-                  {type}
-                </Label>
-                <Input
-                  id={`currency-${type}`}
-                  type="number"
-                  min="0"
-                  value={amount}
-                  onChange={(e) => updateCurrency(type as keyof Currency, Number(e.target.value))}
-                  className="text-center"
-                />
-              </div>
-            ))}
-          </div>
-          <div className="text-center mt-2 text-sm text-muted-foreground">
-            Total Value:{' '}
-            {convertCurrency(
-              currency.cp +
-                currency.sp * 10 +
-                currency.ep * 50 +
-                currency.gp * 100 +
-                currency.pp * 1000,
-              'cp',
-              'gp',
-            ).toFixed(2)}{' '}
-            gp
-          </div>
-        </CardContent>
-      </Card>
+      <CurrencySection currency={currency} updateCurrency={updateCurrency} />
 
       <Tabs defaultValue="inventory">
         <TabsList className="grid w-full grid-cols-2">
@@ -184,227 +97,31 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
 
         {/* Inventory Tab */}
         <TabsContent value="inventory">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-green-500" />
-                Inventory ({inventory.length} items)
-                {showShop && <span className="text-xs ml-2 text-muted-foreground">(Shop Active)</span>}
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowShop(!showShop)}
-                className="w-fit"
-              >
-                {showShop ? 'Hide Shop' : 'Show Shop'}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {inventory.length > 0 ? (
-                <div className="space-y-3">
-                  {inventory.map((item) => (
-                    <div
-                      key={`${item.id}-${item.quantity}`}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          {getItemIcon(item.category)}
-                          <Checkbox
-                            checked={item.equipped}
-                            onCheckedChange={() => toggleEquipped(item.id)}
-                            disabled={item.category === 'consumable'}
-                            aria-label={item.equipped ? `Unequip ${item.name}` : `Equip ${item.name}`}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-medium ${item.equipped ? 'text-primary' : ''}`}>
-                              {item.name}
-                            </span>
-                            {item.equipped && (
-                              <Badge variant="default" className="text-xs">
-                                Equipped
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs capitalize">
-                              {item.category}
-                            </Badge>
-                          </div>
-                          <div className="text-sm text-muted-foreground">{item.description}</div>
-                          {item.weight && (
-                            <div className="text-xs text-muted-foreground">
-                              <Weight className="w-3 h-3 inline mr-1" />
-                              {item.weight * item.quantity} lbs
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{item.quantity}x</Badge>
-                        <Button variant="outline" size="sm" onClick={() => sellItem(item)}>
-                          Sell
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeFromInventory(item.id)}
-                          aria-label="Remove from inventory"
-                          title="Remove from inventory"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">Empty Inventory</h3>
-                  <p className="text-sm">Add items from the Equipment Shop tab.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <InventoryTabContent
+            inventory={inventory}
+            showShop={showShop}
+            setShowShop={setShowShop}
+            toggleEquipped={toggleEquipped}
+            sellItem={sellItem}
+            removeFromInventory={removeFromInventory}
+            getItemIcon={getItemIcon}
+          />
         </TabsContent>
 
         {/* Shop Tab */}
         <TabsContent value="shop">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-purple-500" />
-                Equipment Shop
-              </CardTitle>
-
-              {/* Search and Filter */}
-              <div className="flex gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search equipment..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-48" aria-label="Filter by category" title="Filter by category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                {filteredEquipment.map((equipment) => (
-                  <div
-                    key={equipment.id}
-                    className="p-4 border rounded-lg hover:border-primary transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {getItemIcon(equipment.category)}
-                        <div>
-                          <h4 className="font-medium">{equipment.name}</h4>
-                          <div className="flex gap-1 mt-1">
-                            <Badge variant="outline" className="text-xs capitalize">
-                              {equipment.category}
-                            </Badge>
-                            {equipment.weaponType && (
-                              <Badge variant="secondary" className="text-xs capitalize">
-                                {equipment.weaponType}
-                              </Badge>
-                            )}
-                            {equipment.armorType && (
-                              <Badge variant="secondary" className="text-xs capitalize">
-                                {equipment.armorType} armor
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-green-600">
-                          {formatCurrency(equipment.cost)}
-                        </div>
-                        {equipment.weight && (
-                          <div className="text-xs text-muted-foreground">
-                            {equipment.weight} lbs
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-muted-foreground mb-3">{equipment.description}</p>
-
-                    {/* Equipment Stats */}
-                    {equipment.damage && (
-                      <div className="text-xs mb-2">
-                        <span className="font-medium">Damage:</span> {equipment.damage.dice}{' '}
-                        {equipment.damage.type}
-                      </div>
-                    )}
-                    {equipment.armorClass && (
-                      <div className="text-xs mb-2">
-                        <span className="font-medium">AC:</span> {equipment.armorClass.base}
-                        {equipment.armorClass.dexModifier && ' + Dex'}
-                        {equipment.armorClass.maxDexModifier !== undefined &&
-                          ` (max ${equipment.armorClass.maxDexModifier})`}
-                      </div>
-                    )}
-                    {equipment.properties && equipment.properties.length > 0 && (
-                      <div className="text-xs mb-3">
-                        <span className="font-medium">Properties:</span>{' '}
-                        {equipment.properties.join(', ')}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => purchaseItem(equipment)}
-                        className="flex-1"
-                        size="sm"
-                        disabled={
-                          currency.gp <
-                          convertCurrency(equipment.cost.amount, equipment.cost.currency, 'gp')
-                        }
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Purchase
-                      </Button>
-                      <Button
-                        onClick={() => addToInventory(equipment)}
-                        variant="secondary"
-                        size="sm"
-                      >
-                        Add Free
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {filteredEquipment.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">No Equipment Found</h3>
-                  <p className="text-sm">Try adjusting your search or filter criteria.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <EquipmentShop
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            categories={categories}
+            filteredEquipment={filteredEquipment}
+            currency={currency}
+            purchaseItem={purchaseItem}
+            addToInventory={addToInventory}
+            getItemIcon={getItemIcon}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -445,7 +445,6 @@ export default tseslint.config(
       'src/services/world-builders/quest-prompts.ts',
       'src/pages/BattleMapPage.tsx',
       'src/features/character/hooks/use-inventory-manager.ts',
-      'src/features/character/components/sheet/InventoryManager.tsx',
       'src/components/scenes/SceneManager.tsx',
       'src/components/scenes/SceneCard.tsx',
       'src/components/scenes/SceneListItem.tsx',
