@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
@@ -6,6 +7,7 @@ import {
   calculateHitPoints,
   calculateArmorClass,
   calculateCarryingCapacity,
+  SKILLS_MAP,
 } from '../basic-math';
 
 import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
@@ -78,6 +80,16 @@ describe('basic-math', () => {
       const character: any = {};
       // level 1, hitDie 8, conMod 0 -> 8
       expect(calculateHitPoints(character)).toBe(8);
+    });
+
+    it('should handle partial character data with null abilityScores', () => {
+      const character: any = {
+        level: 1,
+        abilityScores: null,
+        class: { hitDie: 10 },
+      };
+      // 10 + 0 = 10
+      expect(calculateHitPoints(character)).toBe(10);
     });
   });
 
@@ -256,9 +268,93 @@ describe('basic-math', () => {
       expect(calculateArmorClass(character)).toBe(12);
     });
 
+    it('should handle missing class in calculateArmorClass', () => {
+      const character: any = {
+        abilityScores: { dexterity: { modifier: 2 } },
+      };
+      // 10 + 2 = 12
+      expect(calculateArmorClass(character)).toBe(12);
+    });
+
+    it('should handle class without name in calculateArmorClass', () => {
+      const character: any = {
+        class: {},
+        abilityScores: { dexterity: { modifier: 2 } },
+      };
+      // Should not crash and return 10 + 2 = 12
+      expect(calculateArmorClass(character)).toBe(12);
+    });
+
+    it('should handle barbarian unarmored defense with case-insensitive name', () => {
+      const character: any = {
+        class: { name: 'BARBARIAN' },
+        abilityScores: {
+          dexterity: { modifier: 2 },
+          constitution: { modifier: 3 },
+        },
+      };
+      // 10 + 2 + 3 = 15
+      expect(calculateArmorClass(character)).toBe(15);
+    });
+
+    it('should handle armor without armorClass property', () => {
+      (EQUIPMENT_LOOKUP.get as any).mockReturnValue({ name: 'Strange Armor' });
+      const character: any = {
+        abilityScores: { dexterity: { modifier: 2 } },
+        equippedArmor: 'strange',
+      };
+      // 10 + 2 = 12
+      expect(calculateArmorClass(character)).toBe(12);
+    });
+
+    it('should handle armor with maxDexModifier of 0', () => {
+      (EQUIPMENT_LOOKUP.get as any).mockReturnValue({ armorClass: { base: 14, maxDexModifier: 0 } });
+      const character: any = {
+        abilityScores: { dexterity: { modifier: 2 } },
+        equippedArmor: 'clunky',
+      };
+      // 14 + min(2, 0) = 14
+      expect(calculateArmorClass(character)).toBe(14);
+    });
+
     it('should handle missing ability scores in calculateArmorClass', () => {
       const character: any = {};
       expect(calculateArmorClass(character)).toBe(10);
+    });
+
+    it('should handle barbarian without constitution score', () => {
+      const character: any = {
+        class: { name: 'barbarian' },
+        abilityScores: {
+          dexterity: { modifier: 2 },
+          // constitution missing
+        },
+      };
+      // 10 + 2 + 0 = 12
+      expect(calculateArmorClass(character)).toBe(12);
+    });
+
+    it('should handle monk without wisdom score', () => {
+      const character: any = {
+        class: { name: 'monk' },
+        abilityScores: {
+          dexterity: { modifier: 3 },
+          // wisdom missing
+        },
+      };
+      // 10 + 3 + 0 = 13
+      expect(calculateArmorClass(character)).toBe(13);
+    });
+  });
+
+  describe('SKILLS_MAP', () => {
+    it('should map skills to correct ability scores', () => {
+      expect(SKILLS_MAP.Acrobatics).toBe('dexterity');
+      expect(SKILLS_MAP.Athletics).toBe('strength');
+      expect(SKILLS_MAP.Perception).toBe('wisdom');
+      expect(SKILLS_MAP.Arcana).toBe('intelligence');
+      expect(SKILLS_MAP.Persuasion).toBe('charisma');
+      expect(Object.keys(SKILLS_MAP).length).toBe(18);
     });
   });
 

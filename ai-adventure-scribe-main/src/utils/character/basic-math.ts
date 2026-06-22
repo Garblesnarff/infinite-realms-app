@@ -72,12 +72,12 @@ export const calculateArmorClass = (character: Character): number => {
   // Check if character has unarmored defense feature
   const hasUnarmoredDefense =
     isUnarmored &&
-    character.class &&
+    character.class?.name &&
     (character.class.name.toLowerCase() === 'barbarian' ||
       character.class.name.toLowerCase() === 'monk');
 
   // If character has unarmored defense, calculate accordingly
-  if (hasUnarmoredDefense && character.class && character.abilityScores) {
+  if (hasUnarmoredDefense && character.class?.name && character.abilityScores) {
     const baseAC = 10;
 
     switch (character.class.name.toLowerCase()) {
