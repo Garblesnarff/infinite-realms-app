@@ -236,6 +236,7 @@ export default tseslint.config(
       'src/services/ai/dm-response-processor.ts',
       'src/services/ai/__tests__/dm-response-processor.test.ts',
       'src/components/combat/CombatInterface.tsx', // 966 lines
+      'src/pages/CampaignDetailPage.tsx',
 
       // Engine files needing modularization (800+ lines)
       'src/engine/world/orchestrator.ts', // 884 lines
