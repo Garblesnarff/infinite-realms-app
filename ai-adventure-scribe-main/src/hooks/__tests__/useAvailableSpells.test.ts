@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -134,8 +135,13 @@ describe('useAvailableSpells', () => {
     });
 
     expect(spellApi.getClassSpells).toHaveBeenCalledWith('Wizard', 1);
-    expect(result.current.availableCantrips).toEqual(mockCantrips);
-    expect(result.current.availableSpells).toEqual(mockSpells);
+
+    // Verify that spells are processed with search strings
+    expect(result.current.availableCantrips[0]).toMatchObject(mockCantrips[0]);
+    expect(result.current.availableCantrips[0]).toHaveProperty('_searchString');
+    expect(result.current.availableSpells[0]).toMatchObject(mockSpells[0]);
+    expect(result.current.availableSpells[0]).toHaveProperty('_searchString');
+
     expect(result.current.spellsError).toBeNull();
   });
 

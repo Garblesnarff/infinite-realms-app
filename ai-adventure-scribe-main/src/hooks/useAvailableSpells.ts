@@ -12,6 +12,13 @@ interface UseAvailableSpellsProps {
   level: number;
 }
 
+/**
+ * ⚡ Bolt: Extended Spell type with pre-calculated search string for high-performance filtering.
+ */
+interface ProcessedSpell extends Spell {
+  _searchString: string;
+}
+
 export interface UseAvailableSpellsReturn {
   availableCantrips: Spell[];
   availableSpells: Spell[];
@@ -28,27 +35,31 @@ export interface UseAvailableSpellsReturn {
 }
 
 /**
+ * ⚡ Bolt: Pre-calculates a lowercased search string for a spell.
+ */
+const processSpell = (spell: Spell): ProcessedSpell => ({
+  ...spell,
+  _searchString: `${spell.name} ${spell.description} ${spell.school}`.toLowerCase(),
+});
+
+/**
  * ⚡ Bolt: Static helper function extracted outside the hook to avoid
  * unnecessary useCallback overhead and simplify dependency tracking for pure logic.
+ * Optimized to use pre-calculated search strings and avoid redundant processing.
  */
-const filterSpells = (spells: Spell[], searchTerm: string, filters: SpellFilters): Spell[] => {
-  // ⚡ Bolt: Hoist search term lowercasing and school lookup set outside the loop
-  // to avoid redundant O(N) work and reduce complexity of the filter operation.
-  const searchLower = searchTerm.toLowerCase();
-  const schoolSet = filters.schools.length > 0 ? new Set(filters.schools) : null;
-
+const filterSpells = (
+  spells: ProcessedSpell[],
+  searchLower: string,
+  filters: SpellFilters,
+  schoolSet: Set<string> | null,
+): ProcessedSpell[] => {
   return spells.filter((spell) => {
-    // Search term filter
-    if (searchLower) {
-      const matchesSearch =
-        spell.name.toLowerCase().includes(searchLower) ||
-        spell.description.toLowerCase().includes(searchLower) ||
-        spell.school.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
+    // Search term filter - uses pre-calculated O(1) search string
+    if (searchLower && !spell._searchString.includes(searchLower)) {
+      return false;
     }
 
-    // School filter
+    // School filter - uses Set for O(1) lookup
     if (schoolSet && !schoolSet.has(spell.school)) {
       return false;
     }
@@ -79,8 +90,8 @@ export function useAvailableSpells({
   // Loading state
   const [isLoadingSpells, setIsLoadingSpells] = useState(false);
   const [spellsError, setSpellsError] = useState<string | null>(null);
-  const [availableCantrips, setAvailableCantrips] = useState<Spell[]>([]);
-  const [availableSpells, setAvailableSpells] = useState<Spell[]>([]);
+  const [availableCantrips, setAvailableCantrips] = useState<ProcessedSpell[]>([]);
+  const [availableSpells, setAvailableSpells] = useState<ProcessedSpell[]>([]);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,8 +140,9 @@ export function useAvailableSpells({
         spellNames: spells.slice(0, 3).map((s) => s.name),
       });
 
-      setAvailableCantrips(cantrips);
-      setAvailableSpells(spells);
+      // ⚡ Bolt: Pre-process spells to include search strings upon retrieval.
+      setAvailableCantrips(cantrips.map(processSpell));
+      setAvailableSpells(spells.map(processSpell));
     } catch (error) {
       logger.error('Failed to fetch spells:', error);
       setSpellsError(error instanceof Error ? error.message : 'Failed to load spells');
@@ -146,14 +158,19 @@ export function useAvailableSpells({
     fetchSpells();
   }, [fetchSpells]);
 
-  // Filtered spells
-  const filteredCantrips = useMemo(() => {
-    return filterSpells(availableCantrips, searchTerm, filters);
-  }, [availableCantrips, searchTerm, filters]);
+  /**
+   * ⚡ Bolt: Consolidated filtering into a single useMemo to avoid redundant
+   * processing of search terms and filter criteria.
+   */
+  const { filteredCantrips, filteredSpells } = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
+    const schoolSet = filters.schools.length > 0 ? new Set(filters.schools) : null;
 
-  const filteredSpells = useMemo(() => {
-    return filterSpells(availableSpells, searchTerm, filters);
-  }, [availableSpells, searchTerm, filters]);
+    return {
+      filteredCantrips: filterSpells(availableCantrips, searchLower, filters, schoolSet),
+      filteredSpells: filterSpells(availableSpells, searchLower, filters, schoolSet),
+    };
+  }, [availableCantrips, availableSpells, searchTerm, filters]);
 
   return {
     availableCantrips,
