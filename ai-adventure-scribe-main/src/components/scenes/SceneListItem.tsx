@@ -13,7 +13,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -78,21 +77,19 @@ export const SceneListItem: React.FC<SceneListItemProps> = ({
         {/* Details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <h3
-                    className="text-lg font-semibold truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
-                    tabIndex={0}
-                  >
-                    {scene.name}
-                  </h3>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{scene.name}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <h3
+                  className="text-lg font-semibold truncate cursor-default outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm"
+                  tabIndex={0}
+                >
+                  {scene.name}
+                </h3>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{scene.name}</p>
+              </TooltipContent>
+            </Tooltip>
             {scene.isActive && (
               <Badge className="bg-electricCyan text-white">
                 <Eye className="mr-1 h-3 w-3" aria-hidden="true" />

@@ -18,14 +18,12 @@ describe('SceneTemplateLibrary Accessibility', () => {
     expect(filterGroup).toBeInTheDocument();
 
     // Check "All" button
-    const allButton = screen.getByRole('button', { name: /^all$/i });
+    const allButton = screen.getByRole('button', { name: /show all templates/i });
     expect(allButton).toHaveAttribute('aria-pressed', 'true');
-    expect(allButton).toHaveAttribute('title', 'Show all templates');
 
     // Check a category button
-    const interiorButton = screen.getByRole('button', { name: /interior/i });
+    const interiorButton = screen.getByRole('button', { name: /show interior templates/i });
     expect(interiorButton).toHaveAttribute('aria-pressed', 'false');
-    expect(interiorButton).toHaveAttribute('title', 'Show interior templates');
 
     // Click category button and verify state change
     fireEvent.click(interiorButton);

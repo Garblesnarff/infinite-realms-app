@@ -159,8 +159,9 @@ export const FolderItem: React.FC<FolderItemProps> = ({
             <TooltipTrigger asChild>
               <Badge
                 variant="secondary"
-                className="text-xs cursor-help"
+                className="text-xs cursor-help focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none"
                 aria-label={`${folder.characterCount} characters`}
+                tabIndex={0}
               >
                 {folder.characterCount}
               </Badge>
