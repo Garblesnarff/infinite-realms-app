@@ -19,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 
 interface WeaponManagementPanelProps {
@@ -63,35 +69,43 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sword className="w-5 h-5" />
-          Weapon Management
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Main Hand Weapon */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <Label htmlFor={mainHandId}>Main Hand</Label>
-            {mainHandWeapon && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  unequipMainHandWeapon(participantId);
-                  setSelectedMainHand('');
-                }}
-                aria-label="Unequip main hand"
-                title="Unequip main hand weapon"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
+    <TooltipProvider>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sword className="w-5 h-5" aria-hidden="true" />
+            Weapon Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Main Hand Weapon */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label htmlFor={mainHandId}>Main Hand</Label>
+              {mainHandWeapon && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        unequipMainHandWeapon(participantId);
+                        setSelectedMainHand('');
+                      }}
+                      aria-label={`Unequip ${mainHandWeapon.name} from main hand`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Unequip {mainHandWeapon.name} from main hand</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
 
-          {mainHandWeapon ? (
+            {mainHandWeapon ? (
             <div className="p-2 bg-muted rounded">
               <div className="font-medium">{mainHandWeapon.name}</div>
               <div className="text-sm text-muted-foreground">
@@ -103,52 +117,59 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="flex gap-2">
-              <Select value={selectedMainHand} onValueChange={setSelectedMainHand}>
-                <SelectTrigger
-                  id={mainHandId}
-                  aria-label="Select main hand weapon"
-                  title="Choose a weapon to equip in main hand"
+            ) : (
+              <div className="flex gap-2">
+                <Select value={selectedMainHand} onValueChange={setSelectedMainHand}>
+                  <SelectTrigger id={mainHandId}>
+                    <SelectValue placeholder="Select weapon" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weapons.map((weapon) => (
+                      <SelectItem key={weapon.id} value={weapon.id}>
+                        {weapon.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={handleEquipMainHand}
+                  disabled={!selectedMainHand}
                 >
-                  <SelectValue placeholder="Select weapon" />
-                </SelectTrigger>
-                <SelectContent>
-                  {weapons.map((weapon) => (
-                    <SelectItem key={weapon.id} value={weapon.id}>
-                      {weapon.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleEquipMainHand} disabled={!selectedMainHand}>
-                Equip
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Off-Hand Weapon */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <Label htmlFor={offHandId}>Off-Hand</Label>
-            {offHandWeapon && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  unequipOffHandWeapon(participantId);
-                  setSelectedOffHand('');
-                }}
-                aria-label="Unequip off-hand"
-                title="Unequip off-hand weapon"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+                  Equip
+                </Button>
+              </div>
             )}
           </div>
 
-          {offHandWeapon ? (
+          {/* Off-Hand Weapon */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label htmlFor={offHandId}>Off-Hand</Label>
+              {offHandWeapon && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        unequipOffHandWeapon(participantId);
+                        setSelectedOffHand('');
+                      }}
+                      aria-label={`Unequip ${offHandWeapon.name} from off-hand`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Unequip {offHandWeapon.name} from off-hand</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+
+            {offHandWeapon ? (
             <div className="p-2 bg-muted rounded">
               <div className="font-medium">{offHandWeapon.name}</div>
               <div className="text-sm text-muted-foreground">
@@ -160,40 +181,41 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="flex gap-2">
-              <Select value={selectedOffHand} onValueChange={setSelectedOffHand}>
-                <SelectTrigger
-                  id={offHandId}
-                  aria-label="Select off-hand weapon"
-                  title="Choose a weapon to equip in off-hand"
+            ) : (
+              <div className="flex gap-2">
+                <Select value={selectedOffHand} onValueChange={setSelectedOffHand}>
+                  <SelectTrigger id={offHandId}>
+                    <SelectValue placeholder="Select weapon" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weapons
+                      .filter(
+                        (weapon) =>
+                          weapon.weaponProperties?.light ||
+                          weapon.weaponProperties?.finesse ||
+                          weapon.name.toLowerCase().includes('dagger') ||
+                          weapon.name.toLowerCase().includes('hand'),
+                      )
+                      .map((weapon) => (
+                        <SelectItem key={weapon.id} value={weapon.id}>
+                          {weapon.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={handleEquipOffHand}
+                  disabled={!selectedOffHand}
                 >
-                  <SelectValue placeholder="Select weapon" />
-                </SelectTrigger>
-                <SelectContent>
-                  {weapons
-                    .filter(
-                      (weapon) =>
-                        weapon.weaponProperties?.light ||
-                        weapon.weaponProperties?.finesse ||
-                        weapon.name.toLowerCase().includes('dagger') ||
-                        weapon.name.toLowerCase().includes('hand'),
-                    )
-                    .map((weapon) => (
-                      <SelectItem key={weapon.id} value={weapon.id}>
-                        {weapon.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleEquipOffHand} disabled={!selectedOffHand}>
-                Equip
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+                  Equip
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 };
 

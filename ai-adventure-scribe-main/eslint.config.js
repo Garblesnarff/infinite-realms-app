@@ -270,6 +270,7 @@ export default tseslint.config(
       'src/services/voice/voice-constants.ts',
       'src/components/combat/CombatActionPanel.tsx',
       'src/components/combat/CombatActionForm.tsx',
+      'src/components/combat/WeaponManagementPanel.tsx',
       'src/components/character-creation/steps/RaceSelection.tsx', // 766 lines
       'src/components/character-creation/steps/VariantHumanSelection.tsx',
       'src/components/character-creation/steps/variant-human/use-variant-human-selection.ts',

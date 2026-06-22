@@ -66,7 +66,7 @@ describe('AbilityScores Accessibility and Logic', () => {
     });
   });
 
-  it('save button has descriptive aria-label and title', () => {
+  it('save button has descriptive aria-label', () => {
     render(
       <AbilityScores
         characterId="test-id"
@@ -77,7 +77,6 @@ describe('AbilityScores Accessibility and Logic', () => {
 
     const saveButton = screen.getByRole('button', { name: /save ability scores/i });
     expect(saveButton).toBeInTheDocument();
-    expect(saveButton).toHaveAttribute('title', 'Save ability scores');
   });
 
   it('updates stats and calls supabase on save', async () => {

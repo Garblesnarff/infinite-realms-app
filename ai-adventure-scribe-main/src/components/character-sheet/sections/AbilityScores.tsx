@@ -4,6 +4,12 @@ import React, { useState, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
@@ -96,42 +102,55 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
   };
 
   return (
-    <Card className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Ability Scores</h2>
-        <Button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2"
-          title="Save ability scores"
-          aria-label={isSaving ? 'Saving ability scores...' : 'Save ability scores'}
-        >
-          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save
-        </Button>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {Object.entries(editedStats).map(([ability, value]) => (
-          <div key={ability} className="space-y-2">
-            <label
-              htmlFor={`${baseId}-${ability}`}
-              className="block text-sm font-medium text-gray-700 capitalize"
-            >
-              {ability}
-            </label>
-            <Input
-              id={`${baseId}-${ability}`}
-              type="number"
-              min="3"
-              max="20"
-              value={value}
-              onChange={(e) => handleStatChange(ability as keyof typeof stats, e.target.value)}
-              className="w-full"
-            />
-          </div>
-        ))}
-      </div>
-    </Card>
+    <TooltipProvider>
+      <Card className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Ability Scores</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2"
+                aria-label={isSaving ? 'Saving ability scores...' : 'Save ability scores'}
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                Save
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Save ability scores to character sheet</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {Object.entries(editedStats).map(([ability, value]) => (
+            <div key={ability} className="space-y-2">
+              <label
+                htmlFor={`${baseId}-${ability}`}
+                className="block text-sm font-medium text-gray-700 capitalize"
+              >
+                {ability}
+              </label>
+              <Input
+                id={`${baseId}-${ability}`}
+                type="number"
+                min="3"
+                max="20"
+                value={value}
+                onChange={(e) => handleStatChange(ability as keyof typeof stats, e.target.value)}
+                className="w-full"
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </TooltipProvider>
   );
 };
 
