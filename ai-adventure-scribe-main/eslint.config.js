@@ -526,6 +526,8 @@ export default tseslint.config(
       'src/agents/services/lore-keeper/LoreKeeperService.ts',
       'src/agents/services/lore-keeper/__tests__/LoreKeeperService.test.ts',
       'src/features/character/components/sheet/sections/class-feature-tracker/ResourceSection.tsx',
+      'server-bun/src/services/exhaustion-service.ts',
+      'server-bun/src/services/exhaustion/exhaustion-mechanics.ts',
     ],
     rules: {
       'max-lines': 'warn',
