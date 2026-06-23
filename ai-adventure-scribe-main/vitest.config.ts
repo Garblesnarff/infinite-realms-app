@@ -31,6 +31,7 @@ export default defineConfig({
       'src/services/__tests__/localSpellService.test.ts',
       'src/services/__tests__/gallery-service.test.ts',
       'src/services/__tests__/character-background-generator.test.ts',
+      'src/services/__tests__/model-usage-tracker.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',
       'src/lib/logger.test.ts',
       'src/lib/telemetry.test.ts',
@@ -458,6 +459,7 @@ export default defineConfig({
       include: [
         'src/services/spellApi.ts',
         'src/services/character-background-generator.ts',
+        'src/services/model-usage-tracker.ts',
         'src/services/localSpellService.ts',
         'src/services/gallery-service.ts',
         'src/services/passive-skills-service.ts',
