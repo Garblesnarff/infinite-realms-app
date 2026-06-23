@@ -9,11 +9,51 @@ export interface AssetInfo {
   name: string;
 }
 
+/**
+ * Prepared asset with pre-compiled regex pattern for performance
+ */
+interface PreparedAsset extends AssetInfo {
+  pattern: RegExp;
+}
+
 // Module-level cache for assets to avoid re-fetching
 let cachedAssets: { campaignId: string; assets: AssetInfo[] } | null = null;
 
+// ⚡ Bolt: Cache for prepared assets (sorted and with compiled regexes)
+// to avoid O(N log N) sorting and O(N) regex compilation on every AI response.
+let preparedAssetsCache: {
+  originalAssets: AssetInfo[];
+  prepared: PreparedAsset[];
+} | null = null;
+
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Internal helper to prepare assets for processing (sorting and regex compilation)
+ */
+function getPreparedAssets(assets: AssetInfo[]): PreparedAsset[] {
+  // Return cached version if it's the exact same array reference
+  if (preparedAssetsCache && preparedAssetsCache.originalAssets === assets) {
+    return preparedAssetsCache.prepared;
+  }
+
+  // Sort assets by name length (longest first) to avoid partial matches
+  // e.g. "Lord Diabolo" matches before "Lord"
+  const sorted = [...assets].sort((a, b) => b.name.length - a.name.length);
+
+  const prepared = sorted.map((asset) => ({
+    ...asset,
+    pattern: new RegExp(`\\b${escapeRegex(asset.name)}\\b`, 'i'),
+  }));
+
+  preparedAssetsCache = {
+    originalAssets: assets,
+    prepared,
+  };
+
+  return prepared;
 }
 
 /**
@@ -28,17 +68,16 @@ export function insertAssetTags(text: string, assets: AssetInfo[]): string {
 
   let result = text;
 
-  // Sort assets by name length (longest first) to avoid partial matches
-  const sortedAssets = [...assets].sort((a, b) => b.name.length - a.name.length);
+  // ⚡ Bolt: Use prepared assets to skip redundant sorting and regex compilation.
+  const preparedAssets = getPreparedAssets(assets);
 
-  for (const asset of sortedAssets) {
+  for (const asset of preparedAssets) {
     // Skip if tag already exists for this asset
     const existingTag = `[ASSET:${asset.type}:${asset.key}]`;
     if (result.includes(existingTag)) continue;
 
-    // Match FULL name only (case-insensitive, word boundary)
-    const pattern = new RegExp(`\\b${escapeRegex(asset.name)}\\b`, 'i');
-    const match = result.match(pattern);
+    // Match FULL name only (case-insensitive, word boundary) using pre-compiled pattern
+    const match = result.match(asset.pattern);
 
     if (match && match.index !== undefined) {
       // For single-word asset names, only auto-insert when the matched text starts with a

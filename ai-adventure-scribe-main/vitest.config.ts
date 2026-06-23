@@ -531,6 +531,7 @@ export default defineConfig({
         'src/services/combat-audit/reporter.ts',
         'src/services/ai/prompts/character-description-prompts.ts',
         'src/services/ai/character-description-parser.ts',
+        'src/services/ai/asset-processor.ts',
         'src/services/ai/dm-response-processor.ts',
         'src/utils/sentence-segmenter.ts',
         'src/utils/narrative-text-cleanup.ts',
