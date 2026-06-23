@@ -144,26 +144,27 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<RevealedArea[]> {
-    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
-    // This reduces round-trips and ensures defense-in-depth even if pre-flight check fails.
-    const fogRecord = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId),
-        this.getAccessFilter(sceneId, userId, requesterId)
-      ),
-    });
+    // ⚡ Bolt: Refactored to use a single joined query for both access verification and data retrieval.
+    // This eliminates the redundant verifyAccess query when no fog record exists, reducing
+    // database round-trips from 2 to 1 for all new scene loads.
+    const [result] = await db
+      .select({
+        revealedAreas: fogOfWar.revealedAreas,
+      })
+      .from(scenes)
+      .leftJoin(
+        fogOfWar,
+        and(eq(fogOfWar.sceneId, scenes.id), eq(fogOfWar.userId, userId))
+      )
+      .where(FogOfWarService.getAccessConditions(sceneId, userId, requesterId))
+      .limit(1);
 
-    if (!fogRecord) {
-      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
-      // If unauthorized, verifyAccess will throw NotFoundError.
-      await this.verifyAccess(sceneId, userId, requesterId);
-
-      // No fog of war record yet - return empty array
-      return [];
+    if (!result) {
+      // 🛡️ Sentinel: If no row is returned, the scene either doesn't exist or requester lacks access.
+      throw new NotFoundError('Scene', sceneId);
     }
 
-    return fogRecord.revealedAreas as RevealedArea[];
+    return (result.revealedAreas as RevealedArea[]) || [];
   }
 
   /**
@@ -522,21 +523,26 @@ export class FogOfWarService {
     userId: string,
     requesterId: string
   ): Promise<FogOfWar | null> {
-    // 🛡️ Sentinel: Combined verification and retrieval into a single query.
-    const record = await db.query.fogOfWar.findFirst({
-      where: and(
-        eq(fogOfWar.sceneId, sceneId),
-        eq(fogOfWar.userId, userId),
-        this.getAccessFilter(sceneId, userId, requesterId)
-      ),
-    });
+    // ⚡ Bolt: Refactored to use a single joined query for both access verification and record retrieval.
+    // This reduces database round-trips from 2 to 1 for new or unvisited scenes.
+    const [result] = await db
+      .select({
+        record: fogOfWar,
+      })
+      .from(scenes)
+      .leftJoin(
+        fogOfWar,
+        and(eq(fogOfWar.sceneId, scenes.id), eq(fogOfWar.userId, userId))
+      )
+      .where(FogOfWarService.getAccessConditions(sceneId, userId, requesterId))
+      .limit(1);
 
-    if (!record) {
-      // 🛡️ Sentinel: If no record was found, we still need to verify access to maintain standard error behavior.
-      await this.verifyAccess(sceneId, userId, requesterId);
+    if (!result) {
+      // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
+      throw new NotFoundError('Scene', sceneId);
     }
 
-    return record || null;
+    return (result.record as FogOfWar | null) || null;
   }
 
   /**
