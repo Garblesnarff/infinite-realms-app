@@ -1,15 +1,14 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 
 import type { AbilityScores } from '@/types/character';
 
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useAbilityRollingLogic } from '@/hooks/ability-score/use-ability-rolling-logic';
+import { usePointBuyLogic, ABILITIES, POINT_COST } from '@/hooks/ability-score/use-point-buy-logic';
+export { ABILITIES, POINT_COST };
 import { calculateModifier } from '@/utils/abilityScoreUtils';
-import {
-  generateAbilityScoresDetailed,
-  rerollSingleScoreDetailed,
-  type AbilityScoreRollResult,
-} from '@/utils/diceRolls';
+import { type AbilityScoreRollResult } from '@/utils/diceRolls';
 import {
   calculateRacialBonuses,
   getTotalRacialBonus,
@@ -18,27 +17,6 @@ import {
 } from '@/utils/racialAbilityBonuses';
 
 export type Method = 'pointBuy' | 'standardArray' | 'roll';
-
-// Cost table for point-buy system
-export const POINT_COST: Record<number, number> = {
-  8: 0,
-  9: 1,
-  10: 2,
-  11: 3,
-  12: 4,
-  13: 5,
-  14: 7,
-  15: 9,
-};
-
-export const ABILITIES: (keyof AbilityScores)[] = [
-  'strength',
-  'dexterity',
-  'constitution',
-  'intelligence',
-  'wisdom',
-  'charisma',
-];
 
 export interface UseAbilityScoreSelectionReturn {
   state: ReturnType<typeof useCharacter>['state'];
@@ -65,192 +43,39 @@ export interface UseAbilityScoreSelectionReturn {
 /**
  * Hook for managing ability score selection logic
  * Extracted from AbilityScoresSelection.tsx
+ * Refactored to delegate to specialized sub-hooks
  */
 export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
   const [method, setMethod] = useState<Method>('pointBuy');
-  const [rollHistory, setRollHistory] = useState<number[][]>([]);
-  const [currentRollDetails, setCurrentRollDetails] = useState<AbilityScoreRollResult | null>(null);
 
-  // Initialize remaining points from context or default value
-  const [remainingPoints, setRemainingPoints] = useState(() => {
-    return state.character?.remainingAbilityPoints ?? 27;
+  // Delegate point-buy logic
+  const {
+    remainingPoints,
+    setRemainingPoints,
+    handleIncreaseScore,
+    handleDecreaseScore,
+    pointsUsed,
+    pointBuyValid,
+  } = usePointBuyLogic({
+    character: state.character,
+    dispatch,
+    method,
   });
 
-  useEffect(() => {
-    // Update context with remaining points whenever they change
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { remainingAbilityPoints: remainingPoints },
-    });
-  }, [remainingPoints, dispatch]);
-
-  /**
-   * Handles increasing an ability score if points are available
-   */
-  const handleIncreaseScore = useCallback(
-    (ability: keyof AbilityScores) => {
-      const currentScore = state.character?.abilityScores?.[ability]?.score || 8;
-      if (
-        currentScore < 15 &&
-        remainingPoints >= POINT_COST[currentScore + 1] - POINT_COST[currentScore]
-      ) {
-        const newScores: AbilityScores = {
-          strength: { score: 8, modifier: -1, savingThrow: false },
-          dexterity: { score: 8, modifier: -1, savingThrow: false },
-          constitution: { score: 8, modifier: -1, savingThrow: false },
-          intelligence: { score: 8, modifier: -1, savingThrow: false },
-          wisdom: { score: 8, modifier: -1, savingThrow: false },
-          charisma: { score: 8, modifier: -1, savingThrow: false },
-          ...state.character?.abilityScores,
-          [ability]: {
-            score: currentScore + 1,
-            modifier: calculateModifier(currentScore + 1),
-            savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
-          },
-        };
-
-        dispatch({
-          type: 'UPDATE_CHARACTER',
-          payload: { abilityScores: newScores },
-        });
-
-        setRemainingPoints(
-          (prev) => prev - (POINT_COST[currentScore + 1] - POINT_COST[currentScore]),
-        );
-      }
-    },
-    [state.character?.abilityScores, remainingPoints, dispatch],
-  );
-
-  /**
-   * Handles decreasing an ability score and refunding points
-   */
-  const handleDecreaseScore = useCallback(
-    (ability: keyof AbilityScores) => {
-      const currentScore = state.character?.abilityScores?.[ability]?.score || 8;
-      if (currentScore > 8) {
-        const newScores: AbilityScores = {
-          strength: { score: 8, modifier: -1, savingThrow: false },
-          dexterity: { score: 8, modifier: -1, savingThrow: false },
-          constitution: { score: 8, modifier: -1, savingThrow: false },
-          intelligence: { score: 8, modifier: -1, savingThrow: false },
-          wisdom: { score: 8, modifier: -1, savingThrow: false },
-          charisma: { score: 8, modifier: -1, savingThrow: false },
-          ...state.character?.abilityScores,
-          [ability]: {
-            score: currentScore - 1,
-            modifier: calculateModifier(currentScore - 1),
-            savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
-          },
-        };
-
-        dispatch({
-          type: 'UPDATE_CHARACTER',
-          payload: { abilityScores: newScores },
-        });
-
-        setRemainingPoints(
-          (prev) => prev + (POINT_COST[currentScore] - POINT_COST[currentScore - 1]),
-        );
-      }
-    },
-    [state.character?.abilityScores, dispatch],
-  );
-
-  /**
-   * Handles rolling new ability scores with detailed results
-   */
-  const handleRollScores = useCallback(() => {
-    const rollResult = generateAbilityScoresDetailed();
-    const newScores: AbilityScores = {
-      strength: { score: 8, modifier: -1, savingThrow: false },
-      dexterity: { score: 8, modifier: -1, savingThrow: false },
-      constitution: { score: 8, modifier: -1, savingThrow: false },
-      intelligence: { score: 8, modifier: -1, savingThrow: false },
-      wisdom: { score: 8, modifier: -1, savingThrow: false },
-      charisma: { score: 8, modifier: -1, savingThrow: false },
-      ...state.character?.abilityScores,
-    };
-
-    ABILITIES.forEach((ability, index) => {
-      newScores[ability] = {
-        score: rollResult.scores[index],
-        modifier: calculateModifier(rollResult.scores[index]),
-        savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
-      };
-    });
-
-    setRollHistory((prev) => [...prev, rollResult.scores]);
-    setCurrentRollDetails(rollResult);
-
-    dispatch({
-      type: 'UPDATE_CHARACTER',
-      payload: { abilityScores: newScores },
-    });
-
-    toast({
-      title: 'Ability Scores Rolled!',
-      description: 'New scores have been generated using 4d6 drop lowest.',
-    });
-  }, [state.character?.abilityScores, dispatch, toast]);
-
-  /**
-   * Handles rerolling a single ability score
-   */
-  const handleRerollSingleScore = useCallback(
-    (abilityIndex: number) => {
-      if (!currentRollDetails) return;
-
-      const currentScores = ABILITIES.map(
-        (ability) => state.character?.abilityScores?.[ability]?.score || 8,
-      );
-      const updatedResult = rerollSingleScoreDetailed(
-        currentScores,
-        currentRollDetails.details,
-        abilityIndex,
-      );
-
-      const newScores: AbilityScores = {
-        strength: { score: 8, modifier: -1, savingThrow: false },
-        dexterity: { score: 8, modifier: -1, savingThrow: false },
-        constitution: { score: 8, modifier: -1, savingThrow: false },
-        intelligence: { score: 8, modifier: -1, savingThrow: false },
-        wisdom: { score: 8, modifier: -1, savingThrow: false },
-        charisma: { score: 8, modifier: -1, savingThrow: false },
-        ...state.character?.abilityScores,
-      };
-
-      ABILITIES.forEach((ability, index) => {
-        newScores[ability] = {
-          score: updatedResult.scores[index],
-          modifier: calculateModifier(updatedResult.scores[index]),
-          savingThrow: state.character?.abilityScores?.[ability]?.savingThrow || false,
-        };
-      });
-
-      setCurrentRollDetails(updatedResult);
-
-      // Update roll history with the new scores
-      const newHistory = [...rollHistory];
-      if (newHistory.length > 0) {
-        newHistory[newHistory.length - 1] = updatedResult.scores;
-        setRollHistory(newHistory);
-      }
-
-      dispatch({
-        type: 'UPDATE_CHARACTER',
-        payload: { abilityScores: newScores },
-      });
-
-      toast({
-        title: 'Score Rerolled!',
-        description: `${ABILITIES[abilityIndex]} has been rerolled.`,
-      });
-    },
-    [currentRollDetails, state.character?.abilityScores, rollHistory, dispatch, toast],
-  );
+  // Delegate rolling logic
+  const {
+    rollHistory,
+    setRollHistory,
+    currentRollDetails,
+    setCurrentRollDetails,
+    handleRollScores,
+    handleRerollSingleScore,
+  } = useAbilityRollingLogic({
+    character: state.character,
+    dispatch,
+  });
 
   /**
    * Applies the standard array to ability scores
@@ -315,7 +140,8 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
 
     setRemainingPoints(27);
     setRollHistory([]);
-  }, [state.character?.abilityScores, dispatch]);
+    setCurrentRollDetails(null);
+  }, [state.character?.abilityScores, dispatch, setRemainingPoints, setRollHistory, setCurrentRollDetails]);
 
   const getAbilityDescription = useCallback((ability: keyof AbilityScores) => {
     const descriptions: Record<keyof AbilityScores, string> = {
@@ -350,17 +176,6 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     },
     [state.character?.abilityScores, racialBonuses],
   );
-
-  // Validate point buy: 27 points total
-  const pointsUsed = useMemo(() => {
-    if (method !== 'pointBuy') return 0;
-    return ABILITIES.reduce((total, ability) => {
-      const score = state.character?.abilityScores?.[ability]?.score || 8;
-      return total + (POINT_COST[score] || 0);
-    }, 0);
-  }, [method, state.character?.abilityScores]);
-
-  const pointBuyValid = method !== 'pointBuy' || pointsUsed <= 27;
 
   // Validate standard array: must use exactly [15,14,13,12,10,8]
   const standardArrayValid = useMemo(() => {
