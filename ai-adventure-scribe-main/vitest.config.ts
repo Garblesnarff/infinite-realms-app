@@ -432,6 +432,7 @@ export default defineConfig({
       'src/features/game-session/components/game/__tests__/TimelineRail.test.tsx',
       'src/features/safety/__tests__/SafetyResponseFactory.test.ts',
       'src/utils/lighting/__tests__/mechanics.test.ts',
+      'src/services/ai/shared/__tests__/utils.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -877,6 +878,8 @@ export default defineConfig({
         'src/components/character-sheet/MulticlassManager.tsx',
         'src/features/character/components/sheet/MulticlassManager.tsx',
         'src/utils/lighting/mechanics.ts',
+        'src/services/ai/shared/__tests__/utils.test.ts',
+        'src/services/ai/shared/utils.ts',
       ],
       exclude: [
         '**/__tests__/**',
