@@ -18,6 +18,12 @@ import ReactionOpportunityPanel from './ReactionOpportunityPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useCombatActions } from '@/hooks/use-combat-actions';
 
 interface CombatInterfaceProps {
@@ -77,81 +83,102 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
   // Show the pre-combat card only if combat hasn't started
   if (!isInCombat && !showCombatMode) {
     return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sword className="w-5 h-5" />
-            Combat Ready
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center py-8">
-            <div className="text-muted-foreground mb-4">
-              Prepare for battle! Your party is ready to engage enemies.
-            </div>
-
-            {playerParticipants.length === 0 ? (
-              <div className="text-destructive mb-4">
-                No player characters found. Please ensure your character is selected.
+      <TooltipProvider>
+        <Card className="w-full max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sword className="w-5 h-5" aria-hidden="true" />
+              Combat Ready
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center py-8">
+              <div className="text-muted-foreground mb-4">
+                Prepare for battle! Your party is ready to engage enemies.
               </div>
-            ) : (
-              <div className="space-y-2 mb-4">
-                <p className="text-sm text-muted-foreground">
-                  Party: {playerParticipants.map((p) => p.name).join(', ')}
-                </p>
-                {enemyParticipants.length > 0 && (
-                  <p className="text-sm text-destructive">
-                    Enemies: {enemyParticipants.map((p) => p.name).join(', ')}
-                  </p>
-                )}
-              </div>
-            )}
 
-            <div className="flex gap-2 justify-center">
-              {isDM ? (
-                <>
-                <Button
-                  onClick={addEnemy}
-                  variant="outline"
-                  size="sm"
-                  title="Add a new enemy to the encounter"
-                >
-                    <Users className="w-4 h-4 mr-2" />
-                    Add Enemy
-                  </Button>
-                  <Button
-                    onClick={handleStartCombat}
-                    disabled={isStartingCombat || playerParticipants.length === 0}
-                  >
-                    {isStartingCombat ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Begin Combat
-                      </>
-                    )}
-                  </Button>
-                </>
+              {playerParticipants.length === 0 ? (
+                <div className="text-destructive mb-4">
+                  No player characters found. Please ensure your character is selected.
+                </div>
               ) : (
-                <div className="text-sm text-muted-foreground">
-                  The DM will begin combat when ready.
+                <div className="space-y-2 mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Party: {playerParticipants.map((p) => p.name).join(', ')}
+                  </p>
+                  {enemyParticipants.length > 0 && (
+                    <p className="text-sm text-destructive">
+                      Enemies: {enemyParticipants.map((p) => p.name).join(', ')}
+                    </p>
+                  )}
                 </div>
               )}
+
+              <div className="flex gap-2 justify-center">
+                {isDM ? (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={addEnemy}
+                          variant="outline"
+                          size="sm"
+                          aria-label="Add a new enemy to the encounter"
+                        >
+                          <Users className="w-4 h-4 mr-2" aria-hidden="true" />
+                          Add Enemy
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add a new enemy to the encounter</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={handleStartCombat}
+                          disabled={isStartingCombat || playerParticipants.length === 0}
+                          aria-label="Begin the combat encounter"
+                        >
+                          {isStartingCombat ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-4 h-4 mr-2" aria-hidden="true" />
+                              Begin Combat
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Roll initiative and start the encounter</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    The DM will begin combat when ready.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </TooltipProvider>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Combat Header */}
-      <Card>
+    <TooltipProvider>
+      <div className="space-y-6">
+        {/* Combat Header */}
+        <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-3">
             <div
@@ -166,26 +193,42 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocalShowInitiativeTracker(!localShowInitiativeTracker)}
-              title="Toggle initiative tracker"
-              aria-expanded={localShowInitiativeTracker}
-              aria-controls={trackerId}
-            >
-              {localShowInitiativeTracker ? 'Hide' : 'Show'} Tracker
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocalShowInitiativeTracker(!localShowInitiativeTracker)}
+                  aria-label={localShowInitiativeTracker ? 'Hide initiative tracker' : 'Show initiative tracker'}
+                  aria-expanded={localShowInitiativeTracker}
+                  aria-controls={trackerId}
+                >
+                  {localShowInitiativeTracker ? 'Hide' : 'Show'} Tracker
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{localShowInitiativeTracker ? 'Hide' : 'Show'} initiative tracker</p>
+              </TooltipContent>
+            </Tooltip>
             {isDM && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleEndCombat}
-                title="End current combat encounter"
-              >
-                <X className="w-4 h-4 mr-2" />
-                End Combat
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleEndCombat}
+                    aria-label="End current combat encounter"
+                  >
+                    <X className="w-4 h-4 mr-2" aria-hidden="true" />
+                    End Combat
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>End current combat encounter</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
         </CardHeader>
@@ -292,15 +335,23 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
                       <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                       <p>No enemies in combat</p>
                       {isDM && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={addEnemy}
-                          className="mt-2"
-                          title="Add a new enemy to the encounter"
-                        >
-                          Add Enemy
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={addEnemy}
+                              className="mt-2"
+                              aria-label="Add a new enemy to the encounter"
+                            >
+                              Add Enemy
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Add a new enemy to the encounter</p>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   )}
@@ -395,7 +446,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };
 
