@@ -6,11 +6,8 @@ import { PlayerMessage } from './PlayerMessage';
 
 import type { ChatMessage } from '@/types/game';
 
-import {
-  CombatMessage,
-  InitiativeMessage,
-  CombatSummaryMessage,
-} from '@/components/combat/CombatMessage';
+import { CombatMessage, CombatSummaryMessage } from '@/components/combat/CombatMessage';
+import { InitiativeMessage } from '@/components/combat/messages/InitiativeMessage';
 import { DiceRollMessage } from '@/components/game/DiceRollMessage';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
