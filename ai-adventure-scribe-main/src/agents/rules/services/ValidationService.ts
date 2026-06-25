@@ -35,9 +35,12 @@ export class ValidationService {
     }
 
     try {
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+      // Large JSON columns (rule_exceptions, rule_references, validation_data) are not needed
+      // during the initial rule evaluation process, saving bandwidth and memory.
       const { data, error } = await supabase
         .from('rule_validations')
-        .select('*')
+        .select('id, rule_type, rule_conditions, rule_requirements')
         .eq('rule_type', ruleContext.type)
         .eq('is_active', true);
 
