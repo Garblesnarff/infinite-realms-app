@@ -11,7 +11,7 @@ import {
   listBlogTags,
   updateBlogCategory,
   updateBlogTag,
-} from '@/services/blog/blog-service';
+} from '@/services/blog/blog-taxonomy-service';
 
 export const BLOG_CATEGORIES_QUERY_KEY = 'blog-categories';
 export const BLOG_TAGS_QUERY_KEY = 'blog-tags';

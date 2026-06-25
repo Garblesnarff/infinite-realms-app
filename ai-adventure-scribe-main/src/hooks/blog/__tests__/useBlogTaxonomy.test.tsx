@@ -17,10 +17,10 @@ import {
   BLOG_CATEGORIES_QUERY_KEY
 } from '../useBlogTaxonomy';
 
-import * as blogService from '@/services/blog/blog-service';
+import * as blogTaxonomyService from '@/services/blog/blog-taxonomy-service';
 
-// Mock the blog service
-vi.mock('@/services/blog/blog-service', () => ({
+// Mock the blog taxonomy service
+vi.mock('@/services/blog/blog-taxonomy-service', () => ({
   listBlogCategories: vi.fn(),
   createBlogCategory: vi.fn(),
   updateBlogCategory: vi.fn(),
@@ -71,13 +71,13 @@ describe('useBlogTaxonomy', () => {
       const mockCategories = [
         { id: '1', title: 'Category 1', slug: 'cat-1', createdAt: new Date().toISOString() },
       ];
-      (blogService.listBlogCategories as any).mockResolvedValue(mockCategories);
+      (blogTaxonomyService.listBlogCategories as any).mockResolvedValue(mockCategories);
 
       const { result } = renderHook(() => useBlogCategories(), { wrapper });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(mockCategories);
-      expect(blogService.listBlogCategories).toHaveBeenCalledTimes(1);
+      expect(blogTaxonomyService.listBlogCategories).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -91,7 +91,7 @@ describe('useBlogTaxonomy', () => {
     };
 
     it('should successfully create a category and update cache', async () => {
-      (blogService.createBlogCategory as any).mockResolvedValue(mockCreated);
+      (blogTaxonomyService.createBlogCategory as any).mockResolvedValue(mockCreated);
 
       const { result } = renderHook(() => useCreateBlogCategory(), { wrapper });
 
@@ -99,7 +99,7 @@ describe('useBlogTaxonomy', () => {
         await result.current.mutateAsync(input);
       });
 
-      expect(blogService.createBlogCategory).toHaveBeenCalledWith(input, expect.anything());
+      expect(blogTaxonomyService.createBlogCategory).toHaveBeenCalledWith(input, expect.anything());
 
       // Check if cache was invalidated/updated
       const cached = queryClient.getQueryData([BLOG_CATEGORIES_QUERY_KEY]);
@@ -112,7 +112,7 @@ describe('useBlogTaxonomy', () => {
       const mutationPromise = new Promise((resolve) => {
         resolveMutation = resolve;
       });
-      (blogService.createBlogCategory as any).mockReturnValue(mutationPromise);
+      (blogTaxonomyService.createBlogCategory as any).mockReturnValue(mutationPromise);
 
       const { result } = renderHook(() => useCreateBlogCategory(), { wrapper });
 
@@ -137,14 +137,14 @@ describe('useBlogTaxonomy', () => {
       });
 
       // Cache should be invalidated (refetched in real app, but here we just check settled)
-      expect(blogService.createBlogCategory).toHaveBeenCalled();
+      expect(blogTaxonomyService.createBlogCategory).toHaveBeenCalled();
     });
 
     it('should rollback cache on failure', async () => {
       const previousData = [{ id: 'old', title: 'Old', slug: 'old' }];
       queryClient.setQueryData([BLOG_CATEGORIES_QUERY_KEY], previousData);
 
-      (blogService.createBlogCategory as any).mockRejectedValue(new Error('Failed'));
+      (blogTaxonomyService.createBlogCategory as any).mockRejectedValue(new Error('Failed'));
 
       const { result } = renderHook(() => useCreateBlogCategory(), { wrapper });
 
@@ -176,7 +176,7 @@ describe('useBlogTaxonomy', () => {
       const mutationPromise = new Promise((resolve) => {
         resolveMutation = resolve;
       });
-      (blogService.updateBlogCategory as any).mockReturnValue(mutationPromise);
+      (blogTaxonomyService.updateBlogCategory as any).mockReturnValue(mutationPromise);
 
       const { result } = renderHook(() => useUpdateBlogCategory(), { wrapper });
 
@@ -201,7 +201,7 @@ describe('useBlogTaxonomy', () => {
       const mockTags = [
         { id: '1', name: 'Tag 1', slug: 'tag-1', createdAt: new Date().toISOString() },
       ];
-      (blogService.listBlogTags as any).mockResolvedValue(mockTags);
+      (blogTaxonomyService.listBlogTags as any).mockResolvedValue(mockTags);
 
       const { result } = renderHook(() => useBlogTags(), { wrapper });
 
@@ -217,7 +217,7 @@ describe('useBlogTaxonomy', () => {
     it('should optimistically update tag cache', async () => {
       let resolveMutation: (val: any) => void;
       const mutationPromise = new Promise((resolve) => { resolveMutation = resolve; });
-      (blogService.createBlogTag as any).mockReturnValue(mutationPromise);
+      (blogTaxonomyService.createBlogTag as any).mockReturnValue(mutationPromise);
 
       const { result } = renderHook(() => useCreateBlogTag(), { wrapper });
 
@@ -235,7 +235,7 @@ describe('useBlogTaxonomy', () => {
 
     it('should rollback tag cache on failure', async () => {
       queryClient.setQueryData(['blog-tags'], []);
-      (blogService.createBlogTag as any).mockRejectedValue(new Error('Failed'));
+      (blogTaxonomyService.createBlogTag as any).mockRejectedValue(new Error('Failed'));
 
       const { result } = renderHook(() => useCreateBlogTag(), { wrapper });
 
@@ -253,7 +253,7 @@ describe('useBlogTaxonomy', () => {
     it('should optimistically update a tag', async () => {
       const initial = [{ id: '1', name: 'Old', slug: 'old' }];
       queryClient.setQueryData(['blog-tags'], initial);
-      (blogService.updateBlogTag as any).mockResolvedValue({ ...initial[0], name: 'New' });
+      (blogTaxonomyService.updateBlogTag as any).mockResolvedValue({ ...initial[0], name: 'New' });
 
       const { result } = renderHook(() => useUpdateBlogTag(), { wrapper });
 
@@ -270,7 +270,7 @@ describe('useBlogTaxonomy', () => {
     it('should optimistically remove a tag', async () => {
       const initial = [{ id: '1', name: 'To Delete', slug: 'delete' }];
       queryClient.setQueryData(['blog-tags'], initial);
-      (blogService.deleteBlogTag as any).mockResolvedValue(undefined);
+      (blogTaxonomyService.deleteBlogTag as any).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useDeleteBlogTag(), { wrapper });
 
@@ -288,7 +288,7 @@ describe('useBlogTaxonomy', () => {
       (globalThis.crypto as any).randomUUID = undefined;
 
       const input = { title: 'Fallback 2', slug: 'fallback-2' };
-      (blogService.createBlogCategory as any).mockResolvedValue({ id: '2', ...input });
+      (blogTaxonomyService.createBlogCategory as any).mockResolvedValue({ id: '2', ...input });
 
       const { result } = renderHook(() => useCreateBlogCategory(), { wrapper });
 
@@ -307,7 +307,7 @@ describe('useBlogTaxonomy', () => {
     it('should handle optional fields in update', async () => {
       const id = '1';
       queryClient.setQueryData([BLOG_CATEGORIES_QUERY_KEY], [{ id, title: 'Old', slug: 'old', description: 'old' }]);
-      (blogService.updateBlogCategory as any).mockResolvedValue({ id, title: 'New', slug: 'new', description: null });
+      (blogTaxonomyService.updateBlogCategory as any).mockResolvedValue({ id, title: 'New', slug: 'new', description: null });
 
       const { result } = renderHook(() => useUpdateBlogCategory(), { wrapper });
 
@@ -321,7 +321,7 @@ describe('useBlogTaxonomy', () => {
 
     it('should return empty array if cache is empty during update', async () => {
       queryClient.setQueryData([BLOG_CATEGORIES_QUERY_KEY], undefined);
-      (blogService.updateBlogCategory as any).mockResolvedValue({ id: '1', title: 'New' });
+      (blogTaxonomyService.updateBlogCategory as any).mockResolvedValue({ id: '1', title: 'New' });
 
       const { result } = renderHook(() => useUpdateBlogCategory(), { wrapper });
 
@@ -337,7 +337,7 @@ describe('useBlogTaxonomy', () => {
     it('should handle optional fields in update', async () => {
       const id = '1';
       queryClient.setQueryData(['blog-tags'], [{ id, name: 'Old', slug: 'old', description: 'old' }]);
-      (blogService.updateBlogTag as any).mockResolvedValue({ id, name: 'New', slug: 'new', description: null });
+      (blogTaxonomyService.updateBlogTag as any).mockResolvedValue({ id, name: 'New', slug: 'new', description: null });
 
       const { result } = renderHook(() => useUpdateBlogTag(), { wrapper });
 
@@ -351,7 +351,7 @@ describe('useBlogTaxonomy', () => {
 
     it('should return empty array if cache is empty during update', async () => {
       queryClient.setQueryData(['blog-tags'], undefined);
-      (blogService.updateBlogTag as any).mockResolvedValue({ id: '1', name: 'New' });
+      (blogTaxonomyService.updateBlogTag as any).mockResolvedValue({ id: '1', name: 'New' });
 
       const { result } = renderHook(() => useUpdateBlogTag(), { wrapper });
 
@@ -372,7 +372,7 @@ describe('useBlogTaxonomy', () => {
 
     it('should optimistically remove a category', async () => {
       queryClient.setQueryData([BLOG_CATEGORIES_QUERY_KEY], initialData);
-      (blogService.deleteBlogCategory as any).mockResolvedValue(undefined);
+      (blogTaxonomyService.deleteBlogCategory as any).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useDeleteBlogCategory(), { wrapper });
 

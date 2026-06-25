@@ -467,6 +467,8 @@ export default tseslint.config(
       'src/features/character/hooks/__tests__/use-personality-manager.test.ts',
       'src/features/character/components/sheet/PersonalityManager.tsx',
       'src/components/character-sheet/PersonalityManager.tsx',
+      'src/services/blog/blog-service.ts',
+      'src/hooks/blog/useBlogTaxonomy.ts',
       'src/utils/stealthUtils.ts',
       'src/utils/__tests__/stealthUtils.test.ts',
       'src/features/safety/SafetyCommandProcessor.ts',
