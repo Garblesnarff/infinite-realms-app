@@ -49,7 +49,9 @@ describe('CombatStatus', () => {
     expect(statusContainer.getAttribute('aria-atomic')).toBe('true');
 
     // Check for phase group label
-    expect(screen.getByLabelText('Current phase: Exploration')).toBeDefined();
+    const phaseIndicator = screen.getByLabelText('Current phase: Exploration');
+    expect(phaseIndicator).toBeDefined();
+    expect(phaseIndicator.getAttribute('tabindex')).toBe('0');
   });
 
   it('displays different phases correctly', () => {
@@ -100,9 +102,18 @@ describe('CombatStatus', () => {
 
     expect(screen.getByText('Hero')).toBeDefined();
     expect(screen.getByLabelText('Active turn: Hero')).toBeDefined();
-    expect(screen.getByLabelText('Initiative: 15')).toBeDefined();
-    expect(screen.getByLabelText('Health: 20 of 20')).toBeDefined();
-    expect(screen.getByLabelText('Combat Round 1')).toBeDefined();
+
+    const initiativeBadge = screen.getByLabelText('Initiative: 15');
+    expect(initiativeBadge).toBeDefined();
+    expect(initiativeBadge.getAttribute('tabindex')).toBe('0');
+
+    const healthIndicator = screen.getByLabelText('Health: 20 of 20');
+    expect(healthIndicator).toBeDefined();
+    expect(healthIndicator.getAttribute('tabindex')).toBe('0');
+
+    const roundCounter = screen.getByLabelText('Combat Round 1');
+    expect(roundCounter).toBeDefined();
+    expect(roundCounter.getAttribute('tabindex')).toBe('0');
   });
 
   it('displays pending rolls count with accessibility label', () => {
