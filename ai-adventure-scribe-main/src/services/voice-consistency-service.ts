@@ -12,14 +12,14 @@
  * @author AI Dungeon Master Team
  */
 
+import { VoiceConsistencyRepository } from './voice/voice-consistency-repository';
+import { inferVoiceCategory, normalizeCharacterName } from './voice/voice-utils';
 import { VoiceMapper } from './voice-mapper';
 import { voiceProfileService, type VoiceProfile } from './voice-profile-service';
 
 import type { VoiceConfig } from './voice/voice-types';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-
 
 export { type VoiceProfile };
 
@@ -66,7 +66,7 @@ export class VoiceConsistencyService {
     logger.info('🎭 Getting voice context for session:', sessionId);
 
     try {
-      const mappings = await this.getSessionMappings(sessionId);
+      const mappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
       const knownCharacters: SessionVoiceContext['knownCharacters'] =
         {} as SessionVoiceContext['knownCharacters'];
@@ -118,7 +118,7 @@ export class VoiceConsistencyService {
     logger.info('🎪 Processing voice assignments for', segments.length, 'segments');
 
     const assignments: VoiceAssignment[] = [];
-    const existingMappings = await this.getSessionMappings(sessionId);
+    const existingMappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
     const mappingLookup = new Map(existingMappings.map((m) => [m.characterName, m]));
 
     // ⚡ Bolt: Track appearance counts for aggregation to avoid redundant sequential updates.
@@ -140,7 +140,7 @@ export class VoiceConsistencyService {
         continue;
       }
 
-      const cleanCharacter = this.normalizeCharacterName(segment.character);
+      const cleanCharacter = normalizeCharacterName(segment.character);
       const existingMapping = mappingLookup.get(cleanCharacter);
 
       if (existingMapping) {
@@ -158,7 +158,7 @@ export class VoiceConsistencyService {
         updatesNeeded.set(existingMapping.id, (updatesNeeded.get(existingMapping.id) || 0) + 1);
       } else {
         // New character - use AI's voice category assignment or fallback
-        const voiceCategory = segment.voice_category || this.inferVoiceCategory(cleanCharacter);
+        const voiceCategory = segment.voice_category || inferVoiceCategory(cleanCharacter);
         const voiceConfig =
           VoiceMapper.getAllVoices()[voiceCategory] || VoiceMapper.getAllVoices().default;
 
@@ -194,14 +194,14 @@ export class VoiceConsistencyService {
       const mapping = existingMappings.find((m) => m.id === id);
       if (mapping) {
         const newCount = mapping.appearanceCount + increment;
-        tasks.push(this.updateCharacterUsage(id, newCount));
+        tasks.push(VoiceConsistencyRepository.updateCharacterUsage(id, newCount));
       }
     }
 
     // Aggregated inserts
     for (const data of insertsNeeded.values()) {
       tasks.push(
-        this.saveCharacterVoiceMapping(
+        VoiceConsistencyRepository.saveCharacterVoiceMapping(
           sessionId,
           data.characterName,
           data.voiceCategory,
@@ -224,160 +224,6 @@ export class VoiceConsistencyService {
   }
 
   /**
-   * Get voice mappings for a session
-   * Retrieves all character voice mappings for this specific session
-   */
-  private async getSessionMappings(sessionId: string): Promise<
-    Array<{
-      id: string;
-      characterName: string;
-      voiceCategory: string;
-      voiceId: string | null;
-      lastUsed: Date;
-      appearanceCount: number;
-    }>
-  > {
-    try {
-      // ⚡ Bolt: Using explicit column selection to avoid over-fetching
-      // large JSONB metadata fields when listing mappings.
-      const { data, error } = await supabase
-        .from('character_voice_mappings')
-        .select(
-          'id, character_name, voice_category, voice_id, last_used, updated_at, appearance_count',
-        )
-        .eq('session_id', sessionId);
-
-      if (error) {
-        logger.error('Error fetching voice mappings:', error);
-        return [];
-      }
-
-      if (!data || data.length === 0) {
-        logger.debug(`No voice mappings found for session: ${sessionId}`);
-        return [];
-      }
-
-      // Transform to the expected format
-      return data.map((mapping) => ({
-        id: mapping.id,
-        characterName: mapping.character_name,
-        voiceCategory: mapping.voice_category,
-        voiceId: mapping.voice_id,
-        lastUsed: new Date(mapping.last_used || mapping.updated_at || Date.now()),
-        appearanceCount: mapping.appearance_count || 1,
-      }));
-    } catch (error) {
-      logger.error('Error getting session mappings:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Save a new character voice mapping
-   */
-  private async saveCharacterVoiceMapping(
-    sessionId: string,
-    characterName: string,
-    voiceCategory: string,
-    voiceId: string,
-    initialCount: number = 1,
-  ): Promise<void> {
-    try {
-      const now = new Date().toISOString();
-      const { error } = await supabase.from('character_voice_mappings').insert({
-        session_id: sessionId,
-        character_name: characterName,
-        voice_category: voiceCategory,
-        voice_id: voiceId,
-        appearance_count: initialCount,
-        first_appearance: now,
-        last_used: now,
-        metadata: {},
-      });
-
-      if (error) throw error;
-
-      logger.info(
-        `💾 Saved voice mapping: ${characterName} -> ${voiceCategory} (count: ${initialCount})`,
-      );
-    } catch (error) {
-      logger.error('Error saving character voice mapping:', error);
-    }
-  }
-
-  /**
-   * Update character usage statistics
-   */
-  private async updateCharacterUsage(mappingId: string, newCount: number): Promise<void> {
-    try {
-      // ⚡ Bolt: Optimized to perform update in a single round-trip by using the pre-calculated count.
-      // This eliminates the redundant SELECT query previously performed here.
-      const now = new Date().toISOString();
-
-      const { error } = await supabase
-        .from('character_voice_mappings')
-        .update({
-          appearance_count: newCount,
-          last_used: now,
-          updated_at: now,
-        })
-        .eq('id', mappingId);
-
-      if (error) throw error;
-
-      logger.debug(`📊 Updated usage for mapping: ${mappingId} (count: ${newCount})`);
-    } catch (error) {
-      logger.error('Error updating character usage:', error);
-    }
-  }
-
-  /**
-   * Normalize character names for consistency
-   */
-  private normalizeCharacterName(name: string): string {
-    return name
-      .trim()
-      .toLowerCase()
-      .replace(/^(the|a|an)\s+/i, '') // Remove articles
-      .replace(/[^\w\s'-]/g, '') // Keep only letters, spaces, apostrophes, hyphens
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
-  }
-
-  /**
-   * Infer voice category from character name when AI doesn't provide one
-   */
-  private inferVoiceCategory(characterName: string): string {
-    const name = characterName.toLowerCase();
-
-    // Check for character type keywords
-    const keywords = {
-      elder: ['wizard', 'sage', 'old', 'ancient', 'elder', 'master', 'thorne'],
-      villain_male: ['villain', 'dark', 'evil', 'lord', 'demon', 'shadow'],
-      villain_female: ['witch', 'sorceress', 'dark lady', 'empress'],
-      guard: ['guard', 'soldier', 'captain', 'knight', 'watchman'],
-      merchant: ['merchant', 'trader', 'shopkeeper', 'vendor'],
-      child: ['child', 'kid', 'young', 'boy', 'girl'],
-      monster: ['dragon', 'beast', 'creature', 'monster', 'giant'],
-      goblin: ['goblin', 'imp', 'sprite', 'kobold'],
-    };
-
-    for (const [category, keywordList] of Object.entries(keywords)) {
-      if (keywordList.some((keyword) => name.includes(keyword))) {
-        return category;
-      }
-    }
-
-    // Default fallbacks
-    if (name.includes('female') || name.includes('woman') || name.includes('lady')) {
-      return 'hero_female';
-    }
-
-    // Default to male hero voice
-    return 'hero_male';
-  }
-
-  /**
    * Clear cache for a session (useful for debugging)
    */
   clearSessionCache(sessionId: string): void {
@@ -393,7 +239,7 @@ export class VoiceConsistencyService {
     voiceCategoryCounts: Record<string, number>;
     recentCharacters: string[];
   }> {
-    const mappings = await this.getSessionMappings(sessionId);
+    const mappings = await VoiceConsistencyRepository.getSessionMappings(sessionId);
 
     const voiceCategoryCounts: Record<string, number> = {};
     mappings.forEach((mapping) => {

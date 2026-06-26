@@ -14,6 +14,7 @@
  */
 
 import { VoiceAudioService } from './voice/voice-audio-service';
+import { cleanSegmentText } from './voice/voice-utils';
 import {
   type VoiceSegment,
   type VoicePool,
@@ -45,7 +46,7 @@ export class VoiceDirector {
 
       try {
         // Clean and validate text
-        const cleanText = VoiceDirector.cleanSegmentText(segment.text);
+        const cleanText = cleanSegmentText(segment.text);
         if (!cleanText) {
           logger.warn(`⚠️ Skipping empty segment ${i + 1}`);
           continue;
@@ -88,7 +89,7 @@ export class VoiceDirector {
   static processPlainText(text: string): VoiceSegment[] {
     logger.info('📝 VoiceDirector: Processing plain text with dialogue detection');
 
-    const cleanText = VoiceDirector.cleanSegmentText(text);
+    const cleanText = cleanSegmentText(text);
     if (!cleanText) {
       return [];
     }
@@ -203,18 +204,6 @@ export class VoiceDirector {
    */
   static async generateAudio(segment: VoiceSegment, apiKey: string): Promise<VoiceSegment> {
     return VoiceAudioService.generateAudio(segment, apiKey);
-  }
-
-  /**
-   * Clean segment text for audio generation
-   */
-  private static cleanSegmentText(text: string): string {
-    if (!text) return '';
-
-    return text
-      .replace(/[*_`#]/g, '') // Remove markdown
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
   }
 
   /**

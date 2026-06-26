@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
 import { voiceConsistencyService, type VoiceProfile } from '@/services/voice-consistency-service';
 import { voiceProfileService } from '@/services/voice-profile-service';
+import { normalizeCharacterName } from '@/services/voice/voice-utils';
 
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => {
@@ -127,8 +128,7 @@ describe('VoiceConsistencyService (Delegation)', () => {
 
   describe('Session Mapping logic (Existing)', () => {
     it('should normalize character names correctly', () => {
-       // @ts-ignore - private method access for test
-       const result = voiceConsistencyService.normalizeCharacterName('  The Goblin King!  ');
+       const result = normalizeCharacterName('  The Goblin King!  ');
        expect(result).toBe('goblin king');
     });
   });

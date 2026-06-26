@@ -1,4 +1,9 @@
+import { normalizeCharacterName } from './voice/voice-utils';
+
 import logger from '@/lib/logger';
+
+// Re-export utility for backward compatibility and internal use
+export { normalizeCharacterName };
 
 // Core types for voice management
 export interface VoiceSegment {
@@ -338,19 +343,6 @@ export function hashCharacterName(character: string): number {
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash);
-}
-
-/**
- * Normalize character names for consistent voice assignment
- */
-export function normalizeCharacterName(character: string): string {
-  return character
-    .toLowerCase()
-    .trim()
-    .replace(/^(the|a|an)\s+/i, '') // Remove articles
-    .replace(/[^\w\s'-]/g, '') // Remove special characters except apostrophes and hyphens
-    .replace(/\s+/g, ' ') // Normalize spaces
-    .trim();
 }
 
 /**
