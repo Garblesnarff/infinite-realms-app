@@ -15,14 +15,20 @@
  */
 
 // External/SDK Imports
+import { logger } from '../../../lib/logger';
+
+import type { CampaignContext } from '@/types/dm';
+
 import { supabase } from '@/integrations/supabase/client';
 
 // Project Types
-import { CampaignContext } from '@/types/dm';
-import { logger } from '../../../lib/logger';
 
 export class MechanicsGenerator {
-  async generateMechanics(context: CampaignContext) {
+  async generateMechanics(context: CampaignContext): Promise<{
+    availableActions: string[];
+    relevantRules: string[];
+    suggestions: string[];
+  }> {
     return {
       availableActions: ['Move', 'Interact', 'Attack', 'Cast Spell'], // These could be dynamic later
       relevantRules: await this.getRulesForContext(),
@@ -42,11 +48,10 @@ export class MechanicsGenerator {
       return ['Error fetching rules.'];
     }
 
-    return (
-      rules?.map((rule) => rule.rule_description as string) || [
-        'No specific rules highlighted currently.',
-      ]
-    );
+    const mappedRules = rules?.map((rule) => rule.rule_description as string) || [];
+    return mappedRules.length > 0
+      ? mappedRules
+      : ['No specific rules highlighted currently.'];
   }
 
   private generateActionSuggestions(context: CampaignContext): string[] {
