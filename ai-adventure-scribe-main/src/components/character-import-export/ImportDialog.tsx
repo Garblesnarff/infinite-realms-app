@@ -292,15 +292,46 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
         </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleImport}
-              disabled={!characterData || !!validationError || importMutation.isPending}
-            >
-              {importMutation.isPending ? 'Importing...' : 'Import Character'}
-            </Button>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel and close dialog</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    type="button"
+                    onClick={handleImport}
+                    disabled={!characterData || validationError !== null || importMutation.isPending}
+                    aria-label={
+                      importName || characterData?.character.name
+                        ? `Import character: ${importName || characterData?.character.name}`
+                        : 'Import character'
+                    }
+                  >
+                    {importMutation.isPending ? 'Importing...' : 'Import Character'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {importMutation.isPending
+                    ? 'Importing character...'
+                    : !characterData
+                      ? 'Select a character file to import'
+                      : validationError !== null
+                        ? 'Fix validation errors before importing'
+                        : `Import ${importName || characterData.character.name} to your collection`}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </DialogFooter>
         </DialogContent>
       </TooltipProvider>
