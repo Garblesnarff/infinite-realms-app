@@ -9,6 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 
 interface CombatActionFormProps {
@@ -71,23 +77,31 @@ export const CombatActionForm: React.FC<CombatActionFormProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-2">
-        <selectedAction.icon className="w-5 h-5" />
-        <h4 className="font-semibold">{selectedAction.name}</h4>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          aria-label="Cancel action"
-          title="Cancel action"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </Button>
-      </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <selectedAction.icon className="w-5 h-5" />
+          <h4 className="font-semibold">{selectedAction.name}</h4>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                aria-label="Cancel current action and return to list"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Cancel current action and return to list</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
 
-      <p className="text-sm text-gray-600">{selectedAction.description}</p>
+        <p className="text-sm text-gray-600">{selectedAction.description}</p>
 
       {selectedAction.type === 'cast_spell' ? (
         <SpellSlotPanel
@@ -115,14 +129,22 @@ export const CombatActionForm: React.FC<CombatActionFormProps> = ({
             />
           </div>
           <div className="flex space-x-2">
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex-1"
-              title={`Submit ${selectedAction.name} and roll ${hitDiceToRoll} hit dice`}
-            >
-              Take {selectedAction.name}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="flex-1"
+                  aria-label={`Submit ${selectedAction.name} and roll ${hitDiceToRoll} hit dice`}
+                >
+                  Take {selectedAction.name}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Submit {selectedAction.name} and roll {hitDiceToRoll} hit dice</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       ) : (
@@ -145,26 +167,43 @@ export const CombatActionForm: React.FC<CombatActionFormProps> = ({
         selectedAction.type !== 'short_rest' &&
         selectedAction.type !== 'long_rest' && (
           <div className="flex space-x-2">
-            <Button
-              onClick={handleSubmit}
-              disabled={!actionDetails.trim() || isSubmitting}
-              className="flex-1"
-              title={`Submit ${selectedAction.name} action`}
-            >
-              <MessageSquare className="w-4 h-4 mr-2" aria-hidden="true" />
-              {isSubmitting ? 'Submitting...' : `Take ${selectedAction.name}`}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!actionDetails.trim() || isSubmitting}
+                  className="flex-1"
+                  aria-label={`Submit ${selectedAction.name} action`}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" aria-hidden="true" />
+                  {isSubmitting ? 'Submitting...' : `Take ${selectedAction.name}`}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Submit {selectedAction.name} action</p>
+              </TooltipContent>
+            </Tooltip>
 
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              disabled={isSubmitting}
-              title="Cancel and return to action list"
-            >
-              Cancel
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onCancel}
+                  disabled={isSubmitting}
+                  aria-label="Cancel and return to action list"
+                >
+                  Cancel
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel and return to action list</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };

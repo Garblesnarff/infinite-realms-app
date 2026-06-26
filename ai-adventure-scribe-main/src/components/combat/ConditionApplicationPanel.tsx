@@ -23,6 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // ===========================
 // Condition Application Component
@@ -77,8 +83,9 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
   const hasAnyConditions = participants.some((p) => p.conditions.length > 0);
 
   return (
-    <div className="space-y-4">
-      <h4 className="font-semibold">Apply Condition</h4>
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-4">
+        <h4 className="font-semibold">Apply Condition</h4>
 
       <div className="space-y-3">
         <div className="space-y-2">
@@ -157,14 +164,31 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
           />
         </div>
 
-        <Button
-          onClick={handleApplyCondition}
-          disabled={!selectedCondition || !selectedTarget}
-          className="w-full"
-          variant="default"
-        >
-          Apply {selectedCondition ? CONDITION_TEMPLATES[selectedCondition].name : 'Condition'}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              onClick={handleApplyCondition}
+              disabled={!selectedCondition || !selectedTarget}
+              className="w-full"
+              variant="default"
+              aria-label={
+                selectedCondition && selectedTarget
+                  ? `Apply ${CONDITION_TEMPLATES[selectedCondition].name} to ${participants.find((p) => p.id === selectedTarget)?.name}`
+                  : 'Apply condition'
+              }
+            >
+              Apply {selectedCondition ? CONDITION_TEMPLATES[selectedCondition].name : 'Condition'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              {selectedCondition && selectedTarget
+                ? `Apply ${CONDITION_TEMPLATES[selectedCondition].name} to ${participants.find((p) => p.id === selectedTarget)?.name}`
+                : 'Select a condition and target'}
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Current Conditions */}
@@ -195,22 +219,30 @@ export const ConditionApplicationPanel: React.FC<ConditionApplicationPanelProps>
                       </Badge>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveCondition(condition.name, participant.id)}
-                    className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
-                    aria-label={`Remove ${condition.name} from ${participant.name}`}
-                    title={`Remove ${condition.name} from ${participant.name}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveCondition(condition.name, participant.id)}
+                        className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
+                        aria-label={`Remove ${condition.name} from ${participant.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove {condition.name} from {participant.name}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               )),
             )
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };

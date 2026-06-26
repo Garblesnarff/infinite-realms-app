@@ -17,6 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 import {
@@ -90,39 +96,56 @@ const GrappleActionPanel: React.FC<GrappleActionPanelProps> = ({ participantId, 
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="w-5 h-5" />
-          Grapple
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <Label htmlFor={targetSelectId}>Target</Label>
-            <Select value={selectedTarget} onValueChange={setSelectedTarget}>
-              <SelectTrigger
-                id={targetSelectId}
-                aria-label="Select grapple target"
-                title="Select a target to grapple"
-              >
-                <SelectValue placeholder="Select target" />
-              </SelectTrigger>
-              <SelectContent>
-                {targets.map((target) => (
-                  <SelectItem key={target.id} value={target.id}>
-                    {target.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button onClick={handleGrapple} disabled={!selectedTarget}>
+    <TooltipProvider delayDuration={300}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
             Grapple
-          </Button>
-        </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Label htmlFor={targetSelectId}>Target</Label>
+              <Select value={selectedTarget} onValueChange={setSelectedTarget}>
+                <SelectTrigger id={targetSelectId}>
+                  <SelectValue placeholder="Select target" />
+                </SelectTrigger>
+                <SelectContent>
+                  {targets.map((target) => (
+                    <SelectItem key={target.id} value={target.id}>
+                      {target.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  onClick={handleGrapple}
+                  disabled={!selectedTarget}
+                  aria-label={
+                    selectedTarget
+                      ? `Attempt to grapple ${targets.find((t) => t.id === selectedTarget)?.name}`
+                      : 'Grapple target'
+                  }
+                >
+                  Grapple
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {selectedTarget
+                    ? `Attempt to grapple ${targets.find((t) => t.id === selectedTarget)?.name}`
+                    : 'Select a target to grapple'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
         {grappleResult && (
           <div
@@ -144,8 +167,9 @@ const GrappleActionPanel: React.FC<GrappleActionPanelProps> = ({ participantId, 
             On a success, the target is grappled until they escape or you let them go.
           </p>
         </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 };
 

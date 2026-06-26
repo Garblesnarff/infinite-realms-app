@@ -120,7 +120,10 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
             ) : (
               <div className="flex gap-2">
                 <Select value={selectedMainHand} onValueChange={setSelectedMainHand}>
-                  <SelectTrigger id={mainHandId}>
+                  <SelectTrigger
+                    id={mainHandId}
+                    aria-label="Main hand weapon"
+                  >
                     <SelectValue placeholder="Select weapon" />
                   </SelectTrigger>
                   <SelectContent>
@@ -184,7 +187,10 @@ const WeaponManagementPanel: React.FC<WeaponManagementPanelProps> = ({
             ) : (
               <div className="flex gap-2">
                 <Select value={selectedOffHand} onValueChange={setSelectedOffHand}>
-                  <SelectTrigger id={offHandId}>
+                  <SelectTrigger
+                    id={offHandId}
+                    aria-label="Off-hand weapon"
+                  >
                     <SelectValue placeholder="Select weapon" />
                   </SelectTrigger>
                   <SelectContent>

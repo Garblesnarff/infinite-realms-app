@@ -70,14 +70,14 @@ describe('GrappleActionPanel', () => {
   it('renders correctly with targets', () => {
     render(<GrappleActionPanel participantId={mockParticipantId} targets={mockTargets} />);
     expect(screen.getByRole('heading', { name: /Grapple/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Grapple' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Grapple/i })).toBeDisabled();
   });
 
   it('enables the button when a target is selected', async () => {
     render(<GrappleActionPanel participantId={mockParticipantId} targets={mockTargets} />);
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     expect(button).not.toBeDisabled();
   });
 
@@ -96,7 +96,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });
@@ -130,7 +130,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });
@@ -151,7 +151,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });
@@ -172,7 +172,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });
@@ -193,7 +193,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });
@@ -214,7 +214,7 @@ describe('GrappleActionPanel', () => {
     const select = screen.getByTestId('mock-select');
     fireEvent.click(select);
 
-    const button = screen.getByRole('button', { name: 'Grapple' });
+    const button = screen.getByRole('button', { name: /Grapple/i });
     await act(async () => {
       fireEvent.click(button);
     });

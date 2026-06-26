@@ -14,6 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useCombat } from '@/contexts/CombatContext';
 import logger from '@/lib/logger';
 
@@ -114,8 +120,9 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <TooltipProvider delayDuration={300}>
+      <Card className="w-full">
+        <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Zap className="w-5 h-5" />
           Consume Resources
@@ -125,11 +132,7 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
         <div>
           <Label htmlFor={resourceSelectId}>Select Resource</Label>
           <Select value={selectedResource} onValueChange={setSelectedResource}>
-            <SelectTrigger
-              id={resourceSelectId}
-              aria-label="Select resource to consume"
-              title="Choose a resource to use"
-            >
+            <SelectTrigger id={resourceSelectId}>
               <SelectValue placeholder="Choose a resource" />
             </SelectTrigger>
             <SelectContent>
@@ -161,13 +164,48 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
           )}
 
         <div className="flex gap-2">
-          <Button onClick={handleConsumeResource} disabled={!selectedResource} className="flex-1">
-            <Zap className="w-4 h-4 mr-2" />
-            Consume
-          </Button>
-          <Button variant="outline" onClick={onClose} className="flex-1">
-            Cancel
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                onClick={handleConsumeResource}
+                disabled={!selectedResource}
+                className="flex-1"
+                aria-label={
+                  selectedResource
+                    ? `Consume ${resourceAmount} ${selectedResource.replace('-', ' ')}`
+                    : 'Consume resource'
+                }
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                Consume
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {selectedResource
+                  ? `Consume ${resourceAmount} ${selectedResource.replace('-', ' ')}`
+                  : 'Select a resource to consume'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="flex-1"
+                aria-label="Cancel resource consumption"
+              >
+                Cancel
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Cancel and close panel</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Resource Summary */}
@@ -248,8 +286,9 @@ const ResourceConsumptionPanel: React.FC<ResourceConsumptionPanelProps> = ({
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 };
 
