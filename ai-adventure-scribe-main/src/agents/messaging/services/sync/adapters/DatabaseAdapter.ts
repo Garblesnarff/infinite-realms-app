@@ -1,9 +1,15 @@
-import { supabase } from '@/integrations/supabase/client';
-import { Json } from '@/integrations/supabase/types';
 import { TypeConverter } from './TypeConverter';
-import { MessageSequence, SyncState, VectorClock, SyncStatus } from '../types';
 import { ErrorHandlingService } from '../../../../error/services/error-handling-service';
 import { ErrorCategory, ErrorSeverity } from '../../../../error/types';
+
+import type { MessageSequence, SyncState, VectorClock, SyncStatus } from '../types';
+
+import { supabase } from '@/integrations/supabase/client';
+
+// ⚡ Bolt: Define explicit column lists to avoid over-fetching and improve query performance.
+const MESSAGE_SEQUENCE_COLUMNS = 'id, message_id, sequence_number, vector_clock, created_at, updated_at';
+const SYNC_STATUS_COLUMNS = 'id, agent_id, last_sync_timestamp, sync_state, vector_clock, created_at, updated_at';
+const AGENT_COMMUNICATION_COLUMNS = 'id, message_type, content, sender_id, receiver_id, created_at';
 
 export class DatabaseAdapter {
   private static errorHandler = ErrorHandlingService.getInstance();
@@ -48,7 +54,7 @@ export class DatabaseAdapter {
   static async getMessageSequence(messageId: string): Promise<MessageSequence | null> {
     const { data, error } = await this.errorHandler.handleDatabaseOperation(
       async () =>
-        supabase.from('message_sequences').select('*').eq('message_id', messageId).single(),
+        supabase.from('message_sequences').select(MESSAGE_SEQUENCE_COLUMNS).eq('message_id', messageId).single(),
       {
         category: ErrorCategory.DATABASE,
         context: 'DatabaseAdapter.getMessageSequence',
@@ -62,7 +68,7 @@ export class DatabaseAdapter {
 
   static async getAllMessageSequences(): Promise<MessageSequence[]> {
     const { data, error } = await this.errorHandler.handleDatabaseOperation(
-      async () => supabase.from('message_sequences').select('*'),
+      async () => supabase.from('message_sequences').select(MESSAGE_SEQUENCE_COLUMNS),
       {
         category: ErrorCategory.DATABASE,
         context: 'DatabaseAdapter.getAllMessageSequences',
@@ -76,7 +82,7 @@ export class DatabaseAdapter {
 
   static async getSyncStatus(agentId: string): Promise<SyncStatus | null> {
     const { data, error } = await this.errorHandler.handleDatabaseOperation(
-      async () => supabase.from('sync_status').select('*').eq('agent_id', agentId).single(),
+      async () => supabase.from('sync_status').select(SYNC_STATUS_COLUMNS).eq('agent_id', agentId).single(),
       {
         category: ErrorCategory.DATABASE,
         context: 'DatabaseAdapter.getSyncStatus',
@@ -93,7 +99,7 @@ export class DatabaseAdapter {
       async () =>
         supabase
           .from('sync_status')
-          .select('*')
+          .select(SYNC_STATUS_COLUMNS)
           .order('last_sync_timestamp', { ascending: false })
           .limit(1)
           .single(),
@@ -108,9 +114,14 @@ export class DatabaseAdapter {
     return TypeConverter.syncStatusFromDb(data);
   }
 
-  static async getMessageById(messageId: string): Promise<any> {
+  static async getMessageById(messageId: string): Promise<Record<string, unknown> | null> {
     const { data, error } = await this.errorHandler.handleDatabaseOperation(
-      async () => supabase.from('agent_communications').select('*').eq('id', messageId).single(),
+      async () =>
+        supabase
+          .from('agent_communications')
+          .select(AGENT_COMMUNICATION_COLUMNS)
+          .eq('id', messageId)
+          .single(),
       {
         category: ErrorCategory.DATABASE,
         context: 'DatabaseAdapter.getMessageById',
