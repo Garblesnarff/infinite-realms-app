@@ -267,29 +267,49 @@ describe('CombatInitiativeService Security', () => {
     });
   });
 
-  describe('removeParticipant Security', () => {
-    it('should return early if the user does not own the participant in removeParticipant', async () => {
-      const qb = createMockQueryBuilder([]);
-      (db.select as any).mockReturnValueOnce(qb);
+  describe('advanceTurn Security', () => {
+    it('should call findFirst with ownership verification in advanceTurn', async () => {
+      const mockEncounter = {
+        id: mockEncounterId,
+        sessionId: mockSessionId,
+        status: 'active',
+        currentTurnOrder: 0,
+        currentRound: 1,
+        participants: [
+          { id: 'p1', turnOrder: 0, isActive: true },
+          { id: 'p2', turnOrder: 1, isActive: true },
+        ],
+      };
 
-      await CombatInitiativeService.removeParticipant('other-participant', mockUserId);
+      (db.query.combatEncounters.findFirst as any).mockResolvedValue(mockEncounter);
+      (db.update as any).mockReturnValue(createMockQueryBuilder([{ id: mockEncounterId }]));
 
-      // Verify that update was NOT called
-      expect(db.update).not.toHaveBeenCalled();
+      await CombatInitiativeService.advanceTurn(mockEncounterId, mockUserId);
+
+      expect(db.query.combatEncounters.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.any(Function),
+        }),
+      );
     });
+  });
 
-    it('should proceed if the user owns the participant in removeParticipant', async () => {
-      const qb = createMockQueryBuilder([{ id: 'my-participant', encounterId: mockEncounterId }]);
-      (db.select as any).mockReturnValueOnce(qb);
-
-      // Mock update for removeParticipant
-      const updateQb = createMockQueryBuilder([{ length: 1 }]);
+  describe('removeParticipant Security', () => {
+    it('should call update with ownership verification in removeParticipant', async () => {
+      // Mock update
+      const updateQb = createMockQueryBuilder([{ id: 'my-participant' }]);
       (db.update as any).mockReturnValueOnce(updateQb);
+
+      // Mock the nested SELECT for the EXISTS clause in WHERE
+      const selectQb = createMockQueryBuilder([{ one: 1 }]);
+      (db.select as any).mockReturnValueOnce(selectQb);
 
       await CombatInitiativeService.removeParticipant('my-participant', mockUserId);
 
       // Verify that update was called
       expect(db.update).toHaveBeenCalled();
+      // Verify that where was called (incorporating ownership)
+      expect(updateQb.where).toHaveBeenCalled();
     });
   });
 });

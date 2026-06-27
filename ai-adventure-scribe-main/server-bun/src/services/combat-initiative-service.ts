@@ -218,13 +218,32 @@ export class CombatInitiativeService {
    * @returns Result with previous and current participants
    */
   static async advanceTurn(encounterId: string, userId?: string): Promise<AdvanceTurnResult> {
-    if (userId) {
-      await verifyEncounterAccess(encounterId, userId);
-    }
-
-    // Single relational query to fetch encounter and active participants
+    // 🛡️ Sentinel: Combined authorization and retrieval into a single relational query.
+    // This ensures atomic verification and masks resource existence for unauthorized users.
     const encounterWithParticipants = await db.query.combatEncounters.findFirst({
-      where: (ce, { eq }) => eq(ce.id, encounterId),
+      where: (ce, { eq, and, or, exists, sql }) =>
+        and(
+          eq(ce.id, encounterId),
+          userId
+            ? exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(gameSessions)
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(gameSessions.id, ce.sessionId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
       with: {
         participants: {
           where: (cp, { eq }) => eq(cp.isActive, true),
@@ -410,58 +429,36 @@ export class CombatInitiativeService {
    * Remove a participant from combat
    */
   static async removeParticipant(participantId: string, userId?: string): Promise<void> {
-    let participant: { id: string; encounterId: string } | undefined;
-
-    if (userId) {
-      // 🛡️ Sentinel: Updated to verify ownership of the specific participant, not just encounter access.
-      // This prevents players from removing other participants from combat.
-      const [scopedParticipant] = await db
-        .select({
-          id: combatParticipants.id,
-          encounterId: combatParticipants.encounterId,
-        })
-        .from(combatParticipants)
-        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
-        .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
-        .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
-        .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
-        .where(
-          and(
-            eq(combatParticipants.id, participantId),
-            or(
-              eq(campaigns.userId, userId),
-              eq(characters.userId, userId),
-              eq(characters.ownerId, userId),
-            ),
-          ),
-        )
-        .limit(1);
-
-      if (!scopedParticipant) {
-        // If not authorized or not found, we simply return (or could throw NotFoundError)
-        // Match existing behavior of returning early.
-        return;
-      }
-
-      participant = scopedParticipant;
-    } else {
-      participant = await db.query.combatParticipants.findFirst({
-        where: eq(combatParticipants.id, participantId),
-        columns: { id: true, encounterId: true },
-      });
-
-      if (!participant) {
-        return;
-      }
-    }
-
+    // 🛡️ Sentinel: Refactored to use a single atomic UPDATE statement with inline ownership verification.
+    // This eliminates pre-flight queries and prevents IDOR while masking resource existence.
     await db
       .update(combatParticipants)
-      .set({ isActive: false })
-      .where(and(
-        eq(combatParticipants.id, participantId),
-        eq(combatParticipants.encounterId, participant.encounterId)
-      ));
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          userId
+            ? exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(combatEncounters)
+                  .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+                  .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+                  .leftJoin(characters, eq(combatParticipants.characterId, characters.id))
+                  .where(
+                    and(
+                      eq(combatEncounters.id, combatParticipants.encounterId),
+                      or(
+                        eq(campaigns.userId, userId),
+                        eq(characters.userId, userId),
+                        eq(characters.ownerId, userId),
+                      ),
+                    ),
+                  ),
+              )
+            : sql`true`,
+        ),
+      );
   }
 
   /**
