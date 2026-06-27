@@ -3,6 +3,12 @@ import React, { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface DiceRollResult {
@@ -118,70 +124,99 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
   };
 
   const baseContent = (
-    <div className={cn('flex items-center gap-2', className)}>
-      {displayOnly ? (
-        <div
-          className="flex items-center gap-1 px-2 py-1 border border-border rounded-sm bg-muted/60"
-          aria-label={label ? `Dice: ${label}` : `Dice: ${dice}`}
-          title={label || dice}
-        >
-          <Dice6 className="w-3 h-3" />
-          <span className="text-xs font-medium">{label || dice}</span>
-          {modifier !== 0 && (
-            <span className="text-xs">
-              {modifier > 0 ? '+' : ''}
-              {modifier}
-            </span>
-          )}
-        </div>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={performRoll}
-          disabled={disabled || isRolling}
-          className="flex items-center gap-1 hover:bg-primary/10"
-          aria-label={label ? `Roll ${label}` : `Roll ${dice}`}
-          title={label ? `Roll ${label}` : `Roll ${dice}`}
-        >
-          <Dice6 className={cn('w-3 h-3', isRolling && 'animate-spin')} />
-          {label || dice}
-          {modifier !== 0 && (
-            <span className="text-xs">
-              {modifier > 0 ? '+' : ''}
-              {modifier}
-            </span>
-          )}
-        </Button>
-      )}
+    <TooltipProvider>
+      <div className={cn('flex items-center gap-2', className)}>
+        {displayOnly ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className="flex items-center gap-1 px-2 py-1 border border-border rounded-sm bg-muted/60 outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-background cursor-help"
+                aria-label={label ? `Dice: ${label}` : `Dice: ${dice}`}
+                tabIndex={0}
+              >
+                <Dice6 className="w-3 h-3" aria-hidden="true" />
+                <span className="text-xs font-medium">{label || dice}</span>
+                {modifier !== 0 && (
+                  <span className="text-xs">
+                    {modifier > 0 ? '+' : ''}
+                    {modifier}
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{label || dice}</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={performRoll}
+                disabled={disabled || isRolling}
+                className="flex items-center gap-1 hover:bg-primary/10"
+                aria-label={label ? `Roll ${label}` : `Roll ${dice}`}
+              >
+                <Dice6
+                  className={cn('w-3 h-3', isRolling && 'animate-spin')}
+                  aria-hidden="true"
+                />
+                {label || dice}
+                {modifier !== 0 && (
+                  <span className="text-xs">
+                    {modifier > 0 ? '+' : ''}
+                    {modifier}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{label ? `Roll ${label}` : `Roll ${dice}`}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-      {/* Advantage/Disadvantage indicators */}
-      {advantage && (
-        <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-          <Plus className="w-2 h-2 mr-1" />
-          ADV
-        </Badge>
-      )}
-      {disadvantage && (
-        <Badge variant="secondary" className="text-xs bg-red-100 text-red-800">
-          <Minus className="w-2 h-2 mr-1" />
-          DIS
-        </Badge>
-      )}
+        {/* Advantage/Disadvantage indicators */}
+        {advantage && (
+          <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+            <Plus className="w-2 h-2 mr-1" aria-hidden="true" />
+            ADV
+          </Badge>
+        )}
+        {disadvantage && (
+          <Badge variant="secondary" className="text-xs bg-red-100 text-red-800">
+            <Minus className="w-2 h-2 mr-1" aria-hidden="true" />
+            DIS
+          </Badge>
+        )}
 
-      {/* Last roll result */}
-      {lastRoll && (
-        <Badge
-          variant="outline"
-          className={cn('text-sm font-mono', getResultColor())}
-          aria-live="polite"
-          aria-label={`Last roll total: ${lastRoll.total}`}
-          title="Last roll result"
-        >
-          {lastRoll.total}
-        </Badge>
-      )}
-    </div>
+        {/* Last roll result */}
+        {lastRoll && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-sm font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-background cursor-help',
+                  getResultColor(),
+                )}
+                aria-live="polite"
+                aria-label={`Last roll total: ${lastRoll.total}`}
+                tabIndex={0}
+              >
+                {lastRoll.total}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Last roll result</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </TooltipProvider>
   );
 
   if (displayOnly) {
