@@ -36,6 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
@@ -180,7 +181,8 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
   const sceneList = scenes || [];
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider>
+      <div className="space-y-6">
       {/* Header with view toggle and create button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2" role="group" aria-label="View mode">
@@ -194,7 +196,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                 aria-label="Grid view"
                 aria-pressed={viewMode === 'grid'}
               >
-                <Grid className="h-4 w-4" />
+                <Grid className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -212,7 +214,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
                 aria-label="List view"
                 aria-pressed={viewMode === 'list'}
               >
-                <List className="h-4 w-4" />
+                <List className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -231,7 +233,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button type="button" onClick={onCreateScene} variant="cosmic">
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               Create New Scene
             </Button>
           </TooltipTrigger>
@@ -252,7 +254,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button type="button" onClick={onCreateScene} variant="cosmic">
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
                   Create First Scene
                 </Button>
               </TooltipTrigger>
@@ -309,16 +311,32 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => sceneToDelete && handleDelete(sceneToDelete)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete Scene
-            </AlertDialogAction>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Keep this scene</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogAction
+                  onClick={() => sceneToDelete && handleDelete(sceneToDelete)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  aria-label="Delete Scene - This action cannot be undone"
+                >
+                  Delete Scene
+                </AlertDialogAction>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Permanently delete this scene</p>
+              </TooltipContent>
+            </Tooltip>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </TooltipProvider>
   );
 };

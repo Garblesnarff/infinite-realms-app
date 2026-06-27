@@ -193,3 +193,7 @@
 ## 2026-06-20 - Spell Filter Badge Tooltips
 **Learning:** Replacing native `title` attributes with Shadcn `Tooltip` components on interactive `Badge` elements (used as filters or removable tags) improves accessibility by providing a clear `aria-label` and avoids the "double tooltip" issue on desktop browsers. Wrapping the component in a `TooltipProvider` with a consistent `delayDuration={300}` ensures a smooth user experience.
 **Action:** Replace native `title` with Shadcn `Tooltip` for all interactive filter badges. Ensure `aria-label` matches the tooltip content for screen reader parity. Use local `TooltipProvider` if a global one is not available or to control timing locally.
+
+## 2026-06-28 - Scene Manager Accessibility and Tooltip Standardization
+**Learning:** Essential game management views like the Scene Manager require clear accessible names for icons and descriptive labels for destructive actions. Wrapping components in a local `TooltipProvider` ensures that tooltips function correctly even if the global provider is missing or deep in the tree. Providing tooltips on dialog actions (like Cancel/Delete) offers immediate feedback on the consequences of high-stakes operations.
+**Action:** Always wrap interactive lists and management views in a `TooltipProvider`. Add `aria-hidden="true"` to decorative icons. Use descriptive `aria-label` for destructive actions (e.g., "Delete Scene - This action cannot be undone"). Add tooltips to confirmation dialog buttons.
