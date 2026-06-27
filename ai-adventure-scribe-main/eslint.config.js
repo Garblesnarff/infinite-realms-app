@@ -417,6 +417,7 @@ export default tseslint.config(
       'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
       'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
       'src/features/game-session/components/chat/chat/DMChatBubble.tsx',
+      'src/features/game-session/components/chat/chat/DMBubbleVoiceSection.tsx',
       'src/features/game-session/components/chat/ChatInput.tsx',
       'src/features/game-session/components/chat/DiceRollRequest.tsx',
       'src/features/game-session/hooks/use-simple-chat-logic.ts',

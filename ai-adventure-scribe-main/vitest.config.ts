@@ -844,6 +844,7 @@ export default defineConfig({
         'src/components/combat/ConditionApplicationPanel.tsx',
         'src/components/combat/ResourceConsumptionPanel.tsx',
         'src/features/game-session/components/chat/chat/DMChatBubble.tsx',
+        'src/features/game-session/components/chat/chat/DMBubbleVoiceSection.tsx',
         'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
         'src/features/game-session/components/chat/message-list/MessageMetadata.tsx',
         'src/features/game-session/components/chat/message-list/MessageVoicePlayer.tsx',
