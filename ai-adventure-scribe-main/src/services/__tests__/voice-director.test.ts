@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { VoiceAudioService } from '../voice/voice-audio-service';
 import { VoiceDirector } from '../voice-director';
 import * as routing from '../voice-routing';
-import { VOICE_POOLS, clearCharacterVoiceMappings } from '../voice-routing';
+import { clearCharacterVoiceMappings } from '../voice-routing';
+import { VOICE_POOLS } from '../voice/voice-pools';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({

@@ -264,7 +264,6 @@ export default tseslint.config(
       'src/hooks/voice/use-voice-processing.ts',
       'src/hooks/use-voice-audio-control.ts',
       'src/services/voice-director.ts',
-      'src/services/voice-routing.ts',
       'src/services/voice-consistency-service.ts',
       'src/services/voice-mapper.ts',
       'src/services/voice/voice-constants.ts',

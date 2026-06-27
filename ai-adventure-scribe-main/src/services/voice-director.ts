@@ -14,18 +14,10 @@
  */
 
 import { VoiceAudioService } from './voice/voice-audio-service';
+import { detectVoiceCategoryFromNPCType } from './voice/voice-classification';
+import { type VoicePool, VOICE_POOLS } from './voice/voice-pools';
 import { cleanSegmentText } from './voice/voice-utils';
-import {
-  type VoiceSegment,
-  type VoicePool,
-  type VoiceConfig,
-  type AISegment,
-  VOICE_POOLS,
-  assignVoice,
-  detectVoiceCategoryFromNPCType,
-  getCharacterVoiceMappings as getMappings,
-  clearCharacterVoiceMappings as clearMappings,
-} from './voice-routing';
+import { type AISegment, type VoiceConfig, type VoiceSegment, assignVoice, clearCharacterVoiceMappings as clearMappings, getCharacterVoiceMappings as getMappings } from './voice-routing';
 
 import logger from '@/lib/logger';
 

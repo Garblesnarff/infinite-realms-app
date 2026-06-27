@@ -4,13 +4,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   normalizeCharacterName,
   hashCharacterName,
-  detectVoiceCategoryFromNPCType,
-  getVoicePoolByCharacter,
-  getVoicePoolByCategory,
   assignVoice,
   ensureMapInitialized,
   clearCharacterVoiceMappings,
-  VOICE_POOLS
+  VOICE_POOLS,
+  detectVoiceCategoryFromNPCType,
+  getVoicePoolByCharacter,
+  getVoicePoolByCategory,
 } from '../voice-routing';
 
 // Mock logger
