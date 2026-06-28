@@ -442,6 +442,7 @@ export default defineConfig({
       'src/features/safety/__tests__/SafetyResponseFactory.test.ts',
       'src/utils/lighting/__tests__/mechanics.test.ts',
       'src/services/ai/shared/__tests__/utils.test.ts',
+      'src/services/ai/shared/__tests__/verbalized-sampling.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -901,6 +902,7 @@ export default defineConfig({
         'src/utils/lighting/mechanics.ts',
         'src/services/ai/shared/__tests__/utils.test.ts',
         'src/services/ai/shared/utils.ts',
+        'src/services/ai/shared/verbalized-sampling.ts',
       ],
       exclude: [
         '**/__tests__/**',

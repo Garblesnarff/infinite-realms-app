@@ -263,3 +263,7 @@
 ## 2026-08-14 - [Response Service Coverage & Thenable Mocks]
 **Learning:** The `EnvironmentGenerator` and `OpportunityGenerator` services were completely untested. Testing `OpportunityGenerator` required mocking Supabase queries that are awaited directly (using `.then()` behavior). Deeply nested tests in `src/agents/services/response/__tests__` must use `../../../../lib/logger` to reach the lib directory.
 **Action:** Use `then: vi.fn().mockImplementation((cb) => cb({ data, error }))` when mocking Supabase clients for direct awaits. Always verify that new tests and source files are registered in both `include` and `coverage.include` in `vitest.config.ts`.
+
+## 2026-08-16 - [Verbalized Sampling Parser Coverage]
+**Learning:** The `Verbalized Sampling Parser` uses complex heuristics for AI response deduplication and fallback extraction. Achieving high coverage requires carefully crafted multi-paragraph inputs that trigger specific regex paths (like scene splitters) and length-based thresholds (200 chars for sections, 2500 chars for truncation).
+**Action:** When testing heuristic parsers, use varied input lengths and structures (with/without options, with/without XML tags) to verify fallback robustness. Always add `/* eslint-disable max-lines */` to test files exceeding 200 lines to comply with strict project linting.
