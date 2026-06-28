@@ -595,6 +595,7 @@ export default defineConfig({
         'src/services/auth/TokenService.ts',
         'src/services/world-builders/npc-generator.ts',
         'src/services/world-builders/location-generator.ts',
+        'src/services/world-builders/world-building-analyzer.ts',
         'src/components/spells/SpellCard.tsx',
         'src/components/spells/SpellFilterPanel.tsx',
         'src/features/character/components/spells/SpellCard.tsx',

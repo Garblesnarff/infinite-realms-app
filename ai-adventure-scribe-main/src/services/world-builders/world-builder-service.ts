@@ -1,6 +1,7 @@
 import { LocationGenerator } from './location-generator';
 import { NPCGenerator } from './npc-generator';
 import { QuestGenerator } from './quest-generator';
+import { WorldBuildingAnalyzer } from './world-building-analyzer';
 import { WorldBuilderRepository } from './world-builder-repository';
 import { MemoryManager } from '../memory-manager';
 
@@ -14,79 +15,6 @@ import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 export class WorldBuilderService {
-  /**
-   * Analyze if the current context needs world building
-   */
-  static async analyzeBuildingNeeds(context: WorldBuildingContext): Promise<WorldBuildingTrigger> {
-    const { playerAction, recentMemories = [] } = context;
-    const actionLower = playerAction.toLowerCase();
-
-    let confidence = 0;
-    const suggestions: WorldBuildingTrigger['suggestions'] = {};
-
-    // Check for location building triggers
-    const locationTriggers = [
-      'go to',
-      'enter',
-      'travel to',
-      'visit',
-      'explore',
-      'find',
-      'search for',
-    ];
-    if (locationTriggers.some((trigger) => actionLower.includes(trigger))) {
-      confidence += 0.3;
-      suggestions.locations = ['contextual location based on player action'];
-    }
-
-    // Check for NPC building triggers
-    const npcTriggers = [
-      'talk to',
-      'speak with',
-      'meet',
-      'find someone',
-      'ask',
-      'hire',
-      'buy from',
-    ];
-    if (npcTriggers.some((trigger) => actionLower.includes(trigger))) {
-      confidence += 0.3;
-      suggestions.npcs = ['contextual NPC based on player need'];
-    }
-
-    // Check for quest building triggers
-    const questTriggers = ['help', 'quest', 'mission', 'task', 'job', 'problem', 'trouble'];
-    if (questTriggers.some((trigger) => actionLower.includes(trigger))) {
-      confidence += 0.3;
-      suggestions.quests = ['quest based on current situation'];
-    }
-
-    // Check memories for world building opportunities
-    const memoryBasedOpportunities = recentMemories.filter(
-      (memory) =>
-        memory.type === 'quest' ||
-        memory.type === 'npc' ||
-        memory.type === 'location' ||
-        memory.content.includes('mysterious') ||
-        memory.content.includes('unresolved'),
-    );
-
-    if (memoryBasedOpportunities.length > 0) {
-      confidence += 0.2;
-    }
-
-    // Determine trigger type
-    let type: WorldBuildingTrigger['type'] = 'player_action';
-    if (memoryBasedOpportunities.length > 2) type = 'memory_based';
-    if (confidence < 0.2) type = 'random_event';
-
-    return {
-      type,
-      confidence: Math.min(confidence, 1.0),
-      suggestions,
-    };
-  }
-
   /**
    * Expand the world based on current context
    */
@@ -121,7 +49,7 @@ export class WorldBuilderService {
 
     try {
       // Analyze what kind of expansion is needed
-      const buildingNeeds = await this.analyzeBuildingNeeds(context);
+      const buildingNeeds = await WorldBuildingAnalyzer.analyzeBuildingNeeds(context);
 
       if (buildingNeeds.confidence < 0.3) {
         logger.info('🤏 Low confidence for world building, skipping');
@@ -182,7 +110,7 @@ export class WorldBuilderService {
             context.campaignId,
             context.sessionId,
             context.characterId,
-            this.inferQuestTypeFromAction(context.playerAction),
+            WorldBuildingAnalyzer.inferQuestTypeFromAction(context.playerAction),
           );
           result.quests.push(quest);
           result.narrativeElements.opportunities.push(...quest.hooks.initial);
@@ -244,7 +172,7 @@ export class WorldBuilderService {
       };
 
       // Only expand world if there's a good reason
-      const needs = await this.analyzeBuildingNeeds(context);
+      const needs = await WorldBuildingAnalyzer.analyzeBuildingNeeds(context);
 
       if (needs.confidence > 0.6) {
         logger.info(`🎯 High confidence (${needs.confidence}) world building triggered`);
@@ -349,51 +277,4 @@ export class WorldBuilderService {
     }
   }
 
-  /**
-   * Infer quest type from player action
-   */
-  private static inferQuestTypeFromAction(action: string): QuestRequest['type'] {
-    const actionLower = action.toLowerCase();
-
-    if (actionLower.includes('investigate') || actionLower.includes('mystery')) {
-      return 'investigation';
-    }
-    if (
-      actionLower.includes('talk') ||
-      actionLower.includes('negotiate') ||
-      actionLower.includes('convince')
-    ) {
-      return 'social';
-    }
-    if (
-      actionLower.includes('find') ||
-      actionLower.includes('get') ||
-      actionLower.includes('bring')
-    ) {
-      return 'fetch';
-    }
-    if (
-      actionLower.includes('kill') ||
-      actionLower.includes('defeat') ||
-      actionLower.includes('fight')
-    ) {
-      return 'kill';
-    }
-    if (
-      actionLower.includes('escort') ||
-      actionLower.includes('protect') ||
-      actionLower.includes('guard')
-    ) {
-      return 'escort';
-    }
-    if (
-      actionLower.includes('explore') ||
-      actionLower.includes('discover') ||
-      actionLower.includes('map')
-    ) {
-      return 'exploration';
-    }
-
-    return 'side'; // Default
-  }
 }
