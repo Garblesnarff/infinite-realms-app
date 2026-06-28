@@ -194,6 +194,10 @@
 **Learning:** Replacing native `title` attributes with Shadcn `Tooltip` components on interactive `Badge` elements (used as filters or removable tags) improves accessibility by providing a clear `aria-label` and avoids the "double tooltip" issue on desktop browsers. Wrapping the component in a `TooltipProvider` with a consistent `delayDuration={300}` ensures a smooth user experience.
 **Action:** Replace native `title` with Shadcn `Tooltip` for all interactive filter badges. Ensure `aria-label` matches the tooltip content for screen reader parity. Use local `TooltipProvider` if a global one is not available or to control timing locally.
 
+## 2026-06-24 - Character Portrait Tooltip Standardization
+**Learning:** Standardizing informational overlays (like HP, AC, and level badges) in `CharacterPortrait.tsx` with Shadcn Tooltips instead of native `title` attributes improves visual consistency and accessibility. Adding `tabIndex={0}` and `focus-visible` rings to these non-button interactive elements ensures that keyboard-only users can discover and trigger the tooltips, achieving parity with mouse users.
+**Action:** Always replace native `title` with Shadcn `Tooltip` for informational badges and overlays. Ensure these elements are focusable (`tabIndex={0}`) and have appropriate focus ring styles.
+
 ## 2026-06-28 - Scene Manager Accessibility and Tooltip Standardization
 **Learning:** Essential game management views like the Scene Manager require clear accessible names for icons and descriptive labels for destructive actions. Wrapping components in a local `TooltipProvider` ensures that tooltips function correctly even if the global provider is missing or deep in the tree. Providing tooltips on dialog actions (like Cancel/Delete) offers immediate feedback on the consequences of high-stakes operations.
 **Action:** Always wrap interactive lists and management views in a `TooltipProvider`. Add `aria-hidden="true"` to decorative icons. Use descriptive `aria-label` for destructive actions (e.g., "Delete Scene - This action cannot be undone"). Add tooltips to confirmation dialog buttons.

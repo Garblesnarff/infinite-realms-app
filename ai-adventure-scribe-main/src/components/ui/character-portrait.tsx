@@ -22,6 +22,7 @@ import { User, Heart, Shield, Zap } from 'lucide-react';
 import * as React from 'react';
 
 import { Badge } from './badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
@@ -149,14 +150,21 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
         {/* Level Badge */}
         {level !== undefined && (
           <div className="absolute top-1 left-1" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
-            <Badge
-              variant="purple"
-              className="text-xs font-bold px-1.5 py-0.5"
-              aria-label={`Level ${level}`}
-              title={`Level ${level}`}
-            >
-              {level}
-            </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="purple"
+                  className="text-xs font-bold px-1.5 py-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none"
+                  aria-label={`Level ${level}`}
+                  tabIndex={0}
+                >
+                  {level}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Level {level}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
 
@@ -168,40 +176,61 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
           >
             <div className="flex items-center justify-around gap-1 text-white text-[0.625rem]">
               {hp !== undefined && maxHp !== undefined && (
-                <div
-                  className="flex items-center gap-0.5"
-                  aria-label={`HP: ${hp}/${maxHp}`}
-                  title={`HP: ${hp}/${maxHp}`}
-                >
-                  <Heart
-                    className={cn('h-3 w-3', hpColor)}
-                    fill="currentColor"
-                    aria-hidden="true"
-                  />
-                  <span className="font-semibold tabular-nums">
-                    {hp}/{maxHp}
-                  </span>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-red-400 outline-none rounded-sm px-0.5"
+                      aria-label={`HP: ${hp}/${maxHp}`}
+                      tabIndex={0}
+                    >
+                      <Heart
+                        className={cn('h-3 w-3', hpColor)}
+                        fill="currentColor"
+                        aria-hidden="true"
+                      />
+                      <span className="font-semibold tabular-nums">
+                        {hp}/{maxHp}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>HP: {hp}/{maxHp}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {ac !== undefined && (
-                <div
-                  className="flex items-center gap-0.5"
-                  aria-label={`Armor Class: ${ac}`}
-                  title={`Armor Class: ${ac}`}
-                >
-                  <Shield className="h-3 w-3 text-blue-400" aria-hidden="true" />
-                  <span className="font-semibold tabular-nums">{ac}</span>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-blue-400 outline-none rounded-sm px-0.5"
+                      aria-label={`Armor Class: ${ac}`}
+                      tabIndex={0}
+                    >
+                      <Shield className="h-3 w-3 text-blue-400" aria-hidden="true" />
+                      <span className="font-semibold tabular-nums">{ac}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Armor Class: {ac}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {initiative !== undefined && (
-                <div
-                  className="flex items-center gap-0.5"
-                  aria-label={`Initiative: +${initiative}`}
-                  title={`Initiative: +${initiative}`}
-                >
-                  <Zap className="h-3 w-3 text-yellow-400" aria-hidden="true" />
-                  <span className="font-semibold tabular-nums">+{initiative}</span>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-yellow-400 outline-none rounded-sm px-0.5"
+                      aria-label={`Initiative: +${initiative}`}
+                      tabIndex={0}
+                    >
+                      <Zap className="h-3 w-3 text-yellow-400" aria-hidden="true" />
+                      <span className="font-semibold tabular-nums">+{initiative}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Initiative: +{initiative}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
           </div>
