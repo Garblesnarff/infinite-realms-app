@@ -68,13 +68,13 @@ export class LocationGenerator {
         maxTokens: 4096,
       });
 
-      try {
-        // Extract JSON from the response
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error('No JSON found in location generation response');
-        }
+      // Extract JSON from the response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in location generation response');
+      }
 
+      try {
         const locationData = JSON.parse(jsonMatch[0]);
 
         // Add metadata
@@ -94,7 +94,7 @@ export class LocationGenerator {
         return location;
       } catch (parseError) {
         logger.error('Failed to parse location JSON:', parseError);
-        throw new Error('Failed to generate location: Invalid response format');
+        throw new Error('Invalid response format');
       }
     } catch (error) {
       logger.error('Location generation failed:', error);
@@ -350,11 +350,11 @@ export class LocationGenerator {
     const actionLower = action.toLowerCase();
 
     if (
-      actionLower.includes('enter') ||
-      actionLower.includes('building') ||
-      actionLower.includes('shop')
+      actionLower.includes('dungeon') ||
+      actionLower.includes('cave') ||
+      actionLower.includes('underground')
     ) {
-      return 'building';
+      return 'dungeon';
     }
     if (
       actionLower.includes('forest') ||
@@ -364,18 +364,18 @@ export class LocationGenerator {
       return 'wilderness';
     }
     if (
-      actionLower.includes('dungeon') ||
-      actionLower.includes('cave') ||
-      actionLower.includes('underground')
-    ) {
-      return 'dungeon';
-    }
-    if (
       actionLower.includes('town') ||
       actionLower.includes('city') ||
       actionLower.includes('village')
     ) {
       return 'settlement';
+    }
+    if (
+      actionLower.includes('enter') ||
+      actionLower.includes('building') ||
+      actionLower.includes('shop')
+    ) {
+      return 'building';
     }
 
     // Default to a generic building/room
