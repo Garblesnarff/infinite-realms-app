@@ -24,6 +24,7 @@ const Landing = lazy(() => import('./pages/Landing'));
 const LaunchPage = lazy(() => import('./pages/LaunchPage'));
 const CallbackPage = lazy(() => import('./features/auth/components/CallbackPage'));
 const DiceTest = lazy(() => import('./pages/DiceTest'));
+const GameUIPreview = lazy(() => import('./pages/GameUIPreview'));
 const CharacterSheet = lazy(() => import('./features/character/components/sheet/character-sheet'));
 const CharacterList = lazy(() => import('./features/character/components/list/character-list'));
 const CampaignWizard = lazy(
@@ -83,6 +84,16 @@ function App() {
                       Skip to content
                     </a>
                     <Routes>
+                      {/* Public preview of the navy+gold game UI overhaul (mock data) */}
+                      <Route
+                        path="/ui-preview"
+                        element={
+                          <Suspense fallback={<RouteLoading />}>
+                            <GameUIPreview />
+                          </Suspense>
+                        }
+                      />
+
                       {/* Beta Launch Page - new main entry point */}
                       <Route
                         path="/"

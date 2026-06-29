@@ -171,15 +171,18 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   onSceneBlurbToggle,
   handleAIResponse,
 }) => {
-  const getDefaultLeftCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1200;
-  const getDefaultRightCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1440;
+  // Navy+gold overhaul: show the rich side rails by default on any reasonable
+  // desktop; only auto-collapse on narrow/mobile widths. Keys bumped to v2 so
+  // existing users pick up the new default instead of a stale collapsed value.
+  const getDefaultLeftCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1024;
+  const getDefaultRightCollapsed = () => typeof window !== 'undefined' && window.innerWidth < 1024;
 
   const [isLeftCollapsed, setIsLeftCollapsed] = useLocalStorage(
-    'ui:leftPanelCollapsed',
+    'ui:leftPanelCollapsed:v2',
     getDefaultLeftCollapsed(),
   );
   const [isRightCollapsed, setIsRightCollapsed] = useLocalStorage(
-    'ui:rightPanelCollapsed',
+    'ui:rightPanelCollapsed:v2',
     getDefaultRightCollapsed(),
   );
   const [isCombatDetected, setIsCombatDetected] = useState(false);

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useId, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
-import { CompactCharacterHeader } from './CompactCharacterHeader';
+import { RightSheetLive } from './overhaul/RightSheetLive';
 import { GameSidePanelContent } from './GameSidePanelContent';
 import { MemoryCard } from './memory/MemoryCard';
 import { MemoryFilter } from './memory/MemoryFilter';
@@ -329,8 +329,8 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(({
               className="flex flex-col h-full"
             >
               <TabsContent value="character" className="flex-1 p-0 mt-0 border-0 bg-background">
-                <div style={{ maxHeight: '72vh', overflow: 'auto' }}>
-                  <CompactCharacterHeader />
+                <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
+                  <RightSheetLive />
                 </div>
               </TabsContent>
 

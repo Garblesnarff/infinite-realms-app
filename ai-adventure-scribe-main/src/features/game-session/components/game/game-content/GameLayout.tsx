@@ -140,14 +140,18 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(({
             isLeftCollapsed && isRightCollapsed
               ? 'grid-cols-1'
               : isLeftCollapsed
-                ? 'grid-cols-1 md:grid-cols-[1fr_minmax(280px,320px)]'
+                ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
                 : isRightCollapsed
-                  ? 'grid-cols-1 md:grid-cols-[minmax(200px,240px)_1fr]'
-                  : 'grid-cols-1 md:grid-cols-[minmax(200px,240px)_1fr_minmax(280px,320px)]'
+                  ? 'grid-cols-1 md:grid-cols-[minmax(210px,250px)_1fr]'
+                  : 'grid-cols-1 lg:grid-cols-[minmax(210px,250px)_1fr_minmax(300px,340px)]'
           }`}
         >
           {/* Left Campaign Panel */}
-          <GameLeftPanel isCollapsed={isLeftCollapsed} onToggle={handleLeftClose} />
+          <GameLeftPanel
+            isCollapsed={isLeftCollapsed}
+            onToggle={handleLeftClose}
+            chapterLabel={`Chapter ${sessionData?.turn_count ?? 0}`}
+          />
 
           {/* Main Content Area */}
           <GameMainContent
