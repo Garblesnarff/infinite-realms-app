@@ -144,13 +144,13 @@ export class QuestGenerator {
         maxTokens: 4096,
       });
 
-      try {
-        // Extract JSON from the response
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error('No JSON found in quest generation response');
-        }
+      // Extract JSON from the response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in quest generation response');
+      }
 
+      try {
         const questData = JSON.parse(jsonMatch[0]);
 
         // Add metadata
