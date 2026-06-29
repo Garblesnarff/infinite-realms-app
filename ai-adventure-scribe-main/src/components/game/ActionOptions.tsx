@@ -173,31 +173,34 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                           aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
                           className={`
                           flex items-start gap-3 p-4 h-auto text-left justify-start
-                          transition-all duration-200 border-2 rounded-lg
-                          hover:bg-infinite-purple/5 hover:border-infinite-purple/30
-                          focus:ring-2 focus:ring-infinite-purple/50 focus:border-infinite-purple
+                          transition-all duration-200 border rounded-xl
+                          bg-white/[0.02] border-white/10 text-foreground/90
+                          hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40
+                          focus:ring-2 focus:ring-infinite-gold/40 focus:border-infinite-gold/60
                           animate-in fade-in-0 slide-in-from-left-4 duration-300
-                          ${isSelected ? 'bg-infinite-purple/10 border-infinite-purple text-infinite-purple' : ''}
+                          ${isSelected ? 'bg-infinite-gold/10 border-infinite-gold/70' : ''}
                           ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
                         `}
                           style={{
                             animationDelay: `${index * 100}ms`,
                           }}
                         >
-                          <div className="flex-shrink-0 mt-0.5">
-                            <IconComponent className="h-4 w-4" aria-hidden="true" />
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-infinite-gold/30 bg-infinite-gold/10">
+                            <IconComponent className="h-4 w-4 text-infinite-gold" aria-hidden="true" />
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm mb-1">Option {option.number}</div>
-                            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                            <div className="ir-display text-[10px] font-semibold uppercase tracking-[1.5px] text-infinite-gold/80 mb-1">
+                              Option {option.number}
+                            </div>
+                            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
                               {option.text}
                             </div>
                           </div>
 
                           {isSelected && (
                             <div className="flex-shrink-0 mt-1">
-                              <div className="w-2 h-2 bg-infinite-purple rounded-full animate-pulse" aria-hidden="true"></div>
+                              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse" aria-hidden="true"></div>
                             </div>
                           )}
                         </Button>
