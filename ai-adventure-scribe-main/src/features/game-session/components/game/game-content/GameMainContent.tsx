@@ -91,80 +91,36 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
     <div
       className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
     >
-      <Card className="flex flex-col shadow-2xl border-2 border-infinite-purple/40 overflow-hidden transition-all duration-300 hover:shadow-3xl hover:scale-100 mobile-chat h-full bg-gradient-to-b from-card/95 to-card/90">
+      <Card className="ir-panel flex flex-col shadow-2xl border border-white/10 overflow-hidden transition-all duration-300 mobile-chat h-full bg-[linear-gradient(180deg,#0c1322,#0a0f1c)]">
         {/* Enhanced Cinematic Header with Improved Visual Hierarchy */}
-        <div className="relative p-3 md:p-4 border-b border-white/10 bg-gradient-to-br from-slate-900/95 via-purple-900/90 to-slate-900/95 backdrop-blur-md overflow-hidden transition-all duration-500">
-          {/* Enhanced Animated Background Particles */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div
-              className="absolute top-1/4 left-1/4 w-2 h-2 bg-infinite-gold rounded-full animate-pulse opacity-70"
-              style={{ animationDelay: '0s' }}
-            ></div>
-            <div
-              className="absolute top-1/2 left-3/4 w-1 h-1 bg-infinite-teal rounded-full animate-pulse opacity-50"
-              style={{ animationDelay: '1s' }}
-            ></div>
-            <div
-              className="absolute top-3/4 left-1/2 w-1.5 h-1.5 bg-infinite-purple rounded-full animate-pulse opacity-60"
-              style={{ animationDelay: '2s' }}
-            ></div>
-            <div
-              className="absolute top-1/3 right-1/4 w-1 h-1 bg-infinite-gold rounded-full animate-pulse opacity-40"
-              style={{ animationDelay: '0.5s' }}
-            ></div>
-            <div
-              className="absolute top-2/3 right-1/3 w-1.5 h-1.5 bg-infinite-teal rounded-full animate-pulse opacity-30"
-              style={{ animationDelay: '1.5s' }}
-            ></div>
-            <div
-              className="absolute top-1/6 left-2/3 w-1 h-1 bg-infinite-purple rounded-full animate-pulse opacity-50"
-              style={{ animationDelay: '2.5s' }}
-            ></div>
-          </div>
-
-          {/* Enhanced Atmospheric Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-infinite-purple/8 to-transparent opacity-80"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-purple-900/10 via-transparent to-slate-900/10"></div>
+        <div className="relative p-3 md:p-4 border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)] overflow-hidden transition-all duration-300">
 
           <div
             className="relative flex flex-col lg:flex-row lg:items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700 gap-4 md:gap-6"
             style={{ zIndex: Z_INDEX.DROPDOWN }}
           >
-            <div className="flex-1">
-              <div className="mb-2">
-                <h1 className="text-xl md:text-2xl font-display mb-1 truncate">
-                  {campaignState?.campaign?.name || 'InfiniteRealms Adventure'}
-                </h1>
-                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 text-sm">
-                  <div className="flex items-center gap-3 bg-infinite-gold/20 px-4 py-2 rounded-full border border-infinite-gold/30 w-fit">
-                    <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse"></div>
-                    <span className="font-display text-infinite-gold font-medium text-responsive-sm">
-                      Chapter {sessionData.turn_count ?? 0}
-                    </span>
-                  </div>
-                  <div className="hidden md:block h-4 w-px bg-white/20"></div>
-                  {showSceneBlurb && (
-                    <div className="flex-1 hidden xl:block">
-                      <p className="text-narrative text-muted-foreground leading-relaxed text-xs line-clamp-2">
-                        {stripAssetTags(sessionData.current_scene_description || '') ||
-                          'Your infinite story unfolds across realms of endless possibility...'}
-                      </p>
-                    </div>
-                  )}
-                </div>
+            <div className="flex-1 min-w-0 text-center lg:px-4">
+              <h1 className="ir-display text-xl md:text-2xl font-bold tracking-wide mb-1 truncate text-foreground">
+                {campaignState?.campaign?.name || 'InfiniteRealms Adventure'}
+              </h1>
+              <div className="flex items-center justify-center">
+                <span className="ir-display text-[11px] font-semibold uppercase tracking-[1.6px] text-infinite-gold/80">
+                  Chapter {sessionData.turn_count ?? 0}
+                </span>
               </div>
-
-              {/* Enhanced Stats and Combat Status (compact) */}
-              <div className="flex items-center gap-3 text-sm mt-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm">
-                    <StatsBar />
-                  </div>
-                </div>
-                <div className="shrink-0">
+              {showSceneBlurb && (
+                <p className="ir-narr text-sm text-foreground/70 mt-1 line-clamp-2 max-w-2xl mx-auto">
+                  {stripAssetTags(sessionData.current_scene_description || '') ||
+                    'Your infinite story unfolds across realms of endless possibility...'}
+                </p>
+              )}
+              {/* Stats are shown in the right character sheet; surface here only when it's hidden */}
+              {isRightCollapsed && (
+                <div className="flex items-center justify-center gap-3 text-sm mt-2">
+                  <StatsBar />
                   <CombatStatus />
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Safety Banner */}
@@ -193,7 +149,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
                 className={`relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow ${
                   showTracker
                     ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-500 animate-pulse shadow-2xl'
-                    : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50 hover:from-infinite-purple/30 hover:to-infinite-teal/30'
+                    : 'bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10'
                 }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
@@ -212,23 +168,6 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(({
                 </div>
               </Button>
 
-              {/* Enhanced Status Indicators */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 px-4 py-2 bg-infinite-teal/20 rounded-full border border-infinite-teal/40 glass">
-                  <div className="w-2 h-2 bg-infinite-teal rounded-full animate-pulse shadow-lg"></div>
-                  <span className="text-xs font-display font-medium text-infinite-teal">
-                    Realm Active
-                  </span>
-                </div>
-                {showTracker && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 rounded-full border border-red-400/40 glass">
-                    <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse shadow-lg"></div>
-                    <span className="text-xs font-display font-medium text-red-400">
-                      Tracker Open
-                    </span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
