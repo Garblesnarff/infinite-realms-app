@@ -267,3 +267,7 @@
 ## 2026-08-16 - [Verbalized Sampling Parser Coverage]
 **Learning:** The `Verbalized Sampling Parser` uses complex heuristics for AI response deduplication and fallback extraction. Achieving high coverage requires carefully crafted multi-paragraph inputs that trigger specific regex paths (like scene splitters) and length-based thresholds (200 chars for sections, 2500 chars for truncation).
 **Action:** When testing heuristic parsers, use varied input lengths and structures (with/without options, with/without XML tags) to verify fallback robustness. Always add `/* eslint-disable max-lines */` to test files exceeding 200 lines to comply with strict project linting.
+
+## 2026-08-17 - [World Update Processor Coverage]
+**Learning:** Found that `world-update-processor.ts` lacked dedicated unit tests after being surgically extracted from the monolithic DM response processor. Testing revealed the importance of mocking nested service calls (MemoryManager, WorldBuilderService) with specific return values to trigger log-based assertions and ensure both XML-based and fallback extraction paths are verified.
+**Action:** When testing extracted logic modules, ensure all imported services are mocked with stable return values. Use explicit log message matching to verify that conditional branches (like partial save failures or tier-based skipping) are correctly executed. Always verify that new tests are registered in BOTH `include` and `coverage.include` in `vitest.config.ts`.

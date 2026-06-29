@@ -276,6 +276,7 @@ export default defineConfig({
       'src/hooks/ai/__tests__/roll-processor.test.ts',
       'src/hooks/ai/__tests__/session-logger.test.ts',
       'src/services/ai/__tests__/dm-response-processor.test.ts',
+      'src/services/ai/response/__tests__/world-update-processor.test.ts',
       'src/services/dice/__tests__/DiceEngine.test.ts',
       'src/utils/roll-request/__tests__/parse.test.ts',
       'src/utils/roll-request/__tests__/regex-parser.test.ts',
