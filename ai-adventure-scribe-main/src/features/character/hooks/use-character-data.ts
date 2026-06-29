@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * useCharacterData Hook
  *
@@ -10,267 +9,42 @@
  * Main Hook:
  * - useCharacterData: Fetches and provides character data.
  *
- * Helper Functions (internal):
- * - transformAbilityScores: Formats raw stat data.
- * - transformCharacterData: Consolidates various DB records into a Character object.
- *
  * Key Dependencies:
- * - React (useState, useEffect)
+ * - React (useState, useEffect, useCallback)
  * - React Router (useNavigate)
  * - Supabase client (`@/integrations/supabase/client`)
  * - useToast hook (`@/hooks/use-toast`)
  * - Character type (`@/types/character`)
  * - isValidUUID utility (`@/utils/validation`)
+ * - data-transformers utility (`@/utils/character/data-transformers`)
  *
  * @author AI Dungeon Master Team
  */
 
 // SDK Imports
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Project Imports
-
-import type { Character, AbilityScores } from '@/types/character';
+import type { Character } from '@/types/character';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
+import {
+  transformCharacterData,
+  type CharacterRow,
+  type CharacterStatsRow,
+  type CharacterEquipmentRow,
+} from '@/utils/character/data-transformers';
+import { isValidUUID } from '@/utils/validation';
 
-// Project Types
-
-// Helper Functions (defined in-file)
-interface CharacterStatsRow {
-  strength: number;
-  dexterity: number;
-  constitution: number;
-  intelligence: number;
-  wisdom: number;
-  charisma: number;
+interface UseCharacterDataReturn {
+  character: Character | null;
+  loading: boolean;
+  refetch: () => Promise<void>;
 }
-
-interface CharacterEquipmentRow {
-  id: string;
-  item_name: string;
-  quantity?: number;
-  equipped?: boolean;
-  is_magic?: boolean;
-  magic_bonus?: number;
-  magic_properties?: string | null;
-  requires_attunement?: boolean;
-  is_attuned?: boolean;
-  attunement_requirements?: string | null;
-  magic_item_type?: string;
-  magic_item_rarity?: string;
-  magic_effects?: string | null;
-}
-
-interface CharacterRow {
-  id: string;
-  user_id: string;
-  name: string;
-  description?: string | null;
-  race: string;
-  class: string;
-  level: number;
-  background?: string | null;
-  experience_points?: number | null;
-  alignment?: string | null;
-  avatar_url?: string | null;
-  image_url?: string | null;
-  background_image?: string | null;
-  appearance?: string | null;
-  personality_traits?: string | null;
-  backstory_elements?: string | null;
-  vision_types?: string | null;
-  obscurement?: string | null;
-  is_hidden?: boolean | null;
-  stealth_check_bonus?: number | null;
-  cantrips?: string | null;
-  known_spells?: string | null;
-  prepared_spells?: string | null;
-  ritual_spells?: string | null;
-  character_stats?: CharacterStatsRow | CharacterStatsRow[] | null;
-  character_equipment?: CharacterEquipmentRow[] | null;
-}
-
-const parseJsonField = <T>(raw: string | null | undefined, fallback: T): T => {
-  if (!raw) return fallback;
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    logger.warn('Failed to parse character JSON field', { raw, error });
-    return fallback;
-  }
-};
-
-const parseSpellListField = (raw: string | null | undefined): string[] => {
-  if (!raw) return [];
-
-  const trimmed = raw.trim();
-
-  if (trimmed.startsWith('[')) {
-    const parsed = parseJsonField<string[] | null>(trimmed, null);
-    if (Array.isArray(parsed)) {
-      return parsed.map((id) => String(id).trim()).filter((id) => id.length > 0);
-    }
-  }
-
-  return trimmed
-    .split(',')
-    .map((id: string) => id.trim())
-    .filter((id: string) => id.length > 0);
-};
-/**
- * Transforms database stats into Character ability scores format
- * @param statsData - Raw stats data from database
- * @returns Formatted ability scores object
- */
-const transformAbilityScores = (
-  statsData: CharacterStatsRow | null | undefined,
-): AbilityScores | null => {
-  if (!statsData) return null;
-
-  return {
-    strength: {
-      score: statsData.strength,
-      modifier: Math.floor((statsData.strength - 10) / 2),
-      savingThrow: false,
-    },
-    dexterity: {
-      score: statsData.dexterity,
-      modifier: Math.floor((statsData.dexterity - 10) / 2),
-      savingThrow: false,
-    },
-    constitution: {
-      score: statsData.constitution,
-      modifier: Math.floor((statsData.constitution - 10) / 2),
-      savingThrow: false,
-    },
-    intelligence: {
-      score: statsData.intelligence,
-      modifier: Math.floor((statsData.intelligence - 10) / 2),
-      savingThrow: false,
-    },
-    wisdom: {
-      score: statsData.wisdom,
-      modifier: Math.floor((statsData.wisdom - 10) / 2),
-      savingThrow: false,
-    },
-    charisma: {
-      score: statsData.charisma,
-      modifier: Math.floor((statsData.charisma - 10) / 2),
-      savingThrow: false,
-    },
-  };
-};
-
-/**
- * Transforms database character data into Character type
- * @param characterData - Raw character data from database
- * @param statsData - Raw stats data from database
- * @param equipmentData - Raw equipment data from database
- * @returns Transformed Character object
- */
-const transformCharacterData = (
-  characterData: CharacterRow,
-  statsData: CharacterStatsRow | null,
-  equipmentData: CharacterEquipmentRow[] | null,
-): Character => ({
-  id: characterData.id,
-  user_id: characterData.user_id,
-  name: characterData.name,
-  description: characterData.description,
-  race: {
-    id: 'stored',
-    name: characterData.race,
-    description: '',
-    abilityScoreIncrease: {},
-    speed: 30,
-    traits: [],
-    languages: [],
-  },
-  class: {
-    id: 'stored',
-    name: characterData.class,
-    description: '',
-    hitDie: 8,
-    primaryAbility: 'strength',
-    savingThrowProficiencies: [],
-    skillChoices: [],
-    numSkillChoices: 2,
-    classFeatures: [],
-    armorProficiencies: [],
-    weaponProficiencies: [],
-  },
-  level: characterData.level,
-  background: {
-    id: 'stored',
-    name: characterData.background || '',
-    description: '',
-    skillProficiencies: [],
-    toolProficiencies: [],
-    languages: 0,
-    equipment: [],
-    feature: {
-      name: '',
-      description: '',
-    },
-  },
-  abilityScores: transformAbilityScores(statsData) || {
-    strength: { score: 10, modifier: 0, savingThrow: false },
-    dexterity: { score: 10, modifier: 0, savingThrow: false },
-    constitution: { score: 10, modifier: 0, savingThrow: false },
-    intelligence: { score: 10, modifier: 0, savingThrow: false },
-    wisdom: { score: 10, modifier: 0, savingThrow: false },
-    charisma: { score: 10, modifier: 0, savingThrow: false },
-  },
-  equipment: equipmentData?.map((item) => item.item_name) || [],
-  experience: characterData.experience_points || 0,
-  alignment: characterData.alignment || '',
-  // Vision and Stealth
-  visionTypes: parseJsonField<string[]>(characterData.vision_types, []),
-  obscurement: characterData.obscurement || 'clear',
-  isHidden: characterData.is_hidden || false,
-  stealthCheckBonus: characterData.stealth_check_bonus || 0,
-  // Magic Items
-  inventory:
-    equipmentData?.map((item) => ({
-      itemId: item.id,
-      quantity: item.quantity || 1,
-      equipped: item.equipped || false,
-      // Magic item properties
-      isMagic: item.is_magic || false,
-      magicBonus: item.magic_bonus || 0,
-      magicProperties: parseJsonField<string[]>(item.magic_properties, []),
-      requiresAttunement: item.requires_attunement || false,
-      isAttuned: item.is_attuned || false,
-      attunementRequirements: item.attunement_requirements || '',
-      magicItemType: item.magic_item_type || '',
-      magicItemRarity: item.magic_item_rarity || 'common',
-      magicEffects: parseJsonField<Record<string, unknown>>(item.magic_effects, {}),
-    })) || [],
-  // AI-generated fields
-  avatar_url: characterData.avatar_url,
-  image_url: characterData.image_url,
-  appearance: characterData.appearance,
-  personality_traits: characterData.personality_traits,
-  backstory_elements: characterData.backstory_elements,
-  background_image: characterData.background_image || undefined,
-  // Legacy fields
-  personalityTraits: [],
-  ideals: [],
-  bonds: [],
-  flaws: [],
-  // Spell data supports both JSON arrays and legacy comma-separated strings.
-  cantrips: parseSpellListField(characterData.cantrips),
-  knownSpells: parseSpellListField(characterData.known_spells),
-  preparedSpells: parseSpellListField(characterData.prepared_spells),
-  ritualSpells: parseSpellListField(characterData.ritual_spells),
-});
 
 /**
  * Custom hook for fetching and managing character data
@@ -278,7 +52,7 @@ const transformCharacterData = (
  * @param characterId - UUID of the character to fetch
  * @returns Object containing character data, loading state, and refetch function
  */
-export const useCharacterData = (characterId: string | undefined) => {
+export const useCharacterData = (characterId: string | undefined): UseCharacterDataReturn => {
   const [character, setCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -290,25 +64,30 @@ export const useCharacterData = (characterId: string | undefined) => {
    * @param id - Character ID to validate
    * @returns Boolean indicating if ID is valid
    */
-  const validateCharacterId = (id: string | undefined): boolean => {
-    if (!id || !isValidUUID(id)) {
-      toast({
-        title: 'Invalid Character',
-        description: 'The character ID is invalid. Redirecting to characters page.',
-        variant: 'destructive',
-      });
-      navigate('/app/characters');
-      return false;
-    }
-    return true;
-  };
+  const validateCharacterId = useCallback(
+    (id: string | undefined): id is string => {
+      if (!id || !isValidUUID(id)) {
+        toast({
+          title: 'Invalid Character',
+          description: 'The character ID is invalid. Redirecting to characters page.',
+          variant: 'destructive',
+        });
+        navigate('/app/characters');
+        return false;
+      }
+      return true;
+    },
+    [navigate, toast],
+  );
 
   /**
    * Fetches character data from Supabase
    * Includes basic info, stats, and equipment
    */
-  const fetchCharacter = async () => {
-    if (!validateCharacterId(characterId)) return;
+  const fetchCharacter = useCallback(async (): Promise<void> => {
+    if (!validateCharacterId(characterId)) {
+      return;
+    }
 
     try {
       setLoading(true);
@@ -342,11 +121,13 @@ export const useCharacterData = (characterId: string | undefined) => {
           character_equipment(*)
         `,
         )
-        .eq('id', characterId!)
+        .eq('id', characterId)
         .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`) // CRITICAL: Dual ownership check
         .maybeSingle();
 
-      if (characterError) throw characterError;
+      if (characterError) {
+        throw characterError;
+      }
 
       if (!characterData) {
         toast({
@@ -370,7 +151,7 @@ export const useCharacterData = (characterId: string | undefined) => {
 
       // Transform and set character data
       const transformedCharacter = transformCharacterData(
-        characterRecord as CharacterRow,
+        characterRecord as unknown as CharacterRow,
         statsData as CharacterStatsRow | null,
         equipmentData as CharacterEquipmentRow[] | null,
       );
@@ -387,12 +168,12 @@ export const useCharacterData = (characterId: string | undefined) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [characterId, navigate, toast, user, validateCharacterId]);
 
   // Fetch character data on mount or when characterId changes
   useEffect(() => {
     fetchCharacter();
-  }, [characterId, navigate, toast, user]);
+  }, [fetchCharacter]);
 
   return { character, loading, refetch: fetchCharacter };
 };
