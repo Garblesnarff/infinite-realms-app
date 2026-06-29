@@ -201,7 +201,7 @@ export const DMChatBubble: React.FC<DMChatBubbleProps> = React.memo(
 
             {/* Enhanced Action Options */}
             {parsedMessage.hasOptions && (
-              <div className="w-full max-w-md animate-in slide-in-from-bottom-2 duration-500">
+              <div className="w-full animate-in slide-in-from-bottom-2 duration-500">
                 <ActionOptions
                   options={parsedMessage.options}
                   onOptionSelect={handleOptionSelect}

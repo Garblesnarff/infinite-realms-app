@@ -27,7 +27,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
   }
 
   return (
-    <div className="w-full max-w-md mt-3">
+    <div className="w-full mt-3">
       <ActionOptions
         options={options}
         onOptionSelect={(option) => onOptionSelect(createPlayerMessageFromOption(option))}

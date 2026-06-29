@@ -172,7 +172,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                           aria-pressed={isSelected}
                           aria-label={isSelected ? `Selected: Option ${option.number} - ${option.text}` : `Option ${option.number} - ${option.text}`}
                           className={`
-                          flex items-start gap-3 p-4 h-auto text-left justify-start
+                          flex items-start gap-3 p-4 h-full w-full text-left justify-start
                           transition-all duration-200 border rounded-xl
                           bg-white/[0.02] border-white/10 text-foreground/90
                           hover:bg-infinite-gold/[0.07] hover:border-infinite-gold/40
