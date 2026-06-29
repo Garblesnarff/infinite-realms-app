@@ -88,6 +88,7 @@
     "@workos-inc/node": "^7.74.1",
     "bcryptjs": "^2.4.3",
     "caniuse-lite": "^1.0.30001713",
+    "cannon-es": "^0.20.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
