@@ -151,7 +151,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
               </div>
 
               <div
-                className="grid gap-3"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                 role="group"
                 aria-labelledby={instructionsId}
               >
