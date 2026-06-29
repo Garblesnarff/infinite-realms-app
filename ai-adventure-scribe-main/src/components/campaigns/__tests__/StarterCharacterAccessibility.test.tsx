@@ -7,6 +7,8 @@ import { StarterCharacterDetails, getModifier } from '../StarterCharacterDetails
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 const mockTemplate: StarterCharacterTemplate = {
   id: 'test-id',
   name: 'Valerius the Brave',
@@ -50,7 +52,7 @@ describe('StarterCharacterCard Accessibility', () => {
 
     expect(button).toBeInTheDocument();
     expect(button).toHaveAttribute('aria-pressed', 'true');
-    expect(button).toHaveAttribute('title', 'Select Valerius the Brave, Human Fighter');
+    expect(button).not.toHaveAttribute('title');
 
     // Check for the selection checkmark (aria-hidden)
     const checkmark = button.querySelector('svg[aria-hidden="true"]');
@@ -77,14 +79,18 @@ describe('StarterCharacterCard Accessibility', () => {
 
 describe('StarterCharacterDetails Accessibility', () => {
   it('renders ability scores with correct group roles and labels', () => {
-    render(<StarterCharacterDetails template={mockTemplate} />);
+    render(
+      <TooltipProvider>
+        <StarterCharacterDetails template={mockTemplate} />
+      </TooltipProvider>,
+    );
 
     // Strength: 16, modifier +3
     const strengthGroup = screen.getByRole('group', {
       name: /strength: 16, modifier \+3/i,
     });
     expect(strengthGroup).toBeInTheDocument();
-    expect(strengthGroup).toHaveAttribute('title', 'strength: 16, modifier +3');
+    expect(strengthGroup).not.toHaveAttribute('title');
 
     // Check that internal texts are hidden from screen readers to avoid redundancy
     const internalTexts = strengthGroup.querySelectorAll('[aria-hidden="true"]');
@@ -95,7 +101,7 @@ describe('StarterCharacterDetails Accessibility', () => {
       name: /charisma: 8, modifier -1/i,
     });
     expect(charismaGroup).toBeInTheDocument();
-    expect(charismaGroup).toHaveAttribute('title', 'charisma: 8, modifier -1');
+    expect(charismaGroup).not.toHaveAttribute('title');
   });
 
   it('correctly calculates modifiers with getModifier', () => {

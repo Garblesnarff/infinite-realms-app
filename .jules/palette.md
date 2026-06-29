@@ -201,3 +201,7 @@
 ## 2026-06-28 - Scene Manager Accessibility and Tooltip Standardization
 **Learning:** Essential game management views like the Scene Manager require clear accessible names for icons and descriptive labels for destructive actions. Wrapping components in a local `TooltipProvider` ensures that tooltips function correctly even if the global provider is missing or deep in the tree. Providing tooltips on dialog actions (like Cancel/Delete) offers immediate feedback on the consequences of high-stakes operations.
 **Action:** Always wrap interactive lists and management views in a `TooltipProvider`. Add `aria-hidden="true"` to decorative icons. Use descriptive `aria-label` for destructive actions (e.g., "Delete Scene - This action cannot be undone"). Add tooltips to confirmation dialog buttons.
+
+## 2026-08-15 - Starter Character Selection Accessibility and Tooltip Standardization
+**Learning:** For informational game elements like ability score cards in character selection, replacing native 'title' attributes with Shadcn Tooltips ensures visual consistency. To maintain accessibility for keyboard-only users, these non-button interactive elements must be made focusable with 'tabIndex={0}' and styled with 'focus-visible' rings to allow tooltip discovery without a mouse.
+**Action:** Replace native 'title' with Shadcn 'Tooltip' for all informational badges and stat cards. Ensure these elements are focusable ('tabIndex={0}') and have appropriate focus ring styles (e.g., 'focus-visible:ring-purple-500').

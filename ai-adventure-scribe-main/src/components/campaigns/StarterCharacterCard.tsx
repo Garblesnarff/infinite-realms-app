@@ -48,10 +48,10 @@ export const StarterCharacterCard: React.FC<StarterCharacterCardProps> = ({
   return (
     <button
       onClick={onSelect}
+      type="button"
       aria-pressed={isSelected}
       aria-label={accessibleName}
-      title={accessibleName}
-      className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200 hover:scale-[1.02] text-left w-full ${
+      className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200 hover:scale-[1.02] text-left w-full outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
         isSelected
           ? 'border-purple-500 bg-purple-500/20 shadow-lg shadow-purple-500/20'
           : 'border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800/70'
