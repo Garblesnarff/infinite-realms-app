@@ -184,6 +184,7 @@ function App() {
                         path="/app/*"
                         element={
                           <ProtectedRoute>
+                            <div className="ir-app">
                             <Navigation />
                             <Breadcrumbs />
                             <main id="main-content" tabIndex={-1}>
@@ -319,6 +320,7 @@ function App() {
                                 />
                               </Routes>
                             </main>
+                            </div>
                           </ProtectedRoute>
                         }
                       />

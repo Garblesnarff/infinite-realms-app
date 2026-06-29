@@ -65,17 +65,20 @@ export default {
                     border: 'hsl(var(--sidebar-border))',
                     ring: 'hsl(var(--sidebar-ring))'
                 },
-                // InfiniteRealms Brand Colors (Lore-based naming)
-                'infinite-purple': '#6B46C1',
-                'infinite-gold': '#F59E0B',
-                'infinite-teal': '#0891B2',
-                'infinite-dark': '#1E1B4B',
+                // InfiniteRealms Brand Colors — channel-var driven so they can be
+                // re-themed per scope (see --c-* defaults in index.css and the
+                // navy overrides in ir-overhaul.css under .ir-app). <alpha-value>
+                // keeps opacity utilities (e.g. bg-infinite-dark/60) working.
+                'infinite-purple': 'rgb(var(--c-infinite-purple) / <alpha-value>)',
+                'infinite-gold': 'rgb(var(--c-infinite-gold) / <alpha-value>)',
+                'infinite-teal': 'rgb(var(--c-infinite-teal) / <alpha-value>)',
+                'infinite-dark': 'rgb(var(--c-infinite-dark) / <alpha-value>)',
 
                 // Lore-based Color Aliases
-                'shadowweave': '#6B46C1',      // Deep purple for mystical/magical elements
-                'emberlight': '#F59E0B',       // Warm gold for highlights and treasure
-                'crystalline': '#0891B2',      // Cool teal for water/ice elements
-                'electricCyan': '#06B6D4',     // Bright cyan for critical moments
+                'shadowweave': 'rgb(var(--c-infinite-purple) / <alpha-value>)',
+                'emberlight': 'rgb(var(--c-infinite-gold) / <alpha-value>)',
+                'crystalline': 'rgb(var(--c-infinite-teal) / <alpha-value>)',
+                'electricCyan': 'rgb(var(--c-electric-cyan) / <alpha-value>)',
             },
             fontFamily: {
                 sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],

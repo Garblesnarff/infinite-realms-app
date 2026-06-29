@@ -1,0 +1,101 @@
+/* ============================================================
+   Infinite Realms — UI Overhaul (navy + gold), SCOPED to the app
+   ------------------------------------------------------------
+   Everything here is gated under `.ir-app`, which wraps the
+   authenticated /app/* routes (see App.tsx). Marketing/landing
+   pages are NOT affected and keep the purple cosmic brand.
+
+   To revert: remove the `ir-app` wrapper in App.tsx, or delete
+   this file's @import in index.css. To flip back to purple,
+   change only the token values in the `.ir-app` block below.
+   ============================================================ */
+
+.ir-app {
+  color-scheme: dark;
+  min-height: 100vh;
+  background: #070b14;
+
+  /* --- Tailwind brand color channels -> navy + antique gold (app only) --- */
+  --c-infinite-dark: 7 11 20;       /* #070b14 deep navy (was #1E1B4B) */
+  --c-infinite-gold: 213 176 112;   /* #d5b070 antique gold (was #F59E0B) */
+  --c-infinite-purple: 95 113 168;  /* #5f71a8 muted steel-blue (was purple) */
+  --c-infinite-teal: 79 182 196;    /* #4fb6c4 */
+
+  /* --- navy surface retint (was purple-tinted) --- */
+  --infinite-dark: #070b14;
+  --infinite-dark-light: #0c1322;
+  --infinite-dark-lighter: #161e30;
+  --infinite-surface: #0c1220;
+
+  /* antique gold to match the mockups (was bright amber #f59e0b) */
+  --infinite-gold: #d5b070;
+  --infinite-gold-light: #f3deb0;
+  --infinite-gold-dark: #b9954f;
+  --infinite-gold-darker: #8f7548;
+
+  /* --- force the dark token set with navy values --- */
+  --background: #070b14;
+  --foreground: #eaeefa;
+  --foreground-secondary: rgba(234, 238, 250, 0.9);
+  --foreground-muted: rgba(234, 238, 250, 0.65);
+
+  --muted: rgba(255, 255, 255, 0.10);
+  --muted-foreground: rgba(234, 238, 250, 0.65);
+  --muted-hover: rgba(255, 255, 255, 0.16);
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border-hover: rgba(213, 176, 112, 0.35);
+  --input: rgba(255, 255, 255, 0.06);
+  --input-hover: rgba(255, 255, 255, 0.10);
+
+  --card: rgba(255, 255, 255, 0.045);
+  --card-hover: rgba(255, 255, 255, 0.07);
+  --card-foreground: #eaeefa;
+  --card-border: rgba(255, 255, 255, 0.09);
+
+  --popover: #0c1220;
+  --popover-foreground: #eaeefa;
+
+  --sidebar-background: #0c1220;
+  --sidebar-foreground: #eaeefa;
+  --sidebar-border: rgba(255, 255, 255, 0.10);
+
+  /* atmospheric gradients -> navy */
+  --gradient-cosmic: linear-gradient(135deg, #070b14 0%, #0c1322 50%, #0a0f1c 100%);
+  --gradient-ethereal: linear-gradient(135deg, rgba(213,176,112,0.08) 0%, rgba(79,182,196,0.08) 100%);
+
+  /* brand utility tints re-pointed to gold accents */
+  --text-brand-secondary: var(--infinite-gold);
+  --bg-brand-secondary: rgba(213, 176, 112, 0.10);
+  --border-brand-secondary: rgba(213, 176, 112, 0.22);
+
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--foreground);
+}
+
+/* ---- shared primitives the overhauled components can opt into ---- */
+.ir-app .ir-panel {
+  position: relative;
+  background: linear-gradient(180deg, #111726 0%, #0e1422 100%);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 10px 30px rgba(0,0,0,0.40);
+}
+.ir-app .ir-panel-h {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600;
+  letter-spacing: 1.8px; text-transform: uppercase; color: var(--infinite-gold);
+}
+.ir-app .ir-display { font-family: 'Cinzel', serif; }
+.ir-app .ir-narr { font-family: 'EB Garamond', Georgia, serif; font-style: italic; }
+
+/* gold gradient button */
+.ir-app .ir-btn-gold {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 17px; border-radius: 7px; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #1a1206;
+  background: linear-gradient(180deg, #f6e3b8 0%, var(--infinite-gold) 60%, #c69d57 100%);
+  border: 1px solid #f3deb0; box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 4px 14px rgba(213,176,112,0.16);
+}
+.ir-app .ir-btn-gold:hover { filter: brightness(1.06); }
