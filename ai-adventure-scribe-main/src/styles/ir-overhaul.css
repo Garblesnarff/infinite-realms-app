@@ -99,3 +99,23 @@
   border: 1px solid #f3deb0; box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 4px 14px rgba(213,176,112,0.16);
 }
 .ir-app .ir-btn-gold:hover { filter: brightness(1.06); }
+
+/* ---- retint light/parchment surfaces that predate the navy theme ---- */
+/* Chat composer was a cream parchment gradient (index.css) -> navy */
+.ir-app .chat-composer {
+  background: linear-gradient(180deg, #141c2e 0%, #0e1626 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+}
+.ir-app .chat-composer textarea,
+.ir-app .chat-composer input {
+  color: var(--foreground);
+}
+.ir-app .chat-composer textarea::placeholder,
+.ir-app .chat-composer input::placeholder {
+  color: var(--muted-foreground);
+}
+/* glass-strong / bg-white panels inside the app -> navy glass */
+.ir-app .glass-strong {
+  background: rgba(12, 18, 32, 0.85) !important;
+  backdrop-filter: blur(10px);
+}

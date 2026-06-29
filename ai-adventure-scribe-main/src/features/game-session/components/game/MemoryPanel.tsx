@@ -223,7 +223,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(({
   return (
     <div
       ref={panelRef}
-      className="h-full bg-white shadow-sm border-0 flex flex-col resize-x lg:resize-x-none min-w-[280px] max-w-[400px]"
+      className="h-full bg-transparent shadow-sm border-0 flex flex-col resize-x lg:resize-x-none min-w-[280px] max-w-[400px]"
       style={{ width: panelWidth, minWidth: '280px', maxWidth: '400px' }}
     >
       {/* Drag Handle for Desktop */}
@@ -241,7 +241,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(({
             : 'border-infinite-purple/40 bg-gradient-to-b from-infinite-purple/8 to-card/95'
         }`}
       >
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+        <div className="p-3 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="flex gap-1 flex-shrink-0">
               <Button
