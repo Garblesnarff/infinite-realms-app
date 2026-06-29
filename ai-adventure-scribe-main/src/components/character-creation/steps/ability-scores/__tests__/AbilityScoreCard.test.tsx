@@ -51,7 +51,7 @@ describe('AbilityScoreCard', () => {
     // Check for racial bonus badge
     const racialBadge = screen.getByText(/\+2 racial/i);
     expect(racialBadge).toBeInTheDocument();
-    expect(racialBadge).toHaveAttribute('title', 'Racial ability score bonus');
+    expect(racialBadge).not.toHaveAttribute('title');
     expect(racialBadge).toHaveAttribute('aria-label', '+2 racial bonus to strength');
   });
 

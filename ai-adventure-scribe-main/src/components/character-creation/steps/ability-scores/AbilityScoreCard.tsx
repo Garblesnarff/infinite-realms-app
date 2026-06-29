@@ -90,34 +90,61 @@ const AbilityScoreCard: React.FC<AbilityScoreCardProps> = ({
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">Base: {baseScore}</div>
             {racialBonus > 0 && (
-              <Badge
-                variant="outline"
-                className="bg-green-50 text-green-700 border-green-300"
-                title="Racial ability score bonus"
-                aria-label={`+${racialBonus} racial bonus to ${ability}`}
-              >
-                {formatRacialBonus(racialBonus)} racial
-              </Badge>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="bg-green-50 text-green-700 border-green-300 focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none cursor-help"
+                    aria-label={`+${racialBonus} racial bonus to ${ability}`}
+                    tabIndex={0}
+                  >
+                    {formatRacialBonus(racialBonus)} racial
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Racial ability score bonus</p>
+                </TooltipContent>
+              </Tooltip>
             )}
-            <div
-              className="text-3xl font-bold"
-              aria-label={`Final ${ability} score: ${finalScore}`}
-            >
-              {finalScore}
-            </div>
-            <div
-              className={`text-sm font-medium ${
-                modifier > 0
-                  ? 'text-green-600'
-                  : modifier < 0
-                    ? 'text-red-600'
-                    : 'text-muted-foreground'
-              }`}
-              aria-label={`${ability} modifier: ${modifier >= 0 ? '+' : ''}${modifier}`}
-            >
-              {modifier >= 0 ? '+' : ''}
-              {modifier}
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="text-3xl font-bold focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none rounded-sm cursor-help"
+                  aria-label={`Final ${ability} score: ${finalScore}`}
+                  tabIndex={0}
+                >
+                  {finalScore}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  Final {ability} score (Base + Bonuses)
+                </p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={`text-sm font-medium focus-visible:ring-2 focus-visible:ring-infinite-purple outline-none rounded-sm cursor-help ${
+                    modifier > 0
+                      ? 'text-green-600'
+                      : modifier < 0
+                        ? 'text-red-600'
+                        : 'text-muted-foreground'
+                  }`}
+                  aria-label={`${ability} modifier: ${modifier >= 0 ? '+' : ''}${modifier}`}
+                  tabIndex={0}
+                >
+                  {modifier >= 0 ? '+' : ''}
+                  {modifier}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  The modifier added to {ability} based checks, attacks, and saving throws
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <Tooltip>
