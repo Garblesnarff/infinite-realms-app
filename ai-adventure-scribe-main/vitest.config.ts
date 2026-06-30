@@ -128,6 +128,7 @@ export default defineConfig({
       'src/services/world-builders/__tests__/npc-generator.test.ts',
       'src/services/world-builders/__tests__/location-generator.test.ts',
       'src/services/world-builders/__tests__/quest-generator.test.ts',
+      'src/services/world-builders/__tests__/world-building-analyzer.test.ts',
       'src/services/combat-audit/__tests__/CombatAuditSystem.test.ts',
       'src/services/combat-audit/__tests__/rules.test.ts',
       'src/services/combat-audit/__tests__/reporter.test.ts',
