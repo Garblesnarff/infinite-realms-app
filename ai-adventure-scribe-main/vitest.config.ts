@@ -395,6 +395,7 @@ export default defineConfig({
       'src/features/game-session/components/chat/chat/__tests__/DMChatBubble.accessibility.test.tsx',
       'src/components/ui/__tests__/SidebarAccessibility.test.tsx',
       'src/components/game/__tests__/DiceRollMessage.test.tsx',
+      'src/services/blog/__tests__/blog-service.test.ts',
       'src/components/combat/__tests__/GrappleActionPanel.test.tsx',
       'src/features/game-session/components/chat/message-list/__tests__/use-message-dice-rolls.test.ts',
       'src/hooks/game/__tests__/use-dice-roll-request.test.ts',
