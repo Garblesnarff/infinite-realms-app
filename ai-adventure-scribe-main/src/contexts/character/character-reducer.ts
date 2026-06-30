@@ -1,39 +1,14 @@
-import type { Character } from '@/types/character';
+import {
+  handleUpdateCharacter,
+  handleUpdateSpellSlots,
+  handleUpdateConcentration,
+} from './character-updater';
+
+import type { CharacterState, CharacterAction } from './types';
 
 import logger from '@/lib/logger';
 
-/**
- * Interface defining the shape of the character state
- * Includes the character data, UI state, and error handling
- */
-export interface CharacterState {
-  character: Character | null;
-  isDirty: boolean;
-  currentStep: number;
-  isLoading: boolean;
-  error: string | null;
-}
-
-/**
- * Union type defining all possible actions that can be dispatched to modify character state
- * Each action type has its own payload structure
- */
-export type CharacterAction =
-  | { type: 'SET_CHARACTER'; payload: Character }
-  | { type: 'UPDATE_CHARACTER'; payload: Partial<Character> }
-  | { type: 'SET_GENDER'; payload: 'male' | 'female' }
-  | { type: 'SET_AGE'; payload: number }
-  | { type: 'SET_HEIGHT'; payload: number }
-  | { type: 'SET_WEIGHT'; payload: number }
-  | { type: 'SET_EYES'; payload: string | undefined }
-  | { type: 'SET_SKIN'; payload: string | undefined }
-  | { type: 'SET_HAIR'; payload: string | undefined }
-  | { type: 'SET_STEP'; payload: number }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'RESET' }
-  | { type: 'UPDATE_SPELL_SLOTS'; payload: Record<number, { max: number; current: number }> }
-  | { type: 'UPDATE_CONCENTRATION'; payload: string | null };
+export type { CharacterState, CharacterAction };
 
 /**
  * Initial state with default values to avoid null checks
@@ -116,97 +91,9 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
         };
       }
 
-      case 'UPDATE_CHARACTER': {
-        // Only log when there are actual changes to reduce noise
-        const currentCharacter = state.character;
-        const payload = action.payload;
-        const hasChanges =
-          currentCharacter &&
-          payload &&
-          Object.keys(payload).some((key) => {
-            const currentValue = currentCharacter[key as keyof Character];
-            const newValue = payload[key as keyof typeof payload];
-            return JSON.stringify(currentValue) !== JSON.stringify(newValue);
-          });
+      case 'UPDATE_CHARACTER':
+        return handleUpdateCharacter(state, action.payload);
 
-        if (hasChanges) {
-          logger.debug('UPDATE_CHARACTER reducer called');
-          logger.debug('Current state.character:', state.character);
-          logger.debug('Action payload:', payload);
-
-          // Special logging for spell-related updates
-          if (
-            payload.cantrips ||
-            payload.knownSpells ||
-            payload.preparedSpells ||
-            payload.ritualSpells
-          ) {
-            logger.debug('[CharacterContext] Spell update detected:', {
-              incomingCantrips: payload.cantrips,
-              incomingKnownSpells: payload.knownSpells,
-              incomingPreparedSpells: payload.preparedSpells,
-              incomingRitualSpells: payload.ritualSpells,
-              currentCantrips: state.character?.cantrips,
-              currentKnownSpells: state.character?.knownSpells,
-              currentPreparedSpells: state.character?.preparedSpells,
-              currentRitualSpells: state.character?.ritualSpells,
-            });
-          }
-        }
-
-        // Validate current character state
-        if (!state.character || typeof state.character !== 'object') {
-          logger.error('No character to update or invalid character state');
-          return {
-            ...state,
-            error: 'No character data to update',
-          };
-        }
-
-        // Validate payload
-        if (!action.payload || typeof action.payload !== 'object') {
-          logger.error('Invalid update payload:', action.payload);
-          return {
-            ...state,
-            error: 'Invalid character update data',
-          };
-        }
-
-        // Safe merge with validation
-        const updatedCharacter = {
-          ...state.character,
-          ...action.payload,
-        };
-
-        // Additional logging for spell updates - include both property naming conventions
-        if (
-          hasChanges &&
-          (payload.cantrips ||
-            payload.knownSpells ||
-            payload.preparedSpells ||
-            payload.ritualSpells)
-        ) {
-          logger.debug('[CharacterContext] Final spell state after update:', {
-            finalCantrips: updatedCharacter.cantrips,
-            finalKnownSpells: updatedCharacter.knownSpells,
-            finalPreparedSpells: updatedCharacter.preparedSpells,
-            finalRitualSpells: updatedCharacter.ritualSpells,
-            cantripCount: updatedCharacter.cantrips?.length || 0,
-            spellCount: updatedCharacter.knownSpells?.length || 0,
-            preparedSpellCount: updatedCharacter.preparedSpells?.length || 0,
-            ritualSpellCount: updatedCharacter.ritualSpells?.length || 0,
-          });
-        }
-
-        const newState = {
-          ...state,
-          character: updatedCharacter,
-          isDirty: state.isDirty || !!hasChanges,
-          error: null, // Clear any previous errors on successful update
-        };
-
-        return newState;
-      }
       case 'SET_GENDER':
         return {
           ...state,
@@ -302,95 +189,11 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
         };
       }
 
-      case 'UPDATE_SPELL_SLOTS': {
-        // Validate spell slots payload
-        const spellSlots = action.payload;
-        if (!spellSlots || typeof spellSlots !== 'object') {
-          logger.error('Invalid spell slots payload:', spellSlots);
-          return {
-            ...state,
-            error: 'Invalid spell slot data',
-          };
-        }
+      case 'UPDATE_SPELL_SLOTS':
+        return handleUpdateSpellSlots(state, action.payload);
 
-        // Validate spell slot structure
-        for (const [level, slots] of Object.entries(spellSlots)) {
-          const levelNum = parseInt(level, 10);
-          if (isNaN(levelNum) || levelNum < 0 || levelNum > 9) {
-            logger.error('Invalid spell slot level:', level);
-            return {
-              ...state,
-              error: 'Invalid spell slot level',
-            };
-          }
-
-          if (
-            !slots ||
-            typeof slots !== 'object' ||
-            typeof slots.max !== 'number' ||
-            typeof slots.current !== 'number' ||
-            slots.max < 0 ||
-            slots.current < 0 ||
-            slots.current > slots.max
-          ) {
-            logger.error('Invalid spell slot data for level', level, ':', slots);
-            return {
-              ...state,
-              error: 'Invalid spell slot structure',
-            };
-          }
-        }
-
-        // Validate character exists before updating
-        if (!state.character) {
-          logger.error('No character to update spell slots for');
-          return {
-            ...state,
-            error: 'No character data to update',
-          };
-        }
-
-        return {
-          ...state,
-          character: {
-            ...state.character,
-            spellSlots: spellSlots,
-          },
-          isDirty: true,
-          error: null,
-        };
-      }
-
-      case 'UPDATE_CONCENTRATION': {
-        // Validate concentration payload
-        const concentration = action.payload;
-        if (concentration !== null && typeof concentration !== 'string') {
-          logger.error('Invalid concentration payload:', concentration);
-          return {
-            ...state,
-            error: 'Invalid concentration spell data',
-          };
-        }
-
-        // Validate character exists before updating
-        if (!state.character) {
-          logger.error('No character to update concentration for');
-          return {
-            ...state,
-            error: 'No character data to update',
-          };
-        }
-
-        return {
-          ...state,
-          character: {
-            ...state.character,
-            activeConcentration: concentration,
-          },
-          isDirty: true,
-          error: null,
-        };
-      }
+      case 'UPDATE_CONCENTRATION':
+        return handleUpdateConcentration(state, action.payload);
 
       case 'RESET': {
         logger.info('Resetting character state to initial state');
