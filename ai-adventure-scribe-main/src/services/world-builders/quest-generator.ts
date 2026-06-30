@@ -294,7 +294,8 @@ export class QuestGenerator {
       }
 
       // Build query with ownership validation
-      let campaignQuery = supabase.from('campaigns').select('*').eq('id', campaignId);
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+      let campaignQuery = supabase.from('campaigns').select('genre').eq('id', campaignId);
 
       if (userId) {
         campaignQuery = campaignQuery.eq('user_id', userId); // SECURITY: Ensure user owns this campaign

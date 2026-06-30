@@ -1,14 +1,14 @@
 import { LocationGenerator } from './location-generator';
 import { NPCGenerator } from './npc-generator';
 import { QuestGenerator } from './quest-generator';
-import { WorldBuildingAnalyzer } from './world-building-analyzer';
 import { WorldBuilderRepository } from './world-builder-repository';
+import { WorldBuildingAnalyzer } from './world-building-analyzer';
 import { MemoryManager } from '../memory-manager';
 
 import type { LocationRequest, GeneratedLocation } from './location-generator';
 import type { NPCRequest, GeneratedNPC } from './npc-types';
 import type { QuestRequest, GeneratedQuest } from './quest-generator';
-import type { WorldBuildingContext, WorldExpansionResult, WorldBuildingTrigger } from './types';
+import type { WorldBuildingContext, WorldExpansionResult } from './types';
 
 import { isWorldBuilderEnabled } from '@/config/featureFlags';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,9 +57,10 @@ export class WorldBuilderService {
       }
 
       // Get campaign details for context
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
       const { data: campaign } = await supabase
         .from('campaigns')
-        .select('*')
+        .select('genre')
         .eq('id', context.campaignId)
         .single();
 

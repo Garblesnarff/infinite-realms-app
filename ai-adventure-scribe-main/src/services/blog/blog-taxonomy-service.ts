@@ -26,9 +26,10 @@ export const mapTag = (row: any): BlogTag => ({
 });
 
 export const listBlogCategories = async (): Promise<BlogCategory[]> => {
+  // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
   const { data, error } = await supabaseClient
     .from('blog_categories')
-    .select('*')
+    .select('id, name, slug, description, created_at, updated_at')
     .order('name', { ascending: true });
 
   if (error) {
@@ -50,7 +51,8 @@ export const createBlogCategory = async (input: {
       slug: input.slug,
       description: input.description ?? null,
     })
-    .select('*')
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    .select('id, name, slug, description, created_at, updated_at')
     .single();
 
   if (error) {
@@ -72,7 +74,8 @@ export const updateBlogCategory = async (
       ...(input.description !== undefined ? { description: input.description } : {}),
     })
     .eq('id', id)
-    .select('*')
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    .select('id, name, slug, description, created_at, updated_at')
     .single();
 
   if (error) {
@@ -91,9 +94,10 @@ export const deleteBlogCategory = async (id: string): Promise<void> => {
 };
 
 export const listBlogTags = async (): Promise<BlogTag[]> => {
+  // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
   const { data, error } = await supabaseClient
     .from('blog_tags')
-    .select('*')
+    .select('id, name, slug, description, created_at, updated_at')
     .order('name', { ascending: true });
 
   if (error) {
@@ -115,7 +119,8 @@ export const createBlogTag = async (input: {
       slug: input.slug,
       description: input.description ?? null,
     })
-    .select('*')
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    .select('id, name, slug, description, created_at, updated_at')
     .single();
 
   if (error) {
@@ -137,7 +142,8 @@ export const updateBlogTag = async (
       ...(input.description !== undefined ? { description: input.description } : {}),
     })
     .eq('id', id)
-    .select('*')
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+    .select('id, name, slug, description, created_at, updated_at')
     .single();
 
   if (error) {

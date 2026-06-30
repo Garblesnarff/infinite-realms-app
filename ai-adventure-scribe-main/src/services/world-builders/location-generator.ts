@@ -308,7 +308,8 @@ export class LocationGenerator {
       }
 
       // Build query with ownership validation
-      let query = supabase.from('campaigns').select('*').eq('id', campaignId);
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+      let query = supabase.from('campaigns').select('genre').eq('id', campaignId);
 
       if (userId) {
         query = query.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
