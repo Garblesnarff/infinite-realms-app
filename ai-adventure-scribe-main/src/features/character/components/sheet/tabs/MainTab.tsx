@@ -82,16 +82,16 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
           {/* AC, Initiative, Speed */}
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-blue-100 rounded-full">
-                <Shield className="w-6 h-6 text-blue-600" />
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-infinite-teal/15 rounded-full">
+                <Shield className="w-6 h-6 text-infinite-teal" />
               </div>
               <div className="text-2xl font-bold">{armorClass}</div>
               <div className="text-xs text-muted-foreground">Armor Class</div>
             </div>
 
             <div className="text-center">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-yellow-100 rounded-full">
-                <Zap className="w-6 h-6 text-yellow-600" />
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-infinite-gold/15 rounded-full">
+                <Zap className="w-6 h-6 text-infinite-gold" />
               </div>
               <DiceRoller
                 dice="1d20"
@@ -102,8 +102,8 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
             </div>
 
             <div className="text-center">
-              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-green-100 rounded-full">
-                <Clock className="w-6 h-6 text-green-600" />
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-2 bg-emerald-500/15 rounded-full">
+                <Clock className="w-6 h-6 text-emerald-400" />
               </div>
               <div className="text-2xl font-bold">{character.race?.speed || 30}</div>
               <div className="text-xs text-muted-foreground">Speed (ft)</div>
@@ -111,7 +111,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
           </div>
 
           {/* Proficiency Bonus and Passive Perception */}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
             <div className="text-center">
               <div className="text-lg font-bold">+{proficiencyBonus}</div>
               <div className="text-xs text-muted-foreground">Proficiency Bonus</div>
@@ -123,7 +123,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
           </div>
 
           {/* Quick Actions */}
-          <div className="space-y-2 pt-4 border-t">
+          <div className="space-y-2 pt-4 border-t border-white/10">
             <h4 className="text-sm font-medium">Quick Rolls</h4>
             <div className="flex flex-wrap gap-2">
               <DiceRoller
@@ -164,7 +164,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate: _onUp
           />
 
           {/* Background and Alignment */}
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/10">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Background</label>
               <p className="text-sm">{character.background?.name || 'None'}</p>

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
 /**
  * Scene Management Page
  *
@@ -14,14 +15,11 @@ import { ArrowLeft, Map, Plus, Settings } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import type {
-  SceneTemplate} from '@/components/scenes/SceneTemplateLibrary';
+import type { SceneTemplate } from '@/components/scenes/SceneTemplateLibrary';
 
 import { SceneCreationWizard } from '@/components/scenes/SceneCreationWizard';
 import { SceneManager } from '@/components/scenes/SceneManager';
-import {
-  SceneTemplateLibrary
-} from '@/components/scenes/SceneTemplateLibrary';
+import { SceneTemplateLibrary } from '@/components/scenes/SceneTemplateLibrary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -74,7 +72,7 @@ export const SceneManagementPage: React.FC = () => {
   if (!campaignId) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card variant="parchment" className="p-12 text-center">
+        <Card className="p-12 text-center">
           <CardTitle className="text-2xl mb-2">Invalid Campaign</CardTitle>
           <CardDescription>Please select a valid campaign.</CardDescription>
           <Button onClick={() => navigate('/app/campaigns')} className="mt-6">
@@ -136,7 +134,7 @@ export const SceneManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-amber-50/30 to-slate-50">
+    <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
       <div className="container mx-auto px-4 py-8">
         {/* Breadcrumbs */}
         <div className="mb-6">
@@ -220,7 +218,7 @@ export const SceneManagementPage: React.FC = () => {
               </Button>
             </div>
 
-            <Card variant="parchment" className="max-w-2xl mx-auto">
+            <Card className="max-w-2xl mx-auto">
               <CardHeader>
                 <div className="text-6xl mb-4 text-center">{selectedTemplate.thumbnailEmoji}</div>
                 <CardTitle className="text-center">{selectedTemplate.name}</CardTitle>
@@ -230,19 +228,19 @@ export const SceneManagementPage: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center p-4 bg-white/[0.05] rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1">Dimensions</p>
                     <p className="font-semibold">
                       {selectedTemplate.width} × {selectedTemplate.height} squares
                     </p>
                   </div>
-                  <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center p-4 bg-white/[0.05] rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1">Grid Type</p>
                     <p className="font-semibold capitalize">
                       {selectedTemplate.gridType.replace('_', ' ')}
                     </p>
                   </div>
-                  <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center p-4 bg-white/[0.05] rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1">Lighting</p>
                     <p className="font-semibold">
                       {Math.round(
@@ -251,7 +249,7 @@ export const SceneManagementPage: React.FC = () => {
                       %
                     </p>
                   </div>
-                  <div className="text-center p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center p-4 bg-white/[0.05] rounded-lg">
                     <p className="text-sm text-muted-foreground mb-1">Time of Day</p>
                     <p className="font-semibold capitalize">
                       {selectedTemplate.suggestedSettings.timeOfDay}
@@ -273,8 +271,8 @@ export const SceneManagementPage: React.FC = () => {
                   </ul>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <p className="text-sm text-amber-800">
+                <div className="bg-infinite-gold/10 border border-infinite-gold/30 rounded-lg p-4">
+                  <p className="text-sm text-infinite-gold">
                     <strong>Note:</strong> You'll need to upload your own background image after
                     creating the scene.
                   </p>
@@ -335,7 +333,7 @@ export const SceneManagementPage: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="blank" className="mt-6">
-                <Card variant="parchment" className="p-12 text-center">
+                <Card className="p-12 text-center">
                   <div className="text-6xl mb-4">🎨</div>
                   <CardTitle className="mb-2">Start from Scratch</CardTitle>
                   <CardDescription className="mb-6">

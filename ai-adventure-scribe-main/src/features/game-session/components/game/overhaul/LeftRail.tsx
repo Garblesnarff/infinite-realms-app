@@ -1,7 +1,8 @@
 import React from 'react';
 
-import { IRBar, IRPanel, IRPanelHeader, IRThumb } from './primitives';
 import type { CampaignSummaryVM, CombatantVM, PartyMemberVM } from './types';
+
+import { IRBar, IRPanel, IRPanelHeader, IRThumb } from '@/components/ui/ir-primitives';
 
 const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }) => (
   <IRPanel>
@@ -42,11 +43,21 @@ const RegionMap: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }) => (
     <IRPanelHeader title="Region Map" />
     <div className="relative m-3 h-28 overflow-hidden rounded-md border border-white/10 bg-[radial-gradient(circle_at_60%_40%,rgba(79,182,196,0.10),transparent_60%),linear-gradient(160deg,#0b1322,#070b14)]">
       {campaign.regionMapUrl && (
-        <img src={campaign.regionMapUrl} alt="Region map" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+        <img
+          src={campaign.regionMapUrl}
+          alt="Region map"
+          className="absolute inset-0 h-full w-full object-cover opacity-70"
+        />
       )}
       {/* decorative dotted path */}
       <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
-        <path d="M30 80 Q 90 40 150 60" stroke="rgba(213,176,112,0.45)" strokeWidth="1.5" strokeDasharray="3 5" fill="none" />
+        <path
+          d="M30 80 Q 90 40 150 60"
+          stroke="rgba(213,176,112,0.45)"
+          strokeWidth="1.5"
+          strokeDasharray="3 5"
+          fill="none"
+        />
         <circle cx="30" cy="80" r="3" fill="#4fb6c4" />
         <circle cx="150" cy="60" r="3" fill="#d5b070" />
       </svg>
@@ -86,12 +97,17 @@ const Party: React.FC<{ party: PartyMemberVM[]; partyMax: number }> = ({ party, 
   </IRPanel>
 );
 
-const EncounterTracker: React.FC<{ round: number; combatants: CombatantVM[] }> = ({ round, combatants }) => (
+const EncounterTracker: React.FC<{ round: number; combatants: CombatantVM[] }> = ({
+  round,
+  combatants,
+}) => (
   <IRPanel>
     <IRPanelHeader title="Encounter Tracker" />
     <div className="flex items-center justify-between px-3 pb-1 pt-2">
       <span className="text-[11px] text-foreground/80">Round {round}</span>
-      <span className="ir-display text-[9px] uppercase tracking-[1.5px] text-infinite-gold/70">Init Order</span>
+      <span className="ir-display text-[9px] uppercase tracking-[1.5px] text-infinite-gold/70">
+        Init Order
+      </span>
     </div>
     <div className="space-y-1 p-2 pt-1">
       {combatants.map((c) => (
@@ -105,7 +121,9 @@ const EncounterTracker: React.FC<{ round: number; combatants: CombatantVM[] }> =
                 : 'border-white/5 bg-white/[0.02]'
           }`}
         >
-          <span className={`ir-display w-6 text-sm font-bold ${c.isEnemy ? 'text-red-400' : 'text-infinite-gold'}`}>
+          <span
+            className={`ir-display w-6 text-sm font-bold ${c.isEnemy ? 'text-red-400' : 'text-infinite-gold'}`}
+          >
             {String(c.initiative).padStart(2, '0')}
           </span>
           <span className="flex-1 truncate text-xs text-foreground/90">{c.name}</span>

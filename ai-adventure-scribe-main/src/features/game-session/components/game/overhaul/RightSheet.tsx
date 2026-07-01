@@ -1,7 +1,15 @@
 import React from 'react';
 
-import { IRBar, IRModRow, IRPanel, IRPanelHeader, IRStatTile, IRThumb } from './primitives';
 import type { CharacterSheetVM } from './types';
+
+import {
+  IRBar,
+  IRModRow,
+  IRPanel,
+  IRPanelHeader,
+  IRStatTile,
+  IRThumb,
+} from '@/components/ui/ir-primitives';
 
 const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
   <IRPanel>
@@ -80,7 +88,9 @@ export const RightSheet: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
               <IRThumb size={26} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-1">
-                  <span className="truncate text-[11px] font-medium text-foreground/90">{a.name}</span>
+                  <span className="truncate text-[11px] font-medium text-foreground/90">
+                    {a.name}
+                  </span>
                   <span className="text-[10px] text-muted-foreground">{a.damage}</span>
                 </div>
                 <span className="text-[10px] font-semibold text-infinite-gold">{a.bonus}</span>
@@ -99,7 +109,9 @@ export const RightSheet: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
             <div key={cd.id} className="flex items-center gap-2">
               <IRThumb src={cd.iconUrl} size={26} />
               <span className="flex-1 truncate text-[11px] text-foreground/90">{cd.name}</span>
-              {cd.duration && <span className="text-[10px] text-muted-foreground">{cd.duration}</span>}
+              {cd.duration && (
+                <span className="text-[10px] text-muted-foreground">{cd.duration}</span>
+              )}
             </div>
           ))}
         </div>
@@ -126,7 +138,11 @@ export const RightSheet: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
         <div className="p-2.5">
           {(c.gold != null || c.carriedWeight != null) && (
             <div className="mb-1.5 flex items-center justify-between border-b border-white/5 pb-1.5 text-[10px]">
-              {c.gold != null && <span className="font-semibold text-infinite-gold">{c.gold.toLocaleString()} gp</span>}
+              {c.gold != null && (
+                <span className="font-semibold text-infinite-gold">
+                  {c.gold.toLocaleString()} gp
+                </span>
+              )}
               {c.carriedWeight != null && (
                 <span className="text-muted-foreground">
                   {c.carriedWeight} / {c.maxWeight} lb

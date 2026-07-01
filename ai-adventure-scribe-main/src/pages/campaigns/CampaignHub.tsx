@@ -136,7 +136,7 @@ const CampaignHub: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/20">
+    <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
       <div className="container mx-auto px-4 py-8">
         {/* Enhanced Header */}
         <div className="mb-6">
@@ -148,10 +148,10 @@ const CampaignHub: React.FC = () => {
                     <span className="text-xl">⚔️</span>
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-infinite-purple to-infinite-gold bg-clip-text text-transparent">
+                    <h1 className="ir-display text-3xl font-semibold bg-gradient-to-r from-infinite-purple to-infinite-gold bg-clip-text text-transparent">
                       {campaign.name}
                     </h1>
-                    <p className="dark:text-gray-200 text-gray-700">Epic Campaign Adventure</p>
+                    <p className="text-muted-foreground">Epic Campaign Adventure</p>
                   </div>
                 </div>
               </div>
@@ -207,13 +207,13 @@ const CampaignHub: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger
               value="world"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
+              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-700 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
             >
               🌍 World
             </TabsTrigger>
             <TabsTrigger
               value="settings"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-slate-600 data-[state=active]:to-slate-700 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
+              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-infinite-dark-lighter data-[state=active]:to-infinite-dark data-[state=active]:text-infinite-gold data-[state=active]:shadow-lg transition-all duration-300 font-medium"
             >
               ⚙️ Settings
             </TabsTrigger>

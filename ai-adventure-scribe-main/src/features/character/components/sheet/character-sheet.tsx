@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import CharacterSheetTabs from './character-sheet-tabs';
 
 import { CharacterSheetSkeleton } from '@/components/skeletons/CharacterSheetSkeleton';
-import { Card } from '@/components/ui/card';
+import { IRPanel } from '@/components/ui/ir-primitives';
 import { useCharacterData } from '@/hooks/use-character-data';
 
 /**
@@ -28,9 +28,9 @@ const CharacterSheet: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Card className="p-6 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <IRPanel className="p-6">
         <CharacterSheetTabs character={character} onCharacterUpdate={refetch} />
-      </Card>
+      </IRPanel>
     </div>
   );
 };

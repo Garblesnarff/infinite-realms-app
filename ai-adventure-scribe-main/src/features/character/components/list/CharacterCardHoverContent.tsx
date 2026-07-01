@@ -50,7 +50,7 @@ const CharacterCardHoverContent = ({
       className={`hover-popup ${isHovered ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out`}
       style={isHovered ? { zIndex: Z_INDEX.CARD_HOVER } : undefined}
     >
-      <div className="bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-xl border border-border max-w-xs">
+      <div className="ir-panel backdrop-blur-sm p-4 max-w-xs">
         {/* Avatar Display */}
         {character.avatar_url && (
           <div className="flex justify-center mb-3">
@@ -157,13 +157,11 @@ const CharacterCardHoverContent = ({
               )}
               {character.character_stats?.armor_class && (
                 <span className="flex items-center gap-1">
-                  <span className="font-medium">AC:</span>{' '}
-                  {character.character_stats.armor_class}
+                  <span className="font-medium">AC:</span> {character.character_stats.armor_class}
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <span className="font-medium">Prof:</span> +
-                {getProficiencyBonus(character.level)}
+                <span className="font-medium">Prof:</span> +{getProficiencyBonus(character.level)}
               </span>
             </div>
           </>

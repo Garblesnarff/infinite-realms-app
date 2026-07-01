@@ -42,7 +42,10 @@ const FightingStylesDisplay: React.FC<FightingStylesDisplayProps> = ({ character
               <div key={index} className="border-l-4 border-red-500 pl-4">
                 <div className="flex items-center gap-2 mb-2">
                   <h4 className="font-semibold">{styleName}</h4>
-                  <Badge variant="secondary" className="bg-red-100 text-red-800">
+                  <Badge
+                    variant="secondary"
+                    className="bg-red-500/15 text-red-400 border border-red-500/30"
+                  >
                     Unknown Style
                   </Badge>
                 </div>
@@ -57,7 +60,10 @@ const FightingStylesDisplay: React.FC<FightingStylesDisplayProps> = ({ character
                 <h4 className="font-semibold">
                   {style.name.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                 </h4>
-                <Badge variant="secondary" className="bg-red-100 text-red-800">
+                <Badge
+                  variant="secondary"
+                  className="bg-red-500/15 text-red-400 border border-red-500/30"
+                >
                   Fighting Style
                 </Badge>
               </div>

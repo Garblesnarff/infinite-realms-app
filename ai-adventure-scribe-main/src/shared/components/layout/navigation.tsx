@@ -33,7 +33,7 @@ const Navigation: React.FC = () => {
   return (
     <nav
       id="app-nav"
-      className="bg-infinite-dark/95 backdrop-blur supports-[backdrop-filter]:bg-infinite-dark/60 sticky top-0 w-full border-b border-infinite-purple/30"
+      className="bg-infinite-dark/95 backdrop-blur supports-[backdrop-filter]:bg-infinite-dark/60 sticky top-0 w-full border-b border-infinite-purple/30 shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_10px_30px_rgba(0,0,0,0.25)]"
       style={{ zIndex: Z_INDEX.STICKY }}
     >
       <div className="container mx-auto px-4">
@@ -41,7 +41,7 @@ const Navigation: React.FC = () => {
           {/* Logo/Home */}
           <Link
             to="/app"
-            className="flex items-center space-x-2 font-bold text-xl text-infinite-gold hover:text-infinite-gold/80 transition-colors"
+            className="ir-display flex items-center space-x-2 text-xl font-semibold uppercase tracking-[1.5px] text-infinite-gold hover:text-infinite-gold/80 transition-colors"
           >
             <Sword className="h-6 w-6 text-infinite-purple" />
             <span>InfiniteRealms</span>
@@ -80,7 +80,7 @@ const Navigation: React.FC = () => {
             </div>
 
             {/* User Plan Badge and Upgrade Button */}
-            <div className="flex items-center space-x-2 border-l border-border pl-4">
+            <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
               {userPlan === 'free' ? (
                 <Link
                   to="/app/account"
@@ -98,7 +98,7 @@ const Navigation: React.FC = () => {
             </div>
 
             {/* User Info and Sign Out */}
-            <div className="flex items-center space-x-2 border-l border-border pl-4">
+            <div className="flex items-center space-x-2 border-l border-white/10 pl-4">
               <Link
                 to="/app/account"
                 className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-infinite-gold transition-colors"

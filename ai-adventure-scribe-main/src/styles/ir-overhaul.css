@@ -16,10 +16,10 @@
   background: #070b14;
 
   /* --- Tailwind brand color channels -> navy + antique gold (app only) --- */
-  --c-infinite-dark: 7 11 20;       /* #070b14 deep navy (was #1E1B4B) */
-  --c-infinite-gold: 213 176 112;   /* #d5b070 antique gold (was #F59E0B) */
-  --c-infinite-purple: 95 113 168;  /* #5f71a8 muted steel-blue (was purple) */
-  --c-infinite-teal: 79 182 196;    /* #4fb6c4 */
+  --c-infinite-dark: 7 11 20; /* #070b14 deep navy (was #1E1B4B) */
+  --c-infinite-gold: 213 176 112; /* #d5b070 antique gold (was #F59E0B) */
+  --c-infinite-purple: 95 113 168; /* #5f71a8 muted steel-blue (was purple) */
+  --c-infinite-teal: 79 182 196; /* #4fb6c4 */
 
   /* --- navy surface retint (was purple-tinted) --- */
   --infinite-dark: #070b14;
@@ -39,14 +39,14 @@
   --foreground-secondary: rgba(234, 238, 250, 0.9);
   --foreground-muted: rgba(234, 238, 250, 0.65);
 
-  --muted: rgba(255, 255, 255, 0.10);
+  --muted: rgba(255, 255, 255, 0.1);
   --muted-foreground: rgba(234, 238, 250, 0.65);
   --muted-hover: rgba(255, 255, 255, 0.16);
 
-  --border: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(213, 176, 112, 0.35);
   --input: rgba(255, 255, 255, 0.06);
-  --input-hover: rgba(255, 255, 255, 0.10);
+  --input-hover: rgba(255, 255, 255, 0.1);
 
   --card: rgba(255, 255, 255, 0.045);
   --card-hover: rgba(255, 255, 255, 0.07);
@@ -58,16 +58,26 @@
 
   --sidebar-background: #0c1220;
   --sidebar-foreground: #eaeefa;
-  --sidebar-border: rgba(255, 255, 255, 0.10);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
 
   /* atmospheric gradients -> navy */
   --gradient-cosmic: linear-gradient(135deg, #070b14 0%, #0c1322 50%, #0a0f1c 100%);
-  --gradient-ethereal: linear-gradient(135deg, rgba(213,176,112,0.08) 0%, rgba(79,182,196,0.08) 100%);
+  --gradient-ethereal: linear-gradient(
+    135deg,
+    rgba(213, 176, 112, 0.08) 0%,
+    rgba(79, 182, 196, 0.08) 100%
+  );
 
   /* brand utility tints re-pointed to gold accents */
   --text-brand-secondary: var(--infinite-gold);
-  --bg-brand-secondary: rgba(213, 176, 112, 0.10);
+  --bg-brand-secondary: rgba(213, 176, 112, 0.1);
   --border-brand-secondary: rgba(213, 176, 112, 0.22);
+
+  /* parchment Card variant -> aged leather/vellum instead of cream */
+  --parchment-from: rgba(42, 33, 20, 0.6);
+  --parchment-to: rgba(28, 22, 14, 0.55);
+  --parchment-text: #e8dcc8;
+  --parchment-border: rgba(213, 176, 112, 0.35);
 
   font-family: 'Inter', system-ui, sans-serif;
   color: var(--foreground);
@@ -79,32 +89,59 @@
   background: linear-gradient(180deg, #111726 0%, #0e1422 100%);
   border: 1px solid var(--border);
   border-radius: 13px;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 10px 30px rgba(0,0,0,0.40);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 10px 30px rgba(0, 0, 0, 0.4);
 }
 .ir-app .ir-panel-h {
-  display: flex; align-items: center; gap: 8px;
-  padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600;
-  letter-spacing: 1.8px; text-transform: uppercase; color: var(--infinite-gold);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--infinite-gold);
 }
-.ir-app .ir-display { font-family: 'Cinzel', serif; }
-.ir-app .ir-narr { font-family: 'EB Garamond', Georgia, serif; font-style: italic; }
+.ir-app .ir-display {
+  font-family: 'Cinzel', serif;
+}
+.ir-app .ir-narr {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-style: italic;
+}
 
 /* gold gradient button */
 .ir-app .ir-btn-gold {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 17px; border-radius: 7px; cursor: pointer;
-  font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #1a1206;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 17px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #1a1206;
   background: linear-gradient(180deg, #f6e3b8 0%, var(--infinite-gold) 60%, #c69d57 100%);
-  border: 1px solid #f3deb0; box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 4px 14px rgba(213,176,112,0.16);
+  border: 1px solid #f3deb0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 4px 14px rgba(213, 176, 112, 0.16);
 }
-.ir-app .ir-btn-gold:hover { filter: brightness(1.06); }
+.ir-app .ir-btn-gold:hover {
+  filter: brightness(1.06);
+}
 
 /* ---- retint light/parchment surfaces that predate the navy theme ---- */
 /* Chat composer was a cream parchment gradient (index.css) -> navy */
 .ir-app .chat-composer {
   background: linear-gradient(180deg, #141c2e 0%, #0e1626 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 .ir-app .chat-composer textarea,
 .ir-app .chat-composer input {
@@ -118,4 +155,67 @@
 .ir-app .glass-strong {
   background: rgba(12, 18, 32, 0.85) !important;
   backdrop-filter: blur(10px);
+}
+
+/* campaign-card is shared with the public Explore gallery (out of scope), so
+   its hover-popup surface (bg-white/95) is retinted here rather than edited
+   in the component itself — this only takes effect under .ir-app. */
+.ir-app .campaign-card .bg-white\/95 {
+  background: rgba(12, 18, 32, 0.92) !important;
+  color: var(--foreground);
+}
+
+/* Tailwind's shadcn-style semantic utilities (bg-card, border-border, etc.)
+   resolve to `hsl(var(--x))`, but --x is defined as a hex/rgba literal in
+   index.css — that's invalid CSS, so these utilities silently compute to
+   transparent everywhere in the app (not something introduced by this
+   overhaul). Rather than touch the underlying token format (a larger,
+   separate fix with its own risk across public pages), retint the specific
+   utility classes directly here, scoped to .ir-app only, so the many plain
+   <Card>/bg-muted/bg-popover surfaces across the app render correctly. */
+.ir-app .bg-card {
+  background-color: rgba(255, 255, 255, 0.045) !important;
+}
+.ir-app .bg-popover {
+  background-color: #0c1220 !important;
+}
+.ir-app .bg-muted {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.ir-app .bg-sidebar {
+  background-color: #0c1220 !important;
+}
+.ir-app .bg-background {
+  background-color: #070b14 !important;
+}
+.ir-app .border-border,
+.ir-app .divide-border > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.ir-app .border-input {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+.ir-app .bg-primary {
+  background-color: rgb(var(--c-infinite-purple)) !important;
+}
+.ir-app .border-primary {
+  border-color: rgb(var(--c-infinite-purple)) !important;
+}
+.ir-app .bg-secondary {
+  background-color: var(--infinite-gold) !important;
+}
+.ir-app .border-secondary {
+  border-color: var(--infinite-gold) !important;
+}
+.ir-app .bg-accent {
+  background-color: rgb(var(--c-infinite-teal)) !important;
+}
+.ir-app .border-accent {
+  border-color: rgb(var(--c-infinite-teal)) !important;
+}
+.ir-app .bg-destructive {
+  background-color: #ef4444 !important;
+}
+.ir-app .border-destructive {
+  border-color: #ef4444 !important;
 }

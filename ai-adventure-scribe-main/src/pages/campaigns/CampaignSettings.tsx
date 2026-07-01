@@ -25,14 +25,14 @@ const CampaignSettings: React.FC = () => {
 
         <div className="space-y-6">
           {/* Show NPC Rolls Toggle */}
-          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-border/50 bg-card/50 hover:border-border transition-colors">
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-white/10 bg-white/[0.03] hover:border-white/20 transition-colors">
             <div className="flex-1 space-y-2">
               <Label
                 htmlFor="show-npc-rolls"
                 className="text-base font-medium cursor-pointer flex items-center gap-2"
               >
                 {showNPCRolls ? (
-                  <Eye className="w-4 h-4 text-primary" />
+                  <Eye className="w-4 h-4 text-infinite-gold" />
                 ) : (
                   <EyeOff className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -44,7 +44,7 @@ const CampaignSettings: React.FC = () => {
               </p>
 
               {/* Info box */}
-              <div className="flex items-start gap-2 mt-3 p-3 rounded-md bg-muted/50 border border-border/30">
+              <div className="flex items-start gap-2 mt-3 p-3 rounded-md bg-white/[0.05] border border-white/10">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   <strong className="text-foreground">Tabletop Note:</strong> In traditional D&D,
@@ -64,7 +64,7 @@ const CampaignSettings: React.FC = () => {
                 className={cn(
                   'relative inline-flex h-8 w-14 items-center rounded-full transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  showNPCRolls ? 'bg-primary' : 'bg-muted',
+                  showNPCRolls ? 'bg-infinite-gold' : 'bg-muted',
                 )}
               >
                 <span

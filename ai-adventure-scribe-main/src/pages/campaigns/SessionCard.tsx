@@ -44,10 +44,10 @@ interface SessionCardProps {
 }
 
 const statusStyles: Record<string, string> = {
-  active: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  ending: 'bg-amber-100 text-amber-700 border-amber-200',
-  completed: 'bg-blue-100 text-blue-700 border-blue-200',
-  expired: 'bg-slate-200 text-slate-700 border-slate-300',
+  active: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  ending: 'bg-infinite-gold/15 text-infinite-gold border-infinite-gold/30',
+  completed: 'bg-infinite-teal/15 text-infinite-teal border-infinite-teal/30',
+  expired: 'bg-white/10 text-muted-foreground border-white/10',
 };
 
 const statusLabels: Record<string, string> = {
@@ -97,7 +97,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
   const helperText = isResumable ? 'Resume where you left off' : 'Create continuation session';
 
   return (
-    <Card className="p-4 md:p-5 shadow-sm border border-border/60">
+    <Card className="p-4 md:p-5 shadow-sm border border-white/10">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -176,7 +176,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
           const isPro = userPlan && userPlan !== 'free';
 
           return (
-            <div className="mt-3 pt-3 border-t border-border/50">
+            <div className="mt-3 pt-3 border-t border-white/10">
               {chronicle?.status === 'ready' ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button

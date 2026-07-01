@@ -19,7 +19,9 @@ export const IRPanelHeader: React.FC<{
 }> = ({ title, right }) => (
   <header className="ir-panel-h justify-between">
     <span>{title}</span>
-    {right ? <span className="text-[10px] tracking-normal text-infinite-gold/80">{right}</span> : null}
+    {right ? (
+      <span className="text-[10px] tracking-normal text-infinite-gold/80">{right}</span>
+    ) : null}
   </header>
 );
 
@@ -37,7 +39,9 @@ export const IRStatTile: React.FC<{
       {label}
     </span>
     <span className="mt-0.5 text-base font-bold leading-none text-foreground">{value}</span>
-    {sub != null && <span className="mt-0.5 text-[10px] leading-none text-muted-foreground">{sub}</span>}
+    {sub != null && (
+      <span className="mt-0.5 text-[10px] leading-none text-muted-foreground">{sub}</span>
+    )}
   </div>
 );
 
@@ -59,7 +63,10 @@ export const IRBar: React.FC<{
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   return (
     <div className={`h-1.5 w-full overflow-hidden rounded-full bg-white/10 ${className}`}>
-      <div className={`h-full rounded-full transition-all duration-500 ${barClassName}`} style={{ width: `${pct}%` }} />
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${barClassName}`}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 };

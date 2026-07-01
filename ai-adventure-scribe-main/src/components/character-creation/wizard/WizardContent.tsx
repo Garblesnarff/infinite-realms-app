@@ -260,7 +260,7 @@ const WizardContent: React.FC = () => {
   if (!CurrentStepComponent) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card className="p-6 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <Card className="p-6 glass-strong">
           <div className="text-center">
             <h1 className="text-3xl font-bold mb-4">Character Creation</h1>
             <p className="text-muted-foreground">Loading character creation steps...</p>
@@ -271,7 +271,7 @@ const WizardContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-indigo-50/20">
+    <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Main Character Creation Area */}

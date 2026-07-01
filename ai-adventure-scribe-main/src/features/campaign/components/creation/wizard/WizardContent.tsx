@@ -15,7 +15,7 @@ import CampaignPreview from '../shared/CampaignPreview';
 import ProgressIndicator from '../shared/ProgressIndicator';
 import StepNavigation from '../shared/StepNavigation';
 
-import { Card } from '@/components/ui/card';
+import { IRPanel } from '@/components/ui/ir-primitives';
 import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useAutosave } from '@/hooks/useAutosave';
@@ -104,7 +104,11 @@ const WizardContent: React.FC = () => {
   const CurrentStepComponent = wizardSteps[currentStep].component;
 
   const storageKey = 'campaign-wizard-draft-v1';
-  const { status: _status, restore, clear } = useAutosave(storageKey, state.campaign || {}, { delay: 900 });
+  const {
+    status: _status,
+    restore,
+    clear,
+  } = useAutosave(storageKey, state.campaign || {}, { delay: 900 });
 
   const hasDraft = !!restore();
 
@@ -113,7 +117,7 @@ const WizardContent: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Main Campaign Creation Area */}
         <div className="xl:col-span-2">
-          <Card className="p-6 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+          <IRPanel className="p-6">
             <WizardHeader
               step={currentStep + 1}
               totalSteps={wizardSteps.length}
@@ -149,7 +153,7 @@ const WizardContent: React.FC = () => {
               onPrevious={handlePrevious}
               isLoading={isSaving}
             />
-          </Card>
+          </IRPanel>
         </div>
 
         {/* Campaign Preview Sidebar */}

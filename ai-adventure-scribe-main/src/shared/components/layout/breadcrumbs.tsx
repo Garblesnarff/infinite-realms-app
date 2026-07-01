@@ -97,7 +97,7 @@ const Breadcrumbs: React.FC = () => {
   return (
     <div id="app-breadcrumbs" className="container mx-auto px-4 py-2">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-        <Link to="/app" className="hover:text-foreground transition-colors">
+        <Link to="/app" className="hover:text-infinite-gold transition-colors">
           Home
         </Link>
         {pathSegments.map((segment, index) => {
@@ -108,7 +108,7 @@ const Breadcrumbs: React.FC = () => {
           return (
             <React.Fragment key={index}>
               <ChevronRight className="h-4 w-4" />
-              <Link to={buildPath(index)} className="hover:text-foreground transition-colors">
+              <Link to={buildPath(index)} className="hover:text-infinite-gold transition-colors">
                 {pretty}
               </Link>
             </React.Fragment>

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
 import { Check } from 'lucide-react';
 import React from 'react';
 
@@ -40,10 +41,7 @@ export const ListGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, onG
     }
   >
     {genre.backgroundImage && (
-      <div
-        className="absolute inset-0 bg-black/70"
-        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
-      />
+      <div className="absolute inset-0 bg-black/70" style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }} />
     )}
     <div
       className={`p-4 relative ${genre.backgroundImage ? 'text-white' : ''}`}
@@ -91,7 +89,11 @@ export const ListGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, onG
   </Card>
 );
 
-export const CompactGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, onGenreChange }) => (
+export const CompactGenreCard: React.FC<GenreCardProps> = ({
+  genre,
+  isSelected,
+  onGenreChange,
+}) => (
   <Card
     key={genre.value}
     className={`cursor-pointer transition-all hover:shadow-lg border-2 relative p-4 overflow-hidden ${
@@ -117,10 +119,7 @@ export const CompactGenreCard: React.FC<GenreCardProps> = ({ genre, isSelected, 
     }
   >
     {genre.backgroundImage && (
-      <div
-        className="absolute inset-0 bg-black/70"
-        style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
-      />
+      <div className="absolute inset-0 bg-black/70" style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }} />
     )}
     <div
       className={`flex items-center justify-between mb-2 relative ${genre.backgroundImage ? 'text-white' : ''}`}
@@ -239,7 +238,7 @@ export const GridGenreCard: React.FC<GridGenreCardProps> = ({
       className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ${hovered === genre.value ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
       style={{ zIndex: Z_INDEX.CARD_HOVER }}
     >
-      <div className="bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-xl border border-border w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto">
+      <div className="ir-panel backdrop-blur-sm p-3 w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto">
         <div className="flex items-center gap-2 mb-2">
           {genre.icon}
           <h3 className="text-lg font-bold text-foreground">{genre.label}</h3>

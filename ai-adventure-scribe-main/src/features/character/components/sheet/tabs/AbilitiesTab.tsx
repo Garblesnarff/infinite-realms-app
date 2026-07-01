@@ -106,7 +106,10 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
         </CardHeader>
         <CardContent className="space-y-4">
           {Object.entries(character.abilityScores).map(([ability, data]) => (
-            <div key={ability} className="flex items-center justify-between p-3 border rounded-lg">
+            <div
+              key={ability}
+              className="flex items-center justify-between p-3 border border-white/10 rounded-lg"
+            >
               <div className="flex items-center gap-3">
                 <div className="text-center">
                   <div className="text-2xl font-bold">{data.score}</div>
@@ -138,9 +141,12 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
             const modifier = getSaveModifier(ability as AbilityName);
 
             return (
-              <div key={ability} className="flex items-center justify-between p-2 border rounded">
+              <div
+                key={ability}
+                className="flex items-center justify-between p-2 border border-white/10 rounded"
+              >
                 <div className="flex items-center gap-2">
-                  {isProficient && <div className="w-2 h-2 bg-primary rounded-full" />}
+                  {isProficient && <div className="w-2 h-2 bg-infinite-gold rounded-full" />}
                   <span className="capitalize font-medium">{ability}</span>
                   <Badge variant="outline" className="text-xs">
                     {formatModifier(modifier)}
@@ -169,10 +175,13 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
               const modifier = getSkillModifier(skill as SkillName);
 
               return (
-                <div key={skill} className="flex items-center justify-between p-2 border rounded">
+                <div
+                  key={skill}
+                  className="flex items-center justify-between p-2 border border-white/10 rounded"
+                >
                   <div className="flex items-center gap-2 flex-1">
                     {isProficient && (
-                      <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
+                      <div className="w-2 h-2 bg-infinite-gold rounded-full flex-shrink-0" />
                     )}
                     <div className="flex-1">
                       <div className="font-medium">{skill}</div>
@@ -193,10 +202,10 @@ const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpd
           </div>
 
           {/* Proficiency Legend */}
-          <div className="mt-6 pt-4 border-t">
+          <div className="mt-6 pt-4 border-t border-white/10">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-primary rounded-full" />
+                <div className="w-2 h-2 bg-infinite-gold rounded-full" />
                 <span>Proficient (+{proficiencyBonus})</span>
               </div>
               <div>

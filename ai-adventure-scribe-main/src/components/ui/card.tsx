@@ -10,7 +10,7 @@ const cardVariants = cva(
       variant: {
         default: 'bg-card text-card-foreground border-border hover:border-border/80',
         parchment:
-          'fantasy-card bg-gradient-to-br from-[rgba(255,255,250,0.9)] to-[rgba(250,244,230,0.85)] text-amber-900 border-amber-200/50 hover:shadow-lg hover:shadow-amber-200/20',
+          'fantasy-card bg-gradient-to-br from-[var(--parchment-from)] to-[var(--parchment-to)] text-[var(--parchment-text)] border-[var(--parchment-border)] hover:shadow-lg hover:shadow-amber-200/20',
         glass: 'glass-panel hover:shadow-lg',
         cosmic: 'cosmic-panel hover:shadow-lg hover:shadow-infinite-purple/20',
       },

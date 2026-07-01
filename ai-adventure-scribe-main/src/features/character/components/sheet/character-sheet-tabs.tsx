@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
 import {
   User,
   Zap,
@@ -26,6 +27,7 @@ import SpellsTab from './tabs/SpellsTab';
 import type { Character } from '@/types/character';
 
 import CharacterGallery from '@/components/gallery/CharacterGallery';
+import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface CharacterSheetTabsProps {
@@ -97,21 +99,20 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
   return (
     <div className="w-full">
       {/* Character Header - Always Visible */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border">
+      <IRPanel className="mb-6 p-4">
         <div className="flex items-center gap-4">
           {/* Character Portrait/Avatar */}
           <div className="flex-shrink-0">
             {character.avatar_url ? (
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
-                <img
-                  src={character.avatar_url}
-                  alt={`${character.name || 'Character'} avatar`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              <IRThumb
+                src={character.avatar_url}
+                alt={`${character.name || 'Character'} avatar`}
+                size={64}
+                className="rounded-full"
+              />
             ) : (
               <div
-                className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold"
+                className="w-16 h-16 rounded-full bg-gradient-to-br from-infinite-gold-light to-infinite-gold-dark text-infinite-dark flex items-center justify-center text-xl font-bold ir-display"
                 aria-hidden="true"
               >
                 {character.name?.charAt(0).toUpperCase() || '?'}
@@ -121,7 +122,9 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
 
           {/* Character Title */}
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">{character.name || 'Unnamed Character'}</h1>
+            <h1 className="ir-display text-2xl font-semibold text-foreground">
+              {character.name || 'Unnamed Character'}
+            </h1>
             <p className="text-muted-foreground">
               Level {character.level || 1} {character.race?.name || 'Unknown Race'}{' '}
               {character.class?.name || 'Unknown Class'}
@@ -201,12 +204,12 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </IRPanel>
 
       {/* Tab Navigation and Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList
-          className="grid w-full grid-cols-4 md:grid-cols-8 h-auto p-2 bg-gradient-to-r from-infinite-dark/10 via-infinite-purple/5 to-infinite-teal/10 backdrop-blur-sm border-2 border-infinite-purple/20 shadow-lg"
+          className="grid w-full grid-cols-4 md:grid-cols-8 h-auto p-2 bg-[linear-gradient(180deg,#111726_0%,#0e1422_100%)] backdrop-blur-sm border-2 border-white/10 shadow-lg"
           aria-label="Character sheet sections"
         >
           {tabs.map((tab) => {
