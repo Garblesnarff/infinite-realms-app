@@ -30,7 +30,6 @@ export { VolumeSlider } from './audio/VolumeSlider';
 
 // Voice components
 export { VoiceHandler } from './voice/VoiceHandler';
-export { DMMessageVoiceControls } from './voice/DMMessageVoiceControls';
 
 // Dice components
 export { DiceRollEmbed } from './dice/DiceRollEmbed';

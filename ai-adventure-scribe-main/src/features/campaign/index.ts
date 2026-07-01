@@ -14,8 +14,6 @@
 // Components
 export {
   CampaignWizard,
-  CampaignView,
-  SimpleCampaignView,
   CampaignList,
   CampaignCard,
   CampaignSkeleton,

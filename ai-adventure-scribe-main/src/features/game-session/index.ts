@@ -28,14 +28,10 @@ export {
   VolumeButton,
   VolumeSlider,
   VoiceHandler,
-  DMMessageVoiceControls,
 } from './components';
 
 // Re-export message list components
 export * from './components/chat/message-list';
-
-// Hooks
-export { useSimpleGameSession, useGameSession } from './hooks';
 
 // Types
 export * from './types';
