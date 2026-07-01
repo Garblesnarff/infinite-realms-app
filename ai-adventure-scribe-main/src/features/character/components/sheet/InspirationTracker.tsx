@@ -50,7 +50,7 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
   };
 
   return (
-    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50 dark:bg-gold-950/20' : ''}`}>
+    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50' : ''}`}>
       <CardContent className="p-4">
         {/* Screen reader announcement for inspiration state */}
         <div className="sr-only" role="status" aria-live="polite">
@@ -61,9 +61,7 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
           <div className="flex items-center gap-3">
             <div
               className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${
-                hasInspiration
-                  ? 'border-gold-500 bg-gold-100 dark:bg-gold-900/50'
-                  : 'border-gray-300 bg-gray-100 dark:bg-gray-800'
+                hasInspiration ? 'border-gold-500 bg-gold-100' : 'border-gray-300 bg-gray-100'
               }`}
             >
               <Star
@@ -112,7 +110,7 @@ const InspirationTracker: React.FC<InspirationTrackerProps> = ({ character, onUp
         </div>
 
         {hasInspiration && (
-          <div className="mt-3 p-2 bg-gold-100 dark:bg-gold-900/30 rounded text-xs text-gold-700 dark:text-gold-300">
+          <div className="mt-3 p-2 bg-gold-100 rounded text-xs text-gold-700">
             <strong>Inspiration:</strong> Spend to gain advantage on one ability check, attack roll,
             or saving throw.
           </div>

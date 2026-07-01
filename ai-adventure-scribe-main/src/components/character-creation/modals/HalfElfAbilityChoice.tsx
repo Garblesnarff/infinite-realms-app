@@ -81,13 +81,11 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
 
         <div className="space-y-4 py-4">
           {/* Fixed Charisma Bonus Display */}
-          <Card className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-200 dark:border-purple-800">
+          <Card className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-purple-900 dark:text-purple-100">Charisma</h4>
-                <p className="text-sm text-purple-700 dark:text-purple-300">
-                  Your natural charm and presence
-                </p>
+                <h4 className="font-semibold text-purple-900">Charisma</h4>
+                <p className="text-sm text-purple-700">Your natural charm and presence</p>
               </div>
               <Badge className="bg-purple-600 text-white">+2 (Fixed)</Badge>
             </div>
@@ -104,10 +102,10 @@ export const HalfElfAbilityChoice: React.FC<HalfElfAbilityChoiceProps> = ({
                   key={ability.name}
                   className={`p-4 cursor-pointer transition-all duration-200 ${
                     selected
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50'
+                      ? 'border-blue-500 bg-blue-50'
                       : disabled
                         ? 'opacity-50 cursor-not-allowed'
-                        : 'hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+                        : 'hover:border-blue-300 hover:bg-blue-50/50'
                   }`}
                   onClick={() => !disabled && toggleAbility(ability.name)}
                 >

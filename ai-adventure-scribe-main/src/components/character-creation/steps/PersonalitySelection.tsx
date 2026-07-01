@@ -248,14 +248,14 @@ const PersonalitySelection: React.FC = () => {
       </div>
 
       {/* Help Text */}
-      <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800">
+      <Card className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
         <div className="flex items-start space-x-3">
-          <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-amber-600 dark:text-amber-400 text-sm">💡</span>
+          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-amber-600 text-sm">💡</span>
           </div>
           <div className="space-y-1">
-            <h4 className="font-medium text-amber-900 dark:text-amber-100">Personality Tips</h4>
-            <p className="text-sm text-amber-700 dark:text-amber-200">
+            <h4 className="font-medium text-amber-900">Personality Tips</h4>
+            <p className="text-sm text-amber-700">
               Use the randomize buttons to get inspiration from official D&D backgrounds, or write
               your own unique personality elements. These will shape how your character interacts
               with the world and other players.

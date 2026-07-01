@@ -125,14 +125,14 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
       </Tabs>
 
       {/* Personality Integration Tips */}
-      <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+      <Card className="border-blue-200 bg-blue-50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+          <CardTitle className="flex items-center gap-2 text-blue-700">
             <Target className="w-5 h-5" />
             Roleplaying Tips
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-blue-600 dark:text-blue-400">
+        <CardContent className="text-sm text-blue-600">
           <div className="space-y-2">
             <p>
               <strong>Traits:</strong> Describe how your character behaves in everyday situations.
@@ -149,7 +149,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
               <strong>Flaws:</strong> Give your character weaknesses that can complicate their life
               in interesting ways.
             </p>
-            <Separator className="my-3 bg-blue-300 dark:bg-blue-700" />
+            <Separator className="my-3 bg-blue-300" />
             <p>
               <em>
                 Acting on these elements, especially when it creates interesting complications, is a

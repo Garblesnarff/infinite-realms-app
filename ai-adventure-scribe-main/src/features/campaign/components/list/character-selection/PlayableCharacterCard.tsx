@@ -40,7 +40,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
       }}
       aria-label={cardTitle}
       title={cardTitle}
-      className="group cursor-pointer hover:shadow-2xl hover:shadow-infinite-purple/40 transition-all duration-500 overflow-hidden border-2 border-border/60 hover:border-infinite-gold/90 hover:scale-[1.02] relative bg-white dark:bg-background focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:outline-none"
+      className="group cursor-pointer hover:shadow-2xl hover:shadow-infinite-purple/40 transition-all duration-500 overflow-hidden border-2 border-border/60 hover:border-infinite-gold/90 hover:scale-[1.02] relative bg-white focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:outline-none"
     >
       {/* Glow effect on hover */}
       <div
@@ -60,7 +60,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
         }}
         aria-hidden="true"
       >
-        <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95 dark:from-background/60 dark:via-background/80 dark:to-background/95" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/80 to-white/95" />
         {character.avatar_url && (
           <div className="absolute -bottom-8 left-4" style={{ zIndex: Z_INDEX.DROPDOWN }}>
             <img
@@ -71,7 +71,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
           </div>
         )}
       </div>
-      <CardContent className="p-4 pt-10 bg-white dark:bg-background">
+      <CardContent className="p-4 pt-10 bg-white">
         <div className="space-y-3">
           <div>
             <h3 className="font-semibold text-lg text-foreground">{character.name}</h3>
@@ -83,7 +83,10 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
           {stats && (
             <>
               {/* HP and AC */}
-              <div className="flex gap-4 text-sm bg-gray-100 dark:bg-muted p-2 rounded-md border border-gray-200 dark:border-border" aria-label="Quick stats">
+              <div
+                className="flex gap-4 text-sm bg-gray-100 p-2 rounded-md border border-gray-200"
+                aria-label="Quick stats"
+              >
                 <div className="flex items-center gap-1">
                   <span className="font-semibold text-foreground">HP:</span>
                   <span className="text-foreground">{stats.max_hit_points || '\u2014'}</span>
@@ -95,57 +98,73 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
               </div>
 
               {/* Ability Scores Grid */}
-              <div className="grid grid-cols-3 gap-2 text-xs" role="group" aria-label="Ability modifiers">
+              <div
+                className="grid grid-cols-3 gap-2 text-xs"
+                role="group"
+                aria-label="Ability modifiers"
+              >
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Strength modifier: ${getModifier(stats.strength)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">STR</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    STR
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.strength)}
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Dexterity modifier: ${getModifier(stats.dexterity)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">DEX</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    DEX
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.dexterity)}
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Constitution modifier: ${getModifier(stats.constitution)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">CON</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    CON
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.constitution)}
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Intelligence modifier: ${getModifier(stats.intelligence)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">INT</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    INT
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.intelligence)}
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Wisdom modifier: ${getModifier(stats.wisdom)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">WIS</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    WIS
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.wisdom)}
                   </span>
                 </div>
                 <div
-                  className="flex flex-col items-center p-2 bg-gray-50 dark:bg-muted/50 rounded border border-gray-200 dark:border-border shadow-sm"
+                  className="flex flex-col items-center p-2 bg-gray-50 rounded border border-gray-200 shadow-sm"
                   aria-label={`Charisma modifier: ${getModifier(stats.charisma)}`}
                 >
-                  <span className="font-semibold text-muted-foreground" aria-hidden="true">CHA</span>
+                  <span className="font-semibold text-muted-foreground" aria-hidden="true">
+                    CHA
+                  </span>
                   <span className="text-lg font-bold text-foreground" aria-hidden="true">
                     {getModifier(stats.charisma)}
                   </span>

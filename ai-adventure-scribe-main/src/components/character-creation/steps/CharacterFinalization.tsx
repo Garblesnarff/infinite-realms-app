@@ -196,7 +196,7 @@ const CharacterFinalization: React.FC = () => {
           {/* Image Generation Quota Tracker */}
           {imageQuota && (
             <div
-              className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800' : 'bg-muted/50'}`}
+              className={`p-3 rounded-lg border ${imageQuota.remaining === 0 ? 'bg-red-50 border-red-200' : 'bg-muted/50'}`}
             >
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
@@ -208,7 +208,7 @@ const CharacterFinalization: React.FC = () => {
                   <span
                     className={
                       imageQuota.remaining === 0
-                        ? 'text-red-600 dark:text-red-400 font-medium'
+                        ? 'text-red-600 font-medium'
                         : 'text-muted-foreground'
                     }
                   >
@@ -222,9 +222,7 @@ const CharacterFinalization: React.FC = () => {
                 </span>
               </div>
               {imageQuota.remaining === 0 && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                  Resets at midnight UTC
-                </p>
+                <p className="text-xs text-red-600 mt-1">Resets at midnight UTC</p>
               )}
             </div>
           )}
@@ -322,14 +320,12 @@ const CharacterFinalization: React.FC = () => {
       </div>
 
       {/* AI Generation Tip */}
-      <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
         <div className="flex items-start space-x-3">
-          <Sparkles className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+          <Sparkles className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm">
-            <p className="font-medium text-green-900 dark:text-green-100 mb-1">
-              Enhanced AI Generation
-            </p>
-            <p className="text-green-800 dark:text-green-200">
+            <p className="font-medium text-green-900 mb-1">Enhanced AI Generation</p>
+            <p className="text-green-800">
               Generate in order: First create a portrait <strong>Avatar</strong>, then the{' '}
               <strong>Character Sheet</strong> will use it as reference for consistency! The avatar
               will be used throughout the app for character identification in chats, character

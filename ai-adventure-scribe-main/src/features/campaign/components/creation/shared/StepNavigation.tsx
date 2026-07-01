@@ -69,12 +69,10 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   return (
     <div className="mt-8 space-y-6">
       {/* Progress Overview */}
-      <Card className="p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+      <Card className="p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-blue-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
-            <div className="text-sm font-medium text-blue-700 dark:text-blue-300">
-              Campaign Creation Progress
-            </div>
+            <div className="text-sm font-medium text-blue-700">Campaign Creation Progress</div>
             <Badge variant="outline" className="px-2 py-1 border-blue-500 text-blue-600">
               {currentStep + 1} / {totalSteps}
             </Badge>
@@ -96,7 +94,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
                     ? 'bg-green-500 text-white'
                     : index === currentStep
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+                      : 'bg-gray-200 text-gray-500'
                 }`}
               >
                 {index < currentStep ? <CheckCircle className="w-4 h-4" /> : getStepIcon(index)}

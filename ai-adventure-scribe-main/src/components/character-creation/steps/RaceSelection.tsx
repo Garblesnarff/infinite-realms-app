@@ -72,7 +72,11 @@ const RaceSelection: React.FC = () => {
           {/* Category Filters & View Controls */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             {/* Category Filters */}
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter races by category">
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Filter races by category"
+            >
               {raceCategories.map((category) => (
                 <Button
                   key={category.id}
@@ -210,7 +214,7 @@ const RaceSelection: React.FC = () => {
 
       {/* Comparison Mode */}
       {comparisonRaces.length > 0 && (
-        <Card className="p-4 bg-blue-50 dark:bg-blue-950/20">
+        <Card className="p-4 bg-blue-50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">Race Comparison ({comparisonRaces.length}/3)</h3>
             <Button variant="outline" size="sm" onClick={() => setComparisonRaces([])}>

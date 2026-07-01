@@ -1,9 +1,4 @@
-import {
-  Calendar,
-  Lightbulb,
-  Sparkles,
-  Star,
-} from 'lucide-react';
+import { Calendar, Lightbulb, Sparkles, Star } from 'lucide-react';
 import React from 'react';
 
 import type { InspirationEntry } from '@/features/character/hooks/use-personality-manager';
@@ -14,18 +9,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface InspirationSectionProps {
   hasInspiration: boolean;
   toggleInspiration: () => void;
   inspirationNotes: string;
   setInspirationNotes: (value: string) => void;
-  awardInspiration: (trigger: string, source: InspirationEntry['source'], description: string) => void;
+  awardInspiration: (
+    trigger: string,
+    source: InspirationEntry['source'],
+    description: string,
+  ) => void;
   inspirationHistory: InspirationEntry[];
   awardInspirationId: string;
 }
@@ -43,7 +38,7 @@ export const InspirationSection: React.FC<InspirationSectionProps> = ({
   awardInspirationId,
 }) => {
   return (
-    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50 dark:bg-gold-950/20' : ''}`}>
+    <Card className={`${hasInspiration ? 'border-gold-500 bg-gold-50' : ''}`}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -73,9 +68,7 @@ export const InspirationSection: React.FC<InspirationSectionProps> = ({
           <div className="flex items-center gap-4">
             <div
               className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${
-                hasInspiration
-                  ? 'border-gold-500 bg-gold-100 dark:bg-gold-900/50'
-                  : 'border-gray-300 bg-gray-100 dark:bg-gray-800'
+                hasInspiration ? 'border-gold-500 bg-gold-100' : 'border-gray-300 bg-gray-100'
               }`}
             >
               <Star

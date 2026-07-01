@@ -229,9 +229,9 @@ const SpellSelection: React.FC = () => {
       )}
 
       {validation.valid && (selectedCantrips.length > 0 || selectedSpells.length > 0) && (
-        <Alert className="border-green-200 bg-green-50 dark:bg-green-900/20">
+        <Alert className="border-green-200 bg-green-50">
           <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-700 dark:text-green-300">
+          <AlertDescription className="text-green-700">
             Spell selection is valid and has been saved to your character.
           </AlertDescription>
         </Alert>

@@ -154,7 +154,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               <p className="text-muted-foreground italic">Nothing to preview yet...</p>
             ) : (
               <div
-                className="prose prose-slate dark:prose-invert max-w-none"
+                className="prose prose-slate max-w-none"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }}
               />
             )}

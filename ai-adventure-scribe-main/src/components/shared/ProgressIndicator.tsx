@@ -69,8 +69,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
     title: 'text-lg font-semibold',
     badge: 'text-sm',
     progressBarGradient: 'from-blue-500 to-purple-600',
-    stepPreviewCard:
-      'p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950 border-blue-200 dark:border-blue-800',
+    stepPreviewCard: 'p-4 bg-gradient-to-r from-slate-50 to-blue-50 border-blue-200',
     currentStepText: 'font-medium text-foreground',
     currentStepDot: 'bg-primary',
     currentStepLabel: 'text-primary font-semibold',

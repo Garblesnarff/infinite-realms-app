@@ -82,9 +82,9 @@ export const CharacterCreationErrorFallback: React.FC<CharacterCreationErrorFall
             list. Any progress may need to be re-entered.
           </p>
 
-          <div className="flex items-start gap-2 mt-3 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded">
-            <Save className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-blue-700 dark:text-blue-300">
+          <div className="flex items-start gap-2 mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+            <Save className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-700">
               <strong>Tip:</strong> Consider taking screenshots of your character details before
               restarting, so you don't lose your creative choices.
             </p>

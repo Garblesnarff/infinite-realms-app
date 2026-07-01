@@ -25,7 +25,7 @@ export const ShortcutItem: React.FC<ShortcutItemProps> = ({ shortcut, searchQuer
 
     return parts.map((part, index) =>
       regex.test(part) ? (
-        <mark key={index} className="bg-yellow-200 dark:bg-yellow-900">
+        <mark key={index} className="bg-yellow-200">
           {part}
         </mark>
       ) : (
@@ -71,7 +71,11 @@ export interface CategorySectionProps {
   searchQuery?: string;
 }
 
-export const CategorySection: React.FC<CategorySectionProps> = ({ category, shortcuts, searchQuery }) => {
+export const CategorySection: React.FC<CategorySectionProps> = ({
+  category,
+  shortcuts,
+  searchQuery,
+}) => {
   if (shortcuts.length === 0) return null;
 
   return (

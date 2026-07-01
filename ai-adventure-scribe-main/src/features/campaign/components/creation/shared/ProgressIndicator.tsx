@@ -11,11 +11,10 @@ interface ProgressIndicatorProps {
 }
 
 const campaignTheme = {
-  title: 'text-lg font-semibold text-blue-700 dark:text-blue-300',
+  title: 'text-lg font-semibold text-blue-700',
   badge: 'px-3 py-1 border-blue-500 text-blue-600',
   progressBarGradient: 'from-blue-600 to-indigo-600',
-  stepPreviewCard:
-    'p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800',
+  stepPreviewCard: 'p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border-blue-200',
   currentStepText: 'font-medium text-blue-600',
   currentStepDot: 'bg-blue-600',
   currentStepLabel: 'text-blue-600 font-semibold',
