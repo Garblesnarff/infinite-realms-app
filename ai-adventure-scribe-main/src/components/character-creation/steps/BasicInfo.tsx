@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Character name validation rules per D&D 5E conventions

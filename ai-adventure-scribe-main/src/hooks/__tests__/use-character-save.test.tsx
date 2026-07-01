@@ -36,7 +36,7 @@ vi.mock('../lib/logger', () => ({
   },
 }));
 
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),
@@ -82,9 +82,9 @@ vi.mock('@/utils/characterTransformations', () => ({
 
 import { useCharacterSave } from '../use-character-save';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';

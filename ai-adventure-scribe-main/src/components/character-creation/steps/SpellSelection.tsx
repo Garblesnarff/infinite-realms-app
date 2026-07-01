@@ -1,11 +1,4 @@
-import {
-  Wand2,
-  Filter,
-  ChevronDown,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-} from 'lucide-react';
+import { Wand2, Filter, ChevronDown, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import SpellcastingInfoCard from './spell-selection/SpellcastingInfoCard';
@@ -18,12 +11,10 @@ import SpellSearchBar from '@/components/spells/SpellSearchBar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useToast } from '@/components/ui/use-toast';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useToast } from '@/hooks/use-toast';
 import { useSpellSelection } from '@/hooks/useSpellSelection';
 import logger from '@/lib/logger';
-
-
 
 /**
  * Enhanced SpellSelection component for spellcasting classes during character creation

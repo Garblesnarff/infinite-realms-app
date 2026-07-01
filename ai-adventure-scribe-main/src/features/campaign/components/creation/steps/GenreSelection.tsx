@@ -8,11 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { GENRES } from '@/features/campaign/data/genres';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-
+import { useToast } from '@/hooks/use-toast';
 
 const GenreSelection: React.FC<{ isLoading?: boolean }> = ({ isLoading = false }) => {
   const { state, dispatch } = useCampaign();

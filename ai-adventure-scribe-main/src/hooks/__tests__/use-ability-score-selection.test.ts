@@ -13,7 +13,7 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
 }));
 
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),

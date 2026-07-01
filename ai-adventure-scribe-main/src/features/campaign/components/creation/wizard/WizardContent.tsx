@@ -16,8 +16,8 @@ import ProgressIndicator from '../shared/ProgressIndicator';
 import StepNavigation from '../shared/StepNavigation';
 
 import { IRPanel } from '@/components/ui/ir-primitives';
-import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/hooks/use-toast';
 import { useAutosave } from '@/hooks/useAutosave';
 import logger from '@/lib/logger';
 

@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock dependencies
 const mockToast = vi.fn();
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: mockToast,
   })),
@@ -71,15 +71,19 @@ describe('usePersonalityManager', () => {
         result.current.toggleInspiration();
       });
 
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        inspiration: true,
-        personalityIntegration: expect.objectContaining({
-          lastInspiration: '2024-02-20T12:00:00.000Z',
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inspiration: true,
+          personalityIntegration: expect.objectContaining({
+            lastInspiration: '2024-02-20T12:00:00.000Z',
+          }),
         }),
-      }));
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Inspiration Gained!',
-      }));
+      );
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Inspiration Gained!',
+        }),
+      );
     });
 
     it('should toggle inspiration off', () => {
@@ -90,12 +94,16 @@ describe('usePersonalityManager', () => {
         result.current.toggleInspiration();
       });
 
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        inspiration: false,
-      }));
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Inspiration Used',
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inspiration: false,
+        }),
+      );
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Inspiration Used',
+        }),
+      );
     });
   });
 
@@ -107,23 +115,27 @@ describe('usePersonalityManager', () => {
         result.current.awardInspiration('New Trigger', 'ideal', 'New Description');
       });
 
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        inspiration: true,
-        personalityIntegration: expect.objectContaining({
-          inspirationHistory: expect.arrayContaining([
-            mockCharacter.personalityIntegration.inspirationHistory[0],
-            {
-              date: '2024-02-20T12:00:00.000Z',
-              trigger: 'New Trigger',
-              source: 'ideal',
-              description: 'New Description',
-            },
-          ]),
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inspiration: true,
+          personalityIntegration: expect.objectContaining({
+            inspirationHistory: expect.arrayContaining([
+              mockCharacter.personalityIntegration.inspirationHistory[0],
+              {
+                date: '2024-02-20T12:00:00.000Z',
+                trigger: 'New Trigger',
+                source: 'ideal',
+                description: 'New Description',
+              },
+            ]),
+          }),
         }),
-      }));
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Inspiration Awarded!',
-      }));
+      );
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Inspiration Awarded!',
+        }),
+      );
     });
 
     it('should not award inspiration if already present', () => {
@@ -135,9 +147,11 @@ describe('usePersonalityManager', () => {
       });
 
       expect(mockOnUpdate).not.toHaveBeenCalled();
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        variant: 'destructive',
-      }));
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: 'destructive',
+        }),
+      );
     });
   });
 
@@ -154,9 +168,11 @@ describe('usePersonalityManager', () => {
         result.current.addPersonalityElement('trait', 'New Trait');
       });
 
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        personalityTraits: ['Trait 1', 'New Trait'],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          personalityTraits: ['Trait 1', 'New Trait'],
+        }),
+      );
       expect(result.current.newTrait).toBe('');
       expect(mockToast).toHaveBeenCalled();
     });
@@ -166,9 +182,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.addPersonalityElement('ideal', 'New Ideal');
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        ideals: ['Ideal 1', 'New Ideal'],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ideals: ['Ideal 1', 'New Ideal'],
+        }),
+      );
     });
 
     it('should add a bond and clear input', () => {
@@ -176,9 +194,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.addPersonalityElement('bond', 'New Bond');
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        bonds: ['Bond 1', 'New Bond'],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bonds: ['Bond 1', 'New Bond'],
+        }),
+      );
     });
 
     it('should add a flaw and clear input', () => {
@@ -186,9 +206,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.addPersonalityElement('flaw', 'New Flaw');
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        flaws: ['Flaw 1', 'New Flaw'],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flaws: ['Flaw 1', 'New Flaw'],
+        }),
+      );
     });
 
     it('should not add empty elements', () => {
@@ -208,9 +230,11 @@ describe('usePersonalityManager', () => {
         result.current.removePersonalityElement('trait', 0);
       });
 
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        personalityTraits: [],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          personalityTraits: [],
+        }),
+      );
     });
 
     it('should remove an ideal', () => {
@@ -218,9 +242,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.removePersonalityElement('ideal', 0);
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        ideals: [],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ideals: [],
+        }),
+      );
     });
 
     it('should remove a bond', () => {
@@ -228,9 +254,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.removePersonalityElement('bond', 0);
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        bonds: [],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bonds: [],
+        }),
+      );
     });
 
     it('should remove a flaw', () => {
@@ -238,9 +266,11 @@ describe('usePersonalityManager', () => {
       act(() => {
         result.current.removePersonalityElement('flaw', 0);
       });
-      expect(mockOnUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        flaws: [],
-      }));
+      expect(mockOnUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flaws: [],
+        }),
+      );
     });
   });
 });

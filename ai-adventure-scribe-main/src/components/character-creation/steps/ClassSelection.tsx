@@ -6,11 +6,11 @@ import type { CharacterClass } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { classes } from '@/data/classOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 
 const ClassSelection: React.FC = () => {

@@ -3,12 +3,8 @@ import { useState } from 'react';
 import type { Equipment } from '@/data/equipmentOptions';
 import type { Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
-import {
-  calculateArmorClass,
-  convertCurrency,
-  formatCurrency,
-} from '@/data/equipmentOptions';
+import { calculateArmorClass, convertCurrency, formatCurrency } from '@/data/equipmentOptions';
+import { useToast } from '@/hooks/use-toast';
 
 export interface InventoryItem extends Equipment {
   quantity: number;
@@ -23,7 +19,9 @@ export interface Currency {
   pp: number;
 }
 
-export const useInventoryManager = (character: Character): {
+export const useInventoryManager = (
+  character: Character,
+): {
   inventory: InventoryItem[];
   currency: Currency;
   searchTerm: string;

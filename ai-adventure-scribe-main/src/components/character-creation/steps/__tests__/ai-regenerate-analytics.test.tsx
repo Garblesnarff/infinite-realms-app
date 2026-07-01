@@ -28,7 +28,7 @@ vi.mock('@/contexts/CharacterContext', async () => {
 });
 
 // Toast can be a no-op
-vi.mock('@/components/ui/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
 
 // Silence image generator network usage in this test file
 vi.mock('@/services/openrouter-service', () => ({ openRouterService: { uploadImage: vi.fn() } }));

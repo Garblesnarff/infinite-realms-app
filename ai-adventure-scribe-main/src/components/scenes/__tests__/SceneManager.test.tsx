@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi } from 'vitest';
 
 import { SceneManager } from '../SceneManager';
+
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Mock trpc
 vi.mock('@/infrastructure/api/trpc-client', () => ({
@@ -26,7 +26,7 @@ vi.mock('@/infrastructure/api/trpc-client', () => ({
 }));
 
 // Mock useToast
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),
@@ -36,9 +36,7 @@ const queryClient = new QueryClient();
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      {children}
-    </TooltipProvider>
+    <TooltipProvider>{children}</TooltipProvider>
   </QueryClientProvider>
 );
 
@@ -47,7 +45,11 @@ describe('SceneManager', () => {
     render(<SceneManager campaignId="test-campaign" />, { wrapper });
 
     expect(screen.getByText('No Scenes Yet')).toBeInTheDocument();
-    expect(screen.getByText('Create your first scene to bring your campaign to life with interactive battle maps.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Create your first scene to bring your campaign to life with interactive battle maps.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Create First Scene/i })).toBeInTheDocument();
   });
 });

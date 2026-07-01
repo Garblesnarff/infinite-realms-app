@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 import { llmApiClient, type ImageQuotaStatus } from '@/infrastructure/api';
 import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';

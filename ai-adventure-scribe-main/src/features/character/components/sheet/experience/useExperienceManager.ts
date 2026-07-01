@@ -2,11 +2,8 @@ import { useState } from 'react';
 
 import type { Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
-import {
-  getLevelFromExperience,
-  getExperienceForLevel,
-} from '@/data/levelProgression';
+import { getLevelFromExperience, getExperienceForLevel } from '@/data/levelProgression';
+import { useToast } from '@/hooks/use-toast';
 
 interface UseExperienceManagerProps {
   character: Character;

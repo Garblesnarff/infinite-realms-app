@@ -9,10 +9,10 @@ import ProgressIndicator from '../shared/ProgressIndicator';
 import StepNavigation from '../shared/StepNavigation';
 
 import { Card } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useCharacterSave } from '@/hooks/use-character-save';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
 

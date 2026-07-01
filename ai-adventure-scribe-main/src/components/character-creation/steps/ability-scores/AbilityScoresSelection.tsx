@@ -6,8 +6,8 @@ import type { AbilityScores } from '@/types/character';
 
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 import { usePointBuy } from '@/hooks/usePointBuy';
 import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { generateAbilityScores } from '@/utils/diceRolls';

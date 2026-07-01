@@ -6,8 +6,8 @@ import CampaignParameterSection, { type ParameterOption } from './CampaignParame
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/components/ui/use-toast';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Predefined options for campaign parameters

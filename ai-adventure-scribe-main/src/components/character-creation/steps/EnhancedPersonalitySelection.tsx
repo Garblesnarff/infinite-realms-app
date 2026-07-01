@@ -1,12 +1,4 @@
-import {
-  Heart,
-  Brain,
-  Anchor,
-  AlertTriangle,
-  Shuffle,
-  BookOpen,
-  Sparkles,
-} from 'lucide-react';
+import { Heart, Brain, Anchor, AlertTriangle, Shuffle, BookOpen, Sparkles } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import type { BackgroundSuggestions } from '@/components/character-creation/steps/personality/EnhancedPersonalitySuggestions';
@@ -19,9 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { backgrounds } from '@/data/backgroundOptions';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * EnhancedPersonalitySelection component for character creation
@@ -167,7 +159,9 @@ const EnhancedPersonalitySelection: React.FC = () => {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Character Personality</h2>
-        <p className="text-muted-foreground">Define your character's personality using D&D 5E elements</p>
+        <p className="text-muted-foreground">
+          Define your character's personality using D&D 5E elements
+        </p>
         {backgroundData && (
           <Badge variant="outline" className="mt-2">
             {backgroundData.name} Background
@@ -178,7 +172,11 @@ const EnhancedPersonalitySelection: React.FC = () => {
       {/* Quick Actions */}
       {suggestions && (
         <div className="flex justify-center">
-          <Button onClick={useRandomSuggestions} variant="outline" className="flex items-center gap-2">
+          <Button
+            onClick={useRandomSuggestions}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
             <Shuffle className="w-4 h-4" />
             Use Random Suggestions
           </Button>
@@ -279,7 +277,8 @@ const EnhancedPersonalitySelection: React.FC = () => {
                     Bond
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    What connects your character to the world? People, places, or things they care about.
+                    What connects your character to the world? People, places, or things they care
+                    about.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -319,7 +318,10 @@ const EnhancedPersonalitySelection: React.FC = () => {
         </div>
 
         {/* Right Column - Suggestions */}
-        <EnhancedPersonalitySuggestions suggestions={suggestions} onApplySuggestion={handleApplySuggestion} />
+        <EnhancedPersonalitySuggestions
+          suggestions={suggestions}
+          onApplySuggestion={handleApplySuggestion}
+        />
       </div>
 
       {/* Inspiration Info */}
@@ -332,14 +334,16 @@ const EnhancedPersonalitySelection: React.FC = () => {
         </CardHeader>
         <CardContent className="text-sm text-gold-600 dark:text-gold-400">
           <p>
-            <strong>Inspiration</strong> is a rule the DM can use to reward you for playing your character in a way that's
-            true to their personality traits, ideals, bonds, and flaws. When you have inspiration, you can spend it to
-            gain advantage on one ability check, attack roll, or saving throw.
+            <strong>Inspiration</strong> is a rule the DM can use to reward you for playing your
+            character in a way that's true to their personality traits, ideals, bonds, and flaws.
+            When you have inspiration, you can spend it to gain advantage on one ability check,
+            attack roll, or saving throw.
           </p>
           <Separator className="my-3 bg-gold-300 dark:bg-gold-700" />
           <p className="text-xs">
-            Your DM tells you how to earn inspiration in the game. Typically, you gain it when you play out your
-            character's personality in a way that creates interesting complications or drives the story forward.
+            Your DM tells you how to earn inspiration in the game. Typically, you gain it when you
+            play out your character's personality in a way that creates interesting complications or
+            drives the story forward.
           </p>
         </CardContent>
       </Card>

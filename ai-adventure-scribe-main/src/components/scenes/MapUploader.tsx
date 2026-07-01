@@ -17,7 +17,7 @@ import { MapAdjustmentControls } from './map-uploader/MapAdjustmentControls';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { uploadFile, buildTimestampedFilename } from '@/infrastructure/storage/supabase-storage';
 import { cn } from '@/lib/utils';
 

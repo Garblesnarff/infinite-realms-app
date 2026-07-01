@@ -7,9 +7,9 @@ import { logger } from '../lib/logger';
 
 import type { Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast'; // Assuming kebab-case
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';

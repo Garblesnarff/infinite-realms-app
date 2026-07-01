@@ -4,7 +4,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),
@@ -21,6 +21,7 @@ vi.mock('@/data/equipmentOptions', () => ({
 }));
 
 import { useInventoryManager } from '../use-inventory-manager';
+
 import * as equipmentOptions from '@/data/equipmentOptions';
 
 describe('useInventoryManager', () => {
@@ -155,14 +156,14 @@ describe('useInventoryManager', () => {
     act(() => {
       result.current.toggleEquipped(mockArmor.id);
     });
-    expect(result.current.inventory.find(i => i.id === mockArmor.id)?.equipped).toBe(true);
+    expect(result.current.inventory.find((i) => i.id === mockArmor.id)?.equipped).toBe(true);
 
     act(() => {
       result.current.toggleEquipped(armor2.id);
     });
 
-    expect(result.current.inventory.find(i => i.id === mockArmor.id)?.equipped).toBe(false);
-    expect(result.current.inventory.find(i => i.id === armor2.id)?.equipped).toBe(true);
+    expect(result.current.inventory.find((i) => i.id === mockArmor.id)?.equipped).toBe(false);
+    expect(result.current.inventory.find((i) => i.id === armor2.id)?.equipped).toBe(true);
   });
 
   it('should handle mutually exclusive shields', () => {
@@ -177,14 +178,14 @@ describe('useInventoryManager', () => {
     act(() => {
       result.current.toggleEquipped(mockShield.id);
     });
-    expect(result.current.inventory.find(i => i.id === mockShield.id)?.equipped).toBe(true);
+    expect(result.current.inventory.find((i) => i.id === mockShield.id)?.equipped).toBe(true);
 
     act(() => {
       result.current.toggleEquipped(shield2.id);
     });
 
-    expect(result.current.inventory.find(i => i.id === mockShield.id)?.equipped).toBe(false);
-    expect(result.current.inventory.find(i => i.id === shield2.id)?.equipped).toBe(true);
+    expect(result.current.inventory.find((i) => i.id === mockShield.id)?.equipped).toBe(false);
+    expect(result.current.inventory.find((i) => i.id === shield2.id)?.equipped).toBe(true);
   });
 
   it('should calculate AC correctly', async () => {
@@ -200,17 +201,17 @@ describe('useInventoryManager', () => {
       result.current.toggleEquipped(mockArmor.id);
     });
 
-    expect(result.current.inventory.find(i => i.id === mockArmor.id)?.equipped).toBe(true);
+    expect(result.current.inventory.find((i) => i.id === mockArmor.id)?.equipped).toBe(true);
     expect(result.current.equippedArmor?.id).toBe(mockArmor.id);
 
     expect(equipmentOptions.calculateArmorClass).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: mockArmor.id }),
       null, // shield
-      2,    // dex
-      0,    // bonus
+      2, // dex
+      0, // bonus
       'Fighter',
-      1,    // con
-      0     // wis
+      1, // con
+      0, // wis
     );
     expect(result.current.calculatedAC).toBe(15);
   });
@@ -260,7 +261,7 @@ describe('useInventoryManager', () => {
 
     act(() => {
       result.current.addToInventory(mockEquipment, 10); // 10 * 3 = 30
-      result.current.addToInventory(mockArmor, 1);     // 10
+      result.current.addToInventory(mockArmor, 1); // 10
     });
 
     expect(result.current.totalWeight).toBe(40);

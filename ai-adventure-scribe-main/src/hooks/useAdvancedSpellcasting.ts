@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 
 import type { Spell, Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import {
   getPactMagicProgression,
@@ -13,6 +12,7 @@ import {
   getSorceryPoints,
   getMetamagicOptionsKnown,
 } from '@/data/spellcastingFeatures';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
 

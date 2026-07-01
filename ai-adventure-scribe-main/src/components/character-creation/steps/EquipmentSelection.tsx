@@ -4,11 +4,11 @@ import React from 'react';
 import type { Equipment } from '@/data/equipmentOptions';
 
 import { Card } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { backgrounds } from '@/data/backgroundOptions';
 import { getStartingEquipment } from '@/data/equipmentOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Equipment Selection component for character creation

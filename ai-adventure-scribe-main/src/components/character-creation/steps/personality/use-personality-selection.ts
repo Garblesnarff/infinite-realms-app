@@ -2,8 +2,8 @@ import { useCallback } from 'react';
 
 import type { PersonalityElement } from '@/services/personalityService';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { personalityService } from '@/services/personalityService';
 

@@ -4,14 +4,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAbilityRollingLogic } from '../use-ability-rolling-logic';
 
-import { useToast } from '@/components/ui/use-toast';
-import {
-  generateAbilityScoresDetailed,
-  rerollSingleScoreDetailed,
-} from '@/utils/diceRolls';
+import { useToast } from '@/hooks/use-toast';
+import { generateAbilityScoresDetailed, rerollSingleScoreDetailed } from '@/utils/diceRolls';
 
 // Mock dependencies
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
 }));
 
@@ -48,7 +45,7 @@ describe('useAbilityRollingLogic', () => {
     (generateAbilityScoresDetailed as any).mockReturnValue(mockRollResult);
 
     const { result } = renderHook(() =>
-      useAbilityRollingLogic({ character: mockCharacter, dispatch: mockDispatch })
+      useAbilityRollingLogic({ character: mockCharacter, dispatch: mockDispatch }),
     );
 
     act(() => {
@@ -69,22 +66,31 @@ describe('useAbilityRollingLogic', () => {
       },
     });
 
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Ability Scores Rolled!',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Ability Scores Rolled!',
+      }),
+    );
   });
 
   it('should handle rerolling a single score', () => {
     const initialRollResult = {
       scores: [15, 14, 13, 12, 11, 10],
-      details: [{ total: 15 }, { total: 14 }, { total: 13 }, { total: 12 }, { total: 11 }, { total: 10 }],
+      details: [
+        { total: 15 },
+        { total: 14 },
+        { total: 13 },
+        { total: 12 },
+        { total: 11 },
+        { total: 10 },
+      ],
       timestamp: new Date(),
     };
     (generateAbilityScoresDetailed as any).mockReturnValue(initialRollResult);
 
     const { result, rerender } = renderHook(
       ({ character }) => useAbilityRollingLogic({ character, dispatch: mockDispatch }),
-      { initialProps: { character: mockCharacter } }
+      { initialProps: { character: mockCharacter } },
     );
 
     act(() => {
@@ -101,14 +107,21 @@ describe('useAbilityRollingLogic', () => {
         intelligence: { score: 12, modifier: 1, savingThrow: false },
         wisdom: { score: 11, modifier: 0, savingThrow: false },
         charisma: { score: 10, modifier: 0, savingThrow: false },
-      }
+      },
     };
 
     rerender({ character: updatedCharacter });
 
     const rerollResult = {
       scores: [18, 14, 13, 12, 11, 10],
-      details: [{ total: 18 }, { total: 14 }, { total: 13 }, { total: 12 }, { total: 11 }, { total: 10 }],
+      details: [
+        { total: 18 },
+        { total: 14 },
+        { total: 13 },
+        { total: 12 },
+        { total: 11 },
+        { total: 10 },
+      ],
       timestamp: new Date(),
     };
     (rerollSingleScoreDetailed as any).mockReturnValue(rerollResult);
@@ -120,7 +133,7 @@ describe('useAbilityRollingLogic', () => {
     expect(rerollSingleScoreDetailed).toHaveBeenCalledWith(
       [15, 14, 13, 12, 11, 10],
       initialRollResult.details,
-      0
+      0,
     );
     expect(result.current.currentRollDetails).toEqual(rerollResult);
     expect(result.current.rollHistory[0]).toEqual([18, 14, 13, 12, 11, 10]);
@@ -134,14 +147,16 @@ describe('useAbilityRollingLogic', () => {
       },
     });
 
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Score Rerolled!',
-    }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Score Rerolled!',
+      }),
+    );
   });
 
   it('should not reroll if no current roll details exist', () => {
     const { result } = renderHook(() =>
-      useAbilityRollingLogic({ character: mockCharacter, dispatch: mockDispatch })
+      useAbilityRollingLogic({ character: mockCharacter, dispatch: mockDispatch }),
     );
 
     act(() => {
@@ -161,7 +176,7 @@ describe('useAbilityRollingLogic', () => {
     (generateAbilityScoresDetailed as any).mockReturnValue(mockRollResult);
 
     const { result } = renderHook(() =>
-      useAbilityRollingLogic({ character: null, dispatch: mockDispatch })
+      useAbilityRollingLogic({ character: null, dispatch: mockDispatch }),
     );
 
     act(() => {
@@ -179,7 +194,7 @@ describe('useAbilityRollingLogic', () => {
   });
 
   it('should preserve saving throw proficiencies if character has partial scores', () => {
-     const partialCharacter: any = {
+    const partialCharacter: any = {
       abilityScores: {
         strength: { score: 10, modifier: 0, savingThrow: true },
         // other scores missing
@@ -194,7 +209,7 @@ describe('useAbilityRollingLogic', () => {
     (generateAbilityScoresDetailed as any).mockReturnValue(mockRollResult);
 
     const { result } = renderHook(() =>
-      useAbilityRollingLogic({ character: partialCharacter, dispatch: mockDispatch })
+      useAbilityRollingLogic({ character: partialCharacter, dispatch: mockDispatch }),
     );
 
     act(() => {

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 
 import type { Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export interface InspirationEntry {
   date: string;
@@ -55,13 +55,18 @@ export function usePersonalityManager(
   const [newFlaw, setNewFlaw] = useState('');
   const [inspirationNotes, setInspirationNotes] = useState('');
 
-  const personalityTraits = useMemo(() => character?.personalityTraits || [], [character?.personalityTraits]);
+  const personalityTraits = useMemo(
+    () => character?.personalityTraits || [],
+    [character?.personalityTraits],
+  );
   const ideals = useMemo(() => character?.ideals || [], [character?.ideals]);
   const bonds = useMemo(() => character?.bonds || [], [character?.bonds]);
   const flaws = useMemo(() => character?.flaws || [], [character?.flaws]);
   const hasInspiration = character?.inspiration || false;
-  const inspirationHistory = useMemo(() => (character?.personalityIntegration?.inspirationHistory ||
-    []) as InspirationEntry[], [character?.personalityIntegration?.inspirationHistory]);
+  const inspirationHistory = useMemo(
+    () => (character?.personalityIntegration?.inspirationHistory || []) as InspirationEntry[],
+    [character?.personalityIntegration?.inspirationHistory],
+  );
 
   /**
    * Toggle inspiration state

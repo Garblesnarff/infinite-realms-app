@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAdvancedSpellcasting } from '../useAdvancedSpellcasting';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 import { spellApi } from '@/services/spellApi';
 
 // Mock dependencies
@@ -14,7 +14,7 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
 }));
 
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),

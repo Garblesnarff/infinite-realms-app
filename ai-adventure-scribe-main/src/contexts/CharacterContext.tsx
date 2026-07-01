@@ -19,7 +19,7 @@
  * - React
  * - Supabase client (`@/integrations/supabase/client`) - (Note: supabase client is imported but not directly used in this file's current code, might be for future use or removed if unused)
  * - Character types (`@/types/character`)
- * - useToast hook (`@/components/ui/use-toast`)
+ * - useToast hook (`@/hooks/use-toast`)
  *
  * @author AI Dungeon Master Team
  */
@@ -37,7 +37,7 @@ import {
 import type { ReactNode } from 'react';
 
 // Project Modules & Hooks
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Create context with type definition for better TypeScript support

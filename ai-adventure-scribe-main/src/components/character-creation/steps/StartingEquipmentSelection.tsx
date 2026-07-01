@@ -13,10 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { startingGoldByClass, EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
-
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Starting Equipment Selection component for character creation

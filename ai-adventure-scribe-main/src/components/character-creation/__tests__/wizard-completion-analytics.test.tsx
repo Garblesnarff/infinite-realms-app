@@ -43,7 +43,7 @@ vi.mock('@/hooks/use-character-save', () => ({
 
 // Mock scroll and toast
 vi.mock('@/hooks/use-auto-scroll', () => ({ useAutoScroll: () => ({ scrollToTop: () => {} }) }));
-vi.mock('@/components/ui/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
 
 // Silence navigate by mocking react-router-dom useNavigate
 vi.mock('react-router-dom', async (orig) => {

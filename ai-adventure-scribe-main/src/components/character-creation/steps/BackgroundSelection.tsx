@@ -5,11 +5,11 @@ import type { CharacterBackground } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
 import { Z_INDEX } from '@/constants/z-index';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { backgrounds } from '@/data/backgroundOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 
 /**

@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 
 import type { AbilityScores } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { feats } from '@/data/featOptions';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook for managing Variant Human and Custom Lineage selection logic
@@ -251,7 +251,14 @@ export const useVariantHumanSelection = (): {
       applySelections();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAbilities, selectedFeat, selectedSkill, selectedLanguage, selectedTool, isVariantHuman]);
+  }, [
+    selectedAbilities,
+    selectedFeat,
+    selectedSkill,
+    selectedLanguage,
+    selectedTool,
+    isVariantHuman,
+  ]);
 
   return {
     isVariantHuman,
