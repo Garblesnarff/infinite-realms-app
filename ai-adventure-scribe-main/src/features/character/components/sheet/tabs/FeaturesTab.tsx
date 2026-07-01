@@ -2,10 +2,11 @@
 import { Star, Users, Zap, BookOpen } from 'lucide-react';
 import React from 'react';
 
+import ClassFeatureTracker from '../sections/ClassFeatureTracker';
+import FightingStylesDisplay from '../sections/FightingStylesDisplay';
+
 import type { Character } from '@/types/character';
 
-import ClassFeatureTracker from '@/components/character-sheet/sections/ClassFeatureTracker';
-import FightingStylesDisplay from '@/components/character-sheet/sections/FightingStylesDisplay';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
