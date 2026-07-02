@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Scene Settings Component
  *
@@ -12,28 +11,17 @@
  * - Weather effects input
  */
 
-import { Sun, Moon, Cloud, Eye, Lightbulb, Grid } from 'lucide-react';
-import React, { useId } from 'react';
+import React from 'react';
+
+import { SceneSettingsEnvironmentCard } from './SceneSettingsEnvironmentCard';
+import { SceneSettingsGridCard } from './SceneSettingsGridCard';
+import { SceneSettingsLightingCard } from './SceneSettingsLightingCard';
+import { SceneSettingsSummaryCard } from './SceneSettingsSummaryCard';
+import { SceneSettingsVisionCard } from './SceneSettingsVisionCard';
+
+import type { SceneSettingsData } from './scene-settings-types';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-
-interface SceneSettingsData {
-  enableFogOfWar?: boolean;
-  enableDynamicLighting?: boolean;
-  snapToGrid?: boolean;
-  gridOpacity?: string;
-  ambientLightLevel?: string;
-  darknessLevel?: string;
-  weatherEffects?: string;
-  timeOfDay?: string;
-}
 
 interface SceneSettingsProps {
   settings: SceneSettingsData;
@@ -50,19 +38,6 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
   onSave,
   isSaving = false,
 }) => {
-  const fogOfWarId = useId();
-  const dynamicLightingId = useId();
-  const snapToGridId = useId();
-  const gridOpacityId = useId();
-  const ambientLightId = useId();
-  const darknessId = useId();
-  const timeOfDayId = useId();
-  const timeDawnId = useId();
-  const timeDayId = useId();
-  const timeDuskId = useId();
-  const timeNightId = useId();
-  const weatherId = useId();
-
   const updateSetting = (
     key: keyof SceneSettingsData,
     value: SceneSettingsData[keyof SceneSettingsData],
@@ -70,282 +45,13 @@ export const SceneSettings: React.FC<SceneSettingsProps> = ({
     onChange?.({ ...settings, [key]: value });
   };
 
-  // Convert string opacity to slider value (0-100)
-  const gridOpacityValue = settings.gridOpacity
-    ? Math.round(parseFloat(settings.gridOpacity) * 100)
-    : 30;
-
-  const ambientLightValue = settings.ambientLightLevel
-    ? Math.round(parseFloat(settings.ambientLightLevel) * 100)
-    : 100;
-
-  const darknessValue = settings.darknessLevel
-    ? Math.round(parseFloat(settings.darknessLevel) * 100)
-    : 0;
-
-  const handleGridOpacityChange = (value: number[]): void => {
-    const opacity = (value[0] / 100).toFixed(2);
-    updateSetting('gridOpacity', opacity);
-  };
-
-  const handleAmbientLightChange = (value: number[]): void => {
-    const level = (value[0] / 100).toFixed(2);
-    updateSetting('ambientLightLevel', level);
-  };
-
-  const handleDarknessChange = (value: number[]): void => {
-    const level = (value[0] / 100).toFixed(2);
-    updateSetting('darknessLevel', level);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Vision & Fog of War */}
-      <Card variant="parchment">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            Vision & Fog of War
-          </CardTitle>
-          <CardDescription>
-            Control what players can see and how the map is revealed
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor={fogOfWarId}>Fog of War</Label>
-              <p className="text-xs text-muted-foreground">Hide unexplored areas from players</p>
-            </div>
-            <Switch
-              id={fogOfWarId}
-              checked={settings.enableFogOfWar ?? true}
-              onCheckedChange={(checked) => updateSetting('enableFogOfWar', checked)}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor={dynamicLightingId}>Dynamic Lighting</Label>
-              <p className="text-xs text-muted-foreground">
-                Enable token-based vision and light sources
-              </p>
-            </div>
-            <Switch
-              id={dynamicLightingId}
-              checked={settings.enableDynamicLighting ?? false}
-              onCheckedChange={(checked) => updateSetting('enableDynamicLighting', checked)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Grid Settings */}
-      <Card variant="parchment">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Grid className="h-5 w-5" />
-            Grid Settings
-          </CardTitle>
-          <CardDescription>Configure grid appearance and behavior</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor={snapToGridId}>Snap to Grid</Label>
-              <p className="text-xs text-muted-foreground">Automatically align tokens to grid</p>
-            </div>
-            <Switch
-              id={snapToGridId}
-              checked={settings.snapToGrid ?? true}
-              onCheckedChange={(checked) => updateSetting('snapToGrid', checked)}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor={gridOpacityId}>Grid Opacity</Label>
-              <span className="text-sm text-muted-foreground">{gridOpacityValue}%</span>
-            </div>
-            <Slider
-              id={gridOpacityId}
-              value={[gridOpacityValue]}
-              onValueChange={handleGridOpacityChange}
-              min={0}
-              max={100}
-              step={1}
-              aria-label="Grid opacity percentage"
-              getAriaValueText={(value) => `${value}%`}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lighting */}
-      <Card variant="parchment">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5" />
-            Lighting
-          </CardTitle>
-          <CardDescription>Adjust ambient light and darkness levels</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor={ambientLightId}>Ambient Light Level</Label>
-              <span className="text-sm text-muted-foreground">{ambientLightValue}%</span>
-            </div>
-            <Slider
-              id={ambientLightId}
-              value={[ambientLightValue]}
-              onValueChange={handleAmbientLightChange}
-              min={0}
-              max={100}
-              step={1}
-              aria-label="Ambient light level percentage"
-              getAriaValueText={(value) => `${value}%`}
-            />
-            <p className="text-xs text-muted-foreground">
-              Base light level when no light sources are present
-            </p>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor={darknessId}>Darkness Level</Label>
-              <span className="text-sm text-muted-foreground">{darknessValue}%</span>
-            </div>
-            <Slider
-              id={darknessId}
-              value={[darknessValue]}
-              onValueChange={handleDarknessChange}
-              min={0}
-              max={100}
-              step={1}
-              aria-label="Darkness level percentage"
-              getAriaValueText={(value) => `${value}%`}
-            />
-            <p className="text-xs text-muted-foreground">
-              Global darkness overlay (useful for night scenes)
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Environment */}
-      <Card variant="parchment">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cloud className="h-5 w-5" />
-            Environment
-          </CardTitle>
-          <CardDescription>Set time of day and weather conditions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <Label id={timeOfDayId}>Time of Day</Label>
-            <RadioGroup
-              value={settings.timeOfDay || 'day'}
-              onValueChange={(value) => updateSetting('timeOfDay', value)}
-              aria-labelledby={timeOfDayId}
-            >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="dawn" id={timeDawnId} />
-                  <Label
-                    htmlFor={timeDawnId}
-                    className="flex-1 cursor-pointer flex items-center gap-2"
-                  >
-                    <Sun className="h-4 w-4 text-orange-400" />
-                    Dawn
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="day" id={timeDayId} />
-                  <Label
-                    htmlFor={timeDayId}
-                    className="flex-1 cursor-pointer flex items-center gap-2"
-                  >
-                    <Sun className="h-4 w-4 text-yellow-400" />
-                    Day
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="dusk" id={timeDuskId} />
-                  <Label
-                    htmlFor={timeDuskId}
-                    className="flex-1 cursor-pointer flex items-center gap-2"
-                  >
-                    <Sun className="h-4 w-4 text-orange-600" />
-                    Dusk
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
-                  <RadioGroupItem value="night" id={timeNightId} />
-                  <Label
-                    htmlFor={timeNightId}
-                    className="flex-1 cursor-pointer flex items-center gap-2"
-                  >
-                    <Moon className="h-4 w-4 text-blue-300" />
-                    Night
-                  </Label>
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <Label htmlFor={weatherId}>Weather Effects</Label>
-            <Input
-              id={weatherId}
-              placeholder="e.g., Heavy rain, Light snow, Fog"
-              value={settings.weatherEffects || ''}
-              onChange={(e) => updateSetting('weatherEffects', e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Descriptive weather conditions for narrative purposes
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Settings Summary */}
-      <Card variant="glass">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground mb-1">Fog of War</p>
-              <p className="font-medium">{settings.enableFogOfWar ? 'Enabled' : 'Disabled'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Dynamic Lighting</p>
-              <p className="font-medium">
-                {settings.enableDynamicLighting ? 'Enabled' : 'Disabled'}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Grid Snap</p>
-              <p className="font-medium">{settings.snapToGrid ? 'On' : 'Off'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Time</p>
-              <p className="font-medium capitalize">{settings.timeOfDay || 'Day'}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SceneSettingsVisionCard settings={settings} onUpdate={updateSetting} />
+      <SceneSettingsGridCard settings={settings} onUpdate={updateSetting} />
+      <SceneSettingsLightingCard settings={settings} onUpdate={updateSetting} />
+      <SceneSettingsEnvironmentCard settings={settings} onUpdate={updateSetting} />
+      <SceneSettingsSummaryCard settings={settings} />
 
       {/* Save Button */}
       {showSaveButton && (
