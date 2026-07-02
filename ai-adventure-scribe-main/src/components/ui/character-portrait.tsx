@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * CharacterPortrait Component
  *
@@ -18,10 +17,13 @@
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import { motion } from 'framer-motion';
-import { User, Heart, Shield, Zap } from 'lucide-react';
+import { User } from 'lucide-react';
 import * as React from 'react';
 
 import { Badge } from './badge';
+import { CharacterPortraitHoverDetails } from './character-portrait-hover-details';
+import { CharacterPortraitStatsOverlay } from './character-portrait-stats-overlay';
+import { CharacterPortraitStatusEffects } from './character-portrait-status-effects';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 import { Z_INDEX } from '@/constants/z-index';
@@ -115,15 +117,6 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
       .toUpperCase()
       .slice(0, 2);
 
-    // Calculate HP percentage for color
-    const hpPercentage = hp && maxHp ? (hp / maxHp) * 100 : 100;
-    const hpColor =
-      hpPercentage <= 25
-        ? 'text-red-500'
-        : hpPercentage <= 50
-          ? 'text-yellow-500'
-          : 'text-green-500';
-
     const containerVariants = {
       hidden: { opacity: 0, scale: 0.8 },
       visible: {
@@ -169,112 +162,21 @@ const CharacterPortrait = React.forwardRef<HTMLDivElement, CharacterPortraitProp
         )}
 
         {/* Stats Overlay (Bottom) */}
-        {showStats && (hp !== undefined || ac !== undefined || initiative !== undefined) && (
-          <div
-            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 backdrop-blur-sm"
-            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
-          >
-            <div className="flex items-center justify-around gap-1 text-white text-[0.625rem]">
-              {hp !== undefined && maxHp !== undefined && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-red-400 outline-none rounded-sm px-0.5"
-                      aria-label={`HP: ${hp}/${maxHp}`}
-                      tabIndex={0}
-                    >
-                      <Heart
-                        className={cn('h-3 w-3', hpColor)}
-                        fill="currentColor"
-                        aria-hidden="true"
-                      />
-                      <span className="font-semibold tabular-nums">
-                        {hp}/{maxHp}
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>HP: {hp}/{maxHp}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {ac !== undefined && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-blue-400 outline-none rounded-sm px-0.5"
-                      aria-label={`Armor Class: ${ac}`}
-                      tabIndex={0}
-                    >
-                      <Shield className="h-3 w-3 text-blue-400" aria-hidden="true" />
-                      <span className="font-semibold tabular-nums">{ac}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Armor Class: {ac}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {initiative !== undefined && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-0.5 cursor-help focus-visible:ring-2 focus-visible:ring-yellow-400 outline-none rounded-sm px-0.5"
-                      aria-label={`Initiative: +${initiative}`}
-                      tabIndex={0}
-                    >
-                      <Zap className="h-3 w-3 text-yellow-400" aria-hidden="true" />
-                      <span className="font-semibold tabular-nums">+{initiative}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Initiative: +{initiative}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </div>
+        {showStats && (
+          <CharacterPortraitStatsOverlay hp={hp} maxHp={maxHp} ac={ac} initiative={initiative} />
         )}
 
         {/* Status Effects */}
-        {status.length > 0 && (
-          <div
-            className="absolute top-1 right-1 flex flex-col gap-1"
-            style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
-          >
-            {status.slice(0, 3).map((effect, index) => (
-              <Badge
-                key={index}
-                variant="warning"
-                className="text-[0.625rem] px-1 py-0"
-                aria-label={`Status: ${effect}`}
-              >
-                {effect}
-              </Badge>
-            ))}
-          </div>
-        )}
+        <CharacterPortraitStatusEffects status={status} />
 
         {/* Hover Details */}
-        {showDetailsOnHover && isHovered && (race || characterClass) && (
-          <motion.div
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 p-2 text-white"
-            style={{ zIndex: Z_INDEX.CARD_HOVER }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="text-center">
-              <div className="font-semibold text-sm">{name}</div>
-              {level && <div className="text-xs text-muted-foreground">Level {level}</div>}
-              {race && characterClass && (
-                <div className="text-xs text-muted-foreground">
-                  {race} {characterClass}
-                </div>
-              )}
-            </div>
-          </motion.div>
+        {showDetailsOnHover && isHovered && (
+          <CharacterPortraitHoverDetails
+            name={name}
+            race={race}
+            characterClass={characterClass}
+            level={level}
+          />
         )}
 
         {/* Glow Effect on Hover */}
