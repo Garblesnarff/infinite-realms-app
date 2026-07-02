@@ -29,11 +29,11 @@ import { MessagePriority, MessageType } from './messaging/types';
 // Services
 import { AgentMessagingService } from './messaging/agent-messaging-service';
 import { ErrorHandlingService } from './error/services/error-handling-service';
-import { EnhancedMemoryManager } from './services/memory/EnhancedMemoryManager';
 import { ResponseCoordinator } from './services/response/ResponseCoordinator';
 import { ResponsePipeline } from './services/response/ResponsePipeline';
 import { CachedCampaignContextProvider } from './services/campaign/CachedCampaignContextProvider';
 import { ConversationStateStore } from './services/conversation/ConversationStateStore';
+import { DungeonMasterContextManager } from './services/dm/DungeonMasterContextManager';
 import encounterGenerator from '@/services/encounters/encounter-generator';
 import { EncounterGenerationInput, EncounterSpec } from '@/types/encounters';
 import { postEncounterTelemetry } from '@/services/encounters/telemetry-client';
@@ -62,8 +62,7 @@ export class DungeonMasterAgent implements Agent {
   private responseCoordinator: ResponseCoordinator;
   private responsePipeline: ResponsePipeline;
   private errorHandler: ErrorHandlingService;
-  private gameState: Partial<GameState>;
-  private memoryManager: EnhancedMemoryManager | null = null;
+  private contextManager: DungeonMasterContextManager;
   private lastEncounterAt: number = 0;
   private readonly encounterCooldownMs = 120000; // 2 minutes
 
@@ -90,31 +89,7 @@ export class DungeonMasterAgent implements Agent {
       conversationStore: new ConversationStateStore(),
     });
     this.errorHandler = ErrorHandlingService.getInstance();
-    this.gameState = this.initializeGameState();
-  }
-
-  /**
-   * Initializes the default game state.
-   *
-   * @private
-   * @returns {Partial<GameState>} The initial game state
-   */
-  private initializeGameState(): Partial<GameState> {
-    return {
-      location: {
-        name: 'Starting Location',
-        description: 'The beginning of your adventure',
-        atmosphere: 'neutral',
-        timeOfDay: 'dawn',
-      },
-      activeNPCs: [],
-      sceneStatus: {
-        currentAction: 'beginning',
-        availableActions: [],
-        environmentalEffects: [],
-        threatLevel: 'none',
-      },
-    };
+    this.contextManager = new DungeonMasterContextManager();
   }
 
   /**
@@ -127,16 +102,11 @@ export class DungeonMasterAgent implements Agent {
     try {
       logger.info(`DM Agent executing task: ${task.description}`);
 
-      // Note: We initialize memory manager and response coordinator separately
-      // to ensure dependencies are ready before generating a response.
-      // See: src/agents/services/memory/EnhancedMemoryManager.ts
-      // See: src/agents/services/response/ResponseCoordinator.ts
-      await this.initializeMemoryManager(task);
-      // Store the player's action for future context
-      await this.storePlayerActionMemory(task);
+      // Initialize context and memory manager
+      await this.contextManager.initialize(task);
 
       // Enhance the task with game state and recent memories
-      const enhancedTask = await this.enhanceTaskContext(task);
+      const enhancedTask = await this.contextManager.enhanceTask(task);
 
       // Generate the DM response using the response pipeline
       const { result: response } = await this.responsePipeline.execute(enhancedTask);
@@ -145,11 +115,8 @@ export class DungeonMasterAgent implements Agent {
         return response;
       }
 
-      // Store the generated response in memory for future context
-      await this.storeResponseMemories(response);
-
-      // Update the internal game state based on the response
-      await this.updateGameStateFromResponse(response);
+      // Store response memories and update internal game state
+      await this.contextManager.updateFromResponse(response);
 
       // Targeted invocation hooks (no player UI)
       await this.maybeInvokeEncounterHooks(enhancedTask, response);
@@ -172,123 +139,6 @@ export class DungeonMasterAgent implements Agent {
    */
   public planEncounter(input: EncounterGenerationInput): EncounterSpec {
     return encounterGenerator.generate(input);
-  }
-
-  /**
-   * Initializes the memory manager if needed.
-   *
-   * @private
-   * @param {AgentTask} task - The task to execute
-   */
-  private async initializeMemoryManager(task: AgentTask): Promise<void> {
-    if (task.context?.sessionId && !this.memoryManager) {
-      this.memoryManager = new EnhancedMemoryManager(task.context.sessionId);
-    }
-  }
-
-  /**
-   * Stores the player's action in memory.
-   *
-   * @private
-   * @param {AgentTask} task - The task to execute
-   */
-  private async storePlayerActionMemory(task: AgentTask): Promise<void> {
-    if (this.memoryManager) {
-      await this.memoryManager.storeMemory(task.description, 'action', 'player_action', {
-        location: this.gameState.location?.name,
-      });
-    }
-  }
-
-  /**
-   * Enhances the task context with game state and recent memories.
-   *
-   * @private
-   * @param {AgentTask} task - The original task
-   * @returns {Promise<AgentTask>} The enhanced task
-   */
-  private async enhanceTaskContext(task: AgentTask): Promise<AgentTask> {
-    const recentMemories = this.memoryManager
-      ? await this.memoryManager.retrieveMemories({ timeframe: 'recent', limit: 10 })
-      : [];
-
-    return {
-      ...task,
-      context: {
-        ...task.context,
-        gameState: this.gameState,
-        recentMemories,
-      },
-    };
-  }
-
-  /**
-   * Stores the generated response in memory.
-   *
-   * @private
-   * @param {AgentResult} response - The agent response
-   */
-  private async storeResponseMemories(response: AgentResult): Promise<void> {
-    if (this.memoryManager && response.data?.narrativeResponse) {
-      const { environment, characters } = response.data.narrativeResponse;
-
-      await this.memoryManager.storeMemory(environment.description, 'description', 'location', {
-        location: this.gameState.location?.name,
-        npcs: characters.activeNPCs,
-      });
-
-      if (characters.dialogue) {
-        await this.memoryManager.storeMemory(characters.dialogue, 'dialogue', 'npc', {
-          location: this.gameState.location?.name,
-          npcs: characters.activeNPCs,
-        });
-      }
-    }
-  }
-
-  /**
-   * Updates the game state based on the generated response.
-   *
-   * @private
-   * @param {AgentResult} response - The agent response
-   */
-  private async updateGameStateFromResponse(response: AgentResult): Promise<void> {
-    if (response.data?.narrativeResponse) {
-      const { environment, characters } = response.data.narrativeResponse;
-
-      this.updateGameState({
-        location: {
-          ...this.gameState.location,
-          description: environment.description,
-          atmosphere: environment.atmosphere,
-        },
-        activeNPCs: characters.activeNPCs.map((name) => ({
-          id: name.toLowerCase().replace(/\s/g, '_'),
-          name,
-          description: '',
-          personality: '',
-          currentStatus: 'active',
-        })),
-        sceneStatus: {
-          ...this.gameState.sceneStatus,
-          availableActions: response.data.narrativeResponse.opportunities.immediate,
-        },
-      });
-    }
-  }
-
-  /**
-   * Updates the internal game state with new values.
-   *
-   * @private
-   * @param {Partial<GameState>} newState - The new state to merge
-   */
-  private updateGameState(newState: Partial<GameState>) {
-    this.gameState = {
-      ...this.gameState,
-      ...newState,
-    };
-    logger.info('Updated game state:', this.gameState);
   }
 
   /**
@@ -372,7 +222,8 @@ export class DungeonMasterAgent implements Agent {
     const now = Date.now();
     if (now - this.lastEncounterAt < this.encounterCooldownMs) return;
 
-    const threat = this.gameState.sceneStatus?.threatLevel;
+    const gameState = this.contextManager.getGameState();
+    const threat = gameState.sceneStatus?.threatLevel;
     const justRested =
       typeof task.description === 'string' && /(short|long)\s+rest/i.test(task.description);
 
