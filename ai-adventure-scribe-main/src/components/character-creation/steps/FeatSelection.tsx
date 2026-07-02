@@ -1,19 +1,18 @@
-/* eslint-disable max-lines */
-import { Sword, Sparkles, Users, Lightbulb, Award } from 'lucide-react';
+import { Award } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
-import type { Feat } from '@/data/featOptions';
+import { FeatSelectionAbilityScoreCard } from './FeatSelectionAbilityScoreCard';
+import { FeatSelectionFeatsCard } from './FeatSelectionFeatsCard';
+
 import type { AbilityScores } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { feats, getFeatsByCategory } from '@/data/featOptions';
+import { feats } from '@/data/featOptions';
 
 /**
  * FeatSelection component for choosing feats during character creation
@@ -162,63 +161,6 @@ const FeatSelection: React.FC = () => {
     }
   }, [selectionType, abilityIncreases, selectedFeat]);
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'combat':
-        return <Sword className="w-4 h-4" />;
-      case 'magic':
-        return <Sparkles className="w-4 h-4" />;
-      case 'social':
-        return <Users className="w-4 h-4" />;
-      case 'utility':
-        return <Lightbulb className="w-4 h-4" />;
-      default:
-        return <Award className="w-4 h-4" />;
-    }
-  };
-
-  const getFeatCard = (feat: Feat) => (
-    <Card
-      key={feat.id}
-      className={`cursor-pointer transition-all hover:shadow-md border-2 ${
-        selectedFeat === feat.id ? 'border-primary bg-primary/5' : 'border-muted'
-      }`}
-      onClick={() => setSelectedFeat(feat.id)}
-    >
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          {getCategoryIcon(feat.category)}
-          {feat.name}
-        </CardTitle>
-        <div className="flex gap-1">
-          <Badge variant="outline" className="text-xs">
-            {feat.category}
-          </Badge>
-          {feat.abilityScoreIncrease && (
-            <Badge variant="secondary" className="text-xs">
-              +1 Ability Score
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-2">{feat.description}</p>
-        {feat.prerequisites && (
-          <p className="text-xs text-orange-600 mb-2">
-            <strong>Prerequisites:</strong> {feat.prerequisites}
-          </p>
-        )}
-        <div className="space-y-1">
-          {feat.benefits.map((benefit, index) => (
-            <p key={index} className="text-xs text-muted-foreground">
-              • {benefit}
-            </p>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return !canChooseFeat ? (
     <div className="text-center space-y-4">
       <Award className="w-16 h-16 mx-auto text-muted-foreground" />
@@ -268,120 +210,16 @@ const FeatSelection: React.FC = () => {
 
       {/* ASI Selection */}
       {selectionType === 'asi' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Ability Score Improvement</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Distribute 2 points among your ability scores. You can increase two different scores
-              by 1 each, or one score by 2.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              {Object.entries(character?.abilityScores || {}).map(([ability, score]) => {
-                const increase = abilityIncreases[ability] || 0;
-                const newScore = score.score + increase;
-
-                return (
-                  <div
-                    key={ability}
-                    className="flex items-center justify-between p-3 border rounded"
-                  >
-                    <div>
-                      <div className="font-medium capitalize">{ability}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {score.score} → {newScore} ({newScore >= 10 ? '+' : ''}
-                        {Math.floor((newScore - 10) / 2)})
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAbilityIncrease(ability, -1)}
-                        disabled={increase === 0}
-                      >
-                        -
-                      </Button>
-                      <span className="w-8 text-center">{increase}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAbilityIncrease(ability, 1)}
-                        disabled={
-                          increase === 2 ||
-                          newScore >= 20 ||
-                          Object.values(abilityIncreases).reduce((sum, val) => sum + val, 0) >= 2
-                        }
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                Points remaining:{' '}
-                {2 - Object.values(abilityIncreases).reduce((sum, val) => sum + val, 0)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <FeatSelectionAbilityScoreCard
+          abilityScores={character?.abilityScores}
+          abilityIncreases={abilityIncreases}
+          onIncrease={handleAbilityIncrease}
+        />
       )}
 
       {/* Feat Selection */}
       {selectionType === 'feat' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Choose a Feat</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Select a feat to gain unique abilities and benefits.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="all">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="combat">Combat</TabsTrigger>
-                <TabsTrigger value="magic">Magic</TabsTrigger>
-                <TabsTrigger value="utility">Utility</TabsTrigger>
-                <TabsTrigger value="social">Social</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="all" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                  {feats.map(getFeatCard)}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="combat" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                  {getFeatsByCategory('combat').map(getFeatCard)}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="magic" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                  {getFeatsByCategory('magic').map(getFeatCard)}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="utility" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                  {getFeatsByCategory('utility').map(getFeatCard)}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="social" className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                  {getFeatsByCategory('social').map(getFeatCard)}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+        <FeatSelectionFeatsCard selectedFeat={selectedFeat} onSelectFeat={setSelectedFeat} />
       )}
 
       {/* Manual Apply Button (fallback) */}
