@@ -1,7 +1,9 @@
 import { BookOpen, Grid, List, Eye, Sparkles } from 'lucide-react';
 import React, { useId } from 'react';
 
-import { CompactGenreCard, GridGenreCard, ListGenreCard } from './GenreCard';
+import { CompactGenreCard } from './CompactGenreCard';
+import { GridGenreCard } from './GridGenreCard';
+import { ListGenreCard } from './ListGenreCard';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
