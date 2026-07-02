@@ -1,19 +1,18 @@
-import { SafetyAuditService } from './SafetyAuditService';
+import { SafetyAuditService, type SafetySessionState } from './SafetyAuditService';
 import { SafetyResponseFactory } from './SafetyResponseFactory';
-import { SAFETY_TRIGGER_WORDS } from './types';
-
-import type {
-  SafetyCommand,
-  SessionConfig,
-  TriggerWords,
-  SafetyCommandResponse,
+import {
+  SAFETY_TRIGGER_WORDS,
+  type SafetyCommand,
+  type SessionConfig,
+  type TriggerWords,
+  type SafetyCommandResponse,
 } from './types';
+import { SAFETY_ENABLED } from './types';
+
 import type { ChatMessage } from '@/types/game';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-
-import { SAFETY_ENABLED } from './types';
 
 export class SafetyCommandProcessor {
   private sessionId: string;
@@ -239,7 +238,7 @@ export class SafetyCommandProcessor {
     command: SafetyCommand,
     playerMessage?: string,
     aiResponse?: string,
-    sessionState?: any,
+    sessionState?: SafetySessionState,
   ): Promise<ChatMessage> {
     if (!SAFETY_ENABLED) {
       return SafetyResponseFactory.createDisabledResponse();

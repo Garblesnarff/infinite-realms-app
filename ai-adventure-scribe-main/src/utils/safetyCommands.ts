@@ -2,15 +2,23 @@ import type {
   SafetyCommand,
   SessionConfig,
   TriggerWords,
-  SafetyCommandResponse} from '@/features/safety/types';
+  SafetyCommandResponse,
+} from '@/features/safety/types';
 import type { ChatMessage } from '@/types/game';
 
+import { type SafetySessionState } from '@/features/safety/SafetyAuditService';
 import { SafetyCommandProcessor } from '@/features/safety/SafetyCommandProcessor';
 import { SAFETY_ENABLED, SAFETY_TRIGGER_WORDS } from '@/features/safety/types';
 import logger from '@/lib/logger';
 
 // Re-export types for backward compatibility
-export type { SafetyCommand, SessionConfig, TriggerWords, SafetyCommandResponse };
+export type {
+  SafetyCommand,
+  SafetySessionState,
+  SessionConfig,
+  TriggerWords,
+  SafetyCommandResponse,
+};
 export { SafetyCommandProcessor, SAFETY_ENABLED, SAFETY_TRIGGER_WORDS };
 
 /**
@@ -44,7 +52,7 @@ export async function checkSafetyCommands(
     logger.error('🛡️ [Safety] Error in safety command check, defaulting to safe mode:', error);
 
     // On error, check for critical safety commands manually
-    const criticalCommands = ['x_card', 'veil', 'pause', 'resume'];
+    const criticalCommands = ['x_card', 'veil', 'pause', 'resume'] as const;
     const trimmedMessage = message.trim().toLowerCase();
 
     for (const cmd of criticalCommands) {
@@ -56,7 +64,7 @@ export async function checkSafetyCommands(
         return {
           isSafetyCommand: true,
           command: {
-            type: cmd as any,
+            type: cmd,
             triggeredBy: 'fallback_detection',
             timestamp: new Date().toISOString(),
             context: `Fallback detection due to error: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -78,7 +86,7 @@ export async function processSafetyCommand(
   sessionId: string,
   playerMessage?: string,
   aiResponse?: string,
-  sessionState?: any,
+  sessionState?: SafetySessionState,
 ): Promise<ChatMessage> {
   if (!SAFETY_ENABLED) {
     return {

@@ -88,7 +88,7 @@ export class EncounterGenerator {
     const { size, avgLevel } = partyAverages(levels);
     const difficulty = input.requestedDifficulty ?? 'medium';
     let xpBudget = difficultyBudget(size, avgLevel, difficulty);
-    const sessionId = (input as any).sessionId as string | undefined;
+    const sessionId = input.sessionId;
     if (sessionId) {
       const adjust = getDifficultyAdjustment(sessionId, difficulty);
       xpBudget = Math.round(xpBudget * adjust);

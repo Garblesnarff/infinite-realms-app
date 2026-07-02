@@ -23,7 +23,7 @@ import { IndexedDBService } from '../storage/IndexedDBService';
 import { MessageQueueService } from '../MessageQueueService';
 
 // Project Types
-import { QueuedMessage } from '../../types';
+import { MessagePriority, MessageType, QueuedMessage } from '../../types';
 import { logger } from '../../../../lib/logger';
 
 export class MessageRecoveryService {
@@ -55,9 +55,9 @@ export class MessageRecoveryService {
       for (const storedMessage of pendingMessages) {
         const queuedMessage: QueuedMessage = {
           id: storedMessage.id,
-          type: storedMessage.type as any,
+          type: storedMessage.type as MessageType,
           content: storedMessage.content,
-          priority: storedMessage.priority as any,
+          priority: storedMessage.priority as MessagePriority,
           sender: storedMessage.metadata?.sender || '',
           receiver: storedMessage.metadata?.receiver || '',
           timestamp: new Date(storedMessage.timestamp),

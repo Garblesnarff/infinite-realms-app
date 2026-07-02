@@ -157,7 +157,7 @@ function buildPrompt(req: SceneImageRequest): string {
 
   if (req.character) {
     const c = req.character;
-    const race = c.subrace?.name || (typeof c.race === 'string' ? c.race : (c.race as any)?.name);
+    const race = c.subrace?.name || (typeof c.race === 'string' ? c.race : c.race?.name);
     const klass = (typeof c.class === 'string' ? c.class : c.class?.name) || '';
     const desc: string[] = [];
     if (race) desc.push(race);

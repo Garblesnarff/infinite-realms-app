@@ -5,6 +5,12 @@ import type { SafetyCommand } from './types';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
+/** Minimal session snapshot passed through to safety audit logging. */
+export interface SafetySessionState {
+  is_paused?: boolean;
+  turn_count?: number;
+}
+
 export class SafetyAuditService {
   /**
    * Log a safety event to the audit trail
@@ -14,7 +20,7 @@ export class SafetyAuditService {
     command: SafetyCommand,
     playerMessage?: string,
     aiResponse?: string,
-    sessionState?: any,
+    sessionState?: SafetySessionState,
     userId?: string,
   ): Promise<void> {
     if (!SAFETY_ENABLED) {
