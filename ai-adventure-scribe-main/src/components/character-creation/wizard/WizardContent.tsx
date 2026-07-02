@@ -1,8 +1,8 @@
-/* eslint-disable max-lines */
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { wizardSteps } from './constants';
+import { saveCharacterAndNavigate } from './save-character-and-navigate';
 import { validateStep, validateCharacterForSave } from './wizard-validators';
 import CharacterPreview from '../shared/CharacterPreview';
 import ProgressIndicator from '../shared/ProgressIndicator';
@@ -14,7 +14,6 @@ import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useCharacterSave } from '@/hooks/use-character-save';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
-import { analytics } from '@/services/analytics';
 
 /**
  * Main content component for the character creation wizard
@@ -163,73 +162,13 @@ const WizardContent: React.FC = () => {
         }
 
         // Enhanced save with better error handling
-        try {
-          logger.info('Calling saveCharacter...');
-          const savedCharacter = await saveCharacter(state.character);
-          logger.debug('Save result:', savedCharacter);
-
-          if (!savedCharacter) {
-            logger.warn('Character save returned null; staying on wizard step for user correction');
-            return;
-          }
-
-          if (savedCharacter.id) {
-            logger.info('Character saved successfully, navigating to /characters');
-            try {
-              const campaignId = searchParams.get('campaign') || undefined;
-              const artStyle = analytics.detectArtStyle({
-                characterTheme: state.character?.theme,
-                campaignGenre: undefined,
-              });
-              analytics.characterCreationCompleted({ campaignId, artStyle });
-            } catch (_e) {
-              // ignore analytics errors
-            }
-            toast({
-              title: 'Success!',
-              description:
-                'Character created successfully! Background image generation may continue in the background.',
-            });
-            const targetCampaignId = savedCharacter.campaign_id || state.character?.campaign_id;
-            const starterCampaignId = searchParams.get('starterCampaign');
-
-            // If this is a starter campaign, navigate directly to the game
-            if (starterCampaignId && targetCampaignId && savedCharacter.id) {
-              navigate(
-                `/app/game/${targetCampaignId}?character=${savedCharacter.id}&starterCampaign=${starterCampaignId}`,
-              );
-            } else if (targetCampaignId) {
-              navigate(`/app/campaigns/${targetCampaignId}/characters`);
-            } else {
-              navigate('/app/characters');
-            }
-          } else {
-            logger.error('Save succeeded but no ID returned');
-            toast({
-              title: 'Save Warning',
-              description:
-                'Character data may be incomplete. Please review your characters list and edit if needed.',
-              variant: 'destructive',
-            });
-          }
-        } catch (error) {
-          logger.error('Error saving character:', error);
-
-          // Enhanced error message with recovery suggestions
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const isNetworkError =
-            errorMessage.toLowerCase().includes('network') ||
-            errorMessage.toLowerCase().includes('fetch') ||
-            errorMessage.toLowerCase().includes('connection');
-
-          toast({
-            title: 'Save Error',
-            description: isNetworkError
-              ? `Network connection issue: ${errorMessage}. Please check your internet connection and try again.`
-              : `Failed to save character: ${errorMessage}. Please try again or contact support if the issue persists.`,
-            variant: 'destructive',
-          });
-        }
+        await saveCharacterAndNavigate({
+          character: state.character,
+          saveCharacter,
+          navigate,
+          searchParams,
+          toast,
+        });
       }
     } catch (unexpectedError) {
       // Catch-all error handler for any unexpected errors in navigation
