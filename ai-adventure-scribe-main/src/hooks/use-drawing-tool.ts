@@ -15,16 +15,13 @@
  * @module hooks/use-drawing-tool
  */
 
-/* eslint-disable max-lines */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 import { useDrawingPersistence } from './drawing/use-drawing-persistence';
+import { useDrawingToolKeyboardShortcuts } from './drawing/use-drawing-tool-keyboard-shortcuts';
+import { useDrawingUndoRedo } from './drawing/use-drawing-undo-redo';
 
-import type {
-  SceneDrawing,
-  StrokeConfig,
-  FillConfig,
- DrawingType} from '@/types/drawing';
+import type { SceneDrawing, StrokeConfig, FillConfig, DrawingType } from '@/types/drawing';
 import type { Point2D } from '@/types/scene';
 
 import logger from '@/lib/logger';
@@ -108,7 +105,6 @@ const DEFAULT_STATE: DrawingToolState = {
   selectedLayer: 'drawings',
 };
 
-
 // ===========================
 // Hook Implementation
 // ===========================
@@ -119,14 +115,16 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   // State
   const [state, setState] = useState<DrawingToolState>(DEFAULT_STATE);
 
-  // Undo/Redo stacks
-  const [undoStack, setUndoStack] = useState<SceneDrawing[]>([]);
-  const [redoStack, setRedoStack] = useState<SceneDrawing[]>([]);
-
   // Persistence logic
   const { saveDrawing, deleteDrawing } = useDrawingPersistence({
     sceneId,
     onDrawingDeleted,
+  });
+
+  // Undo/Redo
+  const { recordDrawing, undo, redo, canUndo, canRedo } = useDrawingUndoRedo({
+    saveDrawing,
+    deleteDrawing,
   });
 
   // ===========================
@@ -196,9 +194,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
       const savedDrawing = await saveDrawing(currentDrawing);
 
       if (savedDrawing) {
-        // Add to undo stack
-        setUndoStack((prev) => [...prev, savedDrawing]);
-        setRedoStack([]); // Clear redo stack on new action
+        recordDrawing(savedDrawing);
 
         if (onDrawingCreated) {
           onDrawingCreated(savedDrawing);
@@ -210,7 +206,7 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
     } catch (error) {
       logger.error('Failed to finish drawing', { error });
     }
-  }, [state, onDrawingCreated, saveDrawing]);
+  }, [state, onDrawingCreated, saveDrawing, recordDrawing]);
 
   const cancelDrawing = useCallback(() => {
     setState((prev) => ({ ...prev, currentDrawing: null }));
@@ -253,76 +249,15 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
   }, []);
 
   // ===========================
-  // Undo/Redo
-  // ===========================
-
-  const undo = useCallback(async () => {
-    if (undoStack.length === 0) return;
-
-    const lastDrawing = undoStack[undoStack.length - 1];
-
-    try {
-      // Delete the drawing
-      await deleteDrawing(lastDrawing.id);
-
-      // Move from undo to redo stack
-      setUndoStack((prev) => prev.slice(0, -1));
-      setRedoStack((prev) => [...prev, lastDrawing]);
-    } catch (error) {
-      logger.error('Failed to undo drawing', { error });
-    }
-  }, [undoStack, deleteDrawing]);
-
-  const redo = useCallback(async () => {
-    if (redoStack.length === 0) return;
-
-    const drawingToRedo = redoStack[redoStack.length - 1];
-
-    try {
-      // Recreate the drawing
-      const savedDrawing = await saveDrawing(drawingToRedo);
-
-      if (savedDrawing) {
-        // Move from redo to undo stack
-        setRedoStack((prev) => prev.slice(0, -1));
-        setUndoStack((prev) => [...prev, savedDrawing]);
-      }
-    } catch (error) {
-      logger.error('Failed to redo drawing', { error });
-    }
-  }, [redoStack, saveDrawing]);
-
-  // ===========================
   // Keyboard Shortcuts
   // ===========================
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ctrl/Cmd+Z for undo
-      if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        undo();
-      }
-
-      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y for redo
-      if (
-        ((event.ctrlKey || event.metaKey) && event.key === 'z' && event.shiftKey) ||
-        ((event.ctrlKey || event.metaKey) && event.key === 'y')
-      ) {
-        event.preventDefault();
-        redo();
-      }
-
-      // Escape to cancel current drawing
-      if (event.key === 'Escape' && state.currentDrawing) {
-        event.preventDefault();
-        cancelDrawing();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, cancelDrawing, state.currentDrawing]);
+  useDrawingToolKeyboardShortcuts({
+    undo,
+    redo,
+    cancelDrawing,
+    hasCurrentDrawing: state.currentDrawing !== null,
+  });
 
   // ===========================
   // Return Values
@@ -345,8 +280,8 @@ export function useDrawingTool(options: UseDrawingToolOptions): UseDrawingToolRe
     setSelectedLayer,
     undo,
     redo,
-    canUndo: undoStack.length > 0,
-    canRedo: redoStack.length > 0,
+    canUndo,
+    canRedo,
     saveDrawing,
     deleteDrawing,
     isDrawing: state.currentDrawing !== null,
