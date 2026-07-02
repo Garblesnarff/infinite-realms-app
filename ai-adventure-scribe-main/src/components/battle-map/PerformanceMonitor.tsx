@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Performance Monitor Component
  *
@@ -13,37 +12,15 @@
  * @module components/battle-map/PerformanceMonitor
  */
 
-import { useFrame, useThree } from '@react-three/fiber';
 import { AlertTriangle } from 'lucide-react';
-import React, { useEffect, useState, useRef } from 'react';
+import React from 'react';
+
+import { usePerformanceStats } from './use-performance-stats';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
-import logger from '@/lib/logger';
 import { cn } from '@/lib/utils';
-
-// ===========================
-// Types
-// ===========================
-
-interface PerformanceMetrics {
-  fps: number;
-  renderTime: number;
-  drawCalls: number;
-  triangles: number;
-  geometries: number;
-  textures: number;
-  programs: number;
-  memoryUsed?: number;
-  memoryLimit?: number;
-}
-
-interface PerformanceMemory {
-  usedJSHeapSize: number;
-  totalJSHeapSize: number;
-  jsHeapSizeLimit: number;
-}
 
 interface PerformanceMonitorProps {
   /** Whether to show the monitor */
@@ -58,81 +35,6 @@ interface PerformanceMonitorProps {
   renderTimeWarningThreshold?: number;
   /** Custom className */
   className?: string;
-}
-
-// ===========================
-// Performance Stats Hook
-// ===========================
-
-/**
- * Hook to track performance metrics
- */
-function usePerformanceStats() {
-  const { gl } = useThree();
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({
-    fps: 60,
-    renderTime: 0,
-    drawCalls: 0,
-    triangles: 0,
-    geometries: 0,
-    textures: 0,
-    programs: 0,
-  });
-
-  const frameTimesRef = useRef<number[]>([]);
-  const lastTimeRef = useRef<number>(performance.now());
-  const updateIntervalRef = useRef<number>(0);
-
-  useFrame(() => {
-    const now = performance.now();
-    const delta = now - lastTimeRef.current;
-    lastTimeRef.current = now;
-
-    // Collect frame times
-    frameTimesRef.current.push(delta);
-    if (frameTimesRef.current.length > 60) {
-      frameTimesRef.current.shift();
-    }
-
-    // Update metrics every 500ms to avoid too frequent updates
-    updateIntervalRef.current += delta;
-    if (updateIntervalRef.current >= 500) {
-      updateIntervalRef.current = 0;
-
-      // Calculate average FPS
-      const avgFrameTime =
-        frameTimesRef.current.reduce((a, b) => a + b, 0) / frameTimesRef.current.length;
-      const fps = Math.round(1000 / avgFrameTime);
-
-      // Get renderer info
-      const info = gl.info;
-      const memory = gl.info.memory;
-
-      // Get memory info if available (non-standard Chrome-only API, not in lib.dom.d.ts)
-      let memoryUsed: number | undefined;
-      let memoryLimit: number | undefined;
-
-      const perfMemory = (performance as Performance & { memory?: PerformanceMemory }).memory;
-      if (perfMemory) {
-        memoryUsed = perfMemory.usedJSHeapSize / 1024 / 1024; // Convert to MB
-        memoryLimit = perfMemory.jsHeapSizeLimit / 1024 / 1024; // Convert to MB
-      }
-
-      setMetrics({
-        fps,
-        renderTime: avgFrameTime,
-        drawCalls: info.render.calls,
-        triangles: info.render.triangles,
-        geometries: memory?.geometries ?? 0,
-        textures: memory?.textures ?? 0,
-        programs: info.programs?.length ?? 0,
-        memoryUsed,
-        memoryLimit,
-      });
-    }
-  });
-
-  return metrics;
 }
 
 // ===========================
@@ -271,69 +173,5 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
     </div>
   );
 };
-
-/**
- * Simple FPS Counter (minimal UI)
- */
-export const FPSCounter: React.FC<{
-  className?: string;
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-}> = ({ className, position = 'top-right' }) => {
-  const metrics = usePerformanceStats();
-
-  const positionClasses = {
-    'top-left': 'top-4 left-4',
-    'top-right': 'top-4 right-4',
-    'bottom-left': 'bottom-4 left-4',
-    'bottom-right': 'bottom-4 right-4',
-  };
-
-  const getFPSColor = (fps: number): string => {
-    if (fps >= 60) return 'text-green-600';
-    if (fps >= 30) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  return (
-    <div
-      className={cn(
-        'fixed pointer-events-none font-mono text-sm font-bold',
-        positionClasses[position],
-        getFPSColor(metrics.fps),
-        className,
-      )}
-      style={{ zIndex: Z_INDEX.TOAST }}
-    >
-      {metrics.fps} FPS
-    </div>
-  );
-};
-
-/**
- * Performance Stats for debugging (console output)
- */
-export function usePerformanceLogger(enabled: boolean = false, interval: number = 5000) {
-  const metrics = usePerformanceStats();
-  const lastLogRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const now = Date.now();
-    if (now - lastLogRef.current >= interval) {
-      lastLogRef.current = now;
-      logger.debug('⚡ Performance Metrics', {
-        fps: metrics.fps,
-        renderTimeMs: metrics.renderTime.toFixed(2),
-        drawCalls: metrics.drawCalls,
-        triangles: metrics.triangles,
-        geometries: metrics.geometries,
-        textures: metrics.textures,
-        memoryUsedMB: metrics.memoryUsed?.toFixed(0),
-        memoryLimitMB: metrics.memoryLimit?.toFixed(0),
-      });
-    }
-  }, [enabled, interval, metrics]);
-}
 
 export default PerformanceMonitor;
