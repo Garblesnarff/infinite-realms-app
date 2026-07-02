@@ -35,7 +35,7 @@ interface TRPCProviderProps {
  * Configuration for the API endpoint
  * Uses environment variable or defaults to /api/trpc
  */
-const API_URL = (import.meta as any).env?.VITE_TRPC_API_URL || '/api/trpc';
+const API_URL = import.meta.env?.VITE_TRPC_API_URL || '/api/trpc';
 
 /**
  * TRPCProvider Component
@@ -69,7 +69,7 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
             // Only retry failed requests once
             retry: 1,
             // Refetch on window focus in production
-            refetchOnWindowFocus: (import.meta as any).env?.MODE === 'production',
+            refetchOnWindowFocus: import.meta.env?.MODE === 'production',
           },
           mutations: {
             // Don't retry mutations by default

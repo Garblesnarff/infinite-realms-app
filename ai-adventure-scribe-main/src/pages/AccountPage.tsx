@@ -27,8 +27,7 @@ interface QuotaStatus {
   resetAt: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- pre-existing; restyle-only change
-const API_URL = (import.meta as any).env?.VITE_API_URL || '';
+const API_URL = import.meta.env?.VITE_API_URL || '';
 
 /**
  * Account page for subscription management

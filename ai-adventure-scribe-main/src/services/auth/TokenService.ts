@@ -39,7 +39,7 @@ export const refreshAccessToken = async (
   refreshToken: string,
 ): Promise<{ accessToken: string; refreshToken: string } | null> => {
   try {
-    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    const apiUrl = import.meta.env?.VITE_API_URL || '';
     const response = await fetch(`${apiUrl}/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

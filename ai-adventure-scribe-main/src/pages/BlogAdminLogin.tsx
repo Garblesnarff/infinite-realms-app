@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-const API_URL = (import.meta as any).env?.VITE_API_URL || '';
+const API_URL = import.meta.env?.VITE_API_URL || '';
 
 // Storage key for blog admin token
 export const BLOG_ADMIN_TOKEN_KEY = 'blog_admin_token';

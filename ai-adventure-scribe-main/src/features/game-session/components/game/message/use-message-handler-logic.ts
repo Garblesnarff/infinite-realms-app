@@ -31,10 +31,7 @@ interface UseMessageHandlerLogicProps {
  * ⚡ Bolt: Static configuration and helper functions hoisted outside the hook
  * to reduce render cycle overhead and stabilize identity.
  */
-const headerMode = String(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (import.meta as any)?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short',
-).toLowerCase();
+const headerMode = String(import.meta?.env?.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
 
 const toHeaderExcerpt = (raw: string, limit = 220) => {
   if (!raw) return '';
@@ -232,7 +229,10 @@ export const useMessageHandlerLogic = ({
       };
 
       // Check for auto-triggered safety commands in AI response
-      const autoSafetyResult = await handleSafetyCommand(playerInput, sanitizedAiResponseMessage.text);
+      const autoSafetyResult = await handleSafetyCommand(
+        playerInput,
+        sanitizedAiResponseMessage.text,
+      );
       if (autoSafetyResult.isSafetyCommand) {
         return;
       }

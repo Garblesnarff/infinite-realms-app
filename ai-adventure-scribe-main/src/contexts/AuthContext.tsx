@@ -1,11 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useBlogRole, type BlogRole } from '@/hooks/auth/use-blog-role';
 import { useUserPlan, type UserPlan } from '@/hooks/auth/use-user-plan';
@@ -80,8 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Verify token and get user data from backend
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const apiUrl = import.meta.env?.VITE_API_URL || '';
       const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
         headers: {
           Authorization: `Bearer ${cachedSession.access_token}`,
@@ -191,23 +183,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // WorkOS uses hosted UI - these functions redirect to WorkOS
   const signUp = useCallback(async (_email: string, _password: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    const apiUrl = import.meta.env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };
   }, []);
 
   const signIn = useCallback(async (_email: string, _password: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-    const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+    const apiUrl = import.meta.env?.VITE_API_URL || '';
     window.location.href = `${apiUrl}/v1/auth/login`;
     return { error: null };
   }, []);
 
   const signOut = useCallback(async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const apiUrl = import.meta.env?.VITE_API_URL || '';
       const accessToken = session?.access_token;
 
       // Clear local session first

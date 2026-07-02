@@ -9,12 +9,10 @@ import './index.css';
 
 // Basic frontend observability: request-id propagation and error reporting
 (function setupObservability() {
-  const RELEASE =
-    (import.meta as any).env?.VITE_RELEASE || (import.meta as any).env?.VITE_APP_VERSION || 'dev';
-  const ENV =
-    (import.meta as any).env?.VITE_ENVIRONMENT || (import.meta as any).env?.MODE || 'development';
+  const RELEASE = import.meta.env?.VITE_RELEASE || import.meta.env?.VITE_APP_VERSION || 'dev';
+  const ENV = import.meta.env?.VITE_ENVIRONMENT || import.meta.env?.MODE || 'development';
   const OBS_ENABLED = (() => {
-    const flag = String((import.meta as any).env?.VITE_OBSERVABILITY_ENABLED ?? '')
+    const flag = String(import.meta.env?.VITE_OBSERVABILITY_ENABLED ?? '')
       .trim()
       .toLowerCase();
     if (!flag) return false;
@@ -24,17 +22,14 @@ import './index.css';
   // Inject X-Request-Id header into all fetch() calls
   const originalFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const rid =
-      (init?.headers as any)?.['x-request-id'] ||
-      (init?.headers as any)?.['X-Request-Id'] ||
-      uuidv4();
     const headers = new Headers(init?.headers || {});
+    const rid = headers.get('x-request-id') || uuidv4();
     if (!headers.get('x-request-id')) headers.set('x-request-id', String(rid));
     headers.set('x-release', String(RELEASE));
     headers.set('x-environment', String(ENV));
 
     const nextInit: RequestInit = { ...(init || {}), headers };
-    return originalFetch(input as any, nextInit).catch((err) => {
+    return originalFetch(input, nextInit).catch((err) => {
       if (OBS_ENABLED) {
         // fire-and-forget error capture to backend
         try {
@@ -89,7 +84,7 @@ import './index.css';
     if (!OBS_ENABLED) return;
     try {
       const rid = uuidv4();
-      const reason: any = (event as any).reason;
+      const reason = event.reason;
       originalFetch('/v1/observability/error', {
         method: 'POST',
         headers: {

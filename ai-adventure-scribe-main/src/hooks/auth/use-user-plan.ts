@@ -44,8 +44,7 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
 
     setUserPlanLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const apiUrl = (import.meta as any).env?.VITE_API_URL || '';
+      const apiUrl = import.meta.env?.VITE_API_URL || '';
       const response = await fetch(`${apiUrl}/v1/llm/quota`, {
         headers: {
           Authorization: `Bearer ${freshToken}`,

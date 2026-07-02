@@ -63,8 +63,7 @@ interface RollHistoryRow {
 
 function flagEnabled(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-    const v = String((import.meta as any)?.env?.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
+    const v = String(import.meta?.env?.VITE_ENABLE_ROLL_HISTORY ?? 'false').toLowerCase();
     return ['1', 'true', 'yes', 'on'].includes(v);
   } catch {
     return false;
@@ -143,7 +142,8 @@ export const RollManager = {
        * ⚡ Bolt: Using explicit column list to avoid fetching the potentially large
        * 'meta' JSONB field for every row unless specifically needed.
        */
-      const ROLL_COLS = 'id, session_id, created_at, kind, purpose, formula, dc, ac, result_total, result_natural, advantage, disadvantage, success';
+      const ROLL_COLS =
+        'id, session_id, created_at, kind, purpose, formula, dc, ac, result_total, result_natural, advantage, disadvantage, success';
       const { data, error } = await supabase
         .from('roll_history')
         .select(ROLL_COLS)

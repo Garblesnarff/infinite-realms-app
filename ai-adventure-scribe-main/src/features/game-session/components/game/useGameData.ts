@@ -96,7 +96,7 @@ export function useGameData(
 
         // Derive DM role: env override or campaign owner
         try {
-          const envVal = String((import.meta as any)?.env?.VITE_FORCE_DM || '');
+          const envVal = String(import.meta?.env?.VITE_FORCE_DM || '');
           const forceDM = ['true', '1', 'yes', 'on'].includes(envVal.toLowerCase());
           const ownerId = (campaignData as any)?.user_id;
           setIsDM(Boolean(forceDM || (user?.id && ownerId && user.id === ownerId)));

@@ -57,16 +57,9 @@ export function useBlogRole({ user }: UseBlogRoleProps): {
       }
 
       // Dev override: allow admin access in non-production without email setup
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const devAdminEmail = (import.meta as any)?.env?.VITE_DEV_BLOG_ADMIN_EMAIL as
-        | string
-        | undefined;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const devOverrideRaw = (import.meta as any)?.env?.VITE_BLOG_ADMIN_DEV_OVERRIDE as
-        | string
-        | undefined;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vite import.meta.env typing limitation
-      const isDev = (import.meta as any)?.env?.MODE !== 'production';
+      const devAdminEmail = import.meta?.env?.VITE_DEV_BLOG_ADMIN_EMAIL as string | undefined;
+      const devOverrideRaw = import.meta?.env?.VITE_BLOG_ADMIN_DEV_OVERRIDE as string | undefined;
+      const isDev = import.meta?.env?.MODE !== 'production';
       const enableDevOverride =
         devOverrideRaw === 'true' ||
         devOverrideRaw === '1' ||
