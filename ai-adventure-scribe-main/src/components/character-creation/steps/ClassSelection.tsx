@@ -1,12 +1,12 @@
-/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
-import { Sword, Shield, Heart, Zap, Check, Sparkles, BookOpen } from 'lucide-react';
+import { Sword, Check, BookOpen } from 'lucide-react';
 import React, { useState } from 'react';
+
+import { ClassSelectionCard } from './ClassSelectionCard';
 
 import type { CharacterClass } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Z_INDEX } from '@/constants/z-index';
+import { Card, CardContent } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { classes } from '@/data/classOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
@@ -45,18 +45,6 @@ const ClassSelection: React.FC = () => {
 
     // Auto-scroll to navigation to proceed to next step
     scrollToNavigation();
-  };
-
-  const getClassIcon = (classId: string) => {
-    const iconMap: Record<string, React.ElementType> = {
-      fighter: Sword,
-      wizard: BookOpen,
-      cleric: Sparkles,
-      rogue: Zap,
-      paladin: Shield,
-      barbarian: Heart,
-    };
-    return iconMap[classId] || Sword;
   };
 
   return (
@@ -100,155 +88,19 @@ const ClassSelection: React.FC = () => {
         {classes.map((characterClass) => {
           const isSelected = state.character?.class?.id === characterClass.id;
           const isHovered = hoveredClassId === characterClass.id;
-          const ClassIcon = getClassIcon(characterClass.id);
 
           logger.debug(`Class ${characterClass.id} selected:`, isSelected);
 
           return (
-            <Card
+            <ClassSelectionCard
               key={characterClass.id}
-              className={`group cursor-pointer transition-all duration-300 hover:shadow-2xl border-2 relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-infinite-gold ${
-                isSelected
-                  ? 'border-infinite-gold ring-4 ring-infinite-gold/20 shadow-xl scale-[1.02]'
-                  : 'border-white/10 hover:border-infinite-gold/50 hover:scale-[1.02]'
-              }`}
-              onClick={() => handleClassSelect(characterClass)}
-              onMouseEnter={() => setHoveredClassId(characterClass.id)}
-              onMouseLeave={() => setHoveredClassId(null)}
-              role="button"
-              tabIndex={0}
-              aria-label={`Select ${characterClass.name} class`}
-              aria-pressed={isSelected}
-              title={`Select ${characterClass.name}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleClassSelect(characterClass);
-                }
-              }}
-              style={
-                characterClass.backgroundImage
-                  ? {
-                      backgroundImage: `url(${characterClass.backgroundImage})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }
-                  : undefined
-              }
-            >
-              {/* Background Overlay */}
-              {characterClass.backgroundImage && (
-                <div
-                  className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30 transition-opacity group-hover:opacity-90"
-                  style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
-                />
-              )}
-
-              {/* Selected Indicator */}
-              {isSelected && (
-                <div
-                  className="absolute top-4 right-4 bg-infinite-gold text-infinite-dark rounded-full p-2 shadow-lg"
-                  style={{ zIndex: Z_INDEX.CARD_HOVER }}
-                >
-                  <Check className="w-5 h-5" aria-hidden="true" />
-                </div>
-              )}
-
-              <CardHeader className="relative pb-3" style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`p-2 rounded-lg ${characterClass.backgroundImage ? 'bg-white/20 backdrop-blur-sm' : 'bg-infinite-gold/10'}`}
-                    >
-                      <ClassIcon
-                        className={`w-6 h-6 ${characterClass.backgroundImage ? 'text-white' : 'text-infinite-gold'}`}
-                        aria-hidden="true"
-                      />
-                    </div>
-                    <CardTitle
-                      className={`text-2xl font-bold ${characterClass.backgroundImage ? 'text-white drop-shadow-lg' : ''}`}
-                    >
-                      {characterClass.name}
-                    </CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent
-                className="relative space-y-4"
-                style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
-              >
-                <p
-                  className={`text-sm leading-relaxed ${characterClass.backgroundImage ? 'text-gray-100' : 'text-muted-foreground'}`}
-                >
-                  {characterClass.description}
-                </p>
-
-                {/* Stats Section */}
-                <div
-                  className={`space-y-3 pt-3 border-t ${characterClass.backgroundImage ? 'border-white/20' : 'border-white/10'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-sm font-medium flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
-                    >
-                      <Heart className="w-4 h-4" aria-hidden="true" />
-                      Hit Die:
-                    </span>
-                    <Badge
-                      variant={characterClass.backgroundImage ? 'secondary' : 'outline'}
-                      className={
-                        characterClass.backgroundImage
-                          ? 'bg-white/20 text-white border-white/30'
-                          : ''
-                      }
-                    >
-                      d{characterClass.hitDie}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-sm font-medium flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
-                    >
-                      <Zap className="w-4 h-4" aria-hidden="true" />
-                      Primary Ability:
-                    </span>
-                    <Badge
-                      variant={characterClass.backgroundImage ? 'secondary' : 'outline'}
-                      className={`capitalize ${characterClass.backgroundImage ? 'bg-white/20 text-white border-white/30' : ''}`}
-                    >
-                      {String(characterClass.primaryAbility).charAt(0).toUpperCase() +
-                        String(characterClass.primaryAbility).slice(1)}
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <div
-                      className={`text-sm font-medium mb-2 flex items-center gap-2 ${characterClass.backgroundImage ? 'text-gray-200' : ''}`}
-                    >
-                      <Shield className="w-4 h-4" aria-hidden="true" />
-                      Saving Throws:
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {characterClass.savingThrowProficiencies.map((save, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className={`capitalize text-xs ${characterClass.backgroundImage ? 'bg-white/20 text-white border-white/30' : ''}`}
-                        >
-                          {String(save)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hover Indicator */}
-                {isHovered && !isSelected && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-infinite-gold/0 via-infinite-gold to-infinite-gold/0 animate-pulse" />
-                )}
-              </CardContent>
-            </Card>
+              characterClass={characterClass}
+              isSelected={isSelected}
+              isHovered={isHovered}
+              onSelect={handleClassSelect}
+              onHoverStart={setHoveredClassId}
+              onHoverEnd={() => setHoveredClassId(null)}
+            />
           );
         })}
       </div>
