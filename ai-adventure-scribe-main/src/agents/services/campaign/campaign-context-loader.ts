@@ -10,9 +10,11 @@
  * @author AI Dungeon Master Team
  */
 
-import { supabase } from '@/integrations/supabase/client';
-import { CampaignContext } from '@/types/dm'; // Ensure this type aligns with returned structure
 import { logger } from '../../../lib/logger';
+
+import type { CampaignContext } from '@/types/dm'; // Ensure this type aligns with returned structure
+
+import { supabase } from '@/integrations/supabase/client';
 
 // Define ThematicElements locally if not imported or different from CampaignContext's version
 interface ThematicElements {
@@ -75,19 +77,27 @@ export class CampaignContextLoader {
     };
 
     if (campaign.thematic_elements && typeof campaign.thematic_elements === 'object') {
-      const rawElements = campaign.thematic_elements as any; // Cast to any for parsing
+      const rawElements = campaign.thematic_elements as Record<string, unknown>;
       thematicElements = {
         mainThemes: Array.isArray(rawElements?.mainThemes)
-          ? rawElements.mainThemes.filter(String)
+          ? (rawElements.mainThemes as unknown[]).filter(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            )
           : [],
         recurringMotifs: Array.isArray(rawElements?.recurringMotifs)
-          ? rawElements.recurringMotifs.filter(String)
+          ? (rawElements.recurringMotifs as unknown[]).filter(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            )
           : [],
         keyLocations: Array.isArray(rawElements?.keyLocations)
-          ? rawElements.keyLocations.filter(String)
+          ? (rawElements.keyLocations as unknown[]).filter(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            )
           : [],
         importantNPCs: Array.isArray(rawElements?.importantNPCs)
-          ? rawElements.importantNPCs.filter(String)
+          ? (rawElements.importantNPCs as unknown[]).filter(
+              (v): v is string => typeof v === 'string' && v.length > 0,
+            )
           : [],
       };
     }
@@ -100,11 +110,11 @@ export class CampaignContextLoader {
     };
 
     if (campaign.setting_details && typeof campaign.setting_details === 'object') {
-      const rawSetting = campaign.setting_details as any;
+      const rawSetting = campaign.setting_details as Record<string, unknown>;
       setting = {
-        era: rawSetting.era || 'medieval',
-        location: rawSetting.location || 'unknown',
-        atmosphere: rawSetting.atmosphere || 'mysterious',
+        era: (rawSetting.era as string) || 'medieval',
+        location: (rawSetting.location as string) || 'unknown',
+        atmosphere: (rawSetting.atmosphere as string) || 'mysterious',
       };
     }
 
