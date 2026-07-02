@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Combat-related spellcasting actions and concentration management
  */
@@ -111,10 +110,10 @@ export function checkConcentration(
 
   const dc = Math.max(10, Math.floor(damageTaken / 2));
 
-  const conMod =
-    typeof (participant as any).abilityScores?.constitution?.modifier === 'number'
-      ? ((participant as any).abilityScores!.constitution!.modifier as number)
-      : 0;
+  // CombatParticipant doesn't carry abilityScores, so this has always evaluated
+  // to 0 regardless of the participant's real Constitution modifier - see bead
+  // ai-dungeon-master-d20 for wiring in the real value without changing behavior here.
+  const conMod = 0;
   const roll = Math.floor(Math.random() * 20) + 1 + conMod;
 
   const maintained = roll >= dc;
