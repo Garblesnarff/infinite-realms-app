@@ -7,8 +7,6 @@
  * @module utils/spatial-partitioning
  */
 
-/* eslint-disable max-lines */
-
 import {
   type AABB,
   calculateWallBounds,
@@ -17,9 +15,16 @@ import {
   boundsContainsPoint,
   mergeBounds,
 } from './spatial/aabb';
+import { boundsIntersect, wallIntersectsBounds } from './spatial/geometry';
+import {
+  type QuadTreeNode,
+  type QuadTreeConfig,
+  type QuadTreeStats,
+  createQuadTreeNode,
+  collectQuadTreeStats,
+} from './spatial/quadtree-builder';
 
 import type { Point2D, VisionBlocker } from '@/types/scene';
-
 
 // Re-export for backward compatibility
 export {
@@ -29,29 +34,9 @@ export {
   expandBounds,
   boundsContainsPoint,
   mergeBounds,
+  type QuadTreeNode,
+  type QuadTreeConfig,
 };
-
-// ===========================
-// Types
-// ===========================
-
-/**
- * Quadtree node
- */
-export interface QuadTreeNode {
-  bounds: AABB;
-  walls: VisionBlocker[];
-  children: QuadTreeNode[] | null;
-  level: number;
-}
-
-/**
- * Quadtree configuration
- */
-export interface QuadTreeConfig {
-  maxWalls: number; // Max walls per node before splitting
-  maxLevel: number; // Max tree depth
-}
 
 // ===========================
 // Default Configuration
@@ -85,7 +70,7 @@ export class QuadTree {
 
   constructor(bounds: AABB, walls: VisionBlocker[], config: Partial<QuadTreeConfig> = {}) {
     this.config = { ...DEFAULT_QUADTREE_CONFIG, ...config };
-    this.root = this.createNode(bounds, walls, 0);
+    this.root = createQuadTreeNode(bounds, walls, 0, this.config);
   }
 
   /**
@@ -148,7 +133,7 @@ export class QuadTree {
    */
   rebuild(walls: VisionBlocker[], padding: number = 100): void {
     const newBounds = calculateWallBounds(walls, padding);
-    this.root = this.createNode(newBounds, walls, 0);
+    this.root = createQuadTreeNode(newBounds, walls, 0, this.config);
   }
 
   /**
@@ -164,7 +149,7 @@ export class QuadTree {
     totalWalls: number;
     avgWallsPerLeaf: number;
   } {
-    const stats = {
+    const stats: QuadTreeStats = {
       totalNodes: 0,
       maxDepth: 0,
       totalWalls: 0,
@@ -172,7 +157,7 @@ export class QuadTree {
       wallsInLeaves: 0,
     };
 
-    this.collectStats(this.root, stats);
+    collectQuadTreeStats(this.root, stats);
 
     return {
       totalNodes: stats.totalNodes,
@@ -186,52 +171,6 @@ export class QuadTree {
   // Private Methods
   // ===========================
 
-  private createNode(bounds: AABB, walls: VisionBlocker[], level: number): QuadTreeNode {
-    const node: QuadTreeNode = {
-      bounds,
-      walls: [],
-      children: null,
-      level,
-    };
-
-    // Filter walls that intersect this node's bounds
-    for (const wall of walls) {
-      if (this.wallIntersectsBounds(wall, bounds)) {
-        node.walls.push(wall);
-      }
-    }
-
-    // Split if we have too many walls and haven't reached max depth
-    if (node.walls.length > this.config.maxWalls && level < this.config.maxLevel) {
-      this.split(node);
-    }
-
-    return node;
-  }
-
-  private split(node: QuadTreeNode): void {
-    const { bounds, walls, level } = node;
-    const midX = (bounds.minX + bounds.maxX) / 2;
-    const midY = (bounds.minY + bounds.maxY) / 2;
-
-    // Create four child quadrants
-    const childBounds: AABB[] = [
-      // Top-left
-      { minX: bounds.minX, minY: bounds.minY, maxX: midX, maxY: midY },
-      // Top-right
-      { minX: midX, minY: bounds.minY, maxX: bounds.maxX, maxY: midY },
-      // Bottom-left
-      { minX: bounds.minX, minY: midY, maxX: midX, maxY: bounds.maxY },
-      // Bottom-right
-      { minX: midX, minY: midY, maxX: bounds.maxX, maxY: bounds.maxY },
-    ];
-
-    node.children = childBounds.map((childBound) => this.createNode(childBound, walls, level + 1));
-
-    // Clear walls from parent node (they're now in children)
-    // Keep reference to avoid recreating for query optimization
-  }
-
   private queryNode(
     node: QuadTreeNode,
     queryBounds: AABB,
@@ -239,14 +178,14 @@ export class QuadTree {
     seen: Set<string>,
   ): void {
     // Check if query bounds intersect this node
-    if (!this.boundsIntersect(node.bounds, queryBounds)) {
+    if (!boundsIntersect(node.bounds, queryBounds)) {
       return;
     }
 
     // Add walls from this node
     for (const wall of node.walls) {
       if (!seen.has(wall.id)) {
-        if (this.wallIntersectsBounds(wall, queryBounds)) {
+        if (wallIntersectsBounds(wall, queryBounds)) {
           seen.add(wall.id);
           result.push(wall);
         }
@@ -259,107 +198,6 @@ export class QuadTree {
         this.queryNode(child, queryBounds, result, seen);
       }
     }
-  }
-
-  private collectStats(
-    node: QuadTreeNode,
-    stats: {
-      totalNodes: number;
-      maxDepth: number;
-      totalWalls: number;
-      leafNodes: number;
-      wallsInLeaves: number;
-    },
-  ): void {
-    stats.totalNodes++;
-    stats.maxDepth = Math.max(stats.maxDepth, node.level);
-
-    if (!node.children) {
-      // Leaf node
-      stats.leafNodes++;
-      stats.wallsInLeaves += node.walls.length;
-    }
-
-    // Count unique walls
-    stats.totalWalls += node.walls.length;
-
-    if (node.children) {
-      for (const child of node.children) {
-        this.collectStats(child, stats);
-      }
-    }
-  }
-
-  private wallIntersectsBounds(wall: VisionBlocker, bounds: AABB): boolean {
-    // Check if any wall segment intersects the bounds
-    for (const point of wall.points) {
-      if (this.pointInBounds(point, bounds)) {
-        return true;
-      }
-    }
-
-    // Check if any edge of the wall crosses the bounds
-    for (let i = 0; i < wall.points.length - 1; i++) {
-      if (this.lineIntersectsBounds(wall.points[i], wall.points[i + 1], bounds)) {
-        return true;
-      }
-    }
-
-    // Check closing segment for polygons
-    if (wall.points.length > 2) {
-      if (this.lineIntersectsBounds(wall.points[wall.points.length - 1], wall.points[0], bounds)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private pointInBounds(point: Point2D, bounds: AABB): boolean {
-    return (
-      point.x >= bounds.minX &&
-      point.x <= bounds.maxX &&
-      point.y >= bounds.minY &&
-      point.y <= bounds.maxY
-    );
-  }
-
-  private lineIntersectsBounds(p1: Point2D, p2: Point2D, bounds: AABB): boolean {
-    // Check if line segment intersects AABB
-    // Uses Liang-Barsky algorithm for efficiency
-
-    let t0 = 0;
-    let t1 = 1;
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-
-    const edges = [
-      { p: -dx, q: p1.x - bounds.minX }, // Left
-      { p: dx, q: bounds.maxX - p1.x }, // Right
-      { p: -dy, q: p1.y - bounds.minY }, // Top
-      { p: dy, q: bounds.maxY - p1.y }, // Bottom
-    ];
-
-    for (const edge of edges) {
-      if (edge.p === 0) {
-        if (edge.q < 0) return false; // Parallel and outside
-      } else {
-        const t = edge.q / edge.p;
-        if (edge.p < 0) {
-          if (t > t1) return false;
-          if (t > t0) t0 = t;
-        } else {
-          if (t < t0) return false;
-          if (t < t1) t1 = t;
-        }
-      }
-    }
-
-    return t0 <= t1;
-  }
-
-  private boundsIntersect(a: AABB, b: AABB): boolean {
-    return !(a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY);
   }
 }
 
