@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Quick Action Menu Component
  *
@@ -19,14 +18,12 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+import { QuickActionMenuAnimations } from './QuickActionMenuAnimations';
+import { calculateRadialPosition, RadialActionButton } from './RadialActionButton';
+
 import type { QuickAction } from './hooks/use-quick-action-menu';
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 import { cn } from '@/lib/utils';
 
@@ -52,100 +49,6 @@ export interface QuickActionMenuProps {
   /** Center button label */
   centerLabel?: string;
 }
-
-// ===========================
-// Radial Position Calculator
-// ===========================
-
-/**
- * Calculate position for radial menu items
- */
-function calculateRadialPosition(
-  index: number,
-  total: number,
-  radius: number,
-  offsetAngle: number = -90,
-): { x: number; y: number; angle: number } {
-  const angleStep = 360 / total;
-  const angle = offsetAngle + angleStep * index;
-  const radian = (angle * Math.PI) / 180;
-
-  return {
-    x: Math.cos(radian) * radius,
-    y: Math.sin(radian) * radius,
-    angle,
-  };
-}
-
-// ===========================
-// Radial Action Button
-// ===========================
-
-interface RadialActionButtonProps {
-  action: QuickAction;
-  position: { x: number; y: number; angle: number };
-  index: number;
-  onTrigger: () => void;
-}
-
-const RadialActionButton: React.FC<RadialActionButtonProps> = ({
-  action,
-  position,
-  index,
-  onTrigger,
-}) => {
-  const Icon = action.icon;
-  const [isInteracting, setIsInteracting] = useState(false);
-
-  const variantColors = {
-    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-    danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-    success: 'bg-green-600 text-white hover:bg-green-700',
-    warning: 'bg-yellow-600 text-white hover:bg-yellow-700',
-  };
-
-  const color = variantColors[action.variant || 'default'];
-
-  return (
-    <Tooltip delayDuration={300}>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={onTrigger}
-          onMouseEnter={() => setIsInteracting(true)}
-          onMouseLeave={() => setIsInteracting(false)}
-          onFocus={() => setIsInteracting(true)}
-          onBlur={() => setIsInteracting(false)}
-          disabled={action.enabled === false}
-          className={cn(
-            'absolute flex flex-col items-center justify-center gap-1 p-3 rounded-lg transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2',
-            'shadow-lg border-2 border-background',
-            action.enabled === false && 'opacity-40 cursor-not-allowed',
-            action.enabled !== false && color,
-            isInteracting && 'scale-110',
-          )}
-          style={{
-            left: `calc(50% + ${position.x}px)`,
-            top: `calc(50% + ${position.y}px)`,
-            transform: 'translate(-50%, -50%)',
-            zIndex: isInteracting ? Z_INDEX.DROPDOWN : undefined,
-            animation: `radialAppear 0.3s ease-out ${index * 0.05}s both`,
-          }}
-          aria-label={action.shortcut ? `${action.label} (${action.shortcut})` : action.label}
-        >
-          <Icon className="h-5 w-5" aria-hidden="true" />
-          <span className="text-xs font-medium whitespace-nowrap">{action.label}</span>
-          {action.shortcut && (
-            <span className="text-[10px] font-mono opacity-75">{action.shortcut}</span>
-          )}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        <p>{action.description || action.label}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-};
 
 // ===========================
 // Quick Action Menu Component
@@ -233,106 +136,75 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
   return (
     <TooltipProvider>
       <>
-      <div
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm"
-        aria-hidden="true"
-        style={{
-          zIndex: Z_INDEX.MODAL_BACKDROP,
-          animation: 'fadeIn 0.2s ease-out',
-        }}
-      />
-
-      {/* Menu Container */}
-      <div
-        ref={menuRef}
-        className={cn('fixed', className)}
-        style={{
-          left: position.x,
-          top: position.y,
-          width: radius * 2.5,
-          height: radius * 2.5,
-          transform: 'translate(-50%, -50%)',
-          zIndex: Z_INDEX.MODAL,
-        }}
-      >
-        {/* Center Button */}
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm"
+          aria-hidden="true"
           style={{
-            animation: 'radialCenter 0.3s ease-out',
-            zIndex: Z_INDEX.CARD_HOVER,
+            zIndex: Z_INDEX.MODAL_BACKDROP,
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        />
+
+        {/* Menu Container */}
+        <div
+          ref={menuRef}
+          className={cn('fixed', className)}
+          style={{
+            left: position.x,
+            top: position.y,
+            width: radius * 2.5,
+            height: radius * 2.5,
+            transform: 'translate(-50%, -50%)',
+            zIndex: Z_INDEX.MODAL,
           }}
         >
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex flex-col items-center justify-center gap-1 p-4 rounded-full bg-background border-2 border-border shadow-xl hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2"
-                aria-label="Close menu"
-              >
-                {CenterIcon ? (
-                  <CenterIcon className="h-6 w-6" aria-hidden="true" />
-                ) : (
-                  <div className="h-6 w-6 rounded-full bg-primary" aria-hidden="true" />
-                )}
-                {centerLabel && <span className="text-xs font-medium">{centerLabel}</span>}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p>Close menu</p>
-            </TooltipContent>
-          </Tooltip>
+          {/* Center Button */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              animation: 'radialCenter 0.3s ease-out',
+              zIndex: Z_INDEX.CARD_HOVER,
+            }}
+          >
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex flex-col items-center justify-center gap-1 p-4 rounded-full bg-background border-2 border-border shadow-xl hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple focus-visible:ring-offset-2"
+                  aria-label="Close menu"
+                >
+                  {CenterIcon ? (
+                    <CenterIcon className="h-6 w-6" aria-hidden="true" />
+                  ) : (
+                    <div className="h-6 w-6 rounded-full bg-primary" aria-hidden="true" />
+                  )}
+                  {centerLabel && <span className="text-xs font-medium">{centerLabel}</span>}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p>Close menu</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Radial Action Buttons */}
+          {enabledActions.map((action, index) => {
+            const pos = calculateRadialPosition(index, enabledActions.length, radius);
+            return (
+              <RadialActionButton
+                key={action.id}
+                action={action}
+                position={pos}
+                index={index}
+                onTrigger={() => handleAction(action)}
+              />
+            );
+          })}
         </div>
 
-        {/* Radial Action Buttons */}
-        {enabledActions.map((action, index) => {
-          const pos = calculateRadialPosition(index, enabledActions.length, radius);
-          return (
-            <RadialActionButton
-              key={action.id}
-              action={action}
-              position={pos}
-              index={index}
-              onTrigger={() => handleAction(action)}
-            />
-          );
-        })}
-      </div>
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes radialAppear {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-
-        @keyframes radialCenter {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-      `}</style>
+        {/* CSS Animations */}
+        <QuickActionMenuAnimations />
       </>
     </TooltipProvider>
   );
@@ -343,4 +215,7 @@ export const QuickActionMenu: React.FC<QuickActionMenuProps> = ({
 // ===========================
 
 export type { QuickActionMenuProps, QuickAction };
-export type { UseQuickActionMenuOptions, UseQuickActionMenuReturn } from './hooks/use-quick-action-menu';
+export type {
+  UseQuickActionMenuOptions,
+  UseQuickActionMenuReturn,
+} from './hooks/use-quick-action-menu';
