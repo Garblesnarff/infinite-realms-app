@@ -94,28 +94,29 @@ export const useCombatActions = (_isDM: boolean = false) => {
         maxHitPoints: p.maxHitPoints,
         currentHitPoints: p.currentHitPoints,
         temporaryHitPoints: p.temporaryHitPoints || 0,
-        position: (p as any).position || { x: 0, y: 0 },
+        position: p.position || { x: 0, y: 0, sceneId: '' },
         conditions: p.conditions || [],
         deathSaves: p.deathSaves || { successes: 0, failures: 0, isStable: false },
         actionTaken: false,
         bonusActionTaken: false,
         reactionTaken: false,
         movementUsed: 0,
-        monsterData: (p as any).monsterData,
+        monsterData: p.monsterData,
         spellSlots: p.spellSlots,
         activeConcentration: p.activeConcentration,
-        abilityScores: (p as any).abilityScores || {},
+        // CombatParticipant doesn't carry abilityScores - see bead ai-dungeon-master-d20.
+        abilityScores: {},
         isUnconscious: false,
         isDead: false,
         isStable: false,
-        visionTypes: (p as any).visionTypes || ['normal'],
-        fightingStyles: (p as any).fightingStyles || [],
-        racialTraits: (p as any).racialTraits || [],
-        classFeatures: (p as any).classFeatures || [],
-        resources: (p as any).resources || {},
-        characterClass: (p as any).characterClass || '',
+        visionTypes: p.visionTypes || ['normal'],
+        fightingStyles: p.fightingStyles || [],
+        racialTraits: p.racialTraits || [],
+        classFeatures: p.classFeatures || [],
+        resources: p.resources || {},
+        characterClass: p.characterClass || '',
         isRaging: false,
-        cover: (p as any).cover || { type: 'none' },
+        cover: p.cover || { type: 'none', acBonus: 0, dexSaveBonus: 0, canBeTargeted: true },
       })) as unknown as CombatParticipant[];
 
       await startCombat('current-session', combatParticipants);
@@ -205,7 +206,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
       resources: {},
       characterClass: '',
       isRaging: false,
-      cover: { type: 'none' } as any,
+      cover: { type: 'none', acBonus: 0, dexSaveBonus: 0, canBeTargeted: true },
     };
 
     addParticipant(newEnemy);

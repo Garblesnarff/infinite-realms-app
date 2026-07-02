@@ -359,6 +359,9 @@ export interface CombatParticipant {
   isHidden?: boolean;
   stealthCheckBonus?: number;
 
+  // Cover (used for AC calculation - see utils/fightingStyles.ts getTotalAC)
+  cover?: CoverInfo;
+
   // Monster data for detected enemies
   monsterData?: {
     type: string;
