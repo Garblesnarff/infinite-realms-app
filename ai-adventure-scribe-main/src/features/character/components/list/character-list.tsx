@@ -1,9 +1,9 @@
-/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
-import { Users, Plus } from 'lucide-react';
+import { Users } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { MemoizedCharacterCard } from './character-card';
+import { CharacterListHeroHeader } from './CharacterListHeroHeader';
 import EmptyState from './empty-state';
 
 import type { Character } from '@/types/character';
@@ -11,204 +11,23 @@ import type { Character } from '@/types/character';
 import { CharacterListSkeleton } from '@/components/skeletons/CharacterListSkeleton';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
-import { useAuth } from '@/contexts/AuthContext';
-import { classes } from '@/data/classOptions';
-import { baseRaces } from '@/data/raceOptions';
-import { useLocalStorage } from '@/hooks/use-local-storage';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import logger from '@/lib/logger';
-import { subscriptionManager } from '@/services/supabase-subscription-manager';
-import { addNetworkListener, isOffline } from '@/utils/network';
+import { useCharacterListData } from '@/features/character/hooks/use-character-list-data';
 
 /**
  * CharacterList component displays all characters for the current user
  * Provides options to view existing characters or create new ones
  */
 const CharacterList: React.FC = () => {
-  const [cachedCharacters, setCachedCharacters] = useLocalStorage<Partial<Character>[]>(
-    'aas_cached_characters',
-    [],
-  );
-  const [characters, setCharacters] = React.useState<Partial<Character>[]>([]);
-  const [filteredCharacters, setFilteredCharacters] = React.useState<Partial<Character>[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [offlineMode, setOfflineMode] = React.useState(isOffline());
-  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
-  const cachedCharactersRef = React.useRef<Partial<Character>[]>(cachedCharacters);
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const offlineNoticeShown = React.useRef(false);
-
-  React.useEffect(() => {
-    cachedCharactersRef.current = cachedCharacters;
-  }, [cachedCharacters]);
-
-  /**
-   * Transforms raw database character data into Character type
-   * @param rawData - Raw character data from database
-   * @returns Transformed character data
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pre-existing; restyle-only change
-  const transformCharacterData = (rawData: any[]): Partial<Character>[] => {
-    return rawData.map((char) => {
-      const baseRace = baseRaces.find((r) => r.name === char.race);
-      const subrace = baseRace?.subraces?.find((s) => s.name === char.subrace);
-      return {
-        ...char,
-        race: baseRace || { name: char.race, subraces: [] },
-        subrace: subrace || null,
-        class: classes.find((c) => c.name === char.class) || { name: char.class },
-      };
-    });
-  };
-
-  /**
-   * Fetches all characters for the current user from Supabase
-   */
-  const fetchCharacters = React.useCallback(
-    async ({ suppressLoader = false }: { suppressLoader?: boolean } = {}) => {
-      try {
-        if (!suppressLoader) {
-          setLoading(true);
-        }
-
-        if (isOffline()) {
-          setOfflineMode(true);
-          if (!offlineNoticeShown.current) {
-            toast({
-              title: 'Offline mode',
-              description:
-                cachedCharactersRef.current.length > 0
-                  ? 'You are viewing cached characters. Changes will sync when you reconnect.'
-                  : 'You appear to be offline. Reconnect to load your characters.',
-            });
-            offlineNoticeShown.current = true;
-          }
-          setCharacters(cachedCharactersRef.current);
-          return;
-        }
-
-        setOfflineMode(false);
-        offlineNoticeShown.current = false;
-
-        // Check WorkOS authentication
-        if (!user) {
-          toast({
-            title: 'Not Authenticated',
-            description: 'Please log in to view your characters.',
-            variant: 'destructive',
-          });
-          navigate('/login');
-          return;
-        }
-
-        setCurrentUserId(user.id);
-
-        const { data, error } = await supabase
-          .from('characters')
-          .select(
-            `
-          id, name, race, class, level,
-          image_url, avatar_url, background_image,
-          campaign_id,
-          created_at, updated_at,
-          character_stats!left (
-            strength, dexterity, constitution, intelligence, wisdom, charisma,
-            max_hit_points, current_hit_points, armor_class
-          )
-        `,
-          )
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        const transformedData = transformCharacterData(data || []);
-        setCharacters(transformedData);
-        setCachedCharacters(transformedData);
-      } catch (error) {
-        logger.error('Error fetching characters:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load characters',
-          variant: 'destructive',
-        });
-      } finally {
-        if (!suppressLoader) {
-          setLoading(false);
-        }
-      }
-    },
-    [toast, navigate, setCachedCharacters, user],
-  );
-
-  React.useEffect(() => {
-    fetchCharacters();
-  }, [fetchCharacters]);
-
-  React.useEffect(() => {
-    const disposers: Array<() => void> = [];
-    disposers.push(
-      addNetworkListener('online', () => {
-        setOfflineMode(false);
-        fetchCharacters();
-      }),
-    );
-    disposers.push(
-      addNetworkListener('offline', () => {
-        setOfflineMode(true);
-        setCharacters(cachedCharactersRef.current);
-      }),
-    );
-
-    return () => {
-      disposers.forEach((dispose) => dispose());
-    };
-  }, [fetchCharacters]);
-
-  React.useEffect(() => {
-    if (!currentUserId) return;
-
-    const callbackId = subscriptionManager.subscribeToEvents('characters', {
-      events: ['INSERT', 'UPDATE', 'DELETE'],
-      filter: (payload) => {
-        const payloadUserId =
-          (payload.new as { user_id?: string } | null | undefined)?.user_id ??
-          (payload.old as { user_id?: string } | null | undefined)?.user_id;
-        return payloadUserId === currentUserId;
-      },
-      callback: () => {
-        fetchCharacters({ suppressLoader: true }).catch((error) => {
-          logger.error('Failed to refresh characters after realtime update:', error);
-        });
-      },
-    });
-
-    return () => {
-      subscriptionManager.unsubscribeFromEvents('characters', callbackId);
-    };
-  }, [currentUserId, fetchCharacters]);
-
-  // Filter characters based on search term
-  React.useEffect(() => {
-    if (searchTerm === '') {
-      setFilteredCharacters(characters);
-    } else {
-      const filtered = characters.filter(
-        (character: Partial<Character>) =>
-          character.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (typeof character.race !== 'string' ? character.race?.name : character.race)
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          (typeof character.class !== 'string' ? character.class?.name : character.class)
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()),
-      );
-      setFilteredCharacters(filtered);
-    }
-  }, [characters, searchTerm]);
+  const {
+    characters,
+    filteredCharacters,
+    loading,
+    offlineMode,
+    searchTerm,
+    setSearchTerm,
+    fetchCharacters,
+  } = useCharacterListData();
 
   /**
    * Navigates to character creation page
@@ -221,32 +40,7 @@ const CharacterList: React.FC = () => {
     return (
       <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
         {/* Hero Header - show during loading for consistency */}
-        <div
-          className="relative bg-cover bg-no-repeat py-24 px-4"
-          style={{
-            backgroundImage: "url('/character_page_hero_header.png')",
-            backgroundPosition: '50% 36%',
-          }}
-        >
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative max-w-7xl mx-auto text-center">
-            <div className="mb-10 md:mb-14 h-24 md:h-28"></div>
-            <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow-md">
-              Select a character to embark on epic adventures or forge a new legend
-            </p>
-            <div className="flex justify-center">
-              <Button
-                onClick={handleCreateNew}
-                variant="fantasy"
-                className="flex items-center gap-2 shadow-lg"
-                disabled
-              >
-                <Plus className="w-4 h-4" />
-                Forge New Hero
-              </Button>
-            </div>
-          </div>
-        </div>
+        <CharacterListHeroHeader onCreateNew={handleCreateNew} disabled />
 
         <div
           className="container mx-auto px-4 py-8 -mt-10 relative"
@@ -288,31 +82,7 @@ const CharacterList: React.FC = () => {
         </div>
       )}
       {/* Hero Header */}
-      <div
-        className="relative bg-cover bg-no-repeat py-24 px-4"
-        style={{
-          backgroundImage: "url('/character_page_hero_header.png')",
-          backgroundPosition: '50% 36%',
-        }}
-      >
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-7xl mx-auto text-center">
-          <div className="mb-10 md:mb-14 h-24 md:h-28"></div>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow-md">
-            Select a character to embark on epic adventures or forge a new legend
-          </p>
-          <div className="flex justify-center">
-            <Button
-              onClick={handleCreateNew}
-              variant="fantasy"
-              className="flex items-center gap-2 shadow-lg"
-            >
-              <Plus className="w-4 h-4" />
-              Forge New Hero
-            </Button>
-          </div>
-        </div>
-      </div>
+      <CharacterListHeroHeader onCreateNew={handleCreateNew} />
 
       <div
         className="container mx-auto px-4 py-8 -mt-10 relative"
