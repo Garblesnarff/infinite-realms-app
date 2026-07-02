@@ -1,14 +1,12 @@
-/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
 import { Star, Users, Zap, BookOpen } from 'lucide-react';
 import React from 'react';
 
+import { FeatureCategoryCard } from './FeatureCategoryCard';
+import { FeaturesProficienciesCard } from './FeaturesProficienciesCard';
 import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
 import type { Character } from '@/types/character';
-
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface FeaturesTabProps {
   character: Character;
@@ -130,167 +128,52 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
       <FightingStylesDisplay character={character} />
 
       {/* Racial Traits */}
-      {featuresBySource.race.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-green-600" />
-              Racial Traits
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {featuresBySource.race.map((feature, index) => (
-              <div key={index} className="border-l-4 border-green-500 pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold">{feature.name}</h4>
-                  <Badge variant="secondary" className={getSourceColor(feature.source)}>
-                    {character.race?.name}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <FeatureCategoryCard
+        title="Racial Traits"
+        icon={<Users className="w-5 h-5 text-green-600" />}
+        borderColorClass="border-green-500"
+        badgeColorClass={getSourceColor('race')}
+        features={featuresBySource.race}
+        badgeLabel={() => character.race?.name}
+      />
 
       {/* Class Features */}
-      {featuresBySource.class.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Star className="w-5 h-5 text-blue-600" />
-              Class Features
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {featuresBySource.class.map((feature, index) => (
-              <div key={index} className="border-l-4 border-blue-500 pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold">{feature.name}</h4>
-                  <Badge variant="secondary" className={getSourceColor(feature.source)}>
-                    {character.class?.name} {feature.level && `${feature.level}`}
-                  </Badge>
-                  {feature.uses && (
-                    <Badge
-                      variant={feature.uses.used >= feature.uses.total ? 'destructive' : 'outline'}
-                      className="ml-auto"
-                    >
-                      {feature.uses.total - feature.uses.used} / {feature.uses.total}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-                {feature.uses && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Recharge:{' '}
-                    {feature.uses.recharge === 'short'
-                      ? 'Short Rest'
-                      : feature.uses.recharge === 'long'
-                        ? 'Long Rest'
-                        : feature.uses.recharge === 'dawn'
-                          ? 'Dawn'
-                          : 'Manual'}
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <FeatureCategoryCard
+        title="Class Features"
+        icon={<Star className="w-5 h-5 text-blue-600" />}
+        borderColorClass="border-blue-500"
+        badgeColorClass={getSourceColor('class')}
+        features={featuresBySource.class}
+        badgeLabel={(feature) => (
+          <>
+            {character.class?.name} {feature.level && `${feature.level}`}
+          </>
+        )}
+        showUsage
+      />
 
       {/* Background Features */}
-      {featuresBySource.background.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-purple-600" />
-              Background Features
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {featuresBySource.background.map((feature, index) => (
-              <div key={index} className="border-l-4 border-purple-500 pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold">{feature.name}</h4>
-                  <Badge variant="secondary" className={getSourceColor(feature.source)}>
-                    {character.background?.name}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <FeatureCategoryCard
+        title="Background Features"
+        icon={<BookOpen className="w-5 h-5 text-purple-600" />}
+        borderColorClass="border-purple-500"
+        badgeColorClass={getSourceColor('background')}
+        features={featuresBySource.background}
+        badgeLabel={() => character.background?.name}
+      />
 
       {/* Feats */}
-      {featuresBySource.feat.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-orange-600" />
-              Feats
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {featuresBySource.feat.map((feature, index) => (
-              <div key={index} className="border-l-4 border-orange-500 pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold">{feature.name}</h4>
-                  <Badge variant="secondary" className={getSourceColor(feature.source)}>
-                    Feat
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <FeatureCategoryCard
+        title="Feats"
+        icon={<Zap className="w-5 h-5 text-orange-600" />}
+        borderColorClass="border-orange-500"
+        badgeColorClass={getSourceColor('feat')}
+        features={featuresBySource.feat}
+        badgeLabel={() => 'Feat'}
+      />
 
       {/* Proficiencies */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Proficiencies</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-medium mb-2">Armor</h4>
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="outline">Light Armor</Badge>
-                <Badge variant="outline">Medium Armor</Badge>
-                <Badge variant="outline">Heavy Armor</Badge>
-                <Badge variant="outline">Shields</Badge>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Weapons</h4>
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="outline">Simple Weapons</Badge>
-                <Badge variant="outline">Martial Weapons</Badge>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Languages</h4>
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="outline">Common</Badge>
-                <Badge variant="outline">Elvish</Badge>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Tools</h4>
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="outline">Smith's Tools</Badge>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <FeaturesProficienciesCard />
     </div>
   );
 };
