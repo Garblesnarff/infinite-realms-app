@@ -34,9 +34,10 @@ export const useSessionValidator = ({
     }
 
     // Verify session exists with required data
+    // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
     const { data: session, error } = await supabase
       .from('game_sessions')
-      .select('*')
+      .select('id')
       .eq('id', sessionId)
       .eq('campaign_id', campaignId)
       .eq('character_id', characterId)

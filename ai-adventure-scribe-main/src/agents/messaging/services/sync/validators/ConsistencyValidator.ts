@@ -6,9 +6,11 @@ import { logger } from '../../../../../lib/logger';
 export class ConsistencyValidator {
   public async checkConsistency(): Promise<boolean> {
     try {
+      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
+      // The logic only requires 'sequence_number' for continuity verification.
       const { data: sequences, error } = await supabase
         .from('message_sequences')
-        .select('*')
+        .select('sequence_number')
         .order('sequence_number', { ascending: true });
 
       if (error) {
