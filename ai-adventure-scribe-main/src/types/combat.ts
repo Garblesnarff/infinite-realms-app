@@ -436,6 +436,14 @@ export interface CombatAction {
   damageType?: DamageType;
   conditionsApplied?: Condition[];
 
+  // Supplementary state-change details (damage/heal side effects)
+  effects?: {
+    newHitPoints?: number;
+    unconscious?: boolean;
+    concentrationLost?: boolean;
+    revivedFromUnconscious?: boolean;
+  };
+
   // Narrative (from AI DM)
   dmNarration?: string;
 

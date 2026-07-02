@@ -6,6 +6,8 @@ import type {
   CombatParticipant,
   CombatEncounter,
   CombatAction,
+  DamageType,
+  MonsterAttack,
 } from '@/types/combat';
 
 import logger from '@/lib/logger';
@@ -49,6 +51,9 @@ export const useCombatActionHandlers = ({
       actionType: ActionType,
       participantId: string,
       targetId?: string,
+      // Genuinely heterogeneous per-actionType payload, spread (...additionalData)
+      // into the action object below - see the matching note in use-combat-mechanics.ts.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       additionalData?: any,
     ) => {
       if (!activeEncounter) {
@@ -94,7 +99,7 @@ export const useCombatActionHandlers = ({
 
   // Handle enemy attack with AI integration
   const handleEnemyAttack = useCallback(
-    async (attack: any) => {
+    async (attack: MonsterAttack) => {
       if (!selectedEnemy || !activeEncounter) {
         return;
       }
@@ -147,7 +152,7 @@ export const useCombatActionHandlers = ({
         const reactionAction = processReactionResponse(
           opportunity,
           selectedReaction,
-          activeEncounter as any,
+          activeEncounter,
         );
         await takeAction(reactionAction);
 
@@ -184,7 +189,7 @@ export const useCombatActionHandlers = ({
 
       let concentrationLost = false;
       if (participant.activeConcentration && damageAmount > 0) {
-        concentrationLost = !checkConcentration(participant as any, damageAmount);
+        concentrationLost = !checkConcentration(participant, damageAmount);
       }
 
       const updatedProps: Partial<CombatParticipant> = {
@@ -208,12 +213,12 @@ export const useCombatActionHandlers = ({
         actionType: 'damage_dealt' as ActionType,
         description: `${participant.name} takes ${damageAmount} ${damageType} damage.`,
         damageDealt: damageAmount,
-        damageType: damageType as any,
+        damageType: damageType as DamageType,
         effects: {
           newHitPoints: newHP,
           unconscious: isUnconscious,
           concentrationLost,
-        } as any,
+        },
       };
       await takeAction(action);
     },
@@ -241,8 +246,8 @@ export const useCombatActionHandlers = ({
       // Update participant
       updateParticipant(participantId, {
         currentHitPoints: newHP,
-        isUnconscious: (newHP <= 0) as any,
-      } as any);
+        isUnconscious: newHP <= 0,
+      });
 
       const description = `${participant.name} heals ${healingAmount} hit points${revived ? ' and regains consciousness' : ''}`;
 
@@ -250,12 +255,11 @@ export const useCombatActionHandlers = ({
         participantId,
         actionType: 'heal' as ActionType,
         description,
-        healingAmount,
         effects: {
           revivedFromUnconscious: revived,
           newHitPoints: newHP,
-        } as any,
-      } as any;
+        },
+      };
 
       await takeAction(action);
     },
