@@ -1,25 +1,24 @@
-/* eslint-disable max-lines */
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-import type { Campaign } from '@/types/campaign';
+import { buildSceneImageRequest, type CampaignContext } from './buildSceneImageRequest';
+import { extractSceneAssetReferences } from './extractSceneAssetReferences';
+import {
+  getImageGenerationCap,
+  incrementImageGenerationCap,
+  hasImageGenerationTriggered,
+  markImageGenerationTriggered,
+} from './image-generation-session-cap';
+
 import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
 
-import {
-  ASSET_TAG_PATTERN,
-  normalizeAssetTagKeysInContent,
-} from '@/features/game-session/utils/parse-asset-tags';
 import { llmApiClient } from '@/infrastructure/api';
 import logger from '@/lib/logger';
-import { generateSceneImage, type AssetReference } from '@/services/scene-image-generator';
+import { generateSceneImage } from '@/services/scene-image-generator';
 import { handleAsyncError } from '@/utils/error-handler';
 import { generateImageLabel } from '@/utils/image-label-generator';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
 import { removeRollRequestsFromMessage } from '@/utils/rollRequestParser';
-
-// Type alias for Campaign objects that may carry runtime enhancement data
-// not yet reflected in the Campaign interface.
-type CampaignContext = Campaign & { enhancementEffects?: { atmosphere?: string[] } };
 
 const env = import.meta.env as Record<string, string | undefined>;
 
@@ -56,23 +55,6 @@ export const useImageGeneration = ({
   const isAuto = ['1', 'true', 'yes', 'on'].includes(AUTO);
   const MAX = Number.parseInt(String(env.VITE_DM_IMAGE_MAX_PER_SESSION ?? '3'));
 
-  // Helpers for per-session caps
-  const capKey = (sid: string) => `dm-img-cap:${sid}`;
-  const trigKey = (sid: string, mid: string) => `dm-img-trig:${sid}:${mid}`;
-  const getCap = (sid?: string) =>
-    sid ? Number.parseInt(localStorage.getItem(capKey(sid)) || '0') : 0;
-  const incCap = (sid?: string) => {
-    if (!sid) return;
-    const v = getCap(sid) + 1;
-    localStorage.setItem(capKey(sid), String(v));
-  };
-  const alreadyTriggered = (sid?: string, mid?: string) =>
-    !!sid && !!mid ? localStorage.getItem(trigKey(sid, mid)) === '1' : false;
-  const markTriggered = (sid?: string, mid?: string) => {
-    if (!sid || !mid) return;
-    localStorage.setItem(trigKey(sid, mid), '1');
-  };
-
   const handleGenerateScene = useCallback(
     async (message: ChatMessage & { id?: string; timestamp?: string }) => {
       const messageId = message.id || message.timestamp || `${Math.random()}`;
@@ -91,36 +73,7 @@ export const useImageGeneration = ({
         const t0 = performance.now();
 
         // Extract asset URLs from message for reference images
-        const assetUrls: AssetReference[] = [];
-        if (getAssetImageUrl) {
-          // Parse [ASSET:type:key] tags from message text using shared pattern.
-          // Normalize first so malformed keys (e.g. with quotes) are matched.
-          const tagPattern = new RegExp(ASSET_TAG_PATTERN.source, 'gi');
-          let match;
-          const seen = new Set<string>();
-          const fullText = normalizeAssetTagKeysInContent(message.text || baseText);
-          while ((match = tagPattern.exec(fullText)) !== null) {
-            const [, type, key] = match;
-            const lookupKey = `${type}:${key}`;
-            if (!seen.has(lookupKey)) {
-              seen.add(lookupKey);
-              const url = getAssetImageUrl(type, key);
-              if (url) {
-                assetUrls.push({
-                  url,
-                  type: type as AssetReference['type'],
-                  name: key,
-                });
-              }
-            }
-          }
-          if (assetUrls.length > 0) {
-            logger.info('[useImageGeneration] Found asset references for scene', {
-              count: assetUrls.length,
-              types: assetUrls.map((a) => a.type),
-            });
-          }
-        }
+        const assetUrls = extractSceneAssetReferences(message.text, baseText, getAssetImageUrl);
 
         // Generate semantic label using campaign name and scene keywords
         // Falls back to 'scene' if no campaign name or scene text available
@@ -130,36 +83,18 @@ export const useImageGeneration = ({
           characterName: character?.name || undefined,
         });
 
-        const res = await generateSceneImage({
-          sceneText,
-          campaign: {
-            id: routeCampaignId || undefined,
-            name: campaign?.name,
-            genre: campaign?.genre || undefined,
-            tone: campaign?.tone || undefined,
-            atmosphere: campaign?.enhancementEffects?.atmosphere?.[0] || undefined,
-          },
-          character: character
-            ? {
-                name: character.name,
-                race: character.race,
-                subrace: character.subrace,
-                class: character.class,
-                appearance: character.appearance || undefined,
-                personality_notes:
-                  character.personalityNotes || character.personality_notes || undefined,
-                avatar_url: character.avatar_url || undefined,
-                image_url: character.image_url || undefined,
-                theme: character.theme || undefined,
-              }
-            : null,
-          assetUrls: assetUrls.length > 0 ? assetUrls : undefined,
-          quality: (env.VITE_DM_IMAGE_QUALITY as 'low' | 'medium' | 'high' | undefined) || 'low',
-          model: env.VITE_DM_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
-          storage: routeCampaignId
-            ? { entityType: 'campaign', entityId: routeCampaignId, label }
-            : { label },
-        });
+        const res = await generateSceneImage(
+          buildSceneImageRequest({
+            sceneText,
+            campaign,
+            character,
+            routeCampaignId,
+            assetUrls,
+            label,
+            quality: (env.VITE_DM_IMAGE_QUALITY as 'low' | 'medium' | 'high' | undefined) || 'low',
+            model: env.VITE_DM_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
+          }),
+        );
 
         setImageByMessage((prev) => ({
           ...prev,
@@ -201,7 +136,7 @@ export const useImageGeneration = ({
           delete updated[messageId];
           return updated;
         });
-        incCap(sessionId);
+        incrementImageGenerationCap(sessionId);
         lastGenRef.current = performance.now();
         logger.info('[useImageGeneration] Scene image generated', {
           ms: Math.round(lastGenRef.current - t0),
@@ -228,7 +163,7 @@ export const useImageGeneration = ({
   // Auto-generate on DM-suggested imageRequests
   useEffect(() => {
     if (!isAuto || !sessionId) return;
-    if (getCap(sessionId) >= (Number.isFinite(MAX) ? MAX : 3)) return;
+    if (getImageGenerationCap(sessionId) >= (Number.isFinite(MAX) ? MAX : 3)) return;
 
     // ⚡ Bolt: Using a single backward for loop to find the last DM message
     // instead of creating multiple intermediate arrays via map/reverse.
@@ -246,7 +181,7 @@ export const useImageGeneration = ({
     if (!lastDm) return;
 
     const msgId = lastDm.id || lastDm.timestamp || `${lastDmIdx}`;
-    if (alreadyTriggered(sessionId, String(msgId))) return;
+    if (hasImageGenerationTriggered(sessionId, String(msgId))) return;
     if (generatingFor.has(String(msgId))) return;
 
     const hasImageRequests =
@@ -256,7 +191,7 @@ export const useImageGeneration = ({
 
     if (performance.now() - lastGenRef.current < 1000) return;
 
-    markTriggered(sessionId, String(msgId));
+    markImageGenerationTriggered(sessionId, String(msgId));
     handleGenerateScene(lastDm).catch(() => {});
   }, [messages, isAuto, sessionId, generatingFor, handleGenerateScene]);
 
