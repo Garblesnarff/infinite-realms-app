@@ -20,7 +20,8 @@ describe('Sidebar Accessibility', () => {
     const trigger = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });
     expect(trigger).toBeInTheDocument();
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(trigger).toHaveAttribute('title', 'Toggle Sidebar (Ctrl+B)');
+    // Title attribute removed in favor of Shadcn Tooltip
+    expect(trigger).not.toHaveAttribute('title');
     expect(trigger.querySelector('.sr-only')).toHaveTextContent('Toggle Sidebar (Ctrl+B)');
   });
 
@@ -34,6 +35,7 @@ describe('Sidebar Accessibility', () => {
     const rail = screen.getByRole('button', { name: /Toggle Sidebar \(Ctrl\+B\)/i });
     expect(rail).toBeInTheDocument();
     expect(rail).toHaveAttribute('aria-expanded', 'false');
-    expect(rail).toHaveAttribute('title', 'Toggle Sidebar (Ctrl+B)');
+    // Title attribute removed in favor of Shadcn Tooltip
+    expect(rail).not.toHaveAttribute('title');
   });
 });
