@@ -2,11 +2,17 @@ import { featureFlags } from '@/config/featureFlags';
 import { logger } from '@/lib/logger';
 
 // Minimal type for analytics payloads
-export type AnalyticsPayload = Record<string, any>;
+export type AnalyticsPayload = Record<string, unknown>;
+
+// Third-party analytics globals, neither of which is guaranteed to be loaded
+interface AnalyticsGlobal {
+  gtag?: (...args: unknown[]) => void;
+  posthog?: { capture: (...args: unknown[]) => void };
+}
 
 // Utility to safely access window-bound analytics without failing in SSR/tests
-function getGlobal(): any {
-  return typeof window !== 'undefined' ? (window as any) : {};
+function getGlobal(): AnalyticsGlobal {
+  return typeof window !== 'undefined' ? (window as unknown as AnalyticsGlobal) : {};
 }
 
 function basePayload(extra?: AnalyticsPayload): AnalyticsPayload {
