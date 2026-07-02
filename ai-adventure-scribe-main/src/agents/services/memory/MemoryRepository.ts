@@ -146,11 +146,14 @@ export class MemoryRepository {
       }
       return null;
     }
-    const { data, error } = await supabase.functions.invoke('generate-embedding', {
-      body: { text },
-    });
+    const { data, error } = await supabase.functions.invoke<{ embedding: string }>(
+      'generate-embedding',
+      {
+        body: { text },
+      },
+    );
     if (error) return null;
-    return (data as any).embedding ?? null;
+    return data?.embedding ?? null;
   }
 
   transformDatabaseMemory(dbMemory: any): EnhancedMemory {

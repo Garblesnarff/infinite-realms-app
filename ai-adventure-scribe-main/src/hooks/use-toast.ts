@@ -42,7 +42,7 @@ function useToast() {
   }, []);
 
   return {
-    toasts: [] as any[],
+    toasts: [] as never[],
     toast: memoToast,
     dismiss,
   };

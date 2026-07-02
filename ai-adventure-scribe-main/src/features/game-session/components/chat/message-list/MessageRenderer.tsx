@@ -6,7 +6,11 @@ import { PlayerMessage } from './PlayerMessage';
 
 import type { ChatMessage } from '@/types/game';
 
-import { CombatMessage, CombatSummaryMessage } from '@/components/combat/CombatMessage';
+import {
+  CombatMessage,
+  CombatSummaryMessage,
+  type CombatMessageData,
+} from '@/components/combat/CombatMessage';
 import { InitiativeMessage } from '@/components/combat/messages/InitiativeMessage';
 import { DiceRollMessage } from '@/components/game/DiceRollMessage';
 import { parseMessageOptions } from '@/utils/parseMessageOptions';
@@ -129,7 +133,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
               />
             ) : (
               <CombatMessage
-                data={message.context.combatData as any}
+                data={message.context.combatData as CombatMessageData}
                 timestamp={
                   message.timestamp
                     ? new Date(message.timestamp).toLocaleTimeString([], {
@@ -155,7 +159,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             imageUrl={firstMessageImgUrl || ephemeralImgUrl}
             isGeneratingImage={generatingFor.has(messageId)}
             imageError={genErrorByMessage[messageId]}
-            onGenerateImage={() => onGenerateScene(message as any)}
+            onGenerateImage={() => onGenerateScene(message)}
           />
         ) : (
           <PlayerMessage
