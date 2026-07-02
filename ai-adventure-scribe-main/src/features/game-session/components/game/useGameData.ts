@@ -98,7 +98,7 @@ export function useGameData(
         try {
           const envVal = String(import.meta?.env?.VITE_FORCE_DM || '');
           const forceDM = ['true', '1', 'yes', 'on'].includes(envVal.toLowerCase());
-          const ownerId = (campaignData as any)?.user_id;
+          const ownerId = (campaignData as unknown as Partial<CampaignType>)?.user_id;
           setIsDM(Boolean(forceDM || (user?.id && ownerId && user.id === ownerId)));
         } catch {
           setIsDM(false);

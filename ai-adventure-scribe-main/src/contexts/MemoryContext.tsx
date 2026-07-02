@@ -27,6 +27,7 @@
 // SDK Imports
 import React, { createContext, useContext } from 'react'; // Added ReactNode
 
+import type { Memory } from '@/types/memory';
 import type { ReactNode } from 'react';
 
 // Project Hooks
@@ -34,9 +35,9 @@ import { useMemories } from '@/hooks/use-memories';
 
 // Interfaces and Types (defined in-file, specific to this context)
 interface MemoryContextType {
-  memories: any[];
+  memories: Memory[];
   isLoading: boolean;
-  createMemory: (memory: any) => void;
+  createMemory: (memory: Omit<Memory, 'id' | 'created_at' | 'updated_at'>) => void;
   extractMemories: (content: string, type?: string) => Promise<void>;
 }
 

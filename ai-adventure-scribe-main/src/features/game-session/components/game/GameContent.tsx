@@ -216,9 +216,9 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
     messages,
     messagesLoading,
     onGreetingGenerated: sendMessage,
-    onMemoryCreated: async (memory: any) => {
+    onMemoryCreated: async (memory) => {
       try {
-        await createMemory(memory as any);
+        await createMemory(memory);
       } catch (e) {
         handleAsyncError(e, {
           userMessage: 'Failed to save greeting memory',
