@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-import type { ActionType, CombatParticipant } from '@/types/combat';
+import type { ActionType, CombatAction, CombatEncounter, CombatParticipant } from '@/types/combat';
 
 import logger from '@/lib/logger';
 import { calculateAttackDamage } from '@/utils/attackUtils';
@@ -22,14 +22,17 @@ import {
 } from '@/utils/twoWeaponFighting';
 
 interface UseCombatMechanicsProps {
-  activeEncounter: any;
+  activeEncounter: CombatEncounter | null;
   handleCombatAction: (
     actionType: ActionType,
     participantId: string,
     targetId?: string,
+    // Genuinely heterogeneous per-actionType payload that the implementation spreads
+    // (...additionalData) into an object, which unknown can't support without narrowing.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     additionalData?: any,
   ) => Promise<void>;
-  takeAction: (action: any) => Promise<void>;
+  takeAction: (action: Partial<CombatAction>) => Promise<void>;
   updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => void;
   selectedEnemy: string | null;
 }
@@ -62,7 +65,7 @@ export const useCombatMechanics = ({
     ) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant) return;
 
       // Roll attack with advantage/disadvantage
@@ -70,20 +73,25 @@ export const useCombatMechanics = ({
       const attackRoll = rollAttack(attackBonus, {
         advantage: hasAdvantage,
         disadvantage: hasDisadvantage,
-        halflingLucky: participant.racialTraits?.some((t: any) => t.name === 'lucky') || false,
+        halflingLucky: participant.racialTraits?.some((t) => t.name === 'lucky') || false,
       });
 
       // Check for critical hit
       const isCritical = attackRoll.critical || false;
 
       // Calculate base damage with sneak attack and divine smite
+      // TODO: this hardcoded Longsword stand-in should come from the participant's
+      // actual equipped weapon/character stats once that's wired up.
       const damageResult = calculateAttackDamage(
         {
+          id: 'placeholder-longsword',
           name: 'Longsword',
+          category: 'weapon',
+          cost: { amount: 15, currency: 'gp' },
+          description: 'A standard longsword.',
           damage: { dice: '1d8+3', type: 'slashing' },
-          properties: {},
-        } as any,
-        participant as any,
+        },
+        participant,
         isCritical,
         {
           divineSmiteLevel: divineSmiteSlotLevel,
@@ -96,8 +104,8 @@ export const useCombatMechanics = ({
 
       // Ensure Rage damage is applied for Barbarians if not already included by calculateAttackDamage
       // The utility calculateAttackDamage normally handles this, but we keep this as a safety check
-      if (participant.isRaging && (participant as any).characterClass === 'barbarian') {
-        const hasRageBonus = damageResult.rolls.some((r: any) => r.isRageBonus);
+      if (participant.isRaging && participant.characterClass === 'barbarian') {
+        const hasRageBonus = damageResult.rolls.some((r) => r.isRageBonus);
         if (!hasRageBonus) {
           // If utility didn't add it (e.g. if it's an older version or different implementation),
           // we add it here using our class features utility.
@@ -144,10 +152,10 @@ export const useCombatMechanics = ({
     async (participantId: string, traitName: string) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant || !participant.racialTraits) return;
 
-      const trait = participant.racialTraits.find((t: any) => t.name === traitName);
+      const trait = participant.racialTraits.find((t) => t.name === traitName);
       if (!trait || !canUseRacialTrait(trait)) return;
 
       let description = '';
@@ -180,10 +188,10 @@ export const useCombatMechanics = ({
     async (participantId: string, featureName: string) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant || !participant.classFeatures || !participant.resources) return;
 
-      const feature = participant.classFeatures.find((f: any) => f.name === featureName);
+      const feature = participant.classFeatures.find((f) => f.name === featureName);
       if (!feature || !canUseClassFeature(feature, participant.resources)) return;
 
       let description = '';
@@ -231,10 +239,10 @@ export const useCombatMechanics = ({
     async (participantId: string) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
-      if (!participant || !needsDeathSaves(participant as any)) return;
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
+      if (!participant || !needsDeathSaves(participant)) return;
 
-      const { updatedParticipant, roll } = rollDeathSave(participant as any);
+      const { updatedParticipant, roll } = rollDeathSave(participant);
 
       // Update participant state
       updateParticipant(participantId, {
@@ -272,11 +280,14 @@ export const useCombatMechanics = ({
     async (participantId: string, dc: number) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
-      if (!participant || !(participant as any).activeConcentration) return;
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
+      if (!participant || !participant.activeConcentration) return;
 
       // Inline concentration save logic
-      const conMod = (participant as any).abilityScores?.constitution?.modifier || 0;
+      // CombatParticipant doesn't carry abilityScores, so this has always evaluated to 0
+      // regardless of the participant's real Constitution modifier - see bead
+      // ai-dungeon-master-d20 for wiring in the real value without changing behavior here.
+      const conMod = 0;
       const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
       const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
       const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;
@@ -310,36 +321,33 @@ export const useCombatMechanics = ({
     async (participantId: string, targetId?: string) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p: any) => p.id === participantId);
+      const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant) return;
 
       // Equip default weapons if none equipped (for testing)
       let updatedParticipant = participant;
       if (!participant.mainHandWeapon || !participant.offHandWeapon) {
         const weapons = createDefaultLightWeapons();
-        updatedParticipant = equipMainHandWeapon(participant as any, weapons.scimitar) as any;
-        updatedParticipant = equipOffHandWeapon(
-          updatedParticipant as any,
-          weapons.shortsword,
-        ) as any;
+        updatedParticipant = equipMainHandWeapon(participant, weapons.scimitar);
+        updatedParticipant = equipOffHandWeapon(updatedParticipant, weapons.shortsword);
       }
 
-      if (!canUseTwoWeaponFighting(updatedParticipant as any)) {
+      if (!canUseTwoWeaponFighting(updatedParticipant)) {
         logger.warn('Cannot use two-weapon fighting');
         return;
       }
 
       // Main hand attack (action)
       const mainHandAttack = makeMainHandAttack(
-        updatedParticipant as any,
+        updatedParticipant,
         targetId || selectedEnemy || '',
       );
       await takeAction(mainHandAttack);
 
       // Off-hand attack (bonus action) - if bonus action available
-      if (canMakeOffHandAttack(updatedParticipant as any)) {
+      if (canMakeOffHandAttack(updatedParticipant)) {
         const offHandAttack = makeOffHandAttack(
-          updatedParticipant as any,
+          updatedParticipant,
           targetId || selectedEnemy || '',
         );
         await takeAction(offHandAttack);
