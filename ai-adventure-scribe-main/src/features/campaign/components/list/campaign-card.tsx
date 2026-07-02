@@ -1,45 +1,24 @@
-/* eslint-disable max-lines */
 import { useQueryClient } from '@tanstack/react-query';
-import { Trash2, Play } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { CampaignCardDeleteDialog } from './CampaignCardDeleteDialog';
+import { CampaignCardHoverPopup } from './CampaignCardHoverPopup';
+import { CampaignCardMobileActions } from './CampaignCardMobileActions';
 import CharacterSelectionModal from './character-selection-modal';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogOverlay,
-  AlertDialogPortal,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import type { CampaignCardData } from './campaign-card-types';
+
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaignImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { cn } from '@/lib/utils';
 
 interface CampaignCardProps {
-  campaign: {
-    id: string;
-    name: string;
-    description: string | null;
-    genre: string | null;
-    difficulty_level: string | null;
-    campaign_length: string | null;
-    tone: string | null;
-    background_image?: string | null;
-  };
+  campaign: CampaignCardData;
   isFeatured?: boolean;
   coverImage?: string;
 }
@@ -157,6 +136,11 @@ const CampaignCardComponent = ({
     return new URL('/card-background.jpeg', import.meta.url).href;
   }, [hotLoadedImage, hasImage, imageLoading, coverImage]);
 
+  const goToCampaign = useCallback(
+    () => navigate(`/app/campaigns/${campaign.id}`),
+    [navigate, campaign.id],
+  );
+
   return (
     <Card
       className="campaign-card featured-card group relative border-2 border-border/30 shadow-md transition-all duration-500 hover:shadow-2xl hover:shadow-infinite-purple/50 hover:border-infinite-gold aspect-square w-full"
@@ -178,13 +162,13 @@ const CampaignCardComponent = ({
         role="link"
         tabIndex={0}
         aria-label={`Open campaign ${campaign.name}`}
-        onClick={() => navigate(`/app/campaigns/${campaign.id}`)}
+        onClick={goToCampaign}
         onFocus={() => setIsHovered(true)}
         onBlur={() => setIsHovered(false)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            navigate(`/app/campaigns/${campaign.id}`);
+            goToCampaign();
           }
         }}
         style={
@@ -209,167 +193,28 @@ const CampaignCardComponent = ({
         )}
         {/* Overlay and popup for all cards */}
         <div className="featured-overlay bg-gradient-to-b from-infinite-purple/80 via-transparent to-infinite-dark/90" />
-        <div
-          className={cn(
-            'hover-popup absolute left-1/2 top-1/2 transition-all duration-200 w-80 max-w-full filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.2)]',
-            isHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
-          )}
-          style={{ zIndex: isHovered ? Z_INDEX.CARD_HOVER : undefined }}
-        >
-          <div className="bg-white/95 backdrop-blur-sm p-4 rounded-lg shadow-xl border border-border">
-            <div className="text-xl font-bold text-foreground mb-2 leading-tight break-words">
-              {imageLoading ? <Skeleton className="h-6 w-48" /> : campaign.name}
-            </div>
-            {imageLoading ? (
-              <Skeleton className="h-4 w-full" />
-            ) : (
-              <>
-                {logger.debug('Campaign description:', campaign.description)}
-                <div className="description-section min-h-[3rem] max-h-[200px] overflow-y-auto text-sm text-foreground leading-relaxed mb-3 break-words hyphens-auto p-2 pr-3 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">
-                  {campaign.description ? (
-                    campaign.description
-                  ) : (
-                    <span className="italic text-muted-foreground">
-                      No description yet. Enter the campaign to begin your adventure!
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
+        <CampaignCardHoverPopup
+          campaign={campaign}
+          isHovered={isHovered}
+          imageLoading={imageLoading}
+          onPlay={() => setShowCharacterModal(true)}
+          onEnter={goToCampaign}
+          onDeleteClick={handleDeleteClick}
+        />
 
-            {/* Campaign badges in popup */}
-            <div className="campaign-badges flex gap-1 flex-wrap text-xs mt-2 mb-4">
-              {campaign.genre && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full bg-infinite-purple/10 text-infinite-purple border border-infinite-purple/20 font-medium">
-                  {campaign.genre}
-                </span>
-              )}
-              {campaign.difficulty_level && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20 font-medium">
-                  {campaign.difficulty_level}
-                </span>
-              )}
-              {campaign.campaign_length && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full bg-secondary/10 text-secondary-foreground border border-secondary/20 font-medium">
-                  {campaign.campaign_length}
-                </span>
-              )}
-              {campaign.tone && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full bg-accent/10 text-accent-foreground border border-accent/20 font-medium">
-                  {campaign.tone}
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 justify-end">
-              <Button
-                size="sm"
-                className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
-                aria-label={`Play campaign: ${campaign.name}`}
-                title={`Play campaign: ${campaign.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCharacterModal(true);
-                }}
-              >
-                <Play className="w-4 h-4" />
-                Play
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
-                aria-label={`Enter campaign management: ${campaign.name}`}
-                title={`Enter campaign management: ${campaign.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/app/campaigns/${campaign.id}`);
-                }}
-              >
-                Enter
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
-                aria-label={`Delete campaign: ${campaign.name}`}
-                title={`Delete campaign: ${campaign.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteClick();
-                }}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile actions (visible on touch / small screens) */}
-        <div
-          className="absolute bottom-3 left-3 flex gap-2 md:hidden"
-          style={{ zIndex: Z_INDEX.CARD_HOVER }}
-        >
-          <Button
-            size="sm"
-            className="bg-infinite-gold text-infinite-dark hover:bg-infinite-purple"
-            aria-label={`Play campaign: ${campaign.name}`}
-            title={`Play campaign: ${campaign.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowCharacterModal(true);
-            }}
-          >
-            <Play className="w-4 h-4" />
-            Play
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
-            aria-label={`Enter campaign: ${campaign.name}`}
-            title={`Enter campaign: ${campaign.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/app/campaigns/${campaign.id}`);
-            }}
-          >
-            Enter
-          </Button>
-        </div>
+        <CampaignCardMobileActions
+          campaignName={campaign.name}
+          onPlay={() => setShowCharacterModal(true)}
+          onEnter={goToCampaign}
+        />
       </div>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogPortal>
-          <AlertDialogOverlay
-            className="fixed inset-0 bg-black/60 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-            style={{ zIndex: Z_INDEX.MODAL_BACKDROP }}
-          />
-          <AlertDialogContent
-            className="fixed left-[50%] top-[50%] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border !bg-white rounded-lg border-infinite-purple/30 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg text-foreground"
-            style={{ zIndex: Z_INDEX.MODAL }}
-          >
-            <AlertDialogHeader className="flex flex-col space-y-2 text-center">
-              <AlertDialogTitle className="text-lg font-semibold text-foreground">
-                Delete Campaign
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
-                Are you sure you want to delete "{campaign.name}"? This will permanently remove the
-                campaign and all associated game sessions. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
-              <AlertDialogCancel className="bg-white hover:bg-gray-50">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete Campaign
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogPortal>
-      </AlertDialog>
+      <CampaignCardDeleteDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        campaignName={campaign.name}
+        onConfirmDelete={handleDelete}
+      />
 
       <CharacterSelectionModal
         isOpen={showCharacterModal}
