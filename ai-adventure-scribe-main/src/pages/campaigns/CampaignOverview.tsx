@@ -1,11 +1,12 @@
-/* eslint-disable max-lines -- pre-existing length; restyle-only change. Tracked for decomposition. */
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { CampaignOverviewSidebar } from './CampaignOverviewSidebar';
+import { CampaignOverviewSkeleton } from './CampaignOverviewSkeleton';
+
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
-import { isMultiplayerInvitesEnabled } from '@/config/featureFlags';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -73,47 +74,7 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
   };
 
   if (!campaign) {
-    return (
-      <div className="space-y-8">
-        {/* Hero Skeleton */}
-        <div className="relative h-64 sm:h-80 rounded-2xl bg-gradient-to-br from-infinite-dark-lighter via-infinite-purple/20 to-infinite-dark animate-pulse">
-          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/25 to-black/40 rounded-2xl"></div>
-          <div className="absolute bottom-6 left-6 right-6">
-            <div className="h-8 bg-white/20 rounded-lg w-1/3 mb-4"></div>
-            <div className="flex gap-2">
-              <div className="h-6 bg-white/20 rounded-full w-16"></div>
-              <div className="h-6 bg-white/20 rounded-full w-20"></div>
-              <div className="h-6 bg-white/20 rounded-full w-18"></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="glass-strong rounded-2xl p-8">
-              <div className="h-8 bg-white/20 rounded-lg w-1/4 mb-6"></div>
-              <div className="space-y-4">
-                <div className="h-4 bg-white/10 rounded w-full"></div>
-                <div className="h-4 bg-white/10 rounded w-5/6"></div>
-                <div className="h-4 bg-white/10 rounded w-4/5"></div>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-6">
-            <div className="glass-strong rounded-2xl p-6">
-              <div className="h-6 bg-white/20 rounded-lg w-1/2 mb-4"></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="h-4 bg-white/10 rounded"></div>
-                <div className="h-4 bg-white/10 rounded"></div>
-                <div className="h-4 bg-white/10 rounded"></div>
-                <div className="h-4 bg-white/10 rounded"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <CampaignOverviewSkeleton />;
   }
 
   return (
@@ -211,61 +172,12 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
         </div>
 
         {/* Sidebar Info Panel */}
-        <div className="space-y-6">
-          <div className="glass-strong rounded-2xl p-6 hover-lift">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
-              <span className="w-2 h-2 rounded-full bg-infinite-gold"></span>
-              Campaign Details
-            </h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-white/10">
-                <span className="text-muted-foreground font-medium">Status</span>
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                  Active
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-white/10">
-                <span className="text-muted-foreground font-medium">Created</span>
-                <span className="text-foreground font-semibold">Recently</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-muted-foreground font-medium">Players</span>
-                <span className="text-foreground font-semibold">0 / 6</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="glass-strong rounded-2xl p-6 hover-lift">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-foreground">
-              <span className="w-2 h-2 rounded-full bg-infinite-teal"></span>
-              Quick Actions
-            </h3>
-            <div className="space-y-3">
-              {/* Resume Session button - shows if active session exists */}
-              {activeSession && (
-                <button
-                  onClick={handleResumeSession}
-                  disabled={isLoadingActiveSession}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-infinite-teal to-infinite-teal-dark text-white rounded-lg hover:from-infinite-teal-dark hover:to-infinite-teal transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Resume Session
-                </button>
-              )}
-              <button
-                onClick={() => onStartNewSession?.()}
-                className="w-full px-4 py-3 bg-gradient-to-r from-infinite-purple to-infinite-purple-dark text-white rounded-lg hover:from-infinite-purple-dark hover:to-infinite-purple transition-all duration-300 hover-lift font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Start New Session
-              </button>
-              {isMultiplayerInvitesEnabled() && (
-                <button className="w-full px-4 py-3 border-2 border-infinite-gold text-infinite-gold rounded-lg hover:bg-infinite-gold/10 transition-all duration-300 font-medium">
-                  Invite Players
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <CampaignOverviewSidebar
+          hasActiveSession={Boolean(activeSession)}
+          isLoadingActiveSession={isLoadingActiveSession}
+          onResumeSession={handleResumeSession}
+          onStartNewSession={onStartNewSession}
+        />
       </div>
 
       {/* Enhanced Gallery Section */}
