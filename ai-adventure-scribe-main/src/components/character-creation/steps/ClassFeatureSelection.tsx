@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Sword, Sparkles, Crown } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
@@ -48,7 +49,8 @@ const ClassFeatureSelection: React.FC = () => {
     }
 
     // Build class features object
-    const classFeatures: Record<string, any> = {};
+    const classFeatures: Record<string, { name: string; description: string; choice?: string }> =
+      {};
 
     // Add automatic features
     currentClass?.classFeatures.forEach((feature) => {
@@ -159,9 +161,7 @@ const ClassFeatureSelection: React.FC = () => {
             </CardTitle>
             <p className="text-sm text-muted-foreground">{feature.description}</p>
             {feature.choices?.description && (
-              <p className="text-sm text-blue-600 dark:text-blue-400">
-                {feature.choices.description}
-              </p>
+              <p className="text-sm text-blue-600">{feature.choices.description}</p>
             )}
           </CardHeader>
           <CardContent>

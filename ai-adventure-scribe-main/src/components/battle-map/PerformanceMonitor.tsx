@@ -179,9 +179,9 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
   };
 
   const getFPSColor = (fps: number): string => {
-    if (fps >= 60) return 'text-green-600 dark:text-green-400';
-    if (fps >= 30) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
+    if (fps >= 60) return 'text-green-600';
+    if (fps >= 30) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   return (
@@ -289,9 +289,9 @@ export const FPSCounter: React.FC<{
   };
 
   const getFPSColor = (fps: number): string => {
-    if (fps >= 60) return 'text-green-600 dark:text-green-400';
-    if (fps >= 30) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
+    if (fps >= 60) return 'text-green-600';
+    if (fps >= 30) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   return (

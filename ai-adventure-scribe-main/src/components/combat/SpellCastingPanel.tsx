@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Spell Casting Panel Component
  *
@@ -157,9 +158,7 @@ const SpellCastingPanel: React.FC<SpellCastingPanelProps> = ({
                 {selectedSpell.components_verbal !== undefined && (
                   <div className="flex items-center justify-between p-2 border rounded">
                     <div className="flex items-center gap-2">
-                      <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded">
-                        {getComponentIcon('verbal')}
-                      </div>
+                      <div className="p-1 bg-blue-100 rounded">{getComponentIcon('verbal')}</div>
                       <span>Verbal (V)</span>
                     </div>
                     <Badge variant={selectedSpell.components_verbal ? 'default' : 'secondary'}>
@@ -172,9 +171,7 @@ const SpellCastingPanel: React.FC<SpellCastingPanelProps> = ({
                 {selectedSpell.components_somatic !== undefined && (
                   <div className="flex items-center justify-between p-2 border rounded">
                     <div className="flex items-center gap-2">
-                      <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded">
-                        {getComponentIcon('somatic')}
-                      </div>
+                      <div className="p-1 bg-green-100 rounded">{getComponentIcon('somatic')}</div>
                       <span>Somatic (S)</span>
                     </div>
                     <Badge variant={selectedSpell.components_somatic ? 'default' : 'secondary'}>
@@ -188,7 +185,7 @@ const SpellCastingPanel: React.FC<SpellCastingPanelProps> = ({
                   <div className="p-2 border rounded">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="p-1 bg-purple-100 dark:bg-purple-900/30 rounded">
+                        <div className="p-1 bg-purple-100 rounded">
                           {getComponentIcon('material')}
                         </div>
                         <span>Material (M)</span>

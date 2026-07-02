@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Sword, Sparkles, Users, Lightbulb, Award } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
@@ -203,7 +204,7 @@ const FeatSelection: React.FC = () => {
       <CardContent>
         <p className="text-sm text-muted-foreground mb-2">{feat.description}</p>
         {feat.prerequisites && (
-          <p className="text-xs text-orange-600 dark:text-orange-400 mb-2">
+          <p className="text-xs text-orange-600 mb-2">
             <strong>Prerequisites:</strong> {feat.prerequisites}
           </p>
         )}

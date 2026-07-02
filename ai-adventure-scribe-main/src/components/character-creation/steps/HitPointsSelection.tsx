@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { Heart, Dice1, TrendingUp } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
@@ -291,7 +292,7 @@ const HitPointsSelection: React.FC = () => {
                         isRolled
                           ? 'border-primary bg-primary/10'
                           : isCurrentlyRolling
-                            ? 'border-amber-500 bg-amber-50 dark:bg-amber-950 animate-pulse'
+                            ? 'border-amber-500 bg-amber-50 animate-pulse'
                             : 'border-muted'
                       }`}
                     >

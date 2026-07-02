@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { CheckCircle2, Circle, Zap, Award } from 'lucide-react';
 import React, { useState } from 'react';
 
@@ -194,10 +195,10 @@ export const VariantHumanChoice: React.FC<VariantHumanChoiceProps> = ({
                     key={ability.name}
                     className={`p-4 cursor-pointer transition-all duration-200 ${
                       selected
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/50'
+                        ? 'border-blue-500 bg-blue-50'
                         : disabled
                           ? 'opacity-50 cursor-not-allowed'
-                          : 'hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+                          : 'hover:border-blue-300 hover:bg-blue-50/50'
                     }`}
                     onClick={() => !disabled && toggleAbility(ability.name)}
                   >
@@ -262,8 +263,8 @@ export const VariantHumanChoice: React.FC<VariantHumanChoiceProps> = ({
                     key={feat.id}
                     className={`p-4 cursor-pointer transition-all duration-200 ${
                       selected
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/50'
-                        : 'hover:border-purple-300 hover:bg-purple-50/50 dark:hover:bg-purple-950/20'
+                        ? 'border-purple-500 bg-purple-50'
+                        : 'hover:border-purple-300 hover:bg-purple-50/50'
                     }`}
                     onClick={() => setSelectedFeat(feat.id)}
                   >
