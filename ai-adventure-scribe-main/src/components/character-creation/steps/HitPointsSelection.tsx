@@ -1,12 +1,12 @@
-/* eslint-disable max-lines */
-import { Heart, Dice1, TrendingUp } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
-import { Badge } from '@/components/ui/badge';
+import { HitPointsBreakdownCard } from './HitPointsBreakdownCard';
+import { HitPointsFinalCard } from './HitPointsFinalCard';
+import { HitPointsMethodCard } from './HitPointsMethodCard';
+import { HitPointsRollingCard } from './HitPointsRollingCard';
+
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 
@@ -149,218 +149,55 @@ const HitPointsSelection: React.FC = () => {
       </div>
 
       {/* Hit Point Calculation Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-red-500" />
-            Hit Point Breakdown
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Class:</span>
-              <span>
-                {characterClass.name} (d{hitDie})
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Level:</span>
-              <span>{level}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Constitution Modifier:</span>
-              <span>
-                {conModifier >= 0 ? '+' : ''}
-                {conModifier}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>1st Level HP:</span>
-              <span>
-                {hitDie} + {conModifier} = {hitDie + conModifier}
-              </span>
-            </div>
-            {level > 1 && (
-              <div className="flex justify-between">
-                <span>Additional Levels:</span>
-                <span>
-                  {method === 'average'
-                    ? `${level - 1} × (${averagePerLevel} + ${conModifier}) = ${(level - 1) * (averagePerLevel + conModifier)}`
-                    : hasRolls
-                      ? `${rollResults
-                          .slice(0, level - 1)
-                          .map((r) => `${r} + ${conModifier}`)
-                          .join(
-                            ' + ',
-                          )} = ${rollResults.slice(0, level - 1).reduce((sum, roll) => sum + roll + conModifier, 0)}`
-                      : 'Not rolled yet'}
-                </span>
-              </div>
-            )}
-            <hr />
-            <div className="flex justify-between font-semibold">
-              <span>Maximum Hit Points:</span>
-              <span className="text-red-600">{maxHPPreview}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <HitPointsBreakdownCard
+        className={characterClass.name}
+        hitDie={hitDie}
+        level={level}
+        conModifier={conModifier}
+        method={method}
+        averagePerLevel={averagePerLevel}
+        hasRolls={hasRolls}
+        rollResults={rollResults}
+        maxHPPreview={maxHPPreview}
+      />
 
       {/* Method Selection */}
       {level > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Hit Point Method</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Choose how to determine hit points for levels beyond 1st
-            </p>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup
-              value={method}
-              onValueChange={(value: 'roll' | 'average') => {
-                setMethod(value);
-                if (value === 'roll') {
-                  setRollResults([]);
-                }
-              }}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2 p-3 border rounded">
-                  <RadioGroupItem value="average" id="average" />
-                  <div className="flex-1">
-                    <Label htmlFor="average" className="flex items-center gap-2 cursor-pointer">
-                      <TrendingUp className="w-4 h-4" />
-                      <div>
-                        <div className="font-medium">Take Average</div>
-                        <div className="text-sm text-muted-foreground">
-                          Reliable: {averagePerLevel} + Con modifier per level
-                        </div>
-                      </div>
-                    </Label>
-                  </div>
-                  <Badge variant="secondary">Consistent</Badge>
-                </div>
-
-                <div className="flex items-center space-x-2 p-3 border rounded">
-                  <RadioGroupItem value="roll" id="roll" />
-                  <div className="flex-1">
-                    <Label htmlFor="roll" className="flex items-center gap-2 cursor-pointer">
-                      <Dice1 className="w-4 h-4" />
-                      <div>
-                        <div className="font-medium">Roll Hit Dice</div>
-                        <div className="text-sm text-muted-foreground">
-                          Risky: Roll d{hitDie} + Con modifier per level
-                        </div>
-                      </div>
-                    </Label>
-                  </div>
-                  <Badge variant="outline">Variable</Badge>
-                </div>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
+        <HitPointsMethodCard
+          method={method}
+          hitDie={hitDie}
+          averagePerLevel={averagePerLevel}
+          onMethodChange={(value) => {
+            setMethod(value);
+            if (value === 'roll') {
+              setRollResults([]);
+            }
+          }}
+        />
       )}
 
       {/* Rolling Interface */}
       {method === 'roll' && level > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Dice1 className="w-5 h-5" />
-              Roll Hit Dice
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Roll a d{hitDie} for each level beyond 1st
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Roll Results */}
-              <div className="grid grid-cols-5 gap-2">
-                {Array.from({ length: level - 1 }, (_, i) => {
-                  const roll = rollResults[i];
-                  const isRolled = roll !== undefined;
-                  const isCurrentlyRolling = isRolling && i === rollResults.length;
-
-                  return (
-                    <div
-                      key={i}
-                      className={`p-3 border rounded text-center ${
-                        isRolled
-                          ? 'border-primary bg-primary/10'
-                          : isCurrentlyRolling
-                            ? 'border-amber-500 bg-amber-50 animate-pulse'
-                            : 'border-muted'
-                      }`}
-                    >
-                      <div className="text-xs text-muted-foreground">Level {i + 2}</div>
-                      <div className="text-lg font-semibold">
-                        {isCurrentlyRolling ? '🎲' : isRolled ? roll : '?'}
-                      </div>
-                      {isRolled && (
-                        <div className="text-xs text-muted-foreground">+{conModifier} Con</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Roll Button */}
-              <div className="flex justify-center">
-                <Button onClick={handleRollHitDice} disabled={isRolling || hasRolls} size="lg">
-                  {isRolling ? (
-                    <>Rolling... 🎲</>
-                  ) : hasRolls ? (
-                    'Rolls Complete'
-                  ) : (
-                    `Roll ${level - 1} Hit Dice`
-                  )}
-                </Button>
-              </div>
-
-              {/* Reroll Option */}
-              {hasRolls && !isRolling && (
-                <div className="flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setRollResults([]);
-                      toast({
-                        title: 'Rolls Reset',
-                        description: 'You can now roll hit dice again.',
-                      });
-                    }}
-                  >
-                    Reroll All Dice
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <HitPointsRollingCard
+          level={level}
+          hitDie={hitDie}
+          conModifier={conModifier}
+          rollResults={rollResults}
+          isRolling={isRolling}
+          hasRolls={hasRolls}
+          onRoll={handleRollHitDice}
+          onReroll={() => {
+            setRollResults([]);
+            toast({
+              title: 'Rolls Reset',
+              description: 'You can now roll hit dice again.',
+            });
+          }}
+        />
       )}
 
       {/* Final HP Display */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-red-500" />
-            Final Hit Points
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-red-600 mb-2">{maxHPPreview}</div>
-            <div className="text-sm text-muted-foreground">Maximum Hit Points</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Hit Dice: {level}d{hitDie}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <HitPointsFinalCard maxHPPreview={maxHPPreview} level={level} hitDie={hitDie} />
 
       {/* Manual Apply Button (fallback) */}
       <div className="flex justify-center">
