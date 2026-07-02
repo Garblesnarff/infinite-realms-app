@@ -47,6 +47,7 @@ crewai-service/.ruff_cache/
 # Coverage & build artifacts
 coverage/
 .coverage
+*.tsbuildinfo
 
 # Playwright artifacts
 playwright-report/

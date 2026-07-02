@@ -9,9 +9,9 @@ export const allSpells: Spell[] = [...cantrips, ...firstLevelSpells];
 
 export const getClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } => {
   const normalizedClassName = className.charAt(0).toUpperCase() + className.slice(1).toLowerCase();
-  const mapping = (classSpellMappings as Record<string, { cantrips: string[]; spells: string[] }>)[
-    normalizedClassName
-  ];
+  const mapping = (
+    classSpellMappings as unknown as Record<string, { cantrips: string[]; spells: string[] }>
+  )[normalizedClassName];
 
   // Debug logging for troubleshooting spell loading issues
   if (process.env.NODE_ENV === 'development') {
