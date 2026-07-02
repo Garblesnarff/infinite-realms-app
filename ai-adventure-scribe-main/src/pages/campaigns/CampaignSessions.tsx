@@ -1,16 +1,14 @@
-/* eslint-disable max-lines */
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import SessionCard from './SessionCard';
+import { CampaignSessionsContent } from './CampaignSessionsContent';
+import { continueOrResumeSession } from './continue-or-resume-session';
 
 import type { SessionListItem } from './SessionCard';
 
 import ChronicleViewer from '@/components/chronicles/ChronicleViewer';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { trpc } from '@/infrastructure/api';
@@ -144,166 +142,26 @@ const CampaignSessions: React.FC = () => {
 
   /**
    * Handles both resuming active sessions and continuing completed sessions.
-   *
-   * RESUME (Active sessions that are not expired):
-   * - Simply navigates to the game with the existing session
-   * - No new session is created
-   * - User picks up exactly where they left off
-   *
-   * CONTINUE (Completed or expired sessions):
-   * - Creates a NEW continuation session
-   * - Increments session_number
-   * - Carries over scene description from previous session
-   * - Links to the same character and campaign
-   * - Resets turn_count to 0
+   * See continue-or-resume-session.ts for the resume/continue branching logic.
    */
   const handleContinue = React.useCallback(
     async (session: SessionListItem) => {
       if (!campaignId) return;
 
-      if (!session.character?.id) {
-        toast({
-          title: 'Character required',
-          description:
-            'This session is missing a character link. Please reassign before continuing.',
-          variant: 'destructive',
-        });
-        return;
-      }
+      const isExpired = isSessionExpired(session) || session.status === 'expired';
 
-      const expired = isSessionExpired(session) || session.status === 'expired';
-
-      // Debug logging
-      logger.info('[CampaignSessions] handleContinue called', {
-        sessionId: session.id,
-        sessionNumber: session.session_number,
-        status: session.status,
-        expired,
-        isExpired: isSessionExpired(session),
-        statusIsExpired: session.status === 'expired',
-        shouldResume: session.status === 'active' && !expired,
+      await continueOrResumeSession({
+        session,
+        campaignId,
+        isExpired,
+        navigate,
+        queryClient,
+        toast,
+        setContinuingId,
       });
-
-      // RESUME: Active session that is not expired
-      // Navigate to game without creating a new session
-      // Pass sessionId to ensure we load THIS specific session, not just the most recent one
-      if (session.status === 'active' && !expired) {
-        logger.info('[CampaignSessions] RESUMING - navigating without creating new session');
-        navigate(`/app/game/${campaignId}?character=${session.character.id}&session=${session.id}`);
-        return;
-      }
-
-      // CONTINUE: Completed or expired session
-      // Create a new continuation session with incremented session_number
-      logger.info('[CampaignSessions] CONTINUING - creating new session');
-      setContinuingId(session.id);
-
-      try {
-        const { data: newSession, error: createError } = await supabase
-          .from('game_sessions')
-          .insert({
-            campaign_id: campaignId,
-            character_id: session.character.id,
-            status: 'active',
-            session_number: (session.session_number ?? 0) + 1,
-            current_scene_description:
-              session.current_scene_description ?? 'Continuing your adventure...',
-            session_notes: session.summary
-              ? `Continuing from Session ${session.session_number ?? ''}`
-              : null,
-            turn_count: 0,
-            start_time: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (createError || !newSession) {
-          throw createError || new Error('Failed to create continuation session.');
-        }
-
-        const createdSession = newSession as SessionListItem;
-
-        toast({
-          title: 'Session ready',
-          description: createdSession.session_number
-            ? `Session ${createdSession.session_number} created.`
-            : 'New session created.',
-        });
-
-        await queryClient.invalidateQueries({ queryKey: ['campaign', campaignId, 'sessions'] });
-        navigate(`/app/game/${campaignId}?character=${session.character?.id}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unable to continue session.';
-        toast({
-          title: 'Session continuation failed',
-          description: message,
-          variant: 'destructive',
-        });
-      } finally {
-        setContinuingId(null);
-      }
     },
     [campaignId, navigate, queryClient, toast, isSessionExpired],
   );
-
-  const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, idx) => (
-            <Skeleton key={idx} className="h-36 w-full" />
-          ))}
-        </div>
-      );
-    }
-
-    if (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load sessions.';
-      return (
-        <Card className="p-6">
-          <p className="text-destructive">{message}</p>
-        </Card>
-      );
-    }
-
-    if (sessions.length === 0) {
-      return (
-        <Card className="p-6 text-center space-y-3">
-          <h3 className="text-lg font-semibold">No sessions yet</h3>
-          <p className="text-sm text-muted-foreground">
-            Start your first session to begin chronicling this campaign.
-          </p>
-          <Button onClick={openStartSession} className="mt-2">
-            Start New Session
-          </Button>
-        </Card>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {sessions.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            expired={isSessionExpired(session) || session.status === 'expired'}
-            onContinue={handleContinue}
-            continuing={continuingId === session.id}
-            onViewChronicle={(id) => setChronicleSessionId(id)}
-            onGenerateChronicle={(id) => generateChronicle.mutate({ sessionId: id })}
-            userPlan={userPlan ?? undefined}
-          />
-        ))}
-        {hasNextPage && (
-          <div className="flex justify-center pt-2">
-            <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage} variant="outline">
-              {isFetchingNextPage ? 'Loading...' : 'Load More Sessions'}
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="mt-4 space-y-4">
@@ -323,7 +181,21 @@ const CampaignSessions: React.FC = () => {
           Start New Session
         </Button>
       </div>
-      {renderContent()}
+      <CampaignSessionsContent
+        isLoading={isLoading}
+        error={error}
+        sessions={sessions}
+        openStartSession={openStartSession}
+        isSessionExpired={isSessionExpired}
+        handleContinue={handleContinue}
+        continuingId={continuingId}
+        onViewChronicle={(id) => setChronicleSessionId(id)}
+        onGenerateChronicle={(id) => generateChronicle.mutate({ sessionId: id })}
+        userPlan={userPlan ?? undefined}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        fetchNextPage={() => fetchNextPage()}
+      />
     </div>
   );
 };
