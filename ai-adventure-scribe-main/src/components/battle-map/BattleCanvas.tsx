@@ -14,6 +14,7 @@ import { BattleScene, SceneLoadingOverlay, SceneErrorOverlay } from './BattleSce
 import { CameraController } from './CameraController';
 
 import logger from '@/lib/logger';
+import { type Scene } from '@/types/scene';
 
 /**
  * Props for BattleCanvas component
@@ -34,7 +35,7 @@ export interface BattleCanvasProps {
   /** Maximum zoom level */
   maxZoom?: number;
   /** Callback when scene is loaded */
-  onSceneLoaded?: (scene: any) => void;
+  onSceneLoaded?: (scene: Scene) => void;
 }
 
 /**
@@ -72,7 +73,7 @@ export function BattleCanvas({
   maxZoom = 4,
   onSceneLoaded,
 }: BattleCanvasProps) {
-  const [sceneData, setSceneData] = useState<any>(null);
+  const [sceneData, setSceneData] = useState<Scene | null>(null);
   const [canvasError, setCanvasError] = useState<string | null>(null);
   const [contextLost, setContextLost] = useState(false);
   const [canvasKey, setCanvasKey] = useState(0);
@@ -95,12 +96,12 @@ export function BattleCanvas({
       logger.info('BattleCanvas WebGL context restored');
     };
 
-    canvas.addEventListener('webglcontextlost', onLost as any, { passive: false });
-    canvas.addEventListener('webglcontextrestored', onRestored as any);
+    canvas.addEventListener('webglcontextlost', onLost, { passive: false });
+    canvas.addEventListener('webglcontextrestored', onRestored);
 
     return () => {
-      canvas.removeEventListener('webglcontextlost', onLost as any);
-      canvas.removeEventListener('webglcontextrestored', onRestored as any);
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
     };
   }, []);
 
@@ -108,7 +109,7 @@ export function BattleCanvas({
    * Handle scene loaded callback
    */
   const handleSceneLoaded = useCallback(
-    (scene: any) => {
+    (scene: Scene) => {
       setSceneData(scene);
       if (onSceneLoaded) {
         onSceneLoaded(scene);
@@ -120,9 +121,9 @@ export function BattleCanvas({
   /**
    * Handle canvas errors
    */
-  const handleError = useCallback((error: any) => {
+  const handleError = useCallback((error: unknown) => {
     logger.error('BattleCanvas error:', error);
-    setCanvasError(error?.message || 'Failed to initialize canvas');
+    setCanvasError(error instanceof Error ? error.message : 'Failed to initialize canvas');
   }, []);
 
   // Show error overlay if canvas failed to initialize
@@ -174,7 +175,10 @@ export function BattleCanvas({
         <CameraController
           sceneWidth={sceneData?.width || 20}
           sceneHeight={sceneData?.height || 20}
-          gridSize={sceneData?.gridSize || 100}
+          // Scene has no top-level gridSize (the real value lives at sceneData.settings.gridSize),
+          // so this has always evaluated to the 100 fallback regardless of the loaded scene - see
+          // bead ai-dungeon-master-pvv for wiring in the real value.
+          gridSize={100}
           minZoom={minZoom}
           maxZoom={maxZoom}
           enablePan={enablePan}
