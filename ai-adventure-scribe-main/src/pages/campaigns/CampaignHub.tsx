@@ -1,20 +1,19 @@
-/* eslint-disable max-lines */
 import { useQuery } from '@tanstack/react-query';
-import { Users } from 'lucide-react';
 import React from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import CampaignCharacters from './CampaignCharacters';
+import { CampaignHubHeader } from './CampaignHubHeader';
+import { CampaignHubTabsList } from './CampaignHubTabsList';
 import CampaignOverview from './CampaignOverview';
 import CampaignSessions from './CampaignSessions';
 import CampaignSettings from './CampaignSettings';
 import CampaignWorld from './CampaignWorld';
 
 import { ErrorBoundaryTest } from '@/components/error/ErrorBoundaryTest';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { CharacterSelectionModal } from '@/features/campaign/components';
@@ -139,45 +138,11 @@ const CampaignHub: React.FC = () => {
     <div className="min-h-screen bg-[image:var(--gradient-cosmic)]">
       <div className="container mx-auto px-4 py-8">
         {/* Enhanced Header */}
-        <div className="mb-6">
-          <div className="glass-strong rounded-2xl p-6 hover-lift">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-infinite-purple to-infinite-gold flex items-center justify-center shadow-lg">
-                    <span className="text-xl">⚔️</span>
-                  </div>
-                  <div>
-                    <h1 className="ir-display text-3xl font-semibold bg-gradient-to-r from-infinite-purple to-infinite-gold bg-clip-text text-transparent">
-                      {campaign.name}
-                    </h1>
-                    <p className="text-muted-foreground">Epic Campaign Adventure</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  asChild
-                  className="bg-gradient-to-r from-infinite-purple to-infinite-purple-dark hover:from-infinite-purple-dark hover:to-infinite-purple text-white shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Link to={`/app/campaigns/${campaignId}/characters`}>
-                    <Users className="w-4 h-4 mr-2" />
-                    Manage Characters
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-infinite-gold text-infinite-gold hover:bg-infinite-gold/10"
-                  onClick={openCharacterModal}
-                >
-                  <span className="mr-2">+</span>
-                  New Session
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CampaignHubHeader
+          campaignId={campaignId as string}
+          campaignName={campaign.name}
+          onStartNewSession={openCharacterModal}
+        />
 
         {/* Enhanced Tabs */}
         <Tabs
@@ -186,38 +151,7 @@ const CampaignHub: React.FC = () => {
           aria-label="Campaign sections"
           className="mb-6"
         >
-          <TabsList className="grid w-full grid-cols-5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-1 mb-4">
-            <TabsTrigger
-              value="overview"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-infinite-purple data-[state=active]:to-infinite-purple-dark data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
-            >
-              📜 Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="characters"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-infinite-gold data-[state=active]:to-infinite-gold-dark data-[state=active]:text-infinite-dark data-[state=active]:shadow-lg transition-all duration-300 font-medium"
-            >
-              ⚔️ Characters
-            </TabsTrigger>
-            <TabsTrigger
-              value="sessions"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-infinite-teal data-[state=active]:to-infinite-teal-dark data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
-            >
-              📖 Sessions
-            </TabsTrigger>
-            <TabsTrigger
-              value="world"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-emerald-700 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 font-medium"
-            >
-              🌍 World
-            </TabsTrigger>
-            <TabsTrigger
-              value="settings"
-              className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-infinite-dark-lighter data-[state=active]:to-infinite-dark data-[state=active]:text-infinite-gold data-[state=active]:shadow-lg transition-all duration-300 font-medium"
-            >
-              ⚙️ Settings
-            </TabsTrigger>
-          </TabsList>
+          <CampaignHubTabsList />
 
           <TabsContent value="overview">
             <CampaignOverview campaign={campaign} onStartNewSession={openCharacterModal} />
