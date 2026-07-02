@@ -82,7 +82,11 @@ export function resolveAttack(
     switch (condition.name) {
       case 'prone':
         // melee advantage, but only if weapon is melee
-        if (!weapon?.range) hasAdvantage = true;
+        if (!weapon?.range) {
+          hasAdvantage = true;
+        } else {
+          hasDisadvantage = true;
+        }
         break;
       case 'paralyzed':
         hasAdvantage = true; // Auto-hit on critical (already covered)
