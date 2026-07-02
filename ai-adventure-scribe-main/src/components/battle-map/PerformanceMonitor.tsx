@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Performance Monitor Component
  *
@@ -36,6 +37,12 @@ interface PerformanceMetrics {
   programs: number;
   memoryUsed?: number;
   memoryLimit?: number;
+}
+
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
 }
 
 interface PerformanceMonitorProps {
@@ -99,14 +106,14 @@ function usePerformanceStats() {
 
       // Get renderer info
       const info = gl.info;
-      const memory = (gl.info as any).memory;
+      const memory = gl.info.memory;
 
-      // Get memory info if available
+      // Get memory info if available (non-standard Chrome-only API, not in lib.dom.d.ts)
       let memoryUsed: number | undefined;
       let memoryLimit: number | undefined;
 
-      if ((performance as any).memory) {
-        const perfMemory = (performance as any).memory;
+      const perfMemory = (performance as Performance & { memory?: PerformanceMemory }).memory;
+      if (perfMemory) {
         memoryUsed = perfMemory.usedJSHeapSize / 1024 / 1024; // Convert to MB
         memoryLimit = perfMemory.jsHeapSizeLimit / 1024 / 1024; // Convert to MB
       }
