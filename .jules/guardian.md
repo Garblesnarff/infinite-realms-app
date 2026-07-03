@@ -271,3 +271,7 @@
 ## 2026-08-17 - [World Update Processor Coverage]
 **Learning:** Found that `world-update-processor.ts` lacked dedicated unit tests after being surgically extracted from the monolithic DM response processor. Testing revealed the importance of mocking nested service calls (MemoryManager, WorldBuilderService) with specific return values to trigger log-based assertions and ensure both XML-based and fallback extraction paths are verified.
 **Action:** When testing extracted logic modules, ensure all imported services are mocked with stable return values. Use explicit log message matching to verify that conditional branches (like partial save failures or tier-based skipping) are correctly executed. Always verify that new tests are registered in BOTH `include` and `coverage.include` in `vitest.config.ts`.
+
+## 2026-07-03 - [Account Billing Hook Coverage]
+**Learning:** The `useAccountBilling` hook manages critical monetization state via fetch and React Router. Testing it requires mocking `useSearchParams` and global `fetch`. Verified that `window.location.href` assignment can be tested by mocking the global `location` object (with `configurable: true`). Achieved 100% statement and branch coverage.
+**Action:** Always ensure internal async functions in hooks have explicit `: Promise<void>` return types to satisfy strict project linting. Use `act` for all asynchronous hook interactions that trigger state updates.

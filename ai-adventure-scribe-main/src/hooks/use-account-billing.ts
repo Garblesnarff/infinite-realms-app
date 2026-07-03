@@ -68,7 +68,7 @@ export function useAccountBilling(
 
   // Fetch subscription status
   useEffect(() => {
-    const fetchSubscription = async () => {
+    const fetchSubscription = async (): Promise<void> => {
       try {
         const token = localStorage.getItem('workos_access_token');
         if (!token) return;
@@ -93,7 +93,7 @@ export function useAccountBilling(
 
   // Fetch quota status
   useEffect(() => {
-    const fetchQuota = async () => {
+    const fetchQuota = async (): Promise<void> => {
       try {
         const token = localStorage.getItem('workos_access_token');
         if (!token) return;
