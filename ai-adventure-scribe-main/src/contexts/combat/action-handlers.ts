@@ -9,9 +9,10 @@ import type { SpellSlotLevel } from '@/utils/spell-management';
 
 import logger from '@/lib/logger';
 import { activateRage, deactivateRage } from '@/utils/classFeatures';
-import { processShortRestCombat, processLongRestCombat } from '@/utils/restMechanics';
 import { castSpell } from '@/utils/spell-management';
-import { attemptHide, applyHiddenCondition, removeHiddenCondition } from '@/utils/stealthUtils';
+
+// Re-export for backward compatibility
+export { handleShortRest, handleLongRest, handleHideAction } from './rest-and-stealth-handlers';
 
 /**
  * Result of handling an action
@@ -186,80 +187,6 @@ export function handleRageDeactivation(participant: CombatParticipant): ActionHa
       participantUpdates: { actionTaken: true },
       actionUpdates: {
         description: `End rage (Failed: ${(error as Error).message})`,
-      },
-      success: false,
-      errorMessage: (error as Error).message,
-    };
-  }
-}
-
-/**
- * Handle Short Rest action
- */
-export function handleShortRest(
-  participant: CombatParticipant,
-  hitDiceToRoll: number = 1,
-): ActionHandlerResult {
-  const updatedParticipant = processShortRestCombat(participant, hitDiceToRoll);
-
-  return {
-    participantUpdates: {
-      ...updatedParticipant,
-      actionTaken: true,
-    },
-    actionUpdates: {
-      description: `${participant.name} takes a short rest`,
-    },
-    success: true,
-  };
-}
-
-/**
- * Handle Long Rest action
- */
-export function handleLongRest(participant: CombatParticipant): ActionHandlerResult {
-  const updatedParticipant = processLongRestCombat(participant);
-
-  return {
-    participantUpdates: {
-      ...updatedParticipant,
-      actionTaken: true,
-    },
-    actionUpdates: {
-      description: `${participant.name} takes a long rest`,
-    },
-    success: true,
-  };
-}
-
-/**
- * Handle Hide action
- */
-export function handleHideAction(participant: CombatParticipant): ActionHandlerResult {
-  try {
-    const hideResult = attemptHide(participant);
-
-    const updatedParticipant = hideResult.success
-      ? applyHiddenCondition(participant)
-      : removeHiddenCondition(participant);
-
-    return {
-      participantUpdates: {
-        ...updatedParticipant,
-        actionTaken: true,
-      },
-      actionUpdates: {
-        description: hideResult.description,
-        attackRoll: hideResult.roll,
-      },
-      success: hideResult.success,
-    };
-  } catch (error) {
-    logger.error('Hide action failed:', error);
-    return {
-      participantUpdates: { actionTaken: true },
-      actionUpdates: {
-        description: `Hide (Failed: ${(error as Error).message})`,
       },
       success: false,
       errorMessage: (error as Error).message,

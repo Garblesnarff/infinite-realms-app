@@ -6,68 +6,21 @@
  * as they would be managed at a physical D&D table.
  */
 
-import React, {
-  createContext,
-  useContext,
-  useReducer,
-  useCallback,
-  useMemo,
-  useRef,
-  useEffect,
-} from 'react';
+import React, { createContext, useContext, useReducer, useMemo, useRef, useEffect } from 'react';
 
 import { useCharacter } from './CharacterContext';
-import {
-  handleSpellCast,
-  handleDivineSmite,
-  handleRageActivation,
-  handleRageDeactivation,
-  handleShortRest,
-  handleLongRest,
-  handleHideAction,
-} from './combat/action-handlers';
-import { buildCharacterData } from './combat/character-data';
 import { combatReducer, initialCombatState } from './combat/combat-reducer';
 import { createHealthHandlers } from './combat/health-handlers';
-import { createCombatParticipant, sortByInitiative } from './combat/participant-factory';
-import { saveEncounterToDatabase as saveToDb } from './combat/persistence';
 import {
   createReactionHandlers,
   createParticipantReactionHandlers,
 } from './combat/reaction-handlers';
+import { useCombatLifecycle } from './combat/use-combat-lifecycle';
+import { useParticipantManagement } from './combat/use-participant-management';
+import { useTakeAction } from './combat/use-take-action';
 import { createWeaponHandlers } from './combat/weapon-handlers';
 
-import type { ActionHandlerResult } from './combat/action-handlers';
-import type {
-  CombatEncounter,
-  CombatParticipant,
-  CombatAction as CombatActionType,
-  CombatContextValue,
-} from '@/types/combat';
-
-import { processMovementAction } from '@/utils/movementUtils';
-import { checkReactionTriggers } from '@/utils/reactionTriggers';
-
-// ===========================
-// Action Dispatch Table
-// ===========================
-
-type ActionDispatchEntry = (
-  action: Partial<CombatActionType>,
-  participant: CombatParticipant,
-) => ActionHandlerResult | undefined;
-
-const actionDispatchTable: Record<string, ActionDispatchEntry> = {
-  cast_spell: (action, participant) =>
-    participant.participantType === 'player' ? handleSpellCast(action, participant) : undefined,
-  divine_smite: (action, participant) => handleDivineSmite(action, participant),
-  use_class_feature: (action, participant) =>
-    action.featureUsed === 'rage' ? handleRageActivation(action, participant) : undefined,
-  end_rage: (_action, participant) => handleRageDeactivation(participant),
-  short_rest: (_action, participant) => handleShortRest(participant, 1),
-  long_rest: (_action, participant) => handleLongRest(participant),
-  hide: (_action, participant) => handleHideAction(participant),
-};
+import type { CombatContextValue } from '@/types/combat';
 
 // ===========================
 // Context Creation
@@ -133,242 +86,31 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({
   );
 
   // ===========================
-  // Database Operations
+  // Extracted Callback Hooks
   // ===========================
 
-  const saveEncounterToDatabase = useCallback(async (encounter: CombatEncounter) => {
-    await saveToDb(encounter);
-  }, []);
+  const { startCombat, endCombat, nextTurn, rollInitiative } = useCombatLifecycle({
+    state,
+    dispatch,
+    character: characterState.character,
+  });
 
-  // ===========================
-  // Combat Management
-  // ===========================
+  const takeAction = useTakeAction({
+    state,
+    dispatch,
+    dealDamage,
+    addReactionOpportunity,
+    addParticipantReactionOpportunity,
+  });
 
-  const startCombat = useCallback(
-    async (sessionId: string, initialParticipants: Partial<CombatParticipant>[]) => {
-      const encounterId = crypto.randomUUID();
-      const characterData = buildCharacterData(characterState.character);
-
-      // Create participants using the factory function
-      const participantsWithInitiative = initialParticipants.map((p) =>
-        createCombatParticipant(p, { rollInitiative: true, characterData }),
-      );
-
-      // Sort by initiative (highest first)
-      const sortedParticipants = sortByInitiative(participantsWithInitiative);
-
-      const encounter: CombatEncounter = {
-        id: encounterId,
-        sessionId,
-        phase: 'active',
-        currentRound: 1,
-        currentTurnParticipantId: sortedParticipants[0]?.id,
-        participants: sortedParticipants,
-        actions: [],
-        roundsElapsed: 1,
-        startTime: new Date(),
-        location: 'Combat Location', // Will be enhanced later
-        environmentalEffects: [],
-        visibility: 'clear',
-      };
-
-      dispatch({ type: 'SET_ENCOUNTER', encounter });
-      dispatch({ type: 'START_COMBAT' });
-
-      await saveEncounterToDatabase(encounter);
-    },
-    [saveEncounterToDatabase, characterState.character],
-  );
-
-  const endCombat = useCallback(async () => {
-    if (state.activeEncounter) {
-      const updatedEncounter = {
-        ...state.activeEncounter,
-        phase: 'conclusion' as const,
-        endTime: new Date(),
-      };
-
-      await saveEncounterToDatabase(updatedEncounter);
-    }
-
-    dispatch({ type: 'END_COMBAT' });
-  }, [state.activeEncounter, saveEncounterToDatabase]);
-
-  // ===========================
-  // Turn Management
-  // ===========================
-
-  const nextTurn = useCallback(async () => {
-    dispatch({ type: 'NEXT_TURN' });
-
-    if (state.activeEncounter) {
-      await saveEncounterToDatabase(state.activeEncounter);
-    }
-  }, [state.activeEncounter, saveEncounterToDatabase]);
-
-  const rollInitiative = useCallback(
-    async (participantId: string): Promise<number> => {
-      const participant = state.activeEncounter?.participants.find((p) => p.id === participantId);
-      if (!participant) return 0;
-
-      const initiative = rollDie(20) + (participant.initiative || 0);
-
-      dispatch({
-        type: 'UPDATE_PARTICIPANT',
-        participantId,
-        updates: { initiative },
-      });
-
-      return initiative;
-    },
-    [state.activeEncounter],
-  );
-
-  // ===========================
-  // Actions & Damage
-  // ===========================
-
-  const takeAction = useCallback(
-    async (action: Partial<CombatActionType>) => {
-      if (!state.activeEncounter) return;
-
-      let fullAction: CombatActionType = {
-        id: crypto.randomUUID(),
-        encounterId: state.activeEncounter.id,
-        participantId: action.participantId || '',
-        targetParticipantId: action.targetParticipantId,
-        round: state.activeEncounter.currentRound,
-        turnOrder:
-          state.activeEncounter.participants.findIndex((p) => p.id === action.participantId) + 1,
-        actionType: action.actionType || 'attack',
-        description: action.description || 'Unknown action',
-        attackRoll: action.attackRoll,
-        damageRolls: action.damageRolls,
-        savingThrows: action.savingThrows,
-        hit: action.hit,
-        damageDealt: action.damageDealt,
-        damageType: action.damageType,
-        conditionsApplied: action.conditionsApplied,
-        dmNarration: action.dmNarration,
-        timestamp: new Date(),
-      };
-
-      const participant = state.activeEncounter.participants.find(
-        (p) => p.id === action.participantId,
-      );
-      if (!participant) return;
-
-      // Handle action based on type using dispatch table
-      const handler = action.actionType ? actionDispatchTable[action.actionType] : undefined;
-      const handlerResult = handler?.(action, participant);
-
-      // Apply handler result if present
-      if (handlerResult) {
-        // For cast_spell, merge all action updates into fullAction
-        if (action.actionType === 'cast_spell' && handlerResult.actionUpdates) {
-          fullAction = { ...fullAction, ...handlerResult.actionUpdates };
-        }
-
-        dispatch({
-          type: 'UPDATE_PARTICIPANT',
-          participantId: action.participantId!,
-          updates: handlerResult.participantUpdates,
-        });
-        if (handlerResult.actionUpdates.description) {
-          fullAction.description = handlerResult.actionUpdates.description;
-        }
-        if (handlerResult.actionUpdates.attackRoll) {
-          fullAction.attackRoll = handlerResult.actionUpdates.attackRoll;
-        }
-      } else if (action.participantId) {
-        // Default: mark participant as having taken action
-        dispatch({
-          type: 'UPDATE_PARTICIPANT',
-          participantId: action.participantId,
-          updates: { actionTaken: true },
-        });
-      }
-
-      dispatch({ type: 'ADD_ACTION', action: fullAction });
-
-      // Check for reaction triggers
-      if (state.activeEncounter) {
-        const reactionOpportunities = checkReactionTriggers(fullAction, state.activeEncounter);
-        reactionOpportunities.forEach((opportunity) => {
-          addReactionOpportunity(opportunity);
-          addParticipantReactionOpportunity(opportunity.participantId, opportunity);
-        });
-      }
-
-      // Apply damage if any
-      if (action.damageDealt && action.targetParticipantId) {
-        await dealDamage(action.targetParticipantId, action.damageDealt, action.damageType);
-      }
-    },
-    [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity],
-  );
-
-
-  // ===========================
-  // Participant Management
-  // ===========================
-
-  const addParticipant = useCallback(
-    async (participant: Partial<CombatParticipant>) => {
-      const characterData = buildCharacterData(characterState.character);
-
-      const fullParticipant = createCombatParticipant(participant, {
-        rollInitiative: !participant.initiative,
-        characterData,
-      });
-
-      dispatch({ type: 'ADD_PARTICIPANT', participant: fullParticipant });
-    },
-    [characterState.character],
-  );
-
-  const removeParticipant = useCallback(async (participantId: string) => {
-    dispatch({ type: 'REMOVE_PARTICIPANT', participantId });
-  }, []);
-
-  const updateParticipant = useCallback(
-    async (participantId: string, updates: Partial<CombatParticipant>) => {
-      dispatch({ type: 'UPDATE_PARTICIPANT', participantId, updates });
-    },
-    [],
-  );
-
-  // ===========================
-  // Movement Actions
-  // ===========================
-
-  const moveParticipant = useCallback(
-    async (participantId: string, fromPosition: string, toPosition: string) => {
-      if (!state.activeEncounter) return;
-
-      // Process movement action
-      const opportunities = processMovementAction(
-        participantId,
-        fromPosition,
-        toPosition,
-        state.activeEncounter,
-      );
-
-      // Add reaction opportunities
-      opportunities.forEach((opportunity) => {
-        addReactionOpportunity(opportunity);
-        addParticipantReactionOpportunity(opportunity.participantId, opportunity);
-      });
-
-      // Update participant position
-      dispatch({
-        type: 'UPDATE_PARTICIPANT',
-        participantId,
-        updates: { position: toPosition },
-      });
-    },
-    [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity],
-  );
+  const { addParticipant, removeParticipant, updateParticipant, moveParticipant } =
+    useParticipantManagement({
+      state,
+      dispatch,
+      character: characterState.character,
+      addReactionOpportunity,
+      addParticipantReactionOpportunity,
+    });
 
   // ===========================
   // Context Value
