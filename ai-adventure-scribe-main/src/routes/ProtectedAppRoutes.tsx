@@ -9,7 +9,6 @@ import Navigation from '@/shared/components/layout/navigation';
 
 // Lazy load route page components for code splitting
 const Index = lazy(() => import('@/pages/Index'));
-const DiceTest = lazy(() => import('@/pages/DiceTest'));
 const CharacterSheet = lazy(() => import('@/features/character/components/sheet/character-sheet'));
 const CharacterList = lazy(() => import('@/features/character/components/list/character-list'));
 const CampaignWizard = lazy(
@@ -43,7 +42,6 @@ export const ProtectedAppRoutes: React.FC = () => (
       <main id="main-content" tabIndex={-1}>
         <Routes>
           <Route path="/" element={withRouteSuspense(<Index />)} />
-          <Route path="/dice-test" element={withRouteSuspense(<DiceTest />)} />
           {/* TODO [legacy-character-deprecation]: Legacy character list and creation routes. Gate behind ENABLE_LEGACY_CHARACTER_ENTRY and remove per docs/cleanup/campaign-character-migration.md */}
           {ENABLE_LEGACY_CHARACTER_ENTRY && (
             <Route path="/characters" element={withRouteSuspense(<CharacterList />)} />
