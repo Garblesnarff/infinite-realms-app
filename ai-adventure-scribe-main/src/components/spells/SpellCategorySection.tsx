@@ -129,10 +129,10 @@ const SpellCategorySection: React.FC<SpellCategorySectionProps> = ({
 
         {/* Info Box */}
         {info && (
-          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg">
             <div className="flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-blue-700 dark:text-blue-300">{info}</p>
+              <p className="text-sm text-blue-700">{info}</p>
             </div>
           </div>
         )}

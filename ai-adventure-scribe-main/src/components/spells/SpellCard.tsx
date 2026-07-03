@@ -3,9 +3,9 @@ import React from 'react';
 
 import type { Spell } from '@/types/character';
 
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import logger from '@/lib/logger';
 import { getComponentTrackingInfo } from '@/utils/spellComponents';
@@ -43,18 +43,17 @@ const SpellCard: React.FC<SpellCardProps> = ({
 
   // School color mapping for visual consistency
   const schoolColors: Record<string, string> = {
-    Abjuration: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    Conjuration: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    Divination: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    Enchantment: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    Evocation: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    Illusion: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    Necromancy: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-    Transmutation: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    Abjuration: 'bg-blue-100 text-blue-800',
+    Conjuration: 'bg-yellow-100 text-yellow-800',
+    Divination: 'bg-purple-100 text-purple-800',
+    Enchantment: 'bg-pink-100 text-pink-800',
+    Evocation: 'bg-red-100 text-red-800',
+    Illusion: 'bg-indigo-100 text-indigo-800',
+    Necromancy: 'bg-gray-100 text-gray-800',
+    Transmutation: 'bg-green-100 text-green-800',
   };
 
-  const schoolColor =
-    schoolColors[spell.school] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+  const schoolColor = schoolColors[spell.school] || 'bg-gray-100 text-gray-800';
 
   // Get theme-specific colors for selection highlighting
   const getThemeColors = (): {
@@ -114,7 +113,7 @@ const SpellCard: React.FC<SpellCardProps> = ({
           ${
             isSelected
               ? `${themeColors.border} ${themeColors.bg} shadow-sm ${themeColors.shadow}`
-              : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+              : 'border-gray-200 hover:border-gray-300'
           }
           ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
           ${className}
@@ -154,22 +153,28 @@ const SpellCard: React.FC<SpellCardProps> = ({
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {/* Level Badge */}
                     {showLevel && (
-                      <Badge variant="outline" className="text-xs">
+                      <HexagonalBadge variant="outline" size="sm" className="text-xs">
                         {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}
-                      </Badge>
+                      </HexagonalBadge>
                     )}
 
                     {/* School Badge */}
-                    <Badge className={`text-xs ${schoolColor}`}>{spell.school}</Badge>
+                    <HexagonalBadge size="sm" className={`text-xs ${schoolColor}`}>
+                      {spell.school}
+                    </HexagonalBadge>
 
                     {/* Special Indicators */}
                     {spell.concentration && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                          <HexagonalBadge
+                            variant="secondary"
+                            size="sm"
+                            className="text-xs flex items-center gap-1"
+                          >
                             <Timer className="w-3 h-3" />
                             Concentration
-                          </Badge>
+                          </HexagonalBadge>
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Requires concentration to maintain</p>
@@ -180,10 +185,14 @@ const SpellCard: React.FC<SpellCardProps> = ({
                     {spell.ritual && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                          <HexagonalBadge
+                            variant="secondary"
+                            size="sm"
+                            className="text-xs flex items-center gap-1"
+                          >
                             <RotateCcw className="w-3 h-3" />
                             Ritual
-                          </Badge>
+                          </HexagonalBadge>
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Can be cast as a ritual (+10 minutes, no spell slot)</p>
@@ -194,10 +203,14 @@ const SpellCard: React.FC<SpellCardProps> = ({
                     {spell.damage && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                          <HexagonalBadge
+                            variant="destructive"
+                            size="sm"
+                            className="text-xs flex items-center gap-1"
+                          >
                             <Zap className="w-3 h-3" />
                             {spell.damage}
-                          </Badge>
+                          </HexagonalBadge>
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Damage: {spell.damage}</p>

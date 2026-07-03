@@ -7,12 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface SpellFilters {
   schools: string[];
@@ -73,18 +68,14 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
   }, []);
 
   const schoolColors: Record<string, string> = {
-    Abjuration: 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200',
-    Conjuration:
-      'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900 dark:text-yellow-200',
-    Divination:
-      'bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900 dark:text-purple-200',
-    Enchantment: 'bg-pink-100 text-pink-800 hover:bg-pink-200 dark:bg-pink-900 dark:text-pink-200',
-    Evocation: 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200',
-    Illusion:
-      'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200',
-    Necromancy: 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200',
-    Transmutation:
-      'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200',
+    Abjuration: 'bg-blue-100 text-blue-800 hover:bg-blue-200',
+    Conjuration: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+    Divination: 'bg-purple-100 text-purple-800 hover:bg-purple-200',
+    Enchantment: 'bg-pink-100 text-pink-800 hover:bg-pink-200',
+    Evocation: 'bg-red-100 text-red-800 hover:bg-red-200',
+    Illusion: 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200',
+    Necromancy: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+    Transmutation: 'bg-green-100 text-green-800 hover:bg-green-200',
   };
 
   const toggleSchool = (school: string) => {
@@ -163,7 +154,9 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
         <CardContent className="space-y-4">
           {/* School Filters */}
           <div className="space-y-2" role="group" aria-labelledby={schoolsLabelId}>
-            <Label id={schoolsLabelId} className="text-sm font-medium">Schools of Magic</Label>
+            <Label id={schoolsLabelId} className="text-sm font-medium">
+              Schools of Magic
+            </Label>
             <div className="flex flex-wrap gap-2">
               {availableSchools.map((school) => {
                 const isSelected = filters.schools.includes(school);
@@ -200,7 +193,9 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
 
           {/* Component Filters */}
           <div className="space-y-3" role="group" aria-labelledby={componentsLabelId}>
-            <Label id={componentsLabelId} className="text-sm font-medium">Components Required</Label>
+            <Label id={componentsLabelId} className="text-sm font-medium">
+              Components Required
+            </Label>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -208,7 +203,10 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   checked={filters.components.verbal}
                   onCheckedChange={() => toggleComponent('verbal')}
                 />
-                <Label htmlFor={verbalId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Label
+                  htmlFor={verbalId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
                   <Eye className="w-4 h-4 text-blue-500" />
                   Verbal (V)
                 </Label>
@@ -219,7 +217,10 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   checked={filters.components.somatic}
                   onCheckedChange={() => toggleComponent('somatic')}
                 />
-                <Label htmlFor={somaticId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Label
+                  htmlFor={somaticId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
                   <Hand className="w-4 h-4 text-green-500" />
                   Somatic (S)
                 </Label>
@@ -230,7 +231,10 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   checked={filters.components.material}
                   onCheckedChange={() => toggleComponent('material')}
                 />
-                <Label htmlFor={materialId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Label
+                  htmlFor={materialId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
                   <Gem className="w-4 h-4 text-purple-500" />
                   Material (M)
                 </Label>
@@ -242,7 +246,9 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
 
           {/* Property Filters */}
           <div className="space-y-3" role="group" aria-labelledby={propertiesLabelId}>
-            <Label id={propertiesLabelId} className="text-sm font-medium">Special Properties</Label>
+            <Label id={propertiesLabelId} className="text-sm font-medium">
+              Special Properties
+            </Label>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -264,7 +270,10 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   checked={filters.properties.ritual}
                   onCheckedChange={() => toggleProperty('ritual')}
                 />
-                <Label htmlFor={ritualId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Label
+                  htmlFor={ritualId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
                   <RotateCcw className="w-4 h-4 text-indigo-500" />
                   Ritual
                 </Label>
@@ -275,7 +284,10 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
                   checked={filters.properties.damage}
                   onCheckedChange={() => toggleProperty('damage')}
                 />
-                <Label htmlFor={damageId} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Label
+                  htmlFor={damageId}
+                  className="flex items-center gap-2 text-sm cursor-pointer"
+                >
                   <Zap className="w-4 h-4 text-red-500" />
                   Deals Damage
                 </Label>
@@ -288,85 +300,89 @@ const SpellFilterPanel: React.FC<SpellFilterPanelProps> = ({
             <>
               <Separator />
               <div className="space-y-2" role="group" aria-labelledby={activeFiltersLabelId}>
-                <Label id={activeFiltersLabelId} className="text-sm font-medium">Active Filters</Label>
+                <Label id={activeFiltersLabelId} className="text-sm font-medium">
+                  Active Filters
+                </Label>
                 <div className="flex flex-wrap gap-1">
                   {filters.schools.map((school) => (
-                  <Tooltip key={school}>
-                    <TooltipTrigger asChild>
-                      <Badge
-                        variant="secondary"
-                        className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                        onClick={() => toggleSchool(school)}
-                        onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
-                        role="button"
-                        aria-label={`Remove ${school} filter`}
-                        tabIndex={0}
-                      >
-                        {school}
-                        <X className="w-3 h-3 ml-1" />
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Remove {school} filter</p>
-                    </TooltipContent>
-                  </Tooltip>
+                    <Tooltip key={school}>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="secondary"
+                          className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                          onClick={() => toggleSchool(school)}
+                          onKeyDown={(e) => handleKeyDown(e, () => toggleSchool(school))}
+                          role="button"
+                          aria-label={`Remove ${school} filter`}
+                          tabIndex={0}
+                        >
+                          {school}
+                          <X className="w-3 h-3 ml-1" />
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Remove {school} filter</p>
+                      </TooltipContent>
+                    </Tooltip>
                   ))}
                   {Object.entries(filters.components).map(
                     ([component, active]) =>
                       active && (
-                      <Tooltip key={component}>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="secondary"
-                            className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                            onClick={() =>
-                              toggleComponent(component as keyof SpellFilters['components'])
-                            }
-                            onKeyDown={(e) =>
-                              handleKeyDown(e, () =>
-                                toggleComponent(component as keyof SpellFilters['components']),
-                              )
-                            }
-                            role="button"
-                            aria-label={`Remove ${component} filter`}
-                            tabIndex={0}
-                          >
-                            {component.charAt(0).toUpperCase()}
-                            <X className="w-3 h-3 ml-1" />
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Remove {component} filter</p>
-                        </TooltipContent>
-                      </Tooltip>
+                        <Tooltip key={component}>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="secondary"
+                              className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                              onClick={() =>
+                                toggleComponent(component as keyof SpellFilters['components'])
+                              }
+                              onKeyDown={(e) =>
+                                handleKeyDown(e, () =>
+                                  toggleComponent(component as keyof SpellFilters['components']),
+                                )
+                              }
+                              role="button"
+                              aria-label={`Remove ${component} filter`}
+                              tabIndex={0}
+                            >
+                              {component.charAt(0).toUpperCase()}
+                              <X className="w-3 h-3 ml-1" />
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Remove {component} filter</p>
+                          </TooltipContent>
+                        </Tooltip>
                       ),
                   )}
                   {Object.entries(filters.properties).map(
                     ([property, active]) =>
                       active && (
-                      <Tooltip key={property}>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="secondary"
-                            className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                            onClick={() => toggleProperty(property as keyof SpellFilters['properties'])}
-                            onKeyDown={(e) =>
-                              handleKeyDown(e, () =>
-                                toggleProperty(property as keyof SpellFilters['properties']),
-                              )
-                            }
-                            role="button"
-                            aria-label={`Remove ${property} filter`}
-                            tabIndex={0}
-                          >
-                            {property}
-                            <X className="w-3 h-3 ml-1" />
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Remove {property} filter</p>
-                        </TooltipContent>
-                      </Tooltip>
+                        <Tooltip key={property}>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="secondary"
+                              className="text-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                              onClick={() =>
+                                toggleProperty(property as keyof SpellFilters['properties'])
+                              }
+                              onKeyDown={(e) =>
+                                handleKeyDown(e, () =>
+                                  toggleProperty(property as keyof SpellFilters['properties']),
+                                )
+                              }
+                              role="button"
+                              aria-label={`Remove ${property} filter`}
+                              tabIndex={0}
+                            >
+                              {property}
+                              <X className="w-3 h-3 ml-1" />
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Remove {property} filter</p>
+                          </TooltipContent>
+                        </Tooltip>
                       ),
                   )}
                 </div>
