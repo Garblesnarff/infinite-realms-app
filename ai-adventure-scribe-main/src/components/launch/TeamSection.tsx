@@ -55,7 +55,7 @@ export const TeamSection: React.FC = () => {
                               variant="outline"
                               size="sm"
                               asChild
-                              className="border-gray-600 hover:border-purple-400 text-gray-300 hover:text-purple-300"
+                              className="border-gray-600 bg-transparent hover:border-purple-400 text-gray-300 hover:text-purple-300"
                             >
                               <a
                                 href={member.links.github}
@@ -72,7 +72,7 @@ export const TeamSection: React.FC = () => {
                               variant="outline"
                               size="sm"
                               asChild
-                              className="border-gray-600 hover:border-purple-400 text-gray-300 hover:text-purple-300"
+                              className="border-gray-600 bg-transparent hover:border-purple-400 text-gray-300 hover:text-purple-300"
                             >
                               <a
                                 href={member.links.linkedin}
@@ -132,7 +132,7 @@ export const TeamSection: React.FC = () => {
                     variant="outline"
                     size="sm"
                     asChild
-                    className="border-purple-500/50 hover:border-purple-400 text-purple-300 hover:text-purple-200"
+                    className="border-purple-500/50 bg-transparent hover:border-purple-400 text-purple-300 hover:text-purple-200"
                   >
                     <a href="/contact" className="flex items-center gap-2">
                       Get in Touch

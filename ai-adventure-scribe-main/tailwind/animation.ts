@@ -1,0 +1,21 @@
+export const animation = {
+  'accordion-down': 'accordion-down 0.2s ease-out',
+  'accordion-up': 'accordion-up 0.2s ease-out',
+  // Fantasy-Tech Fusion Animations
+  'fade-in': 'fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  'fade-in-up': 'fade-in-up 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+  'fade-in-down': 'fade-in-down 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+  'slide-in-left': 'slide-in-left 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+  'slide-in-right': 'slide-in-right 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+  'scale-in': 'scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+  'gold-glow-pulse': 'gold-glow-pulse 2s ease-in-out infinite',
+  shimmer: 'shimmer 2s linear infinite',
+  float: 'float 3s ease-in-out infinite',
+  'bounce-subtle': 'bounce-subtle 2s ease-in-out infinite',
+  'spin-slow': 'spin-slow 3s linear infinite',
+  'dice-roll': 'dice-roll 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+  sparkle: 'sparkle 1s cubic-bezier(0.4, 0, 0.2, 1)',
+  celebration: 'celebration 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+  'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
+};

@@ -155,7 +155,7 @@ export const HeroSection: React.FC = () => {
               variant="outline"
               size="lg"
               onClick={handleWatchDemo}
-              className="border-2 border-purple-500/50 hover:border-purple-400 text-purple-300 hover:text-purple-200 hover:bg-purple-900/30 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] px-6 sm:px-10 py-6 rounded-xl backdrop-blur-sm transition-all duration-300 flex items-center gap-2 sm:gap-3 text-base sm:text-lg font-semibold w-full sm:w-auto max-w-full"
+              className="border-2 border-purple-500/50 bg-transparent hover:border-purple-400 text-purple-300 hover:text-purple-200 hover:bg-purple-900/30 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] px-6 sm:px-10 py-6 rounded-xl backdrop-blur-sm transition-all duration-300 flex items-center gap-2 sm:gap-3 text-base sm:text-lg font-semibold w-full sm:w-auto max-w-full"
             >
               <Play className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
               <span className="hidden sm:inline">Watch a Player Betray Their Party</span>

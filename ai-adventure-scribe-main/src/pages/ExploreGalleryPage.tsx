@@ -77,7 +77,11 @@ export const ExploreGalleryPage: React.FC = () => {
               <p className="text-red-400 text-lg mb-4">
                 Failed to load campaigns. Please try again later.
               </p>
-              <Button onClick={() => window.location.reload()} variant="outline">
+              <Button
+                onClick={() => window.location.reload()}
+                variant="outline"
+                className="bg-transparent text-gray-300"
+              >
                 Retry
               </Button>
             </div>
@@ -90,7 +94,9 @@ export const ExploreGalleryPage: React.FC = () => {
                 No campaigns available yet. Check back soon!
               </p>
               <Link to="/">
-                <Button variant="outline">Return Home</Button>
+                <Button variant="outline" className="bg-transparent text-gray-300">
+                  Return Home
+                </Button>
               </Link>
             </div>
           )}

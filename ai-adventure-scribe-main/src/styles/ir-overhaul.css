@@ -33,9 +33,15 @@
   --infinite-gold-dark: #b9954f;
   --infinite-gold-darker: #8f7548;
 
-  /* --- force the dark token set with navy values --- */
-  --background: #070b14;
-  --foreground: #eaeefa;
+  /* --- force the dark token set with navy values ---
+     background/foreground/card-foreground/popover/popover-foreground/
+     sidebar-foreground are "r g b" channel triplets, not hex, to match the
+     `rgb(var(--x) / <alpha-value>)` wrapper in tailwind.config.ts (see the
+     matching comment in index.css :root). secondary/secondary-foreground are
+     re-pointed here too since :root's copies are hardcoded to the default
+     purple-brand gold/dark rather than aliased to --infinite-gold/-dark. */
+  --background: 7 11 20; /* #070b14 */
+  --foreground: 234 238 250; /* #eaeefa */
   --foreground-secondary: rgba(234, 238, 250, 0.9);
   --foreground-muted: rgba(234, 238, 250, 0.65);
 
@@ -50,14 +56,17 @@
 
   --card: rgba(255, 255, 255, 0.045);
   --card-hover: rgba(255, 255, 255, 0.07);
-  --card-foreground: #eaeefa;
+  --card-foreground: 234 238 250; /* #eaeefa */
   --card-border: rgba(255, 255, 255, 0.09);
 
-  --popover: #0c1220;
-  --popover-foreground: #eaeefa;
+  --popover: 12 18 32; /* #0c1220 */
+  --popover-foreground: 234 238 250; /* #eaeefa */
+
+  --secondary: 213 176 112; /* #d5b070, matches --infinite-gold above */
+  --secondary-foreground: 7 11 20; /* #070b14, matches --infinite-dark above */
 
   --sidebar-background: #0c1220;
-  --sidebar-foreground: #eaeefa;
+  --sidebar-foreground: 234 238 250; /* #eaeefa */
   --sidebar-border: rgba(255, 255, 255, 0.1);
 
   /* atmospheric gradients -> navy */
@@ -80,7 +89,7 @@
   --parchment-border: rgba(213, 176, 112, 0.35);
 
   font-family: 'Inter', system-ui, sans-serif;
-  color: var(--foreground);
+  color: rgb(var(--foreground));
 }
 
 /* ---- shared primitives the overhauled components can opt into ---- */
@@ -145,7 +154,7 @@
 }
 .ir-app .chat-composer textarea,
 .ir-app .chat-composer input {
-  color: var(--foreground);
+  color: rgb(var(--foreground));
 }
 .ir-app .chat-composer textarea::placeholder,
 .ir-app .chat-composer input::placeholder {
@@ -162,17 +171,15 @@
    in the component itself — this only takes effect under .ir-app. */
 .ir-app .campaign-card .bg-white\/95 {
   background: rgba(12, 18, 32, 0.92) !important;
-  color: var(--foreground);
+  color: rgb(var(--foreground));
 }
 
-/* Tailwind's shadcn-style semantic utilities (bg-card, border-border, etc.)
-   resolve to `hsl(var(--x))`, but --x is defined as a hex/rgba literal in
-   index.css — that's invalid CSS, so these utilities silently compute to
-   transparent everywhere in the app (not something introduced by this
-   overhaul). Rather than touch the underlying token format (a larger,
-   separate fix with its own risk across public pages), retint the specific
-   utility classes directly here, scoped to .ir-app only, so the many plain
-   <Card>/bg-muted/bg-popover surfaces across the app render correctly. */
+/* Historically these utilities (bg-card, border-border, etc.) resolved to
+   `hsl(var(--x))` while --x held a hex/rgba literal — invalid CSS, computing
+   to transparent everywhere. tailwind.config.ts and the --x definitions in
+   index.css/.ir-app now use valid rgb()/var() forms instead, so these rules
+   are redundant with the (now-correct) underlying tokens. Left in place as a
+   belt-and-suspenders pin on the exact navy/gold values for this scope. */
 .ir-app .bg-card {
   background-color: rgba(255, 255, 255, 0.045) !important;
 }

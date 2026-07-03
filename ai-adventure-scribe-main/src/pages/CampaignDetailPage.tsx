@@ -268,7 +268,7 @@ const CampaignDetailPage: React.FC = () => {
               <Link to="/#starter-campaigns">
                 <Button
                   variant="outline"
-                  className="border-gray-600 text-gray-300 hover:bg-gray-800 px-8 py-6 text-lg rounded-xl"
+                  className="border-gray-600 bg-transparent text-gray-300 hover:bg-gray-800 px-8 py-6 text-lg rounded-xl"
                 >
                   Browse Other Campaigns
                 </Button>

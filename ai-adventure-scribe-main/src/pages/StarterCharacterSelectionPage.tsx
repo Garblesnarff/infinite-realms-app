@@ -22,13 +22,10 @@ import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
-import {
-  useStarterCharacterTemplates
-} from '@/hooks/use-starter-character-templates';
+import { useStarterCharacterTemplates } from '@/hooks/use-starter-character-templates';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-
 
 /**
  * Main Page Component
@@ -170,7 +167,10 @@ const StarterCharacterSelectionPage: React.FC = () => {
 
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">
         {/* Header */}
-        <div className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0" style={{ zIndex: Z_INDEX.STICKY }}>
+        <div
+          className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0"
+          style={{ zIndex: Z_INDEX.STICKY }}
+        >
           <div className="max-w-6xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
@@ -193,7 +193,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
               <Button
                 onClick={handleCreateCustom}
                 variant="outline"
-                className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                className="border-gray-600 bg-transparent text-gray-300 hover:bg-gray-800"
               >
                 <Sparkles className="w-4 h-4 mr-2" />
                 Create Custom Character
@@ -216,7 +216,7 @@ const StarterCharacterSelectionPage: React.FC = () => {
                 <div className="text-center py-12 bg-gray-800/30 rounded-xl border border-gray-700">
                   <User className="w-12 h-12 mx-auto text-gray-500 mb-4" />
                   <p className="text-gray-400 mb-4">No pre-built characters available yet.</p>
-                  <Button onClick={handleCreateCustom} variant="outline">
+                  <Button onClick={handleCreateCustom} variant="outline" className="bg-transparent">
                     Create Custom Character
                   </Button>
                 </div>

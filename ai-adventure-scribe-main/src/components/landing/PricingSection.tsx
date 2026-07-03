@@ -75,7 +75,7 @@ export const PricingSection: React.FC = () => {
             <Button
               onClick={() => handleGetStarted('wanderer')}
               variant="outline"
-              className="w-full mb-8 border-purple-500/50 hover:border-purple-400 text-purple-300 hover:text-purple-200 hover:bg-purple-900/30"
+              className="w-full mb-8 border-purple-500/50 bg-transparent hover:border-purple-400 text-purple-300 hover:text-purple-200 hover:bg-purple-900/30"
             >
               Start Your Journey
             </Button>
