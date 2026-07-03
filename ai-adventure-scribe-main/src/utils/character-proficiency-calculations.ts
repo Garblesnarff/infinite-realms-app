@@ -60,7 +60,9 @@ export const calculateSkillModifiers = (
 /**
  * Get skill proficiencies for a class (simplified)
  */
-export const getClassSkillProficiencies = (characterClass: CharacterClass | null): string[] => {
+export const getClassSkillProficiencies = (
+  characterClass: CharacterClass | null | undefined,
+): string[] => {
   if (!characterClass) {
     return [];
   }
@@ -74,8 +76,8 @@ export const getClassSkillProficiencies = (characterClass: CharacterClass | null
  * Get skill proficiencies for a race and subrace (combined)
  */
 export const getRaceSkillProficiencies = (
-  characterRace: CharacterRace | null,
-  characterSubrace: Subrace | null,
+  characterRace: CharacterRace | null | undefined,
+  characterSubrace: Subrace | null | undefined,
 ): string[] => {
   if (!characterRace) {
     return [];
@@ -124,7 +126,7 @@ export const calculateSavingThrowModifiers = (
  * Get saving throw proficiencies for a class
  */
 export const getClassSavingThrowProficiencies = (
-  characterClass: CharacterClass | null,
+  characterClass: CharacterClass | null | undefined,
 ): string[] => {
   if (!characterClass) {
     return [];

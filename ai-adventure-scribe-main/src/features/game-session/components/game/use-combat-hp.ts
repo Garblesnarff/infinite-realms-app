@@ -86,7 +86,7 @@ export function useCombatHP(characterId: string | undefined): CombatHP | null {
 
           // ⚡ Bolt: Use data from payload directly to avoid redundant network request.
           // This eliminates one network round-trip per HP update.
-          const newData = payload.new as Record<string, unknown>;
+          const newData = payload.new as CombatHP;
           if (newData) {
             setCombatHP({
               current_hp: newData.current_hp,

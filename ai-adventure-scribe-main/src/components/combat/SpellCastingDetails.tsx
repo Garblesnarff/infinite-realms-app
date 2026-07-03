@@ -37,7 +37,7 @@ export const SpellCastingDetails: React.FC<SpellCastingDetailsProps> = ({
           <Badge variant="outline">Level {selectedSpell.level}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          {selectedSpell.school} • {selectedSpell.casting_time} • {selectedSpell.range}
+          {selectedSpell.school} • {selectedSpell.casting_time} • {selectedSpell.range_text}
         </p>
         {selectedSpellLevel && selectedSpellLevel !== selectedSpell.level && (
           <Badge variant="secondary" className="mt-2">
@@ -99,9 +99,9 @@ export const SpellCastingDetails: React.FC<SpellCastingDetailsProps> = ({
                 <div className="mt-2 p-2 bg-muted rounded text-sm">
                   <p className="font-medium mb-1">Material Required:</p>
                   <p>{selectedSpell.material_components}</p>
-                  {selectedSpell.material_cost && (
+                  {selectedSpell.material_cost_gp && (
                     <p className="mt-1 text-xs">
-                      Cost: {selectedSpell.material_cost} gp
+                      Cost: {selectedSpell.material_cost_gp} gp
                       {selectedSpell.material_consumed && ' (consumed)'}
                     </p>
                   )}
