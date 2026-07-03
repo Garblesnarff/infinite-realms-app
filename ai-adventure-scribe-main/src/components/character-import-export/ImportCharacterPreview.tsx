@@ -92,7 +92,7 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0">
               <div className="text-xs text-muted-foreground mb-1">Name</div>
-              <Tooltip>
+              <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                   <div
                     className="font-medium truncate outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
@@ -109,28 +109,58 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
             {characterData.character.race && (
               <div>
                 <div className="text-xs text-muted-foreground mb-1">Race</div>
-                <div className="flex items-center gap-1">
-                  <Shield className="h-3 w-3 text-infinite-purple" aria-hidden="true" />
-                  {characterData.character.race}
-                </div>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+                      tabIndex={0}
+                    >
+                      <Shield className="h-3 w-3 text-infinite-purple" aria-hidden="true" />
+                      {characterData.character.race}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Race: {characterData.character.race}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
             {characterData.character.class && (
               <div>
                 <div className="text-xs text-muted-foreground mb-1">Class</div>
-                <div className="flex items-center gap-1">
-                  <Sword className="h-3 w-3 text-infinite-gold" aria-hidden="true" />
-                  {characterData.character.class}
-                </div>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+                      tabIndex={0}
+                    >
+                      <Sword className="h-3 w-3 text-infinite-gold" aria-hidden="true" />
+                      {characterData.character.class}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Class: {characterData.character.class}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
             {characterData.character.level && (
               <div>
                 <div className="text-xs text-muted-foreground mb-1">Level</div>
-                <div className="flex items-center gap-1">
-                  <Star className="h-3 w-3 text-infinite-teal" aria-hidden="true" />
-                  {characterData.character.level}
-                </div>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+                      tabIndex={0}
+                    >
+                      <Star className="h-3 w-3 text-infinite-teal" aria-hidden="true" />
+                      {characterData.character.level}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Level: {characterData.character.level}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
           </div>
@@ -149,17 +179,24 @@ export const ImportCharacterPreview: React.FC<ImportCharacterPreviewProps> = ({
               <div className="text-xs text-muted-foreground mb-2">Ability Scores</div>
               <div className="grid grid-cols-6 gap-2" role="group" aria-label="Ability Scores">
                 {Object.entries(characterData.stats).map(([stat, value]) => (
-                  <div
-                    key={stat}
-                    className="text-center p-2 bg-background rounded border"
-                    aria-label={`${stat}: ${value || 10}`}
-                  >
-                    <div className="text-xs font-medium uppercase" aria-hidden="true">
-                      {stat.slice(0, 3)}
-                    </div>
-                    <span className="sr-only">{stat}</span>
-                    <div className="text-sm font-bold">{value || 10}</div>
-                  </div>
+                  <Tooltip key={stat} delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="text-center p-2 bg-background rounded border outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple cursor-help"
+                        aria-label={`${stat}: ${value || 10}`}
+                        tabIndex={0}
+                      >
+                        <div className="text-xs font-medium uppercase" aria-hidden="true">
+                          {stat.slice(0, 3)}
+                        </div>
+                        <span className="sr-only">{stat}</span>
+                        <div className="text-sm font-bold">{value || 10}</div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="capitalize">{stat}: {value || 10}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
             </div>

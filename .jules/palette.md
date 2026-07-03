@@ -205,3 +205,7 @@
 ## 2026-08-15 - Starter Character Selection Accessibility and Tooltip Standardization
 **Learning:** For informational game elements like ability score cards in character selection, replacing native 'title' attributes with Shadcn Tooltips ensures visual consistency. To maintain accessibility for keyboard-only users, these non-button interactive elements must be made focusable with 'tabIndex={0}' and styled with 'focus-visible' rings to allow tooltip discovery without a mouse.
 **Action:** Replace native 'title' with Shadcn 'Tooltip' for all informational badges and stat cards. Ensure these elements are focusable ('tabIndex={0}') and have appropriate focus ring styles (e.g., 'focus-visible:ring-purple-500').
+
+## 2026-08-16 - Character Import Preview Accessibility and Tooltip Standardization
+**Learning:** For preview components with static data (like character stats), adding tooltips to all fields ensures that keyboard users can discover the same information as mouse users. Standardizing `delayDuration={300}` across all tooltips in a single component creates a more predictable and smooth UX. Making non-interactive text focusable with `tabIndex={0}` and `focus-visible:ring-infinite-purple` allows the tooltip to be triggered via keyboard.
+**Action:** Always wrap informational fields in `Tooltip` with `tabIndex={0}` if they aren't already buttons. Use a consistent `delayDuration` and focus ring style across the component.
