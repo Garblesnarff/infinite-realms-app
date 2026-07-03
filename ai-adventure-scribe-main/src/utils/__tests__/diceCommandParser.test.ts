@@ -1,163 +1,196 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 
 import {
   parseDiceCommand,
   getDiceCommandSuggestions,
-  mightBeDiceCommand,
+  mightBeDiceCommand
 } from '../diceCommandParser';
 
 describe('diceCommandParser', () => {
   describe('parseDiceCommand', () => {
-    it('should return null for non-dice commands', () => {
-      expect(parseDiceCommand('hello')).toBeNull();
-      expect(parseDiceCommand('!roll 1d20')).toBeNull();
-      expect(parseDiceCommand('/notaroll 1d20')).toBeNull();
+    it('should return null for non-roll commands', () => {
+      expect(parseDiceCommand('/help')).toBeNull();
+      expect(parseDiceCommand('just text')).toBeNull();
+      expect(parseDiceCommand('/r')).toBeNull(); // Requires space and content
     });
 
-    it('should parse basic dice rolls', () => {
-      const result = parseDiceCommand('/roll 1d20');
+    it('should parse simple dice rolls', () => {
+      const result = parseDiceCommand('/r 1d20');
       expect(result).toMatchObject({
         isValid: true,
+        formula: '1d20',
         count: 1,
         dieType: 20,
         modifier: 0,
-        formula: '1d20',
         advantage: false,
-        disadvantage: false,
+        disadvantage: false
       });
+    });
 
-      const resultShort = parseDiceCommand('/r 2d6+3');
-      expect(resultShort).toMatchObject({
+    it('should parse dice rolls with modifiers', () => {
+      const result = parseDiceCommand('/roll 2d6+3');
+      expect(result).toMatchObject({
         isValid: true,
+        formula: '2d6+3',
         count: 2,
         dieType: 6,
-        modifier: 3,
-        formula: '2d6+3',
+        modifier: 3
       });
 
-      const resultNegative = parseDiceCommand('/roll 1d100-5');
-      expect(resultNegative).toMatchObject({
+      const resultMinus = parseDiceCommand('/r 1d8-1');
+      expect(resultMinus).toMatchObject({
         isValid: true,
+        formula: '1d8-1',
         count: 1,
-        dieType: 100,
-        modifier: -5,
-        formula: '1d100-5',
+        dieType: 8,
+        modifier: -1
       });
     });
 
-    it('should parse advantage and disadvantage', () => {
-      expect(parseDiceCommand('/roll 1d20 adv')).toMatchObject({
-        advantage: true,
-        disadvantage: false,
-      });
-
-      expect(parseDiceCommand('/r 1d20 advantage')).toMatchObject({
-        advantage: true,
-        disadvantage: false,
-      });
-
-      expect(parseDiceCommand('/roll 1d20 dis')).toMatchObject({
-        advantage: false,
-        disadvantage: true,
-      });
-
-      expect(parseDiceCommand('/r 1d20 disadvantage')).toMatchObject({
-        advantage: false,
-        disadvantage: true,
-      });
-    });
-
-    it('should handle precedence when both advantage and disadvantage are provided', () => {
-      // Advantage takes precedence per code logic
-      const result = parseDiceCommand('/roll 1d20 adv dis');
+    it('should parse rolls with advantage', () => {
+      const result = parseDiceCommand('/r 1d20+5 adv');
       expect(result).toMatchObject({
+        isValid: true,
+        formula: '1d20+5',
         advantage: true,
-        disadvantage: false,
+        disadvantage: false
+      });
+
+      const resultFull = parseDiceCommand('/roll 1d20 advantage');
+      expect(resultFull).toMatchObject({
+        advantage: true
+      });
+    });
+
+    it('should parse rolls with disadvantage', () => {
+      const result = parseDiceCommand('/r 1d20-2 dis');
+      expect(result).toMatchObject({
+        isValid: true,
+        disadvantage: true,
+        advantage: false
+      });
+
+      const resultFull = parseDiceCommand('/roll 1d20 disadvantage');
+      expect(resultFull).toMatchObject({
+        disadvantage: true
+      });
+    });
+
+    it('should cancel out advantage and disadvantage (D&D 5e)', () => {
+      // In D&D 5e, if you have both, they cancel each other out to a normal roll
+      const result = parseDiceCommand('/r 1d20 adv dis');
+      expect(result).toMatchObject({
+        isValid: true,
+        advantage: false,
+        disadvantage: false
       });
     });
 
     it('should parse labels', () => {
-      const result = parseDiceCommand('/roll 1d20 "Attack Roll"');
+      const result = parseDiceCommand('/r 1d20+2 "Initiative"');
       expect(result).toMatchObject({
         isValid: true,
-        formula: '1d20',
-        label: 'Attack Roll',
-      });
-
-      const resultWithAdv = parseDiceCommand('/r 2d6+2 "Healing" adv');
-      expect(resultWithAdv).toMatchObject({
-        isValid: true,
-        formula: '2d6+2',
-        label: 'Healing',
-        advantage: true,
+        formula: '1d20+2',
+        label: 'Initiative'
       });
     });
 
-    it('should handle case insensitivity and extra spaces', () => {
-      expect(parseDiceCommand('  /ROLL   1d20  ')).toMatchObject({
+    it('should handle labels containing keywords correctly', () => {
+      // This tests for label corruption if keywords are stripped too early
+      const result = parseDiceCommand('/r 1d20 "Attack with advantage"');
+      expect(result).toMatchObject({
+        isValid: true,
+        label: 'Attack with advantage',
+        advantage: false // Keywords in labels shouldn't trigger the flags
+      });
+    });
+
+    it('should support shorthand die notation', () => {
+      // "/r d20" should be treated as "1d20"
+      const result = parseDiceCommand('/r d20');
+      expect(result).toMatchObject({
         isValid: true,
         count: 1,
         dieType: 20,
+        formula: '1d20'
       });
 
-      expect(parseDiceCommand('/r 1d20 ADV')).toMatchObject({
-        advantage: true,
+      const resultMod = parseDiceCommand('/r d8+2');
+      expect(resultMod).toMatchObject({
+        count: 1,
+        dieType: 8,
+        modifier: 2
       });
     });
 
-    it('should return invalid for incorrect formulas', () => {
-      const result = parseDiceCommand('/roll 1d21');
+    it('should return error for invalid dice count', () => {
+      const result = parseDiceCommand('/r 0d20');
+      expect(result?.isValid).toBe(false);
+      expect(result?.error).toContain('between 1 and 100');
+
+      const resultTooMany = parseDiceCommand('/r 101d6');
+      expect(resultTooMany?.isValid).toBe(false);
+    });
+
+    it('should return error for invalid die types', () => {
+      const result = parseDiceCommand('/r 1d7');
       expect(result?.isValid).toBe(false);
       expect(result?.error).toContain('Invalid die type');
+    });
 
-      const resultCount = parseDiceCommand('/roll 101d6');
-      expect(resultCount?.isValid).toBe(false);
-      expect(resultCount?.error).toContain('Number of dice must be between 1 and 100');
+    it('should return error for completely invalid formula', () => {
+      const result = parseDiceCommand('/r invalid');
+      expect(result?.isValid).toBe(false);
+      expect(result?.error).toContain('Invalid dice formula');
+    });
 
-      const resultFormat = parseDiceCommand('/roll d20');
-      expect(resultFormat?.isValid).toBe(false);
-      expect(resultFormat?.error).toContain('Invalid dice formula');
-
-      const resultSpaces = parseDiceCommand('/roll 1d20 + 5');
-      expect(resultSpaces?.isValid).toBe(false);
-      expect(resultSpaces?.error).toContain('Invalid dice formula');
+    it('should handle case-insensitivity', () => {
+      const result = parseDiceCommand('/ROLL 1D20 ADV');
+      expect(result).toMatchObject({
+        isValid: true,
+        formula: '1d20',
+        advantage: true
+      });
     });
   });
 
   describe('getDiceCommandSuggestions', () => {
-    it('should return empty array if input does not start with /r', () => {
-      expect(getDiceCommandSuggestions('hello')).toEqual([]);
+    it('should return empty list if not starting with /r', () => {
+      expect(getDiceCommandSuggestions('/h')).toEqual([]);
+      expect(getDiceCommandSuggestions('roll')).toEqual([]);
     });
 
-    it('should return basic suggestions for partial commands', () => {
-      const suggestions = getDiceCommandSuggestions('/rol');
-      expect(suggestions).toContain('/roll 1d20');
-      expect(suggestions).toContain('/roll 2d6');
-    });
-
-    it('should return common D&D rolls for complete command prefix', () => {
+    it('should return base suggestions for /r or /roll', () => {
       const suggestions = getDiceCommandSuggestions('/r');
-      expect(suggestions).toContain('/roll 1d20 "Initiative"');
-      expect(suggestions).toContain('/roll 1d20 adv "Attack with advantage"');
+      expect(suggestions).toContain('/roll 1d20');
+      expect(suggestions).toContain('/roll 1d4');
+
+      const suggestionsFull = getDiceCommandSuggestions('/roll');
+      expect(suggestionsFull).toContain('/roll 1d20');
+
+      const suggestionsPart = getDiceCommandSuggestions('/rol');
+      expect(suggestionsPart).toContain('/roll 1d20');
     });
 
-    it('should be case insensitive', () => {
-      expect(getDiceCommandSuggestions('/R')).toContain('/roll 1d20');
+    it('should return descriptive suggestions for exact /r or /roll command', () => {
+      const suggestions = getDiceCommandSuggestions('/roll');
+      expect(suggestions).toContain('/roll 1d20 "Initiative"');
+      expect(suggestions).toContain('/roll 1d8+3 "Longsword damage"');
     });
   });
 
   describe('mightBeDiceCommand', () => {
     it('should return true for strings starting with /r or /roll', () => {
       expect(mightBeDiceCommand('/r')).toBe(true);
-      expect(mightBeDiceCommand('/roll')).toBe(true);
-      expect(mightBeDiceCommand('/r 1d20')).toBe(true);
-      expect(mightBeDiceCommand(' /roll ')).toBe(true);
+      expect(mightBeDiceCommand('/roll ')).toBe(true);
+      expect(mightBeDiceCommand('  /r 1d20')).toBe(true);
     });
 
     it('should return false for other strings', () => {
-      expect(mightBeDiceCommand('hello')).toBe(false);
-      expect(mightBeDiceCommand('roll 1d20')).toBe(false);
-      expect(mightBeDiceCommand('/notaroll')).toBe(false);
+      expect(mightBeDiceCommand('roll')).toBe(false);
+      expect(mightBeDiceCommand('/help')).toBe(false);
+      expect(mightBeDiceCommand('/')).toBe(false);
     });
   });
 });

@@ -31,23 +31,9 @@ export function parseDiceCommand(input: string): ParsedDiceCommand | null {
   }
 
   const commandContent = match[1].trim();
-
-  // Parse advantage/disadvantage
-  let advantage = false;
-  let disadvantage = false;
   let cleanContent = commandContent;
 
-  if (/\b(?:adv|advantage)\b/i.test(commandContent)) {
-    advantage = true;
-    cleanContent = cleanContent.replace(/\b(?:adv|advantage)\b/gi, '').trim();
-  }
-
-  if (/\b(?:dis|disadvantage)\b/i.test(commandContent)) {
-    disadvantage = true;
-    cleanContent = cleanContent.replace(/\b(?:dis|disadvantage)\b/gi, '').trim();
-  }
-
-  // Parse optional label (quoted text at the end)
+  // 1. Parse optional label (quoted text at the end) first to avoid keyword collision
   let label: string | undefined;
   const labelMatch = cleanContent.match(/^(.+?)\s+"([^"]+)"$/);
   if (labelMatch) {
@@ -55,8 +41,30 @@ export function parseDiceCommand(input: string): ParsedDiceCommand | null {
     label = labelMatch[2];
   }
 
-  // Parse dice formula: XdY+Z or XdY-Z or XdY
-  const diceRegex = /^(\d+)d(\d+)([+-]\d+)?$/i;
+  // 2. Parse advantage/disadvantage from the non-label content
+  const hasAdv = /\b(?:adv|advantage)\b/i.test(cleanContent);
+  const hasDis = /\b(?:dis|disadvantage)\b/i.test(cleanContent);
+
+  let advantage = false;
+  let disadvantage = false;
+
+  if (hasAdv && hasDis) {
+    // In D&D 5e, they cancel each other out
+    advantage = false;
+    disadvantage = false;
+  } else {
+    advantage = hasAdv;
+    disadvantage = hasDis;
+  }
+
+  // Strip keywords to get just the formula
+  cleanContent = cleanContent
+    .replace(/\b(?:adv|advantage)\b/gi, '')
+    .replace(/\b(?:dis|disadvantage)\b/gi, '')
+    .trim();
+
+  // 3. Parse dice formula: [X]dY+Z or [X]dY-Z or [X]dY (X is optional)
+  const diceRegex = /^(\d*)d(\d+)([+-]\d+)?$/i;
   const diceMatch = cleanContent.match(diceRegex);
 
   if (!diceMatch) {
@@ -68,11 +76,11 @@ export function parseDiceCommand(input: string): ParsedDiceCommand | null {
       modifier: 0,
       advantage: false,
       disadvantage: false,
-      error: `Invalid dice formula: "${cleanContent}". Use format like "1d20", "2d6+3", etc.`,
+      error: `Invalid dice formula: "${cleanContent}". Use format like "d20", "1d20", "2d6+3", etc.`,
     };
   }
 
-  const count = parseInt(diceMatch[1]);
+  const count = diceMatch[1] ? parseInt(diceMatch[1]) : 1;
   const dieType = parseInt(diceMatch[2]);
   const modifierMatch = diceMatch[3];
   const modifier = modifierMatch ? parseInt(modifierMatch) : 0;
@@ -102,11 +110,6 @@ export function parseDiceCommand(input: string): ParsedDiceCommand | null {
       disadvantage: false,
       error: `Invalid die type: d${dieType}. Use d4, d6, d8, d10, d12, d20, or d100`,
     };
-  }
-
-  // Can't have both advantage and disadvantage
-  if (advantage && disadvantage) {
-    disadvantage = false; // Advantage takes precedence
   }
 
   // Build clean formula
