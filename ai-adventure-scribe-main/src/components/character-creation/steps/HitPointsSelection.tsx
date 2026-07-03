@@ -7,8 +7,8 @@ import { HitPointsMethodCard } from './HitPointsMethodCard';
 import { HitPointsRollingCard } from './HitPointsRollingCard';
 
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * HitPointsSelection component for determining maximum hit points

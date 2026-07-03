@@ -5,7 +5,6 @@ import { describe, it, expect, vi } from 'vitest';
 import StartingEquipmentSelection from '../StartingEquipmentSelection';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CharacterProvider } from '@/contexts/CharacterContext';
 
 // Mock the context and hooks
 vi.mock('@/contexts/CharacterContext', () => ({
@@ -25,7 +24,7 @@ vi.mock('@/contexts/CharacterContext', () => ({
   CharacterProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({
     toast: vi.fn(),
   }),
@@ -36,7 +35,7 @@ describe('StartingEquipmentSelection Accessibility', () => {
     render(
       <TooltipProvider>
         <StartingEquipmentSelection />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     // Check if RadioGroup has aria-labelledby
@@ -56,7 +55,7 @@ describe('StartingEquipmentSelection Accessibility', () => {
     const { container } = render(
       <TooltipProvider>
         <StartingEquipmentSelection />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     // Check for aria-hidden="true" on explicitly identified icons
@@ -64,19 +63,19 @@ describe('StartingEquipmentSelection Accessibility', () => {
 
     // Package icons
     const packageIcons = container.querySelectorAll('svg.text-blue-500, svg.text-green-500');
-    packageIcons.forEach(icon => {
+    packageIcons.forEach((icon) => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
 
     // Coins icons
     const coinsIcons = container.querySelectorAll('svg.text-yellow-500');
-    coinsIcons.forEach(icon => {
+    coinsIcons.forEach((icon) => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
 
     // Sword icons
     const swordIcons = container.querySelectorAll('svg.text-red-500');
-    swordIcons.forEach(icon => {
+    swordIcons.forEach((icon) => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     });
   });
@@ -85,7 +84,7 @@ describe('StartingEquipmentSelection Accessibility', () => {
     render(
       <TooltipProvider>
         <StartingEquipmentSelection />
-      </TooltipProvider>
+      </TooltipProvider>,
     );
 
     const applyButton = screen.getByRole('button', { name: /Apply/i });

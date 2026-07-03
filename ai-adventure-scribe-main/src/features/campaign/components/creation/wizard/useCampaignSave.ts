@@ -1,11 +1,20 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { campaignImageGenerator } from '@/services/campaign-image-generator';
+
+interface CampaignSaveData {
+  name?: string;
+  background_image?: string | null;
+  enhancementSelections?: unknown[];
+  enhancementEffects?: Record<string, unknown>;
+  setting_details?: unknown;
+  [key: string]: unknown;
+}
 
 /**
  * Custom hook for handling campaign saving functionality
@@ -22,7 +31,7 @@ export const useCampaignSave = () => {
    * @param campaignData - The campaign data to save
    * @returns The saved campaign's ID if successful
    */
-  const saveCampaign = async (campaignData: any) => {
+  const saveCampaign = async (campaignData: CampaignSaveData) => {
     setIsSaving(true);
     try {
       logger.info('Creating campaign and generating background image...');
@@ -79,18 +88,21 @@ export const useCampaignSave = () => {
    * Generate background image for the campaign
    * This runs asynchronously after campaign creation
    */
-  const generateBackgroundImage = async (campaignId: string, campaignData: any) => {
+  const generateBackgroundImage = async (campaignId: string, campaignData: CampaignSaveData) => {
     try {
       logger.info(`Generating background image for campaign ${campaignId}`);
 
       // Generate the image
-      const imageUrl = await campaignImageGenerator.generateCampaignImage(campaignData, {
-        storage: {
-          entityType: 'campaign',
-          entityId: campaignId,
-          label: 'background',
+      const imageUrl = await campaignImageGenerator.generateCampaignImage(
+        { ...campaignData, name: campaignData.name || 'Untitled Campaign' },
+        {
+          storage: {
+            entityType: 'campaign',
+            entityId: campaignId,
+            label: 'background',
+          },
         },
-      });
+      );
 
       // Update the campaign with the generated image URL
       const { error } = await supabase

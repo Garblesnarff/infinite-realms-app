@@ -26,22 +26,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { useToast } from '@/components/ui/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
 import { trpc } from '@/infrastructure/api/trpc-client';
-
 
 interface SceneManagerProps {
   campaignId: string;
@@ -51,6 +41,24 @@ interface SceneManagerProps {
 }
 
 type ViewMode = 'grid' | 'list';
+
+// The `trpc.scenes` namespace collides with a built-in tRPC client method,
+// which leaves the whole router untyped (see ai-dungeon-master-8ez) - so this
+// can't be inferred from the query, and is declared manually to match the
+// server's scene row shape instead.
+interface SceneRow {
+  id: string;
+  name: string;
+  description?: string | null;
+  width: number;
+  height: number;
+  gridSize: number;
+  gridType: 'square' | 'hexagonal_horizontal' | 'hexagonal_vertical' | 'gridless';
+  gridColor?: string | null;
+  backgroundImageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  isActive?: boolean;
+}
 
 export const SceneManager: React.FC<SceneManagerProps> = ({
   campaignId,
@@ -126,7 +134,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
     setActiveMutation.mutate({ sceneId, campaignId });
   };
 
-  const handleDuplicate = (scene: any) => {
+  const handleDuplicate = (scene: SceneRow) => {
     duplicateMutation.mutate({
       name: `${scene.name} (Copy)`,
       description: scene.description,
@@ -134,7 +142,7 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
       width: scene.width,
       height: scene.height,
       gridSize: scene.gridSize,
-      gridType: scene.gridType as any,
+      gridType: scene.gridType,
       gridColor: scene.gridColor,
       backgroundImageUrl: scene.backgroundImageUrl || '',
       thumbnailUrl: scene.thumbnailUrl || '',
@@ -178,165 +186,161 @@ export const SceneManager: React.FC<SceneManagerProps> = ({
     );
   }
 
-  const sceneList = scenes || [];
+  const sceneList = (scenes || []) as SceneRow[];
 
   return (
     <TooltipProvider>
       <div className="space-y-6">
-      {/* Header with view toggle and create button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2" role="group" aria-label="View mode">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setViewMode('grid')}
-                aria-label="Grid view"
-                aria-pressed={viewMode === 'grid'}
-              >
-                <Grid className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Grid view</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setViewMode('list')}
-                aria-label="List view"
-                aria-pressed={viewMode === 'list'}
-              >
-                <List className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>List view</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <span
-            className="text-sm text-muted-foreground ml-2"
-            role="status"
-            aria-live="polite"
-          >
-            {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
-          </span>
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button type="button" onClick={onCreateScene} variant="cosmic">
-              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-              Create New Scene
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Add a new battle map to this campaign</p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* Empty state */}
-      {sceneList.length === 0 && (
-        <EmptyState
-          illustration="no-locations"
-          variant="card"
-          title="No Scenes Yet"
-          description="Create your first scene to bring your campaign to life with interactive battle maps."
-          action={
+        {/* Header with view toggle and create button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2" role="group" aria-label="View mode">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" onClick={onCreateScene} variant="cosmic">
-                  <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Create First Scene
+                <Button
+                  type="button"
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setViewMode('grid')}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
+                >
+                  <Grid className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Begin by adding your first battle map</p>
+                <p>Grid view</p>
               </TooltipContent>
             </Tooltip>
-          }
-        />
-      )}
 
-      {/* Grid View */}
-      {viewMode === 'grid' && sceneList.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {sceneList.map((scene: any) => (
-            <SceneCard
-              key={scene.id}
-              scene={scene}
-              onViewScene={onViewScene}
-              onEditScene={onEditScene}
-              onSetActive={handleSetActive}
-              onDuplicate={handleDuplicate}
-              onDelete={setSceneToDelete}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* List View */}
-      {viewMode === 'list' && sceneList.length > 0 && (
-        <div className="space-y-3">
-          {sceneList.map((scene: any) => (
-            <SceneListItem
-              key={scene.id}
-              scene={scene}
-              onViewScene={onViewScene}
-              onEditScene={onEditScene}
-              onSetActive={handleSetActive}
-              onDuplicate={handleDuplicate}
-              onDelete={setSceneToDelete}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!sceneToDelete} onOpenChange={() => setSceneToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Scene?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the scene and all associated data including tokens,
-              lighting, and fog of war. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
             <Tooltip>
               <TooltipTrigger asChild>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Keep this scene</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <AlertDialogAction
-                  onClick={() => sceneToDelete && handleDelete(sceneToDelete)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  aria-label="Delete Scene - This action cannot be undone"
+                <Button
+                  type="button"
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setViewMode('list')}
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
                 >
-                  Delete Scene
-                </AlertDialogAction>
+                  <List className="h-4 w-4" aria-hidden="true" />
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Permanently delete this scene</p>
+                <p>List view</p>
               </TooltipContent>
             </Tooltip>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+
+            <span className="text-sm text-muted-foreground ml-2" role="status" aria-live="polite">
+              {sceneList.length} {sceneList.length === 1 ? 'scene' : 'scenes'}
+            </span>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" onClick={onCreateScene} variant="cosmic">
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                Create New Scene
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Add a new battle map to this campaign</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Empty state */}
+        {sceneList.length === 0 && (
+          <EmptyState
+            illustration="no-locations"
+            variant="card"
+            title="No Scenes Yet"
+            description="Create your first scene to bring your campaign to life with interactive battle maps."
+            action={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button type="button" onClick={onCreateScene} variant="cosmic">
+                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Create First Scene
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Begin by adding your first battle map</p>
+                </TooltipContent>
+              </Tooltip>
+            }
+          />
+        )}
+
+        {/* Grid View */}
+        {viewMode === 'grid' && sceneList.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {sceneList.map((scene) => (
+              <SceneCard
+                key={scene.id}
+                scene={scene}
+                onViewScene={onViewScene}
+                onEditScene={onEditScene}
+                onSetActive={handleSetActive}
+                onDuplicate={handleDuplicate}
+                onDelete={setSceneToDelete}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* List View */}
+        {viewMode === 'list' && sceneList.length > 0 && (
+          <div className="space-y-3">
+            {sceneList.map((scene) => (
+              <SceneListItem
+                key={scene.id}
+                scene={scene}
+                onViewScene={onViewScene}
+                onEditScene={onEditScene}
+                onSetActive={handleSetActive}
+                onDuplicate={handleDuplicate}
+                onDelete={setSceneToDelete}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!sceneToDelete} onOpenChange={() => setSceneToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Scene?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the scene and all associated data including tokens,
+                lighting, and fog of war. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Keep this scene</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogAction
+                    onClick={() => sceneToDelete && handleDelete(sceneToDelete)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    aria-label="Delete Scene - This action cannot be undone"
+                  >
+                    Delete Scene
+                  </AlertDialogAction>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Permanently delete this scene</p>
+                </TooltipContent>
+              </Tooltip>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </TooltipProvider>
   );
 };

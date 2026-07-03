@@ -35,12 +35,12 @@ vi.mock('@/integrations/supabase/client', () => {
 
 // Mock useToast (even if not directly used by the hook's core logic being tested, it's an import)
 const mockToastFn = vi.fn();
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToastFn }),
 }));
 
 // Helper Test Component
-let hookResult: any; // To store the hook's return value
+let hookResult: ReturnType<typeof useCampaignSave>; // To store the hook's return value
 
 const TestComponent: React.FC<{ campaignDataToSave?: Partial<Campaign> }> = ({
   campaignDataToSave,
@@ -90,7 +90,7 @@ describe('useCampaignSave', () => {
 
     mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-123' }, error: null });
 
-    let savePromise: Promise<any>;
+    let savePromise: Promise<string>;
 
     // Call saveCampaign - this will set isSaving to true synchronously within the hook's state
     act(() => {

@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi } from 'vitest';
 
 import { SceneManager } from '../SceneManager';
+
+// eslint-disable-next-line import/order -- every ordering/blank-line combo here trips a different import/order violation
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Mock trpc
 const mockRefetch = vi.fn();
@@ -29,7 +30,7 @@ vi.mock('@/infrastructure/api/trpc-client', () => ({
 import { trpc } from '@/infrastructure/api/trpc-client';
 
 // Mock useToast
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),
   })),
@@ -39,9 +40,7 @@ const queryClient = new QueryClient();
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      {children}
-    </TooltipProvider>
+    <TooltipProvider>{children}</TooltipProvider>
   </QueryClientProvider>
 );
 
@@ -70,7 +69,7 @@ const mockScenes = [
 
 describe('SceneManager Refactored', () => {
   it('renders grid view by default and shows scenes', () => {
-    (trpc.scenes.list.useQuery as any).mockReturnValue({
+    vi.mocked(trpc.scenes.list.useQuery).mockReturnValue({
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,
@@ -86,7 +85,7 @@ describe('SceneManager Refactored', () => {
   });
 
   it('switches to list view', () => {
-    (trpc.scenes.list.useQuery as any).mockReturnValue({
+    vi.mocked(trpc.scenes.list.useQuery).mockReturnValue({
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,
@@ -105,7 +104,7 @@ describe('SceneManager Refactored', () => {
 
   it('triggers view scene on click', () => {
     const onViewScene = vi.fn();
-    (trpc.scenes.list.useQuery as any).mockReturnValue({
+    vi.mocked(trpc.scenes.list.useQuery).mockReturnValue({
       data: mockScenes,
       isLoading: false,
       refetch: mockRefetch,

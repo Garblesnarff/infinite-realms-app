@@ -35,7 +35,7 @@ vi.mock('./validation', () => ({
 }));
 
 const mockToastFn = vi.fn();
-vi.mock('@/components/ui/use-toast', () => ({
+vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToastFn }),
 }));
 
@@ -62,7 +62,7 @@ const mockCampaignState = {
   },
 };
 vi.mock('@/contexts/CampaignContext', async (importOriginal) => {
-  const actual = (await importOriginal()) as any;
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     useCampaign: () => ({ state: mockCampaignState, dispatch: mockCampaignDispatch }),
@@ -71,7 +71,7 @@ vi.mock('@/contexts/CampaignContext', async (importOriginal) => {
 });
 
 describe('WizardContent', () => {
-  let WizardContent: React.ComponentType<any>; // To hold the dynamically imported component
+  let WizardContent: React.ComponentType<Record<string, never>>; // To hold the dynamically imported component
 
   beforeAll(async () => {
     // Use vi.doMock for './constants' as it depends on MockStep1/MockStep2
@@ -127,6 +127,12 @@ describe('WizardContent', () => {
   });
 
   describe('handleNext', () => {
+    const expectGenreValidationCalled = () =>
+      expect(mockValidateGenreSelection).toHaveBeenCalledWith(
+        mockCampaignState.campaign,
+        mockToastFn,
+      );
+
     it('should navigate to the next step if validation passes', () => {
       renderWizardContent();
       // Ensure Step 1's validation mock (validateGenreSelection) returns true
@@ -134,10 +140,7 @@ describe('WizardContent', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
-      expect(mockValidateGenreSelection).toHaveBeenCalledWith(
-        mockCampaignState.campaign,
-        mockToastFn,
-      );
+      expectGenreValidationCalled();
       expect(screen.getByTestId('mock-step-2')).toBeInTheDocument(); // Check if Step 2 is rendered
       expect(MockStep2).toHaveBeenCalledTimes(1);
       expect(screen.queryByTestId('mock-step-1')).not.toBeInTheDocument(); // Step 1 should not be there
@@ -152,15 +155,11 @@ describe('WizardContent', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
-      expect(mockValidateGenreSelection).toHaveBeenCalledWith(
-        mockCampaignState.campaign,
-        mockToastFn,
-      );
+      expectGenreValidationCalled();
       // Toast is called by the validation function itself as per current WizardContent structure
       // expect(mockToastFn).toHaveBeenCalled(); // This assertion depends on validateGenreSelection calling toast
 
-      expect(screen.getByTestId('mock-step-1')).toBeInTheDocument(); // Still on Step 1
-      expect(MockStep1).toHaveBeenCalledTimes(1); // Initial render
+      expect(screen.getByTestId('mock-step-1')).toBeInTheDocument(); // Still on Step 1, initial render only
       expect(screen.queryByTestId('mock-step-2')).not.toBeInTheDocument(); // Step 2 should not be there
       // Progress indicator should not update
       expect(screen.getByText(`Step 1 of ${mockWizardStepsArray.length}`)).toBeInTheDocument();
@@ -212,6 +211,12 @@ describe('WizardContent', () => {
       expect(screen.getByRole('button', { name: /Finish/i })).toBeInTheDocument();
     };
 
+    const expectCompleteValidationCalled = () =>
+      expect(mockValidateCompleteCampaign).toHaveBeenCalledWith(
+        mockCampaignState.campaign,
+        mockToastFn,
+      );
+
     it('should not save and should show toast if final validation fails', async () => {
       renderWizardContent();
       navigateToFinalStep();
@@ -221,10 +226,7 @@ describe('WizardContent', () => {
       // Click "Finish" button (which is the "Next" button on the final step)
       fireEvent.click(screen.getByRole('button', { name: /Finish/i }));
 
-      expect(mockValidateCompleteCampaign).toHaveBeenCalledWith(
-        mockCampaignState.campaign,
-        mockToastFn,
-      );
+      expectCompleteValidationCalled();
       expect(mockSaveCampaignFn).not.toHaveBeenCalled();
       expect(mockNavigateFn).not.toHaveBeenCalled();
       expect(screen.getByTestId('mock-step-2')).toBeInTheDocument(); // Still on final step
@@ -252,10 +254,7 @@ describe('WizardContent', () => {
       // Using a small timeout or await Promise.resolve() can sometimes help in tests if act() isn't sufficient.
       // However, testing-library's fireEvent and screen queries usually handle this well with mocked promises.
 
-      expect(mockValidateCompleteCampaign).toHaveBeenCalledWith(
-        mockCampaignState.campaign,
-        mockToastFn,
-      );
+      expectCompleteValidationCalled();
       expect(mockSaveCampaignFn).toHaveBeenCalledWith(mockCampaignState.campaign);
 
       // Check for success toast
@@ -279,10 +278,7 @@ describe('WizardContent', () => {
       // Click "Finish" button
       await fireEvent.click(screen.getByRole('button', { name: /Finish/i }));
 
-      expect(mockValidateCompleteCampaign).toHaveBeenCalledWith(
-        mockCampaignState.campaign,
-        mockToastFn,
-      );
+      expectCompleteValidationCalled();
       expect(mockSaveCampaignFn).toHaveBeenCalledWith(mockCampaignState.campaign);
 
       // Check for error toast

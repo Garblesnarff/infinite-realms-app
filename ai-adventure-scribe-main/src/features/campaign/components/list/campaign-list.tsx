@@ -7,7 +7,7 @@
  * Dependencies:
  * - React Query (tanstack)
  * - Supabase client (src/integrations/supabase/client.ts)
- * - Toast hook (src/components/ui/use-toast.ts)
+ * - Toast hook (src/hooks/use-toast.ts)
  * - CampaignCard (src/components/campaign-list/campaign-card.tsx)
  * - CampaignSkeleton (src/components/campaign-list/campaign-skeleton.tsx)
  * - EmptyState (src/components/campaign-list/empty-state.tsx)

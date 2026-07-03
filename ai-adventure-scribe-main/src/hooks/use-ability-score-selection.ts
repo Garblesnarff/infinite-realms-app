@@ -2,11 +2,10 @@ import { useState, useMemo, useCallback } from 'react';
 
 import type { AbilityScores } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAbilityRollingLogic } from '@/hooks/ability-score/use-ability-rolling-logic';
 import { usePointBuyLogic, ABILITIES, POINT_COST } from '@/hooks/ability-score/use-point-buy-logic';
-export { ABILITIES, POINT_COST };
+import { useToast } from '@/hooks/use-toast';
 import { calculateModifier } from '@/utils/abilityScoreUtils';
 import { type AbilityScoreRollResult } from '@/utils/diceRolls';
 import {
@@ -15,6 +14,8 @@ import {
   type AbilityScoreName,
   type RacialBonus,
 } from '@/utils/racialAbilityBonuses';
+
+export { ABILITIES, POINT_COST };
 
 export type Method = 'pointBuy' | 'standardArray' | 'roll';
 
@@ -141,7 +142,13 @@ export const useAbilityScoreSelection = (): UseAbilityScoreSelectionReturn => {
     setRemainingPoints(27);
     setRollHistory([]);
     setCurrentRollDetails(null);
-  }, [state.character?.abilityScores, dispatch, setRemainingPoints, setRollHistory, setCurrentRollDetails]);
+  }, [
+    state.character?.abilityScores,
+    dispatch,
+    setRemainingPoints,
+    setRollHistory,
+    setCurrentRollDetails,
+  ]);
 
   const getAbilityDescription = useCallback((ability: keyof AbilityScores) => {
     const descriptions: Record<keyof AbilityScores, string> = {

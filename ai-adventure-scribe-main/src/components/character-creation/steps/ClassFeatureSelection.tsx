@@ -8,9 +8,9 @@ import type { CharacterClass } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * ClassFeatureSelection component for choosing level 1 class features

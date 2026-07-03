@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 
+import type { CharacterAction } from '@/contexts/character/types';
 import type { AbilityScores, Character } from '@/types/character';
 
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { calculateModifier } from '@/utils/abilityScoreUtils';
 import {
   generateAbilityScoresDetailed,
@@ -21,7 +22,7 @@ const ABILITIES: (keyof AbilityScores)[] = [
 
 interface UseAbilityRollingLogicProps {
   character: Character | null;
-  dispatch: (action: any) => void;
+  dispatch: (action: CharacterAction) => void;
 }
 
 /**
