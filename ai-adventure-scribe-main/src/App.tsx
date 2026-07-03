@@ -16,7 +16,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Z_INDEX } from '@/constants/z-index';
 
 // Lazy load route page components for code splitting
-const Landing = lazy(() => import('./pages/Landing'));
 const LaunchPage = lazy(() => import('./pages/LaunchPage'));
 const CallbackPage = lazy(() => import('./features/auth/components/CallbackPage'));
 const GameUIPreview = lazy(() => import('./pages/GameUIPreview'));
@@ -66,9 +65,6 @@ function App() {
 
                         {/* Beta Launch Page - new main entry point */}
                         <Route path="/" element={withRouteSuspense(<LaunchPage />)} />
-
-                        {/* Original landing page - keep as backup */}
-                        <Route path="/original-landing" element={withRouteSuspense(<Landing />)} />
 
                         {/* OAuth callback route for WorkOS */}
                         <Route
