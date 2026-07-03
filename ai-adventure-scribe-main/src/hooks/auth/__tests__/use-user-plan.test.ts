@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useUserPlan } from '../use-user-plan';
 
@@ -33,7 +33,11 @@ describe('useUserPlan', () => {
     // Mock global fetch
     global.fetch = vi.fn();
 
-    (import.meta as any).env.VITE_API_URL = apiUrl;
+    vi.stubEnv('VITE_API_URL', apiUrl);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('should return null plan by default when no user is provided', async () => {
@@ -64,16 +68,19 @@ describe('useUserPlan', () => {
     });
 
     // We don't check exact URL here because of Vitest/import.meta.env quirk
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/llm/quota'), expect.objectContaining({
-      headers: {
-        Authorization: `Bearer ${mockToken}`,
-        'Content-Type': 'application/json',
-      },
-    }));
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/llm/quota'),
+      expect.objectContaining({
+        headers: {
+          Authorization: `Bearer ${mockToken}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
   });
 
   it('should handle missing VITE_API_URL', async () => {
-    (import.meta as any).env.VITE_API_URL = undefined;
+    vi.stubEnv('VITE_API_URL', undefined);
     window.localStorage.setItem('workos_access_token', mockToken);
     (global.fetch as any).mockResolvedValue({
       ok: true,
