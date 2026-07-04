@@ -15,7 +15,7 @@ test('Dialog has Close button with title', () => {
   );
 
   const closeButton = screen.getByRole('button', { name: /close/i });
-  expect(closeButton.getAttribute('title')).toBe('Close');
+  expect(closeButton.getAttribute('title')).toBe('Close (Esc)');
 });
 
 test('Sheet has Close button with title', () => {
@@ -28,5 +28,5 @@ test('Sheet has Close button with title', () => {
   );
 
   const closeButton = screen.getByRole('button', { name: /close/i });
-  expect(closeButton.getAttribute('title')).toBe('Close');
+  expect(closeButton.getAttribute('title')).toBe('Close (Esc)');
 });
