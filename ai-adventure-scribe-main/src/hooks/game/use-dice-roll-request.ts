@@ -228,6 +228,11 @@ export function useDiceRollRequest({ request, onManualResult }: UseDiceRollReque
     handleAutoRoll,
     handleDiceRollComplete,
     handleManualSubmit,
+    handleEnterManually: useCallback(() => setManualMode(true), []),
+    handleBackToRoll: useCallback(() => {
+      setManualMode(false);
+      setManualResult('');
+    }, []),
     toggleAdvantage,
     toggleDisadvantage,
   };

@@ -13,7 +13,7 @@ interface DiceRollActionButtonsProps {
   onCancel?: () => void;
 }
 
-export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = ({
+export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = React.memo(({
   formula,
   purpose,
   isRolling,
@@ -85,4 +85,4 @@ export const DiceRollActionButtons: React.FC<DiceRollActionButtonsProps> = ({
       </div>
     </div>
   </TooltipProvider>
-);
+));

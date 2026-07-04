@@ -37,7 +37,6 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
   ({ request, onRoll: _onRoll, onManualResult, onCancel, className }) => {
     const {
       manualMode,
-      setManualMode,
       manualResult,
       setManualResult,
       hasAdvantage,
@@ -51,6 +50,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       handleAutoRoll,
       handleDiceRollComplete,
       handleManualSubmit,
+      handleEnterManually,
+      handleBackToRoll,
       toggleAdvantage,
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onManualResult });
@@ -141,7 +142,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                   purpose={request.purpose}
                   isRolling={isRolling}
                   onAutoRoll={handleAutoRoll}
-                  onEnterManually={() => setManualMode(true)}
+                  onEnterManually={handleEnterManually}
                   onCancel={onCancel}
                 />
               )}
@@ -153,10 +154,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               resolvedFormula={resolvedFormula}
               onManualResultChange={setManualResult}
               onSubmit={handleManualSubmit}
-              onBackToRoll={() => {
-                setManualMode(false);
-                setManualResult('');
-              }}
+              onBackToRoll={handleBackToRoll}
               onCancel={onCancel}
             />
           )}

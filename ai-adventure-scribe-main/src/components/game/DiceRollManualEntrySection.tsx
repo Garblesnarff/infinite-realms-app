@@ -13,7 +13,7 @@ interface DiceRollManualEntrySectionProps {
   onCancel?: () => void;
 }
 
-export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProps> = ({
+export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProps> = React.memo(({
   manualMode,
   manualResult,
   resolvedFormula,
@@ -73,4 +73,4 @@ export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProp
       </div>
     </div>
   );
-};
+});

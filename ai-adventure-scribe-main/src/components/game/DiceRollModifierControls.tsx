@@ -12,7 +12,7 @@ interface DiceRollModifierControlsProps {
   onToggleDisadvantage: () => void;
 }
 
-export const DiceRollModifierControls: React.FC<DiceRollModifierControlsProps> = ({
+export const DiceRollModifierControls: React.FC<DiceRollModifierControlsProps> = React.memo(({
   hasAdvantage,
   hasDisadvantage,
   onToggleAdvantage,
@@ -71,4 +71,4 @@ export const DiceRollModifierControls: React.FC<DiceRollModifierControlsProps> =
       </Tooltip>
     </div>
   </TooltipProvider>
-);
+));
