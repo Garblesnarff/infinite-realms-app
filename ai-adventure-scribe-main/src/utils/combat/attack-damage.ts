@@ -27,12 +27,25 @@ export function calculateAttackDamage(
   let baseDamage = 0;
   let damageType: DamageType = 'piercing';
 
+  const strMod = getAbilityModifier(attacker, 'strength');
+  const dexMod = getAbilityModifier(attacker, 'dexterity');
+
+  // Barbarian Rage damage bonus calculation
+  let rageBonus = 0;
+  const isBarbarian = attacker.characterClass?.toLowerCase() === 'barbarian';
+  if (attacker.isRaging && isBarbarian) {
+    const level = attacker.level || 1;
+    if (level >= 16) rageBonus = 4;
+    else if (level >= 9) rageBonus = 3;
+    else rageBonus = 2;
+  }
+
   if (!weapon) {
     // Unarmed strike
     damageRolls = rollDamage('1d4', criticalHit, {});
     baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
     // Unarmed strikes use STR modifier
-    baseDamage += getAbilityModifier(attacker, 'strength');
+    baseDamage += strMod;
     damageType = 'bludgeoning';
   } else if (weapon.damage) {
     // Weapon damage
@@ -40,12 +53,10 @@ export function calculateAttackDamage(
     baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
     damageType = weapon.damage.type;
 
-    // Add ability modifiers
-    const strMod = getAbilityModifier(attacker, 'strength');
-    const dexMod = getAbilityModifier(attacker, 'dexterity');
-
     if (weapon.weaponProperties?.finesse) {
-      baseDamage += Math.max(strMod, dexMod);
+      // For finesse, use STR if it's better (including rage bonus)
+      const useStr = !weapon.range && (strMod + rageBonus > dexMod);
+      baseDamage += useStr ? strMod : dexMod;
     } else if (!weapon.range) {
       // Melee weapon uses STR
       baseDamage += strMod;
@@ -78,20 +89,12 @@ export function calculateAttackDamage(
     baseDamage += sneakRoll.reduce((sum, roll) => sum + roll.total, 0);
   }
 
-  // Add Barbarian Rage damage bonus
-  if (
-    attacker.isRaging &&
-    attacker.characterClass === 'barbarian' &&
-    weapon &&
-    !weapon.range && // Must be melee weapon
-    getAbilityModifier(attacker, 'strength') >= getAbilityModifier(attacker, 'dexterity') // Must use STR
-  ) {
-    // D&D 5e Rage bonus: +2 (lvl 1-8), +3 (lvl 9-15), +4 (lvl 16+)
-    let rageBonus = 2;
-    const level = attacker.level || 1;
-    if (level >= 16) rageBonus = 4;
-    else if (level >= 9) rageBonus = 3;
+  // Apply Barbarian Rage damage bonus if applicable
+  // Rules: Melee weapon attacks using Strength
+  const isMelee = !weapon || !weapon.range;
+  const usedStr = !weapon || (weapon.weaponProperties?.finesse ? (strMod + rageBonus > dexMod) : !weapon.range);
 
+  if (rageBonus > 0 && isMelee && usedStr) {
     baseDamage += rageBonus;
   }
 
@@ -122,12 +125,19 @@ export function calculateAttackDamage(
  * Uses default values for common abilities if not specified
  */
 export function getAbilityModifier(participant: CombatParticipant, ability: string): number {
-  // Check if participant has the property directly (common for some participant objects)
   const abilityName = ability.toLowerCase();
-  const participantValue = (participant as Record<string, unknown>)[abilityName];
 
-  if (typeof participantValue === 'number') {
-    return Math.floor((participantValue - 10) / 2);
+  // 1. Check abilityScores object (Standard Character structure)
+  const abilityScores = participant.abilityScores as Record<string, Record<string, unknown>> | undefined;
+  const scoreFromObject = abilityScores?.[abilityName]?.score;
+  if (typeof scoreFromObject === 'number') {
+    return Math.floor((scoreFromObject - 10) / 2);
+  }
+
+  // 2. Check for direct property (Legacy/Simple structure)
+  const directValue = (participant as Record<string, unknown>)[abilityName];
+  if (typeof directValue === 'number') {
+    return Math.floor((directValue - 10) / 2);
   }
 
   // Default ability scores for basic combat

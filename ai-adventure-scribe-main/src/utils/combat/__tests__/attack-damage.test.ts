@@ -200,6 +200,10 @@ describe('attack-damage', () => {
       } as any;
       expect(getAbilityModifier(partialParticipant, 'strength')).toBe(2); // default 14
       expect(getAbilityModifier(partialParticipant, 'intelligence')).toBe(1); // default 12
+      expect(getAbilityModifier(partialParticipant, 'wisdom')).toBe(1); // default 12
+      expect(getAbilityModifier(partialParticipant, 'dexterity')).toBe(2); // default 14
+      expect(getAbilityModifier(partialParticipant, 'constitution')).toBe(2); // default 14
+      expect(getAbilityModifier(partialParticipant, 'charisma')).toBe(1); // default 12
     });
 
     it('should handle resistance, immunity, and vulnerability', () => {
@@ -276,6 +280,9 @@ describe('attack-damage', () => {
         isRaging: true,
       };
 
+      // Not raging
+      expect(calculateAttackDamage(mockWeapon, { ...barbarian, isRaging: false, level: 1 }, false).totalBeforeResistance).toBe(7);
+
       expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 1 }, false).totalBeforeResistance).toBe(9);
       expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 8 }, false).totalBeforeResistance).toBe(9);
       expect(calculateAttackDamage(mockWeapon, { ...barbarian, level: 9 }, false).totalBeforeResistance).toBe(10);
@@ -290,6 +297,10 @@ describe('attack-damage', () => {
         if (dice === '5d8') return [mockRoll(25)];
         return [];
       });
+
+      // Without smite
+      const resultNoSmite = calculateAttackDamage(mockWeapon, mockAttacker, false);
+      expect(resultNoSmite.totalBeforeResistance).toBe(7);
 
       calculateAttackDamage(mockWeapon, mockAttacker, false, { divineSmiteLevel: 4 });
       expect(diceUtils.rollDamage).toHaveBeenCalledWith('5d8', false, expect.any(Object));
@@ -320,12 +331,102 @@ describe('attack-damage', () => {
       const rangedResult = calculateAttackDamage(shortbow, barbarian, false);
       expect(rangedResult.totalBeforeResistance).toBe(7); // 5 + 2 (DEX) + 0 (Rage)
 
-      // Unarmed strike (eligible if using STR)
+      // Unarmed strike (eligible for rage)
       (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(3)]);
-      calculateAttackDamage(null, barbarian, false);
-      // expect(unarmedResult.totalBeforeResistance).toBe(5); // 3 (roll) + 2 (STR) + 0 (unarmed not a weapon)
-      // Actually, RAW says melee weapon attacks. Unarmed strikes are melee weapon attacks in some contexts, but not always.
-      // My implementation currently checks for `weapon && !weapon.range`. So unarmed gets no rage bonus.
+      const unarmedResult = calculateAttackDamage(null, barbarian, false);
+      expect(unarmedResult.totalBeforeResistance).toBe(7); // 3 + 2 (STR) + 2 (Rage)
+    });
+
+    it('should choose STR over DEX for finesse weapons if Rage is active and STR+Rage > DEX', () => {
+      (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(5)]);
+      const barbarian = {
+        ...mockAttacker,
+        characterClass: 'barbarian',
+        isRaging: true,
+        strength: 14, // +2
+        dexterity: 16, // +3
+        level: 1
+      } as any;
+
+      const rapier: Equipment = {
+        ...mockWeapon,
+        weaponProperties: { finesse: true },
+        damage: { dice: '1d8', type: 'piercing' },
+      };
+
+      // STR(2) + Rage(2) = 4, which is > DEX(3). Should use STR.
+      const result = calculateAttackDamage(rapier, barbarian, false);
+      // Wait, let's trace:
+      // baseDamage = 5 + (useStr ? 2 : 3) = 7.
+      // Final step: if (rage) baseDamage += 2 -> 9.
+      // Oh, I see my implementation trace:
+      // usedStr = strMod + rageBonus > dexMod (2+2 > 3 = true)
+      // baseDamage += strMod (2) -> 7
+      // later, if (usedStr) baseDamage += rageBonus (2) -> 9.
+      // If it used DEX: baseDamage = 5 + 3 = 8. No rage bonus. 8.
+      // So 9 is better than 8.
+      expect(result.totalBeforeResistance).toBe(9);
+    });
+
+    it('should use abilityScores object in getAbilityModifier', () => {
+      const participant = {
+        abilityScores: {
+          strength: { score: 18 }
+        }
+      } as any;
+      expect(getAbilityModifier(participant, 'strength')).toBe(4);
+    });
+
+    it('should handle missing fields in calculateAttackDamage', () => {
+      (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(5)]);
+      const minimalAttacker = {
+        id: '1',
+        damageResistances: undefined,
+        damageImmunities: undefined,
+        damageVulnerabilities: undefined,
+      } as any;
+
+      const result = calculateAttackDamage(mockWeapon, minimalAttacker, false);
+      expect(result.totalBeforeResistance).toBe(7);
+      expect(result.resistances).toEqual([]);
+    });
+
+    it('should handle Barbarian with missing level (default to 1)', () => {
+      (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(5)]);
+      const barbarian = {
+        characterClass: 'barbarian',
+        isRaging: true,
+      } as any;
+
+      const result = calculateAttackDamage(mockWeapon, barbarian, false);
+      // level defaults to 1 -> Rage bonus +2. 5 + 2 (STR mod default 14) + 2 (Rage) = 9.
+      expect(result.totalBeforeResistance).toBe(9);
+    });
+
+    it('should handle missing level for Sneak Attack (default to 1)', () => {
+      (diceUtils.rollDamage as Mock).mockImplementation((dice: string) => {
+        if (dice === '1d8') return [mockRoll(5)];
+        if (dice === '1d6') return [mockRoll(3)]; // Sneak attack level 1
+        return [];
+      });
+
+      const rogue = { ...mockAttacker, characterClass: 'rogue', level: undefined };
+      const result = calculateAttackDamage(mockWeapon, rogue, false, { sneakAttack: true });
+
+      expect(diceUtils.rollDamage).toHaveBeenCalledWith('1d6', false, expect.any(Object));
+      expect(result.totalBeforeResistance).toBe(10); // 5 + 3 + 2 (STR)
+    });
+
+    it('should handle magical weapon with missing magicBonus (default to 0)', () => {
+      (diceUtils.rollDamage as Mock).mockReturnValue([mockRoll(5)]);
+      const magicWeapon: Equipment = {
+        ...mockWeapon,
+        weaponProperties: { magical: true },
+        magicBonus: undefined,
+      };
+
+      const result = calculateAttackDamage(magicWeapon, mockAttacker, false);
+      expect(result.totalBeforeResistance).toBe(7); // 5 + 2 (STR) + 0 (magicBonus)
     });
 
     it('should apply Sneak Attack damage and handle critical hits', () => {

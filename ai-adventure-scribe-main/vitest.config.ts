@@ -460,6 +460,7 @@ export default defineConfig({
       'src/services/ai/shared/__tests__/utils.test.ts',
       'src/services/ai/shared/__tests__/verbalized-sampling.test.ts',
       'src/utils/combat/__tests__/attack-resolution.test.ts',
+      'src/utils/combat/__tests__/attack-damage.test.ts',
     ],
     exclude: [
       'node_modules/**',
@@ -937,6 +938,7 @@ export default defineConfig({
         'src/services/ai/shared/verbalized-sampling.ts',
         'src/utils/combat/attack-resolution.ts',
         'src/utils/combat/__tests__/attack-resolution.test.ts',
+        'src/utils/combat/attack-damage.ts',
       ],
       exclude: [
         '**/__tests__/**',
