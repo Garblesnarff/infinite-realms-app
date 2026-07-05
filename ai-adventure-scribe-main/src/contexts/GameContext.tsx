@@ -26,6 +26,7 @@ import React, {
 
 import { gameReducer, initialGameState } from './game/game-reducer';
 import { useAiRollProcessor, type AiRollRequest } from './game/use-ai-roll-processor';
+import { useDamageAutoApplication } from './game/use-damage-auto-application';
 import { useDiceRollManagement } from './game/use-dice-roll-management';
 
 import type { GamePhase, GameState, GameAction } from './game/game-reducer';
@@ -73,6 +74,9 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const { state: combatState, dealDamage } = useCombat();
+
+  // Auto-apply damage from dice rolls using extracted hook
+  useDamageAutoApplication(state, combatState, dealDamage);
 
   // Track previous combat state values to prevent infinite loops
   // This ref stores the last combat state values we synchronized with GameContext
@@ -200,68 +204,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   ); // 100ms - Combat state updates should be near-instant but can be throttled slightly
 
   const throttledSetGamePhase = useMemo(() => throttle(setGamePhase, 250), [setGamePhase]); // 250ms - Phase transitions are less frequent but can happen during rapid state changes
-
-  // Track which damage_taken rolls have been applied to prevent double-application
-  const appliedDamageRollsRef = useRef<Set<string>>(new Set());
-
-  /**
-   * Auto-apply damage_taken rolls to player HP when they complete
-   * This bridges the AI DM's damage requests with the combat HP system
-   */
-  useEffect(() => {
-    // Find completed damage_taken rolls that haven't been applied yet
-    const completedDamageRolls = state.diceRollQueue.pendingRolls.filter(
-      (roll) =>
-        roll.requestType === 'damage_taken' &&
-        roll.status === 'completed' &&
-        roll.target === 'player' &&
-        roll.result?.total &&
-        !appliedDamageRollsRef.current.has(roll.id),
-    );
-
-    // Apply each damage roll
-    completedDamageRolls.forEach(async (roll) => {
-      const damageAmount = roll.result?.total || 0;
-      if (damageAmount > 0) {
-        logger.info(
-          `💔 Auto-applying damage_taken roll: ${damageAmount} ${roll.damageType || 'untyped'} damage to player`,
-        );
-
-        // Mark as applied to prevent double-application
-        appliedDamageRollsRef.current.add(roll.id);
-
-        // If in combat, apply via CombatContext
-        if (combatState.isInCombat && combatState.activeEncounter) {
-          // Find player participant
-          const playerParticipant = combatState.activeEncounter.participants.find(
-            (p) => p.participantType === 'player',
-          );
-          if (playerParticipant) {
-            logger.info(
-              `⚔️ Applying ${damageAmount} damage to ${playerParticipant.name} in combat via dealDamage`,
-            );
-            try {
-              await dealDamage(playerParticipant.id, damageAmount, roll.damageType);
-              logger.info(`✅ Damage applied successfully to ${playerParticipant.name}`);
-            } catch (error) {
-              logger.error(`❌ Failed to apply damage:`, error);
-            }
-          }
-        } else {
-          // Outside of combat, log for manual tracking
-          // Future enhancement: Could update character HP directly in database
-          logger.info(
-            `📝 Damage taken outside combat: ${damageAmount} ${roll.damageType || 'untyped'} damage (HP tracking not active outside combat)`,
-          );
-        }
-      }
-    });
-  }, [
-    state.diceRollQueue.pendingRolls,
-    combatState.isInCombat,
-    combatState.activeEncounter,
-    dealDamage,
-  ]);
 
   // ⚡ Bolt: Stabilize context value to prevent unnecessary re-renders of consumers.
   // Using useMemo ensures that components consuming this context only re-render
