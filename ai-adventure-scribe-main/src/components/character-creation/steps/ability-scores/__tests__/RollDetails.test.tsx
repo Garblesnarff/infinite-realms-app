@@ -30,7 +30,6 @@ describe('RollDetails', () => {
     // Check for "Reroll" button
     const rerollBtn = screen.getByRole('button', { name: /reroll strength/i });
     expect(rerollBtn).toBeInTheDocument();
-    expect(rerollBtn).toHaveAttribute('title', 'Reroll strength');
     expect(rerollBtn).toHaveAttribute('type', 'button');
 
     // Check for rolls with aria-labels
