@@ -126,15 +126,16 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
     };
 
     return (
-      <div
-        className={rowClasses}
-        onClick={() => onSelectParticipant?.(participant.id)}
-        title="Select participant to view details"
-        onKeyDown={handleKeyDown}
-        role="button"
-        tabIndex={0}
-        aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}Select ${participant.name}`}
-      >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={rowClasses}
+            onClick={() => onSelectParticipant?.(participant.id)}
+            onKeyDown={handleKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={`${isCurrentTurn ? 'Current Turn: ' : ''}Select ${participant.name}`}
+          >
         {/* Turn Indicator & Initiative */}
         <div className="flex items-center space-x-3">
           {isCurrentTurn && (
@@ -209,7 +210,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
           <div className="mt-2 flex items-center gap-2">
             <Progress
               value={hpPercent}
-              className="h-2 flex-1"
+              className="h-2 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
+              tabIndex={0}
               indicatorClassName={getHPColor(hpPercent)}
               aria-label={`${participant.name} Health: ${participant.currentHitPoints}/${participant.maxHitPoints}${participant.temporaryHitPoints > 0 ? ` (+${participant.temporaryHitPoints} temp)` : ''}`}
             />
@@ -260,8 +262,9 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
         {/* AC & Conditions */}
         <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
           <div
-            className="flex items-center gap-1 text-sm font-semibold text-foreground"
+            className="flex items-center gap-1 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple rounded-sm cursor-help"
             aria-label={`Armor Class: ${participant.armorClass}`}
+            tabIndex={0}
           >
             <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <span>AC {participant.armorClass}</span>
@@ -279,9 +282,10 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
                   <Tooltip key={index}>
                     <TooltipTrigger asChild>
                       <div
-                        className={`rounded-full p-1 text-white ${colorClass}`}
+                        className={`rounded-full p-1 text-white ${colorClass} outline-none focus-visible:ring-2 focus-visible:ring-infinite-purple cursor-help`}
                         aria-label={conditionLabel}
                         role="img"
+                        tabIndex={0}
                       >
                         <ConditionIcon className="h-3 w-3" />
                       </div>
@@ -293,7 +297,12 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
             </div>
           )}
         </div>
-      </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Select participant to view details</p>
+        </TooltipContent>
+      </Tooltip>
     );
   },
 );
