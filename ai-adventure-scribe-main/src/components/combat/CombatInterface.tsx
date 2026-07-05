@@ -6,10 +6,11 @@
  * Manages combat mode and participant selection.
  */
 
-import { Sword, Shield, Users, X, Play, RefreshCw } from 'lucide-react';
+import { Shield, X, RefreshCw } from 'lucide-react';
 import React, { useId } from 'react';
 
 import ActionPanel from './ActionPanel';
+import { CombatReadyCard } from './CombatReadyCard';
 import EnemyCard from './EnemyCard';
 import HPTracker from './HPTracker';
 import InitiativeTracker from './InitiativeTracker';
@@ -83,94 +84,14 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({ isDM = false }) => {
   // Show the pre-combat card only if combat hasn't started
   if (!isInCombat && !showCombatMode) {
     return (
-      <TooltipProvider>
-        <Card className="w-full max-w-2xl mx-auto">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sword className="w-5 h-5" aria-hidden="true" />
-              Combat Ready
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center py-8">
-              <div className="text-muted-foreground mb-4">
-                Prepare for battle! Your party is ready to engage enemies.
-              </div>
-
-              {playerParticipants.length === 0 ? (
-                <div className="text-destructive mb-4">
-                  No player characters found. Please ensure your character is selected.
-                </div>
-              ) : (
-                <div className="space-y-2 mb-4">
-                  <p className="text-sm text-muted-foreground">
-                    Party: {playerParticipants.map((p) => p.name).join(', ')}
-                  </p>
-                  {enemyParticipants.length > 0 && (
-                    <p className="text-sm text-destructive">
-                      Enemies: {enemyParticipants.map((p) => p.name).join(', ')}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex gap-2 justify-center">
-                {isDM ? (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          onClick={addEnemy}
-                          variant="outline"
-                          size="sm"
-                          aria-label="Add a new enemy to the encounter"
-                        >
-                          <Users className="w-4 h-4 mr-2" aria-hidden="true" />
-                          Add Enemy
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Add a new enemy to the encounter</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          onClick={handleStartCombat}
-                          disabled={isStartingCombat || playerParticipants.length === 0}
-                          aria-label="Begin the combat encounter"
-                        >
-                          {isStartingCombat ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
-                              Starting...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-4 h-4 mr-2" aria-hidden="true" />
-                              Begin Combat
-                            </>
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Roll initiative and start the encounter</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    The DM will begin combat when ready.
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </TooltipProvider>
+      <CombatReadyCard
+        isDM={isDM}
+        playerParticipants={playerParticipants}
+        enemyParticipants={enemyParticipants}
+        isStartingCombat={isStartingCombat}
+        onAddEnemy={addEnemy}
+        onStartCombat={handleStartCombat}
+      />
     );
   }
 
