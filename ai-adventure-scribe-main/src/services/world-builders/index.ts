@@ -1,6 +1,6 @@
 // World Builder System - Complete AI-Powered World Generation
 export { LocationGenerator } from './location-generator';
-export type { LocationRequest, GeneratedLocation } from './location-generator';
+export type { LocationRequest, GeneratedLocation } from './location-types';
 
 export { NPCGenerator } from './npc-generator';
 export type { NPCRequest, GeneratedNPC } from './npc-types';

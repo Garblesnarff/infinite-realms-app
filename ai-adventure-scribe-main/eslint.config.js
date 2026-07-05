@@ -497,7 +497,6 @@ export default tseslint.config(
       'src/contexts/character/character-updater.ts',
       'src/services/world-builders/npc-generator.ts',
       'src/services/world-builders/__tests__/npc-generator.test.ts',
-      'src/services/world-builders/location-generator.ts',
       'src/components/game/DiceRollRequest.tsx',
       'src/components/game/DiceRollMessage.tsx',
       'src/utils/roll-request/regex-parser.ts',

@@ -3,6 +3,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { LocationGenerator } from '../location-generator';
+import { calculateNarrativeWeight } from '../location-prompts';
+import { WorldBuildingAnalyzer } from '../world-building-analyzer';
 
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
@@ -99,7 +101,7 @@ describe('LocationGenerator', () => {
 
   describe('calculateNarrativeWeight', () => {
     it('should calculate base weight of 5', () => {
-      const weight = (LocationGenerator as any).calculateNarrativeWeight({}, { context: {} });
+      const weight = calculateNarrativeWeight({}, { context: {} } as any);
       expect(weight).toBe(5);
     });
 
@@ -114,7 +116,7 @@ describe('LocationGenerator', () => {
         context: { currentStory: 'Active' },
       };
 
-      const weight = (LocationGenerator as any).calculateNarrativeWeight(location, request);
+      const weight = calculateNarrativeWeight(location, request);
       // 5 (base) + 2 (story + hooks) + 1 (secrets) + 1 (dungeon) + 1 (dangerous) = 10
       expect(weight).toBe(10);
     });
@@ -130,7 +132,7 @@ describe('LocationGenerator', () => {
         context: { currentStory: 'Critical' },
       };
 
-      const weight = (LocationGenerator as any).calculateNarrativeWeight(location, request);
+      const weight = calculateNarrativeWeight(location, request);
       expect(weight).toBe(10);
     });
   });
@@ -249,7 +251,7 @@ describe('LocationGenerator', () => {
   });
 
   describe('inferLocationTypeFromAction', () => {
-    const infer = (action: string) => (LocationGenerator as any).inferLocationTypeFromAction(action);
+    const infer = (action: string) => WorldBuildingAnalyzer.inferLocationTypeFromAction(action);
 
     it('should infer building', () => {
       expect(infer('Enter the building')).toBe('building');

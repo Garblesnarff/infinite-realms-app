@@ -1,4 +1,4 @@
-import type { GeneratedLocation } from './location-generator';
+import type { GeneratedLocation } from './location-types';
 import type { GeneratedNPC } from './npc-types';
 import type { GeneratedQuest } from './quest-generator';
 import type { Memory } from '@/types/memory';

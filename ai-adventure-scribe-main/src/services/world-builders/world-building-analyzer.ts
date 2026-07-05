@@ -1,3 +1,4 @@
+import type { LocationRequest } from './location-types';
 import type { QuestRequest } from './quest-generator';
 import type { WorldBuildingContext, WorldBuildingTrigger } from './types';
 
@@ -121,5 +122,44 @@ export class WorldBuildingAnalyzer {
     }
 
     return 'side'; // Default
+  }
+
+  /**
+   * Infer what type of location is needed based on player action
+   */
+  static inferLocationTypeFromAction(action: string): LocationRequest['type'] {
+    const actionLower = action.toLowerCase();
+
+    if (
+      actionLower.includes('dungeon') ||
+      actionLower.includes('cave') ||
+      actionLower.includes('underground')
+    ) {
+      return 'dungeon';
+    }
+    if (
+      actionLower.includes('forest') ||
+      actionLower.includes('wilderness') ||
+      actionLower.includes('travel')
+    ) {
+      return 'wilderness';
+    }
+    if (
+      actionLower.includes('town') ||
+      actionLower.includes('city') ||
+      actionLower.includes('village')
+    ) {
+      return 'settlement';
+    }
+    if (
+      actionLower.includes('enter') ||
+      actionLower.includes('building') ||
+      actionLower.includes('shop')
+    ) {
+      return 'building';
+    }
+
+    // Default to a generic building/room
+    return 'room';
   }
 }
