@@ -275,3 +275,7 @@
 ## 2026-07-03 - [Account Billing Hook Coverage]
 **Learning:** The `useAccountBilling` hook manages critical monetization state via fetch and React Router. Testing it requires mocking `useSearchParams` and global `fetch`. Verified that `window.location.href` assignment can be tested by mocking the global `location` object (with `configurable: true`). Achieved 100% statement and branch coverage.
 **Action:** Always ensure internal async functions in hooks have explicit `: Promise<void>` return types to satisfy strict project linting. Use `act` for all asynchronous hook interactions that trigger state updates.
+
+## 2024-05-25 - [Damage Calculation Coverage & Order of Operations]
+**Learning:** Added 100% test coverage for `src/services/combat/damage-calculation.ts`. Verified the D&D 5e rule where resistance is applied (and rounded down) before vulnerability. For example, 11 damage with both resistance and vulnerability results in 10 damage: floor(11/2) = 5, then 5 * 2 = 10.
+**Action:** When testing combat mechanics, always verify the order of operations for stacking modifiers. Ensure new tests and source files are registered in BOTH `include` and `coverage.include` arrays in `vitest.config.ts`.
