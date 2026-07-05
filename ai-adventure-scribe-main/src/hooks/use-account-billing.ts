@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import type { UserPlan } from '@/contexts/AuthContext';
 
+import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
 
 export interface SubscriptionStatus {
@@ -66,55 +67,40 @@ export function useAccountBilling(
     }
   }, [searchParams, refreshUserPlan]);
 
-  // Fetch subscription status
+  // Fetch subscription and quota status
   useEffect(() => {
-    const fetchSubscription = async (): Promise<void> => {
+    const fetchData = async (): Promise<void> => {
       try {
         const token = localStorage.getItem('workos_access_token');
         if (!token) return;
 
-        const response = await fetch(`${API_URL}/v1/billing/subscription`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        // ⚡ Bolt: Parallelize subscription and quota fetching to reduce loading latency
+        // on the account page. This executes both requests concurrently.
+        const [subRes, quotaRes] = await Promise.all([
+          fetch(`${API_URL}/v1/billing/subscription`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/v1/llm/quota`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        if (response.ok) {
-          const data = await response.json();
+        if (subRes.ok) {
+          const data = await subRes.json();
           setSubscription(data);
         }
-      } catch (error) {
-        console.error('Failed to fetch subscription:', error);
-      }
-    };
 
-    fetchSubscription();
-  }, [userPlan]);
-
-  // Fetch quota status
-  useEffect(() => {
-    const fetchQuota = async (): Promise<void> => {
-      try {
-        const token = localStorage.getItem('workos_access_token');
-        if (!token) return;
-
-        const response = await fetch(`${API_URL}/v1/llm/quota`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
+        if (quotaRes.ok) {
+          const data = await quotaRes.json();
           setQuota(data);
         }
       } catch (error) {
-        console.error('Failed to fetch quota:', error);
+        logger.error('Failed to fetch account billing data:', { error });
       }
     };
 
-    fetchQuota();
-  }, []);
+    fetchData();
+  }, [userPlan]);
 
   const handleUpgrade = async (): Promise<void> => {
     setLoading(true);
@@ -152,7 +138,7 @@ export function useAccountBilling(
         window.location.href = url;
       }
     } catch (error) {
-      console.error('Upgrade error:', error);
+      logger.error('Upgrade error:', { error });
       toast.error(error instanceof Error ? error.message : 'Failed to start upgrade');
     } finally {
       setLoading(false);
@@ -187,7 +173,7 @@ export function useAccountBilling(
         window.location.href = url;
       }
     } catch (error) {
-      console.error('Portal error:', error);
+      logger.error('Portal error:', { error });
       toast.error(error instanceof Error ? error.message : 'Failed to open billing portal');
     } finally {
       setLoading(false);
