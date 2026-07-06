@@ -26,6 +26,7 @@ import {
   characters,
   type Token,
   type NewToken,
+  type Character,
   type TokenConfiguration,
   type NewTokenConfiguration,
 } from '../../../db/schema/index';
@@ -86,34 +87,58 @@ export class TokenService {
   /**
    * List all tokens for a scene
    */
-  static async listTokensForScene(sceneId: string, userId: string): Promise<Token[]> {
+  static async listTokensForScene(
+    sceneId: string,
+    userId: string,
+  ): Promise<(Token & { character?: Character | null })[]> {
     // 🛡️ Sentinel: Combine ownership check into the query to prevent existence leakage
+    // ⚡ Bolt: Eager-load character data to avoid N+1 fetches on the frontend
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = await (db as any)
-      .select({ token: tokens })
+      .select({
+        token: tokens,
+        character: characters,
+      })
       .from(tokens)
       .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .leftJoin(characters, eq(tokens.actorId, characters.id))
       .where(and(eq(tokens.sceneId, sceneId), eq(scenes.userId, userId)))
       .orderBy(desc(tokens.createdAt));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return results.map((r: any) => r.token);
+    return results.map((r: any) => ({
+      ...r.token,
+      character: r.character,
+    }));
   }
 
   /**
    * Get a single token by ID with full configuration
    */
-  static async getTokenById(tokenId: string, userId: string): Promise<Token | null> {
+  static async getTokenById(
+    tokenId: string,
+    userId: string,
+  ): Promise<(Token & { character?: Character | null }) | null> {
     // 🛡️ Sentinel: Combine ownership check into the query to prevent existence leakage
+    // ⚡ Bolt: Eager-load character data to avoid N+1 fetches on the frontend
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [result] = await (db as any)
-      .select({ token: tokens })
+      .select({
+        token: tokens,
+        character: characters,
+      })
       .from(tokens)
       .innerJoin(scenes, eq(tokens.sceneId, scenes.id))
+      .leftJoin(characters, eq(tokens.actorId, characters.id))
       .where(and(eq(tokens.id, tokenId), eq(scenes.userId, userId)))
       .limit(1);
 
-    return result?.token || null;
+    if (!result) return null;
+
+    return {
+      ...result.token,
+      character: result.character,
+    };
   }
 
   /**
