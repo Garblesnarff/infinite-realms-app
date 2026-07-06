@@ -72,6 +72,10 @@ export const getClassSkillProficiencies = (
   return profs ? [...profs] : [];
 };
 
+// ⚡ Bolt: Module-level cache for combined race/subrace proficiencies to avoid
+// redundant Set creation and array processing for static data.
+const raceProficiencyCache = new Map<string, string[]>();
+
 /**
  * Get skill proficiencies for a race and subrace (combined)
  */
@@ -83,13 +87,21 @@ export const getRaceSkillProficiencies = (
     return [];
   }
 
+  // ⚡ Bolt: Use a composite key to cache combined results.
+  const cacheKey = `${characterRace.name}:${characterSubrace?.name || 'none'}`;
+  const cached = raceProficiencyCache.get(cacheKey);
+  if (cached) return cached;
+
   const baseProfs = RACE_SKILL_PROFICIENCIES_MAP[characterRace.name] || [];
   const subraceProfs = characterSubrace
     ? SUBRACE_SKILL_PROFICIENCIES_MAP[characterSubrace.name] || []
     : [];
 
   // Combine and remove duplicates
-  return [...new Set([...baseProfs, ...subraceProfs])];
+  const combined = [...new Set([...baseProfs, ...subraceProfs])];
+  raceProficiencyCache.set(cacheKey, combined);
+
+  return combined;
 };
 
 /**
