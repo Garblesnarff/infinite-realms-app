@@ -46,23 +46,28 @@ export function deepEqual(a: any, b: any): boolean {
   if (typeof a !== typeof b) return false;
 
   // Handle Date objects
-  if (a instanceof Date && b instanceof Date) {
+  if (a instanceof Date || b instanceof Date) {
+    if (!(a instanceof Date) || !(b instanceof Date)) return false;
     return a.getTime() === b.getTime();
   }
 
   // Handle RegExp objects
-  if (a instanceof RegExp && b instanceof RegExp) {
+  if (a instanceof RegExp || b instanceof RegExp) {
+    if (!(a instanceof RegExp) || !(b instanceof RegExp)) return false;
     return a.toString() === b.toString();
   }
 
   // Handle arrays
-  if (Array.isArray(a) && Array.isArray(b)) {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
     if (a.length !== b.length) return false;
     return a.every((item, index) => deepEqual(item, b[index]));
   }
 
   // Handle objects
   if (typeof a === 'object' && typeof b === 'object') {
+    if (a === null || b === null) return a === b;
+
     const keysA = Object.keys(a);
     const keysB = Object.keys(b);
 

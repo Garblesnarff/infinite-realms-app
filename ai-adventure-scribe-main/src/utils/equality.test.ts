@@ -68,6 +68,17 @@ describe('deepEqual', () => {
     expect(deepEqual(/test/, /other/)).toBe(false);
   });
 
+  it('should handle mismatched object types', () => {
+    expect(deepEqual([], {})).toBe(false);
+    expect(deepEqual({}, [])).toBe(false);
+    expect(deepEqual(new Date(), {})).toBe(false);
+    expect(deepEqual({}, new Date())).toBe(false);
+    expect(deepEqual(/abc/, {})).toBe(false);
+    expect(deepEqual({}, /abc/)).toBe(false);
+    expect(deepEqual([], new Date())).toBe(false);
+    expect(deepEqual(new Date(), /abc/)).toBe(false);
+  });
+
   it('should handle combat state scenario', () => {
     // Simulate the combat state scenario from GameContext
     const state1 = {
