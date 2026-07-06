@@ -7,6 +7,7 @@
  * @module utils/vision-worker-manager
  */
 
+import logger from '@/lib/logger';
 import type { VisionBlocker } from '@/types/scene';
 import type { Token } from '@/types/token';
 import type { VisionPolygon } from '@/utils/vision-polygon';
@@ -95,7 +96,8 @@ export class VisionWorkerManager {
 
       // Set up error handler
       this.worker.onerror = (error) => {
-        console.error('Vision worker error:', error);
+        // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
+        logger.error('Vision worker error', { error });
         this.initializationError = new Error(`Worker error: ${error.message}`);
       };
 

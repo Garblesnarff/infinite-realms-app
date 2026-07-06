@@ -13,6 +13,7 @@ import { Download, Loader2 } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import logger from '@/lib/logger';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,7 +104,8 @@ export const ExportButton: React.FC<ExportButtonProps> = ({
         description: `Character "${characterName}" has been exported to ${filename}`,
       });
     } catch (error) {
-      console.error('Export error:', error);
+      // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
+      logger.error('Export error', { error });
       toast({
         title: 'Export Failed',
         description:
@@ -182,7 +184,8 @@ export const SimpleExportButton: React.FC<Omit<ExportButtonProps, 'showLabel'>> 
         description: `Character exported as ${filename}`,
       });
     } catch (error) {
-      console.error('Export error:', error);
+      // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
+      logger.error('Export error', { error });
       toast({
         title: 'Export Failed',
         description:

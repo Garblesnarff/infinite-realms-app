@@ -10,6 +10,8 @@ import { parseRegexRollRequests } from './regex-parser';
 import type { ParsedRollRequest } from './regex-patterns';
 import type { RollRequest } from '@/types/roll-request';
 
+import logger from '@/lib/logger';
+
 // Re-export for backward compatibility
 export { normalizeFormula };
 export type { ParsedRollRequest };
@@ -56,7 +58,8 @@ export function parseRollRequests(message: string): ParsedRollRequest[] {
         });
       }
     } catch (error) {
-      console.warn('Failed to parse ROLL_REQUESTS_V1 code block:', error);
+      // ⚡ Bolt: Replace console.warn with structured logger for better performance and observability
+      logger.warn('Failed to parse ROLL_REQUESTS_V1 code block', { error });
     }
   }
 

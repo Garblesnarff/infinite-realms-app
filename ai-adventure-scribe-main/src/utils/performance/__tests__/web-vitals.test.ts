@@ -140,16 +140,14 @@ describe('web-vitals utility', () => {
     const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Quota exceeded');
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     reportWebVitals();
     const reportMetricCallback = vi.mocked(webVitals.onLCP).mock.calls[0][0];
     reportMetricCallback({ name: 'LCP', value: 100 } as any);
 
-    expect(warnSpy).toHaveBeenCalledWith('Failed to store web vitals:', expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith('Failed to store web vitals', expect.objectContaining({ error: expect.any(Error) }));
 
     setItemSpy.mockRestore();
-    warnSpy.mockRestore();
   });
 
   it('should clear recorded metrics', () => {

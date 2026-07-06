@@ -18,6 +18,7 @@ import { MapAdjustmentControls } from './map-uploader/MapAdjustmentControls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import logger from '@/lib/logger';
 import { uploadFile, buildTimestampedFilename } from '@/infrastructure/storage/supabase-storage';
 import { cn } from '@/lib/utils';
 
@@ -181,7 +182,8 @@ export const MapUploader: React.FC<MapUploaderProps> = ({
 
       onImageUpload?.(publicUrl, publicUrl);
     } catch (error) {
-      console.error('Upload error:', error);
+      // ⚡ Bolt: Replace console.error with structured logger for better performance and observability
+      logger.error('Upload error', { error });
       toast({
         title: 'Upload Failed',
         description: error instanceof Error ? error.message : 'Failed to upload image.',

@@ -106,6 +106,7 @@ function sendToAnalytics(metric: Metric): void {
 
   // For now, just track in sessionStorage for debugging
   try {
+    // ⚡ Bolt: Replace console.warn with structured logger for better performance and observability
     const metrics = JSON.parse(sessionStorage.getItem('web-vitals') || '[]');
     metrics.push({
       name: metric.name,
@@ -115,7 +116,7 @@ function sendToAnalytics(metric: Metric): void {
     });
     sessionStorage.setItem('web-vitals', JSON.stringify(metrics));
   } catch (error) {
-    console.warn('Failed to store web vitals:', error);
+    logger.warn('Failed to store web vitals', { error });
   }
 }
 
