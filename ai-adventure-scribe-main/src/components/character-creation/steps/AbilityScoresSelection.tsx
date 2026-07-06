@@ -14,6 +14,12 @@ import { Card } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   useAbilityScoreSelection,
   ABILITIES,
   POINT_COST,
@@ -50,8 +56,9 @@ const AbilityScoresSelection: React.FC = () => {
   } = useAbilityScoreSelection();
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6">
+        <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Assign Ability Scores</h2>
         <p className="text-muted-foreground">Choose your method for generating ability scores</p>
       </div>
@@ -78,16 +85,23 @@ const AbilityScoresSelection: React.FC = () => {
               <div className="text-lg">
                 Points Remaining: <Badge variant="outline">{remainingPoints}</Badge>
               </div>
-              <Button
-                type="button"
-                onClick={handleReset}
-                variant="ghost"
-                size="sm"
-                title="Reset ability scores"
-              >
-                <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
-                Reset
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={handleReset}
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Reset ability scores"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
+                    Reset
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reset ability scores</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </Card>
         </TabsContent>
@@ -106,14 +120,21 @@ const AbilityScoresSelection: React.FC = () => {
                   </Badge>
                 ))}
               </div>
-              <Button
-                type="button"
-                onClick={handleStandardArray}
-                variant="default"
-                title="Apply the standard array of scores (15, 14, 13, 12, 10, 8)"
-              >
-                Apply Standard Array
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={handleStandardArray}
+                    variant="default"
+                    aria-label="Apply the standard array of scores (15, 14, 13, 12, 10, 8)"
+                  >
+                    Apply Standard Array
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Apply the standard array of scores (15, 14, 13, 12, 10, 8)</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </Card>
         </TabsContent>
@@ -126,27 +147,41 @@ const AbilityScoresSelection: React.FC = () => {
             </p>
             <div className="flex items-center justify-between">
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={handleRollScores}
-                  variant="default"
-                  title="Roll new scores for all abilities"
-                >
-                  <Shuffle className="w-4 h-4 mr-1" aria-hidden="true" />
-                  Roll New Scores
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      onClick={handleRollScores}
+                      variant="default"
+                      aria-label="Roll new scores for all abilities"
+                    >
+                      <Shuffle className="w-4 h-4 mr-1" aria-hidden="true" />
+                      Roll New Scores
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Roll new scores for all abilities</p>
+                  </TooltipContent>
+                </Tooltip>
                 <DiceRoller dice="4d6" label="Example Roll" />
               </div>
-              <Button
-                type="button"
-                onClick={handleReset}
-                variant="ghost"
-                size="sm"
-                title="Reset ability scores"
-              >
-                <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
-                Reset
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={handleReset}
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Reset ability scores"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" aria-hidden="true" />
+                    Reset
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reset ability scores</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
 
             {currentRollDetails && (
@@ -216,6 +251,7 @@ const AbilityScoresSelection: React.FC = () => {
         abilityScores={state.character?.abilityScores || {}}
       />
     </div>
+    </TooltipProvider>
   );
 };
 
