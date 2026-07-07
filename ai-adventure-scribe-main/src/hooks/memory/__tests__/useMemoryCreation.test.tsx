@@ -22,6 +22,19 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+vi.mock('@/services/user-data-api', async () => {
+  const { supabase } = await import('@/integrations/supabase/client');
+  return {
+    userDataApi: {
+      createMemories: async (records: unknown[]) => {
+        const { data, error } = await supabase.from('memories').insert(records).select().single();
+        if (error) throw error;
+        return [data];
+      },
+    },
+  };
+});
+
 vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(() => ({
     toast: vi.fn(),

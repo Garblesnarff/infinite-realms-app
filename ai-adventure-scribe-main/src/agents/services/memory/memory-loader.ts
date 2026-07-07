@@ -10,8 +10,8 @@
  * @author AI Dungeon Master Team
  */
 
-import { supabase } from '@/integrations/supabase/client';
-import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
+import { userDataApi } from '@/services/user-data-api';
+import { isValidMemoryType } from '@/types/memory';
 import type { Memory } from '@/types/memory';
 import { logger } from '../../../lib/logger';
 
@@ -25,12 +25,7 @@ export class MemoryLoader {
    */
   async loadRecentMemories(sessionId: string, limit = 10): Promise<Memory[]> {
     // ⚡ Bolt: Use explicit column selection to avoid over-fetching large vector embeddings (~3KB per row).
-    const { data } = await supabase
-      .from('memories')
-      .select(MEMORY_SELECT_COLUMNS)
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const data = await userDataApi.listMemories(sessionId, { limit });
 
     return (data || []).map((memory): Memory => {
       if (!isValidMemoryType(memory.type)) {

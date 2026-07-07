@@ -37,6 +37,13 @@ export type SessionMessagePage = {
   total: number;
   hasMore: boolean;
 };
+export type MemoryQuery = {
+  limit?: number;
+  category?: string;
+  recentMinutes?: number;
+  minNarrativeWeight?: number;
+  top?: boolean;
+};
 
 const CHARACTER_FIELDS = [
   'name',
@@ -199,6 +206,39 @@ export const userDataApi = {
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
       method: 'POST',
       body: JSON.stringify(messages),
+    }),
+  listMemories: (sessionId: string, options: MemoryQuery = {}): Promise<any[]> => {
+    const query = new URLSearchParams({ session_id: sessionId });
+    if (options.limit) query.set('limit', String(options.limit));
+    if (options.category) query.set('category', options.category);
+    if (options.recentMinutes) query.set('recent_minutes', String(options.recentMinutes));
+    if (options.minNarrativeWeight) {
+      query.set('min_narrative_weight', String(options.minNarrativeWeight));
+    }
+    if (options.top) query.set('top', 'true');
+    return request(`/v1/memories?${query.toString()}`);
+  },
+  createMemories: (records: Record<string, unknown>[]): Promise<any[]> =>
+    request('/v1/memories', { method: 'POST', body: JSON.stringify(records) }),
+  getMemory: (memoryId: string): Promise<any> =>
+    request(`/v1/memories/${encodeURIComponent(memoryId)}`),
+  updateMemoryScores: (
+    memoryId: string,
+    updates: { importance?: number; narrative_weight?: number },
+  ): Promise<void> =>
+    request(`/v1/memories/${encodeURIComponent(memoryId)}/scores`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+  matchMemories: (
+    sessionId: string,
+    embedding: string,
+    limit: number,
+    threshold: number,
+  ): Promise<any[]> =>
+    request('/v1/memories/match', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, embedding, limit, threshold }),
     }),
   listCharacters: async (campaignId?: string): Promise<any[]> => {
     const characters = await request<any[]>(

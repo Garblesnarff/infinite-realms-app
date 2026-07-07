@@ -16,6 +16,23 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+vi.mock('@/services/user-data-api', async () => {
+  const { supabase } = await import('@/integrations/supabase/client');
+  return {
+    userDataApi: {
+      listMemories: async (sessionId: string) => {
+        const { data, error } = await supabase
+          .from('memories')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+    },
+  };
+});
+
 vi.mock('@/lib/logger', () => ({
   default: {
     info: vi.fn(),
@@ -129,7 +146,9 @@ describe('useMemoryRetrieval', () => {
 
     expect(result.current.data![0].type).toBe('general');
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Invalid memory type detected: invalid-type, defaulting to 'general'"),
+      expect.stringContaining(
+        "Invalid memory type detected: invalid-type, defaulting to 'general'",
+      ),
     );
   });
 

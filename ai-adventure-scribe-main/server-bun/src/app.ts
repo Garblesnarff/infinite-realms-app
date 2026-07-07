@@ -32,6 +32,7 @@ import { campaignsRoutes } from './routes/v1/campaigns';
 import { publicCampaignTemplateRoutes } from './routes/v1/public-campaign-templates';
 import { sessionsRoutes } from './routes/v1/sessions';
 import { sessionMessageRoutes } from './routes/v1/session-messages';
+import { memoryRoutes } from './routes/v1/memories';
 import { personalityRoutes } from './routes/v1/personality';
 import { adminRoutes } from './routes/v1/admin';
 import { spellsRoutes } from './routes/v1/spells';
@@ -356,6 +357,7 @@ export function createApp() {
   // Sessions routes (game session management)
   app.use(sessionsRoutes);
   app.use(sessionMessageRoutes);
+  app.use(memoryRoutes);
 
   // Personality routes (D&D personality elements)
   app.use(personalityRoutes);

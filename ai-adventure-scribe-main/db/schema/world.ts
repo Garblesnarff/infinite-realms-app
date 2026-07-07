@@ -5,7 +5,16 @@
  * Includes NPCs, locations, quests, and AI agent memories.
  */
 
-import { pgTable, uuid, text, timestamp, jsonb, index, integer } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  integer,
+  boolean,
+} from 'drizzle-orm/pg-core';
 
 import { campaigns, gameSessions } from './game';
 
@@ -19,7 +28,9 @@ export const npcs = pgTable(
   'npcs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     race: text('race'),
     occupation: text('occupation'),
@@ -37,7 +48,7 @@ export const npcs = pgTable(
   (table) => ({
     campaignIdIdx: index('idx_npcs_campaign_id').on(table.campaignId),
     nameIdx: index('idx_npcs_name').on(table.name),
-  })
+  }),
 );
 
 /**
@@ -48,7 +59,9 @@ export const locations = pgTable(
   'locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     locationType: text('location_type'), // 'city', 'dungeon', 'wilderness', etc.
     description: text('description'),
@@ -66,7 +79,7 @@ export const locations = pgTable(
   (table) => ({
     campaignIdIdx: index('idx_locations_campaign_id').on(table.campaignId),
     nameIdx: index('idx_locations_name').on(table.name),
-  })
+  }),
 );
 
 /**
@@ -77,7 +90,9 @@ export const quests = pgTable(
   'quests',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     description: text('description'),
     questGiver: text('quest_giver'), // NPC name or ID
@@ -94,7 +109,7 @@ export const quests = pgTable(
   (table) => ({
     campaignIdIdx: index('idx_quests_campaign_id').on(table.campaignId),
     statusIdx: index('idx_quests_status').on(table.status),
-  })
+  }),
 );
 
 /**
@@ -108,10 +123,18 @@ export const memories = pgTable(
     campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'cascade' }),
     sessionId: uuid('session_id').references(() => gameSessions.id, { onDelete: 'cascade' }),
     memoryType: text('memory_type'), // 'event', 'character', 'location', 'item', etc.
+    type: text('type'),
+    subcategory: text('subcategory'),
+    metadata: jsonb('metadata'),
     importance: integer('importance').default(5), // 1-10 scale
     content: text('content').notNull(),
     context: jsonb('context'),
     embedding: text('embedding'), // Vector embedding for semantic search
+    narrativeWeight: integer('narrative_weight').default(5),
+    emotionalTone: text('emotional_tone'),
+    storyArc: text('story_arc'),
+    proseQuality: boolean('prose_quality').default(false),
+    chapterMarker: boolean('chapter_marker').default(false),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },
@@ -120,7 +143,7 @@ export const memories = pgTable(
     sessionIdIdx: index('idx_memories_session_id').on(table.sessionId),
     memoryTypeIdx: index('idx_memories_memory_type').on(table.memoryType),
     importanceIdx: index('idx_memories_importance').on(table.importance),
-  })
+  }),
 );
 
 // Type exports for TypeScript inference

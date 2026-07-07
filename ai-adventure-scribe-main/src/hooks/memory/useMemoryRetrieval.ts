@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { Memory } from '@/types/memory';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
+import { userDataApi } from '@/services/user-data-api';
+import { isValidMemoryType } from '@/types/memory';
 
 export const useMemoryRetrieval = (sessionId: string | null) => {
   return useQuery({
@@ -15,13 +15,10 @@ export const useMemoryRetrieval = (sessionId: string | null) => {
       logger.info('[Memory Retrieval] Fetching memories for session:', sessionId);
 
       // ⚡ Bolt: Using explicit column list to avoid fetching large vector embeddings (~3KB/row).
-      const { data, error } = await supabase
-        .from('memories')
-        .select(MEMORY_SELECT_COLUMNS)
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
+      let data;
+      try {
+        data = await userDataApi.listMemories(sessionId);
+      } catch (error) {
         logger.error('[Memory Retrieval] Error fetching memories:', error);
         throw error;
       }

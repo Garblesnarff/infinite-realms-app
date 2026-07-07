@@ -7,7 +7,6 @@ import type { Memory } from '@/types/memory';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
-import { MEMORY_SELECT_COLUMNS } from '@/types/memory';
 
 interface ContextParams {
   campaignId: string;
@@ -56,14 +55,7 @@ class GameContextBuilder {
   }
 
   private async fetchMemories(sessionId: string): Promise<Memory[] | null> {
-    const { data, error } = await supabase
-      .from('memories')
-      .select(MEMORY_SELECT_COLUMNS)
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: false })
-      .limit(15);
-    if (error) throw error;
-    return data;
+    return userDataApi.listMemories(sessionId, { limit: 15 }) as Promise<Memory[]>;
   }
 
   private compose(

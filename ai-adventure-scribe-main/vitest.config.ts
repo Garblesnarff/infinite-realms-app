@@ -303,6 +303,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/combat-attack-service.test.ts',
       'server-bun/src/services/__tests__/session-service.test.ts',
       'server-bun/src/services/__tests__/session-message-service.test.ts',
+      'server-bun/src/services/__tests__/memory-service.test.ts',
       'server-bun/src/services/__tests__/token-service.test.ts',
       'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'server-bun/src/services/__tests__/scene-service.test.ts',

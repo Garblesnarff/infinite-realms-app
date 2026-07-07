@@ -20,6 +20,72 @@ vi.mock('@/integrations/supabase/client', () => {
   };
 });
 
+vi.mock('@/services/user-data-api', async () => {
+  const { supabase } = await import('@/integrations/supabase/client');
+  return {
+    userDataApi: {
+      createMemories: async (records: unknown[]) => {
+        const { data, error } = await supabase.from('memories').insert(records);
+        if (error) throw error;
+        return data || [];
+      },
+      listMemories: async (sessionId: string, options: any = {}) => {
+        let query = supabase
+          .from('memories')
+          .select(MEMORY_SELECT_COLUMNS)
+          .eq('session_id', sessionId);
+        if (options.category) query = query.eq('metadata->category', options.category);
+        if (options.recentMinutes) {
+          query = query.gte(
+            'created_at',
+            new Date(Date.now() - options.recentMinutes * 60_000).toISOString(),
+          );
+        }
+        if (options.minNarrativeWeight) {
+          query = query.gte('narrative_weight', options.minNarrativeWeight);
+        }
+        query = options.top
+          ? query
+              .order('importance', { ascending: false })
+              .order('created_at', { ascending: false })
+          : query.order('created_at', { ascending: Boolean(options.minNarrativeWeight) });
+        if (options.limit) query = query.limit(options.limit);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+      },
+      updateMemoryScores: async (memoryId: string, updates: unknown) => {
+        const { error } = await supabase.from('memories').update(updates).eq('id', memoryId);
+        if (error) throw error;
+      },
+      getMemory: async (memoryId: string) => {
+        const { data, error } = await supabase
+          .from('memories')
+          .select('importance, narrative_weight')
+          .eq('id', memoryId)
+          .single();
+        if (error) throw error;
+        return data;
+      },
+      matchMemories: async (
+        sessionId: string,
+        embedding: string,
+        limit: number,
+        threshold: number,
+      ) => {
+        const { data, error } = await supabase.rpc('match_memories', {
+          query_embedding: embedding,
+          session_id: sessionId,
+          match_threshold: threshold,
+          match_count: limit,
+        });
+        if (error) throw error;
+        return data || [];
+      },
+    },
+  };
+});
+
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   default: {

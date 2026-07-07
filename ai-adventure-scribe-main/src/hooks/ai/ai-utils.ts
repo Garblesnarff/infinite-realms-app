@@ -17,7 +17,8 @@ import type { Memory } from '@/types/memory';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { isValidMemoryType, MEMORY_SELECT_COLUMNS } from '@/types/memory';
+import { userDataApi } from '@/services/user-data-api';
+import { isValidMemoryType } from '@/types/memory';
 
 /**
  * Formats chat messages into a task object for the DM Agent.
@@ -89,10 +90,7 @@ export async function fetchGameContext(
  */
 export async function fetchMemories(sessionId: string): Promise<Memory[]> {
   // ⚡ Bolt: Using explicit column list to avoid fetching large vector embeddings (~3KB/row).
-  const { data: memoriesData } = await supabase
-    .from('memories')
-    .select(MEMORY_SELECT_COLUMNS)
-    .eq('session_id', sessionId);
+  const memoriesData = await userDataApi.listMemories(sessionId);
 
   return (memoriesData || []).map((memory): Memory => {
     if (!isValidMemoryType(memory.type)) {

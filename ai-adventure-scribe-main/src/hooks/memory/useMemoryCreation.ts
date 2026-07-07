@@ -6,6 +6,7 @@ import { isSemanticMemoriesEnabled } from '@/config/featureFlags';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { isValidMemoryType } from '@/types/memory';
 import { processContent } from '@/utils/memoryClassification';
 
@@ -54,7 +55,7 @@ export const useMemoryCreation = (sessionId: string | null) => {
       return { isValid: false, processedMemory };
     }
 
-    if (!isValidMemoryType(memory.type)) {
+    if (typeof memory.type !== 'string' || !isValidMemoryType(memory.type)) {
       logger.error('[Memory Creation] Invalid memory type:', memory.type);
       return { isValid: false, processedMemory };
     }
@@ -92,23 +93,14 @@ export const useMemoryCreation = (sessionId: string | null) => {
         embedding,
       });
 
-      const { data, error } = await supabase
-        .from('memories')
-        .insert([
-          {
-            ...validatedMemory,
-            session_id: sessionId,
-            embedding: embedding ?? null,
-            metadata: validatedMemory.metadata || {},
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
+      const [data] = await userDataApi.createMemories([
+        {
+          ...validatedMemory,
+          session_id: sessionId,
+          embedding: embedding ?? null,
+          metadata: validatedMemory.metadata || {},
+        },
+      ]);
       return data;
     },
     onSuccess: (data) => {
