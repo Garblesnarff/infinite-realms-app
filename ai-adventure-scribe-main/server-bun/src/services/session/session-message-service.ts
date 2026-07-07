@@ -54,7 +54,7 @@ export class SessionMessageService {
       db
         .select({
           message: dialogueHistory,
-          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
+          totalCount: sql<number>`(count(*) OVER())::int`.as('total_count'),
         })
         .from(dialogueHistory)
         .where(
@@ -210,7 +210,7 @@ export class SessionMessageService {
       db
         .select({
           message: dialogueHistory,
-          totalCount: sql<number>`count(*)::int OVER()`.as('total_count'),
+          totalCount: sql<number>`(count(*) OVER())::int`.as('total_count'),
         })
         .from(dialogueHistory)
         .where(
