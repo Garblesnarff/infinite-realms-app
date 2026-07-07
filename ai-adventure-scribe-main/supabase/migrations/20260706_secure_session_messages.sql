@@ -21,7 +21,16 @@ END
 $$;
 
 ALTER TABLE public.dialogue_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.session_messages ENABLE ROW LEVEL SECURITY;
-
 REVOKE ALL PRIVILEGES ON TABLE public.dialogue_history FROM anon, authenticated;
-REVOKE ALL PRIVILEGES ON TABLE public.session_messages FROM anon, authenticated;
+
+-- session_messages belongs to the optional legacy multiplayer subsystem and is
+-- not present in every deployment. Secure it when installed; its absence is
+-- already default-deny.
+DO $$
+BEGIN
+  IF to_regclass('public.session_messages') IS NOT NULL THEN
+    ALTER TABLE public.session_messages ENABLE ROW LEVEL SECURITY;
+    REVOKE ALL PRIVILEGES ON TABLE public.session_messages FROM anon, authenticated;
+  END IF;
+END
+$$;
