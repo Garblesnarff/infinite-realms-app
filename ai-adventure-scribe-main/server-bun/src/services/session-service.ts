@@ -6,7 +6,7 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, isNull, desc, sql, or } from 'drizzle-orm';
+import { eq, and, desc, sql, or } from 'drizzle-orm';
 
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
@@ -118,10 +118,8 @@ export class SessionService {
    */
   static async getSessionById(sessionId: string, userId: string): Promise<GameSession> {
     const session = await db.query.gameSessions.findFirst({
-      where: and(
-        eq(gameSessions.id, sessionId),
-        getOwnershipCondition(userId)
-      ),
+      where: (session, { and, eq }) =>
+        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
     });
 
     if (!session) throw new NotFoundError('Session', sessionId);
@@ -154,21 +152,14 @@ export class SessionService {
     campaignId?: string;
     characterId?: string;
   }, userId: string): Promise<GameSession | null> {
-    const conditions = [isNull(gameSessions.endTime)];
-
-    if (params.campaignId) {
-      conditions.push(eq(gameSessions.campaignId, params.campaignId));
-    }
-
-    if (params.characterId) {
-      conditions.push(eq(gameSessions.characterId, params.characterId));
-    }
-
-    // Add ownership check
-    conditions.push(getOwnershipCondition(userId));
-
     const session = await db.query.gameSessions.findFirst({
-      where: and(...conditions),
+      where: (session, { and, eq, isNull }) =>
+        and(
+          isNull(session.endTime),
+          params.campaignId ? eq(session.campaignId, params.campaignId) : undefined,
+          params.characterId ? eq(session.characterId, params.characterId) : undefined,
+          getOwnershipCondition(userId, session),
+        ),
       columns: {
         id: true,
         campaignId: true,
@@ -287,10 +278,11 @@ export class SessionService {
     // ⚡ Bolt: Optimized to exclude heavy text/JSONB fields (sessionNotes, summary, sceneDescription)
     // for list view. This reduces data transfer and memory usage.
     return await db.query.gameSessions.findMany({
-      where: and(
-        eq(gameSessions.campaignId, campaignId),
-        getOwnershipCondition(userId)
-      ),
+      where: (session, { and, eq }) =>
+        and(
+          eq(session.campaignId, campaignId),
+          getOwnershipCondition(userId, session),
+        ),
       columns: {
         id: true,
         campaignId: true,
@@ -326,10 +318,8 @@ export class SessionService {
     // ⚡ Bolt: Optimized to fetch only the sessionNotes column instead of the entire session record.
     // This avoids over-fetching large columns like summary or currentSceneDescription.
     const session = await db.query.gameSessions.findFirst({
-      where: and(
-        eq(gameSessions.id, sessionId),
-        getOwnershipCondition(userId)
-      ),
+      where: (session, { and, eq }) =>
+        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
       columns: { sessionNotes: true },
     });
 

@@ -47,7 +47,8 @@ export class SessionMessageService {
     // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
     const [session, messagesWithCount] = await Promise.all([
       db.query.gameSessions.findFirst({
-        where: and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)),
+        where: (session, { and, eq }) =>
+          and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
         columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
       }),
       db
@@ -134,7 +135,8 @@ export class SessionMessageService {
 
     return db.transaction(async (tx) => {
       const session = await tx.query.gameSessions.findFirst({
-        where: and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)),
+        where: (session, { and, eq }) =>
+          and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
         columns: { id: true },
       });
       if (!session) throw new NotFoundError('Session', sessionId);
@@ -175,7 +177,8 @@ export class SessionMessageService {
     userId: string,
   ): Promise<boolean> {
     const session = await db.query.gameSessions.findFirst({
-      where: and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)),
+      where: (session, { and, eq }) =>
+        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
       columns: { id: true },
     });
     if (!session) throw new NotFoundError('Session', sessionId);
@@ -200,7 +203,8 @@ export class SessionMessageService {
     // Reducing database round-trips from 3 to 2 by using PostgreSQL window function count(*) OVER().
     const [session, messagesWithCount] = await Promise.all([
       db.query.gameSessions.findFirst({
-        where: and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)),
+        where: (session, { and, eq }) =>
+          and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
         columns: { id: true }, // ⚡ Bolt: Only fetch ID for existence/ownership check
       }),
       db
