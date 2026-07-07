@@ -1,0 +1,18 @@
+title = "Infinite Realms gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documentation-only bearer token placeholders"
+targetRules = ["curl-auth-header"]
+condition = "AND"
+regexTarget = "line"
+regexes = [
+  '''Authorization:\s*Bearer\s+(?:YOUR_TOKEN|YOUR_ANON_KEY|YOUR_USER_JWT|SERVICE_ROLE_KEY|USER_JWT)''',
+]
+paths = [
+  '''^ai-adventure-scribe-main/docs/MIGRATION_GUIDE\.md$''',
+  '''^ai-adventure-scribe-main/docs/SESSION_ARCHIVAL\.md$''',
+  '''^ai-adventure-scribe-main/supabase/migrations/README_SESSION_ARCHIVAL\.md$''',
+]
