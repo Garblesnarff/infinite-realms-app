@@ -17,7 +17,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { CharacterSelectionModal } from '@/features/campaign/components';
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 const CampaignHub: React.FC = () => {
   const { id: campaignId } = useParams();
@@ -36,16 +36,7 @@ const CampaignHub: React.FC = () => {
 
       // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
       // of heavy JSONB columns (setting_details, thematic_elements, etc.) not used in this view.
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select(
-          'id, user_id, name, description, genre, difficulty_level, campaign_length, tone, background_image',
-        )
-        .eq('id', campaignId as string)
-        .eq('user_id', user.id) // SECURITY: Validate ownership
-        .single();
-      if (error) throw error;
-      return data;
+      return userDataApi.getCampaign(campaignId as string);
     },
     enabled: Boolean(campaignId) && Boolean(user?.id),
   });

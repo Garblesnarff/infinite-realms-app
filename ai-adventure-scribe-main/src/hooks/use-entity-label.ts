@@ -36,19 +36,11 @@ export function useEntityLabel(type: EntityType, id: string | null) {
       try {
         setLoading(true);
         if (type === 'campaign') {
-          const { data, error } = await supabase
-            .from('campaigns')
-            .select('name')
-            .eq('id', id)
-            .limit(1);
+          const data = await userDataApi.getCampaign(entityId);
           if (cancelled) return;
-          if (error) {
-            logger.warn('[useEntityLabel] Failed to load campaign label', { id, error });
-          } else {
-            const value = data?.[0]?.name ?? null;
-            if (value) cache.set(key, value);
-            setLabel(value);
-          }
+          const value = data?.name ?? null;
+          if (value) cache.set(key, value);
+          setLabel(value);
         } else if (type === 'character') {
           try {
             const data = await userDataApi.getCharacter(entityId);

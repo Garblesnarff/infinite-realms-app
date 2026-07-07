@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * WorldBuilderRepository handles database persistence and data access
@@ -23,17 +24,7 @@ export class WorldBuilderRepository {
       }
 
       // Check if campaign exists and user owns it
-      const { data: campaign, error: campaignError } = await supabase
-        .from('campaigns')
-        .select('user_id')
-        .eq('id', campaignId)
-        .eq('user_id', userId) // SECURITY: Validate ownership
-        .single();
-
-      if (campaignError) {
-        logger.warn('[WorldBuilder] Campaign query error:', campaignError);
-        return false;
-      }
+      const campaign = await userDataApi.getCampaign(campaignId);
 
       if (!campaign) {
         logger.warn(

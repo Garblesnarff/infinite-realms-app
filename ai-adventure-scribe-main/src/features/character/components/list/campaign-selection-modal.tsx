@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 interface CampaignSelectionModalProps {
   isOpen: boolean;
@@ -43,20 +44,8 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
     queryFn: async () => {
       // Only select minimal fields needed for campaign selection
       // Excludes heavy JSONB fields (setting_details, thematic_elements, style_config, rules_config)
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select(
-          `
-          id, name, description, genre,
-          difficulty_level, campaign_length, tone,
-          status, background_image, art_style,
-          created_at, updated_at
-        `,
-        )
-        .eq('status', 'active');
-
-      if (error) throw error;
-      return data;
+      const data = await userDataApi.listCampaigns();
+      return data.filter((campaign) => campaign.status === 'active');
     },
   });
 

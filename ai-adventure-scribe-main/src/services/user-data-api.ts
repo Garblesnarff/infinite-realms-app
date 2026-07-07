@@ -21,6 +21,8 @@ export type CharacterPayload = Record<string, unknown> & {
   stats?: CharacterStatsPayload;
 };
 
+export type CampaignPayload = Record<string, unknown> & { name: string };
+
 const CHARACTER_FIELDS = [
   'name',
   'description',
@@ -97,6 +99,31 @@ function prepareCharacterPayload(payload: Record<string, unknown>): CharacterPay
   return prepared as CharacterPayload;
 }
 
+const CAMPAIGN_FIELDS = [
+  'name',
+  'description',
+  'genre',
+  'difficulty_level',
+  'campaign_length',
+  'tone',
+  'setting',
+  'setting_details',
+  'thematic_elements',
+  'status',
+  'background_image',
+  'art_style',
+  'style_config',
+  'rules_config',
+] as const;
+
+function prepareCampaignPayload(payload: Record<string, unknown>): CampaignPayload {
+  const prepared: Record<string, unknown> = {};
+  for (const field of CAMPAIGN_FIELDS) {
+    if (payload[field] !== undefined) prepared[field] = payload[field];
+  }
+  return prepared as CampaignPayload;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = window.localStorage.getItem('workos_access_token');
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -124,6 +151,22 @@ function normalizeCharacter<T extends Record<string, any>>(character: T): T {
 }
 
 export const userDataApi = {
+  listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
+  getCampaign: (campaignId: string): Promise<any> =>
+    request(`/v1/campaigns/${encodeURIComponent(campaignId)}`),
+  listPublicCampaignTemplates: (): Promise<any[]> => request('/v1/public/campaign-templates'),
+  createCampaign: (payload: CampaignPayload): Promise<any> =>
+    request('/v1/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(prepareCampaignPayload(payload)),
+    }),
+  updateCampaign: (campaignId: string, payload: Record<string, unknown>): Promise<any> =>
+    request(`/v1/campaigns/${encodeURIComponent(campaignId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(prepareCampaignPayload(payload)),
+    }),
+  deleteCampaign: (campaignId: string): Promise<void> =>
+    request(`/v1/campaigns/${encodeURIComponent(campaignId)}`, { method: 'DELETE' }),
   listCharacters: async (campaignId?: string): Promise<any[]> => {
     const characters = await request<any[]>(
       `/v1/characters${campaignId ? `?campaign_id=${encodeURIComponent(campaignId)}` : ''}`,

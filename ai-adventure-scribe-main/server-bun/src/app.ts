@@ -29,6 +29,7 @@ import { classFeaturesRoutes } from './routes/v1/class-features';
 import { observabilityRoutes } from './routes/v1/observability';
 import { encountersRoutes } from './routes/v1/encounters';
 import { campaignsRoutes } from './routes/v1/campaigns';
+import { publicCampaignTemplateRoutes } from './routes/v1/public-campaign-templates';
 import { sessionsRoutes } from './routes/v1/sessions';
 import { personalityRoutes } from './routes/v1/personality';
 import { adminRoutes } from './routes/v1/admin';
@@ -253,9 +254,15 @@ export function createApp() {
               .filter(Boolean)
           : [];
 
-        const metricsPublic = process.env.METRICS_PUBLIC === 'true' || process.env.METRICS_PUBLIC === '1';
+        const metricsPublic =
+          process.env.METRICS_PUBLIC === 'true' || process.env.METRICS_PUBLIC === '1';
 
-        if (!metricsPublic && process.env.NODE_ENV === 'production' && !metricsToken && allowlist.length === 0) {
+        if (
+          !metricsPublic &&
+          process.env.NODE_ENV === 'production' &&
+          !metricsToken &&
+          allowlist.length === 0
+        ) {
           set.status = 403;
           return { error: 'Metrics endpoint is not configured for public access' };
         }
@@ -274,7 +281,8 @@ export function createApp() {
           }
 
           if (allowlist.length > 0) {
-            const trustProxy = process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
+            const trustProxy =
+              process.env.TRUST_PROXY_HEADERS === 'true' || process.env.TRUST_PROXY_HEADERS === '1';
             const forwardedFor = trustProxy ? request.headers.get('x-forwarded-for') : null;
             const realIp = trustProxy ? request.headers.get('x-real-ip') : null;
             const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : realIp || '';
@@ -342,6 +350,7 @@ export function createApp() {
 
   // Campaigns routes (campaign CRUD)
   app.use(campaignsRoutes);
+  app.use(publicCampaignTemplateRoutes);
 
   // Sessions routes (game session management)
   app.use(sessionsRoutes);

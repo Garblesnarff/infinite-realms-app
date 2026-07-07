@@ -19,8 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CampaignDetailHero } from '@/features/campaign/components/view/sections/CampaignDetailHero';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 const CampaignDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -57,17 +57,9 @@ const CampaignDetailPage: React.FC = () => {
 
     try {
       // Check if user already has a campaign linked to this starter
-      const { data: existingCampaign, error: checkError } = await supabase
-        .from('campaigns')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('name', campaign.title)
-        .maybeSingle();
-
-      if (checkError) {
-        logger.error('Error checking for existing campaign:', checkError);
-        throw checkError;
-      }
+      const existingCampaign = (await userDataApi.listCampaigns()).find(
+        (candidate) => candidate.name === campaign.title,
+      );
 
       let campaignId: string;
 
@@ -77,26 +69,16 @@ const CampaignDetailPage: React.FC = () => {
         logger.info(`Using existing campaign ${campaignId} for starter ${campaign.id}`);
       } else {
         // Create a new campaign linked to this starter
-        const { data: newCampaign, error: createError } = await supabase
-          .from('campaigns')
-          .insert({
-            user_id: user.id,
-            name: campaign.title,
-            description: campaign.premise,
-            genre: campaign.genre[0] || 'fantasy',
-            tone: campaign.tone[0] || 'epic',
-            difficulty_level: campaign.difficulty,
-            campaign_length: 'full',
-            status: 'active',
-            background_image: campaign.coverImageUrl,
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          logger.error('Error creating campaign:', createError);
-          throw createError;
-        }
+        const newCampaign = await userDataApi.createCampaign({
+          name: campaign.title,
+          description: campaign.premise,
+          genre: campaign.genre[0] || 'fantasy',
+          tone: campaign.tone[0] || 'epic',
+          difficulty_level: campaign.difficulty,
+          campaign_length: 'full',
+          status: 'active',
+          background_image: campaign.coverImageUrl,
+        });
 
         campaignId = newCampaign.id;
         logger.info(`Created new campaign ${campaignId} for starter ${campaign.id}`);

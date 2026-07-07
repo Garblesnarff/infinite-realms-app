@@ -317,6 +317,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/combat-initiative-security.test.ts',
       'server-bun/src/services/__tests__/inventory-service-security.test.ts',
       'server-bun/src/services/__tests__/campaign-service.test.ts',
+      'src/features/campaign/components/creation/wizard/useCampaignSave.test.tsx',
       'server-bun/src/services/__tests__/fog-of-war-service.test.ts',
       'server-bun/src/services/__tests__/measurement-security.test.ts',
       'server-bun/src/trpc/routers/__tests__/chronicle-security.test.ts',

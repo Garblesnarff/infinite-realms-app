@@ -126,19 +126,11 @@ export const useInitialGreeting = ({
       // Also used explicit column selection instead of select('*') to minimize data transfer.
       const [characterResult, campaignResult] = await Promise.all([
         userDataApi.getCharacter(characterId as string).then((data) => ({ data, error: null })),
-        supabase
-          .from('campaigns')
-          .select('id, name, description')
-          .eq('id', campaignId as string)
-          .single(),
+        userDataApi.getCampaign(campaignId as string).then((data) => ({ data, error: null })),
       ]);
 
       const { data: characterData } = characterResult;
-      const { data: campaignData, error: campaignError } = campaignResult;
-
-      if (campaignError) {
-        throw new Error(`Failed to load campaign: ${campaignError.message}`);
-      }
+      const { data: campaignData } = campaignResult;
 
       logger.info('[Initial Greeting] Generated prompt for AI service');
 

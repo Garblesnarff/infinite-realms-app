@@ -5,6 +5,7 @@ import type { QuestRequest, GeneratedQuest } from '@/services/world-builders/que
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import {
   buildQuestPromptTemplate,
   buildQuestHookPromptTemplate,
@@ -180,25 +181,15 @@ export class QuestGenerator {
         logger.warn('[QuestGenerator] No userId provided - this is insecure');
       }
 
-      // Build query with ownership validation
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
-      let campaignQuery = supabase.from('campaigns').select('genre').eq('id', campaignId);
-
-      if (userId) {
-        campaignQuery = campaignQuery.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
-      }
-
       // Get campaign and memories in parallel
-      const [campaignResult, memories] = await Promise.all([
-        campaignQuery.single(),
+      const [campaign, memories] = await Promise.all([
+        userDataApi.getCampaign(campaignId),
         MemoryManager.getRelevantMemories(sessionId, 'quest opportunities', 5),
       ]);
 
-      if (!campaignResult.data) {
+      if (!campaign) {
         throw new Error('Campaign not found or access denied');
       }
-
-      const campaign = campaignResult;
 
       const request: QuestRequest = {
         type: questType,
@@ -209,7 +200,7 @@ export class QuestGenerator {
           campaignId,
           sessionId,
           characterId,
-          genre: campaign.data.genre || 'fantasy',
+          genre: campaign.genre || 'fantasy',
           playerLevel: await getAveragePartyLevel(campaignId, sessionId),
           recentMemories: memories,
         },

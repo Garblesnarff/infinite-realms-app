@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { isCampaignCharacterFlowEnabled } from '@/config/featureFlags';
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 type CampaignTemplate = {
   id: string;
@@ -45,19 +46,7 @@ const CharacterCreateEntry: React.FC = () => {
   } = useQuery<CampaignTemplate[], Error>({
     queryKey: ['public-campaign-templates'],
     queryFn: async () => {
-      const { data, error: queryError } = await supabase
-        .from('campaigns')
-        .select(
-          'id, name, description, genre, tone, campaign_length, difficulty_level, thumbnail_url',
-        )
-        .eq('template', true)
-        .eq('visibility', 'public')
-        .order('published_at', { ascending: false, nullsLast: false })
-        .order('template_version', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      if (queryError) throw queryError;
-      return (data ?? []) as CampaignTemplate[];
+      return userDataApi.listPublicCampaignTemplates() as Promise<CampaignTemplate[]>;
     },
     enabled: featureOn, // Only run query if feature is enabled
   });

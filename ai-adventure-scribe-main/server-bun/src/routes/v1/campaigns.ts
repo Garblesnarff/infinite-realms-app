@@ -32,14 +32,22 @@ const campaignBodySchema = t.Object({
   difficulty_level: t.Optional(t.Nullable(t.String())),
   campaign_length: t.Optional(t.Nullable(t.String())),
   tone: t.Optional(t.Nullable(t.String())),
-  setting: t.Optional(t.Nullable(t.Object({
-    era: t.Optional(t.Nullable(t.String())),
-    location: t.Optional(t.Nullable(t.String())),
-    atmosphere: t.Optional(t.Nullable(t.String())),
-  }))),
+  setting: t.Optional(
+    t.Nullable(
+      t.Object({
+        era: t.Optional(t.Nullable(t.String())),
+        location: t.Optional(t.Nullable(t.String())),
+        atmosphere: t.Optional(t.Nullable(t.String())),
+      }),
+    ),
+  ),
   thematic_elements: t.Optional(t.Nullable(t.Any())),
+  setting_details: t.Optional(t.Nullable(t.Any())),
   status: t.Optional(t.String()),
   background_image: t.Optional(t.Nullable(t.String())),
+  art_style: t.Optional(t.Nullable(t.String())),
+  style_config: t.Optional(t.Nullable(t.Any())),
+  rules_config: t.Optional(t.Nullable(t.Any())),
 });
 
 const updateCampaignBodySchema = t.Partial(campaignBodySchema);
@@ -122,35 +130,42 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
    * POST /v1/campaigns
    * Create a new campaign
    */
-  .post('/', async ({ body, set, user }) => {
-    const payload = body as CampaignBody;
+  .post(
+    '/',
+    async ({ body, set, user }) => {
+      const payload = body as CampaignBody;
 
-    try {
-      const campaign = await CampaignService.create((user as AuthUser).userId, {
-        name: payload.name,
-        description: payload.description,
-        genre: payload.genre,
-        difficultyLevel: payload.difficulty_level,
-        campaignLength: payload.campaign_length,
-        tone: payload.tone,
-        era: payload.setting?.era,
-        location: payload.setting?.location,
-        atmosphere: payload.setting?.atmosphere,
-        settingDetails: payload.setting,
-        thematicElements: payload.thematic_elements,
-        status: payload.status,
-        backgroundImage: payload.background_image,
-      });
+      try {
+        const campaign = await CampaignService.create((user as AuthUser).userId, {
+          name: payload.name,
+          description: payload.description,
+          genre: payload.genre,
+          difficultyLevel: payload.difficulty_level,
+          campaignLength: payload.campaign_length,
+          tone: payload.tone,
+          era: payload.setting?.era,
+          location: payload.setting?.location,
+          atmosphere: payload.setting?.atmosphere,
+          settingDetails: payload.setting_details ?? payload.setting,
+          thematicElements: payload.thematic_elements,
+          status: payload.status,
+          backgroundImage: payload.background_image,
+          artStyle: payload.art_style,
+          styleConfig: payload.style_config,
+          rulesConfig: payload.rules_config,
+        });
 
-      set.status = 201;
-      return mapCampaignToApi(campaign);
-    } catch (e) {
-      logger.error({ msg: 'CAMPAIGNS_CREATE error', error: e });
-      throw e;
-    }
-  }, {
-    body: campaignBodySchema
-  })
+        set.status = 201;
+        return mapCampaignToApi(campaign);
+      } catch (e) {
+        logger.error({ msg: 'CAMPAIGNS_CREATE error', error: e });
+        throw e;
+      }
+    },
+    {
+      body: campaignBodySchema,
+    },
+  )
 
   /**
    * GET /v1/campaigns/:id
@@ -165,37 +180,44 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
    * PUT /v1/campaigns/:id
    * Update a campaign
    */
-  .put('/:id', async ({ params, body, user }) => {
-    const payload = body as UpdateCampaignBody;
+  .put(
+    '/:id',
+    async ({ params, body, user }) => {
+      const payload = body as UpdateCampaignBody;
 
-    try {
-      const updated = await CampaignService.update(params.id, (user as AuthUser).userId, {
-        name: payload.name,
-        description: payload.description,
-        genre: payload.genre,
-        difficultyLevel: payload.difficulty_level,
-        campaignLength: payload.campaign_length,
-        tone: payload.tone,
-        era: payload.setting?.era,
-        location: payload.setting?.location,
-        atmosphere: payload.setting?.atmosphere,
-        settingDetails: payload.setting,
-        thematicElements: payload.thematic_elements,
-        status: payload.status,
-        backgroundImage: payload.background_image,
-      });
+      try {
+        const updated = await CampaignService.update(params.id, (user as AuthUser).userId, {
+          name: payload.name,
+          description: payload.description,
+          genre: payload.genre,
+          difficultyLevel: payload.difficulty_level,
+          campaignLength: payload.campaign_length,
+          tone: payload.tone,
+          era: payload.setting?.era,
+          location: payload.setting?.location,
+          atmosphere: payload.setting?.atmosphere,
+          settingDetails: payload.setting_details ?? payload.setting,
+          thematicElements: payload.thematic_elements,
+          status: payload.status,
+          backgroundImage: payload.background_image,
+          artStyle: payload.art_style,
+          styleConfig: payload.style_config,
+          rulesConfig: payload.rules_config,
+        });
 
-      return mapCampaignToApi(updated);
-    } catch (e) {
-      logger.error({ msg: 'CAMPAIGNS_UPDATE error', error: e });
-      if (e instanceof NotFoundError) {
+        return mapCampaignToApi(updated);
+      } catch (e) {
+        logger.error({ msg: 'CAMPAIGNS_UPDATE error', error: e });
+        if (e instanceof NotFoundError) {
+          throw e;
+        }
         throw e;
       }
-      throw e;
-    }
-  }, {
-    body: updateCampaignBodySchema
-  })
+    },
+    {
+      body: updateCampaignBodySchema,
+    },
+  )
 
   /**
    * DELETE /v1/campaigns/:id

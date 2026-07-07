@@ -6,9 +6,9 @@ import type { Campaign as CampaignType } from '@/types/campaign';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { characterLoaderService } from '@/services/character-loader';
+import { userDataApi } from '@/services/user-data-api';
 import { handleAsyncError } from '@/utils/error-handler';
 
 export type LoadingPhase = 'initial' | 'data' | 'session' | 'greeting';
@@ -55,26 +55,15 @@ export function useGameData(
 
         // ⚡ Bolt: Parallelize character and campaign data fetching to reduce total loading latency.
         // This ensures the application starts faster by not waiting for each fetch sequentially.
-        const [loadedCharacter, campaignResult] = await Promise.all([
+        const [loadedCharacter, campaignData] = await Promise.all([
           characterLoaderService.loadCharacterWithSpells(characterId, user?.id),
-          supabase
-            .from('campaigns')
-            .select(
-              'id, name, description, genre, difficulty_level, campaign_length, tone, status, art_style, user_id, setting_details, thematic_elements, style_config, rules_config',
-            )
-            .eq('id', campaignId)
-            .single(),
+          userDataApi.getCampaign(campaignId),
         ]);
 
         if (!loadedCharacter) {
           throw new Error('Character not found or failed to load.');
         }
 
-        const { data: campaignData, error: campaignError } = campaignResult;
-
-        if (campaignError) {
-          throw new Error(`Failed to load campaign: ${campaignError.message}`);
-        }
         if (!campaignData) {
           throw new Error('Campaign not found.');
         }

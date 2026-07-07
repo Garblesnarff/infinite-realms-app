@@ -1,37 +1,26 @@
 import { act, render, screen, waitFor } from '@testing-library/react'; // Added waitFor
 import React from 'react';
-import { vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCampaignSave } from './useCampaignSave';
 
 import type { Campaign } from '@/types/campaign';
 
-// Mock Supabase Client
-// Define mocks that will be asserted on, if any, outside the factory.
-// For this case, we assert on mockSupabaseInsert, so it needs to be accessible.
-const mockSupabaseSingle = vi.fn();
-const mockSupabaseSelect = vi.fn(() => ({ single: mockSupabaseSingle }));
-// mockSupabaseInsert needs to be accessible for assertions.
-const mockSupabaseInsert = vi.fn(() => ({ select: mockSupabaseSelect }));
+const { mockCreateCampaign } = vi.hoisted(() => ({ mockCreateCampaign: vi.fn() }));
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createCampaign: mockCreateCampaign,
+    updateCampaign: vi.fn(),
+  },
+}));
 
-vi.mock('@/integrations/supabase/client', () => {
-  // These are now local to the factory, or we use the module-scoped ones if they are correctly set up.
-  // To allow mockSupabaseInsert to be asserted from outside, it must be the one defined in module scope.
-  // The functions in the chain leading to it can be local if not asserted on.
-  // const localMockSupabaseSingle = vi.fn(); // not needed if using module-scoped mockSupabaseSingle
-  // const localMockSupabaseSelect = vi.fn(() => ({ single: mockSupabaseSingle })); // uses module-scoped mockSupabaseSingle
-  // const localMockSupabaseInsert = vi.fn(() => ({ select: localMockSupabaseSelect })); // uses localMockSupabaseSelect
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 
-  // The key is that the `from` property must return a function that eventually calls the
-  // module-scoped mockSupabaseInsert.
-  const localMockSupabaseFrom = vi.fn(() => ({ insert: mockSupabaseInsert })); // Uses module-scoped mockSupabaseInsert
-
-  return {
-    supabase: {
-      from: localMockSupabaseFrom,
-    },
-  };
-});
+vi.mock('@/services/campaign-image-generator', () => ({
+  campaignImageGenerator: { generateCampaignImage: vi.fn(() => new Promise(() => {})) },
+}));
 
 // Mock useToast (even if not directly used by the hook's core logic being tested, it's an import)
 const mockToastFn = vi.fn();
@@ -40,7 +29,7 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 // Helper Test Component
-let hookResult: ReturnType<typeof useCampaignSave>; // To store the hook's return value
+let hookResult: ReturnType<typeof useCampaignSave>;
 
 const TestComponent: React.FC<{ campaignDataToSave?: Partial<Campaign> }> = ({
   campaignDataToSave,
@@ -71,12 +60,7 @@ const TestComponent: React.FC<{ campaignDataToSave?: Partial<Campaign> }> = ({
 describe('useCampaignSave', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset any specific mock implementations if they were changed in a test
-    mockSupabaseSingle.mockReset();
-    mockSupabaseInsert.mockClear(); // Clear call history etc.
-    mockSupabaseSelect.mockClear();
-    // mockSupabaseFrom is no longer module-scoped, so it cannot be cleared here.
-    // Its behavior is defined within the vi.mock factory for supabase client.
+    mockCreateCampaign.mockReset();
   });
 
   it('initial state should have isSaving as false', () => {
@@ -85,12 +69,12 @@ describe('useCampaignSave', () => {
   });
 
   it('saveCampaign should set isSaving to true during operation and false after success', async () => {
-    mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-123' }, error: null });
+    mockCreateCampaign.mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(() => resolve({ id: 'campaign-123' }), 10)),
+    );
     render(<TestComponent />); // Render the component once
 
-    mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-123' }, error: null });
-
-    let savePromise: Promise<string>;
+    let savePromise: Promise<unknown>;
 
     // Call saveCampaign - this will set isSaving to true synchronously within the hook's state
     act(() => {
@@ -112,7 +96,7 @@ describe('useCampaignSave', () => {
   });
 
   it('saveCampaign should return campaign ID on successful insert', async () => {
-    mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-xyz' }, error: null });
+    mockCreateCampaign.mockResolvedValueOnce({ id: 'campaign-xyz' });
     render(<TestComponent />);
 
     let result;
@@ -122,15 +106,18 @@ describe('useCampaignSave', () => {
     });
 
     expect(result).toBe('campaign-xyz');
-    expect(mockSupabaseInsert).toHaveBeenCalledWith([
-      // Corrected status to 'active' as per hook implementation
-      { name: 'Test Campaign', status: 'active', setting_details: {} },
-    ]);
+    expect(mockCreateCampaign).toHaveBeenCalledWith({
+      name: 'Test Campaign',
+      status: 'active',
+      setting_details: {},
+      enhancement_selections: [],
+      enhancement_effects: {},
+    });
   });
 
   it('saveCampaign should throw error if Supabase returns error', async () => {
-    const supabaseError = { message: 'Supabase error' };
-    mockSupabaseSingle.mockResolvedValueOnce({ data: null, error: supabaseError });
+    const supabaseError = new Error('API error');
+    mockCreateCampaign.mockRejectedValueOnce(supabaseError);
     render(<TestComponent />);
 
     await act(async () => {
@@ -142,7 +129,7 @@ describe('useCampaignSave', () => {
   });
 
   it('saveCampaign should throw error if no data is returned from insert', async () => {
-    mockSupabaseSingle.mockResolvedValueOnce({ data: null, error: null }); // No error, but also no data
+    mockCreateCampaign.mockResolvedValueOnce(null);
     render(<TestComponent />);
 
     await act(async () => {
@@ -154,29 +141,28 @@ describe('useCampaignSave', () => {
   });
 
   it('saveCampaign should ensure setting_details is an object', async () => {
-    mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-abc' }, error: null });
+    mockCreateCampaign.mockResolvedValueOnce({ id: 'campaign-abc' });
     render(<TestComponent />);
 
     // Test with setting_details as null
     await act(async () => {
       await hookResult.saveCampaign({ name: 'Test', setting_details: null });
     });
-    expect(mockSupabaseInsert).toHaveBeenCalledWith([
+    expect(mockCreateCampaign).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Test', setting_details: {} }),
-    ]);
+    );
 
     // Reset mocks for next call within the same test
-    mockSupabaseInsert.mockClear();
-    mockSupabaseSingle.mockClear(); // ensure it's clean for the next resolve
-    mockSupabaseSingle.mockResolvedValueOnce({ data: { id: 'campaign-def' }, error: null });
+    mockCreateCampaign.mockClear();
+    mockCreateCampaign.mockResolvedValueOnce({ id: 'campaign-def' });
 
     // Test with provided setting_details
     const myDetails = { world: 'Mystara' };
     await act(async () => {
       await hookResult.saveCampaign({ name: 'Test 2', setting_details: myDetails });
     });
-    expect(mockSupabaseInsert).toHaveBeenCalledWith([
+    expect(mockCreateCampaign).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Test 2', setting_details: myDetails }),
-    ]);
+    );
   });
 });

@@ -11,8 +11,8 @@ import type { QuestRequest, GeneratedQuest } from './quest-generator';
 import type { WorldBuildingContext, WorldExpansionResult } from './types';
 
 import { isWorldBuilderEnabled } from '@/config/featureFlags';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 export class WorldBuilderService {
   /**
@@ -57,12 +57,7 @@ export class WorldBuilderService {
       }
 
       // Get campaign details for context
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
-      const { data: campaign } = await supabase
-        .from('campaigns')
-        .select('genre')
-        .eq('id', context.campaignId)
-        .single();
+      const campaign = await userDataApi.getCampaign(context.campaignId);
 
       const _genre = campaign?.genre || context.genre || 'fantasy';
 

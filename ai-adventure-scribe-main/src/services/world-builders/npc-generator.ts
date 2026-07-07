@@ -5,6 +5,7 @@ import type { NPCRequest, GeneratedNPC } from './npc-types';
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export class NPCGenerator {
@@ -164,15 +165,7 @@ export class NPCGenerator {
         logger.warn('[NPCGenerator] No userId provided - this is insecure');
       }
 
-      // Build query with ownership validation
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching.
-      let query = supabase.from('campaigns').select('genre').eq('id', campaignId);
-
-      if (userId) {
-        query = query.eq('user_id', userId); // SECURITY: Ensure user owns this campaign
-      }
-
-      const { data: campaign } = await query.single();
+      const campaign = await userDataApi.getCampaign(campaignId);
 
       if (!campaign) {
         throw new Error('Campaign not found or access denied');

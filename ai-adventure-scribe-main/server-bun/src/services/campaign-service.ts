@@ -14,12 +14,19 @@ import { campaigns, type Campaign, type NewCampaign } from '../../../db/schema/i
 import { InternalServerError, NotFoundError } from '../lib/errors.js';
 
 export class CampaignService {
+  static async listPublicTemplates(): Promise<Campaign[]> {
+    return db.query.campaigns.findMany({
+      where: and(eq(campaigns.template, true), eq(campaigns.visibility, 'public')),
+      orderBy: [desc(campaigns.publishedAt), desc(campaigns.templateVersion)],
+    });
+  }
+
   /**
    * List all campaigns for a user
    * Optimized to exclude heavy JSONB fields by default for list view
    */
   static async listForUser(userId: string): Promise<Campaign[]> {
-    return await db.query.campaigns.findMany({
+    return (await db.query.campaigns.findMany({
       where: eq(campaigns.userId, userId),
       orderBy: [desc(campaigns.createdAt)],
       columns: {
@@ -45,7 +52,7 @@ export class CampaignService {
         location: true,
         atmosphere: true,
       },
-    }) as Campaign[];
+    })) as Campaign[];
   }
 
   /**
@@ -82,13 +89,9 @@ export class CampaignService {
   /**
    * Update an existing campaign with ownership verification
    */
-  static async update(
-    id: string,
-    userId: string,
-    data: Partial<NewCampaign>
-  ): Promise<Campaign> {
+  static async update(id: string, userId: string, data: Partial<NewCampaign>): Promise<Campaign> {
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
-    const { id: _id, userId: _userId, ...safeUpdates } = data as any;
+    const { id: _id, userId: _userId, ...safeUpdates } = data;
 
     const [updated] = await db
       .update(campaigns)

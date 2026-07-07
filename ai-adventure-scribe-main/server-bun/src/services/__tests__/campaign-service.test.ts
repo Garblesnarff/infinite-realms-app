@@ -38,7 +38,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
   };
 });
 
@@ -56,9 +56,23 @@ describe('CampaignService Security', () => {
 
       await CampaignService.listForUser(mockUserId);
 
-      expect(db.query.campaigns.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.any(Object),
-      }));
+      expect(db.query.campaigns.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.any(Object),
+        }),
+      );
+    });
+  });
+
+  describe('listPublicTemplates', () => {
+    it('queries only templates intended for public discovery', async () => {
+      (db.query.campaigns.findMany as any).mockResolvedValue([]);
+
+      await CampaignService.listPublicTemplates();
+
+      expect(db.query.campaigns.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.any(Object) }),
+      );
     });
   });
 
@@ -101,8 +115,9 @@ describe('CampaignService Security', () => {
         returning: vi.fn().mockResolvedValue([]),
       });
 
-      await expect(CampaignService.update(mockCampaignId, mockUserId, { name: 'New Name' }))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        CampaignService.update(mockCampaignId, mockUserId, { name: 'New Name' }),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should update campaign if owned by user', async () => {
@@ -125,8 +140,9 @@ describe('CampaignService Security', () => {
         returning: vi.fn().mockResolvedValue([]),
       });
 
-      await expect(CampaignService.delete(mockCampaignId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(CampaignService.delete(mockCampaignId, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should succeed if owned by user', async () => {

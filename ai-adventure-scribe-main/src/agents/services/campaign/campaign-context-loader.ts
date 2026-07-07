@@ -14,7 +14,7 @@ import { logger } from '../../../lib/logger';
 
 import type { CampaignContext } from '@/types/dm'; // Ensure this type aligns with returned structure
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 // Define ThematicElements locally if not imported or different from CampaignContext's version
 interface ThematicElements {
@@ -34,36 +34,8 @@ export class CampaignContextLoader {
    * @throws {Error} If the campaign is not found or there's a database error
    */
   async loadCampaignContext(campaignId: string, userId?: string): Promise<CampaignContext> {
-    // Build query with ownership validation if userId provided
-    let query = supabase
-      .from('campaigns')
-      .select(
-        `
-        name,
-        description,
-        genre,
-        tone,
-        setting_details,
-        thematic_elements
-      `,
-      )
-      .eq('id', campaignId);
-
-    // SECURITY: Add user_id filter if provided to validate ownership
-    if (userId) {
-      query = query.eq('user_id', userId);
-    } else {
-      logger.warn(
-        `[CampaignContextLoader] Loading campaign ${campaignId} without userId validation - this is insecure`,
-      );
-    }
-
-    const { data: campaign, error } = await query.single();
-
-    if (error) {
-      logger.error(`Error loading campaign context for ID ${campaignId}:`, error.message);
-      throw new Error(`Failed to load campaign context: ${error.message}`);
-    }
+    void userId;
+    const campaign = await userDataApi.getCampaign(campaignId);
     if (!campaign) {
       throw new Error(`Campaign with ID ${campaignId} not found or access denied.`);
     }

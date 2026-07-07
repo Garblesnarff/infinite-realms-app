@@ -19,7 +19,7 @@
 // SDK/library imports
 // ============================
 import { useQuery } from '@tanstack/react-query';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 // ============================
 // External integrations
@@ -38,8 +38,8 @@ import EmptyState from './empty-state';
 import { FantasyLoader } from '@/components/ui/fantasy-loader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Props for CampaignList component
@@ -93,31 +93,16 @@ const CampaignList = ({ searchTerm = '', sortBy = 'created_at' }: CampaignListPr
       try {
         // Only select minimal fields needed for campaign list view
         // Excludes heavy JSONB fields (setting_details, thematic_elements, style_config, rules_config)
-        let query = supabase
-          .from('campaigns')
-          .select(
-            `
-            id, name, description, genre,
-            difficulty_level, campaign_length, tone,
-            status, background_image, art_style,
-            created_at, updated_at
-          `,
+        const data = await userDataApi.listCampaigns();
+        const needle = searchTerm.toLowerCase();
+        return data
+          .filter(
+            (campaign) =>
+              !needle ||
+              campaign.name?.toLowerCase().includes(needle) ||
+              campaign.genre?.toLowerCase().includes(needle),
           )
-          .eq('user_id', user.id) // SECURITY: Only fetch current user's campaigns
-          .order(sortBy, { ascending: false });
-
-        // Apply search filter
-        if (searchTerm) {
-          query = query.or(`name.ilike.%${searchTerm}%,genre.ilike.%${searchTerm}%`);
-        }
-
-        const { data, error: supabaseError } = await query;
-
-        if (supabaseError) {
-          throw new Error(supabaseError.message);
-        }
-
-        return data;
+          .sort((a, b) => String(b[sortBy] || '').localeCompare(String(a[sortBy] || '')));
       } catch (err) {
         logger.error('Error fetching campaigns:', err);
         toast({

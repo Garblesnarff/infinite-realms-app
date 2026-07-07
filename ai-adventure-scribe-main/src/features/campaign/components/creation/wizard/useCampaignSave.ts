@@ -1,11 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { campaignImageGenerator } from '@/services/campaign-image-generator';
+import { userDataApi } from '@/services/user-data-api';
 
 interface CampaignSaveData {
   name?: string;
@@ -24,7 +23,6 @@ export const useCampaignSave = () => {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   /**
    * Saves campaign data to Supabase and generates background image
@@ -45,25 +43,13 @@ export const useCampaignSave = () => {
         ...campaignDataWithoutImage
       } = campaignData;
 
-      const { data, error } = await supabase
-        .from('campaigns')
-        .insert([
-          {
-            ...campaignDataWithoutImage,
-            user_id: user?.id || '00000000-0000-0000-0000-000000000000',
-            status: 'active',
-            setting_details: campaignData.setting_details || {},
-            enhancement_selections: enhancementSelections || [],
-            enhancement_effects: enhancementEffects || {},
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        logger.error('Error saving campaign:', error);
-        throw new Error(error.message);
-      }
+      const data = await userDataApi.createCampaign({
+        ...campaignDataWithoutImage,
+        status: 'active',
+        setting_details: campaignData.setting_details || {},
+        enhancement_selections: enhancementSelections || [],
+        enhancement_effects: enhancementEffects || {},
+      });
 
       if (!data) {
         throw new Error('No data returned from insert');
@@ -105,15 +91,8 @@ export const useCampaignSave = () => {
       );
 
       // Update the campaign with the generated image URL
-      const { error } = await supabase
-        .from('campaigns')
-        .update({ background_image: imageUrl })
-        .eq('id', campaignId);
-
-      if (error) {
-        logger.error('Error updating campaign with background image:', error);
-        // Don't throw error - campaign creation should still succeed
-      } else {
+      try {
+        await userDataApi.updateCampaign(campaignId, { background_image: imageUrl });
         logger.info(`Successfully generated and saved background image for campaign ${campaignId}`);
 
         // Invalidate all campaign-related queries to refresh with the new image
@@ -126,6 +105,8 @@ export const useCampaignSave = () => {
           title: 'Campaign Image Generated',
           description: 'Your campaign background image has been created successfully.',
         });
+      } catch (error) {
+        logger.error('Error updating campaign with background image:', error);
       }
     } catch (error) {
       logger.error(`Failed to generate background image for campaign ${campaignId}:`, error);
