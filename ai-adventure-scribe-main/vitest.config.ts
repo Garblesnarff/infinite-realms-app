@@ -307,6 +307,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/scene-service.test.ts',
       'server-bun/src/services/__tests__/character-service-spells.test.ts',
       'server-bun/src/services/__tests__/character-service-permissions.test.ts',
+      'server-bun/src/services/__tests__/character-service-create.test.ts',
       'server-bun/src/services/__tests__/bolt-list-shared-characters.test.ts',
       'server-bun/src/services/__tests__/bolt-turn-order.test.ts',
       'server-bun/src/services/__tests__/combat-initiative-service.test.ts',

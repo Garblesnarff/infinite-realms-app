@@ -23,6 +23,7 @@
 // External Integrations
 // ============================
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 // ============================
 // Project Services & Generators (assuming kebab-case filenames)
@@ -133,18 +134,7 @@ export class DMResponseGenerator {
       .single();
 
     if (session?.character_id) {
-      // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce data transfer.
-      const CHAR_COLS = `
-        id, user_id, name, race, class, level, background, description, experience_points, alignment,
-        character_stats (strength, dexterity, constitution, intelligence, wisdom, charisma),
-        character_equipment (item_name)
-      `;
-
-      const { data: characterData } = await supabase
-        .from('characters')
-        .select(CHAR_COLS)
-        .eq('id', session.character_id)
-        .single();
+      const characterData = await userDataApi.getCharacter(session.character_id);
 
       if (characterData) {
         this.character = {

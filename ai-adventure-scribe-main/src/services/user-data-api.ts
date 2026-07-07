@@ -1,0 +1,154 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+
+export type CharacterStatsPayload = Partial<{
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+  armor_class: number;
+  max_hit_points: number;
+  current_hit_points: number;
+  temporary_hit_points: number;
+  initiative_bonus: number;
+  speed: number;
+}>;
+
+export type CharacterPayload = Record<string, unknown> & {
+  name: string;
+  stats?: CharacterStatsPayload;
+};
+
+const CHARACTER_FIELDS = [
+  'name',
+  'description',
+  'race',
+  'subrace',
+  'class',
+  'level',
+  'alignment',
+  'experience_points',
+  'image_url',
+  'avatar_url',
+  'appearance',
+  'personality_traits',
+  'personality_notes',
+  'backstory_elements',
+  'background',
+  'background_image',
+  'theme',
+  'session_notes',
+  'campaign_id',
+  'skill_proficiencies',
+  'tool_proficiencies',
+  'saving_throw_proficiencies',
+  'languages',
+  'cantrips',
+  'known_spells',
+  'prepared_spells',
+  'ritual_spells',
+  'spell_slots',
+  'active_concentration',
+  'class_features',
+  'fighting_styles',
+  'copper_pieces',
+  'silver_pieces',
+  'electrum_pieces',
+  'gold_pieces',
+  'platinum_pieces',
+  'damage_resistances',
+  'damage_immunities',
+  'damage_vulnerabilities',
+  'vision_types',
+  'obscurement',
+  'is_hidden',
+  'stealth_check_bonus',
+  'class_levels',
+  'total_level',
+  'stats',
+  'equipment',
+] as const;
+
+function prepareCharacterPayload(payload: Record<string, unknown>): CharacterPayload {
+  const prepared: Record<string, unknown> = {};
+  for (const field of CHARACTER_FIELDS) {
+    if (payload[field] !== undefined) prepared[field] = payload[field];
+  }
+  for (const field of [
+    'spell_slots',
+    'class_features',
+    'fighting_styles',
+    'damage_resistances',
+    'damage_immunities',
+    'damage_vulnerabilities',
+    'class_levels',
+    'vision_types',
+  ]) {
+    if (typeof prepared[field] === 'string') {
+      try {
+        prepared[field] = JSON.parse(prepared[field] as string);
+      } catch {
+        /* preserve value */
+      }
+    }
+  }
+  return prepared as CharacterPayload;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = window.localStorage.getItem('workos_access_token');
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function normalizeCharacter<T extends Record<string, any>>(character: T): T {
+  return {
+    ...character,
+    character_stats: character.stats ? [character.stats] : [],
+  };
+}
+
+export const userDataApi = {
+  listCharacters: async (campaignId?: string): Promise<any[]> => {
+    const characters = await request<any[]>(
+      `/v1/characters${campaignId ? `?campaign_id=${encodeURIComponent(campaignId)}` : ''}`,
+    );
+    return characters.map(normalizeCharacter);
+  },
+  getCharacter: async (characterId: string): Promise<any> =>
+    normalizeCharacter(
+      await request<Record<string, any>>(`/v1/characters/${encodeURIComponent(characterId)}`),
+    ),
+  createCharacter: (payload: CharacterPayload): Promise<any> =>
+    request('/v1/characters', {
+      method: 'POST',
+      body: JSON.stringify(prepareCharacterPayload(payload)),
+    }),
+  updateCharacter: (characterId: string, payload: Record<string, unknown>): Promise<any> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(prepareCharacterPayload(payload)),
+    }),
+  updateCharacterStats: (characterId: string, payload: CharacterStatsPayload): Promise<void> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/stats`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteCharacter: (characterId: string): Promise<void> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' }),
+};

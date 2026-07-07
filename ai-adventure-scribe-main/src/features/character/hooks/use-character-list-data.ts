@@ -8,9 +8,9 @@ import type { Character } from '@/types/character';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { subscriptionManager } from '@/services/supabase-subscription-manager';
+import { userDataApi } from '@/services/user-data-api';
 import { addNetworkListener, isOffline } from '@/utils/network';
 
 export interface UseCharacterListDataReturn {
@@ -90,24 +90,7 @@ export function useCharacterListData(): UseCharacterListDataReturn {
 
         setCurrentUserId(user.id);
 
-        const { data, error } = await supabase
-          .from('characters')
-          .select(
-            `
-          id, name, race, class, level,
-          image_url, avatar_url, background_image,
-          campaign_id,
-          created_at, updated_at,
-          character_stats!left (
-            strength, dexterity, constitution, intelligence, wisdom, charisma,
-            max_hit_points, current_hit_points, armor_class
-          )
-        `,
-          )
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
+        const data = await userDataApi.listCharacters();
         const transformedData = transformCharacterData(data || []);
         setCharacters(transformedData);
         setCachedCharacters(transformedData);

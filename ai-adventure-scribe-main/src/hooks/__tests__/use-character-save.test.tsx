@@ -62,6 +62,14 @@ vi.mock('@/services/characterSpellApi', () => ({
   },
 }));
 
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createCharacter: vi.fn(),
+    updateCharacter: vi.fn(),
+    updateCharacterStats: vi.fn(),
+  },
+}));
+
 vi.mock('@/utils/spell-id-mapping', () => ({
   convertSpellIdsToDatabase: vi.fn(() => []),
 }));
@@ -88,6 +96,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';
+import { userDataApi } from '@/services/user-data-api';
 import { convertSpellIdsToDatabase } from '@/utils/spell-id-mapping';
 
 const createQueryClient = (): QueryClient =>
@@ -111,13 +120,16 @@ describe('useCharacterSave', () => {
     (useAuth as any).mockReturnValue({ user: { id: 'user-123' } });
     (useCampaign as any).mockReturnValue({ state: { campaign: { id: 'campaign-123' } } });
     (convertSpellIdsToDatabase as any).mockReturnValue([]);
+    (userDataApi.createCharacter as any).mockResolvedValue({ id: 'new-char-id' });
+    (userDataApi.updateCharacter as any).mockResolvedValue({});
+    (userDataApi.updateCharacterStats as any).mockResolvedValue(undefined);
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
-  it('should save a new character successfully using RPC', async () => {
+  it('should save a new character through the authenticated API', async () => {
     const character: any = {
       name: 'New Hero',
       abilityScores: { strength: { score: 10 } },
@@ -125,7 +137,6 @@ describe('useCharacterSave', () => {
       cantrips: ['mage-hand'],
     };
 
-    (supabase.rpc as any).mockResolvedValue({ data: 'new-char-id', error: null });
     (convertSpellIdsToDatabase as any).mockReturnValue(['spell-uuid']);
     (characterSpellService.saveCharacterSpells as any).mockResolvedValue({});
     (characterBackgroundGenerator.generateCharacterBackground as any).mockResolvedValue(
@@ -146,11 +157,8 @@ describe('useCharacterSave', () => {
       savedCharacter = await result.current.saveCharacter(character);
     });
 
-    expect(supabase.rpc).toHaveBeenCalledWith(
-      'create_character_atomic',
-      expect.objectContaining({
-        character_data: expect.objectContaining({ name: 'New Hero' }),
-      }),
+    expect(userDataApi.createCharacter).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'New Hero', stats: expect.any(Object) }),
     );
     expect(savedCharacter.id).toBe('new-char-id');
     expect(mockInvalidateQueries).toHaveBeenCalled();
@@ -175,21 +183,6 @@ describe('useCharacterSave', () => {
       abilityScores: { strength: { score: 12 } },
     };
 
-    const mockUpdate = vi.fn().mockReturnThis();
-    const mockEq = vi.fn().mockReturnThis();
-    const mockOr = vi.fn().mockResolvedValue({ error: null });
-    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
-
-    (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'characters') {
-        return { update: mockUpdate, eq: mockEq, or: mockOr };
-      }
-      if (table === 'character_stats' || table === 'character_equipment') {
-        return { upsert: mockUpsert };
-      }
-      return {};
-    });
-
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
 
     let savedCharacter;
@@ -197,16 +190,21 @@ describe('useCharacterSave', () => {
       savedCharacter = await result.current.saveCharacter(character);
     });
 
-    expect(mockUpdate).toHaveBeenCalled();
-    expect(mockEq).toHaveBeenCalledWith('id', 'existing-id');
-    expect(mockUpsert).toHaveBeenCalled(); // For stats
+    expect(userDataApi.updateCharacter).toHaveBeenCalledWith(
+      'existing-id',
+      expect.objectContaining({ name: 'Updated Hero' }),
+    );
+    expect(userDataApi.updateCharacterStats).toHaveBeenCalledWith(
+      'existing-id',
+      expect.any(Object),
+    );
     expect(savedCharacter.name).toBe('Updated Hero');
     expect(mockInvalidateQueries).toHaveBeenCalled();
   });
 
-  it('should handle RPC error when saving new character', async () => {
+  it('should handle API error when saving new character', async () => {
     const character: any = { name: 'New Hero', abilityScores: {} };
-    (supabase.rpc as any).mockResolvedValue({ data: null, error: { message: 'RPC Failed' } });
+    (userDataApi.createCharacter as any).mockRejectedValue(new Error('API Failed'));
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
 
@@ -219,7 +217,7 @@ describe('useCharacterSave', () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Save Error',
-        description: expect.stringContaining('RPC Failed'),
+        description: expect.stringContaining('API Failed'),
       }),
     );
   });
@@ -227,18 +225,7 @@ describe('useCharacterSave', () => {
   it('should handle update error for existing character', async () => {
     const character: any = { id: 'existing-id', name: 'Updated Hero', abilityScores: {} };
 
-    (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'characters') {
-        return {
-          update: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          or: vi.fn().mockResolvedValue({ error: { message: 'Update Failed' } }),
-        };
-      }
-      return {
-        upsert: vi.fn().mockResolvedValue({ error: null }),
-      };
-    });
+    (userDataApi.updateCharacter as any).mockRejectedValue(new Error('Update Failed'));
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
 
@@ -367,7 +354,7 @@ describe('useCharacterSave', () => {
       knownSpells: ['magic-missile'],
     };
 
-    (supabase.rpc as any).mockResolvedValue({ data: 'new-id', error: null });
+    (userDataApi.createCharacter as any).mockResolvedValue({ id: 'new-id' });
     (convertSpellIdsToDatabase as any).mockReturnValue(['spell-uuid']);
     (characterSpellService.saveCharacterSpells as any).mockRejectedValue(
       new Error('Spell save failed'),
@@ -397,7 +384,6 @@ describe('useCharacterSave', () => {
 
   it('should handle background image generation failure', async () => {
     const character: any = { name: 'New Hero', abilityScores: {} };
-    (supabase.rpc as any).mockResolvedValue({ data: 'new-char-id', error: null });
     (characterBackgroundGenerator.generateCharacterBackground as any).mockRejectedValue(
       new Error('Generation failed'),
     );
@@ -425,7 +411,7 @@ describe('useCharacterSave', () => {
 
   it('should use existing image as reference for background generation', async () => {
     const character: any = { name: 'New Hero', abilityScores: {}, image_url: 'ref-url' };
-    (supabase.rpc as any).mockResolvedValue({ data: 'new-char-id', error: null });
+    (userDataApi.createCharacter as any).mockResolvedValue({ id: 'new-char-id' });
     (characterBackgroundGenerator.generateCharacterBackground as any).mockResolvedValue(
       'image-url',
     );
@@ -452,16 +438,11 @@ describe('useCharacterSave', () => {
 
   it('should handle background image database update failure', async () => {
     const character: any = { name: 'New Hero', abilityScores: {} };
-    (supabase.rpc as any).mockResolvedValue({ data: 'new-char-id', error: null });
+    (userDataApi.createCharacter as any).mockResolvedValue({ id: 'new-char-id' });
     (characterBackgroundGenerator.generateCharacterBackground as any).mockResolvedValue(
       'image-url',
     );
-
-    (supabase.from as any).mockReturnValue({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockResolvedValue({ error: { message: 'DB Update Failed' } }),
-    });
+    (userDataApi.updateCharacter as any).mockRejectedValue(new Error('DB Update Failed'));
 
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
 

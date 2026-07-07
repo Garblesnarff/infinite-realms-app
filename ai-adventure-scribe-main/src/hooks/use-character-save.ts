@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import { supabase } from '@/integrations/supabase/client';
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';
+import { userDataApi } from '@/services/user-data-api';
 import { transformCharacterForStorage } from '@/types/character';
 import {
   transformAbilityScoresForStorage,
@@ -122,43 +123,22 @@ export const useCharacterSave = (): {
             ? transformEquipmentForStorage(character, '00000000-0000-0000-0000-000000000000')
             : null;
 
-        // Call atomic RPC function
-        const { data: newCharacterId, error: rpcError } = await supabase.rpc(
-          'create_character_atomic',
-          {
-            character_data: characterData,
-            stats_data: {
-              strength: statsData.strength,
-              dexterity: statsData.dexterity,
-              constitution: statsData.constitution,
-              intelligence: statsData.intelligence,
-              wisdom: statsData.wisdom,
-              charisma: statsData.charisma,
-              armor_class: statsData.armor_class,
-              current_hit_points: statsData.current_hit_points,
-              max_hit_points: statsData.max_hit_points,
-            },
-            equipment_data: equipmentData
-              ? equipmentData.map((item) => ({
-                  item_name: item.item_name,
-                  item_type: item.item_type,
-                  quantity: item.quantity,
-                  equipped: item.equipped,
-                  is_magic: item.is_magic,
-                  magic_bonus: item.magic_bonus,
-                  magic_properties: item.magic_properties,
-                  requires_attunement: item.requires_attunement,
-                  is_attuned: item.is_attuned,
-                  attunement_requirements: item.attunement_requirements,
-                  magic_item_type: item.magic_item_type,
-                  magic_item_rarity: item.magic_item_rarity,
-                  magic_effects: item.magic_effects,
-                }))
-              : null,
+        const createdCharacter = await userDataApi.createCharacter({
+          ...characterData,
+          stats: {
+            strength: statsData.strength,
+            dexterity: statsData.dexterity,
+            constitution: statsData.constitution,
+            intelligence: statsData.intelligence,
+            wisdom: statsData.wisdom,
+            charisma: statsData.charisma,
+            armor_class: statsData.armor_class,
+            current_hit_points: statsData.current_hit_points,
+            max_hit_points: statsData.max_hit_points,
           },
-        );
-
-        if (rpcError) throw rpcError;
+          equipment: equipmentData || undefined,
+        });
+        const newCharacterId = createdCharacter.id;
         characterData.id = newCharacterId;
         savedCharacter = { ...character, id: newCharacterId, campaign_id: effectiveCampaignId };
 
@@ -179,21 +159,19 @@ export const useCharacterSave = (): {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const promises: Promise<any>[] = [
-          supabase
-            .from('characters')
-            .update(characterData)
-            .eq('id', characterData.id)
-            .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`),
-          supabase.from('character_stats').upsert(statsData, { onConflict: 'character_id' }),
+          userDataApi.updateCharacter(characterData.id, characterData),
+          userDataApi.updateCharacterStats(characterData.id, statsData),
           saveSpells(characterData.id),
         ];
 
         if (character.inventory && character.inventory.length > 0) {
           const equipmentData = transformEquipmentForStorage(character, characterData.id);
           promises.push(
-            supabase.from('character_equipment').upsert(equipmentData, {
-              onConflict: 'character_id,item_name',
-            }),
+            Promise.resolve(
+              supabase.from('character_equipment').upsert(equipmentData, {
+                onConflict: 'character_id,item_name',
+              }),
+            ),
           );
         }
 
@@ -201,10 +179,10 @@ export const useCharacterSave = (): {
 
         // Check for core character update error (first promise)
         const updateResult = results[0];
-        if (updateResult.error) throw updateResult.error;
+        if (updateResult?.error) throw updateResult.error;
 
         // Log warnings for other potential failures but don't fail the entire operation
-        if (results[1].error) logger.warn('Stats save failed but continuing:', results[1].error);
+        if (results[1]?.error) logger.warn('Stats save failed but continuing:', results[1].error);
         if (results[3]?.error)
           logger.warn('Equipment save failed but continuing:', results[3].error);
 
@@ -228,11 +206,11 @@ export const useCharacterSave = (): {
 
       // Return the complete character data
       return savedCharacter;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error saving character:', error);
       toast({
         title: 'Save Error',
-        description: `Failed to save character: ${error.message || 'Unknown error'}`,
+        description: `Failed to save character: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
       return null;
@@ -270,19 +248,10 @@ export const useCharacterSave = (): {
       );
 
       // Update the character with the generated image URL
-      const { error } = await supabase
-        .from('characters')
-        .update({
+      try {
+        await userDataApi.updateCharacter(characterId, {
           background_image: imageUrl,
-          updated_at: new Date().toISOString(), // Ensure updated_at triggers realtime
-        })
-        .eq('id', characterId)
-        .or(`user_id.eq.${user?.id},owner_id.eq.${user?.id}`);
-
-      if (error) {
-        logger.error('Error updating character with background image:', error);
-        // Don't throw error - character creation should still succeed
-      } else {
+        });
         logger.info(
           `Successfully generated and saved background image for character ${characterId}`,
         );
@@ -296,6 +265,8 @@ export const useCharacterSave = (): {
           title: 'Character Background Generated',
           description: 'Your character background image has been created successfully.',
         });
+      } catch (error) {
+        logger.error('Error updating character with background image:', error);
       }
     } catch (error) {
       logger.error(`Failed to generate background image for character ${characterId}:`, error);

@@ -6,11 +6,20 @@
  */
 
 import { relations } from 'drizzle-orm';
-import { pgTable, uuid, text, timestamp, integer, boolean, numeric, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  numeric,
+  index,
+} from 'drizzle-orm/pg-core';
 
-import { characters , gameSessions } from './game';
+import { characters, gameSessions } from './game';
 
-import type { InferSelectModel, InferInsertModel} from 'drizzle-orm';
+import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
 
 /**
  * Inventory Items Table
@@ -20,7 +29,9 @@ export const inventoryItems = pgTable(
   'inventory_items',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    characterId: uuid('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     itemType: text('item_type').notNull(), // weapon, armor, consumable, ammunition, equipment, treasure
     quantity: integer('quantity').notNull().default(1),
@@ -36,7 +47,37 @@ export const inventoryItems = pgTable(
   (table) => ({
     characterIdIdx: index('idx_inventory_character').on(table.characterId),
     itemTypeIdx: index('idx_inventory_item_type').on(table.characterId, table.itemType),
-  })
+  }),
+);
+
+/** Legacy character-sheet equipment table used by character creation. */
+export const characterEquipment = pgTable(
+  'character_equipment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    itemName: text('item_name').notNull(),
+    itemType: text('item_type').default('equipment'),
+    quantity: integer('quantity').default(1),
+    equipped: boolean('equipped').default(false),
+    isMagic: boolean('is_magic').default(false),
+    magicBonus: integer('magic_bonus').default(0),
+    magicProperties: text('magic_properties'),
+    requiresAttunement: boolean('requires_attunement').default(false),
+    isAttuned: boolean('is_attuned').default(false),
+    attunementRequirements: text('attunement_requirements'),
+    magicItemType: text('magic_item_type'),
+    magicItemRarity: text('magic_item_rarity').default('common'),
+    magicEffects: text('magic_effects'),
+  },
+  (table) => ({
+    characterItemIdx: index('idx_character_equipment_character_item').on(
+      table.characterId,
+      table.itemName,
+    ),
+  }),
 );
 
 /**
@@ -47,8 +88,12 @@ export const consumableUsageLog = pgTable(
   'consumable_usage_log',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    characterId: uuid('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
-    itemId: uuid('item_id').notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id, { onDelete: 'cascade' }),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: 'cascade' }),
     quantityUsed: integer('quantity_used').notNull().default(1),
     sessionId: uuid('session_id').references(() => gameSessions.id, { onDelete: 'set null' }),
     context: text('context'),
@@ -59,7 +104,7 @@ export const consumableUsageLog = pgTable(
     itemIdIdx: index('idx_consumable_usage_item').on(table.itemId),
     sessionIdIdx: index('idx_consumable_usage_session').on(table.sessionId),
     timestampIdx: index('idx_consumable_usage_timestamp').on(table.timestamp),
-  })
+  }),
 );
 
 // Define relations

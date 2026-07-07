@@ -12,8 +12,8 @@ import type {
   CharacterBackground,
 } from '@/types/character';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { convertSpellIdsToFrontend } from '@/utils/spell-id-mapping';
 
 /**
@@ -29,32 +29,8 @@ export async function loadCharacterWithSpells(
   try {
     logger.info(`🔄 [CharacterLoader] Loading character ${characterId} with spells`);
 
-    // Build query with ownership validation if userId provided
-    let query = supabase
-      .from('characters')
-      .select(
-        `
-        *,
-        character_stats(*)
-      `,
-      )
-      .eq('id', characterId);
-
-    // SECURITY: Add user_id filter if provided to validate ownership
-    if (userId) {
-      query = query.eq('user_id', userId);
-    } else {
-      logger.warn(
-        '[CharacterLoader] Loading character without userId validation - this is insecure',
-      );
-    }
-
-    const { data: characterData, error: characterError } = await query.single();
-
-    if (characterError) {
-      logger.error('[CharacterLoader] Database error:', characterError);
-      throw new Error(`Failed to load character: ${characterError.message}`);
-    }
+    void userId;
+    const characterData = await userDataApi.getCharacter(characterId);
 
     if (!characterData) {
       logger.error('[CharacterLoader] Character not found or access denied');

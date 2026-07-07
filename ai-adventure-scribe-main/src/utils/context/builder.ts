@@ -6,6 +6,7 @@ import type { Memory } from '@/types/memory';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { MEMORY_SELECT_COLUMNS } from '@/types/memory';
 
 interface ContextParams {
@@ -20,7 +21,9 @@ class GameContextBuilder {
     // (worlds, quests) to reduce over-fetching and minimize payload size.
     const { data, error } = await supabase
       .from('campaigns')
-      .select('id, name, description, genre, status, era, location, atmosphere, thematic_elements, worlds(id, name, description), quests(id, title, description, status)')
+      .select(
+        'id, name, description, genre, status, era, location, atmosphere, thematic_elements, worlds(id, name, description), quests(id, title, description, status)',
+      )
       .eq('id', campaignId)
       .maybeSingle();
     if (error) throw error;
@@ -30,42 +33,24 @@ class GameContextBuilder {
   private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
     // ⚡ Bolt: Optimized to select only required columns and relations with explicit selection for nested objects.
     // This reduces database load and data transfer while maintaining all required context data.
-    const { data, error } = await supabase
-      .from('characters')
-      .select(`
-        id,
-        name,
-        race,
-        class,
-        level,
-        character_stats(
-          strength,
-          dexterity,
-          constitution,
-          intelligence,
-          wisdom,
-          charisma,
-          current_hit_points,
-          max_hit_points,
-          armor_class
-        ),
-        character_equipment(
-          item_name,
-          item_type,
-          equipped
-        ),
-        quest_progress(
-          status,
-          updated_at,
-          quests(
-            title
-          )
-        )
-      `)
-      .eq('id', characterId)
-      .maybeSingle();
-    if (error) throw error;
-    return data;
+    const [character, equipmentResult, questResult] = await Promise.all([
+      userDataApi.getCharacter(characterId),
+      supabase
+        .from('character_equipment')
+        .select('item_name, item_type, equipped')
+        .eq('character_id', characterId),
+      supabase
+        .from('quest_progress')
+        .select('status, updated_at, quests(title)')
+        .eq('character_id', characterId),
+    ]);
+    if (equipmentResult.error) throw equipmentResult.error;
+    if (questResult.error) throw questResult.error;
+    return {
+      ...character,
+      character_equipment: equipmentResult.data,
+      quest_progress: questResult.data,
+    } as CharacterRow;
   }
 
   private async fetchMemories(sessionId: string): Promise<Memory[] | null> {

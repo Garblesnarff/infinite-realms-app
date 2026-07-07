@@ -24,8 +24,8 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCharacterImageHotLoading } from '@/hooks/use-image-hot-loading';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Props interface for CharacterCard component
@@ -99,13 +99,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
     try {
       if (!user?.id) throw new Error('No authenticated user');
 
-      const { error } = await supabase
-        .from('characters')
-        .delete()
-        .eq('id', character.id)
-        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`);
-
-      if (error) throw error;
+      await userDataApi.deleteCharacter(character.id);
 
       toast({
         title: 'Character Deleted',

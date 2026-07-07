@@ -13,6 +13,7 @@ import type {
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Load character details by game session ID.
@@ -42,24 +43,13 @@ export async function loadCharacterBySession(
 
     if (!session?.character_id) return undefined;
 
-    // Build character query with ownership validation if userId provided
-    let characterQuery = supabase
-      .from('characters')
-      .select(
-        `
-        *,
-        character_stats (*),
-        character_equipment (*)
-      `,
-      )
-      .eq('id', session.character_id);
-
-    // SECURITY: Validate character ownership if userId provided
-    if (userId) {
-      characterQuery = characterQuery.eq('user_id', userId);
-    }
-
-    const { data: characterData } = await characterQuery.single();
+    const [characterData, equipmentResult] = await Promise.all([
+      userDataApi.getCharacter(session.character_id),
+      supabase
+        .from('character_equipment')
+        .select('item_name')
+        .eq('character_id', session.character_id),
+    ]);
 
     if (!characterData) return undefined;
 
@@ -98,9 +88,7 @@ export async function loadCharacterBySession(
       ideals: [],
       bonds: [],
       flaws: [],
-      equipment:
-        characterData.character_equipment?.map((item: { item_name: string }) => item.item_name) ||
-        [],
+      equipment: equipmentResult.data?.map((item: { item_name: string }) => item.item_name) || [],
     };
   } catch (error) {
     logger.error('[CharacterLoader] Error loading character by session:', error);

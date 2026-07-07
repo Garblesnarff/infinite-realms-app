@@ -20,6 +20,7 @@ import { Elysia, t } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 
@@ -32,6 +33,7 @@ const characterSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
   description: t.Optional(t.Nullable(t.String())),
   race: t.Optional(t.Nullable(t.String())),
+  subrace: t.Optional(t.Nullable(t.String())),
   class: t.Optional(t.Nullable(t.String())),
   level: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
   alignment: t.Optional(t.Nullable(t.String())),
@@ -40,8 +42,74 @@ const characterSchema = t.Object({
   avatar_url: t.Optional(t.Nullable(t.String())),
   appearance: t.Optional(t.Nullable(t.String())),
   personality_traits: t.Optional(t.Nullable(t.String())),
+  personality_notes: t.Optional(t.Nullable(t.String())),
   backstory_elements: t.Optional(t.Nullable(t.String())),
   background: t.Optional(t.Nullable(t.String())),
+  background_image: t.Optional(t.Nullable(t.String())),
+  theme: t.Optional(t.Nullable(t.String())),
+  session_notes: t.Optional(t.Nullable(t.String())),
+  campaign_id: t.Optional(t.Nullable(t.String())),
+  skill_proficiencies: t.Optional(t.Nullable(t.String())),
+  tool_proficiencies: t.Optional(t.Nullable(t.String())),
+  saving_throw_proficiencies: t.Optional(t.Nullable(t.String())),
+  languages: t.Optional(t.Array(t.String())),
+  cantrips: t.Optional(t.Nullable(t.String())),
+  known_spells: t.Optional(t.Nullable(t.String())),
+  prepared_spells: t.Optional(t.Nullable(t.String())),
+  ritual_spells: t.Optional(t.Nullable(t.String())),
+  spell_slots: t.Optional(t.Any()),
+  active_concentration: t.Optional(t.Nullable(t.String())),
+  class_features: t.Optional(t.Any()),
+  fighting_styles: t.Optional(t.Any()),
+  copper_pieces: t.Optional(t.Number()),
+  silver_pieces: t.Optional(t.Number()),
+  electrum_pieces: t.Optional(t.Number()),
+  gold_pieces: t.Optional(t.Number()),
+  platinum_pieces: t.Optional(t.Number()),
+  damage_resistances: t.Optional(t.Any()),
+  damage_immunities: t.Optional(t.Any()),
+  damage_vulnerabilities: t.Optional(t.Any()),
+  vision_types: t.Optional(t.Array(t.String())),
+  obscurement: t.Optional(t.Nullable(t.String())),
+  is_hidden: t.Optional(t.Boolean()),
+  stealth_check_bonus: t.Optional(t.Number()),
+  class_levels: t.Optional(t.Any()),
+  total_level: t.Optional(t.Number({ minimum: 1 })),
+  stats: t.Optional(
+    t.Object({
+      strength: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      dexterity: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      constitution: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      intelligence: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      wisdom: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      charisma: t.Optional(t.Number({ minimum: 1, maximum: 30 })),
+      armor_class: t.Optional(t.Number({ minimum: 0 })),
+      max_hit_points: t.Optional(t.Number({ minimum: 0 })),
+      current_hit_points: t.Optional(t.Number({ minimum: 0 })),
+      temporary_hit_points: t.Optional(t.Number({ minimum: 0 })),
+      initiative_bonus: t.Optional(t.Number()),
+      speed: t.Optional(t.Number({ minimum: 0 })),
+    }),
+  ),
+  equipment: t.Optional(
+    t.Array(
+      t.Object({
+        item_name: t.String({ minLength: 1 }),
+        item_type: t.Optional(t.String()),
+        quantity: t.Optional(t.Number({ minimum: 0 })),
+        equipped: t.Optional(t.Boolean()),
+        is_magic: t.Optional(t.Boolean()),
+        magic_bonus: t.Optional(t.Number()),
+        magic_properties: t.Optional(t.Nullable(t.String())),
+        requires_attunement: t.Optional(t.Boolean()),
+        is_attuned: t.Optional(t.Boolean()),
+        attunement_requirements: t.Optional(t.Nullable(t.String())),
+        magic_item_type: t.Optional(t.Nullable(t.String())),
+        magic_item_rarity: t.Optional(t.Nullable(t.String())),
+        magic_effects: t.Optional(t.Nullable(t.String())),
+      }),
+    ),
+  ),
 });
 
 const updateCharacterSchema = t.Partial(characterSchema);
@@ -58,7 +126,10 @@ function parseSpellString(value: string | string[] | null): string[] {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [value];
     } catch {
-      return value.split(',').map((s) => s.trim()).filter(Boolean);
+      return value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
   }
   return [];
@@ -76,11 +147,14 @@ function mapCharacterToApi(character: Character & { stats?: any }): any {
     name: character.name,
     description: character.description,
     race: character.race,
+    subrace: character.subrace,
     class: character.class,
     level: character.level,
     alignment: character.alignment,
     experience_points: character.experiencePoints,
     background: character.background,
+    skill_proficiencies: character.skillProficiencies,
+    languages: character.languages,
     image_url: character.imageUrl,
     avatar_url: character.avatarUrl,
     background_image: character.backgroundImage,
@@ -88,13 +162,30 @@ function mapCharacterToApi(character: Character & { stats?: any }): any {
     personality_traits: character.personalityTraits,
     personality_notes: character.personalityNotes,
     backstory_elements: character.backstoryElements,
+    theme: character.theme,
+    session_notes: character.sessionNotes,
     cantrips: character.cantrips,
     known_spells: character.knownSpells,
     prepared_spells: character.preparedSpells,
     ritual_spells: character.ritualSpells,
+    spell_slots: character.spellSlots,
+    active_concentration: character.activeConcentration,
+    class_features: character.classFeatures,
+    fighting_styles: character.fightingStyles,
+    copper_pieces: character.copperPieces,
+    silver_pieces: character.silverPieces,
+    electrum_pieces: character.electrumPieces,
+    gold_pieces: character.goldPieces,
+    platinum_pieces: character.platinumPieces,
+    damage_resistances: character.damageResistances,
+    damage_immunities: character.damageImmunities,
+    damage_vulnerabilities: character.damageVulnerabilities,
+    class_levels: character.classLevels,
+    total_level: character.totalLevel,
     vision_types: character.visionTypes,
     obscurement: character.obscurement,
     is_hidden: character.isHidden,
+    stealth_check_bonus: character.stealthCheckBonus,
     campaign_id: character.campaignId,
     user_id: character.userId,
     owner_id: character.ownerId,
@@ -113,6 +204,12 @@ function mapCharacterToApi(character: Character & { stats?: any }): any {
           intelligence: character.stats.intelligence,
           wisdom: character.stats.wisdom,
           charisma: character.stats.charisma,
+          armor_class: character.stats.armorClass,
+          max_hit_points: character.stats.maxHitPoints,
+          current_hit_points: character.stats.currentHitPoints,
+          temporary_hit_points: character.stats.temporaryHitPoints,
+          initiative_bonus: character.stats.initiativeBonus,
+          speed: character.stats.speed,
           created_at: character.stats.createdAt,
           updated_at: character.stats.updatedAt,
         }
@@ -153,17 +250,23 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    * GET /v1/characters
    * List all characters for the authenticated user
    */
-  .get('/', async ({ user }) => {
-    try {
-      // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
-      // both userId AND ownerId for comprehensive character access.
-      const characters = await CharacterService.listForUser(user!.userId);
-      return (characters || []).map((c) => mapCharacterToApi(c as any));
-    } catch (error) {
-      logger.error({ msg: 'CHARACTERS_LIST error', error });
-      throw error;
-    }
-  })
+  .get(
+    '/',
+    async ({ user, query }) => {
+      try {
+        // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
+        // both userId AND ownerId for comprehensive character access.
+        const characters = await CharacterService.listForUser(user!.userId, query.campaign_id);
+        return (characters || []).map((c) => mapCharacterToApi(c as any));
+      } catch (error) {
+        logger.error({ msg: 'CHARACTERS_LIST error', error });
+        throw error;
+      }
+    },
+    {
+      query: t.Object({ campaign_id: t.Optional(t.String()) }),
+    },
+  )
 
   /**
    * POST /v1/characters
@@ -173,20 +276,81 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     '/',
     async ({ body, set, user }) => {
       try {
-        const character = await CharacterService.create(user!.userId, {
-          name: body.name,
-          description: body.description,
-          race: body.race,
-          class: body.class,
-          level: body.level,
-          alignment: body.alignment,
-          experiencePoints: body.experience_points,
-          imageUrl: body.image_url,
-          appearance: body.appearance,
-          personalityTraits: body.personality_traits,
-          backstoryElements: body.backstory_elements,
-          background: body.background,
-        });
+        if (body.campaign_id) {
+          const campaign = await CampaignService.getById(body.campaign_id, user!.userId);
+          if (!campaign) {
+            set.status = 404;
+            return { error: 'Campaign not found' };
+          }
+        }
+
+        const character = await CharacterService.create(
+          user!.userId,
+          {
+            name: body.name,
+            description: body.description,
+            race: body.race,
+            subrace: body.subrace,
+            class: body.class,
+            level: body.level,
+            alignment: body.alignment,
+            experiencePoints: body.experience_points,
+            imageUrl: body.image_url,
+            avatarUrl: body.avatar_url,
+            appearance: body.appearance,
+            personalityTraits: body.personality_traits,
+            personalityNotes: body.personality_notes,
+            backstoryElements: body.backstory_elements,
+            background: body.background,
+            backgroundImage: body.background_image,
+            theme: body.theme,
+            sessionNotes: body.session_notes,
+            campaignId: body.campaign_id,
+            skillProficiencies: body.skill_proficiencies,
+            toolProficiencies: body.tool_proficiencies,
+            savingThrowProficiencies: body.saving_throw_proficiencies,
+            languages: body.languages,
+            cantrips: body.cantrips,
+            knownSpells: body.known_spells,
+            preparedSpells: body.prepared_spells,
+            ritualSpells: body.ritual_spells,
+            spellSlots: body.spell_slots,
+            activeConcentration: body.active_concentration,
+            classFeatures: body.class_features,
+            fightingStyles: body.fighting_styles,
+            copperPieces: body.copper_pieces,
+            silverPieces: body.silver_pieces,
+            electrumPieces: body.electrum_pieces,
+            goldPieces: body.gold_pieces,
+            platinumPieces: body.platinum_pieces,
+            damageResistances: body.damage_resistances,
+            damageImmunities: body.damage_immunities,
+            damageVulnerabilities: body.damage_vulnerabilities,
+            visionTypes: body.vision_types,
+            obscurement: body.obscurement,
+            isHidden: body.is_hidden,
+            stealthCheckBonus: body.stealth_check_bonus,
+            classLevels: body.class_levels,
+            totalLevel: body.total_level,
+          },
+          body.stats
+            ? {
+                strength: body.stats.strength,
+                dexterity: body.stats.dexterity,
+                constitution: body.stats.constitution,
+                intelligence: body.stats.intelligence,
+                wisdom: body.stats.wisdom,
+                charisma: body.stats.charisma,
+                armorClass: body.stats.armor_class,
+                maxHitPoints: body.stats.max_hit_points,
+                currentHitPoints: body.stats.current_hit_points,
+                temporaryHitPoints: body.stats.temporary_hit_points,
+                initiativeBonus: body.stats.initiative_bonus,
+                speed: body.stats.speed,
+              }
+            : undefined,
+          body.equipment,
+        );
 
         set.status = 201;
         return mapCharacterToApi(character as any);
@@ -197,7 +361,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     },
     {
       body: characterSchema,
-    }
+    },
   )
 
   /**
@@ -226,10 +390,41 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           alignment: body.alignment,
           experiencePoints: body.experience_points,
           imageUrl: body.image_url,
+          avatarUrl: body.avatar_url,
           appearance: body.appearance,
           personalityTraits: body.personality_traits,
+          personalityNotes: body.personality_notes,
           backstoryElements: body.backstory_elements,
           background: body.background,
+          backgroundImage: body.background_image,
+          theme: body.theme,
+          sessionNotes: body.session_notes,
+          skillProficiencies: body.skill_proficiencies,
+          toolProficiencies: body.tool_proficiencies,
+          savingThrowProficiencies: body.saving_throw_proficiencies,
+          languages: body.languages,
+          cantrips: body.cantrips,
+          knownSpells: body.known_spells,
+          preparedSpells: body.prepared_spells,
+          ritualSpells: body.ritual_spells,
+          spellSlots: body.spell_slots,
+          activeConcentration: body.active_concentration,
+          classFeatures: body.class_features,
+          fightingStyles: body.fighting_styles,
+          copperPieces: body.copper_pieces,
+          silverPieces: body.silver_pieces,
+          electrumPieces: body.electrum_pieces,
+          goldPieces: body.gold_pieces,
+          platinumPieces: body.platinum_pieces,
+          damageResistances: body.damage_resistances,
+          damageImmunities: body.damage_immunities,
+          damageVulnerabilities: body.damage_vulnerabilities,
+          visionTypes: body.vision_types,
+          obscurement: body.obscurement,
+          isHidden: body.is_hidden,
+          stealthCheckBonus: body.stealth_check_bonus,
+          classLevels: body.class_levels,
+          totalLevel: body.total_level,
         });
 
         return mapCharacterToApi(updated as any);
@@ -240,7 +435,46 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     },
     {
       body: updateCharacterSchema,
-    }
+    },
+  )
+
+  .put(
+    '/:id/stats',
+    async ({ params, body, user }) => {
+      await CharacterService.upsertStats(params.id, user!.userId, {
+        strength: body.strength,
+        dexterity: body.dexterity,
+        constitution: body.constitution,
+        intelligence: body.intelligence,
+        wisdom: body.wisdom,
+        charisma: body.charisma,
+        armorClass: body.armor_class,
+        maxHitPoints: body.max_hit_points,
+        currentHitPoints: body.current_hit_points,
+        temporaryHitPoints: body.temporary_hit_points,
+        initiativeBonus: body.initiative_bonus,
+        speed: body.speed,
+      });
+      return { ok: true };
+    },
+    {
+      body: t.Partial(
+        t.Object({
+          strength: t.Number({ minimum: 1, maximum: 30 }),
+          dexterity: t.Number({ minimum: 1, maximum: 30 }),
+          constitution: t.Number({ minimum: 1, maximum: 30 }),
+          intelligence: t.Number({ minimum: 1, maximum: 30 }),
+          wisdom: t.Number({ minimum: 1, maximum: 30 }),
+          charisma: t.Number({ minimum: 1, maximum: 30 }),
+          armor_class: t.Number({ minimum: 0 }),
+          max_hit_points: t.Number({ minimum: 0 }),
+          current_hit_points: t.Number({ minimum: 0 }),
+          temporary_hit_points: t.Number({ minimum: 0 }),
+          initiative_bonus: t.Number(),
+          speed: t.Number({ minimum: 0 }),
+        }),
+      ),
+    },
   )
 
   /**
@@ -274,7 +508,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           params.id,
           user!.userId,
           spells,
-          className
+          className,
         );
 
         return result;
@@ -300,7 +534,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         spells: t.Array(t.String()),
         className: t.String(),
       }),
-    }
+    },
   )
 
   /**
@@ -352,8 +586,8 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           class: character.class,
           level: character.level,
         },
-        cantrips: cantrips.map(name => ({ name, level: 0 })),
-        spells: knownSpells.map(name => ({
+        cantrips: cantrips.map((name) => ({ name, level: 0 })),
+        spells: knownSpells.map((name) => ({
           name,
           is_prepared: preparedSet.has(name),
         })),
@@ -374,5 +608,5 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       params: t.Object({
         id: t.String(),
       }),
-    }
+    },
   );

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 type EntityType = 'campaign' | 'character' | 'session';
 
@@ -22,6 +23,7 @@ export function useEntityLabel(type: EntityType, id: string | null) {
       setLoading(false);
       return;
     }
+    const entityId = id;
 
     const inCache = cache.get(key);
     if (inCache) {
@@ -48,18 +50,14 @@ export function useEntityLabel(type: EntityType, id: string | null) {
             setLabel(value);
           }
         } else if (type === 'character') {
-          const { data, error } = await supabase
-            .from('characters')
-            .select('name')
-            .eq('id', id)
-            .limit(1);
-          if (cancelled) return;
-          if (error) {
-            logger.warn('[useEntityLabel] Failed to load character label', { id, error });
-          } else {
-            const value = data?.[0]?.name ?? null;
+          try {
+            const data = await userDataApi.getCharacter(entityId);
+            if (cancelled) return;
+            const value = data?.name ?? null;
             if (value) cache.set(key, value);
             setLabel(value);
+          } catch (error) {
+            logger.warn('[useEntityLabel] Failed to load character label', { id, error });
           }
         } else if (type === 'session') {
           const { data, error } = await supabase

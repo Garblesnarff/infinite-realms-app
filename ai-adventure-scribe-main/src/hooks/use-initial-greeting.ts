@@ -10,9 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import {
-  createInitialMemories,
-} from '@/utils/game-session/initial-greeting-memories';
+import { userDataApi } from '@/services/user-data-api';
+import { createInitialMemories } from '@/utils/game-session/initial-greeting-memories';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
 import { parseRollRequests } from '@/utils/rollRequestParser';
 
@@ -126,16 +125,7 @@ export const useInitialGreeting = ({
       // ⚡ Bolt: Parallelize character and campaign data fetching to reduce total latency.
       // Also used explicit column selection instead of select('*') to minimize data transfer.
       const [characterResult, campaignResult] = await Promise.all([
-        supabase
-          .from('characters')
-          .select(
-            `
-            id, name, level, race, class, background,
-            character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
-          `,
-          )
-          .eq('id', characterId as string)
-          .single(),
+        userDataApi.getCharacter(characterId as string).then((data) => ({ data, error: null })),
         supabase
           .from('campaigns')
           .select('id, name, description')
@@ -143,12 +133,8 @@ export const useInitialGreeting = ({
           .single(),
       ]);
 
-      const { data: characterData, error: characterError } = characterResult;
+      const { data: characterData } = characterResult;
       const { data: campaignData, error: campaignError } = campaignResult;
-
-      if (characterError) {
-        throw new Error(`Failed to load character: ${characterError.message}`);
-      }
 
       if (campaignError) {
         throw new Error(`Failed to load campaign: ${campaignError.message}`);

@@ -6,8 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 interface AbilityScoresProps {
   characterId: string;
@@ -72,12 +72,7 @@ const AbilityScores: React.FC<AbilityScoresProps> = ({ characterId, stats, onSta
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('character_stats')
-        .update(editedStats)
-        .eq('character_id', characterId);
-
-      if (error) throw error;
+      await userDataApi.updateCharacterStats(characterId, editedStats);
 
       toast({
         title: 'Success',

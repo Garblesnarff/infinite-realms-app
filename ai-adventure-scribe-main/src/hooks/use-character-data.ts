@@ -32,6 +32,7 @@ import type { Character } from '@/types/character';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import {
   transformCharacterData,
   type CharacterRow,
@@ -103,26 +104,11 @@ export const useCharacterData = (characterId: string | undefined) => {
       // ⚡ Bolt: Fetch character data with stats and equipment in a single query.
       // This reduces database round-trips from 2 to 1 and improves loading performance.
       // Explicit column selection avoids over-fetching data.
-      const { data: characterData, error: characterError } = await supabase
-        .from('characters')
-        .select(
-          `
-          id, user_id, name, description, race, class, level, background,
-          experience_points, alignment, avatar_url, image_url, background_image,
-          appearance, personality_traits, backstory_elements, vision_types,
-          obscurement, is_hidden, stealth_check_bonus, cantrips, known_spells,
-          prepared_spells, ritual_spells,
-          character_stats(
-            strength, dexterity, constitution, intelligence, wisdom, charisma
-          ),
-          character_equipment(*)
-        `,
-        )
-        .eq('id', characterId!)
-        .or(`user_id.eq.${user.id},owner_id.eq.${user.id}`) // CRITICAL: Dual ownership check
-        .maybeSingle();
-
-      if (characterError) throw characterError;
+      const [characterData, equipmentResult] = await Promise.all([
+        userDataApi.getCharacter(characterId!),
+        supabase.from('character_equipment').select('*').eq('character_id', characterId!),
+      ]);
+      if (equipmentResult.error) throw equipmentResult.error;
 
       if (!characterData) {
         toast({
@@ -142,7 +128,7 @@ export const useCharacterData = (characterId: string | undefined) => {
         : characterRecord.character_stats;
 
       // ⚡ Bolt: equipmentData is now pre-fetched via the joined query
-      const equipmentData = characterRecord.character_equipment;
+      const equipmentData = equipmentResult.data;
 
       // Transform and set character data
       const transformedCharacter = transformCharacterData(

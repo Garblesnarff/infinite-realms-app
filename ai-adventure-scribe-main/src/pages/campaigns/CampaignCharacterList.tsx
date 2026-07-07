@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MemoizedCharacterCard } from '@/features/character/components/list/character-card';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { subscriptionManager } from '@/services/supabase-subscription-manager';
+import { userDataApi } from '@/services/user-data-api';
 
 const CampaignCharacterList: React.FC = () => {
   const { id: campaignId } = useParams();
@@ -23,20 +23,7 @@ const CampaignCharacterList: React.FC = () => {
     queryFn: async () => {
       // ⚡ Bolt: Optimized character query to exclude high-bandwidth text columns (backstory, traits, etc.)
       // which are not used by the character card. This significantly reduces payload size for lists.
-      const { data, error } = await supabase
-        .from('characters')
-        .select(
-          `
-          id, name, race, class, level, avatar_url, background_image, created_at,
-          character_stats!left (
-            strength, dexterity, constitution, intelligence, wisdom, charisma,
-            max_hit_points, current_hit_points, armor_class
-          )
-        `,
-        )
-        .eq('campaign_id', campaignId as string)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await userDataApi.listCharacters(campaignId);
       return data as any[];
     },
     enabled: Boolean(campaignId),
@@ -63,7 +50,7 @@ const CampaignCharacterList: React.FC = () => {
         if (payload.eventType === 'DELETE' || payload.eventType === 'INSERT') {
           logger.debug('Characters realtime change detected, invalidating query', {
             eventType: payload.eventType,
-            id: (payload.new ?? payload.old)?.id,
+            id: ((payload.new ?? payload.old) as { id?: string } | null)?.id,
           });
           queryClient.invalidateQueries({ queryKey, exact: true });
           return;

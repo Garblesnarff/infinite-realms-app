@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 export interface Character {
   id: string;
@@ -140,24 +141,7 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase
-        .from('characters')
-        .select(
-          `
-          id, name, race, class, level, avatar_url, background_image,
-          character_stats (
-            strength, dexterity, constitution,
-            intelligence, wisdom, charisma,
-            armor_class, max_hit_points
-          )
-        `,
-        )
-        .eq('user_id', user.id)
-        .eq('campaign_id', campaignId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data as Character[];
+      return userDataApi.listCharacters(campaignId) as Promise<Character[]>;
     },
     enabled: !!user?.id && !starterCampaignId && !starterLoading,
   });
@@ -175,32 +159,6 @@ export function useCharacterSelection({
 
     try {
       // Create character from template
-      const { data: character, error: charError } = await supabase
-        .from('characters')
-        .insert({
-          user_id: user.id,
-          name: template.name,
-          race: template.race,
-          subrace: template.subrace,
-          class: template.class,
-          level: template.level,
-          background: template.background,
-          backstory_elements: template.adapted_backstory,
-          description: template.tagline,
-          campaign_id: campaignId,
-          skill_proficiencies: template.skills.join(', '),
-          languages: template.languages,
-          image_url: template.portrait_url,
-        })
-        .select('id')
-        .single();
-
-      if (charError) {
-        logger.error('Error creating character:', charError);
-        throw charError;
-      }
-
-      // Create character stats
       const abilityScores = template.ability_scores || {
         strength: 10,
         dexterity: 10,
@@ -209,24 +167,31 @@ export function useCharacterSelection({
         wisdom: 10,
         charisma: 10,
       };
-
-      const { error: statsError } = await supabase.from('character_stats').insert({
-        character_id: character.id,
-        strength: abilityScores.strength,
-        dexterity: abilityScores.dexterity,
-        constitution: abilityScores.constitution,
-        intelligence: abilityScores.intelligence,
-        wisdom: abilityScores.wisdom,
-        charisma: abilityScores.charisma,
-        max_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-        current_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-        armor_class: 10 + Math.floor((abilityScores.dexterity - 10) / 2),
+      const character = await userDataApi.createCharacter({
+        name: template.name,
+        race: template.race,
+        subrace: template.subrace,
+        class: template.class,
+        level: template.level,
+        background: template.background,
+        backstory_elements: template.adapted_backstory,
+        description: template.tagline,
+        campaign_id: campaignId,
+        skill_proficiencies: template.skills.join(', '),
+        languages: template.languages,
+        image_url: template.portrait_url,
+        stats: {
+          strength: abilityScores.strength,
+          dexterity: abilityScores.dexterity,
+          constitution: abilityScores.constitution,
+          intelligence: abilityScores.intelligence,
+          wisdom: abilityScores.wisdom,
+          charisma: abilityScores.charisma,
+          max_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
+          current_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
+          armor_class: 10 + Math.floor((abilityScores.dexterity - 10) / 2),
+        },
       });
-
-      if (statsError) {
-        logger.error('Error creating character stats:', statsError);
-        // Don't throw - character was created, stats are optional
-      }
 
       toast({
         title: 'Starting Adventure!',

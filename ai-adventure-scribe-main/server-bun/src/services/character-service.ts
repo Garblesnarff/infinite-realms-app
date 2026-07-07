@@ -17,40 +17,29 @@ import { CharacterSpellService } from './character/character-spell-service.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
+  characterEquipment,
   characterStats,
   characters,
 } from '../../../db/schema/index';
 import { InternalServerError } from '../lib/errors.js';
 
-import type {
-  Character,
-  NewCharacter,
-} from '../../../db/schema/index';
+import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
 export class CharacterService {
   /**
    * List all characters for a user
    */
-  static async listForUser(userId: string): Promise<Character[]> {
+  static async listForUser(userId: string, campaignId?: string): Promise<Character[]> {
     // ⚡ Bolt: Eager-load characterStats to avoid N+1 queries when displaying
     // character lists that show HP, ability scores, or modifiers.
     const chars = await db.query.characters.findMany({
-      where: or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+      where: and(
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        campaignId ? eq(characters.campaignId, campaignId) : undefined,
+      ),
       orderBy: [desc(characters.createdAt)],
       with: {
         stats: true,
-      },
-      columns: {
-        id: true,
-        name: true,
-        race: true,
-        class: true,
-        level: true,
-        imageUrl: true,
-        avatarUrl: true,
-        campaignId: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
 
@@ -68,14 +57,17 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select({ one: sql`1` })
+            db
+              .select({ one: sql`1` })
               .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId)
-              ))
-          )
-        )
+              .where(
+                and(
+                  eq(characterPermissions.characterId, characters.id),
+                  eq(characterPermissions.userId, userId),
+                ),
+              ),
+          ),
+        ),
       ),
       with: {
         stats: true,
@@ -96,14 +88,17 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            db.select({ one: sql`1` })
+            db
+              .select({ one: sql`1` })
               .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId)
-              ))
-          )
-        )
+              .where(
+                and(
+                  eq(characterPermissions.characterId, characters.id),
+                  eq(characterPermissions.userId, userId),
+                ),
+              ),
+          ),
+        ),
       ),
       with: {
         campaign: {
@@ -124,29 +119,78 @@ export class CharacterService {
   /**
    * Create a new character
    */
-  static async create(userId: string, data: Partial<NewCharacter>): Promise<Character> {
-    const [character] = await db
-      .insert(characters)
-      .values({
-        userId,
-        ownerId: userId,
-        name: data.name || 'Unnamed Character',
-        description: data.description || null,
-        race: data.race || null,
-        class: data.class || null,
-        level: data.level || 1,
-        alignment: data.alignment || null,
-        experiencePoints: data.experiencePoints || 0,
-        imageUrl: data.imageUrl || null,
-        appearance: data.appearance || null,
-        personalityTraits: data.personalityTraits || null,
-        backstoryElements: data.backstoryElements || null,
-        background: data.background || null,
-      })
-      .returning();
+  static async create(
+    userId: string,
+    data: Partial<NewCharacter>,
+    stats?: Omit<Partial<NewCharacterStats>, 'characterId'>,
+    equipment?: Array<Record<string, unknown>>,
+  ): Promise<Character> {
+    return db.transaction(async (tx) => {
+      const [character] = await tx
+        .insert(characters)
+        .values({
+          ...data,
+          userId,
+          ownerId: userId,
+          name: data.name || 'Unnamed Character',
+          level: data.level || 1,
+          experiencePoints: data.experiencePoints || 0,
+        })
+        .returning();
 
-    if (!character) throw new InternalServerError('Failed to create character');
-    return character;
+      if (!character) throw new InternalServerError('Failed to create character');
+
+      if (stats) {
+        await tx.insert(characterStats).values({
+          ...stats,
+          characterId: character.id,
+        });
+      }
+
+      if (equipment?.length) {
+        await tx.insert(characterEquipment).values(
+          equipment.map((item) => ({
+            characterId: character.id,
+            itemName: String(item.item_name || ''),
+            itemType: String(item.item_type || 'equipment'),
+            quantity: Number(item.quantity || 1),
+            equipped: Boolean(item.equipped),
+            isMagic: Boolean(item.is_magic),
+            magicBonus: Number(item.magic_bonus || 0),
+            magicProperties: item.magic_properties ? String(item.magic_properties) : null,
+            requiresAttunement: Boolean(item.requires_attunement),
+            isAttuned: Boolean(item.is_attuned),
+            attunementRequirements: item.attunement_requirements
+              ? String(item.attunement_requirements)
+              : null,
+            magicItemType: item.magic_item_type ? String(item.magic_item_type) : null,
+            magicItemRarity: String(item.magic_item_rarity || 'common'),
+            magicEffects: item.magic_effects ? String(item.magic_effects) : null,
+          })),
+        );
+      }
+
+      return character;
+    });
+  }
+
+  static async upsertStats(
+    characterId: string,
+    userId: string,
+    data: Omit<Partial<NewCharacterStats>, 'characterId'>,
+  ): Promise<void> {
+    const character = await this.getById(characterId, userId);
+    if (!character) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
+    }
+
+    await db
+      .insert(characterStats)
+      .values({ ...data, characterId })
+      .onConflictDoUpdate({
+        target: characterStats.characterId,
+        set: { ...data, updatedAt: new Date() },
+      });
   }
 
   /**
@@ -155,7 +199,7 @@ export class CharacterService {
   static async update(
     characterId: string,
     userId: string,
-    data: Partial<NewCharacter>
+    data: Partial<NewCharacter>,
   ): Promise<Character | null> {
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
     const {
@@ -172,22 +216,27 @@ export class CharacterService {
         ...safeUpdates,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId),
-          exists(
-            db.select({ one: sql`1` })
-              .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId),
-                inArray(characterPermissions.permissionLevel, ['editor', 'owner'])
-              ))
-          )
-        )
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(characterPermissions)
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                    inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      )
       .returning();
 
     return updated || null;
@@ -199,22 +248,27 @@ export class CharacterService {
   static async delete(characterId: string, userId: string): Promise<boolean> {
     const result = await db
       .delete(characters)
-      .where(and(
-        eq(characters.id, characterId),
-        or(
-          eq(characters.userId, userId),
-          eq(characters.ownerId, userId),
-          exists(
-            db.select({ one: sql`1` })
-              .from(characterPermissions)
-              .where(and(
-                eq(characterPermissions.characterId, characters.id),
-                eq(characterPermissions.userId, userId),
-                eq(characterPermissions.permissionLevel, 'owner')
-              ))
-          )
-        )
-      ))
+      .where(
+        and(
+          eq(characters.id, characterId),
+          or(
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(characterPermissions)
+                .where(
+                  and(
+                    eq(characterPermissions.characterId, characters.id),
+                    eq(characterPermissions.userId, userId),
+                    eq(characterPermissions.permissionLevel, 'owner'),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      )
       .returning({ id: characters.id });
 
     return result.length > 0;
@@ -232,7 +286,7 @@ export class CharacterService {
       knownSpells?: string[];
       preparedSpells?: string[];
       ritualSpells?: string[];
-    }
+    },
   ): Promise<Character | null> {
     return CharacterSpellService.updateSpells(characterId, userId, spellData);
   }
@@ -259,9 +313,9 @@ export class CharacterService {
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
           exists(
-            sql`SELECT 1 FROM character_permissions WHERE character_id = ${characters.id} AND user_id = ${userId}`
-          )
-        )
+            sql`SELECT 1 FROM character_permissions WHERE character_id = ${characters.id} AND user_id = ${userId}`,
+          ),
+        ),
       ),
       with: {
         stats: true,
@@ -302,14 +356,16 @@ export class CharacterService {
         obscurement: character.obscurement,
         isHidden: character.isHidden,
       },
-      stats: character.stats ? {
-        strength: character.stats.strength,
-        dexterity: character.stats.dexterity,
-        constitution: character.stats.constitution,
-        intelligence: character.stats.intelligence,
-        wisdom: character.stats.wisdom,
-        charisma: character.stats.charisma,
-      } : null,
+      stats: character.stats
+        ? {
+            strength: character.stats.strength,
+            dexterity: character.stats.dexterity,
+            constitution: character.stats.constitution,
+            intelligence: character.stats.intelligence,
+            wisdom: character.stats.wisdom,
+            charisma: character.stats.charisma,
+          }
+        : null,
       exportedAt: new Date().toISOString(),
     };
 
@@ -405,7 +461,7 @@ export class CharacterService {
     characterId: string,
     userId: string,
     spellIds: string[],
-    className: string
+    className: string,
   ): Promise<{ success: boolean; message: string }> {
     return CharacterSpellService.saveCharacterSpells(characterId, userId, spellIds, className);
   }
