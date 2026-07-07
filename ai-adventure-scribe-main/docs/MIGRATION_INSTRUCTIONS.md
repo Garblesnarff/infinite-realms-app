@@ -11,7 +11,7 @@ The migration file `supabase/migrations/20250907_complete_character_columns.sql`
 ### 1. Access Supabase Dashboard
 1. Go to https://supabase.com/dashboard
 2. Log in to your account
-3. Select your project: `cnalyhtalikwsopogula`
+3. Select the project identified by `${SUPABASE_PROJECT_REF}`.
 
 ### 2. Navigate to SQL Editor
 1. In the left sidebar, click on "SQL Editor" 

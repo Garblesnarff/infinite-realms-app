@@ -4,7 +4,7 @@
 
 1. **Set DATABASE_URL** in `server/.env`:
    ```bash
-   DATABASE_URL=postgresql://postgres:[PASSWORD]@db.cnalyhtalikwsopogula.supabase.co:5432/postgres
+   DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD}@db.${SUPABASE_PROJECT_REF}.supabase.co:5432/postgres
    ```
 
 2. **Generate types**:

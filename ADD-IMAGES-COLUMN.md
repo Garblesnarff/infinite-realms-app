@@ -6,7 +6,7 @@ The application is failing because the `dialogue_history` table is missing the `
 
 ### Method 1: Supabase Dashboard (Recommended)
 
-1. Go to: https://app.supabase.com/project/cnalyhtalikwsopogula/sql/new
+1. Go to: `https://app.supabase.com/project/${SUPABASE_PROJECT_REF}/sql/new`
 2. Copy and paste the SQL below:
 
 ```sql

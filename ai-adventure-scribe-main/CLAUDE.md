@@ -263,7 +263,7 @@ bd close bead-id --reason "Fixed: description"
 
 **Common issues**:
 - **Cloudflare caching**: Purge cache after content changes (Development Mode for testing)
-- **DNS**: blog subdomain points to 91.98.173.12 (gray cloud = direct, orange = proxied)
+- **DNS**: blog subdomain points to `${PRODUCTION_HOST}` (gray cloud = direct, orange = proxied)
 - **SSL**: Managed by Let's Encrypt (auto-renews), cert at `/etc/letsencrypt/live/blog.infiniterealms.app/`
 - **nginx**: Separate server block for blog subdomain, sets `X-Blog-Subdomain: true` header
 
