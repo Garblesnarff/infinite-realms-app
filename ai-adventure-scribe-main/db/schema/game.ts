@@ -227,6 +227,8 @@ export const dialogueHistory = pgTable(
     message: text('message').notNull(),
     timestamp: timestamp('timestamp', { withTimezone: true, mode: 'date' }).defaultNow(),
     context: jsonb('context'),
+    images: jsonb('images'),
+    sequenceNumber: integer('sequence_number'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   },

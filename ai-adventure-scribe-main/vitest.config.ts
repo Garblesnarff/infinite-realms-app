@@ -11,7 +11,7 @@ export default defineConfig({
     // Added resolve configuration
     alias: {
       '@': path.resolve(__dirname, './src'),
-      'pino': path.resolve(__dirname, './src/test/__mocks__/pino.ts'),
+      pino: path.resolve(__dirname, './src/test/__mocks__/pino.ts'),
     },
   },
   test: {
@@ -302,6 +302,7 @@ export default defineConfig({
       'server-bun/src/services/__tests__/class-features-service.test.ts',
       'server-bun/src/services/__tests__/combat-attack-service.test.ts',
       'server-bun/src/services/__tests__/session-service.test.ts',
+      'server-bun/src/services/__tests__/session-message-service.test.ts',
       'server-bun/src/services/__tests__/token-service.test.ts',
       'server-bun/src/services/__tests__/exhaustion-service.test.ts',
       'server-bun/src/services/__tests__/scene-service.test.ts',

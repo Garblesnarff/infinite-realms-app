@@ -7,8 +7,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatMessage } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -62,6 +62,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       return { previousData };
     },
     mutationFn: async (message: ChatMessage) => {
+      if (!sessionId) throw new Error('Session ID is required to save a message');
       let retries = 0;
       let delay = INITIAL_RETRY_DELAY;
 
@@ -82,16 +83,13 @@ export const useMessageQueue = (sessionId: string | null) => {
               }
             : {};
 
-          const { error } = await supabase.from('dialogue_history').insert({
+          await userDataApi.saveSessionMessages(sessionId, {
             id: messageId,
-            session_id: sessionId,
             message: message.text,
             speaker_type: message.sender,
             context: contextData,
             timestamp: now,
           });
-
-          if (error) throw error;
 
           // Return the message with the ID we generated (available immediately, no race condition)
           const persistedMessage: ChatMessage = {
@@ -127,6 +125,7 @@ export const useMessageQueue = (sessionId: string | null) => {
           delay *= 2; // Double the delay for next retry
         }
       }
+      throw new Error('Message persistence retries exhausted');
     },
     onError: (error, _variables, context) => {
       logger.error('Error saving message:', error);
@@ -155,10 +154,10 @@ export const useMessageQueue = (sessionId: string | null) => {
    * Also generates IDs for each message to ensure they're immediately available
    */
   const processMessageBatch = async (batch: ChatMessage[]) => {
+    if (!sessionId) throw new Error('Session ID is required to save messages');
     const now = new Date().toISOString();
     const formattedBatch = batch.map((message) => ({
       id: message.id || uuidv4(),
-      session_id: sessionId,
       message: message.text,
       speaker_type: message.sender,
       context: message.context
@@ -171,9 +170,7 @@ export const useMessageQueue = (sessionId: string | null) => {
       timestamp: message.timestamp || now,
     }));
 
-    const { error } = await supabase.from('dialogue_history').insert(formattedBatch);
-
-    if (error) throw error;
+    await userDataApi.saveSessionMessages(sessionId, formattedBatch);
   };
 
   /**

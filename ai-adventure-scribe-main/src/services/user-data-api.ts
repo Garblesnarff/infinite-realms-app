@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
+/* eslint-disable max-lines */
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export type CharacterStatsPayload = Partial<{
@@ -22,6 +23,20 @@ export type CharacterPayload = Record<string, unknown> & {
 };
 
 export type CampaignPayload = Record<string, unknown> & { name: string };
+export type SessionMessagePayload = {
+  id?: string;
+  speaker_type: string;
+  speaker_id?: string;
+  message: string;
+  context?: Record<string, unknown>;
+  images?: unknown[];
+  timestamp?: string;
+};
+export type SessionMessagePage = {
+  messages: any[];
+  total: number;
+  hasMore: boolean;
+};
 
 const CHARACTER_FIELDS = [
   'name',
@@ -167,6 +182,24 @@ export const userDataApi = {
     }),
   deleteCampaign: (campaignId: string): Promise<void> =>
     request(`/v1/campaigns/${encodeURIComponent(campaignId)}`, { method: 'DELETE' }),
+  listSessionMessages: (sessionId: string, offset = 0, limit = 50): Promise<SessionMessagePage> =>
+    request(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/messages?offset=${offset}&limit=${limit}`,
+    ),
+  sessionMessageExists: async (sessionId: string, messageId: string): Promise<boolean> => {
+    const result = await request<{ exists: boolean }>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`,
+    );
+    return result.exists;
+  },
+  saveSessionMessages: (
+    sessionId: string,
+    messages: SessionMessagePayload | SessionMessagePayload[],
+  ): Promise<any> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(messages),
+    }),
   listCharacters: async (campaignId?: string): Promise<any[]> => {
     const characters = await request<any[]>(
       `/v1/characters${campaignId ? `?campaign_id=${encodeURIComponent(campaignId)}` : ''}`,

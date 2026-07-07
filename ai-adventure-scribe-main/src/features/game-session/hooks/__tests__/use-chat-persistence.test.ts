@@ -6,6 +6,7 @@ import { useChatPersistence } from '../use-chat-persistence';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { handleAsyncError } from '@/utils/error-handler';
 
 // Mock dependencies BEFORE importing module under test
 vi.mock('@/integrations/supabase/client', () => ({
@@ -19,6 +20,36 @@ vi.mock('@/integrations/supabase/client', () => ({
     })),
   },
 }));
+
+vi.mock('@/services/user-data-api', async () => {
+  const { supabase } = await import('@/integrations/supabase/client');
+  return {
+    userDataApi: {
+      saveSessionMessages: async (_sessionId: string, payload: unknown) => {
+        const { error } = await supabase.from('dialogue_history').insert(payload);
+        if (error) throw error;
+      },
+      sessionMessageExists: async (_sessionId: string, messageId: string) => {
+        const { data, error } = await supabase
+          .from('dialogue_history')
+          .select('id')
+          .eq('id', messageId)
+          .maybeSingle();
+        if (error) throw error;
+        return Boolean(data);
+      },
+      listSessionMessages: async (sessionId: string) => {
+        const { data, error } = await supabase
+          .from('dialogue_history')
+          .select('id, speaker_type, message, timestamp')
+          .eq('session_id', sessionId)
+          .order('sequence_number', { ascending: true });
+        if (error) throw error;
+        return { messages: data || [], total: data?.length || 0, hasMore: false };
+      },
+    },
+  };
+});
 
 vi.mock('@/lib/logger', () => {
   const mockLogger = {
@@ -124,7 +155,7 @@ describe('useChatPersistence', () => {
       });
 
       expect(history).toBeNull();
-      expect(logger.error).toHaveBeenCalled();
+      expect(handleAsyncError).toHaveBeenCalled();
     });
   });
 
@@ -189,7 +220,6 @@ describe('useChatPersistence', () => {
 
       const { result } = renderHook(() => useChatPersistence(mockSessionId));
 
-      let saved;
       let savePromise: Promise<boolean>;
 
       await act(async () => {
@@ -201,9 +231,10 @@ describe('useChatPersistence', () => {
         vi.advanceTimersByTime(100);
       });
 
-      saved = await savePromise!;
-      expect(saved).toBe(true);
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('Message verified in database after 1 retries'));
+      expect(await savePromise!).toBe(true);
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('Message verified in database after 1 retries'),
+      );
     });
 
     it('should return false if verification fails after max retries', async () => {
@@ -237,7 +268,9 @@ describe('useChatPersistence', () => {
 
       const saved = await savePromise!;
       expect(saved).toBe(false);
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Message verification failed after 5 retries'));
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('Message verification failed after 5 retries'),
+      );
     });
 
     it('should return false if insert fails', async () => {
@@ -253,7 +286,10 @@ describe('useChatPersistence', () => {
       });
 
       expect(saved).toBe(false);
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Database insert FAILED:'), expect.anything());
+      expect(logger.error).toHaveBeenCalledWith(
+        '[useChatPersistence] Exception during save:',
+        expect.anything(),
+      );
     });
   });
 });

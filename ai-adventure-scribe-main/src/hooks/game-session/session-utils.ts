@@ -7,6 +7,7 @@ import type { GameSession } from '@/types/game';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Extended game session interface with additional properties
@@ -60,7 +61,7 @@ export const IMMUTABLE_SESSION_FIELDS = new Set<keyof ExtendedGameSession | stri
 /**
  * Validates that a session object has required properties.
  */
-export function isValidSession(session: any): session is ExtendedGameSession {
+export function isValidSession(session: unknown): session is ExtendedGameSession {
   return !!(session && typeof session === 'object' && typeof session.id === 'string');
 }
 
@@ -131,16 +132,7 @@ export async function generateSessionSummary(sessionId: string): Promise<string>
   }
 
   try {
-    const { data: messages, error } = await supabase
-      .from('dialogue_history')
-      .select('message, speaker_type, context')
-      .eq('session_id', sessionId)
-      .order('sequence_number', { ascending: true });
-
-    if (error) {
-      logger.error('[generateSessionSummary] Error fetching dialogue history:', error);
-      return 'No activity recorded in this session';
-    }
+    const { messages } = await userDataApi.listSessionMessages(sessionId, 0, 200);
 
     if (!messages?.length) {
       logger.info('[generateSessionSummary] No messages found for session:', sessionId);

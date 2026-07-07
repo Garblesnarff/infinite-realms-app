@@ -2,8 +2,8 @@ import { useState, useCallback } from 'react';
 
 import type { ChatMessage } from '@/services/ai-service';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { handleAsyncError } from '@/utils/error-handler';
 
 interface DialogueHistoryRow {
@@ -39,14 +39,10 @@ export const useChatPersistence = (
   const waitForMessageToExist = useCallback(
     async (messageId: string, maxRetries = 5, initialDelay = 100): Promise<boolean> => {
       for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const { data, error } = await supabase
-          .from('dialogue_history')
-          .select('id')
-          .eq('id', messageId)
-          .maybeSingle();
-
-        if (!error && data) {
-          logger.debug(`[useChatPersistence] ✅ Message verified in database after ${attempt} retries`);
+        if (await userDataApi.sessionMessageExists(sessionId!, messageId)) {
+          logger.debug(
+            `[useChatPersistence] ✅ Message verified in database after ${attempt} retries`,
+          );
           return true;
         }
 
@@ -59,7 +55,9 @@ export const useChatPersistence = (
         }
       }
 
-      logger.error(`[useChatPersistence] ❌ Message verification failed after ${maxRetries} retries`);
+      logger.error(
+        `[useChatPersistence] ❌ Message verification failed after ${maxRetries} retries`,
+      );
       return false;
     },
     [],
@@ -78,19 +76,13 @@ export const useChatPersistence = (
       });
 
       try {
-        const { error } = await supabase.from('dialogue_history').insert({
+        await userDataApi.saveSessionMessages(sid, {
           id: message.id,
-          session_id: sid,
           speaker_type:
             message.role === 'assistant' ? 'dm' : message.role === 'user' ? 'player' : 'system',
           message: message.content,
           timestamp: message.timestamp.toISOString(),
         });
-
-        if (error) {
-          logger.error('[useChatPersistence] ❌ Database insert FAILED:', { error });
-          throw error;
-        }
 
         logger.debug('[useChatPersistence] Database insert promise resolved, verifying...');
 
@@ -102,7 +94,9 @@ export const useChatPersistence = (
           return false;
         }
 
-        logger.debug('[useChatPersistence] ✅ Message saved and verified:', { messageId: message.id });
+        logger.debug('[useChatPersistence] ✅ Message saved and verified:', {
+          messageId: message.id,
+        });
         return true;
       } catch (error) {
         logger.error('[useChatPersistence] Exception during save:', { error });
@@ -132,16 +126,7 @@ export const useChatPersistence = (
       // Load message history from dialogue_history table
       // ⚡ Bolt: Optimized to use explicit columns instead of select('*') to reduce over-fetching
       // of the heavy JSONB 'context' column which is not displayed in the chat history.
-      const { data: historyData, error: historyError } = await supabase
-        .from('dialogue_history')
-        .select('id, speaker_type, message, timestamp')
-        .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: true });
-
-      if (historyError) {
-        logger.error('Error loading history:', historyError);
-        throw historyError;
-      }
+      const { messages: historyData } = await userDataApi.listSessionMessages(sessionId, 0, 200);
 
       if (historyData && historyData.length > 0) {
         logger.info(`📚 Loaded ${historyData.length} messages from history`);

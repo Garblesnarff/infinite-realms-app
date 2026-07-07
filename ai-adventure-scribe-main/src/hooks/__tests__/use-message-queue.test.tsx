@@ -6,20 +6,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Use hoisted to define mocks that can be used in vi.mock
-const { mockInsert, mockFrom } = vi.hoisted(() => {
+const { mockInsert, mockSaveSessionMessages } = vi.hoisted(() => {
   const insert = vi.fn().mockResolvedValue({ error: null });
   return {
     mockInsert: insert,
-    mockFrom: vi.fn(() => ({
-      insert,
-    })),
+    mockSaveSessionMessages: vi.fn(async (_sessionId: string, payload: unknown) => {
+      const result = await insert(payload);
+      if (result.error) throw result.error;
+      return { messages: [] };
+    }),
   };
 });
 
 // Mock dependencies BEFORE importing module under test
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: mockFrom,
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    saveSessionMessages: mockSaveSessionMessages,
   },
 }));
 
@@ -90,13 +92,12 @@ describe('useMessageQueue', () => {
       persistedMessage = await result.current.messageMutation.mutateAsync(message);
     });
 
-    expect(mockFrom).toHaveBeenCalledWith('dialogue_history');
+    expect(mockSaveSessionMessages).toHaveBeenCalledWith(sessionId, expect.any(Object));
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'test-uuid',
         message: 'Hello',
         speaker_type: 'player',
-        session_id: sessionId,
         context: { location: 'Tavern', emotion: 'happy', intent: 'greeting' },
       }),
     );

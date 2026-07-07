@@ -7,7 +7,6 @@ import type { Memory } from '@/types/memory';
 import type { RollRequest } from '@/types/roll-request';
 
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { userDataApi } from '@/services/user-data-api';
@@ -102,17 +101,11 @@ export const useInitialGreeting = ({
       logger.info('[Initial Greeting] Starting generation for session:', sessionId);
 
       // Ensure we are not resuming an existing conversation
-      const { count: existingMessageCount, error: countError } = await supabase
-        .from('dialogue_history')
-        .select('id', { count: 'exact', head: true })
-        .eq('session_id', sessionId!);
-
-      if (countError) {
-        logger.warn(
-          '[Initial Greeting] Failed to check existing messages, continuing with caution',
-          countError,
-        );
-      }
+      const { total: existingMessageCount } = await userDataApi.listSessionMessages(
+        sessionId!,
+        0,
+        1,
+      );
 
       if ((existingMessageCount ?? 0) > 0) {
         logger.info(

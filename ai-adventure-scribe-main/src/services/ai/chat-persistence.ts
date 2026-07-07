@@ -1,7 +1,7 @@
 import type { ChatMessage } from './shared/types';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 export class ChatPersistence {
   /**
@@ -16,18 +16,12 @@ export class ChatPersistence {
   }): Promise<void> {
     try {
       const messageId = params.id || crypto.randomUUID();
-      const { error } = await supabase.from('dialogue_history').insert({
+      await userDataApi.saveSessionMessages(params.sessionId, {
         id: messageId,
-        session_id: params.sessionId,
         speaker_type: params.role,
         speaker_id: params.speakerId,
         message: params.content,
       });
-
-      if (error) {
-        logger.error('Error saving chat message:', error);
-        throw new Error('Failed to save chat message');
-      }
     } catch (error) {
       logger.error('Error saving chat message:', error);
       throw error;
@@ -41,16 +35,7 @@ export class ChatPersistence {
     try {
       // ⚡ Bolt: Use explicit columns to avoid over-fetching large JSONB columns (context, images)
       // that are not needed for initial history mapping. This reduces data transfer.
-      const { data, error } = await supabase
-        .from('dialogue_history')
-        .select('id, speaker_type, message, created_at, sequence_number')
-        .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: true });
-
-      if (error) {
-        logger.error('Error getting conversation history:', error);
-        throw new Error('Failed to get conversation history');
-      }
+      const { messages: data } = await userDataApi.listSessionMessages(sessionId, 0, 200);
 
       return data.map((msg) => ({
         id: msg.id,

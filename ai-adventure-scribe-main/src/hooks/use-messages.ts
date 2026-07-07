@@ -3,8 +3,8 @@ import { useState, useCallback, useEffect } from 'react';
 
 import type { ChatMessage, MessageContext } from '@/types/game';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 const PAGE_SIZE = 50;
 
@@ -33,7 +33,7 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
   const [hasMore, setHasMore] = useState(true);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
 
-  const query = useQuery({
+  const query = useQuery<{ messages: ChatMessage[]; hasMore: boolean }>({
     queryKey: ['messages', sessionId, page],
     queryFn: async () => {
       if (!sessionId) return { messages: [], hasMore: false };
@@ -50,37 +50,11 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
       // Order by sequence_number ascending for chronological display (oldest first)
       // Sequence numbers ensure proper ordering even with concurrent multi-tab inserts
       // ⚡ Bolt: Use explicit column list to avoid over-fetching and improve performance.
-      const { data, error, count } = await supabase
-        .from('dialogue_history')
-        .select(
-          `
-          id,
-          message,
-          speaker_type,
-          timestamp,
-          context,
-          images,
-          sequence_number,
-          game_sessions!inner(
-            id,
-            character_id,
-            characters(
-              id,
-              name,
-              avatar_url
-            )
-          )
-        `,
-          { count: 'exact' },
-        )
-        .eq('session_id', sessionId)
-        .order('sequence_number', { ascending: true })
-        .range(start, end);
-
-      if (error) {
-        logger.error('Error fetching messages:', error);
-        return { messages: [], hasMore: false };
-      }
+      const { messages: data, total: count } = await userDataApi.listSessionMessages(
+        sessionId,
+        start,
+        PAGE_SIZE,
+      );
 
       const messages = (data || []).map((msg) => {
         // Extract character data from the nested structure
@@ -126,7 +100,6 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
       return { messages: messages, hasMore: moreAvailable };
     },
     enabled: !!sessionId,
-    keepPreviousData: true,
   });
 
   // Update allMessages whenever query data changes
@@ -191,16 +164,13 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
             }
           : {};
 
-        const { error } = await supabase.from('dialogue_history').insert({
+        await userDataApi.saveSessionMessages(sessionId, {
           id: message.id,
-          session_id: sessionId,
           message: message.text,
           speaker_type: message.sender,
           context: contextData,
           timestamp: new Date().toISOString(),
         });
-
-        if (error) throw error;
 
         // Invalidate all message queries to refetch and sync with DB sequence numbers
         await queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
