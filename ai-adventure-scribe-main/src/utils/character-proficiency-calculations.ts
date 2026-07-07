@@ -22,10 +22,19 @@ export interface SavingThrowModifiers {
   [ability: string]: { modifier: number; proficient: boolean };
 }
 
+// ⚡ Bolt: Module-level caches for static proficiency data to avoid redundant
+// array copies and Set creation on every calculation. This significantly reduces
+// garbage collection pressure and CPU cycles during character stat recalculations.
+const classSkillCache = new Map<string, string[]>();
+const combinedProficiencySetCache = new Map<string, Set<string>>();
+const raceProficiencyCache = new Map<string, string[]>();
+const classSavingThrowCache = new Map<string, string[]>();
+const savingThrowSetCache = new Map<string, Set<string>>();
+
 /**
  * Calculate skill modifiers for all skills
- * ⚡ Bolt: Added optional profBonus to avoid redundant calculations.
- * ⚡ Bolt: Optimized proficiency lookup using a Set.
+ * ⚡ Bolt: Optimized by caching the combined proficiency Set for each class/race combination.
+ * This eliminates the O(N) cost of merging arrays and creating a new Set on every render.
  */
 export const calculateSkillModifiers = (
   character: Character,
@@ -33,18 +42,23 @@ export const calculateSkillModifiers = (
 ): SkillModifiers => {
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
-  // Get class proficiencies (simplified)
-  const classProficiencies = getClassSkillProficiencies(character.class);
-  const raceProficiencies = getRaceSkillProficiencies(character.race, character.subrace);
+  // ⚡ Bolt: Use a composite cache key for the combined proficiency set
+  const cacheKey = `${character.class?.name || 'none'}:${character.race?.name || 'none'}:${character.subrace?.name || 'none'}`;
+  let profSet = combinedProficiencySetCache.get(cacheKey);
 
-  // ⚡ Bolt: Use a Set for O(1) lookups instead of O(N) array includes in the loop.
-  const profSet = new Set([...classProficiencies, ...raceProficiencies]);
+  if (!profSet) {
+    const newSet = new Set<string>();
+    getClassSkillProficiencies(character.class).forEach((p) => newSet.add(p));
+    getRaceSkillProficiencies(character.race, character.subrace).forEach((p) => newSet.add(p));
+    profSet = newSet;
+    combinedProficiencySetCache.set(cacheKey, profSet);
+  }
 
   const skillMods: SkillModifiers = {};
 
   Object.entries(SKILLS_MAP).forEach(([skill, ability]) => {
     const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
-    const proficient = profSet.has(skill);
+    const proficient = profSet?.has(skill) ?? false;
     const expertise = false; // Could be enhanced to track expertise
 
     skillMods[skill] = {
@@ -59,6 +73,7 @@ export const calculateSkillModifiers = (
 
 /**
  * Get skill proficiencies for a class (simplified)
+ * ⚡ Bolt: Optimized with a module-level cache to avoid redundant array copies.
  */
 export const getClassSkillProficiencies = (
   characterClass: CharacterClass | null | undefined,
@@ -67,14 +82,15 @@ export const getClassSkillProficiencies = (
     return [];
   }
 
-  const profs = CLASS_SKILL_PROFICIENCIES_MAP[characterClass.name];
-  // Return a copy to satisfy the mutable return type and prevent accidental mutation of the shared map
-  return profs ? [...profs] : [];
-};
+  const cached = classSkillCache.get(characterClass.name);
+  if (cached) return [...cached];
 
-// ⚡ Bolt: Module-level cache for combined race/subrace proficiencies to avoid
-// redundant Set creation and array processing for static data.
-const raceProficiencyCache = new Map<string, string[]>();
+  const profs = CLASS_SKILL_PROFICIENCIES_MAP[characterClass.name];
+  // Return a copy to prevent accidental mutation of the shared map and cache
+  const result = profs ? [...profs] : [];
+  classSkillCache.set(characterClass.name, result);
+  return [...result];
+};
 
 /**
  * Get skill proficiencies for a race and subrace (combined)
@@ -106,24 +122,28 @@ export const getRaceSkillProficiencies = (
 
 /**
  * Calculate saving throw modifiers
- * ⚡ Bolt: Added optional profBonus to avoid redundant calculations.
- * ⚡ Bolt: Optimized proficiency lookup using a Set for O(1) complexity.
+ * ⚡ Bolt: Optimized by caching the saving throw Set per class.
+ * This reduces execution time by avoiding redundant Set allocations.
  */
 export const calculateSavingThrowModifiers = (
   character: Character,
   profBonus?: number,
 ): SavingThrowModifiers => {
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
-  const classProficiencies = getClassSavingThrowProficiencies(character.class);
 
-  // ⚡ Bolt: Use a Set for O(1) lookups instead of O(N) array includes in the loop.
-  const profSet = new Set(classProficiencies);
+  const className = character.class?.name || 'none';
+  let profSet = savingThrowSetCache.get(className);
+
+  if (!profSet) {
+    profSet = new Set(getClassSavingThrowProficiencies(character.class));
+    savingThrowSetCache.set(className, profSet);
+  }
 
   const savingThrows: SavingThrowModifiers = {};
 
   if (character.abilityScores) {
     Object.entries(character.abilityScores).forEach(([ability, data]) => {
-      const proficient = profSet.has(ability);
+      const proficient = profSet?.has(ability) ?? false;
       savingThrows[ability] = {
         modifier: data.modifier + (proficient ? pb : 0),
         proficient,
@@ -136,6 +156,7 @@ export const calculateSavingThrowModifiers = (
 
 /**
  * Get saving throw proficiencies for a class
+ * ⚡ Bolt: Optimized with a module-level cache to avoid redundant array copies.
  */
 export const getClassSavingThrowProficiencies = (
   characterClass: CharacterClass | null | undefined,
@@ -144,7 +165,12 @@ export const getClassSavingThrowProficiencies = (
     return [];
   }
 
+  const cached = classSavingThrowCache.get(characterClass.name);
+  if (cached) return [...cached];
+
   const profs = CLASS_SAVING_THROW_PROFICIENCIES_MAP[characterClass.name];
-  // Return a copy to satisfy the mutable return type and prevent accidental mutation of the shared map
-  return profs ? [...profs] : [];
+  // Return a copy to prevent accidental mutation of the shared map and cache
+  const result = profs ? [...profs] : [];
+  classSavingThrowCache.set(characterClass.name, result);
+  return [...result];
 };
