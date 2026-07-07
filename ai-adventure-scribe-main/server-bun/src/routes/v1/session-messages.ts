@@ -40,16 +40,16 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
     }
   })
   .get(
-    '/:sessionId/messages',
+    '/:id/messages',
     async ({ params, query, user }) => {
       const [result, session] = await Promise.all([
         SessionMessageService.getRecentMessages(
-          params.sessionId,
+          params.id,
           user!.userId,
           query.limit,
           query.offset,
         ),
-        SessionService.getSessionById(params.sessionId, user!.userId),
+        SessionService.getSessionById(params.id, user!.userId),
       ]);
       const character = session.characterId
         ? await CharacterService.getById(session.characterId, user!.userId)
@@ -75,21 +75,21 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
       }),
     },
   )
-  .get('/:sessionId/messages/:messageId', async ({ params, user }) => ({
+  .get('/:id/messages/:messageId', async ({ params, user }) => ({
     exists: await SessionMessageService.messageExists(
-      params.sessionId,
+      params.id,
       params.messageId,
       user!.userId,
     ),
   }))
   .post(
-    '/:sessionId/messages',
+    '/:id/messages',
     async ({ params, body, user }) => {
       const payload = Array.isArray(body) ? body : [body];
       const messages = await SessionMessageService.addMessages(
         payload.map((message) => ({
           id: message.id,
-          sessionId: params.sessionId,
+          sessionId: params.id,
           speakerType: message.speaker_type,
           speakerId: message.speaker_id,
           message: message.message,
