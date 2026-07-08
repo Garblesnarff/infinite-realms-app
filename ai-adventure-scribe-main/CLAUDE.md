@@ -19,7 +19,7 @@
 - **NEVER commit `.env` files** - they contain API keys, passwords, database URLs
 - **Check `.gitignore`** before committing - verify sensitive files are excluded
 - **Files with secrets** (already gitignored, DO NOT commit):
-  - `.env`, `.env.local`, `server/.env`, `server-bun/.env`, `crewai-service/.env`
+  - `.env`, `.env.local`, `server/.env`, `server-bun/.env`
 - **Safe to commit**: `.env.example` (no real secrets)
 - **If you see secrets in code**: Use `Deno.env.get('KEY_NAME')` or `process.env.KEY_NAME`
 - **Before committing**: Run `git status --ignored` to verify .env files aren't staged
