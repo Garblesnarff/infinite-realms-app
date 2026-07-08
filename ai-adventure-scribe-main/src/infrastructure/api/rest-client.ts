@@ -1,3 +1,6 @@
+import { waitForAuth } from '@/lib/auth-gate';
+import logger from '@/lib/logger';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export interface LLMHistoryMessage {
@@ -14,12 +17,14 @@ export interface GenerateTextParams {
   provider?: 'openrouter' | 'gemini';
   responseSchema?: Record<string, unknown>;
   onStream?: (chunk: string) => void;
+  requestType?: 'user' | 'system';
 }
 
 export interface GenerateImageParams {
   prompt: string;
   model?: string;
-  referenceImage?: string; // base64 without data URL prefix
+  referenceImage?: string; // deprecated single-image form
+  referenceImages?: string[];
   quality?: 'low' | 'medium' | 'high';
 }
 
@@ -28,15 +33,28 @@ export interface AppendMessageImageParams {
   image: { url: string; prompt?: string; model?: string; quality?: 'low' | 'medium' | 'high' };
 }
 
+export interface ImageQuotaStatus {
+  plan: string;
+  limits: { daily: { llm: number; image: number; voice: number } };
+  usage: number;
+  remaining: number;
+  resetAt: string;
+}
+
 class LlmApiClient {
   private useOfflineFallback = false;
+  private offlineFallbackSetAt = 0;
+  private static readonly OFFLINE_RESET_MS = 30_000;
 
   private async fetchWithAuth(path: string, options: RequestInit = {}): Promise<Response> {
+    if (this.useOfflineFallback && Date.now() - this.offlineFallbackSetAt > LlmApiClient.OFFLINE_RESET_MS) {
+      this.useOfflineFallback = false;
+    }
     if (this.useOfflineFallback) {
       throw new Error('API unavailable');
     }
 
-    // Get WorkOS token from localStorage
+    await waitForAuth();
     const token = window.localStorage.getItem('workos_access_token');
 
     try {
@@ -56,6 +74,7 @@ class LlmApiClient {
     } catch (err: any) {
       if (err instanceof TypeError && String(err.message || '').includes('fetch')) {
         this.useOfflineFallback = true;
+        this.offlineFallbackSetAt = Date.now();
       }
       throw err;
     }
@@ -67,17 +86,18 @@ class LlmApiClient {
       (import.meta.env.VITE_LLM_PROVIDER as 'openrouter' | 'gemini' | undefined) ||
       'openrouter';
 
-    const makeReq = async (provider: 'openrouter' | 'gemini') =>
+    const makeReq = async (provider: 'openrouter' | 'gemini', model?: string) =>
       this.fetchWithAuth(params.onStream ? '/v1/llm/generate/stream' : '/v1/llm/generate', {
         method: 'POST',
         body: JSON.stringify({
           prompt: params.prompt,
-          model: params.model,
+          model: model || params.model,
           maxTokens: params.maxTokens,
           temperature: params.temperature,
           history: params.history,
           provider,
           responseSchema: params.responseSchema,
+          requestType: params.requestType || 'user',
         }),
       });
 
@@ -126,6 +146,7 @@ class LlmApiClient {
       const msg = String(err?.message || '');
       const isConfigErr = /Server not configured for OpenRouter/i.test(msg);
       const isGeminiConfigErr = /Server not configured for Gemini/i.test(msg);
+      const isRateLimitErr = /429|rate\s*limit|too\s*many\s*requests|quota\s*exceeded/i.test(msg);
 
       if (preferredProvider === 'openrouter' && isConfigErr) {
         const res = await makeReq('gemini');
@@ -137,6 +158,23 @@ class LlmApiClient {
         const data = await res.json();
         return data?.text ?? '';
       }
+      if (isRateLimitErr) {
+        const fallbackModels = [
+          'arcee-ai/trinity-large-preview:free',
+          'stepfun/step-3.5-flash:free',
+          'nvidia/nemotron-3-nano-30b-a3b:free',
+        ];
+        logger.warn(`[LLMApiClient] ${preferredProvider} rate limited; trying free fallbacks`);
+        for (const fallbackModel of fallbackModels) {
+          try {
+            const res = await makeReq('openrouter', fallbackModel);
+            const data = await res.json();
+            if (data?.text) return data.text;
+          } catch (fallbackError) {
+            logger.warn(`[LLMApiClient] Fallback ${fallbackModel} failed`, fallbackError);
+          }
+        }
+      }
       throw err;
     }
   }
@@ -147,7 +185,7 @@ class LlmApiClient {
       body: JSON.stringify({
         prompt: params.prompt,
         model: params.model,
-        referenceImage: params.referenceImage,
+        referenceImages: params.referenceImages || (params.referenceImage ? [params.referenceImage] : undefined),
         quality: params.quality,
       }),
     });
@@ -169,6 +207,29 @@ class LlmApiClient {
       },
     );
     await res.json().catch(() => ({}));
+  }
+
+  async getImageQuotaStatus(): Promise<ImageQuotaStatus | null> {
+    try {
+      const res = await this.fetchWithAuth('/v1/images/quota');
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async extractMemories(prompt: string, maxTokens = 1000): Promise<string> {
+    try {
+      const res = await this.fetchWithAuth('/v1/llm/extract', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, maxTokens }),
+      });
+      const data = await res.json();
+      return data?.text ?? '';
+    } catch (error) {
+      logger.warn('[LLMApiClient] Memory extraction failed', error);
+      return '';
+    }
   }
 }
 
