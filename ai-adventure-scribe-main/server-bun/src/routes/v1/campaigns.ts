@@ -14,9 +14,10 @@
 
 import { Elysia, t, type Static } from 'elysia';
 
-import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
+import type { AuthUser } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { CampaignService } from '../../services/campaign-service.js';
 
@@ -86,9 +87,8 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
   /**
    * Centralized authentication and campaign ownership verification
    */
-  .derive(async ({ request, params }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-
+  .use(requireAuth)
+  .derive(async ({ user, params }) => {
     let campaign = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch campaign once in derive block to avoid double-fetching.
@@ -96,14 +96,9 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
       campaign = await CampaignService.getById(params.id, user.userId);
     }
 
-    return { user, authError, campaign };
+    return { campaign };
   })
-  .onBeforeHandle(async ({ user, authError, params, campaign, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .onBeforeHandle(async ({ params, campaign, set }) => {
     if (params?.id && !campaign) {
       // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
       set.status = 404;
