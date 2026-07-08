@@ -11,6 +11,8 @@ import {
   isSpellValidForClass,
   getSpellValidationRules,
 } from '@/utils/spell-validation';
+import { canCastRituals } from '@/data/spellcastingFeatures';
+import { bard } from '@/data/classes/bard';
 
 // Helper function to create mock characters
 function createMockCharacter(
@@ -67,6 +69,12 @@ function createMockCharacter(
  */
 
 describe('Spell Validation System', () => {
+  it('allows Bard ritual casting but not base Warlock ritual casting', () => {
+    expect(bard.spellcasting?.ritualCasting).toBe(true);
+    expect(canCastRituals('Bard')).toBe(true);
+    expect(canCastRituals('Warlock')).toBe(false);
+  });
+
   let mockWizard: CharacterClass;
   let mockCleric: CharacterClass;
   let mockBard: CharacterClass;
@@ -276,6 +284,12 @@ describe('Spell Validation System', () => {
         ritualCasting: false,
         spellcastingAbility: 'charisma',
       });
+    });
+
+    it('uses the Warlock spells-known progression after level 9', () => {
+      expect(getSpellcastingInfo(mockWarlock, 10)?.spellsKnown).toBe(10);
+      expect(getSpellcastingInfo(mockWarlock, 11)?.spellsKnown).toBe(11);
+      expect(getSpellcastingInfo(mockWarlock, 20)?.spellsKnown).toBe(15);
     });
   });
 

@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { feats } from '@/data/featOptions';
 import { useToast } from '@/hooks/use-toast';
+import { canChooseAbilityScoreImprovement } from '@/utils/asi-levels';
 
 /**
  * FeatSelection component for choosing feats during character creation
@@ -35,7 +36,7 @@ const FeatSelection: React.FC = () => {
   });
 
   const currentLevel = character?.level || 1;
-  const canChooseFeat = [4, 8, 12, 16, 19].includes(currentLevel);
+  const canChooseFeat = canChooseAbilityScoreImprovement(character?.class?.name, currentLevel);
 
   // Note: No early returns before hooks to satisfy rules-of-hooks
 

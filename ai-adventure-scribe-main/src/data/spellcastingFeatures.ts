@@ -253,7 +253,7 @@ export const calculateSpellsKnown = (
 };
 
 export const canCastRituals = (characterClass: string): boolean => {
-  return ['bard', 'cleric', 'druid', 'wizard', 'warlock'].includes(characterClass.toLowerCase());
+  return ['bard', 'cleric', 'druid', 'wizard'].includes(characterClass.toLowerCase());
 };
 
 export const hasPactMagic = (characterClass: string): boolean => {

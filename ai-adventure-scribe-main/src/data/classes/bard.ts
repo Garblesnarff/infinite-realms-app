@@ -25,7 +25,7 @@ export const bard: CharacterClass = {
     ability: 'charisma' as keyof AbilityScores,
     cantripsKnown: 2,
     spellsKnown: 4,
-    ritualCasting: false,
+    ritualCasting: true,
   },
   classFeatures: [
     {

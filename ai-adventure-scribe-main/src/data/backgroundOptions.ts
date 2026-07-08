@@ -61,6 +61,33 @@ export const backgrounds: CharacterBackground[] = [
     ],
   },
   {
+    id: 'charlatan',
+    name: 'Charlatan',
+    description:
+      'You have always had a way with people, knowing what makes them tick and how to exploit their hopes and doubts.',
+    skillProficiencies: ['Deception', 'Sleight of Hand'],
+    toolProficiencies: ['Disguise kit', 'Forgery kit'],
+    languages: 0,
+    equipment: [
+      'Fine clothes',
+      'Disguise kit',
+      'Tools of the con of your choice',
+      '15 gp',
+    ],
+    feature: {
+      name: 'False Identity',
+      description:
+        'You have created a second identity that includes documentation, established acquaintances, and disguises that allow you to assume that persona.',
+    },
+    suggestedPersonalityTraits: [
+      'I fall in and out of love easily, and am always pursuing someone.',
+      'Flattery is my preferred trick for getting what I want.',
+    ],
+    suggestedIdeals: ['Independence. I am a free spirit—no one tells me what to do.'],
+    suggestedBonds: ['I owe everything to my mentor—a horrible person who is probably rotting in jail somewhere.'],
+    suggestedFlaws: ["I can't resist swindling people who are more powerful than me."],
+  },
+  {
     id: 'noble',
     name: 'Noble',
     description:

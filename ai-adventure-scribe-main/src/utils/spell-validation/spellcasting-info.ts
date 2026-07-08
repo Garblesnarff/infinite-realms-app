@@ -123,7 +123,7 @@ export function getSpellcastingInfo(
   // Warlock cantrip scaling: 2 at lvl 1, 3 at lvl 4, 4 at lvl 10
   if (normalizedClassName === 'Warlock') {
     result.cantripsKnown = level >= 10 ? 4 : level >= 4 ? 3 : 2;
-    const warlockSpells = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+    const warlockSpells = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15];
     result.spellsKnown = warlockSpells[Math.min(level, 20)];
   }
 
