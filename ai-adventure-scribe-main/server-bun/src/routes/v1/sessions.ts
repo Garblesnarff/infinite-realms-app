@@ -22,6 +22,7 @@ import { SessionService } from '../../services/session-service.js';
 import { db } from '../../../../db/client';
 import { sessionChronicles } from '../../../../db/schema/index';
 import { chronicleGenerator } from '../../services/chronicle-generator.js';
+import { persistChronicleFailure } from '../../services/chronicle-status-service.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
@@ -150,15 +151,15 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         const sessionUserId = (user as { userId: string }).userId;
         const sessionIdForChronicle = id;
         (async () => {
+          let chronicleId: string | undefined;
           try {
-            const [row] = await db
-              .insert(sessionChronicles)
-              .values({
-                sessionId: sessionIdForChronicle,
-                userId: sessionUserId,
-                status: 'generating',
-              })
-              .returning({ id: sessionChronicles.id });
+            chronicleId = await db.transaction(async (tx) => {
+              const [row] = await tx.insert(sessionChronicles).values({
+                  sessionId: sessionIdForChronicle, userId: sessionUserId, status: 'generating',
+                }).returning({ id: sessionChronicles.id });
+              if (!row) throw new Error('Failed to create chronicle row');
+              return row.id;
+            });
 
             const content = await chronicleGenerator.generateProChronicle(
               sessionIdForChronicle,
@@ -167,10 +168,11 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
             const illustrationUrl = await chronicleGenerator.generateIllustration(
               content.illustrationPrompt,
             );
+            if (!chronicleId) throw new Error('Chronicle row was not created');
+            const completedChronicleId = chronicleId;
 
-            await db
-              .update(sessionChronicles)
-              .set({
+            await db.transaction(async (tx) => {
+              await tx.update(sessionChronicles).set({
                 status: 'ready',
                 chronicleText: content.chronicleText,
                 chapterTitle: content.chapterTitle,
@@ -179,14 +181,21 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
                 shareToken: chronicleGenerator.generateShareToken(),
                 generatedAt: new Date(),
                 updatedAt: new Date(),
-              })
-              .where(eq(sessionChronicles.id, row.id));
+              }).where(eq(sessionChronicles.id, completedChronicleId));
+            });
 
             logger.info({
               msg: '[Sessions] Chronicle generated',
               sessionId: sessionIdForChronicle,
             });
           } catch (err) {
+            if (chronicleId) {
+              try {
+                await persistChronicleFailure(db, chronicleId, err);
+              } catch (statusError) {
+                logger.error({ msg: '[Sessions] Chronicle failure status update failed', sessionId: sessionIdForChronicle, chronicleId, error: statusError });
+              }
+            }
             logger.error({
               msg: '[Sessions] Auto chronicle failed',
               sessionId: sessionIdForChronicle,

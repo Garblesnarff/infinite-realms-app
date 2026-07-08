@@ -17,6 +17,7 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
+import { claimStripeEvent, getPlanFromPriceId, resolveAllowedPriceId, validateCheckoutUrl } from '../../services/billing-hardening.js';
 
 // Initialize Stripe client (lazy - only if key is configured)
 let stripe: Stripe | null = null;
@@ -32,15 +33,6 @@ function getStripe(): Stripe {
   return stripe;
 }
 
-/**
- * Map Stripe price ID to plan name
- */
-function getPlanFromPriceId(priceId: string | undefined): string {
-  if (!priceId) return 'free';
-  // For now, any paid price means 'pro' plan
-  // Can expand later for multiple tiers
-  return 'pro';
-}
 
 /**
  * Get or create Stripe customer for user
@@ -97,10 +89,24 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         const { priceId, successUrl, cancelUrl } = body;
 
         // Use provided priceId or default from env
-        const finalPriceId = priceId || env.STRIPE_PRICE_ID;
-        if (!finalPriceId) {
+        const allowedPrice = resolveAllowedPriceId(priceId);
+        if (!priceId && !env.STRIPE_PRICE_ID) {
           set.status = 503;
           return { error: 'Billing unavailable' };
+        }
+        if (!allowedPrice) {
+          set.status = 400;
+          return { error: 'Unknown billing price' };
+        }
+
+        let validatedSuccessUrl: string;
+        let validatedCancelUrl: string;
+        try {
+          validatedSuccessUrl = validateCheckoutUrl(successUrl, '/app/account?success=true');
+          validatedCancelUrl = validateCheckoutUrl(cancelUrl, '/app/account?canceled=true');
+        } catch {
+          set.status = 400;
+          return { error: 'Invalid checkout redirect URL' };
         }
 
         // Get or create Stripe customer
@@ -114,9 +120,9 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         const session = await stripeClient.checkout.sessions.create({
           mode: 'subscription',
           customer: customerId,
-          line_items: [{ price: finalPriceId, quantity: 1 }],
-          success_url: successUrl || `${process.env.APP_ORIGIN || 'https://infiniterealms.app'}/app/account?success=true`,
-          cancel_url: cancelUrl || `${process.env.APP_ORIGIN || 'https://infiniterealms.app'}/app/account?canceled=true`,
+          line_items: [{ price: allowedPrice.priceId, quantity: 1 }],
+          success_url: validatedSuccessUrl,
+          cancel_url: validatedCancelUrl,
           allow_promotion_codes: true,
           metadata: {
             userId: user.userId,
@@ -232,6 +238,7 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
    * Elysia handles this correctly when we access request.text() directly.
    */
   .post('/webhook', async ({ request, set }) => {
+    let claimedEventId: string | undefined;
     try {
       const stripeClient = getStripe();
       const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
@@ -267,13 +274,27 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
         eventId: event.id,
       });
 
+      if (!await claimStripeEvent(event.id, event.type)) {
+        logger.info({ msg: 'STRIPE_WEBHOOK_DUPLICATE', eventId: event.id, type: event.type });
+        return { received: true, duplicate: true };
+      }
+      claimedEventId = event.id;
+
       // Handle events
       switch (event.type) {
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
-          const userId = session.metadata?.userId;
+          let userId = session.metadata?.userId;
           const customerId = session.customer as string;
           const subscriptionId = session.subscription as string;
+
+          if (!userId) {
+            const email = session.customer_details?.email || session.customer_email;
+            if (email) {
+              const matches = await sql`SELECT id FROM users WHERE lower(email) = lower(${email}) LIMIT 2`;
+              if (matches.length === 1) userId = String(matches[0].id);
+            }
+          }
 
           if (userId) {
             // Update user with subscription info
@@ -303,6 +324,13 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
               subscriptionId,
               amountTotal: session.amount_total,
               currency: session.currency,
+            });
+          } else {
+            logger.error({
+              msg: 'STRIPE_PAID_CUSTOMER_UNRESOLVED', alert: true, severity: 'critical',
+              eventId: event.id, sessionId: session.id, customerId, subscriptionId,
+              customerEmail: session.customer_details?.email || session.customer_email || null,
+              amountTotal: session.amount_total, currency: session.currency,
             });
           }
           break;
@@ -409,6 +437,13 @@ export const billingRoutes = new Elysia({ prefix: '/v1/billing' })
 
       return { received: true };
     } catch (err) {
+      if (claimedEventId) {
+        try {
+          await sql`DELETE FROM processed_stripe_events WHERE event_id = ${claimedEventId}`;
+        } catch (releaseError) {
+          logger.error({ msg: 'STRIPE_WEBHOOK_CLAIM_RELEASE_FAILED', eventId: claimedEventId, error: releaseError });
+        }
+      }
       logger.error({ msg: 'WEBHOOK_ERROR', error: err });
       set.status = 500;
       return { error: 'Webhook handler failed' };

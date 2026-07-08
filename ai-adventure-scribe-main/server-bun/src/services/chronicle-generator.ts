@@ -45,6 +45,9 @@ interface FalStatusResponse {
   images?: Array<{ url: string }>;
 }
 
+const TEXT_TIMEOUT_MS = 60_000;
+const IMAGE_TIMEOUT_MS = 120_000;
+
 // ─── ChronicleGenerator ─────────────────────────────────────────────────────
 
 class ChronicleGenerator {
@@ -239,7 +242,7 @@ Respond ONLY as JSON with exactly these fields:
       max_tokens: 2000,
       temperature: 0.9,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) });
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseProResponse(text, data);
@@ -281,7 +284,7 @@ Respond ONLY as JSON with exactly these fields:
       max_tokens: 600,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) });
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseFreeResponse(text, data);
@@ -309,6 +312,7 @@ Respond ONLY as JSON with exactly these fields:
           image_size: { width: 1200, height: 630 },
           num_images: 1,
         }),
+        signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
       });
 
       if (!submitRes.ok) {
@@ -334,6 +338,7 @@ Respond ONLY as JSON with exactly these fields:
 
         const pollRes = await fetch(q.response_url, {
           headers: { Authorization: 'Key ' + falApiKey },
+          signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
         });
 
         if (!pollRes.ok) {

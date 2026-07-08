@@ -14,8 +14,18 @@ import { Elysia, t } from 'elysia';
 import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
+import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
+
+const IMAGE_PROVIDER_TIMEOUT_MS = 120_000;
+const MAX_PROMPT_LENGTH = 4_000;
+const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
+
+export function estimateBase64Bytes(value: string): number {
+  const base64 = value.includes(',') ? value.slice(value.indexOf(',') + 1) : value;
+  return Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+}
 
 /**
  * Helper to find URL-like string
@@ -106,6 +116,7 @@ const extractFromMessage = (msg: any): string | null => {
 };
 
 export const imageRoutes = new Elysia({ prefix: '/v1/images' })
+  .use(planRateLimit('images'))
 
   /**
    * Get image quota status
@@ -148,6 +159,14 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       if (!prompt || typeof prompt !== 'string') {
         set.status = 400;
         return { error: 'Missing prompt' };
+      }
+      if (prompt.length > MAX_PROMPT_LENGTH) {
+        set.status = 400;
+        return { error: `Prompt must be ${MAX_PROMPT_LENGTH} characters or fewer` };
+      }
+      if (referenceImages?.some((image: string) => estimateBase64Bytes(image) > MAX_REFERENCE_IMAGE_BYTES)) {
+        set.status = 400;
+        return { error: 'Each reference image must be 5 MB or smaller' };
       }
 
       const userId = user.userId;
@@ -215,6 +234,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
             'X-Title': 'AI Adventure Scribe',
           },
           body: JSON.stringify(reqBody),
+          signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -253,7 +273,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
 
         // Otherwise assume remote URL; fetch and convert
         try {
-          const r2 = await fetch(imageRef);
+          const r2 = await fetch(imageRef, { signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS) });
           if (!r2.ok) {
             logger.warn({ msg: 'IMAGE_FETCH_FAILED', url: imageRef, status: r2.status });
             set.status = 502;
@@ -268,6 +288,12 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         }
       } catch (e) {
         logger.error({ msg: 'IMAGE_ERROR', error: e });
+        if (e instanceof DOMException && e.name === 'TimeoutError') {
+          getCircuitBreaker('images:openrouter').onFailure();
+          set.status = 503;
+          set.headers['Retry-After'] = '1';
+          return { error: 'Image provider timed out; retry the request' };
+        }
         if (e instanceof CircuitOpenError) {
           set.status = 503;
           set.headers['Retry-After'] = String(Math.max(1, e.retryAfterSec));
@@ -281,7 +307,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       body: t.Object({
         prompt: t.String(),
         model: t.Optional(t.String()),
-        referenceImages: t.Optional(t.Array(t.String())),
+        referenceImages: t.Optional(t.Array(t.String(), { maxItems: 4 })),
         quality: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
       }),
     }

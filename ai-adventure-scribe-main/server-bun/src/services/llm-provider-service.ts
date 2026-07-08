@@ -34,6 +34,7 @@ export interface LLMResponse {
 }
 
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
+export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
 
 /**
@@ -106,7 +107,7 @@ const getGeminiModelIds = async (apiKey: string): Promise<Set<string>> => {
       url.searchParams.set('key', apiKey);
       if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-      const resp = await fetch(url.toString());
+      const resp = await fetch(url.toString(), { signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS) });
       if (!resp.ok) break;
       const data = await resp.json() as { models?: Array<{ name?: string }>; nextPageToken?: string };
       for (const model of data.models || []) {
@@ -163,6 +164,7 @@ export class LLMProviderService {
           },
         } : {}),
       }),
+      signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
     });
     if (!response.ok || !response.body) throw new Error(`LLM stream failed (${response.status})`);
 
@@ -230,6 +232,10 @@ export class LLMProviderService {
       if (e instanceof CircuitOpenError) {
         return { error: 'Provider temporarily unavailable', status: 503, retryAfter: e.retryAfterSec, text: '' };
       }
+      if (e instanceof DOMException && e.name === 'TimeoutError') {
+        getCircuitBreaker(`llm:${provider}`).onFailure();
+        return { error: 'Provider timed out; retry the request', status: 503, retryAfter: 1, text: '' };
+      }
       return { error: 'LLM request failed', status: 500, text: '' };
     }
   }
@@ -287,6 +293,7 @@ export class LLMProviderService {
         'X-Title': 'AI Adventure Scribe',
       },
       body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -380,6 +387,7 @@ export class LLMProviderService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiBody),
+          signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
         }
       );
 
@@ -474,6 +482,7 @@ export class LLMProviderService {
             'X-Title': 'AI Adventure Scribe - Memory Extraction',
           },
           body: JSON.stringify(reqBody),
+          signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
         });
 
         if (!response.ok) {
