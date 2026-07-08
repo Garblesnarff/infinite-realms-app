@@ -9,6 +9,7 @@ export interface CombatDetectionResult {
 }
 
 export interface DetectedEnemy {
+  monsterId?: string;
   name: string;
   type: 'mech' | 'humanoid' | 'beast' | 'undead' | 'dragon' | 'construct' | 'unknown';
   estimatedCR: string;

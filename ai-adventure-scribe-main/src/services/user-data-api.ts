@@ -265,6 +265,10 @@ export const userDataApi = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  applyCharacterDamage: (characterId: string, amount: number): Promise<{ currentHitPoints: number; temporaryHitPoints: number }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/damage`, {
+      method: 'POST', body: JSON.stringify({ amount }),
+    }),
   deleteCharacter: (characterId: string): Promise<void> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' }),
 };

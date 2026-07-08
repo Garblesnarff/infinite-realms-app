@@ -110,11 +110,16 @@ export function checkConcentration(
 
   const dc = Math.max(10, Math.floor(damageTaken / 2));
 
-  // CombatParticipant doesn't carry abilityScores, so this has always evaluated
-  // to 0 regardless of the participant's real Constitution modifier - see bead
-  // ai-dungeon-master-d20 for wiring in the real value without changing behavior here.
-  const conMod = 0;
-  const roll = Math.floor(Math.random() * 20) + 1 + conMod;
+  const combatant = participant as CombatParticipant & {
+    abilityScores?: { constitution?: { modifier?: number; savingThrow?: boolean } };
+    savingThrowProficiencies?: string[];
+  };
+  const constitution = combatant.abilityScores?.constitution;
+  const conMod = constitution?.modifier || 0;
+  const proficient = constitution?.savingThrow === true ||
+    combatant.savingThrowProficiencies?.includes('constitution');
+  const proficiencyBonus = proficient ? 2 + Math.floor(((participant.level || 1) - 1) / 4) : 0;
+  const roll = Math.floor(Math.random() * 20) + 1 + conMod + proficiencyBonus;
 
   const maintained = roll >= dc;
   if (!maintained) {

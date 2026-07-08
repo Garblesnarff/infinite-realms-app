@@ -22,6 +22,7 @@ import {
   type FoundryMessage,
 } from './services/collaboration/room-manager.js';
 import { verifyWorkOSToken } from './services/workos.js';
+import { verifySessionAccess } from './services/combat/combat-authorization.js';
 
 // Re-export for external modules (e.g. tRPC routers)
 export { broadcastToScene } from './services/collaboration/room-manager.js';
@@ -45,15 +46,7 @@ async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
         requestId,
       };
 
-      const clients = rooms.get(roomId);
-      if (clients) {
-        const payloadStr = JSON.stringify(payload);
-        for (const client of clients) {
-          if (client.readyState === 1) {
-            client.send(payloadStr);
-          }
-        }
-      }
+      broadcastToRoom(roomId, ws, payload);
 
       logger.info(
         {
@@ -178,6 +171,9 @@ export const wsPlugin = new Elysia().ws('/ws', {
       if (!user) {
         ws.close(4000, 'Unauthorized');
         return;
+      }
+      if (sessionId !== 'lobby') {
+        await verifySessionAccess(sessionId, user.userId);
       }
 
       // Store user data in ws.data

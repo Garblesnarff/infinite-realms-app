@@ -6,6 +6,7 @@
 
 import type { CharacterData } from './participant-factory';
 import type { Character } from '@/types/character';
+import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 /**
  * Build a CharacterData object from a Character, or return null if no character provided.
@@ -13,9 +14,11 @@ import type { Character } from '@/types/character';
  */
 export function buildCharacterData(character: Character | null | undefined): CharacterData | null {
   if (!character) return null;
+  const stats = calculateAllCharacterStats(character);
 
   return {
     id: character.id,
+    speed: stats.speed,
     spellSlots: character.spellSlots,
     preparedSpells: character.preparedSpells,
     activeConcentration: character.activeConcentration,

@@ -25,6 +25,7 @@ export interface CharacterData {
   obscurement?: CombatParticipant['obscurement'];
   isHidden?: boolean;
   stealthCheckBonus?: number;
+  speed?: number;
 }
 
 /**
@@ -54,7 +55,9 @@ export function createCombatParticipant(
     initiative: shouldRollInitiative
       ? rollDie(20) + (partial.initiative || 0)
       : partial.initiative || 0,
+    initiativeBonus: partial.initiativeBonus ?? partial.initiative ?? 0,
     armorClass: partial.armorClass || 10,
+    speed: partial.speed || 30,
     maxHitPoints: partial.maxHitPoints || 1,
     currentHitPoints: partial.currentHitPoints || partial.maxHitPoints || 1,
     temporaryHitPoints: partial.temporaryHitPoints || 0,
@@ -65,6 +68,7 @@ export function createCombatParticipant(
     bonusActionTaken: partial.bonusActionTaken || false,
     reactionTaken: partial.reactionTaken || false,
     movementUsed: partial.movementUsed || 0,
+    movementRemaining: partial.movementRemaining ?? partial.speed ?? 30,
     reactionOpportunities: partial.reactionOpportunities || [],
     monsterData: partial.monsterData,
     spellSlots: partial.spellSlots,
@@ -123,11 +127,18 @@ export function enrichParticipantWithCharacterData(
   participant.obscurement = characterData.obscurement || 'clear';
   participant.isHidden = characterData.isHidden || false;
   participant.stealthCheckBonus = characterData.stealthCheckBonus || 0;
+  if (typeof characterData.speed === 'number') {
+    participant.speed = characterData.speed;
+    participant.movementRemaining = Math.max(0, characterData.speed - participant.movementUsed);
+  }
 }
 
 /**
  * Sort participants by initiative (highest first)
  */
 export function sortByInitiative(participants: CombatParticipant[]): CombatParticipant[] {
-  return [...participants].sort((a, b) => b.initiative - a.initiative);
+  return [...participants].sort(
+    (a, b) => b.initiative - a.initiative ||
+      (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
+  );
 }

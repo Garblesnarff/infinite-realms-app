@@ -1,6 +1,7 @@
 import { MemoryManager } from '../../memory-manager';
 import { WorldBuilderService, WorldBuilderRepository } from '../../world-builders';
 import { parseXMLTagsFromResponse } from '../xml-parser';
+import { llmApiClient } from '../../llm-api-client';
 
 import type { MemoryContext } from '../../memory-manager';
 import type { GameContext, ChatMessage } from '../shared/types';
@@ -26,6 +27,36 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
 
   if (!context.sessionId) {
     return text;
+  }
+
+  // Preserve chronological continuity even when older events are not similar to
+  // the current embedding query. Every 20 turns, store an abstractive campaign summary.
+  if (turnCount !== undefined && turnCount > 0 && turnCount % 20 === 0) {
+    try {
+      const transcript = [...(conversationHistory || []).slice(-40), {
+        role: 'assistant' as const,
+        content: text,
+      }]
+        .map((entry) => `${entry.role}: ${sanitizeForMemoryExtraction(entry.content)}`)
+        .join('\n');
+      const summary = await llmApiClient.extractMemories(
+        `Summarize this D&D campaign chronologically. Preserve resolved quests, named NPC relationships, locations, important items, promises, deaths, and unresolved threats. Return only the concise summary.\n\n${transcript}`,
+        1200,
+      );
+      if (summary.trim()) {
+        await MemoryManager.saveMemories([{
+          session_id: context.sessionId,
+          campaign_id: context.campaignId,
+          content: summary.trim(),
+          type: 'story_beat',
+          memory_type: 'campaign_summary',
+          importance: 5,
+          metadata: { source: 'periodic_summary', turn: turnCount },
+        }]);
+      }
+    } catch (summaryError) {
+      logger.warn('Periodic campaign summarization failed (non-fatal):', summaryError);
+    }
   }
 
   // Parse XML tags from the response

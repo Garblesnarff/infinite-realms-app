@@ -15,9 +15,9 @@ import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
-import { detectCombatFromText } from '@/utils/combatDetection';
 
 // Voice narration types
 export interface NarrationSegment {
@@ -133,7 +133,7 @@ const fetchGameContext = async (
  */
 export const useAIResponse = () => {
   const { setGamePhase, state: gameState } = useGame();
-  const { state: combatState } = useCombat();
+  const { state: combatState, updateParticipant, nextTurn } = useCombat();
   const { userPlan } = useAuth();
   const lastSigRef = useRef<string>('');
   // Track processed roll request signatures to prevent infinite re-parsing loops
@@ -195,14 +195,11 @@ export const useAIResponse = () => {
           throw new Error('Failed to fetch game context');
         }
 
-        // Analyze player message for combat context
-        const combatDetection = detectCombatFromText(latestMessage.text);
-
         logger.debug('Calling DM Agent with context:', {
           gameContext,
           knownCharacters: Object.keys(voiceContext.knownCharacters).length,
           isFirstMessage,
-          combatDetected: combatDetection.isCombat,
+          combatDetected: combatState.isInCombat,
         });
 
         // Build conversation history for AIService
@@ -229,6 +226,16 @@ export const useAIResponse = () => {
             isInCombat: combatState.isInCombat,
             currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
             pendingRolls: gameState.diceRollQueue.pendingRolls.length,
+            round: combatState.activeEncounter?.currentRound,
+            participants: (combatState.activeEncounter?.participants || []).map((participant) => ({
+              id: participant.id,
+              name: participant.name,
+              type: participant.participantType,
+              hp: participant.currentHitPoints,
+              maxHp: participant.maxHitPoints,
+              armorClass: participant.armorClass,
+              conditions: (participant.conditions || []).map((condition) => condition.name),
+            })) || [],
           },
         };
 
@@ -240,7 +247,7 @@ export const useAIResponse = () => {
         });
 
         // Call AIService
-        const result = await AIService.chatWithDM({
+        let result = await AIService.chatWithDM({
           message: latestMessage.text,
           context: aiContext,
           conversationHistory,
@@ -250,10 +257,37 @@ export const useAIResponse = () => {
         });
 
         // Extract response data (result type has both snake_case and camelCase variants)
-        const responseText = result.text;
-        const narrationSegments = result.narrationSegments;
+        let responseText = result.text;
+        let narrationSegments = result.narrationSegments;
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
         const imageRequests: ImageRequest[] | undefined = undefined;
+
+        if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
+          const resolvedActions: Array<Record<string, unknown>> = [];
+          for (const action of result.combat_actions as StructuredCombatAction[]) {
+            const outcomes = await executeStructuredCombatAction(combatState.activeEncounter.id, action);
+            resolvedActions.push({ action, outcomes });
+            for (const outcome of outcomes) {
+              if (outcome.newHp !== undefined) {
+                await updateParticipant(outcome.participantId, { currentHitPoints: outcome.newHp });
+              }
+            }
+            await nextTurn();
+          }
+          const narrationResult = await AIService.chatWithDM({
+            message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),
+            context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
+            conversationHistory: [...conversationHistory, {
+              id: `resolution-setup-${Date.now()}`, role: 'assistant' as const,
+              content: result.text, timestamp: new Date(),
+            }],
+            userPlan: userPlan || undefined,
+            turnCount,
+          });
+          result = narrationResult;
+          responseText = narrationResult.text;
+          narrationSegments = narrationResult.narrationSegments;
+        }
 
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
@@ -296,8 +330,8 @@ export const useAIResponse = () => {
 
         // Clamp combat intent flags (delegated to game-phase-updater)
         const { shouldStartCombat, shouldEndCombat } = clampCombatIntentFlags(
-          !!combatDetection.shouldStartCombat,
-          !!combatDetection.shouldEndCombat,
+          !!result.combatDetection?.shouldStartCombat,
+          !!result.combatDetection?.shouldEndCombat,
           combatState.isInCombat,
         );
 
@@ -324,13 +358,13 @@ export const useAIResponse = () => {
           rollRequests: processedRolls.playerRollRequests,
           imageRequests,
           combatDetection: {
-            isCombat: combatDetection.isCombat,
-            confidence: combatDetection.confidence,
-            combatType: combatDetection.combatType,
+            isCombat: result.combatDetection?.isCombat || false,
+            confidence: result.combatDetection?.confidence || 1,
+            combatType: result.combatDetection?.combatType || 'none',
             shouldStartCombat,
             shouldEndCombat,
-            enemies: combatDetection.enemies || [],
-            combatActions: combatDetection.combatActions || [],
+            enemies: result.combatDetection?.enemies || [],
+            combatActions: result.combatDetection?.combatActions || [],
           },
         };
       } catch (error) {

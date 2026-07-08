@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const bard: CharacterClass = {
+  subclasses: classSubclasses.bard,
   id: 'bard',
   name: 'Bard',
   description: 'An inspiring magician whose power echoes the music of creation.',

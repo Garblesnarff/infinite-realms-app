@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { needsDeathSaves, rollDeathSave, stabilizeParticipant } from '../combat/deathSaves';
+import { combatReducer } from '@/contexts/combat/combat-reducer';
 
 import type { CombatParticipant } from '@/types/combat';
 
@@ -14,6 +15,25 @@ vi.mock('@/utils/diceRolls', () => ({
 }));
 
 describe('deathSaves', () => {
+  it('skips an unconscious combatant when advancing the turn', () => {
+    const makeParticipant = (id: string, hp: number) => ({
+      id,
+      currentHitPoints: hp,
+      isDead: hp <= 0,
+      isUnconscious: hp <= 0,
+      deathSaves: { successes: 0, failures: 0 },
+      reactionOpportunities: [],
+    });
+    const result = combatReducer({
+      activeEncounter: {
+        currentTurnParticipantId: 'active',
+        currentRound: 1,
+        participants: [makeParticipant('active', 10), makeParticipant('down', 0), makeParticipant('next', 8)],
+      },
+    } as any, { type: 'NEXT_TURN' });
+
+    expect(result.activeEncounter?.currentTurnParticipantId).toBe('next');
+  });
   let mockParticipant: CombatParticipant;
 
   beforeEach(() => {

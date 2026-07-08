@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const cleric: CharacterClass = {
+  subclasses: classSubclasses.cleric,
   id: 'cleric',
   name: 'Cleric',
   description: 'A priestly champion who wields divine magic in service of a higher power.',

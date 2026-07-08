@@ -44,6 +44,10 @@ export interface CharacterStats {
 
   // Combat
   carryingCapacity: number;
+  baseSpeed: number;
+  encumbranceLevel: EncumbranceLevel;
+  speedPenalty: number;
+  totalCarriedWeight: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -51,6 +55,29 @@ export interface CharacterStats {
   // Combined race/subrace data
   allTraits: string[];
   allLanguages: string[];
+}
+
+export type EncumbranceLevel = 'normal' | 'encumbered' | 'heavily-encumbered' | 'overloaded';
+
+export interface CurrencyLike {
+  cp?: number;
+  sp?: number;
+  ep?: number;
+  gp?: number;
+  pp?: number;
+}
+
+export interface EncumbranceSummary {
+  currentWeight: number;
+  currencyWeight: number;
+  totalWeight: number;
+  carryingCapacity: number;
+  encumberedThreshold: number;
+  heavilyEncumberedThreshold: number;
+  encumbranceLevel: EncumbranceLevel;
+  speedPenalty: number;
+  baseSpeed: number;
+  effectiveSpeed: number;
 }
 
 // Re-export basic calculations for backward compatibility
@@ -168,6 +195,68 @@ export const calculatePassivePerception = (
   return 10 + (mods['Perception']?.modifier || 0);
 };
 
+export const getBaseSpeed = (character: Character): number =>
+  character.subrace?.speed || character.race?.speed || 30;
+
+export const calculateInventoryWeight = (character: Character): number =>
+  character.inventory?.reduce((total, item) => {
+    const quantity = item.quantity || 1;
+    const itemWeight = item.weight ?? 1;
+    return total + itemWeight * quantity;
+  }, 0) || 0;
+
+export const calculateCurrencyWeight = (currency?: CurrencyLike): number => {
+  if (!currency) return 0;
+  const totalCoins =
+    (currency.cp || 0) +
+    (currency.sp || 0) +
+    (currency.ep || 0) +
+    (currency.gp || 0) +
+    (currency.pp || 0);
+  return Math.floor(totalCoins / 50);
+};
+
+export const calculateEncumbrance = (
+  character: Character,
+  currency: CurrencyLike = character.currency || {},
+): EncumbranceSummary => {
+  const strengthScore = character.abilityScores?.strength?.score || 10;
+  const currentWeight = calculateInventoryWeight(character);
+  const currencyWeight = calculateCurrencyWeight(currency);
+  const totalWeight = currentWeight + currencyWeight;
+  const carryingCapacity = strengthScore * 15;
+  const encumberedThreshold = strengthScore * 5;
+  const heavilyEncumberedThreshold = strengthScore * 10;
+  const baseSpeed = getBaseSpeed(character);
+
+  let encumbranceLevel: EncumbranceLevel = 'normal';
+  let speedPenalty = 0;
+
+  if (totalWeight >= carryingCapacity) {
+    encumbranceLevel = 'overloaded';
+    speedPenalty = baseSpeed;
+  } else if (totalWeight >= heavilyEncumberedThreshold) {
+    encumbranceLevel = 'heavily-encumbered';
+    speedPenalty = 20;
+  } else if (totalWeight >= encumberedThreshold) {
+    encumbranceLevel = 'encumbered';
+    speedPenalty = 10;
+  }
+
+  return {
+    currentWeight,
+    currencyWeight,
+    totalWeight,
+    carryingCapacity,
+    encumberedThreshold,
+    heavilyEncumberedThreshold,
+    encumbranceLevel,
+    speedPenalty,
+    baseSpeed,
+    effectiveSpeed: Math.max(0, baseSpeed - speedPenalty),
+  };
+};
+
 /**
  * Calculate all character stats at once
  * ⚡ Bolt: Optimized by extracting shared values and eliminating redundant sub-calls.
@@ -187,6 +276,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
   ];
 
   const skillMods = calculateSkillModifiers(character, pb);
+  const encumbrance = calculateEncumbrance(character);
 
   return {
     proficiencyBonus: pb,
@@ -194,7 +284,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: calculateArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
-    speed: character.subrace?.speed || character.race?.speed || 30,
+    speed: encumbrance.effectiveSpeed,
 
     spellSaveDC: calculateSpellSaveDC(character, pb, spellcastingAbility),
     spellAttackBonus: calculateSpellAttackBonus(character, pb, spellcastingAbility),
@@ -205,6 +295,10 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     savingThrowModifiers: calculateSavingThrowModifiers(character, pb),
 
     carryingCapacity: calculateCarryingCapacity(character),
+    baseSpeed: encumbrance.baseSpeed,
+    encumbranceLevel: encumbrance.encumbranceLevel,
+    speedPenalty: encumbrance.speedPenalty,
+    totalCarriedWeight: encumbrance.totalWeight,
     passivePerception: calculatePassivePerception(character, skillMods),
     passiveInvestigation: 10 + (skillMods['Investigation']?.modifier || 0),
     passiveInsight: 10 + (skillMods['Insight']?.modifier || 0),

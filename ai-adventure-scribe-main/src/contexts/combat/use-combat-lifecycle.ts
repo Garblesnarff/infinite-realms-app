@@ -105,7 +105,7 @@ export function useCombatLifecycle({
       const participant = state.activeEncounter?.participants.find((p) => p.id === participantId);
       if (!participant) return 0;
 
-      const initiative = rollDie(20) + (participant.initiative || 0);
+      const initiative = rollDie(20) + (participant.initiativeBonus || 0);
 
       dispatch({
         type: 'UPDATE_PARTICIPANT',

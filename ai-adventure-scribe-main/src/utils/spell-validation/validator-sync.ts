@@ -1,7 +1,7 @@
 import type { Character } from '@/types/character';
 import type { SpellValidationResult, SpellValidationError } from '@/utils/spell-validation/types';
 
-import { getClassSpells } from '@/data/spellOptions';
+import { getClassSpells, normalizeLegacySpellId } from '@/data/spellOptions';
 import { getRacialSpells } from '@/utils/spell-validation/racial-spells';
 import { getSpellcastingInfo } from '@/utils/spell-validation/spellcasting-info';
 
@@ -168,7 +168,7 @@ export function validateSpellSelection(
 
   cantrips.forEach((cantripId) => {
     const isRacialFixed = racialSpells.cantrips.includes(cantripId);
-    const isClassCantrip = availableCantripIds.includes(cantripId);
+    const isClassCantrip = availableCantripIds.includes(normalizeLegacySpellId(cantripId));
     if (isRacialFixed || isClassCantrip) return;
 
     if (bonusRemaining > 0 && bonusAllowedIds.includes(cantripId)) {
@@ -212,7 +212,7 @@ export function validateSpellSelection(
   // Validate each selected spell against class list and racial list
   spells.forEach((spellId) => {
     const isRacialSpell = racialSpells.spells.includes(spellId);
-    const isClassSpell = availableSpellIds.includes(spellId);
+    const isClassSpell = availableSpellIds.includes(normalizeLegacySpellId(spellId));
 
     if (!isRacialSpell && !isClassSpell) {
       errors.push({

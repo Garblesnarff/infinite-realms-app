@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const warlock: CharacterClass = {
+  subclasses: classSubclasses.warlock,
   id: 'warlock',
   name: 'Warlock',
   description: 'A wielder of magic derived from a bargain with an extraplanar entity.',

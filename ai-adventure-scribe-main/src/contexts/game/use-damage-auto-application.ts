@@ -4,6 +4,7 @@ import type { GameState } from './game-reducer';
 import type { CombatState, DamageType } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Custom hook to automatically apply damage from completed dice rolls to the player's HP.
@@ -15,6 +16,7 @@ export const useDamageAutoApplication = (
   state: GameState,
   combatState: CombatState,
   dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>,
+  characterId?: string | null,
 ) => {
   // Track which damage_taken rolls have been applied to prevent double-application
   const appliedDamageRollsRef = useRef<Set<string>>(new Set());
@@ -61,12 +63,14 @@ export const useDamageAutoApplication = (
               logger.error(`❌ Failed to apply damage:`, error);
             }
           }
-        } else {
-          // Outside of combat, log for manual tracking
-          // Future enhancement: Could update character HP directly in database
-          logger.info(
-            `📝 Damage taken outside combat: ${damageAmount} ${roll.damageType || 'untyped'} damage (HP tracking not active outside combat)`,
-          );
+        } else if (characterId) {
+          try {
+            await userDataApi.applyCharacterDamage(characterId, damageAmount);
+            logger.info(`✅ Applied ${damageAmount} out-of-combat damage to character HP`);
+          } catch (error) {
+            appliedDamageRollsRef.current.delete(roll.id);
+            logger.error('❌ Failed to persist out-of-combat damage:', error);
+          }
         }
       }
     });
@@ -75,5 +79,6 @@ export const useDamageAutoApplication = (
     combatState.isInCombat,
     combatState.activeEncounter,
     dealDamage,
+    characterId,
   ]);
 };

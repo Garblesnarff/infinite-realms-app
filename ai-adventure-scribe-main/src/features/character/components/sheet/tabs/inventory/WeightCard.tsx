@@ -7,6 +7,7 @@ import type { Character } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { calculateEncumbrance } from '@/utils/character-calculations';
 
 interface WeightCardProps {
   character: Character;
@@ -17,30 +18,8 @@ interface WeightCardProps {
  * Displays carrying capacity and weight status
  */
 export const WeightCard: React.FC<WeightCardProps> = ({ character, currency }) => {
-  // Calculate carrying capacity
-  const strengthScore = character.abilityScores?.strength?.score || 10;
-  const carryingCapacity = strengthScore * 15; // Standard 5e rule
-  const encumbered = strengthScore * 5;
-  const heavilyEncumbered = strengthScore * 10;
-
-  // Calculate current weight (simplified - would need actual item weights)
-  const currentWeight =
-    character.inventory?.reduce((total, item) => total + (item.quantity || 1), 0) || 0;
-
-  // Calculate total currency weight (50 coins = 1 lb)
-  const totalCoins = currency.cp + currency.sp + currency.ep + currency.gp + currency.pp;
-  const currencyWeight = Math.floor(totalCoins / 50);
-  const totalWeight = currentWeight + currencyWeight;
-
-  // Determine encumbrance status
-  const getEncumbranceStatus = () => {
-    if (totalWeight >= carryingCapacity) return 'overloaded';
-    if (totalWeight >= heavilyEncumbered) return 'heavily-encumbered';
-    if (totalWeight >= encumbered) return 'encumbered';
-    return 'normal';
-  };
-
-  const encumbranceStatus = getEncumbranceStatus();
+  const encumbrance = calculateEncumbrance(character, currency);
+  const encumbranceStatus = encumbrance.encumbranceLevel;
 
   const getEncumbranceColor = (status: string) => {
     switch (status) {
@@ -68,18 +47,18 @@ export const WeightCard: React.FC<WeightCardProps> = ({ character, currency }) =
           <div className="flex justify-between items-center">
             <span className="text-sm">Current Weight</span>
             <span className={`font-bold ${getEncumbranceColor(encumbranceStatus)}`}>
-              {totalWeight} lbs
+              {encumbrance.totalWeight} lbs
             </span>
           </div>
 
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Encumbered: {encumbered}</span>
-              <span>Heavy: {heavilyEncumbered}</span>
-              <span>Max: {carryingCapacity}</span>
+              <span>Encumbered: {encumbrance.encumberedThreshold}</span>
+              <span>Heavy: {encumbrance.heavilyEncumberedThreshold}</span>
+              <span>Max: {encumbrance.carryingCapacity}</span>
             </div>
             <Progress
-              value={(totalWeight / carryingCapacity) * 100}
+              value={(encumbrance.totalWeight / encumbrance.carryingCapacity) * 100}
               className="h-2"
               indicatorClassName={
                 encumbranceStatus === 'overloaded'
@@ -95,9 +74,14 @@ export const WeightCard: React.FC<WeightCardProps> = ({ character, currency }) =
           </div>
 
           {encumbranceStatus !== 'normal' && (
-            <Badge variant="outline" className="capitalize">
-              {encumbranceStatus.replace('-', ' ')}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="capitalize">
+                {encumbranceStatus.replace('-', ' ')}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                Speed {encumbrance.baseSpeed} ft → {encumbrance.effectiveSpeed} ft
+              </span>
+            </div>
           )}
         </div>
       </CardContent>

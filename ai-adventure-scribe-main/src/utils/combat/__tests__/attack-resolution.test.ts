@@ -26,6 +26,11 @@ vi.mock('@/utils/diceUtils', () => ({
 }));
 
 describe('resolveAttack', () => {
+  it('automatically crits a paralyzed target within 5 feet', () => {
+    const target = { ...mockTarget, conditions: [{ name: 'paralyzed' }] } as any;
+    vi.mocked(rollAttack).mockReturnValue({ total: 16, naturalRoll: 10 } as any);
+    expect(resolveAttack(mockWeapon, mockAttacker, target, { distanceInFeet: 5 }).criticalHit).toBe(true);
+  });
   const mockAttacker: any = {
     id: 'attacker-1',
     name: 'Attacker',

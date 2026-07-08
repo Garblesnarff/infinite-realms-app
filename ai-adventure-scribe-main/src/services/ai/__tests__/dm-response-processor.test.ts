@@ -543,6 +543,17 @@ describe('processDMResponse', () => {
   });
 
   describe('Combat Detection', () => {
+    it('uses structured transitions and actions instead of prose inference', async () => {
+      const rawResponse = JSON.stringify({
+        text: 'The goblin reaches for its blade.', narration_segments: [], roll_requests: [],
+        combat_transition: 'start', combatants: [],
+        combat_actions: [{ actor_id: 'goblin-1', action_type: 'dodge', target_ids: [], weapon_id: null, spell_id: null, movement_feet: 0 }],
+      });
+      const result = await processDMResponse({ ...defaultParams, rawResponse });
+      expect(result.combatDetection?.shouldStartCombat).toBe(true);
+      expect(result.combat_actions).toHaveLength(1);
+      expect(result.text).toBe('The goblin reaches for its blade.');
+    });
     it('should include combat detection results in the final response', async () => {
       const combatDetection = {
         isCombat: true,

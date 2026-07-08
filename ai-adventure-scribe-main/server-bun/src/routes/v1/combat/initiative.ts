@@ -95,10 +95,8 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const { participantId, roll, modifier } = body as {
+      const { participantId } = body as {
         participantId: string;
-        roll?: number;
-        modifier?: number;
       };
 
       if (!participantId) {
@@ -106,16 +104,11 @@ export const initiativeRoutes = new Elysia()
         return { error: 'participantId is required' };
       }
 
-      if (roll !== undefined && (roll < 1 || roll > 20)) {
-        set.status = 400;
-        return { error: 'roll must be between 1 and 20' };
-      }
-
       const result = await CombatInitiativeService.rollInitiative(
         params.encounterId,
         participantId,
-        roll,
-        modifier,
+        undefined,
+        undefined,
         user.userId
       );
 

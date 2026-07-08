@@ -43,6 +43,7 @@ export interface CombatParticipant {
   temporaryHitPoints: number;
   armorClass: number;
   initiative: number;
+  initiativeBonus?: number;
   speed: number;
 
   // Turn tracking

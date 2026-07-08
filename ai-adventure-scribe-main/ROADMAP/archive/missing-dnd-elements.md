@@ -1,3 +1,5 @@
+> Archived 2026-07-07. This historical gap analysis predates the combat, conditions, rests, progression, inventory, SRD content, and structured AI mechanics now implemented.
+
 ### **I. Core Gameplay Loop & Mechanics (Beyond Character Creation)**
 
 1.  **Combat System (Most Significant Gap):**

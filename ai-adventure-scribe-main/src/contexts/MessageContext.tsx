@@ -26,7 +26,7 @@
  */
 
 // SDK Imports
-import React, { createContext, useContext, useMemo } from 'react'; // Added ReactNode
+import React, { createContext, useContext, useMemo, useCallback } from 'react'; // Added ReactNode
 
 import type { ChatMessage } from '@/types/game';
 import type { ReactNode } from 'react';
@@ -34,6 +34,8 @@ import type { ReactNode } from 'react';
 // Project Hooks
 import { useMessageQueue } from '@/hooks/use-message-queue';
 import { useMessages } from '@/hooks/use-messages';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSessionStorySocket } from '@/hooks/use-session-story-socket';
 
 // Project Types
 
@@ -59,6 +61,16 @@ export const MessageProvider: React.FC<{
 }> = ({ sessionId, children }) => {
   const { data: messages = [], isLoading, isFetching, hasMore, loadMore } = useMessages(sessionId);
   const { messageMutation, queueStatus } = useMessageQueue(sessionId);
+  const { mutateAsync } = messageMutation;
+  const queryClient = useQueryClient();
+  const handleRemoteMessage = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+  }, [queryClient, sessionId]);
+  const notifyPeers = useSessionStorySocket(sessionId, handleRemoteMessage);
+  const sendMessage = useCallback(async (message: ChatMessage) => {
+    await mutateAsync(message);
+    notifyPeers(message.text);
+  }, [mutateAsync, notifyPeers]);
 
   /**
    * ⚡ Bolt: Memoize the context value to prevent unnecessary re-renders
@@ -71,10 +83,10 @@ export const MessageProvider: React.FC<{
       isFetchingMore: isFetching && !isLoading,
       hasMore,
       loadMore,
-      sendMessage: messageMutation.mutateAsync,
+      sendMessage,
       queueStatus,
     }),
-    [messages, isLoading, isFetching, hasMore, loadMore, messageMutation.mutateAsync, queueStatus],
+    [messages, isLoading, isFetching, hasMore, loadMore, sendMessage, queueStatus],
   );
 
   return <MessageContext.Provider value={value}>{children}</MessageContext.Provider>;

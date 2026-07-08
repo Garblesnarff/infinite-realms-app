@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const druid: CharacterClass = {
+  subclasses: classSubclasses.druid,
   id: 'druid',
   name: 'Druid',
   description: 'A priest of nature, wielding elemental forces and transforming into animals.',

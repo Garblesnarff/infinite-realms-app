@@ -488,26 +488,13 @@ export interface CreateWeaponAttackInput {
  * Input for resolving an attack
  */
 export interface AttackRollInput {
+  expectedVersion: number;
   attackerId: string;
   targetId: string;
-  attackRoll: number;
-  attackBonus?: number;
   weaponId?: string;
   attackType: AttackType;
-  isCritical?: boolean;
   advantage?: boolean;
   disadvantage?: boolean;
-  damageRoll?: number;
-  /**
-   * Target's active conditions (e.g., ['paralyzed', 'poisoned'])
-   * Used for auto-crit detection (paralyzed/unconscious within 5ft)
-   */
-  targetConditions?: string[];
-  /**
-   * Distance to target in feet
-   * Used for auto-crit detection (must be within 5ft for paralyzed/unconscious)
-   */
-  distanceInFeet?: number;
 }
 
 /**
@@ -536,26 +523,12 @@ export interface AttackResult {
  * Input for spell attack resolution
  */
 export interface SpellAttackInput {
+  expectedVersion: number;
   casterId: string;
   targetIds: string[];
+  spellId?: string;
   spellName: string;
-  attackRoll?: number;
-  saveDC?: number;
-  saveRolls?: Record<string, number>;
-  damageRoll?: number;
-  damageDice?: string;
-  damageType?: DamageType;
-  isCritical?: boolean;
-  /**
-   * Target conditions by target ID (e.g., { 'target-id': ['paralyzed'] })
-   * Used for auto-crit detection (paralyzed/unconscious within 5ft)
-   */
-  targetConditionsByTargetId?: Record<string, string[]>;
-  /**
-   * Distance to each target in feet by target ID
-   * Used for auto-crit detection (must be within 5ft for paralyzed/unconscious)
-   */
-  distanceByTargetId?: Record<string, number>;
+  slotLevel?: number;
 }
 
 /**

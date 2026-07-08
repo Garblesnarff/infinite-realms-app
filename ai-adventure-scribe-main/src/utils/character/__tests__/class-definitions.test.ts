@@ -2,8 +2,17 @@
 import { describe, it, expect } from 'vitest';
 
 import { CLASS_FEATURES_MAP, getHitDie, getInitialCharacterResources } from '../class-definitions';
+import { classes } from '@/data/classes';
 
 describe('class-definitions', () => {
+  it('provides subclass feature progression for every class', () => {
+    expect(classes).toHaveLength(12);
+    for (const characterClass of classes) {
+      expect(characterClass.subclasses.length).toBeGreaterThan(0);
+      expect(characterClass.subclasses[0].features.length).toBeGreaterThan(0);
+      expect(characterClass.subclasses[0].features.every((feature) => feature.level >= 1)).toBe(true);
+    }
+  });
   describe('getHitDie', () => {
     it('should return correct hit die for all classes', () => {
       expect(getHitDie('barbarian')).toBe(12);

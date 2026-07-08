@@ -80,6 +80,21 @@ export interface MonsterDef {
   resistances?: string[];
   immunities?: string[];
   vulnerabilities?: string[];
+  size?: string;
+  type?: string;
+  alignment?: string;
+  armorClass?: number;
+  hitPoints?: number;
+  hitDice?: string;
+  speed?: Record<string, string>;
+  abilities?: Record<string, number>;
+  conditionImmunities?: string[];
+  senses?: Record<string, string | number>;
+  languages?: string;
+  proficiencyBonus?: number;
+  specialAbilities?: Array<{ name: string; desc: string }>;
+  actions?: Array<Record<string, unknown>>;
+  legendaryActions?: Array<Record<string, unknown>>;
 }
 
 export interface EncounterOutcome {

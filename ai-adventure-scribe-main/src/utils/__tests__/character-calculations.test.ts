@@ -15,6 +15,7 @@ import {
   calculateCarryingCapacity,
   calculatePassivePerception,
   calculateAllCharacterStats,
+  calculateEncumbrance,
 } from '../character-calculations';
 
 import type { Character } from '@/types/character';
@@ -427,6 +428,41 @@ describe('character-calculations', () => {
       };
       const stats = calculateAllCharacterStats(character as Character);
       expect(stats.speed).toBe(35);
+    });
+
+    it('should apply encumbrance speed penalties to effective speed', () => {
+      const character: Partial<Character> = {
+        race: { speed: 30 } as any,
+        abilityScores: {
+          strength: { score: 10, modifier: 0 },
+        } as any,
+        inventory: [
+          { itemId: 'anvil', quantity: 1, weight: 55, equipped: false },
+        ],
+      };
+
+      const stats = calculateAllCharacterStats(character as Character);
+      expect(stats.encumbranceLevel).toBe('encumbered');
+      expect(stats.speedPenalty).toBe(10);
+      expect(stats.speed).toBe(20);
+    });
+  });
+
+  describe('calculateEncumbrance', () => {
+    it('should include item and currency weight and compute overloaded speed', () => {
+      const summary = calculateEncumbrance({
+        race: { speed: 30 } as any,
+        abilityScores: {
+          strength: { score: 10, modifier: 0 },
+        } as any,
+        inventory: [
+          { itemId: 'statue', quantity: 1, weight: 150, equipped: false },
+        ],
+      } as Character, { gp: 50 });
+
+      expect(summary.totalWeight).toBe(151);
+      expect(summary.encumbranceLevel).toBe('overloaded');
+      expect(summary.effectiveSpeed).toBe(0);
     });
   });
 

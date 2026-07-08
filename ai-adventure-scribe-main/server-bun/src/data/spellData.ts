@@ -1,4 +1,7 @@
-// Server-side spell data - converted from frontend spellOptions.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import srdSpells from '../../../src/data/srd/spells.json';
+
+// Server-side spell data - converted from the bundled SRD dataset.
 // This provides comprehensive D&D 5E spell data without requiring database queries
 
 interface Spell {
@@ -19,6 +22,12 @@ interface Spell {
   damage?: boolean;
   attackSave?: string;
   damageEffect?: string;
+  classes?: string[];
+  attackType?: 'melee' | 'ranged';
+  saveAbility?: string;
+  saveSuccess?: string;
+  damageType?: string;
+  damageByLevel?: Record<string, string>;
 }
 
 // D&D 5E Cantrips (Level 0 spells)
@@ -831,25 +840,50 @@ export const classSpellMappings = {
   }
 };
 
-// Get all spells (cantrips + 1st level)
-export const allSpells = [...cantrips, ...firstLevelSpells];
+// Canonical SRD catalog, including spell levels 0-9.
+export const allSpells: Spell[] = (srdSpells as unknown as any[]).map((spell) => ({
+  id: spell.id,
+  name: spell.name,
+  level: spell.level,
+  school: spell.school,
+  castingTime: spell.casting_time,
+  range: spell.range_text,
+  duration: spell.duration,
+  description: spell.description,
+  verbal: spell.components_verbal,
+  somatic: spell.components_somatic,
+  material: spell.components_material,
+  materialComponents: spell.material_components,
+  concentration: spell.concentration,
+  ritual: spell.ritual,
+  damage: Boolean(spell.damage),
+  damageEffect: spell.damage,
+  classes: spell.classes,
+  attackType: spell.attack_type as 'melee' | 'ranged' | undefined,
+  saveAbility: spell.save_ability,
+  saveSuccess: spell.save_success,
+  damageType: spell.damage_type,
+  damageByLevel: spell.damage_by_level,
+}));
 
 // Helper functions
 export function getClassSpells(className: string): { cantrips: Spell[], spells: Spell[] } {
-  const mapping = classSpellMappings[className as keyof typeof classSpellMappings];
-
-  if (!mapping) {
-    return { cantrips: [], spells: [] };
-  }
+  const classKey = className.toLowerCase();
+  const available = allSpells.filter((spell) => spell.classes?.includes(classKey));
 
   return {
-    cantrips: cantrips.filter(spell => mapping.cantrips.includes(spell.id)),
-    spells: firstLevelSpells.filter(spell => mapping.spells.includes(spell.id))
+    cantrips: available.filter((spell) => spell.level === 0),
+    spells: available.filter((spell) => spell.level > 0),
   };
 }
 
 export function getSpellById(id: string): Spell | undefined {
   return allSpells.find(spell => spell.id === id);
+}
+
+export function getSpellByName(name: string): Spell | undefined {
+  const normalized = name.trim().toLowerCase();
+  return allSpells.find((spell) => spell.name.toLowerCase() === normalized);
 }
 
 export function getSpellsByLevel(level: number): Spell[] {

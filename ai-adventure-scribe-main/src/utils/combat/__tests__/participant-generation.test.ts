@@ -36,7 +36,7 @@ describe('createCombatParticipantsFromDetection', () => {
 
     expect(participants[1].name).toBe('Goblin');
     expect(participants[1].initiative).toBe(1); // CR 1/4 -> mod 1
-    expect(participants[1].armorClass).toBe(13);
+    expect(participants[1].armorClass).toBe(15);
     expect(participants[1].monsterData?.type).toBe('humanoid');
   });
 

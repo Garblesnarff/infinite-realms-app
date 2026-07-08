@@ -63,7 +63,15 @@ export function truncateAtRollRequest(message: string): string {
   const rollBlockMatch = message.match(/```ROLL_REQUESTS_V1[\s\S]*?```/);
 
   if (rollBlockMatch && rollBlockMatch.index !== undefined) {
-    const beforeBlock = message.substring(0, rollBlockMatch.index);
+    let beforeBlock = message.substring(0, rollBlockMatch.index);
+
+    // A roll request means the outcome is unresolved. Drop any preceding sentence
+    // that claims a hit, miss, success, failure, damage, or other resolved result.
+    const outcomeSentence = /(?:^|(?<=[.!?])\s+)[^.!?]*(?:\b(?:hits?|miss(?:es|ed)?|succeeds?|fails?|critical hit|takes? \d+ (?:points? of )?damage)\b|\b(?:blade|arrow|spell|attack)\b[^.!?]*\b(?:cuts?|strikes?|connects?|lands?)\b)[^.!?]*[.!?]/i;
+    const prematureOutcome = outcomeSentence.exec(beforeBlock);
+    if (prematureOutcome?.index !== undefined) {
+      beforeBlock = beforeBlock.substring(0, prematureOutcome.index).trim();
+    }
 
     // Normalize whitespace within each paragraph while preserving paragraph breaks
     const normalized = beforeBlock

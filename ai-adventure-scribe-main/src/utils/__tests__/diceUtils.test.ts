@@ -198,8 +198,8 @@ describe('diceUtils', () => {
       const result = parseDiceString('1d8+1d4+2');
       expect(result.count).toBe(1);
       expect(result.dieType).toBe(8);
-      expect(result.modifier).toBe(4); // 1d4 average (2.5) floored to 2, + 2 = 4
-      // Actually, if it's 1d8+1d4+2, parseDiceString is likely used where only one die type is expected.
+      expect(result.modifier).toBe(2);
+      expect(result.diceGroups).toEqual([{ count: 1, dieType: 8 }, { count: 1, dieType: 4 }]);
     });
 
     it('should handle negative dice counts in parseDiceString', () => {

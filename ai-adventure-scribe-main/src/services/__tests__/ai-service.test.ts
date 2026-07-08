@@ -105,8 +105,7 @@ describe('AIService', () => {
       const mockMemories = [{ content: 'memory 1' }];
       vi.mocked(MemoryManager.getRelevantMemories).mockResolvedValue(mockMemories as any);
 
-      const mockCombatResult = { isCombat: false, confidence: 0.1 };
-      vi.mocked(detectCombatFromText).mockReturnValue(mockCombatResult as any);
+      const mockCombatResult = expect.objectContaining({ isCombat: false, confidence: 1 });
 
       const mockPrompt = 'Build prompt';
       vi.mocked(ContextBuilder.build).mockResolvedValue(mockPrompt);
@@ -121,7 +120,7 @@ describe('AIService', () => {
 
       // Assert
       expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith(mockContext.sessionId, 'Hello DM', 8);
-      expect(detectCombatFromText).toHaveBeenCalledWith('Hello DM');
+      expect(detectCombatFromText).not.toHaveBeenCalled();
       expect(ContextBuilder.build).toHaveBeenCalledWith(expect.objectContaining({
         context: mockContext,
         message: 'Hello DM',

@@ -68,6 +68,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         history,
         provider = 'openrouter',
         requestType: rawRequestType = 'user',
+        responseSchema,
       } = body || {};
 
       if (!prompt || typeof prompt !== 'string') {
@@ -98,6 +99,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         temperature,
         history,
         provider,
+        responseSchema,
       });
 
       if (result.error) {
@@ -128,8 +130,55 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }))),
         provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
         requestType: t.Optional(t.Union([t.Literal('user'), t.Literal('system')])),
+        responseSchema: t.Optional(t.Any()),
       }),
     }
+  )
+
+  .post(
+    '/generate/stream',
+    async ({ request, body, set }) => {
+      const { user, error: authError } = await authenticateRequest(request);
+      if (authError || !user) {
+        set.status = 401;
+        return { error: authError || 'Unauthorized' };
+      }
+      const {
+        prompt, model, maxTokens = 1000, temperature = 0.8, history,
+        provider = 'openrouter', responseSchema,
+      } = body || {};
+      const quota = await AIUsageService.checkQuotaAndConsume({
+        userId: user.userId, plan: user.plan, type: 'llm', units: 1,
+      });
+      if (!quota.allowed) {
+        set.status = 402;
+        return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
+      }
+      try {
+        const stream = await LLMProviderService.stream({
+          prompt, model, maxTokens, temperature, history, provider, responseSchema,
+        });
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' },
+        });
+      } catch (error) {
+        logger.error({ msg: 'LLM_STREAM_ERROR', error });
+        set.status = 502;
+        return { error: 'LLM stream failed' };
+      }
+    },
+    {
+      body: t.Object({
+        prompt: t.String(), model: t.Optional(t.String()), maxTokens: t.Optional(t.Number()),
+        temperature: t.Optional(t.Number()),
+        history: t.Optional(t.Array(t.Object({
+          role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
+          content: t.String(),
+        }))),
+        provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
+        responseSchema: t.Optional(t.Any()),
+      }),
+    },
   )
 
   /**

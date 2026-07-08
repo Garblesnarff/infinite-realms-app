@@ -121,7 +121,7 @@ const GameContent: React.FC = () => {
     null;
 
   return (
-    <GameProviders sessionId={sessionId} starterCampaignId={effectiveStarterCampaignId}>
+    <GameProviders sessionId={sessionId} starterCampaignId={effectiveStarterCampaignId} characterId={characterIdFromParams}>
       <GameContentInner
         sessionId={sessionId}
         campaignIdForHandler={campaignIdFromParams ?? null}

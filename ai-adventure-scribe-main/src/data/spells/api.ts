@@ -1,51 +1,54 @@
-import { cantrips } from './cantrips';
-import { firstLevelSpells } from './level1';
-import { classSpellMappings } from './mappings';
+import srdSpellsJson from '@/data/srd/spells.json';
 import { logger } from '../../lib/logger';
 
 import type { Spell } from '@/types/character';
 
-export const allSpells: Spell[] = [...cantrips, ...firstLevelSpells];
+type SrdSpell = Spell & { classes: string[] };
+export const normalizeLegacySpellId = (id: string) => id.replace(
+  /-(?:barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)$/,
+  '',
+);
+export const allSpells = srdSpellsJson.map((spell) => ({
+  ...spell,
+  castingTime: spell.casting_time,
+  range: spell.range_text,
+  verbal: spell.components_verbal,
+  somatic: spell.components_somatic,
+  material: spell.components_material,
+  ...(spell.material_components ? { materialDescription: spell.material_components } : {}),
+  duration: spell.concentration && !spell.duration.toLowerCase().includes('concentration')
+    ? `Concentration, ${spell.duration}`
+    : spell.duration,
+})) as unknown as SrdSpell[];
 
 export const getClassSpells = (className: string): { cantrips: Spell[]; spells: Spell[] } => {
   const normalizedClassName = className.charAt(0).toUpperCase() + className.slice(1).toLowerCase();
-  const mapping = (
-    classSpellMappings as unknown as Record<string, { cantrips: string[]; spells: string[] }>
-  )[normalizedClassName];
+  const classKey = normalizedClassName.toLowerCase();
+  const available = allSpells.filter((spell) => spell.classes.includes(classKey));
 
   // Debug logging for troubleshooting spell loading issues
   if (process.env.NODE_ENV === 'development') {
     logger.debug(
       `🔍 [getClassSpells] Looking up spells for: ${className} -> ${normalizedClassName}`,
     );
-    logger.debug(`📊 [getClassSpells] Available mappings:`, Object.keys(classSpellMappings));
-    logger.debug(`📋 [getClassSpells] Mapping found:`, !!mapping);
-    if (mapping) {
-      logger.debug(
-        `🎯 [getClassSpells] Expected cantrips: ${mapping.cantrips.length}, spells: ${mapping.spells.length}`,
-      );
-    }
+    logger.debug(`📋 [getClassSpells] SRD spells found:`, available.length);
   }
 
-  if (!mapping) {
+  if (!available.length) {
     if (process.env.NODE_ENV === 'development') {
       logger.warn(`⚠️ [getClassSpells] No mapping found for class: ${normalizedClassName}`);
     }
     return { cantrips: [], spells: [] };
   }
 
-  const resultCantrips = cantrips.filter((spell) => mapping.cantrips.includes(spell.id));
-  const resultSpells = firstLevelSpells.filter((spell) => mapping.spells.includes(spell.id));
+  const resultCantrips = available.filter((spell) => spell.level === 0);
+  const resultSpells = available.filter((spell) => spell.level > 0);
 
   if (process.env.NODE_ENV === 'development') {
     logger.debug(`✅ [getClassSpells] ${normalizedClassName} results:`, {
       cantrips: resultCantrips.length,
       spells: resultSpells.length,
-      totalAvailable: `cantrips: ${cantrips.length}, spells: ${firstLevelSpells.length}`,
-      missingCantrips: mapping.cantrips.filter((id) => !cantrips.some((spell) => spell.id === id)),
-      missingSpells: mapping.spells.filter(
-        (id) => !firstLevelSpells.some((spell) => spell.id === id),
-      ),
+      totalAvailable: allSpells.length,
     });
   }
 
@@ -71,7 +74,7 @@ export const searchSpells = (query: string): Spell[] => {
 };
 
 export const getSpellById = (id: string): Spell | undefined =>
-  allSpells.find((spell) => spell.id === id);
+  allSpells.find((spell) => spell.id === normalizeLegacySpellId(id));
 
 export const validateSpellSelection = (
   className: string,
@@ -86,7 +89,7 @@ export const validateSpellSelection = (
   });
   selectedSpells.forEach((id) => {
     if (!classSpells.spells.some((s) => s.id === id))
-      errors.push(`${id} is not available as a 1st level spell for ${className}`);
+      errors.push(`${id} is not available as a spell for ${className}`);
   });
   return { valid: errors.length === 0, errors };
 };

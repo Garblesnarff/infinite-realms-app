@@ -133,9 +133,9 @@ export class CombatInitiativeService {
       throw new NotFoundError('Participant', participantId);
     }
 
-    // Use provided roll or roll d20
-    const diceRoll = roll !== undefined ? roll : rollD20();
-    const initiativeModifier = modifier !== undefined ? modifier : participant.initiativeModifier;
+    // Initiative is authoritative: caller-provided values are legacy display hints only.
+    const diceRoll = rollD20();
+    const initiativeModifier = participant.initiativeModifier;
     const total = InitiativeMechanics.calculateInitiative(diceRoll, initiativeModifier);
 
     // Update participant initiative

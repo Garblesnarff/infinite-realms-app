@@ -15,9 +15,9 @@ import type {
 } from '@/types/combat';
 
 import { applyConditionEffects, removeConditionEffects } from '@/utils/conditionEffects';
-import { rollDie } from '@/utils/diceRolls';
 import { calculateDamage } from '@/utils/diceUtils';
 import { checkConcentration } from '@/utils/spell-management';
+import { rollDeathSave as resolveDeathSave } from '@/utils/combat/deathSaves';
 
 type Dispatch = (action: ReducerAction) => void;
 
@@ -50,7 +50,7 @@ export function createHealthHandlers(dispatch: Dispatch, getState: () => CombatS
     const newCurrentHP = Math.max(0, participant.currentHitPoints - actualDamage);
 
     // Check concentration if participant is concentrating
-    const concentrationMaintained = checkConcentration(participant, damage);
+    const concentrationMaintained = checkConcentration(participant, actualDamage);
     let concentrationUpdate = {};
     if (!concentrationMaintained) {
       concentrationUpdate = { activeConcentration: null };
@@ -143,50 +143,14 @@ export function createHealthHandlers(dispatch: Dispatch, getState: () => CombatS
     const participant = state.activeEncounter?.participants.find((p) => p.id === participantId);
     if (!participant || participant.currentHitPoints > 0) return 'success';
 
-    const roll = rollDie(20);
-    let result: 'success' | 'failure' | 'critical';
-    let updates: Partial<CombatParticipant> = {};
-
-    if (roll === 20) {
-      // Critical success - regain 1 HP
-      result = 'critical';
-      updates = {
-        currentHitPoints: 1,
-        deathSaves: { successes: 0, failures: 0 },
-      };
-    } else if (roll === 1) {
-      // Critical failure - two failures
-      result = 'failure';
-      updates = {
-        deathSaves: {
-          successes: participant.deathSaves.successes,
-          failures: Math.min(3, participant.deathSaves.failures + 2),
-        },
-      };
-    } else if (roll >= 10) {
-      // Success
-      result = 'success';
-      updates = {
-        deathSaves: {
-          successes: participant.deathSaves.successes + 1,
-          failures: participant.deathSaves.failures,
-        },
-      };
-    } else {
-      // Failure
-      result = 'failure';
-      updates = {
-        deathSaves: {
-          successes: participant.deathSaves.successes,
-          failures: participant.deathSaves.failures + 1,
-        },
-      };
-    }
+    const { updatedParticipant, roll } = resolveDeathSave(participant);
+    const result: 'success' | 'failure' | 'critical' =
+      roll === 20 ? 'critical' : roll >= 10 ? 'success' : 'failure';
 
     dispatch({
       type: 'UPDATE_PARTICIPANT',
       participantId,
-      updates,
+      updates: updatedParticipant,
     });
 
     return result;

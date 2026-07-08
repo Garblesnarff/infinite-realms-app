@@ -16,6 +16,7 @@ import {
   gameSessions,
   campaigns,
   characters,
+  characterPermissions,
   npcs,
 } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
@@ -30,12 +31,17 @@ export async function verifySessionAccess(sessionId: string, userId: string): Pr
     .from(gameSessions)
     .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
     .leftJoin(characters, eq(gameSessions.characterId, characters.id))
+    .leftJoin(characterPermissions, and(
+      eq(characterPermissions.characterId, characters.id),
+      eq(characterPermissions.userId, userId),
+    ))
     .where(and(
       eq(gameSessions.id, sessionId),
       or(
         eq(campaigns.userId, userId),
         eq(characters.userId, userId),
-        eq(characters.ownerId, userId)
+        eq(characters.ownerId, userId),
+        eq(characterPermissions.userId, userId)
       )
     ))
     .limit(1);

@@ -30,6 +30,7 @@ import {
   initializeParticipantStatus,
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
+import { CombatInitiativeService } from './combat-initiative-service.js';
 
 import type {
   CombatParticipantStatus,
@@ -203,6 +204,11 @@ export class CombatHPService {
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
+    const currentParticipant = await CombatInitiativeService.getCurrentTurn(encounterId, userId);
+    if (!currentParticipant || currentParticipant.id !== participantId) {
+      throw new BusinessLogicError('Death saves can only be rolled on the participant’s turn');
+    }
+
     // Delegate to HPMechanics
     const result = HPMechanics.calculateHealingResult(
       participantId,
@@ -300,12 +306,9 @@ export class CombatHPService {
   static async rollDeathSave(
     participantId: string,
     encounterId: string,
-    roll: number,
     userId?: string
   ): Promise<DeathSaveResult> {
-    if (roll < 1 || roll > 20) {
-      throw new ValidationError('Death save roll must be between 1 and 20', { roll });
-    }
+    const roll = Math.floor(Math.random() * 20) + 1;
 
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);

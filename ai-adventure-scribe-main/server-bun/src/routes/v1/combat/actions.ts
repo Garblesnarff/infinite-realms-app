@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 
 import { verifyEncounterOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
-import { NotFoundError } from '../../../lib/errors.js';
+import { AppError, NotFoundError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CharacterService } from '../../../services/character-service.js';
 import { CombatAttackService } from '../../../services/combat-attack-service.js';
@@ -58,14 +58,9 @@ export const actionRoutes = new Elysia()
 
       const attackInput = body as AttackRollInput;
 
-      if (!attackInput.attackerId || !attackInput.targetId || attackInput.attackRoll === undefined) {
+      if (!attackInput.attackerId || !attackInput.targetId || !Number.isInteger(attackInput.expectedVersion)) {
         set.status = 400;
-        return { error: 'attackerId, targetId, and attackRoll are required' };
-      }
-
-      if (attackInput.attackRoll < 1 || attackInput.attackRoll > 20) {
-        set.status = 400;
-        return { error: 'attackRoll must be between 1 and 20' };
+        return { error: 'attackerId, targetId, and expectedVersion are required' };
       }
 
       const attackService = new CombatAttackService();
@@ -110,6 +105,10 @@ export const actionRoutes = new Elysia()
       if (!spellInput.spellName) {
         set.status = 400;
         return { error: 'spellName is required' };
+      }
+      if (!Number.isInteger(spellInput.expectedVersion)) {
+        set.status = 400;
+        return { error: 'expectedVersion is required' };
       }
 
       const attackService = new CombatAttackService();

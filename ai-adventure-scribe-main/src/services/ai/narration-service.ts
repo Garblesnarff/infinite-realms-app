@@ -17,7 +17,6 @@ import type { SessionVoiceContext } from '../voice-consistency-service';
 import type { ChatMessage, GameContext, AIResponse } from './shared/types';
 
 import logger from '@/lib/logger';
-import { detectCombatFromText } from '@/utils/combatDetection';
 
 /**
  * Parameters for chatWithDM function
@@ -67,8 +66,16 @@ export async function chatWithDM(params: ChatParams): Promise<AIResponse> {
       // Voice context temporarily disabled for option button testing
       const voiceContext: SessionVoiceContext | null = null;
 
-      // Detect combat from player message
-      const combatDetection = detectCombatFromText(params.message);
+      const authoritativeCombat = params.context.gameState?.isInCombat === true;
+      const combatDetection = {
+        isCombat: authoritativeCombat,
+        confidence: 1,
+        combatType: 'none' as const,
+        shouldStartCombat: false,
+        shouldEndCombat: false,
+        enemies: [],
+        combatActions: [],
+      };
       logger.info(
         `⚔️ Combat detection: ${combatDetection.isCombat ? 'YES' : 'NO'} (confidence: ${Math.round(combatDetection.confidence * 100)}%)`,
       );

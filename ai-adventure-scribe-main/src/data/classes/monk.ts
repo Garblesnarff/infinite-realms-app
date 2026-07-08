@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const monk: CharacterClass = {
+  subclasses: classSubclasses.monk,
   id: 'monk',
   name: 'Monk',
   description:

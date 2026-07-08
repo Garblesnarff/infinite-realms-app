@@ -24,12 +24,19 @@ import {
   getCreatureStats,
   getCreatureStatsBatch,
   createWeaponAttack,
+  getParticipantAbilityProfile,
+  claimEncounterVersion,
+  getActiveConditionNames,
 } from './data-access.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
 import { aggregateResistances } from './resistance-resolver.js';
 import { NotFoundError, InternalServerError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CombatHPService } from '../combat-hp-service.js';
+import { CombatInitiativeService } from '../combat-initiative-service.js';
+import { BusinessLogicError } from '../../lib/errors.js';
+import { getSpellById, getSpellByName } from '../../data/spellData.js';
+import { SpellSlotsService } from '../spell-slots-service.js';
 
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
@@ -48,6 +55,50 @@ import type {
 export class CombatAttackService {
   constructor() {
     // No database client needed - using global db instance
+  }
+
+  private rollD20(advantage = false, disadvantage = false): number {
+    const first = Math.floor(Math.random() * 20) + 1;
+    if (advantage === disadvantage) return first;
+    const second = Math.floor(Math.random() * 20) + 1;
+    return advantage ? Math.max(first, second) : Math.min(first, second);
+  }
+
+  private async assertCurrentTurn(encounterId: string, actorId: string, userId: string) {
+    const current = await CombatInitiativeService.getCurrentTurn(encounterId, userId);
+    if (!current || current.id !== actorId) {
+      throw new BusinessLogicError('Actor is not the current-turn participant', { actorId });
+    }
+  }
+
+  private abilityModifier(score = 10): number {
+    return Math.floor((score - 10) / 2);
+  }
+
+  private proficiencyBonus(level = 1): number {
+    return 2 + Math.floor((Math.max(1, level) - 1) / 4);
+  }
+
+  private spellcastingAbility(className?: string | null): string {
+    const normalized = className?.toLowerCase() || '';
+    if (['bard', 'paladin', 'sorcerer', 'warlock'].some((name) => normalized.includes(name))) return 'cha';
+    if (['cleric', 'druid', 'ranger'].some((name) => normalized.includes(name))) return 'wis';
+    return 'int';
+  }
+
+  private damageDiceForLevel(
+    damageByLevel: Record<string, string> | undefined,
+    spellLevel: number,
+    requestedLevel: number | undefined,
+    casterLevel: number,
+  ): string | undefined {
+    if (!damageByLevel) return undefined;
+    const keys = Object.keys(damageByLevel).map(Number).sort((a, b) => a - b);
+    const effectiveLevel = spellLevel === 0
+      ? Math.max(...keys.filter((level) => level <= casterLevel), keys[0] || 1)
+      : Math.max(spellLevel, requestedLevel || spellLevel);
+    const selected = [...keys].reverse().find((level) => level <= effectiveLevel) ?? keys[0];
+    return selected === undefined ? undefined : damageByLevel[String(selected)];
   }
 
   /**
@@ -84,18 +135,17 @@ export class CombatAttackService {
   ): Promise<AttackResult> {
     const {
       attackerId,
+      expectedVersion,
       targetId,
-      attackRoll,
-      attackBonus = 0,
       weaponId,
-      attackType: _attackType,
-      isCritical: forceCritical = false,
+      attackType,
       advantage = false,
       disadvantage = false,
-      damageRoll,
-      targetConditions,
-      distanceInFeet,
     } = input;
+
+    await this.assertCurrentTurn(encounterId, attackerId, userId);
+    await claimEncounterVersion(encounterId, expectedVersion);
+    const attackRoll = this.rollD20(advantage, disadvantage);
 
     // ⚡ Bolt: Batch fetch both attacker and target with their stats in a single query.
     // This reduces database round-trips from 3 down to 2 (1 for participants, 1 for weapon).
@@ -122,6 +172,11 @@ export class CombatAttackService {
       throw new NotFoundError('Weapon', weaponId);
     }
 
+    const attackerProfile = await getParticipantAbilityProfile(attackerData.participant);
+    const attackAbility = attackType === 'ranged' ? 'dex' : 'str';
+    const serverAttackBonus = weapon?.attackBonus ??
+      this.abilityModifier(attackerProfile.scores[attackAbility]) + this.proficiencyBonus(attackerProfile.level);
+
     // Determine target AC: Use combat participant AC (allows for temporary modifications)
     // with fallback to base creature stats if participant AC is the default 10.
     const targetAC =
@@ -132,10 +187,10 @@ export class CombatAttackService {
     // Check if attack hits
     const hitCheck = checkHit({
       attackRoll,
-      attackBonus: weapon?.attackBonus || attackBonus,
+      attackBonus: serverAttackBonus,
       targetAC,
-      advantage,
-      disadvantage,
+      advantage: false,
+      disadvantage: false,
     });
 
     if (!hitCheck.hit) {
@@ -156,8 +211,9 @@ export class CombatAttackService {
 
     // Hit - calculate damage
     // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
-    const autoCrit = checkAutoCrit(targetConditions, distanceInFeet);
-    const isCrit = forceCritical || hitCheck.isCritical || autoCrit;
+    const targetConditions = await getActiveConditionNames(targetId);
+    const autoCrit = checkAutoCrit(targetConditions, attackType === 'melee' ? 5 : undefined);
+    const isCrit = hitCheck.isCritical || autoCrit;
 
     if (!weapon) {
       // No weapon - return hit with no damage calculated
@@ -186,7 +242,6 @@ export class CombatAttackService {
       resistances: defenses.resistances,
       vulnerabilities: defenses.vulnerabilities,
       immunities: defenses.immunities,
-      damageRoll,
     });
 
     // Apply damage to target HP
@@ -241,18 +296,17 @@ export class CombatAttackService {
   ): Promise<SpellAttackResult> {
     const {
       casterId,
+      expectedVersion,
       targetIds,
+      spellId,
       spellName,
-      attackRoll,
-      saveDC,
-      saveRolls,
-      damageRoll,
-      damageDice,
-      damageType,
-      isCritical = false,
-      targetConditionsByTargetId,
-      distanceByTargetId,
+      slotLevel,
     } = input;
+
+    await this.assertCurrentTurn(encounterId, casterId, userId);
+    await claimEncounterVersion(encounterId, expectedVersion);
+    const spell = spellId ? getSpellById(spellId) : getSpellByName(spellName);
+    if (!spell) throw new NotFoundError('Spell', spellId || spellName);
 
     // ⚡ Bolt: Batch fetch both caster and all targets with their stats in a single query.
     // This reduces database round-trips from 2 to 1 for participant data.
@@ -268,6 +322,30 @@ export class CombatAttackService {
     if (!allParticipantDataMap.has(casterId)) {
       throw new NotFoundError('Caster participant', casterId);
     }
+    const casterData = allParticipantDataMap.get(casterId)!;
+    const casterProfile = await getParticipantAbilityProfile(casterData.participant);
+    if (casterData.participant.characterId && !casterProfile.spellIds.includes(spell.id.toLowerCase()) &&
+      !casterProfile.spellIds.includes(spell.name.toLowerCase())) {
+      throw new BusinessLogicError('Caster does not know or have this spell prepared', { spellId: spell.id });
+    }
+    if (casterData.participant.characterId && spell.level > 0) {
+      await SpellSlotsService.useSpellSlot({
+        characterId: casterData.participant.characterId,
+        spellName: spell.name,
+        spellLevel: spell.level,
+        slotLevelUsed: Math.max(spell.level, slotLevel || spell.level),
+        sessionId: casterData.participant.encounter?.sessionId,
+      }, userId);
+    }
+    const spellAbility = this.spellcastingAbility(casterProfile.className);
+    const spellModifier = this.abilityModifier(casterProfile.scores[spellAbility]);
+    const proficiencyBonus = this.proficiencyBonus(casterProfile.level);
+    const spellAttackBonus = spellModifier + proficiencyBonus;
+    const saveDC = 8 + spellAttackBonus;
+    const damageDice = this.damageDiceForLevel(
+      spell.damageByLevel, spell.level, slotLevel, casterProfile.level,
+    );
+    const damageType = spell.damageType as DamageType | undefined;
 
     const results: AttackResult[] = [];
 
@@ -290,11 +368,12 @@ export class CombatAttackService {
       // Aggregate resistances using the extracted module
       const defenses = aggregateResistances(targetParticipant, targetStats);
 
-      if (attackRoll !== undefined) {
+      if (spell.attackType) {
         // Spell attack roll
+        const attackRoll = this.rollD20();
         const hitCheckResult = checkHit({
           attackRoll,
-          attackBonus: 0, // Spell attack bonus should be included in attackRoll
+          attackBonus: spellAttackBonus,
           targetAC,
         });
 
@@ -316,10 +395,9 @@ export class CombatAttackService {
         // Hit - calculate damage
         if (damageDice && damageType) {
           // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
-          const targetConditionsForTarget = targetConditionsByTargetId?.[targetId];
-          const distanceInFeet = distanceByTargetId?.[targetId];
-          const autoCrit = checkAutoCrit(targetConditionsForTarget, distanceInFeet);
-          const spellIsCrit = hitCheckResult.isCritical || isCritical || autoCrit;
+          const targetConditionsForTarget = await getActiveConditionNames(targetId);
+          const autoCrit = checkAutoCrit(targetConditionsForTarget, spell.attackType === 'melee' ? 5 : undefined);
+          const spellIsCrit = hitCheckResult.isCritical || autoCrit;
 
           const damageCalc = calculateDamage({
             damageDice,
@@ -329,7 +407,6 @@ export class CombatAttackService {
             resistances: defenses.resistances,
             vulnerabilities: defenses.vulnerabilities,
             immunities: defenses.immunities,
-            damageRoll,
           });
 
           // Apply damage to target HP
@@ -375,12 +452,17 @@ export class CombatAttackService {
             });
           }
         }
-      } else if (saveDC !== undefined && saveRolls) {
+      } else if (spell.saveAbility) {
         // Saving throw spell
-        const saveRoll = saveRolls[targetId];
-        if (saveRoll === undefined) {
-          return null;
-        }
+        const targetProfile = await getParticipantAbilityProfile(targetParticipant);
+        const ability = spell.saveAbility.toLowerCase();
+        const namedAbility = ({ str: 'strength', dex: 'dexterity', con: 'constitution', int: 'intelligence', wis: 'wisdom', cha: 'charisma' } as Record<string, string>)[ability];
+        const explicitBonus = targetProfile.saveBonuses[ability] ?? targetProfile.saveBonuses[namedAbility];
+        const proficient = targetProfile.savingThrowProficiencies.includes(ability) ||
+          targetProfile.savingThrowProficiencies.includes(namedAbility);
+        const saveBonus = explicitBonus ?? this.abilityModifier(targetProfile.scores[ability]) +
+          (proficient ? this.proficiencyBonus(targetProfile.level) : 0);
+        const saveRoll = this.rollD20() + saveBonus;
         const savedSuccessfully = saveRoll >= saveDC;
 
         if (damageDice && damageType) {
@@ -392,12 +474,11 @@ export class CombatAttackService {
             resistances: defenses.resistances,
             vulnerabilities: defenses.vulnerabilities,
             immunities: defenses.immunities,
-            damageRoll,
           });
 
           // Half damage on successful save
           const finalDamage = savedSuccessfully
-            ? Math.floor(damageCalc.finalDamage / 2)
+            ? spell.saveSuccess === 'half' ? Math.floor(damageCalc.finalDamage / 2) : 0
             : damageCalc.finalDamage;
 
           // Apply damage to target HP

@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/shared/components/error/ErrorBoundary';
 interface GameProvidersProps {
   sessionId: string;
   starterCampaignId: string | null;
+  characterId?: string | null;
   children: React.ReactNode;
 }
 
@@ -22,6 +23,7 @@ interface GameProvidersProps {
 const GameProviders: React.FC<GameProvidersProps> = ({
   sessionId,
   starterCampaignId,
+  characterId,
   children,
 }) => (
   <ErrorBoundary level="feature">
@@ -31,7 +33,7 @@ const GameProviders: React.FC<GameProvidersProps> = ({
     >
       <SceneBackgroundProvider>
         <CombatProvider sessionId={sessionId}>
-          <GameProvider>
+          <GameProvider characterId={characterId}>
             <MessageProvider sessionId={sessionId}>
               <MemoryProvider sessionId={sessionId}>
                 <VoiceProvider>{children}</VoiceProvider>

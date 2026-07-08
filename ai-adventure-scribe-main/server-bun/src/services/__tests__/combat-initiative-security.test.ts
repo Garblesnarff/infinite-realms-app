@@ -247,7 +247,8 @@ describe('CombatInitiativeService Security', () => {
         mockUserId,
       );
 
-      expect(result.total).toBe(17); // 15 + 2
+      expect(result.total).toBeGreaterThanOrEqual(3); // server d20 + 2
+      expect(result.total).toBeLessThanOrEqual(22);
     });
   });
 

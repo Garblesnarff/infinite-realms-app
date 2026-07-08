@@ -7,9 +7,10 @@
 export function normalizeFormula(formula: string): string {
   if (!formula) return '1d20';
 
-  let normalized = formula
-    .replace(/\s+/g, '')
-    .toLowerCase()
+  const compactFormula = formula.replace(/\s+/g, '').toLowerCase();
+  if (/[+-]{2,}[a-z]/.test(compactFormula)) return '1d20';
+
+  let normalized = compactFormula
     .replace(/(?<![+\-*/])modifier/g, '')
     .replace(/\+\+/g, '+')
     .replace(/--/g, '-')

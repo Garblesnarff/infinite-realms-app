@@ -1,11 +1,13 @@
 import type { CombatParticipant } from '@/types/combat';
 import type { DetectedEnemy } from '@/utils/combatDetection';
+import { loadMonsters } from '@/services/encounters/srd-loader';
 
 export interface PlayerCharacterLike {
   id: string;
   name: string;
   armor_class?: number;
   hit_points?: number;
+  speed?: number;
   abilityScores?: {
     dexterity?: {
       modifier: number;
@@ -36,6 +38,8 @@ export function createCombatParticipantsFromDetection(
       armorClass: playerCharacter.armor_class || 10,
       maxHitPoints: playerCharacter.hit_points || 10,
       currentHitPoints: playerCharacter.hit_points || 10,
+      speed: playerCharacter.speed || 30,
+      movementRemaining: playerCharacter.speed || 30,
       temporaryHitPoints: 0,
       conditions: [],
       deathSaves: { successes: 0, failures: 0, isStable: false },
@@ -49,6 +53,8 @@ export function createCombatParticipantsFromDetection(
   // Add detected enemies
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
+    const monster = loadMonsters().find((entry) =>
+      entry.id === enemy.monsterId || entry.name.toLowerCase() === enemy.name.toLowerCase());
 
     // Parse CR (handle fractional strings like "1/4")
     let numericCR = 1;
@@ -72,9 +78,9 @@ export function createCombatParticipantsFromDetection(
       participantType: 'monster',
       name: `${enemy.name} ${i > 0 ? i + 1 : ''}`.trim(),
       initiative: initiativeModifier, // This will be added to d20 roll in startCombat
-      armorClass: enemy.suggestedAC,
-      maxHitPoints: enemy.suggestedHP,
-      currentHitPoints: enemy.suggestedHP,
+      armorClass: monster?.armorClass ?? enemy.suggestedAC,
+      maxHitPoints: monster?.hitPoints ?? enemy.suggestedHP,
+      currentHitPoints: monster?.hitPoints ?? enemy.suggestedHP,
       temporaryHitPoints: 0,
       conditions: [],
       deathSaves: { successes: 0, failures: 0, isStable: false },
@@ -83,11 +89,20 @@ export function createCombatParticipantsFromDetection(
       reactionTaken: false,
       movementUsed: 0,
       monsterData: {
-        type: enemy.type,
-        challengeRating: enemy.estimatedCR,
-        alignment: 'hostile',
-        specialAbilities: [],
-        attacks: [
+        type: monster?.type || enemy.type,
+        challengeRating: String(monster?.cr ?? enemy.estimatedCR),
+        alignment: monster?.alignment || 'hostile',
+        specialAbilities: monster?.specialAbilities?.map((ability) => ability.name) || [],
+        attacks: monster?.actions?.filter((action) => action.attack_bonus !== undefined).map((action) => {
+          const damage = Array.isArray(action.damage) ? action.damage[0] as any : undefined;
+          const description = String(action.desc || '');
+          return {
+            name: String(action.name || 'Attack'), attackBonus: Number(action.attack_bonus || 0),
+            damageRoll: String(damage?.damage_dice || '1d4'),
+            damageType: String(damage?.damage_type?.index || 'bludgeoning') as any,
+            reach: Number(description.match(/reach (\d+) ft/i)?.[1] || 5), description,
+          };
+        }) || [
           {
             name: 'Basic Attack',
             attackBonus: 4,

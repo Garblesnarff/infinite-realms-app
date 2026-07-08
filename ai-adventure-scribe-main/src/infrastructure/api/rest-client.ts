@@ -12,6 +12,8 @@ export interface GenerateTextParams {
   temperature?: number;
   history?: LLMHistoryMessage[];
   provider?: 'openrouter' | 'gemini';
+  responseSchema?: Record<string, unknown>;
+  onStream?: (chunk: string) => void;
 }
 
 export interface GenerateImageParams {
@@ -66,7 +68,7 @@ class LlmApiClient {
       'openrouter';
 
     const makeReq = async (provider: 'openrouter' | 'gemini') =>
-      this.fetchWithAuth('/v1/llm/generate', {
+      this.fetchWithAuth(params.onStream ? '/v1/llm/generate/stream' : '/v1/llm/generate', {
         method: 'POST',
         body: JSON.stringify({
           prompt: params.prompt,
@@ -75,11 +77,49 @@ class LlmApiClient {
           temperature: params.temperature,
           history: params.history,
           provider,
+          responseSchema: params.responseSchema,
         }),
       });
 
     try {
       const res = await makeReq(preferredProvider);
+      if (params.onStream && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let raw = '';
+        let emittedText = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          raw += chunk;
+          if (params.responseSchema) {
+            const startMatch = /"text"\s*:\s*"/.exec(raw);
+            if (startMatch?.index !== undefined) {
+              const start = startMatch.index + startMatch[0].length;
+              let end = start;
+              let escaped = false;
+              for (; end < raw.length; end += 1) {
+                const char = raw[end];
+                if (char === '"' && !escaped) break;
+                escaped = char === '\\' && !escaped;
+                if (char !== '\\') escaped = false;
+              }
+              try {
+                const decoded = JSON.parse(`"${raw.slice(start, end)}"`) as string;
+                const delta = decoded.slice(emittedText.length);
+                if (delta) params.onStream(delta);
+                emittedText = decoded;
+              } catch {
+                // Wait for the remainder of an escape sequence in the next chunk.
+              }
+            }
+          } else {
+            params.onStream(chunk);
+          }
+        }
+        return raw;
+      }
       const data = await res.json();
       return data?.text ?? '';
     } catch (err: any) {

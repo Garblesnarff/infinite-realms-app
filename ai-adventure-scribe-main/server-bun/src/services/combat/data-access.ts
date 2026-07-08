@@ -23,12 +23,101 @@ import {
   weaponAttacks,
   creatureStats,
   characters,
+  characterStats,
+  combatParticipantConditions,
+  conditionsLibrary,
+  characterSpells,
+  spells,
   npcs,
 } from '../../../../db/schema/index';
-import { NotFoundError } from '../../lib/errors.js';
+import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 
 import type { WeaponAttack, CreatureStats, CombatParticipant } from '../../../../db/schema/index';
 import type { CreateWeaponAttackInput } from '../../types/combat.js';
+
+export interface AbilityProfile {
+  level: number;
+  className?: string | null;
+  savingThrowProficiencies: string[];
+  scores: Record<string, number>;
+  saveBonuses: Record<string, number>;
+  spellIds: string[];
+}
+
+export async function claimEncounterVersion(encounterId: string, expectedVersion: number): Promise<number> {
+  const [updated] = await db.update(combatEncounters)
+    .set({ version: sql`${combatEncounters.version} + 1`, updatedAt: new Date() })
+    .where(and(eq(combatEncounters.id, encounterId), eq(combatEncounters.version, expectedVersion)))
+    .returning({ version: combatEncounters.version });
+  if (!updated) {
+    throw new BusinessLogicError('Combat state changed; refresh and retry', { expectedVersion });
+  }
+  return updated.version;
+}
+
+export async function getActiveConditionNames(participantId: string): Promise<string[]> {
+  const rows = await db.select({ name: conditionsLibrary.name })
+    .from(combatParticipantConditions)
+    .innerJoin(conditionsLibrary, eq(combatParticipantConditions.conditionId, conditionsLibrary.id))
+    .where(and(
+      eq(combatParticipantConditions.participantId, participantId),
+      eq(combatParticipantConditions.isActive, true),
+    ));
+  return rows.map((row) => row.name.toLowerCase());
+}
+
+export async function getParticipantAbilityProfile(participant: any): Promise<AbilityProfile> {
+  if (participant.characterId) {
+    const [result] = await db
+      .select({ character: characters, stats: characterStats })
+      .from(characters)
+      .leftJoin(characterStats, eq(characters.id, characterStats.characterId))
+      .where(eq(characters.id, participant.characterId))
+      .limit(1);
+    if (!result) throw new NotFoundError('Character', participant.characterId);
+    const spellRows = await db.select({ id: spells.id, name: spells.name })
+      .from(characterSpells)
+      .innerJoin(spells, eq(characterSpells.spellId, spells.id))
+      .where(eq(characterSpells.characterId, participant.characterId));
+    const proficiencies = (result.character.savingThrowProficiencies || '')
+      .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+    return {
+      level: result.character.level,
+      className: result.character.class,
+      savingThrowProficiencies: proficiencies,
+      scores: {
+        str: result.stats?.strength ?? 10, dex: result.stats?.dexterity ?? 10,
+        con: result.stats?.constitution ?? 10, int: result.stats?.intelligence ?? 10,
+        wis: result.stats?.wisdom ?? 10, cha: result.stats?.charisma ?? 10,
+      },
+      saveBonuses: {},
+      spellIds: [
+        ...[result.character.cantrips, result.character.knownSpells, result.character.preparedSpells]
+          .filter(Boolean).flatMap((value) => String(value).split(',')),
+        ...spellRows.flatMap((spell) => [spell.id, spell.name]),
+      ].map((value) => value.trim().toLowerCase()),
+    };
+  }
+
+  if (participant.npcId) {
+    const npc = await db.query.npcs.findFirst({ where: eq(npcs.id, participant.npcId) });
+    if (!npc) throw new NotFoundError('NPC', participant.npcId);
+    const stats = (npc.stats || {}) as Record<string, any>;
+    return {
+      level: Number(stats.level || stats.challengeRating || 1),
+      savingThrowProficiencies: [],
+      scores: {
+        str: Number(stats.strength ?? stats.str ?? 10), dex: Number(stats.dexterity ?? stats.dex ?? 10),
+        con: Number(stats.constitution ?? stats.con ?? 10), int: Number(stats.intelligence ?? stats.int ?? 10),
+        wis: Number(stats.wisdom ?? stats.wis ?? 10), cha: Number(stats.charisma ?? stats.cha ?? 10),
+      },
+      saveBonuses: (stats.savingThrows || stats.saveBonuses || {}) as Record<string, number>,
+      spellIds: [],
+    };
+  }
+
+  return { level: 1, savingThrowProficiencies: [], scores: {}, saveBonuses: {}, spellIds: [] };
+}
 
 /**
  * Verify a user owns the character (via user_id or owner_id).

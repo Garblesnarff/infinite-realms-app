@@ -42,27 +42,38 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     dice_rolls,
   } = params;
 
+  let structuredResponse: Record<string, any> | null = null;
+  try {
+    const cleaned = rawResponse.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    structuredResponse = JSON.parse(cleaned);
+  } catch {
+    // Backward-compatible fallback for providers that do not support schemas.
+  }
+  const responseText = typeof structuredResponse?.text === 'string'
+    ? structuredResponse.text
+    : rawResponse;
+
   // Initialize result with raw text
-  let result: { text: string; narrationSegments?: NarrationSegment[] } = { text: rawResponse };
+  let result: { text: string; narrationSegments?: NarrationSegment[] } = { text: responseText };
 
   // 1. Post-processing logic (Formatting & Parsing)
   if (isFirstMessage) {
-    logger.info('[Opening Message] Raw AI response length:', rawResponse.length);
+    logger.info('[Opening Message] Raw AI response length:', responseText.length);
     // Strip any code-fence wrapper the model adds around the response.
     // Pattern 1: entire response is wrapped (```response...```) — unwrap it, keep content.
     // Pattern 2: leading metadata block before narrative — strip just that block.
     // Preserves mid-response ROLL_REQUESTS_V1 fences in both cases.
     let sampledText: string;
-    const entirelyWrapped = rawResponse.match(/^```\w*\n([\s\S]*)\n```\s*$/);
+    const entirelyWrapped = responseText.match(/^```\w*\n([\s\S]*)\n```\s*$/);
     if (entirelyWrapped) {
       sampledText = entirelyWrapped[1].trim();
     } else {
-      sampledText = rawResponse.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
+      sampledText = responseText.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
     }
     logger.info('[Opening Message] Sampled text length:', sampledText.length);
     const processed = applyAssetPostProcessing({ text: sampledText });
     result = { text: processed.text };
-  } else if (voiceContext) {
+  } else if (structuredResponse || voiceContext) {
     try {
       // Clean the response by removing markdown code blocks first
       let cleanedResponse = rawResponse.trim();
@@ -84,12 +95,12 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
         .replace(/"\s*:\s*"([^"]*?)"\s*([,}])/g, '":"$1"$2'); // Fix spacing issues
 
       // Parse the cleaned JSON
-      const structuredResponse = JSON.parse(cleanedResponse);
+      const parsedResponse = structuredResponse || JSON.parse(cleanedResponse);
       logger.debug('🎭 Successfully parsed structured voice response');
 
       // Map snake_case narration_segments to camelCase narrationSegments
       const narrationSegments =
-        structuredResponse.narration_segments || structuredResponse.narrationSegments;
+        parsedResponse.narration_segments || parsedResponse.narrationSegments;
 
       if (narrationSegments) {
         logger.debug('📊 AI SEGMENTS ANALYSIS:', narrationSegments.length);
@@ -99,8 +110,8 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       const assets = getCachedAssets();
 
       if (assets.length > 0) {
-        if (structuredResponse.text) {
-          structuredResponse.text = insertAssetTags(structuredResponse.text, assets);
+        if (parsedResponse.text) {
+          parsedResponse.text = insertAssetTags(parsedResponse.text, assets);
         }
         if (narrationSegments) {
           for (const segment of narrationSegments) {
@@ -111,7 +122,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
         }
       }
       result = {
-        text: structuredResponse.text || rawResponse,
+        text: parsedResponse.text || responseText,
         narrationSegments: narrationSegments,
       };
     } catch (parseError) {
@@ -165,6 +176,13 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
   // Normalize malformed asset tags before persistence, rendering, and memory extraction.
   result.text = normalizeAssetTagsInContent(result.text);
+  if (structuredResponse?.combat_actions?.length) {
+    result.text = result.text
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) => !/(?:\b(?:hits?|miss(?:es|ed)?|succeeds?|fails?|critical hit|takes? \d+ (?:points? of )?damage)\b|\b(?:blade|arrow|spell|attack)\b.*\b(?:cuts?|strikes?|connects?|lands?)\b)/i.test(sentence))
+      .join(' ')
+      .trim();
+  }
   if (result.narrationSegments) {
     result.narrationSegments = result.narrationSegments.map((segment) => ({
       ...segment,
@@ -204,17 +222,40 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   });
 
   // 4. Wrap everything into AIResponse
+  const transition = structuredResponse?.combat_transition as 'none' | 'start' | 'end' | undefined;
+  const combatantEntries = structuredResponse?.combatants || [];
+  const monsterCatalog = combatantEntries.length
+    ? new Map((await import('@/services/encounters/srd-loader')).loadMonsters().flatMap((monster) => [
+        [monster.id.toLowerCase(), monster] as const,
+        [monster.name.toLowerCase(), monster] as const,
+      ]))
+    : new Map();
+  const structuredEnemies = combatantEntries.flatMap((entry: any) => {
+    const monster = monsterCatalog.get(String(entry.monster_id || entry.name).toLowerCase());
+    if (!monster) return [];
+    return Array.from({ length: Math.max(1, Number(entry.count) || 1) }, () => ({
+      monsterId: monster.id,
+      name: monster.name,
+      type: ['humanoid', 'beast', 'undead', 'dragon', 'construct'].includes(monster.type || '')
+        ? monster.type : 'unknown',
+      estimatedCR: String(monster.cr), description: `${monster.size || ''} ${monster.type || ''}`.trim(),
+      suggestedHP: monster.hitPoints || 1, suggestedAC: monster.armorClass || 10,
+    }));
+  });
   const enhancedResult: AIResponse = {
     ...result,
-    roll_requests,
+    roll_requests: structuredResponse?.roll_requests || roll_requests,
     dice_rolls,
+    combat_transition: transition || 'none',
+    combat_actions: structuredResponse?.combat_actions || [],
+    combatants: structuredResponse?.combatants || [],
     combatDetection: {
-      isCombat: combatDetection.isCombat,
+      isCombat: transition === 'start' ? true : transition === 'end' ? false : combatDetection.isCombat,
       confidence: combatDetection.confidence,
       combatType: combatDetection.combatType,
-      shouldStartCombat: combatDetection.shouldStartCombat,
-      shouldEndCombat: combatDetection.shouldEndCombat,
-      enemies: combatDetection.enemies || [],
+      shouldStartCombat: transition === 'start',
+      shouldEndCombat: transition === 'end',
+      enemies: structuredEnemies.length ? structuredEnemies : combatDetection.enemies || [],
       combatActions: combatDetection.combatActions || [],
     },
   };

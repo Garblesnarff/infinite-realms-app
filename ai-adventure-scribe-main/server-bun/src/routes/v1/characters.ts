@@ -438,6 +438,14 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     },
   )
 
+  .post(
+    '/:id/damage',
+    async ({ params, body, user }) => CharacterService.applyDamage(
+      params.id, user!.userId, body.amount,
+    ),
+    { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
+  )
+
   .put(
     '/:id/stats',
     async ({ params, body, user }) => {

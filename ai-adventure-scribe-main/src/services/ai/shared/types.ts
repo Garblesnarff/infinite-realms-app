@@ -34,6 +34,7 @@ export interface GameContext {
   starterCampaignId?: string;
   campaignDetails?: Record<string, unknown>;
   characterDetails?: Record<string, unknown>;
+  gameState?: Record<string, unknown>;
 }
 
 /**
@@ -62,6 +63,9 @@ export interface AIResponse {
   narrationSegments?: NarrationSegment[];
   roll_requests?: unknown[];
   dice_rolls?: unknown[];
+  combat_transition?: 'none' | 'start' | 'end';
+  combat_actions?: unknown[];
+  combatants?: unknown[];
   combatDetection?: {
     isCombat: boolean;
     confidence: number;

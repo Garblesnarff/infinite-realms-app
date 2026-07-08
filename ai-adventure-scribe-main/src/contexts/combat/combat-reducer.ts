@@ -107,7 +107,8 @@ export function combatReducer(state: CombatState, action: ReducerAction): Combat
       if (!state.activeEncounter) return state;
       // Insert participant in initiative order
       const newParticipants = [...state.activeEncounter.participants, action.participant].sort(
-        (a, b) => b.initiative - a.initiative,
+        (a, b) => b.initiative - a.initiative ||
+          (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
       );
       return {
         ...state,
@@ -143,15 +144,18 @@ export function combatReducer(state: CombatState, action: ReducerAction): Combat
         nextIndex = 0;
         newRound += 1;
       }
-      // Skip unconscious/dead participants
-      while (nextIndex < state.activeEncounter.participants.length) {
+      // Incapacitated participants cannot take turns. Search at most one full cycle.
+      let checked = 0;
+      while (checked < state.activeEncounter.participants.length) {
         const participant = state.activeEncounter.participants[nextIndex];
-        if (participant.currentHitPoints > 0 || participant.deathSaves.failures < 3) {
-          break;
-        }
-        nextIndex++;
+        if (participant && participant.currentHitPoints > 0 && !participant.isDead && !participant.isUnconscious) break;
+        nextIndex = (nextIndex + 1) % state.activeEncounter.participants.length;
+        if (nextIndex === 0) newRound += 1;
+        checked += 1;
       }
-      const nextParticipant = state.activeEncounter.participants[nextIndex];
+      const nextParticipant = checked === state.activeEncounter.participants.length
+        ? undefined
+        : state.activeEncounter.participants[nextIndex];
       return {
         ...state,
         activeEncounter: {

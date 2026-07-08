@@ -42,6 +42,7 @@ export const combatEncounters = pgTable(
     status: text('status').notNull().default('active'), // 'active' | 'paused' | 'completed'
     currentRound: integer('current_round').notNull().default(1),
     currentTurnOrder: integer('current_turn_order').notNull().default(0),
+    version: integer('version').notNull().default(1),
 
     // Optional metadata
     location: text('location'),

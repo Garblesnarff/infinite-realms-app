@@ -275,12 +275,14 @@ export function parseDiceString(diceString: string): {
   dieType: number;
   count: number;
   modifier: number;
+  diceGroups?: Array<{ count: number; dieType: number }>;
 } {
   const partRegex = /([+-]?\d*d\d+|[+-]?\d+)/g;
   const parts = diceString.replace(/\s+/g, '').match(partRegex) || [];
 
   let totalModifier = 0;
   let firstDiceGroup: { count: number; dieType: number } | null = null;
+  const diceGroups: Array<{ count: number; dieType: number }> = [];
 
   for (const part of parts) {
     if (part.includes('d')) {
@@ -295,12 +297,8 @@ export function parseDiceString(diceString: string): {
 
       if (!firstDiceGroup) {
         firstDiceGroup = { count, dieType };
-      } else {
-        // For multiple dice groups, we can only return one in this interface.
-        // We'll treat subsequent dice as their average value added to the modifier
-        // to give a somewhat sensible "modifier" if this is used for simple math.
-        totalModifier += Math.floor((count * (dieType + 1)) / 2);
       }
+      diceGroups.push({ count, dieType });
     } else {
       totalModifier += parseInt(part);
     }
@@ -311,6 +309,7 @@ export function parseDiceString(diceString: string): {
       count: firstDiceGroup.count,
       dieType: firstDiceGroup.dieType,
       modifier: totalModifier,
+      ...(diceGroups.length > 1 ? { diceGroups } : {}),
     };
   }
 

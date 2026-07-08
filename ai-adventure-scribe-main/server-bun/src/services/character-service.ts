@@ -193,6 +193,29 @@ export class CharacterService {
       });
   }
 
+  static async applyDamage(characterId: string, userId: string, amount: number) {
+    const [updated] = await db
+      .update(characterStats)
+      .set({
+        currentHitPoints: sql`greatest(0, ${characterStats.currentHitPoints} - greatest(0, ${amount} - coalesce(${characterStats.temporaryHitPoints}, 0)))`,
+        temporaryHitPoints: sql`greatest(0, coalesce(${characterStats.temporaryHitPoints}, 0) - ${amount})`,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(characterStats.characterId, characterId),
+        exists(db.select({ one: sql`1` }).from(characters).where(and(
+          eq(characters.id, characterStats.characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ))),
+      ))
+      .returning({
+        currentHitPoints: characterStats.currentHitPoints,
+        temporaryHitPoints: characterStats.temporaryHitPoints,
+      });
+    if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Character not found' });
+    return updated;
+  }
+
   /**
    * Update an existing character
    */

@@ -51,15 +51,17 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
   const [isRolling, setIsRolling] = useState(false);
 
   const parseDiceString = (diceStr: string) => {
-    // Parse strings like "1d20", "2d6+3", "1d8-1"
-    const match = diceStr.match(/(\d+)d(\d+)([+-]\d+)?/);
-    if (!match) return { count: 1, sides: 20, mod: 0 };
-
-    const count = parseInt(match[1]);
-    const sides = parseInt(match[2]);
-    const mod = match[3] ? parseInt(match[3]) : 0;
-
-    return { count, sides, mod };
+    const parts = diceStr.replace(/\s+/g, '').match(/[+-]?\d*d\d+|[+-]?\d+/g) || [];
+    const groups: Array<{ count: number; sides: number }> = [];
+    let mod = 0;
+    for (const part of parts) {
+      if (!part.includes('d')) { mod += Number(part); continue; }
+      const [rawCount, rawSides] = part.split('d');
+      const count = rawCount === '-' ? -1 : rawCount === '' || rawCount === '+' ? 1 : Number(rawCount);
+      groups.push({ count, sides: Number(rawSides) });
+    }
+    if (!groups.length) groups.push({ count: 1, sides: 20 });
+    return { count: groups[0].count, sides: groups[0].sides, mod, groups };
   };
 
   const rollDice = (sides: number): number => {
@@ -74,7 +76,7 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
     // Add slight delay for visual feedback
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    const { count, sides, mod } = parseDiceString(dice);
+    const { count, sides, mod, groups } = parseDiceString(dice);
     let rolls: number[] = [];
 
     // Handle advantage/disadvantage for d20 rolls
@@ -88,9 +90,10 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
         rolls = [Math.min(roll1, roll2)];
       }
     } else {
-      // Normal rolling
-      for (let i = 0; i < count; i++) {
-        rolls.push(rollDice(sides));
+      for (const group of groups) {
+        for (let i = 0; i < Math.abs(group.count); i++) {
+          rolls.push(rollDice(group.sides) * Math.sign(group.count));
+        }
       }
     }
 

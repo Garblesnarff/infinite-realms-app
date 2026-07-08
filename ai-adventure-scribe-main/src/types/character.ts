@@ -89,6 +89,17 @@ export interface ClassFeature {
   };
 }
 
+export interface SubclassFeature extends ClassFeature {
+  level: number;
+}
+
+export interface CharacterSubclass {
+  id: string;
+  name: string;
+  description: string;
+  features: SubclassFeature[];
+}
+
 export interface CharacterClass {
   id: string;
   name: string;
@@ -109,6 +120,7 @@ export interface CharacterClass {
     pactMagic?: boolean;
   };
   classFeatures: ClassFeature[];
+  subclasses: CharacterSubclass[];
   armorProficiencies: string[];
   weaponProficiencies: string[];
   toolProficiencies?: string[];
@@ -292,6 +304,7 @@ export interface Character {
   inventory?: Array<{
     itemId: string;
     quantity: number;
+    weight?: number;
     equipped: boolean;
     // Magic item properties
     isMagic?: boolean;

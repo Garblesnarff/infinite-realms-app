@@ -24,6 +24,7 @@ export function resolveAttack(
     spellAttack?: boolean;
     divineSmiteLevel?: number;
     sneakAttack?: boolean;
+    distanceInFeet?: number;
   } = {},
 ): AttackResolution {
   const level = attacker.level || 1;
@@ -119,7 +120,10 @@ export function resolveAttack(
   let hit = roll.total >= targetAC;
 
   // Critical hit/fail rules
-  const criticalHit = roll.naturalRoll === 20;
+  const targetIsHelpless = target.conditions.some((condition) =>
+    condition.name === 'paralyzed' || condition.name === 'unconscious');
+  const inferredDistance = options.distanceInFeet ?? (weapon?.range ? Number.POSITIVE_INFINITY : 5);
+  const criticalHit = roll.naturalRoll === 20 || (hit && targetIsHelpless && inferredDistance <= 5);
   const criticalFail = roll.naturalRoll === 1;
 
   // Critical hits always hit, natural 1s always miss

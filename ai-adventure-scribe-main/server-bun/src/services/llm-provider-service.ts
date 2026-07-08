@@ -15,6 +15,7 @@ export interface LLMGenerateOptions {
   temperature?: number;
   history?: ChatMessage[];
   provider?: 'openrouter' | 'gemini';
+  responseSchema?: Record<string, unknown>;
 }
 
 export interface LLMExtractOptions {
@@ -129,6 +130,77 @@ const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
 };
 
 export class LLMProviderService {
+  static async stream(options: LLMGenerateOptions): Promise<ReadableStream<Uint8Array>> {
+    if (options.provider === 'gemini') {
+      const result = await this.generate(options);
+      if (result.error) throw new Error(result.error);
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(result.text));
+          controller.close();
+        },
+      });
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('Service unavailable');
+    const model = options.model || process.env.OPENROUTER_TEXT_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free';
+    const messages = [...(options.history || []), { role: 'user' as const, content: options.prompt }];
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_ORIGIN || 'http://localhost:5173',
+        'X-Title': 'AI Adventure Scribe',
+      },
+      body: JSON.stringify({
+        model, messages, stream: true,
+        max_tokens: options.maxTokens ?? 1000, temperature: options.temperature ?? 0.8,
+        ...(options.responseSchema ? {
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'structured_response', strict: true, schema: options.responseSchema },
+          },
+        } : {}),
+      }),
+    });
+    if (!response.ok || !response.body) throw new Error(`LLM stream failed (${response.status})`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    let buffer = '';
+    return new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            controller.close();
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const payload = line.startsWith('data: ') ? line.slice(6) : '';
+            if (!payload || payload === '[DONE]') continue;
+            try {
+              const json = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> };
+              const content = json.choices?.[0]?.delta?.content;
+              if (content) {
+                controller.enqueue(encoder.encode(content));
+                return;
+              }
+            } catch {
+              // Ignore provider keepalive or malformed SSE frames.
+            }
+          }
+        }
+      },
+      cancel() { void reader.cancel(); },
+    });
+  }
+
   /**
    * Generate text via OpenRouter or Gemini
    */
@@ -139,16 +211,17 @@ export class LLMProviderService {
       maxTokens = 1000,
       temperature = 0.8,
       history,
-      provider = 'openrouter'
+      provider = 'openrouter',
+      responseSchema,
     } = options;
 
     try {
       if (provider === 'openrouter') {
-        return await this.generateOpenRouter(prompt, model, maxTokens, temperature, history);
+        return await this.generateOpenRouter(prompt, model, maxTokens, temperature, history, responseSchema);
       }
 
       if (provider === 'gemini') {
-        return await this.generateGemini(prompt, model, maxTokens, temperature, history);
+        return await this.generateGemini(prompt, model, maxTokens, temperature, history, responseSchema);
       }
 
       return { error: 'Unsupported provider', status: 400, text: '' };
@@ -169,7 +242,8 @@ export class LLMProviderService {
     model?: string,
     maxTokens = 1000,
     temperature = 0.8,
-    history?: ChatMessage[]
+    history?: ChatMessage[],
+    responseSchema?: Record<string, unknown>,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:openrouter');
     breaker.allowOrThrow();
@@ -196,6 +270,12 @@ export class LLMProviderService {
       messages,
       max_tokens: maxTokens,
       temperature,
+      ...(responseSchema ? {
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'structured_response', strict: true, schema: responseSchema },
+        },
+      } : {}),
     };
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -237,7 +317,8 @@ export class LLMProviderService {
     model?: string,
     maxTokens = 1000,
     temperature = 0.8,
-    history?: ChatMessage[]
+    history?: ChatMessage[],
+    responseSchema?: Record<string, unknown>,
   ): Promise<LLMResponse> {
     const breaker = getCircuitBreaker('llm:gemini');
     breaker.allowOrThrow();
@@ -279,6 +360,7 @@ export class LLMProviderService {
       generationConfig: {
         maxOutputTokens: maxTokens,
         temperature,
+        ...(responseSchema ? { responseMimeType: 'application/json', responseSchema } : {}),
       },
     };
 

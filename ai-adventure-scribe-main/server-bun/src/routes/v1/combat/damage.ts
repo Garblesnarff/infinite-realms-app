@@ -195,20 +195,15 @@ export const damageRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const { participantId, roll } = body as any;
+      const { participantId } = body as any;
 
       if (!participantId) {
         set.status = 400;
         return { error: 'participantId is required' };
       }
 
-      if (roll === undefined || roll < 1 || roll > 20) {
-        set.status = 400;
-        return { error: 'roll must be between 1 and 20' };
-      }
-
       // 🛡️ Sentinel: Pass user.userId to rollDeathSave for defense-in-depth atomic ownership verification.
-      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, roll, user.userId);
+      const result = await CombatHPService.rollDeathSave(participantId, params.encounterId, user.userId);
       return result;
     } catch (e) {
       logger.error({ msg: 'Death save error', error: e });

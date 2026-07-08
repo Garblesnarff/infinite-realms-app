@@ -4,6 +4,11 @@ import { db } from '../../../../db/client';
 import { NotFoundError, BusinessLogicError } from '../../lib/errors.js';
 import * as HPDataAccess from '../combat/hp-data-access.js';
 import { CombatHPService } from '../combat-hp-service.js';
+import { CombatInitiativeService } from '../combat-initiative-service.js';
+
+vi.mock('../combat-initiative-service.js', () => ({
+  CombatInitiativeService: { getCurrentTurn: vi.fn() },
+}));
 
 // Mock state for query builder
 const mockState = {
@@ -69,6 +74,7 @@ describe('CombatHPService', () => {
   };
 
   beforeEach(() => {
+    vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({ id: mockParticipantId } as any);
     vi.clearAllMocks();
     mockState.results = [];
   });
@@ -205,6 +211,7 @@ describe('CombatHPService', () => {
 
     describe('rollDeathSave', () => {
       it('should roll death save for unconscious participant', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0.7); // Natural 15
         const unconsciousStatus = { ...mockStatus, currentHp: 0, isConscious: false };
         mockState.results = [{
           participant: mockParticipant,
@@ -215,7 +222,6 @@ describe('CombatHPService', () => {
         const result = await CombatHPService.rollDeathSave(
           mockParticipantId,
           mockEncounterId,
-          15, // Success
           mockUserId
         );
 
@@ -230,7 +236,7 @@ describe('CombatHPService', () => {
           currentRound: 1
         }];
 
-        await expect(CombatHPService.rollDeathSave(mockParticipantId, mockEncounterId, 15, mockUserId))
+        await expect(CombatHPService.rollDeathSave(mockParticipantId, mockEncounterId, mockUserId))
           .rejects.toThrow(BusinessLogicError);
       });
     });

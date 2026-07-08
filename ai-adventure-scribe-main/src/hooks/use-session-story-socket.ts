@@ -1,0 +1,39 @@
+import { useCallback, useEffect, useRef } from 'react';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+
+export function useSessionStorySocket(sessionId: string | null, onRemoteMessage: () => void) {
+  const socketRef = useRef<WebSocket | null>(null);
+  const callbackRef = useRef(onRemoteMessage);
+  callbackRef.current = onRemoteMessage;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const token = window.localStorage.getItem('workos_access_token');
+    if (!sessionId || !token) return;
+    const base = new URL(API_BASE_URL);
+    const protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(
+      `${protocol}//${base.host}/ws?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`,
+    );
+    socketRef.current = socket;
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(String(event.data));
+        if (message.type === 'chat') callbackRef.current();
+      } catch {
+        /* ignore malformed peer frames */
+      }
+    };
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [sessionId]);
+
+  return useCallback((text: string) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'chat', text }));
+    }
+  }, []);
+}

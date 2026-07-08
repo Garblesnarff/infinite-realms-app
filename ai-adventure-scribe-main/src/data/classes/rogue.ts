@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const rogue: CharacterClass = {
+  subclasses: classSubclasses.rogue,
   id: 'rogue',
   name: 'Rogue',
   description: 'A scoundrel who uses stealth and trickery to overcome obstacles and enemies.',

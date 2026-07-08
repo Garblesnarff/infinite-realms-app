@@ -121,6 +121,10 @@ describe('findLastSentenceBoundary', () => {
 // ---------------------------------------------------------------------------
 
 describe('truncateAtRollRequest', () => {
+  it('removes an outcome narrated before the roll request', () => {
+    const message = `You swing at the goblin. Your blade cuts deep into its shoulder!\n${ROLL_BLOCK}`;
+    expect(truncateAtRollRequest(message)).toBe('You swing at the goblin.');
+  });
   it('returns message unchanged when no roll block is present', () => {
     const msg = 'The forest is quiet. You hear nothing.';
     expect(truncateAtRollRequest(msg)).toBe(msg);

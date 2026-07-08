@@ -1,6 +1,8 @@
 import type { CharacterClass, AbilityScores } from '@/types/character';
+import { classSubclasses } from './subclasses';
 
 export const barbarian: CharacterClass = {
+  subclasses: classSubclasses.barbarian,
   id: 'barbarian',
   name: 'Barbarian',
   description: 'A fierce warrior of primitive background who can enter a battle rage.',
