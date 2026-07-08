@@ -32,6 +32,12 @@
   --infinite-gold-light: #f3deb0;
   --infinite-gold-dark: #b9954f;
   --infinite-gold-darker: #8f7548;
+  --ir-gold-button-highlight: #f6e3b8;
+  --ir-gold-button-base: var(--infinite-gold);
+  --ir-gold-button-shadow: #c69d57;
+  --ir-gold-button-border: var(--infinite-gold-light);
+  --ir-gold-button-foreground: #1a1206;
+  --ir-gold-button-radius: 7px;
 
   /* --- force the dark token set with navy values ---
      background/foreground/card-foreground/popover/popover-foreground/
@@ -124,25 +130,32 @@
 }
 
 /* gold gradient button */
-.ir-app .ir-btn-gold {
+.ir-app .ir-btn-gold,
+.ir-app .ir-gold-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 9px 17px;
-  border-radius: 7px;
+  border-radius: var(--ir-gold-button-radius);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: #1a1206;
-  background: linear-gradient(180deg, #f6e3b8 0%, var(--infinite-gold) 60%, #c69d57 100%);
-  border: 1px solid #f3deb0;
+  color: var(--ir-gold-button-foreground);
+  background: linear-gradient(
+    180deg,
+    var(--ir-gold-button-highlight) 0%,
+    var(--ir-gold-button-base) 60%,
+    var(--ir-gold-button-shadow) 100%
+  );
+  border: 1px solid var(--ir-gold-button-border);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.4) inset,
     0 4px 14px rgba(213, 176, 112, 0.16);
 }
-.ir-app .ir-btn-gold:hover {
+.ir-app .ir-btn-gold:hover,
+.ir-app .ir-gold-button:hover {
   filter: brightness(1.06);
 }
 

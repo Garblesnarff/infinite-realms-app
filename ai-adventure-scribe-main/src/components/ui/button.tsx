@@ -22,8 +22,7 @@ const buttonVariants = cva(
           'border-infinite-purple/30 bg-gradient-to-br from-[rgba(45,17,85,0.95)] to-[rgba(15,41,69,0.92)] text-white hover:from-[rgba(45,17,85,1)] hover:to-[rgba(15,41,69,0.98)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all duration-300',
         parchment:
           'border-amber-200/50 bg-gradient-to-br from-[rgba(255,255,250,0.9)] to-[rgba(250,244,230,0.85)] text-amber-900 hover:from-[rgba(255,255,250,1)] hover:to-[rgba(250,244,230,0.95)] hover:shadow-lg transition-all duration-300',
-        'ir-gold':
-          'rounded-[7px] border border-[#f3deb0] bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#c69d57] text-[#1a1206] font-bold uppercase tracking-[1px] shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_4px_14px_rgba(213,176,112,0.16)] hover:shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_4px_14px_rgba(213,176,112,0.16)] hover:brightness-110 hover:translate-y-0',
+        'ir-gold': 'ir-gold-button hover:translate-y-0',
       },
       size: {
         default: 'h-10 px-4 py-2',
