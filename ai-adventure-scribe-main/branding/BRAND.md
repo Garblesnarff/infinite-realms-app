@@ -19,13 +19,35 @@ InfiniteRealms is not just a game - it's a universe creation platform where play
 - **Legacy** - Actions that echo through time
 - **Infinity** - Endless possibilities
 
-## Visual Identity Concepts
+## Visual Identity
 
-### Color Palette Ideas
-- **Primary**: Deep cosmic purple (#6B46C1) - represents the infinite
-- **Secondary**: Ethereal gold (#F59E0B) - represents the precious nature of memories
-- **Accent**: Mystical teal (#0891B2) - represents the flow of time
-- **Background**: Rich dark blue (#1E1B4B) - represents the cosmos of possibility
+InfiniteRealms deliberately uses two related visual systems:
+
+- **Product application (`/app/*`) — shipped:** deep navy surfaces, antique gold emphasis, muted steel-blue secondary accents, and teal interaction/status accents.
+- **Public marketing — retained:** cosmic purple, bright gold, and teal. Purple remains appropriate for launch pages and campaign storytelling; it is not the default product-shell color.
+
+Do not reintroduce marketing purple as a hardcoded app glow. Product UI should inherit the scoped tokens below.
+
+### Shipped app palette
+
+- **Deep navy:** `#070b14` (`--c-infinite-dark`)
+- **Antique gold:** `#d5b070` (`--c-infinite-gold`)
+- **Steel blue:** `#5f71a8` (`--c-infinite-purple`; legacy token name retained for compatibility)
+- **Teal:** `#4fb6c4` (`--c-infinite-teal`)
+
+### Theme token architecture
+
+The authenticated product shell applies `.ir-app` to every `/app/*` route. `src/styles/ir-overhaul.css` defines the product theme beneath that scope, so public and marketing surfaces remain unchanged.
+
+The `--c-infinite-*` values are space-separated RGB channels, not hex colors:
+
+```css
+--c-infinite-gold: 213 176 112;
+```
+
+This format is intentional. Tailwind consumes the channels as `rgb(var(--c-infinite-gold) / <alpha-value>)`, enabling utilities such as `bg-infinite-gold/10` to respect opacity. Use semantic CSS variables and shared Tailwind utilities (`shadow-glow-gold`, `shadow-glow-teal`, and `shadow-glow-purple`) instead of component-local hex, RGB, gradient, radius, or glow values.
+
+Shared product primitives include `.ir-panel`, `.ir-display`, `.ir-narr`, `.ir-btn-gold`, and the `ir-gold` Button variant. Change the product palette centrally in `.ir-app`; do not override it screen by screen.
 
 ### Typography
 - **Headers**: Bold, fantasy-inspired fonts (Medieval Sharp for emphasis)
@@ -55,7 +77,8 @@ InfiniteRealms is not just a game - it's a universe creation platform where play
 ## Brand Applications
 
 ### Website/App
-- Cosmic gradient backgrounds
+- Navy and antique-gold product surfaces under `.ir-app`
+- Cosmic purple gradients on public marketing surfaces
 - Smooth animations suggesting infinite scroll/time passage
 - Particle effects representing memories floating through space
 - Progressive disclosure of complexity (simple entry, infinite depth)
@@ -98,7 +121,10 @@ The brand should work across:
 
 ---
 
-**Created:** September 2025  
-**Next Review:** October 2025
+**Created:** September 2025
+
+**Product theme updated:** July 8, 2026
+
+**Next Review:** October 2026
 
 *This brand guide will evolve as the platform grows and user feedback shapes our identity.*
