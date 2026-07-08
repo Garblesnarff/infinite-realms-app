@@ -3,6 +3,18 @@ import logger from '@/lib/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
+export class ApiClientError extends Error {
+  readonly status: number;
+  readonly retryable: boolean;
+
+  constructor(message: string, status: number, retryable: boolean) {
+    super(message);
+    this.name = 'ApiClientError';
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
+
 export interface LLMHistoryMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -68,7 +80,15 @@ class LlmApiClient {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`API ${res.status}: ${text || res.statusText}`);
+        let body: { error?: string; message?: string; retryable?: boolean } | null = null;
+        try {
+          body = text ? (JSON.parse(text) as typeof body) : null;
+        } catch {
+          body = null;
+        }
+        const retryable = body?.retryable ?? (res.status === 429 || res.status >= 500);
+        const message = body?.error || body?.message || text || res.statusText;
+        throw new ApiClientError(`API ${res.status}: ${message}`, res.status, retryable);
       }
       return res;
     } catch (err: any) {
@@ -146,7 +166,6 @@ class LlmApiClient {
       const msg = String(err?.message || '');
       const isConfigErr = /Server not configured for OpenRouter/i.test(msg);
       const isGeminiConfigErr = /Server not configured for Gemini/i.test(msg);
-      const isRateLimitErr = /429|rate\s*limit|too\s*many\s*requests|quota\s*exceeded/i.test(msg);
 
       if (preferredProvider === 'openrouter' && isConfigErr) {
         const res = await makeReq('gemini');
@@ -157,23 +176,6 @@ class LlmApiClient {
         const res = await makeReq('openrouter');
         const data = await res.json();
         return data?.text ?? '';
-      }
-      if (isRateLimitErr) {
-        const fallbackModels = [
-          'arcee-ai/trinity-large-preview:free',
-          'stepfun/step-3.5-flash:free',
-          'nvidia/nemotron-3-nano-30b-a3b:free',
-        ];
-        logger.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
-        for (const fallbackModel of fallbackModels) {
-          try {
-            const res = await makeReq('openrouter', fallbackModel);
-            const data = await res.json();
-            if (data?.text) return data.text;
-          } catch (fallbackError) {
-            logger.warn(`[LLMApiClient] Fallback ${fallbackModel} failed`, fallbackError);
-          }
-        }
       }
       throw err;
     }

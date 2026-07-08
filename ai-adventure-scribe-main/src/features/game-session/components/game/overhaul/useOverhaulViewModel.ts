@@ -102,6 +102,11 @@ function buildCharacterSheet(character: Character | null): CharacterSheetVM {
   const level = character.level ?? 1;
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
   const xpMax = getExperienceForLevel(Math.min(20, level + 1)) || xpCurrent;
+  const hpMax = stats.hitPoints;
+  const hpCurrent = Math.min(
+    hpMax,
+    Math.max(0, character.hitPoints?.current ?? character.hitPoints?.maximum ?? hpMax),
+  );
 
   const abilityScores = ABILITY_ORDER.map((a) => {
     const score = character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score ?? 10;
@@ -171,8 +176,8 @@ function buildCharacterSheet(character: Character | null): CharacterSheetVM {
     xpCurrent,
     xpMax,
     avatarUrl: character.avatar_url,
-    hpCurrent: stats.hitPoints,
-    hpMax: stats.hitPoints,
+    hpCurrent,
+    hpMax,
     ac: stats.armorClass,
     initiative: fmt(stats.initiative),
     speed: stats.speed,

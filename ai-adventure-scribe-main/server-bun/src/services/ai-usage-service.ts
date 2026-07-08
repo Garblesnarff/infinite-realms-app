@@ -19,6 +19,8 @@ export type QuotaConfig = {
 const PRICE_PER_MILLION_USD: Record<string, { input: number; output: number }> = {
   'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
   'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
+  'deepseek/deepseek-chat': { input: 0.2002, output: 0.8001 },
+  'google/gemini-2.5-flash-image': { input: 0.30, output: 2.50 },
   'bytedance/seed-1.6-flash': { input: 0.075, output: 0.30 },
   'moonshotai/kimi-k2-0905': { input: 0.60, output: 2.50 },
 };
@@ -35,10 +37,18 @@ export class AIUsageService {
     outputTokens: number;
   }): Promise<void> {
     const model = opts.model || 'unknown';
-    const pricing = PRICE_PER_MILLION_USD[model] || { input: 0, output: 0 };
+    const pricing = PRICE_PER_MILLION_USD[model];
+    if (!pricing) {
+      logger.warn({
+        msg: 'AI_USAGE_UNKNOWN_MODEL_PRICING',
+        provider: opts.provider,
+        model,
+      });
+    }
     const inputTokens = Math.max(0, Math.floor(opts.inputTokens));
     const outputTokens = Math.max(0, Math.floor(opts.outputTokens));
-    const costUsd = (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
+    const costUsd =
+      (inputTokens * (pricing?.input ?? 0) + outputTokens * (pricing?.output ?? 0)) / 1_000_000;
     const period = AIUsageService.periodKey();
 
     try {
