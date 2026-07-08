@@ -4,13 +4,12 @@
  * Design: Dark fantasy aesthetic with aged parchment and arcane elements
  */
 
-import { motion, AnimatePresence } from 'framer-motion';
 import React from 'react';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
 import { NPCRollCard } from '@/components/game/NPCRollCard';
-import { Z_INDEX } from '@/constants/z-index';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useNPCRollQueue } from '@/hooks/game/use-npc-roll-queue';
 
 export { useNPCRollQueue };
@@ -24,41 +23,18 @@ interface NPCRollDisplayProps {
 export const NPCRollDisplay: React.FC<NPCRollDisplayProps> = React.memo(
   ({ roll, onDismiss, autoDismissDelay = 3000 }) => {
     return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 flex items-center justify-center p-4"
-          style={{ zIndex: Z_INDEX.MODAL }}
-          onClick={onDismiss}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          aria-label="Behind the DM Screen popup"
+      <Dialog open onOpenChange={(open) => !open && onDismiss()}>
+        <DialogContent
+          className="w-[calc(100%-2rem)] max-w-md border-0 bg-transparent p-0 shadow-none"
+          aria-describedby="npc-roll-description"
         >
-          {/* Backdrop with mystical atmosphere */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            style={{
-              backgroundImage: `
-              radial-gradient(ellipse at top, rgba(88, 28, 135, 0.15) 0%, transparent 50%),
-              radial-gradient(ellipse at bottom, rgba(30, 27, 75, 0.15) 0%, transparent 50%)
-            `,
-            }}
-          />
-
-          {/* Main NPC Roll Card component */}
-          <NPCRollCard
-            roll={roll}
-            onDismiss={onDismiss}
-            autoDismissDelay={autoDismissDelay}
-          />
-        </motion.div>
-      </AnimatePresence>
+          <DialogTitle className="sr-only">Behind the DM Screen</DialogTitle>
+          <DialogDescription id="npc-roll-description" className="sr-only" aria-live="polite">
+            The Dungeon Master is resolving an NPC dice roll.
+          </DialogDescription>
+          <NPCRollCard roll={roll} onDismiss={onDismiss} autoDismissDelay={autoDismissDelay} />
+        </DialogContent>
+      </Dialog>
     );
   },
 );

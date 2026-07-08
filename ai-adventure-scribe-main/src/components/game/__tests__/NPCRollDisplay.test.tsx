@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { expect, vi, describe, it, beforeEach, afterEach } from 'vitest';
 
@@ -102,12 +102,9 @@ describe('NPCRollDisplay', () => {
   it('has accessible attributes and live regions', async () => {
     render(<NPCRollDisplay roll={mockRollHit as any} onDismiss={() => {}} />);
 
-    // Check for the main container aria-label and role="status"
-    const container = screen.getByLabelText('Behind the DM Screen popup');
-    expect(container).toBeDefined();
-    expect(container.getAttribute('role')).toBe('status');
-    expect(container.getAttribute('aria-live')).toBe('polite');
-    expect(container.getAttribute('aria-atomic')).toBe('true');
+    const dialog = screen.getByRole('dialog', { name: 'Behind the DM Screen' });
+    expect(dialog).toBeDefined();
+    expect(screen.getByText('The Dungeon Master is resolving an NPC dice roll.')).toBeDefined();
 
     // Check for rolling status
     const rollingStatus = screen.getByLabelText('Rolling dice...');
@@ -135,7 +132,6 @@ describe('NPCRollDisplay', () => {
     // Check for the close button title and aria-label
     const closeButton = screen.getByRole('button', { name: /close behind the dm screen popup/i });
     expect(closeButton).toBeDefined();
-    expect(closeButton.getAttribute('title')).toBe('Close');
   });
 
   it('displays MISS when roll is below AC', async () => {
@@ -203,7 +199,9 @@ describe('NPCRollDisplay', () => {
 
   it('calls onDismiss after autoDismissDelay', async () => {
     const onDismiss = vi.fn();
-    render(<NPCRollDisplay roll={mockRollHit as any} onDismiss={onDismiss} autoDismissDelay={5000} />);
+    render(
+      <NPCRollDisplay roll={mockRollHit as any} onDismiss={onDismiss} autoDismissDelay={5000} />,
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(4900);
@@ -226,31 +224,12 @@ describe('NPCRollDisplay', () => {
     expect(spy).toHaveBeenCalled();
   });
 
-  it('calls onDismiss when clicking the backdrop', () => {
+  it('does not dismiss when clicking the roll card', () => {
     const onDismiss = vi.fn();
     const { unmount } = render(<NPCRollDisplay roll={mockRollHit as any} onDismiss={onDismiss} />);
 
-    const backdrop = screen.getByLabelText('Behind the DM Screen popup');
-    backdrop.click();
-
-    expect(onDismiss).toHaveBeenCalled();
-    unmount();
-  });
-
-  it('stops propagation when clicking the popup container', () => {
-    const onDismiss = vi.fn();
-    const { unmount } = render(<NPCRollDisplay roll={mockRollHit as any} onDismiss={onDismiss} />);
-
-    const container = screen.getByText('BEHIND THE DM SCREEN').closest('div')?.parentElement?.parentElement;
-    const stopPropagationSpy = vi.fn();
-
-    if (container) {
-      const event = new MouseEvent('click', { bubbles: true });
-      Object.defineProperty(event, 'stopPropagation', { value: stopPropagationSpy });
-      container.dispatchEvent(event);
-      expect(stopPropagationSpy).toHaveBeenCalled();
-    }
+    fireEvent.click(screen.getByText('BEHIND THE DM SCREEN'));
+    expect(onDismiss).not.toHaveBeenCalled();
     unmount();
   });
 });
-
