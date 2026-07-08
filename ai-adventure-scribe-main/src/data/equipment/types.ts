@@ -27,6 +27,8 @@ export interface Equipment {
       | 'radiant'
       | 'thunder';
   };
+  /** Damage dice used when a versatile weapon is wielded in two hands. */
+  versatileDamage?: string;
   weaponType?: 'simple' | 'martial';
   attackBonus?: number;
   range?: { normal: number; long?: number };

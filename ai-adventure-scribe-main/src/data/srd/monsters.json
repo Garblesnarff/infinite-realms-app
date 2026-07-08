@@ -35,6 +35,11 @@
     },
     "languages": "Deep Speech, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "con": 6,
+      "int": 8,
+      "wis": 6
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -196,6 +201,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spellcasting",
@@ -312,6 +318,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 7,
+      "con": 10,
+      "wis": 6,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -518,6 +530,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 5,
+      "con": 11,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -720,6 +738,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 5,
+      "con": 10,
+      "wis": 6,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -940,6 +964,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 5,
+      "con": 11,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -1164,6 +1194,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 6,
+      "con": 10,
+      "wis": 7,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -1384,6 +1420,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 8,
+      "con": 13,
+      "wis": 8,
+      "cha": 13
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -1610,6 +1652,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 6,
+      "con": 10,
+      "wis": 7,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -1816,6 +1864,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 6,
+      "con": 13,
+      "wis": 7,
+      "cha": 11
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -2017,6 +2071,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 5,
+      "con": 12,
+      "wis": 6,
+      "cha": 10
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -2238,6 +2298,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 5,
+      "con": 11,
+      "wis": 6,
+      "cha": 6
+    },
     "specialAbilities": [
       {
         "name": "Ice Walk",
@@ -2455,6 +2521,7 @@
     },
     "languages": "Auran",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Air Form",
@@ -2541,6 +2608,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 9,
+      "con": 14,
+      "wis": 9,
+      "cha": 11
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -2747,6 +2820,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 7,
+      "con": 15,
+      "wis": 10,
+      "cha": 12
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -2949,6 +3028,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 6,
+      "con": 13,
+      "wis": 8,
+      "cha": 10
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -3173,6 +3258,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 7,
+      "con": 15,
+      "wis": 10,
+      "cha": 12
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -3401,6 +3492,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 8,
+      "con": 14,
+      "wis": 10,
+      "cha": 11
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -3625,6 +3722,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 9,
+      "con": 16,
+      "wis": 10,
+      "cha": 16
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -3855,6 +3958,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 8,
+      "con": 14,
+      "wis": 10,
+      "cha": 11
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -4061,6 +4170,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 7,
+      "con": 16,
+      "wis": 9,
+      "cha": 13
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -4262,6 +4377,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "dex": 7,
+      "con": 16,
+      "wis": 9,
+      "cha": 13
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -4487,6 +4608,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 6,
+      "con": 14,
+      "wis": 7,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Ice Walk",
@@ -4695,6 +4822,12 @@
     },
     "languages": "Common, Sphinx",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 6,
+      "con": 11,
+      "int": 9,
+      "wis": 10
+    },
     "specialAbilities": [
       {
         "name": "Inscrutable",
@@ -4956,6 +5089,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Antimagic Susceptibility",
@@ -5034,6 +5168,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -5125,6 +5260,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -5210,6 +5346,10 @@
     },
     "languages": "any six languages",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "int": 9,
+      "wis": 6
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -5449,6 +5589,10 @@
     },
     "languages": "Thieves' cant plus any two languages",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 6,
+      "int": 4
+    },
     "specialAbilities": [
       {
         "name": "Assassinate",
@@ -5581,6 +5725,7 @@
     },
     "languages": "one language known by its creator",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -5645,6 +5790,7 @@
     },
     "languages": "one language known by its creator",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -5704,6 +5850,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -5763,6 +5910,9 @@
     },
     "languages": "Ignan",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "con": 4
+    },
     "specialAbilities": [
       {
         "name": "Heated Body",
@@ -5859,6 +6009,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Pack Tactics",
@@ -5920,6 +6071,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -5991,6 +6143,12 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "str": 14,
+      "con": 12,
+      "wis": 9,
+      "cha": 12
+    },
     "specialAbilities": [
       {
         "name": "Death Throes",
@@ -6144,6 +6302,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -6214,6 +6373,11 @@
     },
     "languages": "any two languages",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "str": 4,
+      "dex": 5,
+      "wis": 2
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -6330,6 +6494,12 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "str": 6,
+      "con": 7,
+      "wis": 5,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Barbed Hide",
@@ -6475,6 +6645,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Petrifying Gaze",
@@ -6553,6 +6724,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Echolocation",
@@ -6626,6 +6798,11 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "str": 5,
+      "con": 4,
+      "wis": 2
+    },
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -6729,6 +6906,7 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -6866,6 +7044,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Reckless",
@@ -6926,6 +7105,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -7023,6 +7203,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 4,
+      "con": 3,
+      "wis": 2,
+      "cha": 3
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -7131,6 +7317,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amorphous",
@@ -7216,6 +7403,7 @@
     },
     "languages": "Blink Dog, understands Sylvan but can't speak it",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -7285,6 +7473,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -7354,6 +7543,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 4,
+      "wis": 2,
+      "cha": 4
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -7444,6 +7639,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -7535,6 +7731,11 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "int": 5,
+      "wis": 6,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -7644,6 +7845,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 3,
+      "wis": 2,
+      "cha": 3
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -7758,6 +7965,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 4,
+      "wis": 2,
+      "cha": 4
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -7872,6 +8085,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -7965,6 +8179,7 @@
     },
     "languages": "Common, Goblin",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Brute",
@@ -8046,6 +8261,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Standing Leap",
@@ -8109,6 +8325,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -8164,6 +8381,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -8223,6 +8441,7 @@
     },
     "languages": "Elvish, Sylvan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -8369,6 +8588,11 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "con": 7,
+      "wis": 4,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -8457,6 +8681,7 @@
     },
     "languages": "understands Draconic but can't speak",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -8658,6 +8883,7 @@
     },
     "languages": "understands Deep Speech but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -8784,6 +9010,7 @@
     },
     "languages": "understands the languages of its creator but can't speak",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Acid Absorption",
@@ -8882,6 +9109,7 @@
     },
     "languages": "Deep Speech, Undercommon",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Damage Transfer",
@@ -9005,6 +9233,11 @@
     },
     "languages": "Common, Giant",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "con": 10,
+      "wis": 7,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -9188,6 +9421,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -9243,6 +9477,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -9299,6 +9534,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -9374,6 +9610,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 3,
+      "con": 3,
+      "wis": 2,
+      "cha": 3
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -9489,6 +9731,11 @@
     },
     "languages": "all, telepathy 120 ft.",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "con": 5,
+      "wis": 7,
+      "cha": 6
+    },
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -9704,6 +9951,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -9764,6 +10012,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -9824,6 +10073,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Dark Devotion",
@@ -9962,6 +10212,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Dark Devotion",
@@ -10023,6 +10274,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Echolocation",
@@ -10095,6 +10347,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Two-Headed",
@@ -10168,6 +10421,7 @@
     },
     "languages": "Gnomish, Terran, Undercommon",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Stone Camouflage",
@@ -10300,6 +10554,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -10363,6 +10618,10 @@
     },
     "languages": "all, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "wis": 9,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Angelic Weapons",
@@ -10501,6 +10760,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -10569,6 +10829,11 @@
     },
     "languages": "Auran",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 6,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Elemental Demise",
@@ -10810,6 +11075,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -10893,6 +11159,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -10951,6 +11218,11 @@
     },
     "languages": "Aquan, Draconic",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 6,
+      "con": 11,
+      "wis": 7
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -11126,6 +11398,7 @@
     },
     "languages": "Abyssal, telepathy 60 ft. (works only with creatures that understand Abyssal)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -11231,6 +11504,7 @@
     },
     "languages": "Elvish, Undercommon",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Fey Ancestry",
@@ -11475,6 +11749,7 @@
     },
     "languages": "Elvish, Undercommon",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Fey Ancestry",
@@ -11599,6 +11874,7 @@
     },
     "languages": "Druidic plus any two languages",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spellcasting",
@@ -11757,6 +12033,7 @@
     },
     "languages": "Elvish, Sylvan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -11912,6 +12189,7 @@
     },
     "languages": "Dwarvish, Undercommon",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Duergar Resilience",
@@ -12020,6 +12298,7 @@
     },
     "languages": "Auran, Terran",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Death Burst",
@@ -12134,6 +12413,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -12208,6 +12488,7 @@
     },
     "languages": "Terran",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Earth Glide",
@@ -12287,6 +12568,11 @@
     },
     "languages": "Ignan",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "int": 7,
+      "wis": 6,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Elemental Demise",
@@ -12495,6 +12781,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Trampling Charge",
@@ -12569,6 +12856,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -12654,6 +12942,12 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 7,
+      "con": 8,
+      "wis": 6,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Hellish Weapons",
@@ -12831,6 +13125,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spider Climb",
@@ -12949,6 +13244,7 @@
     },
     "languages": "Giant, Orc",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Two Heads",
@@ -13059,6 +13355,7 @@
     },
     "languages": "Ignan",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Fire Form",
@@ -13150,6 +13447,11 @@
     },
     "languages": "Giant",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 3,
+      "con": 10,
+      "cha": 5
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -13243,6 +13545,7 @@
     },
     "languages": "understands the languages of its creator but can't speak",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Berserk",
@@ -13337,6 +13640,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Flyby",
@@ -13418,6 +13722,9 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 4
+    },
     "specialAbilities": [
       {
         "name": "Antimagic Susceptibility",
@@ -13483,6 +13790,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -13532,6 +13840,11 @@
     },
     "languages": "Giant",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "con": 8,
+      "wis": 3,
+      "cha": 4
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -13623,6 +13936,7 @@
     },
     "languages": "Terran",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -13722,6 +14036,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Ooze Cube",
@@ -13817,6 +14132,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Stench",
@@ -13927,6 +14243,7 @@
     },
     "languages": "any languages it knew in life",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Ethereal Sight",
@@ -14032,6 +14349,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -14102,6 +14420,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -14185,6 +14504,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -14278,6 +14598,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Echolocation",
@@ -14341,6 +14662,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -14413,6 +14735,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -14469,6 +14792,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -14540,6 +14864,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -14600,6 +14925,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -14692,6 +15018,7 @@
     },
     "languages": "Giant Eagle, understands Common and Auran but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -14783,6 +15110,7 @@
     },
     "languages": "Giant Elk, understands Common, Elvish, and Sylvan but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -14858,6 +15186,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Illumination",
@@ -14919,6 +15248,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -14986,6 +15316,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -15049,6 +15380,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Rampage",
@@ -15110,6 +15442,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -15166,6 +15499,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -15246,6 +15580,7 @@
     },
     "languages": "Giant Owl, understands Common, Elvish, and Sylvan but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Flyby",
@@ -15311,6 +15646,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -15366,6 +15702,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -15430,6 +15767,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -15494,6 +15832,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -15581,6 +15920,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -15645,6 +15985,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blood Frenzy",
@@ -15711,6 +16052,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spider Climb",
@@ -15790,6 +16132,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -15866,6 +16209,7 @@
     },
     "languages": "understands Common but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight and Smell",
@@ -15963,6 +16307,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -16018,6 +16363,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -16080,6 +16426,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spider Climb",
@@ -16151,6 +16498,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Aberrant Ground",
@@ -16269,6 +16617,12 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "str": 9,
+      "con": 9,
+      "wis": 7,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -16461,6 +16815,11 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "str": 7,
+      "dex": 5,
+      "con": 6
+    },
     "specialAbilities": [
       {
         "name": "Brave",
@@ -16628,6 +16987,7 @@
     },
     "languages": "Gnoll",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Rampage",
@@ -16738,6 +17098,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -16803,6 +17164,7 @@
     },
     "languages": "Common, Goblin",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Nimble Escape",
@@ -16883,6 +17245,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 4,
+      "con": 5,
+      "wis": 2,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -16999,6 +17367,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Trampling Charge",
@@ -17104,6 +17473,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amorphous",
@@ -17187,6 +17557,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 3,
+      "con": 3,
+      "wis": 2,
+      "cha": 3
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -17283,6 +17659,7 @@
     },
     "languages": "Common, Draconic, Sylvan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -17400,6 +17777,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Stone Camouflage",
@@ -17493,6 +17871,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -17588,6 +17967,7 @@
     },
     "languages": "Undercommon",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blind Senses",
@@ -17664,6 +18044,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -17745,6 +18126,13 @@
     },
     "languages": "Celestial, Common",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 8,
+      "con": 7,
+      "int": 7,
+      "wis": 8,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Rejuvenation",
@@ -17921,6 +18309,7 @@
     },
     "languages": "Common, Sphinx",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Inscrutable",
@@ -18117,6 +18506,7 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -18268,6 +18658,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -18359,6 +18750,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -18421,6 +18813,7 @@
     },
     "languages": "understands Infernal but can't speak it",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -18531,6 +18924,11 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "str": 7,
+      "con": 8,
+      "wis": 4
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -18635,6 +19033,7 @@
     },
     "languages": "Giant",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -18717,6 +19116,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -18810,6 +19210,7 @@
     },
     "languages": "Common, Goblin",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Martial Advantage",
@@ -18912,6 +19313,7 @@
     },
     "languages": "understands the languages of its creator but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Telepathic Bond",
@@ -18982,6 +19384,12 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "str": 10,
+      "dex": 7,
+      "wis": 7,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -19147,6 +19555,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blood Frenzy",
@@ -19212,6 +19621,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -19295,6 +19705,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Pack Tactics",
@@ -19364,6 +19775,12 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 7,
+      "con": 9,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -19517,6 +19934,7 @@
     },
     "languages": "Aquan, Auran",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Death Burst",
@@ -19672,6 +20090,7 @@
     },
     "languages": "Infernal, Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -19759,6 +20178,7 @@
     },
     "languages": "Auran, understands Common but doesn't speak it",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Invisibility",
@@ -19847,6 +20267,7 @@
     },
     "languages": "understands the languages of its creator but can't speak",
     "proficiencyBonus": 5,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Fire Absorption",
@@ -20004,6 +20425,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -20068,6 +20490,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Echolocation",
@@ -20136,6 +20559,10 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "con": 4,
+      "wis": 2
+    },
     "specialAbilities": [
       {
         "name": "Brave",
@@ -20235,6 +20662,7 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Sunlight Sensitivity",
@@ -20322,6 +20750,13 @@
     },
     "languages": "understands Abyssal, Celestial, Infernal, and Primordial but can't speak, telepathy 120 ft.",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "str": 17,
+      "dex": 7,
+      "con": 14,
+      "int": 13,
+      "wis": 11
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -20526,6 +20961,7 @@
     },
     "languages": "Abyssal, Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -20740,6 +21176,7 @@
     },
     "languages": "understands infernal but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Devil's Sight",
@@ -20817,6 +21254,11 @@
     },
     "languages": "Common plus up to five other languages",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "con": 10,
+      "int": 12,
+      "wis": 9
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -21096,6 +21538,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -21193,6 +21636,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -21249,6 +21693,7 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -21470,6 +21915,10 @@
     },
     "languages": "any four languages",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "int": 6,
+      "wis": 4
+    },
     "specialAbilities": [
       {
         "name": "Spellcasting",
@@ -21643,6 +22092,7 @@
     },
     "languages": "Ignan, Terran",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Death Burst",
@@ -21793,6 +22243,7 @@
     },
     "languages": "Ignan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Death Burst",
@@ -21875,6 +22326,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Trampling Charge",
@@ -21951,6 +22403,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Tail Spike Regrowth",
@@ -22088,6 +22541,12 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "str": 9,
+      "con": 10,
+      "wis": 8,
+      "cha": 10
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -22191,6 +22650,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -22251,6 +22711,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Petrifying Gaze",
@@ -22404,6 +22865,7 @@
     },
     "languages": "Aquan, Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -22486,6 +22948,7 @@
     },
     "languages": "Abyssal, Aquan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -22646,6 +23109,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -22741,6 +23205,7 @@
     },
     "languages": "Abyssal",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -22831,6 +23296,7 @@
     },
     "languages": "understands Abyssal but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -22905,6 +23371,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Beast of Burden",
@@ -22982,6 +23449,9 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "wis": 2
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -23087,6 +23557,12 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "con": 8,
+      "int": 5,
+      "wis": 9,
+      "cha": 8
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -23344,6 +23820,12 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "con": 11,
+      "int": 9,
+      "wis": 6,
+      "cha": 7
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -23469,6 +23951,7 @@
     },
     "languages": "Abyssal, Common, Infernal, Primordial",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -23614,6 +24097,7 @@
     },
     "languages": "understands Abyssal, Common, and Infernal but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Confer Fire Resistance",
@@ -23690,6 +24174,7 @@
     },
     "languages": "any two languages",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -23758,6 +24243,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amorphous",
@@ -23831,6 +24317,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -23911,6 +24398,7 @@
     },
     "languages": "Common, Giant",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -23985,6 +24473,9 @@
     },
     "languages": "understands Common and Giant but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "wis": 0
+    },
     "specialAbilities": [
       {
         "name": "Undead Fortitude",
@@ -24046,6 +24537,12 @@
     },
     "languages": "Common, Giant",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 3,
+      "con": 6,
+      "wis": 4,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Innate Spellcasting",
@@ -24245,6 +24742,7 @@
     },
     "languages": "Common, Orc",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Aggressive",
@@ -24320,6 +24818,9 @@
     },
     "languages": "Otyugh",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "con": 7
+    },
     "specialAbilities": [
       {
         "name": "Limited Telepathy",
@@ -24434,6 +24935,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Flyby",
@@ -24498,6 +25000,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight and Smell",
@@ -24590,6 +25093,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -24678,6 +25182,11 @@
     },
     "languages": "understands Celestial, Common, Elvish, and Sylvan but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 4,
+      "wis": 4,
+      "cha": 3
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -24734,6 +25243,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Ethereal Jaunt",
@@ -24812,6 +25322,11 @@
     },
     "languages": "Infernal, telepathy 120 ft.",
     "proficiencyBonus": 6,
+    "savingThrows": {
+      "dex": 8,
+      "con": 13,
+      "wis": 10
+    },
     "specialAbilities": [
       {
         "name": "Fear Aura",
@@ -25021,6 +25536,11 @@
     },
     "languages": "all, telepathy 120 ft.",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "con": 12,
+      "wis": 11,
+      "cha": 12
+    },
     "specialAbilities": [
       {
         "name": "Angelic Weapons",
@@ -25215,6 +25735,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Hold Breath",
@@ -25276,6 +25797,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -25331,6 +25853,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -25422,6 +25945,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -25477,6 +26001,7 @@
     },
     "languages": "any two languages",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Divine Eminence",
@@ -25616,6 +26141,7 @@
     },
     "languages": "understands Common and Draconic but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Senses",
@@ -25701,6 +26227,10 @@
     },
     "languages": "",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "con": 11,
+      "wis": 4
+    },
     "specialAbilities": [
       {
         "name": "Tunneler",
@@ -25803,6 +26333,7 @@
     },
     "languages": "Abyssal, Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -25888,6 +26419,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blood Frenzy",
@@ -25956,6 +26488,7 @@
     },
     "languages": "Common, Infernal",
     "proficiencyBonus": 5,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Limited Magic Immunity",
@@ -26160,6 +26693,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -26220,6 +26754,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Mimicry",
@@ -26285,6 +26820,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 5,
+      "wis": 2,
+      "cha": 4
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -26376,6 +26917,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Pack Tactics",
@@ -26445,6 +26987,7 @@
     },
     "languages": "",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Heated Body",
@@ -26526,6 +27069,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -26585,6 +27129,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -26640,6 +27185,12 @@
     },
     "languages": "",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 4,
+      "con": 9,
+      "wis": 4,
+      "cha": 3
+    },
     "specialAbilities": [
       {
         "name": "Keen Sight",
@@ -26733,6 +27284,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -26843,6 +27395,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Antimagic Susceptibility",
@@ -26901,6 +27454,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Iron Scent",
@@ -26968,6 +27522,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -27058,6 +27613,7 @@
     },
     "languages": "Sahuagin",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blood Frenzy",
@@ -27231,6 +27787,7 @@
     },
     "languages": "Ignan",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Heated Body",
@@ -27373,6 +27930,7 @@
     },
     "languages": "Common, Elvish, Sylvan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -27463,6 +28021,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -27518,6 +28077,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Sight",
@@ -27620,6 +28180,7 @@
     },
     "languages": "Aquan, Common, Giant",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -27700,6 +28261,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Water Breathing",
@@ -27765,6 +28327,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Amorphous",
@@ -27843,6 +28406,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Lightning Absorption",
@@ -27933,6 +28497,7 @@
     },
     "languages": "understands commands given in any language but can't speak",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Bound",
@@ -28017,6 +28582,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -28065,6 +28631,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 5,
+      "wis": 2,
+      "cha": 4
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -28181,6 +28753,7 @@
     },
     "languages": "understands all languages it spoke in life but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -28263,6 +28836,11 @@
     },
     "languages": "all, telepathy 120 ft.",
     "proficiencyBonus": 7,
+    "savingThrows": {
+      "int": 14,
+      "wis": 14,
+      "cha": 17
+    },
     "specialAbilities": [
       {
         "name": "Angelic Weapons",
@@ -28537,6 +29115,7 @@
     },
     "languages": "understands all languages it knew in life but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Incorporeal Movement",
@@ -28602,6 +29181,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Spider Climb",
@@ -28675,6 +29255,12 @@
     },
     "languages": "Abyssal, Common",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 6,
+      "con": 5,
+      "wis": 5,
+      "cha": 6
+    },
     "specialAbilities": [
       {
         "name": "Rejuvenation",
@@ -28827,6 +29413,7 @@
     },
     "languages": "Common, Elvish, Sylvan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -28914,6 +29501,7 @@
     },
     "languages": "any two languages",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Cunning Action",
@@ -29011,6 +29599,7 @@
     },
     "languages": "Aquan, Ignan",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Death Burst",
@@ -29154,6 +29743,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -29209,6 +29799,11 @@
     },
     "languages": "Giant",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 5,
+      "con": 8,
+      "wis": 4
+    },
     "specialAbilities": [
       {
         "name": "Stone Camouflage",
@@ -29307,6 +29902,7 @@
     },
     "languages": "understands the languages of its creator but can't speak",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Immutable Form",
@@ -29410,6 +30006,12 @@
     },
     "languages": "Common, Giant",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "str": 14,
+      "con": 10,
+      "wis": 9,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -29601,6 +30203,7 @@
     },
     "languages": "Abyssal, Common, Infernal, telepathy 60 ft.",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Telepathic Bond",
@@ -29710,6 +30313,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Echolocation",
@@ -29793,6 +30397,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -29867,6 +30472,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -29941,6 +30547,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -30015,6 +30622,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -30089,6 +30697,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Blood Frenzy",
@@ -30170,6 +30779,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -30247,6 +30857,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -30320,6 +30931,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -30406,6 +31018,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Swarm",
@@ -30476,6 +31089,11 @@
     },
     "languages": "",
     "proficiencyBonus": 9,
+    "savingThrows": {
+      "int": 5,
+      "wis": 9,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Legendary Resistance",
@@ -30712,6 +31330,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Pack Tactics",
@@ -30799,6 +31418,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -30891,6 +31511,7 @@
     },
     "languages": "Common, Druidic, Elvish, Sylvan",
     "proficiencyBonus": 4,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -30990,6 +31611,7 @@
     },
     "languages": "any one language",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Pack Tactics",
@@ -31070,6 +31692,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Trampling Charge",
@@ -31145,6 +31768,7 @@
     },
     "languages": "Giant",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Smell",
@@ -31240,6 +31864,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -31333,6 +31958,7 @@
     },
     "languages": "Celestial, Elvish, Sylvan, telepathy 60 ft.",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Charge",
@@ -31532,6 +32158,11 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 9,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -31718,6 +32349,11 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 9,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -31851,6 +32487,11 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 5,
+    "savingThrows": {
+      "dex": 9,
+      "wis": 7,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -31938,6 +32579,10 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 6,
+      "wis": 3
+    },
     "specialAbilities": [
       {
         "name": "Regeneration",
@@ -32066,6 +32711,7 @@
     },
     "languages": "any one language (usually Common)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -32193,6 +32839,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "False Appearance",
@@ -32276,6 +32923,11 @@
     },
     "languages": "Abyssal, telepathy 120 ft.",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 5,
+      "wis": 4,
+      "cha": 2
+    },
     "specialAbilities": [
       {
         "name": "Magic Resistance",
@@ -32403,6 +33055,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Sight and Smell",
@@ -32466,6 +33119,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Trampling Charge",
@@ -32533,6 +33187,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -32603,6 +33258,7 @@
     },
     "languages": "Aquan",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Water Form",
@@ -32706,6 +33362,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -32769,6 +33426,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -32862,6 +33520,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -32941,6 +33600,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33080,6 +33740,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33157,6 +33818,7 @@
     },
     "languages": "Common (can't speak in boar form)",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33242,6 +33904,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33371,6 +34034,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33495,6 +34159,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33669,6 +34334,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33736,6 +34402,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -33844,6 +34511,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -34001,6 +34669,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -34095,6 +34764,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -34194,6 +34864,7 @@
     },
     "languages": "Common",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -34292,6 +34963,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Shapechanger",
@@ -34362,6 +35034,12 @@
     },
     "languages": "Draconic",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "dex": 2,
+      "con": 4,
+      "wis": 2,
+      "cha": 2
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -34461,6 +35139,7 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Sunlight Sensitivity",
@@ -34635,6 +35314,7 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Consume Life",
@@ -34721,6 +35401,7 @@
     },
     "languages": "Common, Giant, Winter Wolf",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -34816,6 +35497,7 @@
     },
     "languages": "",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -34880,6 +35562,7 @@
     },
     "languages": "Goblin, Worg",
     "proficiencyBonus": 2,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Keen Hearing and Smell",
@@ -34961,6 +35644,7 @@
     },
     "languages": "the languages it knew in life",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Incorporeal Movement",
@@ -35030,6 +35714,7 @@
     },
     "languages": "",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [],
     "actions": [
       {
@@ -35184,6 +35869,7 @@
     },
     "languages": "Terran",
     "proficiencyBonus": 3,
+    "savingThrows": {},
     "specialAbilities": [
       {
         "name": "Earth Glide",
@@ -35289,6 +35975,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 5,
+      "con": 6,
+      "wis": 3,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -35422,6 +36114,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 4,
+      "con": 8,
+      "wis": 5,
+      "cha": 7
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -35550,6 +36248,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 3,
+      "con": 6,
+      "wis": 3,
+      "cha": 5
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -35696,6 +36400,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 3,
+      "con": 7,
+      "wis": 4,
+      "cha": 6
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -35847,6 +36557,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 4,
+      "con": 6,
+      "wis": 4,
+      "cha": 5
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -35993,6 +36709,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 6,
+      "con": 9,
+      "wis": 5,
+      "cha": 9
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -36146,6 +36868,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 4,
+      "con": 6,
+      "wis": 4,
+      "cha": 5
+    },
     "specialAbilities": [
       {
         "name": "Amphibious",
@@ -36279,6 +37007,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 4,
+      "con": 9,
+      "wis": 4,
+      "cha": 8
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -36406,6 +37140,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 4,
+    "savingThrows": {
+      "dex": 4,
+      "con": 9,
+      "wis": 4,
+      "cha": 8
+    },
     "specialAbilities": [],
     "actions": [
       {
@@ -36553,6 +37293,12 @@
     },
     "languages": "Common, Draconic",
     "proficiencyBonus": 3,
+    "savingThrows": {
+      "dex": 3,
+      "con": 7,
+      "wis": 3,
+      "cha": 4
+    },
     "specialAbilities": [
       {
         "name": "Ice Walk",
@@ -36685,6 +37431,9 @@
     },
     "languages": "understands all languages it spoke in life but can't speak",
     "proficiencyBonus": 2,
+    "savingThrows": {
+      "wis": 0
+    },
     "specialAbilities": [
       {
         "name": "Undead Fortitude",

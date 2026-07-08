@@ -1,0 +1,1071 @@
+[
+  {
+    "id": "battleaxe",
+    "name": "Battleaxe",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 4,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Versatile"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "versatile": true
+    },
+    "versatileDamage": "1d10"
+  },
+  {
+    "id": "blowgun",
+    "name": "Blowgun",
+    "category": "weapon",
+    "subcategory": "martial ranged",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 1,
+    "description": "Martial Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Loading"
+    ],
+    "damage": {
+      "dice": "1",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 25,
+      "long": 100
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "loading": true
+    }
+  },
+  {
+    "id": "club",
+    "name": "Club",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 1,
+      "currency": "sp"
+    },
+    "weight": 2,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Light",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "light": true
+    }
+  },
+  {
+    "id": "crossbow-hand",
+    "name": "Crossbow, hand",
+    "category": "weapon",
+    "subcategory": "martial ranged",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 75,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Martial Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Light",
+      "Loading"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 30,
+      "long": 120
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "light": true,
+      "loading": true
+    }
+  },
+  {
+    "id": "crossbow-heavy",
+    "name": "Crossbow, heavy",
+    "category": "weapon",
+    "subcategory": "martial ranged",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 50,
+      "currency": "gp"
+    },
+    "weight": 18,
+    "description": "Martial Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Heavy",
+      "Loading",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d10",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 100,
+      "long": 400
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "heavy": true,
+      "loading": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "crossbow-light",
+    "name": "Crossbow, light",
+    "category": "weapon",
+    "subcategory": "simple ranged",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 25,
+      "currency": "gp"
+    },
+    "weight": 5,
+    "description": "Simple Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Loading",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 80,
+      "long": 320
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "loading": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "dagger",
+    "name": "Dagger",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 2,
+      "currency": "gp"
+    },
+    "weight": 1,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Finesse",
+      "Light",
+      "Thrown",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "finesse": true,
+      "light": true,
+      "thrown": true
+    }
+  },
+  {
+    "id": "dart",
+    "name": "Dart",
+    "category": "weapon",
+    "subcategory": "simple ranged",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 5,
+      "currency": "cp"
+    },
+    "weight": 0.25,
+    "description": "Simple Ranged weapon.",
+    "properties": [
+      "Finesse",
+      "Thrown"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 20,
+      "long": 60
+    },
+    "weaponProperties": {
+      "finesse": true,
+      "thrown": true
+    }
+  },
+  {
+    "id": "flail",
+    "name": "Flail",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Melee weapon.",
+    "properties": [],
+    "damage": {
+      "dice": "1d8",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {}
+  },
+  {
+    "id": "glaive",
+    "name": "Glaive",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 20,
+      "currency": "gp"
+    },
+    "weight": 6,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Reach",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d10",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "reach": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "greataxe",
+    "name": "Greataxe",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 30,
+      "currency": "gp"
+    },
+    "weight": 7,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d12",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "greatclub",
+    "name": "Greatclub",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 2,
+      "currency": "sp"
+    },
+    "weight": 10,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "greatsword",
+    "name": "Greatsword",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 50,
+      "currency": "gp"
+    },
+    "weight": 6,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "2d6",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "halberd",
+    "name": "Halberd",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 20,
+      "currency": "gp"
+    },
+    "weight": 6,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Reach",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d10",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "reach": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "handaxe",
+    "name": "Handaxe",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 5,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Light",
+      "Thrown",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "light": true,
+      "thrown": true
+    }
+  },
+  {
+    "id": "javelin",
+    "name": "Javelin",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 5,
+      "currency": "sp"
+    },
+    "weight": 2,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Thrown",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "thrown": true
+    }
+  },
+  {
+    "id": "lance",
+    "name": "Lance",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 6,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Reach",
+      "Special"
+    ],
+    "damage": {
+      "dice": "1d12",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "reach": true,
+      "special": true
+    }
+  },
+  {
+    "id": "light-hammer",
+    "name": "Light hammer",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 2,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Light",
+      "Thrown",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "light": true,
+      "thrown": true
+    }
+  },
+  {
+    "id": "longbow",
+    "name": "Longbow",
+    "category": "weapon",
+    "subcategory": "martial ranged",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 50,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Heavy",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 150,
+      "long": 600
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "heavy": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "longsword",
+    "name": "Longsword",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 15,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Versatile"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "versatile": true
+    },
+    "versatileDamage": "1d10"
+  },
+  {
+    "id": "mace",
+    "name": "Mace",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 5,
+      "currency": "gp"
+    },
+    "weight": 4,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {}
+  },
+  {
+    "id": "maul",
+    "name": "Maul",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 10,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "2d6",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "morningstar",
+    "name": "Morningstar",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 15,
+      "currency": "gp"
+    },
+    "weight": 4,
+    "description": "Martial Melee weapon.",
+    "properties": [],
+    "damage": {
+      "dice": "1d8",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {}
+  },
+  {
+    "id": "net",
+    "name": "Net",
+    "category": "weapon",
+    "subcategory": "martial ranged",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 1,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Martial Ranged weapon.",
+    "properties": [
+      "Thrown",
+      "Special"
+    ],
+    "attackBonus": 0,
+    "range": {
+      "normal": 5,
+      "long": 15
+    },
+    "weaponProperties": {
+      "thrown": true,
+      "special": true
+    }
+  },
+  {
+    "id": "pike",
+    "name": "Pike",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 5,
+      "currency": "gp"
+    },
+    "weight": 18,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Heavy",
+      "Reach",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d10",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "heavy": true,
+      "reach": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "quarterstaff",
+    "name": "Quarterstaff",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 2,
+      "currency": "sp"
+    },
+    "weight": 4,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Versatile",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "versatile": true
+    },
+    "versatileDamage": "1d8"
+  },
+  {
+    "id": "rapier",
+    "name": "Rapier",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 25,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Finesse"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "finesse": true
+    }
+  },
+  {
+    "id": "scimitar",
+    "name": "Scimitar",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 25,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Finesse",
+      "Light"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "finesse": true,
+      "light": true
+    }
+  },
+  {
+    "id": "shortbow",
+    "name": "Shortbow",
+    "category": "weapon",
+    "subcategory": "simple ranged",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 25,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Simple Ranged weapon.",
+    "properties": [
+      "Ammunition",
+      "Two-Handed"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 80,
+      "long": 320
+    },
+    "weaponProperties": {
+      "ammunition": true,
+      "twoHanded": true
+    }
+  },
+  {
+    "id": "shortsword",
+    "name": "Shortsword",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 10,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Finesse",
+      "Light",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "finesse": true,
+      "light": true
+    }
+  },
+  {
+    "id": "sickle",
+    "name": "Sickle",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 1,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Light",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "light": true
+    }
+  },
+  {
+    "id": "sling",
+    "name": "Sling",
+    "category": "weapon",
+    "subcategory": "simple ranged",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 1,
+      "currency": "sp"
+    },
+    "weight": 0,
+    "description": "Simple Ranged weapon.",
+    "properties": [
+      "Ammunition"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 30,
+      "long": 120
+    },
+    "weaponProperties": {
+      "ammunition": true
+    }
+  },
+  {
+    "id": "spear",
+    "name": "Spear",
+    "category": "weapon",
+    "subcategory": "simple melee",
+    "weaponType": "simple",
+    "cost": {
+      "amount": 1,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Simple Melee weapon.",
+    "properties": [
+      "Thrown",
+      "Versatile",
+      "Monk"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "thrown": true,
+      "versatile": true
+    },
+    "versatileDamage": "1d8"
+  },
+  {
+    "id": "trident",
+    "name": "Trident",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 5,
+      "currency": "gp"
+    },
+    "weight": 4,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Thrown",
+      "Versatile"
+    ],
+    "damage": {
+      "dice": "1d6",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "thrown": true,
+      "versatile": true
+    },
+    "versatileDamage": "1d8"
+  },
+  {
+    "id": "war-pick",
+    "name": "War pick",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 5,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Melee weapon.",
+    "properties": [],
+    "damage": {
+      "dice": "1d8",
+      "type": "piercing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {}
+  },
+  {
+    "id": "warhammer",
+    "name": "Warhammer",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 15,
+      "currency": "gp"
+    },
+    "weight": 2,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Versatile"
+    ],
+    "damage": {
+      "dice": "1d8",
+      "type": "bludgeoning"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "versatile": true
+    },
+    "versatileDamage": "1d10"
+  },
+  {
+    "id": "whip",
+    "name": "Whip",
+    "category": "weapon",
+    "subcategory": "martial melee",
+    "weaponType": "martial",
+    "cost": {
+      "amount": 2,
+      "currency": "gp"
+    },
+    "weight": 3,
+    "description": "Martial Melee weapon.",
+    "properties": [
+      "Finesse",
+      "Reach"
+    ],
+    "damage": {
+      "dice": "1d4",
+      "type": "slashing"
+    },
+    "attackBonus": 0,
+    "range": {
+      "normal": 5
+    },
+    "weaponProperties": {
+      "finesse": true,
+      "reach": true
+    }
+  }
+]
