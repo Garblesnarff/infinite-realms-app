@@ -116,6 +116,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         };
       }
 
+      if (result.usage && result.provider) {
+        await AIUsageService.recordProviderUsage({
+          userId, plan, type: quotaType, provider: result.provider, model: result.model,
+          inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens,
+        });
+      }
+
       return { text: result.text };
     },
     {
@@ -227,6 +234,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           set.status = result.status;
         }
         return { error: result.error };
+      }
+
+      if (result.usage && result.provider) {
+        await AIUsageService.recordProviderUsage({
+          userId: user.userId, plan: user.plan, type: 'llm_system', provider: result.provider,
+          model: result.model, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens,
+        });
       }
 
       return { text: result.text, model: result.model };

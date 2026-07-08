@@ -16,7 +16,51 @@ export type QuotaConfig = {
   daily: Record<UsageType, number>;
 };
 
+const PRICE_PER_MILLION_USD: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
+  'bytedance/seed-1.6-flash': { input: 0.075, output: 0.30 },
+  'moonshotai/kimi-k2-0905': { input: 0.60, output: 2.50 },
+};
+
 export class AIUsageService {
+  static async recordProviderUsage(opts: {
+    userId: string;
+    orgId?: string | null;
+    plan: string;
+    type: UsageType;
+    provider: string;
+    model?: string;
+    inputTokens: number;
+    outputTokens: number;
+  }): Promise<void> {
+    const model = opts.model || 'unknown';
+    const pricing = PRICE_PER_MILLION_USD[model] || { input: 0, output: 0 };
+    const inputTokens = Math.max(0, Math.floor(opts.inputTokens));
+    const outputTokens = Math.max(0, Math.floor(opts.outputTokens));
+    const costUsd = (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
+    const period = AIUsageService.periodKey();
+
+    try {
+      await sql`
+        INSERT INTO ai_usage (
+          org_id, user_id, plan, type, units, period_start,
+          provider, model, input_tokens, output_tokens, total_tokens, cost_usd
+        ) VALUES (
+          ${opts.orgId || null}, ${opts.userId}, ${opts.plan}, ${opts.type}, 0, ${period},
+          ${opts.provider}, ${model}, ${inputTokens}, ${outputTokens}, ${inputTokens + outputTokens}, ${costUsd}
+        )
+      `;
+      const totals = await sql`
+        SELECT COALESCE(SUM(cost_usd), 0) AS cost_usd
+        FROM ai_usage WHERE user_id = ${opts.userId} AND period_start = ${period}
+      `;
+      logger.info({ msg: 'AI_USAGE_DAILY_COST', userId: opts.userId, period, costUsd: Number(totals[0]?.cost_usd || 0) });
+    } catch (error) {
+      logger.error({ msg: 'AI_USAGE_DETAIL_DB_ERROR', error });
+    }
+  }
+
   private static readonly DEFAULT_QUOTAS: Record<string, QuotaConfig> = {
     free: {
       // llm: User-initiated chat messages (30/day)

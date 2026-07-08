@@ -26,6 +26,8 @@ export interface LLMExtractOptions {
 export interface LLMResponse {
   text: string;
   model?: string;
+  provider?: 'openrouter' | 'gemini';
+  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
   error?: string;
   status?: number;
   details?: string;
@@ -310,10 +312,12 @@ export class LLMProviderService {
     }
 
     breaker.onSuccess();
-    type ORChatResp = { choices?: { message?: { content?: string } }[] };
+    type ORChatResp = { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
     const data = (await response.json()) as ORChatResp;
     const text: string = data.choices?.[0]?.message?.content ?? '';
-    return { text };
+    const inputTokens = data.usage?.prompt_tokens ?? 0;
+    const outputTokens = data.usage?.completion_tokens ?? 0;
+    return { text, model: textModel, provider: 'openrouter', usage: { inputTokens, outputTokens, totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens } };
   }
 
   /**
@@ -442,7 +446,10 @@ export class LLMProviderService {
     const first = candidates[0];
     const parts: Array<{ text?: string }> = first?.content?.parts || [];
     const text = parts.map(p => p?.text).filter(Boolean).join('\n');
-    return { text: text || '' };
+    const metadata = data?.usageMetadata || {};
+    const inputTokens = Number(metadata.promptTokenCount || 0);
+    const outputTokens = Number(metadata.candidatesTokenCount || 0);
+    return { text: text || '', model: successModel, provider: 'gemini', usage: { inputTokens, outputTokens, totalTokens: Number(metadata.totalTokenCount || inputTokens + outputTokens) } };
   }
 
   /**
@@ -491,12 +498,14 @@ export class LLMProviderService {
           continue; // Try next model
         }
 
-        type ORChatResp = { choices?: { message?: { content?: string } }[] };
+        type ORChatResp = { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
         const data = (await response.json()) as ORChatResp;
         const text: string = data.choices?.[0]?.message?.content ?? '';
 
         logger.info({ msg: 'LLM_EXTRACT_SUCCESS', model, promptLength: prompt.length, responseLength: text.length });
-        return { text, model };
+        const inputTokens = data.usage?.prompt_tokens ?? 0;
+        const outputTokens = data.usage?.completion_tokens ?? 0;
+        return { text, model, provider: 'openrouter', usage: { inputTokens, outputTokens, totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens } };
       } catch (err) {
         logger.warn({ msg: 'LLM_EXTRACT_ERROR', model, error: err });
         continue; // Try next model
