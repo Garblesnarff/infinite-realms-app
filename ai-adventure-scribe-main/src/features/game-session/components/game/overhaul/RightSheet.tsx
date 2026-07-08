@@ -1,4 +1,5 @@
 import React from 'react';
+import { useCampaign } from '@/contexts/CampaignContext';
 
 import type { CharacterSheetVM } from './types';
 
@@ -11,7 +12,11 @@ import {
   IRThumb,
 } from '@/components/ui/ir-primitives';
 
-const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
+const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => {
+  const { state } = useCampaign();
+  const mode = state.campaign?.id ? localStorage.getItem(`game:levelingMode:${state.campaign.id}`) : null;
+  const isMilestone = mode?.includes('milestone') || state.campaign?.rules_config?.levelingMode === 'milestone';
+  return (
   <IRPanel>
     <IRPanelHeader title="Character Sheet" />
     <div className="p-3">
@@ -23,15 +28,16 @@ const SheetHeader: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
           <p className="mt-1 text-[11px] font-semibold text-infinite-gold">Level {c.level}</p>
         </div>
       </div>
-      <div className="mt-2">
+      {!isMilestone && <div className="mt-2">
         <IRBar value={c.xpCurrent} max={c.xpMax} barClassName="bg-infinite-gold/80" />
         <p className="mt-1 text-right text-[10px] text-muted-foreground">
           {c.xpCurrent.toLocaleString()} / {c.xpMax.toLocaleString()} XP
         </p>
-      </div>
+      </div>}
     </div>
   </IRPanel>
-);
+  );
+};
 
 const CoreStats: React.FC<{ c: CharacterSheetVM }> = ({ c }) => (
   <div className="grid grid-cols-4 gap-2">

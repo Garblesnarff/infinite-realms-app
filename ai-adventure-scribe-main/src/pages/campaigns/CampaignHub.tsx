@@ -54,6 +54,7 @@ const CampaignHub: React.FC = () => {
           tone: campaign.tone as 'serious' | 'humorous' | 'gritty' | undefined,
           difficulty_level: campaign.difficulty_level || undefined,
           campaign_length: campaign.campaign_length as 'one-shot' | 'short' | 'full' | undefined,
+          rules_config: campaign.rules_config ?? {},
         },
       });
     }
@@ -157,7 +158,7 @@ const CampaignHub: React.FC = () => {
             <CampaignWorld />
           </TabsContent>
           <TabsContent value="settings">
-            <CampaignSettings />
+            <CampaignSettings campaignId={campaign.id} rulesConfig={campaign.rules_config ?? {}} />
           </TabsContent>
         </Tabs>
       </div>

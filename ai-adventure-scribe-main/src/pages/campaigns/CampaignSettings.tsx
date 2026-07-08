@@ -1,13 +1,24 @@
-import { Eye, EyeOff, Scroll, Info } from 'lucide-react';
+import { Eye, EyeOff, Scroll, Info, Trophy } from 'lucide-react';
 import React from 'react';
 
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { cn } from '@/lib/utils';
+import { userDataApi } from '@/services/user-data-api';
 
-const CampaignSettings: React.FC = () => {
+interface CampaignSettingsProps { campaignId: string; rulesConfig: Record<string, unknown> }
+
+const CampaignSettings: React.FC<CampaignSettingsProps> = ({ campaignId, rulesConfig }) => {
   const [showNPCRolls, setShowNPCRolls] = useLocalStorage('game:showNPCRolls', true);
+  const [levelingMode, setLevelingMode] = useLocalStorage<'xp' | 'milestone'>(
+    `game:levelingMode:${campaignId}`,
+    rulesConfig.levelingMode === 'milestone' ? 'milestone' : 'xp',
+  );
+  const changeLevelingMode = async (mode: 'xp' | 'milestone') => {
+    setLevelingMode(mode);
+    await userDataApi.updateCampaign(campaignId, { rules_config: { ...rulesConfig, levelingMode: mode } });
+  };
 
   return (
     <div className="mt-4 space-y-4">
@@ -75,6 +86,19 @@ const CampaignSettings: React.FC = () => {
                 />
               </button>
             </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-white/10 bg-white/[0.03]">
+            <div className="space-y-2">
+              <Label htmlFor="leveling-mode" className="text-base font-medium flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-infinite-gold" /> Level Advancement
+              </Label>
+              <p className="text-sm text-muted-foreground">XP tracks earned experience. Milestone hides XP and lets the DM trigger level-ups.</p>
+            </div>
+            <select id="leveling-mode" className="rounded-md border bg-background p-2" value={levelingMode} onChange={(event) => void changeLevelingMode(event.target.value as 'xp' | 'milestone')}>
+              <option value="xp">Experience Points</option>
+              <option value="milestone">Milestone</option>
+            </select>
           </div>
 
           {/* Preview/Status */}

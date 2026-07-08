@@ -38,6 +38,7 @@ interface Campaign {
   // Defaults and configuration for scoped flows
   defaultArtStyle?: string; // e.g., 'fantasy', 'cyberpunk'
   rules?: Record<string, unknown> | string; // ruleset identifier or config blob
+  rules_config?: Record<string, unknown>;
   enhancementSelections?: OptionSelection[];
   enhancementEffects?: {
     atmosphere?: string[];
