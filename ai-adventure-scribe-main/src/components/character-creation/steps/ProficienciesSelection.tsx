@@ -31,7 +31,11 @@ const standardLanguages = [
  * ProficienciesSelection component for choosing skills, tools, and languages
  * Computes fixed proficiencies from race, class, background and presents choices
  */
-const ProficienciesSelection: React.FC = () => {
+interface ProficienciesSelectionProps {
+  effectiveLevel?: number;
+}
+
+const ProficienciesSelection: React.FC<ProficienciesSelectionProps> = ({ effectiveLevel }) => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
   const character = state.character;
@@ -62,6 +66,7 @@ const ProficienciesSelection: React.FC = () => {
   const hasSkillChoices = numSkillChoices > 0 && skillChoices.length > 0;
   const className = currentClass?.id.toLowerCase();
   const classLevel =
+    effectiveLevel ??
     character?.classLevels?.find((entry) => entry.classId === currentClass?.id)?.level ??
     character?.level ??
     1;

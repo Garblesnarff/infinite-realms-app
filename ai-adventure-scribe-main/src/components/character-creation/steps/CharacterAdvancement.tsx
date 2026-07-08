@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 
 import FeatSelection from './FeatSelection';
 import HitPointsSelection from './HitPointsSelection';
+import ProficienciesSelection from './ProficienciesSelection';
 
 import type { AbilityScores } from '@/types/character';
 
@@ -38,6 +39,7 @@ const CharacterAdvancement: React.FC = () => {
   const [_selectedMulticlass, _setSelectedMulticlass] = useState<string>('');
   const [showFeatureSelection, setShowFeatureSelection] = useState(false);
   const [showHitPointsSelection, setShowHitPointsSelection] = useState(false);
+  const [showExpertiseSelection, setShowExpertiseSelection] = useState(false);
 
   const currentLevel = character?.level || 1;
   const currentExperience = character?.experience || 0;
@@ -55,6 +57,9 @@ const CharacterAdvancement: React.FC = () => {
   const hasAbilityScoreImprovement = newClassFeatures.some(
     (feature) => feature.abilityScoreImprovement,
   );
+  const gainsExpertise =
+    (currentClass?.id === 'rogue' && nextLevel === 6) ||
+    (currentClass?.id === 'bard' && (nextLevel === 3 || nextLevel === 10));
 
   // Multiclassing validation
   const availableClasses = [
@@ -101,6 +106,11 @@ const CharacterAdvancement: React.FC = () => {
       return;
     }
 
+    if (gainsExpertise) {
+      setShowExpertiseSelection(true);
+      return;
+    }
+
     // Always need to roll/select hit points for new level
     setShowHitPointsSelection(true);
   };
@@ -129,6 +139,7 @@ const CharacterAdvancement: React.FC = () => {
     // Reset selections
     setShowFeatureSelection(false);
     setShowHitPointsSelection(false);
+    setShowExpertiseSelection(false);
   };
 
   /**
@@ -181,6 +192,24 @@ const CharacterAdvancement: React.FC = () => {
         <HitPointsSelection />
         <div className="flex justify-center">
           <Button onClick={() => applyLevelUp()}>Complete Level Up</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (showExpertiseSelection) {
+    return (
+      <div className="space-y-6">
+        <ProficienciesSelection effectiveLevel={nextLevel} />
+        <div className="flex justify-center">
+          <Button
+            onClick={() => {
+              setShowExpertiseSelection(false);
+              setShowHitPointsSelection(true);
+            }}
+          >
+            Continue to Hit Points
+          </Button>
         </div>
       </div>
     );
