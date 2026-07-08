@@ -465,6 +465,7 @@ export default defineConfig({
       'src/features/game-session/components/game/__tests__/CompactCharacterHeader.test.tsx',
       'src/features/game-session/components/game/__tests__/FloatingActionPanel.test.tsx',
       'src/features/game-session/components/game/__tests__/GameSidePanel.test.tsx',
+      'src/features/game-session/components/game/__tests__/GameMainContent.test.tsx',
       'src/features/game-session/components/game/__tests__/useGameData.test.ts',
       'src/features/game-session/components/game/__tests__/CombatSummary.test.tsx',
       'src/features/game-session/components/game/__tests__/TimelineRail.test.tsx',

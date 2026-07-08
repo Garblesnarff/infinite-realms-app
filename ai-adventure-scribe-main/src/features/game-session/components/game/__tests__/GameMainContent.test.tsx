@@ -1,0 +1,147 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { GameMainContent } from '../game-content/GameMainContent';
+
+const state = vi.hoisted(() => ({
+  queueStatus: 'idle',
+  hasPendingRolls: false,
+  pendingRequests: [] as Array<{ type: string }>,
+}));
+
+vi.mock('@/contexts/MessageContext', () => ({
+  useMessageContext: () => ({ queueStatus: state.queueStatus }),
+}));
+vi.mock('@/hooks/use-pending-rolls', () => ({
+  usePendingRolls: () => ({
+    hasPendingRolls: state.hasPendingRolls,
+    pendingRequests: state.pendingRequests,
+  }),
+}));
+vi.mock('../overhaul/useOverhaulViewModel', () => ({
+  useOverhaulViewModel: ({ sceneBlurb }: { sceneBlurb: string }) => ({
+    scene: { title: 'THE LIVE CAMPAIGN', blurb: sceneBlurb },
+    campaign: { chapter: 'Chapter 7' },
+  }),
+}));
+vi.mock('../overhaul/SceneHeader', () => ({
+  SceneHeader: ({ title, blurb }: { title: string; blurb?: string }) => (
+    <header data-testid="scene-header">
+      {title}: {blurb}
+    </header>
+  ),
+}));
+vi.mock('../../chat/MessageList', () => ({
+  MessageList: ({ suppressEmptyState }: { suppressEmptyState: boolean }) => (
+    <div data-testid="message-list" data-suppress-empty={suppressEmptyState}>
+      streamed DM narrative
+      <div data-testid="dice-card">d20: 18</div>
+      <button>Quick action</button>
+    </div>
+  ),
+}));
+vi.mock('../../chat/ChatInput', () => ({
+  ChatInput: ({
+    onSendMessage,
+    isDisabled,
+  }: {
+    onSendMessage: (value: string) => void;
+    isDisabled: boolean;
+  }) => (
+    <button
+      data-testid="chat-input"
+      disabled={isDisabled}
+      onClick={() => onSendMessage('I advance')}
+    >
+      Send
+    </button>
+  ),
+}));
+vi.mock('../TimelineRail', () => ({ TimelineRail: () => <aside data-testid="timeline-rail" /> }));
+vi.mock('../StatsBar', () => ({ StatsBar: () => <div>Stats</div> }));
+vi.mock('@/components/combat/CombatStatus', () => ({
+  CombatStatus: () => <div>Combat status</div>,
+}));
+vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => <div>Safety</div> }));
+vi.mock('../game-content/GamePanelControls', () => ({
+  GamePanelControls: () => <div>Panel controls</div>,
+}));
+
+const sendMessage = vi.fn();
+vi.mock('../message/MessageHandler', () => ({
+  MessageHandler: ({
+    children,
+  }: {
+    children: (args: {
+      handleSendMessage: typeof sendMessage;
+      isProcessing: boolean;
+    }) => React.ReactNode;
+  }) => children({ handleSendMessage: sendMessage, isProcessing: false }),
+}));
+
+const baseProps = {
+  sessionId: 'session-1',
+  campaignIdForHandler: 'campaign-1',
+  characterIdForHandler: 'character-1',
+  sessionData: {
+    id: 'session-1',
+    turn_count: 7,
+    current_scene_description: 'Moonlight spills across the ruins. [ASSET:test]',
+  } as never,
+  updateGameSessionState: vi.fn(),
+  showSceneBlurb: true,
+  onSceneBlurbToggle: vi.fn(),
+  isLeftCollapsed: false,
+  isRightCollapsed: false,
+  onLeftToggle: vi.fn(),
+  onRightToggle: vi.fn(),
+  showTracker: false,
+  setShowTracker: vi.fn(),
+  isCombatDetected: false,
+  isGeneratingGreeting: false,
+  innerHandleAIResponse: vi.fn(),
+  contentWarnings: [],
+  comfortLevel: 'pg13' as const,
+  showSafetyInfo: false,
+};
+
+describe('GameMainContent overhaul behavior contract', () => {
+  beforeEach(() => {
+    state.queueStatus = 'idle';
+    state.hasPendingRolls = false;
+    state.pendingRequests = [];
+    sendMessage.mockClear();
+  });
+
+  it('keeps the live message, dice, quick-action, timeline, and input surfaces in the navy center stage', () => {
+    const { container } = render(<GameMainContent {...baseProps} />);
+
+    expect(screen.getByTestId('scene-header')).toHaveTextContent('THE LIVE CAMPAIGN');
+    expect(screen.getByTestId('message-list')).toHaveTextContent('streamed DM narrative');
+    expect(screen.getByTestId('dice-card')).toHaveTextContent('d20: 18');
+    expect(screen.getByRole('button', { name: 'Quick action' })).toBeInTheDocument();
+    expect(screen.getByTestId('timeline-rail')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('chat-input'));
+    expect(sendMessage).toHaveBeenCalledWith('I advance');
+    expect(container.firstChild).toMatchSnapshot();
+  });
+
+  it('preserves streaming and initial-greeting states', () => {
+    state.queueStatus = 'processing';
+    render(<GameMainContent {...baseProps} isGeneratingGreeting />);
+
+    expect(screen.getByText('Dungeon Master is thinking...')).toBeInTheDocument();
+    expect(screen.getByText('Crafting Opening Scene')).toBeInTheDocument();
+    expect(screen.getByTestId('message-list')).toHaveAttribute('data-suppress-empty', 'true');
+  });
+
+  it('blocks input while a dice request is pending', () => {
+    state.hasPendingRolls = true;
+    state.pendingRequests = [{ type: 'saving throw' }];
+    render(<GameMainContent {...baseProps} />);
+
+    expect(screen.getByText('Please complete the saving throw roll above')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-input')).toBeDisabled();
+  });
+});
