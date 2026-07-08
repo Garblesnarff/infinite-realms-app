@@ -9,6 +9,10 @@ server/.env.local
 *.log
 **/.DS_Store
 CLAUDE.md
+
+# Secrets & Credentials
+.factory/
+
 # Logs
 logs
 *.log

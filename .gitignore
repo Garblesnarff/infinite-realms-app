@@ -103,6 +103,7 @@ crewai-service/venv/
 *.crt
 secrets/
 credentials/
+.factory/
 
 # PM2
 .pm2/
