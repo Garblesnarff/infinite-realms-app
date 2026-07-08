@@ -12,7 +12,7 @@ import {
   applyHiddenCondition,
   removeHiddenCondition,
   canSeeHidden,
-  getStealthActionDescription
+  getStealthActionDescription,
 } from '../stealthUtils';
 
 // Mock diceUtils
@@ -41,7 +41,7 @@ describe('stealthUtils', () => {
       const participant: any = {
         level: 1,
         conditions: [],
-        racialTraits: [{ name: 'naturally_stealthy' }]
+        racialTraits: [{ name: 'naturally_stealthy' }],
       };
       // 2 (dex) + 2 (prof) + 1 (racial) = 5
       expect(calculateStealthBonus(participant)).toBe(5);
@@ -51,7 +51,7 @@ describe('stealthUtils', () => {
       const participant: any = {
         level: 1,
         conditions: [],
-        classFeatures: [{ name: 'sneak_attack' }]
+        classFeatures: [{ name: 'sneak_attack' }],
       };
       // 2 (dex) + 2 (prof) + 1 (class) = 5
       expect(calculateStealthBonus(participant)).toBe(5);
@@ -61,7 +61,7 @@ describe('stealthUtils', () => {
       const participant: any = {
         level: 1,
         conditions: [],
-        mainHandWeapon: { properties: { finesse: true } }
+        mainHandWeapon: { properties: { finesse: true } },
       };
       // 2 (dex) + 2 (prof) + 1 (weapon) = 5
       expect(calculateStealthBonus(participant)).toBe(5);
@@ -70,7 +70,7 @@ describe('stealthUtils', () => {
     it('should subtract penalty for prone condition', () => {
       const participant: any = {
         level: 1,
-        conditions: [{ name: 'prone' }]
+        conditions: [{ name: 'prone' }],
       };
       // 2 (dex) + 2 (prof) - 2 (prone) = 2
       expect(calculateStealthBonus(participant)).toBe(2);
@@ -85,8 +85,20 @@ describe('stealthUtils', () => {
 
       const result = rollStealthCheck(participant);
 
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4);
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4, { disadvantage: false });
       expect(result).toBe(mockRoll);
+    });
+
+    it('rolls with disadvantage when equipped armor imposes it', () => {
+      const participant: any = {
+        level: 1,
+        conditions: [],
+        stealthDisadvantage: true,
+      };
+
+      rollStealthCheck(participant);
+
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4, { disadvantage: true });
     });
   });
 
@@ -186,7 +198,7 @@ describe('stealthUtils', () => {
     it('should return true if observer has blindsight in range', () => {
       const observer: any = {
         name: 'Bat',
-        visionTypes: [{ type: 'blindsight', range: 60 }]
+        visionTypes: [{ type: 'blindsight', range: 60 }],
       };
       const target: any = { name: 'Thief', isHidden: true };
       const result = canSeeHidden(observer, target, 30);
@@ -197,7 +209,7 @@ describe('stealthUtils', () => {
     it('should return true if observer has truesight in range', () => {
       const observer: any = {
         name: 'Angel',
-        visionTypes: [{ type: 'truesight', range: 120 }]
+        visionTypes: [{ type: 'truesight', range: 120 }],
       };
       const target: any = { name: 'Thief', isHidden: true };
       const result = canSeeHidden(observer, target, 60);

@@ -436,9 +436,7 @@ describe('character-calculations', () => {
         abilityScores: {
           strength: { score: 10, modifier: 0 },
         } as any,
-        inventory: [
-          { itemId: 'anvil', quantity: 1, weight: 55, equipped: false },
-        ],
+        inventory: [{ itemId: 'anvil', quantity: 1, weight: 55, equipped: false }],
       };
 
       const stats = calculateAllCharacterStats(character as Character);
@@ -446,19 +444,45 @@ describe('character-calculations', () => {
       expect(stats.speedPenalty).toBe(10);
       expect(stats.speed).toBe(20);
     });
+
+    it('applies heavy armor strength and stealth penalties', () => {
+      const stats = calculateAllCharacterStats({
+        race: { speed: 30 } as any,
+        equippedArmor: 'chain-mail',
+        abilityScores: {
+          strength: { score: 12, modifier: 1 },
+          dexterity: { score: 10, modifier: 0 },
+        } as any,
+      } as Character);
+
+      expect(stats.armorSpeedPenalty).toBe(10);
+      expect(stats.speed).toBe(20);
+      expect(stats.stealthDisadvantage).toBe(true);
+    });
+
+    it('does not reduce speed when the armor strength requirement is met', () => {
+      const stats = calculateAllCharacterStats({
+        equippedArmor: 'chain-mail',
+        abilityScores: { strength: { score: 13, modifier: 1 } } as any,
+      } as Character);
+
+      expect(stats.armorSpeedPenalty).toBe(0);
+      expect(stats.speed).toBe(30);
+    });
   });
 
   describe('calculateEncumbrance', () => {
     it('should include item and currency weight and compute overloaded speed', () => {
-      const summary = calculateEncumbrance({
-        race: { speed: 30 } as any,
-        abilityScores: {
-          strength: { score: 10, modifier: 0 },
-        } as any,
-        inventory: [
-          { itemId: 'statue', quantity: 1, weight: 150, equipped: false },
-        ],
-      } as Character, { gp: 50 });
+      const summary = calculateEncumbrance(
+        {
+          race: { speed: 30 } as any,
+          abilityScores: {
+            strength: { score: 10, modifier: 0 },
+          } as any,
+          inventory: [{ itemId: 'statue', quantity: 1, weight: 150, equipped: false }],
+        } as Character,
+        { gp: 50 },
+      );
 
       expect(summary.totalWeight).toBe(151);
       expect(summary.encumbranceLevel).toBe('overloaded');

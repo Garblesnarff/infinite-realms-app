@@ -109,6 +109,7 @@ export interface CombatParticipant {
   obscurement?: ObscurementLevel;
   isHidden?: boolean;
   stealthCheckBonus?: number;
+  stealthDisadvantage?: boolean;
 
   // Cover (used for AC calculation - see utils/fightingStyles.ts getTotalAC)
   cover?: CoverInfo;

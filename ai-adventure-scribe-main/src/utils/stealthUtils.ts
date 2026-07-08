@@ -58,7 +58,7 @@ export function calculateStealthBonus(participant: CombatParticipant): number {
  */
 export function rollStealthCheck(participant: CombatParticipant): DiceRoll {
   const bonus = calculateStealthBonus(participant);
-  return rollDice(20, 1, bonus);
+  return rollDice(20, 1, bonus, { disadvantage: participant.stealthDisadvantage === true });
 }
 
 /**

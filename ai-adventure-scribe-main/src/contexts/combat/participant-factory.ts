@@ -26,6 +26,7 @@ export interface CharacterData {
   obscurement?: CombatParticipant['obscurement'];
   isHidden?: boolean;
   stealthCheckBonus?: number;
+  stealthDisadvantage?: boolean;
   speed?: number;
   abilityScores?: CombatParticipant['abilityScores'];
   skillProficiencies?: string[];
@@ -91,6 +92,7 @@ export function createCombatParticipant(
     obscurement: partial.obscurement || 'clear',
     isHidden: partial.isHidden || false,
     stealthCheckBonus: partial.stealthCheckBonus || 0,
+    stealthDisadvantage: partial.stealthDisadvantage || false,
     abilityScores: partial.abilityScores,
     skillProficiencies: partial.skillProficiencies,
     magicAttackBonus: partial.magicAttackBonus,
@@ -136,6 +138,7 @@ export function enrichParticipantWithCharacterData(
   participant.obscurement = characterData.obscurement || 'clear';
   participant.isHidden = characterData.isHidden || false;
   participant.stealthCheckBonus = characterData.stealthCheckBonus || 0;
+  participant.stealthDisadvantage = characterData.stealthDisadvantage || false;
   participant.abilityScores = characterData.abilityScores;
   participant.skillProficiencies = characterData.skillProficiencies;
   if (typeof characterData.speed === 'number') {

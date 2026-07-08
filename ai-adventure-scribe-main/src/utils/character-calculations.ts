@@ -11,6 +11,8 @@ import {
 
 import type { Character, CharacterClass } from '@/types/character';
 
+import { EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
+
 import {
   SKILLS_MAP,
   calculateProficiencyBonus,
@@ -47,6 +49,8 @@ export interface CharacterStats {
   baseSpeed: number;
   encumbranceLevel: EncumbranceLevel;
   speedPenalty: number;
+  armorSpeedPenalty: number;
+  stealthDisadvantage: boolean;
   totalCarriedWeight: number;
   passivePerception: number;
   passiveInvestigation: number;
@@ -277,6 +281,14 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
 
   const skillMods = calculateSkillModifiers(character, pb);
   const encumbrance = calculateEncumbrance(character);
+  const equippedArmor = character.equippedArmor
+    ? EQUIPMENT_LOOKUP.get(character.equippedArmor)
+    : undefined;
+  const strengthScore = character.abilityScores?.strength?.score ?? 10;
+  const armorSpeedPenalty =
+    equippedArmor?.strengthRequirement && strengthScore < equippedArmor.strengthRequirement
+      ? 10
+      : 0;
 
   return {
     proficiencyBonus: pb,
@@ -284,7 +296,7 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     hitDie: `1d${character.class?.hitDie || 8}`,
     armorClass: calculateArmorClass(character),
     initiative: character.abilityScores?.dexterity?.modifier || 0,
-    speed: encumbrance.effectiveSpeed,
+    speed: Math.max(0, encumbrance.effectiveSpeed - armorSpeedPenalty),
 
     spellSaveDC: calculateSpellSaveDC(character, pb, spellcastingAbility),
     spellAttackBonus: calculateSpellAttackBonus(character, pb, spellcastingAbility),
@@ -297,7 +309,9 @@ export const calculateAllCharacterStats = (character: Character): CharacterStats
     carryingCapacity: calculateCarryingCapacity(character),
     baseSpeed: encumbrance.baseSpeed,
     encumbranceLevel: encumbrance.encumbranceLevel,
-    speedPenalty: encumbrance.speedPenalty,
+    speedPenalty: encumbrance.speedPenalty + armorSpeedPenalty,
+    armorSpeedPenalty,
+    stealthDisadvantage: equippedArmor?.stealthDisadvantage === true,
     totalCarriedWeight: encumbrance.totalWeight,
     passivePerception: calculatePassivePerception(character, skillMods),
     passiveInvestigation: 10 + (skillMods['Investigation']?.modifier || 0),
