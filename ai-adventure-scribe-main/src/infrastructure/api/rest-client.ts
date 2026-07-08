@@ -164,7 +164,7 @@ class LlmApiClient {
           'stepfun/step-3.5-flash:free',
           'nvidia/nemotron-3-nano-30b-a3b:free',
         ];
-        logger.warn(`[LLMApiClient] ${preferredProvider} rate limited; trying free fallbacks`);
+        logger.warn(`[LLMApiClient] ${preferredProvider} rate limited, trying fallback models`);
         for (const fallbackModel of fallbackModels) {
           try {
             const res = await makeReq('openrouter', fallbackModel);
@@ -194,19 +194,32 @@ class LlmApiClient {
   }
 
   async appendMessageImage(params: AppendMessageImageParams): Promise<void> {
-    const res = await this.fetchWithAuth(
-      `/v1/images/message/${encodeURIComponent(params.messageId)}/images`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          url: params.image.url,
-          prompt: params.image.prompt,
-          model: params.image.model,
-          quality: params.image.quality,
-        }),
-      },
-    );
-    await res.json().catch(() => ({}));
+    const maxAttempts = 5;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const res = await this.fetchWithAuth(
+          `/v1/images/message/${encodeURIComponent(params.messageId)}/images`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              url: params.image.url,
+              prompt: params.image.prompt,
+              model: params.image.model,
+              quality: params.image.quality,
+            }),
+          },
+        );
+        await res.json().catch(() => ({}));
+        return;
+      } catch (error) {
+        lastError = error;
+        const isNotFound = /API 404\b/.test(String((error as Error)?.message || error));
+        if (!isNotFound || attempt === maxAttempts - 1) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 200 * 2 ** attempt));
+      }
+    }
+    throw lastError;
   }
 
   async getImageQuotaStatus(): Promise<ImageQuotaStatus | null> {
