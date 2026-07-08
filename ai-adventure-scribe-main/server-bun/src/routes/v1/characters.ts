@@ -17,9 +17,9 @@
 import { TRPCError } from '@trpc/server';
 import { Elysia, t } from 'elysia';
 
+import { authenticateRequest } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
-import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
@@ -225,8 +225,9 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   /**
    * Centralized authentication and character ownership verification
    */
-  .use(requireAuth)
-  .derive(async ({ user, params }) => {
+  .derive(async ({ request, params }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
@@ -234,9 +235,14 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       character = await CharacterService.getById(params.id, user.userId);
     }
 
-    return { character };
+    return { user, authError, character };
   })
-  .onBeforeHandle(async ({ params, character, set }) => {
+  .onBeforeHandle(async ({ user, authError, params, character, set }) => {
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+
     if (params?.id && !character) {
       // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
       set.status = 404;

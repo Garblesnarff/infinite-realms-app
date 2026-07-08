@@ -15,7 +15,7 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { requireAuth } from '../../middleware/auth.js';
+import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { CharacterService } from '../../services/character-service.js';
@@ -76,8 +76,16 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
   /**
    * Centralized authentication and character ownership verification
    */
-  .use(requireAuth)
-  .onBeforeHandle(async ({ user, params, set }) => {
+  .derive(async ({ request }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, params, set }) => {
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+
     if (params.id) {
       // 🛡️ Sentinel: Use CharacterService.getById which verifies dual-ownership (userId/ownerId)
       // and masks existence by returning null for unauthorized access.
@@ -238,7 +246,16 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
 
 // Utility spell slot routes (not character-specific)
 export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
-  .use(requireAuth)
+  .derive(async ({ request }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    return { user, authError };
+  })
+  .onBeforeHandle(async ({ user, authError, set }) => {
+    if (authError || !user) {
+      set.status = 401;
+      return { error: authError || 'Unauthorized' };
+    }
+  })
 
   /**
    * GET /v1/spell-slots/calculate

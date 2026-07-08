@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 
-import { requireAuth } from '../../middleware/auth.js';
+import { authenticateRequest } from '../../lib/auth.js';
 import { MemoryService } from '../../services/memory-service.js';
 
 import type { Memory } from '../../../../db/schema/index';
@@ -46,7 +46,13 @@ const mapMemory = (memory: Memory) => ({
 });
 
 export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
-  .use(requireAuth)
+  .derive(async ({ request }) => authenticateRequest(request))
+  .onBeforeHandle(({ user, error, set }) => {
+    if (error || !user) {
+      set.status = 401;
+      return { error: error || 'Unauthorized' };
+    }
+  })
   .get(
     '/',
     async ({ query, user }) => {
