@@ -2,7 +2,7 @@ import { ShoppingCart, Search, Plus } from 'lucide-react';
 import React from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
-import type { Currency } from '@/features/character/hooks/use-inventory-manager';
+import { currencyToCopper, type Currency } from '@/features/character/hooks/use-inventory-manager';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,11 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
             />
           </div>
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-48" aria-label="Filter by category" title="Filter by category">
+            <SelectTrigger
+              className="w-48"
+              aria-label="Filter by category"
+              title="Filter by category"
+            >
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -106,13 +110,9 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold text-green-600">
-                    {formatCurrency(equipment.cost)}
-                  </div>
+                  <div className="font-bold text-green-600">{formatCurrency(equipment.cost)}</div>
                   {equipment.weight && (
-                    <div className="text-xs text-muted-foreground">
-                      {equipment.weight} lbs
-                    </div>
+                    <div className="text-xs text-muted-foreground">{equipment.weight} lbs</div>
                   )}
                 </div>
               </div>
@@ -136,8 +136,7 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
               )}
               {equipment.properties && equipment.properties.length > 0 && (
                 <div className="text-xs mb-3">
-                  <span className="font-medium">Properties:</span>{' '}
-                  {equipment.properties.join(', ')}
+                  <span className="font-medium">Properties:</span> {equipment.properties.join(', ')}
                 </div>
               )}
 
@@ -147,18 +146,14 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
                   className="flex-1"
                   size="sm"
                   disabled={
-                    currency.gp <
-                    convertCurrency(equipment.cost.amount, equipment.cost.currency, 'gp')
+                    currencyToCopper(currency) <
+                    convertCurrency(equipment.cost.amount, equipment.cost.currency, 'cp')
                   }
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Purchase
                 </Button>
-                <Button
-                  onClick={() => addToInventory(equipment)}
-                  variant="secondary"
-                  size="sm"
-                >
+                <Button onClick={() => addToInventory(equipment)} variant="secondary" size="sm">
                   Add Free
                 </Button>
               </div>

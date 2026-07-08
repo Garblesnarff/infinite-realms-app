@@ -19,8 +19,31 @@ export interface Currency {
   pp: number;
 }
 
+const COPPER_VALUE: Record<keyof Currency, number> = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 };
+
+export const currencyToCopper = (currency: Currency): number =>
+  Object.entries(currency).reduce(
+    (total, [denomination, amount]) =>
+      total + amount * COPPER_VALUE[denomination as keyof Currency],
+    0,
+  );
+
+export const spendCurrency = (currency: Currency, costInCopper: number): Currency | null => {
+  const remaining = currencyToCopper(currency) - costInCopper;
+  if (remaining < 0) return null;
+
+  let value = remaining;
+  const result: Currency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+  for (const denomination of ['pp', 'gp', 'ep', 'sp', 'cp'] as const) {
+    result[denomination] = Math.floor(value / COPPER_VALUE[denomination]);
+    value %= COPPER_VALUE[denomination];
+  }
+  return result;
+};
+
 export const useInventoryManager = (
   character: Character,
+  onCharacterUpdate?: (updatedCharacter: Character) => void,
 ): {
   inventory: InventoryItem[];
   currency: Currency;
@@ -47,7 +70,9 @@ export const useInventoryManager = (
 
   // State management
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [currency, setCurrency] = useState<Currency>({ cp: 0, sp: 0, ep: 0, gp: 100, pp: 0 });
+  const [currency, setCurrency] = useState<Currency>(
+    character.currency ?? { cp: 0, sp: 0, ep: 0, gp: 100, pp: 0 },
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showShop, setShowShop] = useState(false);
@@ -170,10 +195,13 @@ export const useInventoryManager = (
    * Purchase item (subtract cost from currency)
    */
   const purchaseItem = (equipment: Equipment): void => {
-    const cost = convertCurrency(equipment.cost.amount, equipment.cost.currency, 'gp');
+    const costInCopper =
+      equipment.cost.amount * COPPER_VALUE[equipment.cost.currency as keyof Currency];
+    const remainingCurrency = spendCurrency(currency, costInCopper);
 
-    if (currency.gp >= cost) {
-      setCurrency((prev) => ({ ...prev, gp: prev.gp - cost }));
+    if (remainingCurrency) {
+      setCurrency(remainingCurrency);
+      onCharacterUpdate?.({ ...character, currency: remainingCurrency });
       addToInventory(equipment);
 
       toast({
@@ -183,7 +211,7 @@ export const useInventoryManager = (
     } else {
       toast({
         title: 'Insufficient Funds',
-        description: `You need ${cost} gp to purchase this item.`,
+        description: `You need ${formatCurrency(equipment.cost)} to purchase this item.`,
         variant: 'destructive',
       });
     }
@@ -194,7 +222,11 @@ export const useInventoryManager = (
    */
   const sellItem = (item: InventoryItem): void => {
     const sellValue = Math.floor(convertCurrency(item.cost.amount, item.cost.currency, 'gp') / 2);
-    setCurrency((prev) => ({ ...prev, gp: prev.gp + sellValue }));
+    setCurrency((previous) => {
+      const updated = { ...previous, gp: previous.gp + sellValue };
+      onCharacterUpdate?.({ ...character, currency: updated });
+      return updated;
+    });
     removeFromInventory(item.id, 1);
 
     toast({
@@ -207,7 +239,11 @@ export const useInventoryManager = (
    * Update currency
    */
   const updateCurrency = (type: keyof Currency, amount: number): void => {
-    setCurrency((prev) => ({ ...prev, [type]: Math.max(0, amount) }));
+    setCurrency((previous) => {
+      const updated = { ...previous, [type]: Math.max(0, amount) };
+      onCharacterUpdate?.({ ...character, currency: updated });
+      return updated;
+    });
   };
 
   return {

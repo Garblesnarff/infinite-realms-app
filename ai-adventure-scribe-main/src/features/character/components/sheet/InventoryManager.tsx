@@ -20,7 +20,7 @@ interface InventoryManagerProps {
 /**
  * InventoryManager component for character equipment and inventory management
  */
-const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdate }) => {
+const InventoryManager: React.FC<InventoryManagerProps> = ({ character, onUpdate }) => {
   const {
     inventory,
     currency,
@@ -42,7 +42,7 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, _onUpdat
     purchaseItem,
     sellItem,
     updateCurrency,
-  } = useInventoryManager(character);
+  } = useInventoryManager(character, onUpdate);
 
   // Equipment filters
   const categories = [

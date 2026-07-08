@@ -20,7 +20,7 @@ vi.mock('@/data/equipmentOptions', () => ({
   formatCurrency: vi.fn((cost) => `${cost.amount} ${cost.currency}`),
 }));
 
-import { useInventoryManager } from '../use-inventory-manager';
+import { currencyToCopper, spendCurrency, useInventoryManager } from '../use-inventory-manager';
 
 import * as equipmentOptions from '@/data/equipmentOptions';
 
@@ -224,7 +224,7 @@ describe('useInventoryManager', () => {
       result.current.purchaseItem(mockEquipment);
     });
 
-    expect(result.current.currency.gp).toBe(85);
+    expect(currencyToCopper(result.current.currency)).toBe(8500);
     expect(result.current.inventory).toHaveLength(1);
   });
 
@@ -233,7 +233,7 @@ describe('useInventoryManager', () => {
     vi.mocked(equipmentOptions.convertCurrency).mockReturnValue(1000);
 
     act(() => {
-      result.current.purchaseItem(mockEquipment);
+      result.current.purchaseItem({ ...mockEquipment, cost: { amount: 1001, currency: 'gp' } });
     });
 
     expect(result.current.currency.gp).toBe(100);
@@ -276,6 +276,29 @@ describe('useInventoryManager', () => {
     });
 
     expect(result.current.currency.gp).toBe(500);
+  });
+
+  it('spends across denominations and returns canonical change', () => {
+    expect(currencyToCopper({ cp: 5, sp: 2, ep: 1, gp: 1, pp: 1 })).toBe(1175);
+    expect(spendCurrency({ cp: 0, sp: 0, ep: 0, gp: 0, pp: 1 }, 155)).toEqual({
+      cp: 5,
+      sp: 4,
+      ep: 0,
+      gp: 8,
+      pp: 0,
+    });
+  });
+
+  it('initializes persisted currency and persists edits through character updates', () => {
+    const onUpdate = vi.fn();
+    const character = { ...mockCharacter, currency: { cp: 4, sp: 3, ep: 2, gp: 1, pp: 0 } };
+    const { result } = renderHook(() => useInventoryManager(character, onUpdate));
+
+    expect(result.current.currency).toEqual(character.currency);
+    act(() => result.current.updateCurrency('sp', 9));
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: { cp: 4, sp: 9, ep: 2, gp: 1, pp: 0 } }),
+    );
   });
 
   it('should handle search term and category updates', () => {
