@@ -1,7 +1,7 @@
 import { MemoryManager } from '../../memory-manager';
 import { WorldBuilderService, WorldBuilderRepository } from '../../world-builders';
 import { parseXMLTagsFromResponse } from '../xml-parser';
-import { llmApiClient } from '../../llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 
 import type { MemoryContext } from '../../memory-manager';
 import type { GameContext, ChatMessage } from '../shared/types';

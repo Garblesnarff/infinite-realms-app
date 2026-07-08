@@ -1,4 +1,4 @@
-import { llmApiClient } from '@/services/llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 import { sanitizeForMemoryExtraction } from '@/utils/memory/segmentation';
 
 import type { Memory as UIMemory, MemoryType as UIMemoryType } from '@/types/memory';

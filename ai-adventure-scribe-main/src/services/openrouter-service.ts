@@ -3,7 +3,7 @@
  * Proxies to server endpoints to avoid exposing API keys.
  */
 
-import { llmApiClient } from './llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 import { modelUsageTracker } from './model-usage-tracker';
 import { logger } from '../lib/logger';
 

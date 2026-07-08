@@ -5,7 +5,7 @@
  * Maintains the same public API.
  */
 
-import { llmApiClient } from './llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 import { logger } from '../lib/logger';
 
 interface GeminiImageGenerationRequest {

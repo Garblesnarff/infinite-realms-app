@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryService } from '../MemoryService';
 import * as featureFlags from '@/config/featureFlags';
 import type { Memory, MemoryType } from '@/types/memory';
-import { llmApiClient } from '@/services/llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 
 const {
   mockInsert: baseMockInsert,
@@ -95,7 +95,7 @@ vi.mock('@/utils/memory/importance', () => ({
 }));
 
 // Mock LLM API Client
-vi.mock('@/services/llm-api-client', () => ({
+vi.mock('@/infrastructure/api', () => ({
   llmApiClient: {
     generateText: vi.fn().mockResolvedValue('Mock response'),
     extractMemories: vi.fn().mockResolvedValue(

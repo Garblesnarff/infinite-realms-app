@@ -2,7 +2,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { llmApiClient } from '../llm-api-client';
+import { llmApiClient } from '@/infrastructure/api';
 
 import * as loggerModule from '@/lib/logger';
 

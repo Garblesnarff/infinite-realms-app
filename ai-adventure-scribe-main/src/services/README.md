@@ -16,7 +16,7 @@ Core business logic services for the AI Dungeon Master application. This directo
 - `enhancement-service.ts` - Service for managing character enhancements and upgrades
 - `gallery-service.ts` - Asset gallery management
 - `gemini-api-manager.ts` - Manages Gemini API connections, rate limiting, and failover
-- `llm-api-client.ts` - Generic LLM API client abstraction
+- `../infrastructure/api/rest-client.ts` - Canonical authenticated LLM API client
 - `memory-manager.ts` - Game session memory management
 - `model-usage-tracker.ts` - Tracks AI model usage for billing and analytics
 - `openrouter-service.ts` - OpenRouter API integration for alternative LLM providers
