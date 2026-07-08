@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { EMBEDDING_MAX_INPUT_CHARS } from '../../../shared/embedding-limits.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -13,8 +14,7 @@ serve(async (req) => {
       throw new Error('Text is required');
     }
 
-    // Clean and truncate text (Gemini text-embedding-004 supports up to 2048 tokens)
-    const cleanedText = text.substring(0, 2000).replace(/\n/g, ' ').trim();
+    const cleanedText = text.substring(0, EMBEDDING_MAX_INPUT_CHARS).replace(/\n/g, ' ').trim();
     console.log('Processing text for embedding:', cleanedText.substring(0, 100) + '...');
 
     // Get Google Gemini API key from environment

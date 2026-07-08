@@ -1,3 +1,5 @@
+import { EMBEDDING_MAX_INPUT_CHARS } from '../../../../shared/embedding-limits';
+
 /**
  * Lore Keeper Service
  *
@@ -336,7 +338,7 @@ export class LoreKeeperService {
     const apiBase = import.meta.env.VITE_API_URL || '';
     const response = await fetch(`${apiBase}/v1/ai-proxy/embeddings`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-      body: JSON.stringify({ text: text.substring(0, 8000) }),
+      body: JSON.stringify({ text: text.substring(0, EMBEDDING_MAX_INPUT_CHARS) }),
     });
 
     if (!response.ok) {

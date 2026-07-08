@@ -1,3 +1,5 @@
+import { EMBEDDING_MAX_INPUT_CHARS } from '../../../shared/embedding-limits';
+
 /**
  * Embedding generation using Google's text-embedding-004
  * Produces 768-dimensional vectors (vs OpenAI's 1536)
@@ -33,9 +35,11 @@ export async function generateEmbeddings(
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
 
-    // Truncate texts to max 8000 tokens (~32000 chars) for safety
+    // Apply the same conservative ceiling as browser and edge callers.
     const truncatedBatch = batch.map(text =>
-      text.length > 32000 ? text.substring(0, 32000) : text
+      text.length > EMBEDDING_MAX_INPUT_CHARS
+        ? text.substring(0, EMBEDDING_MAX_INPUT_CHARS)
+        : text
     );
 
     try {
