@@ -1,14 +1,17 @@
 import srdSpellsJson from '@/data/srd/spells.json';
 import { logger } from '../../lib/logger';
+import nonSrdSupplementJson from './non-srd-supplement.json';
 
 import type { Spell } from '@/types/character';
 
-type SrdSpell = Spell & { classes: string[] };
+type SrdSpell = Spell & { classes: string[]; legacy_ids?: string[] };
 export const normalizeLegacySpellId = (id: string) => id.replace(
   /-(?:barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)$/,
   '',
 );
-export const allSpells = srdSpellsJson.map((spell) => ({
+const sourceSpells = [...srdSpellsJson, ...nonSrdSupplementJson];
+
+export const allSpells = sourceSpells.map((spell) => ({
   ...spell,
   castingTime: spell.casting_time,
   range: spell.range_text,
@@ -74,7 +77,10 @@ export const searchSpells = (query: string): Spell[] => {
 };
 
 export const getSpellById = (id: string): Spell | undefined =>
-  allSpells.find((spell) => spell.id === normalizeLegacySpellId(id));
+  allSpells.find((spell) => {
+    const normalizedId = normalizeLegacySpellId(id);
+    return spell.id === normalizedId || spell.legacy_ids?.includes(id);
+  });
 
 export const validateSpellSelection = (
   className: string,
