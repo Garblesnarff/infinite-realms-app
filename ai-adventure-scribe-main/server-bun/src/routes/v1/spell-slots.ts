@@ -8,6 +8,8 @@
  * - Upcast validation
  *
  * Ported from /server/src/routes/v1/spell-slots.ts
+ *
+ * @deprecated Calculation and history helper endpoints have no frontend callers as of 2026-07-08.
  */
 
 import { Elysia, t } from 'elysia';

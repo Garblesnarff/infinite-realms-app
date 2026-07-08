@@ -3,6 +3,8 @@
  *
  * Admin dashboard endpoints:
  * - GET /admin/posts - List all posts for admin (author/admin)
+ *
+ * @deprecated No frontend callers as of 2026-07-08; retained for built-before-wired admin CRUD.
  */
 
 import { Elysia } from 'elysia';

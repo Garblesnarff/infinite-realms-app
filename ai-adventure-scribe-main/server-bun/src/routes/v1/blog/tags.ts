@@ -6,6 +6,8 @@
  * - POST /tags - Create a tag (admin only)
  * - PUT /tags/:id - Update a tag (admin only)
  * - DELETE /tags/:id - Delete a tag (admin only)
+ *
+ * @deprecated No frontend callers as of 2026-07-08; retained for built-before-wired taxonomy support.
  */
 
 import { Elysia } from 'elysia';

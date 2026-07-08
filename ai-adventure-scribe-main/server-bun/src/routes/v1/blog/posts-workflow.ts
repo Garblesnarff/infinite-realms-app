@@ -8,6 +8,8 @@
  * - POST /posts/:postId/archive - Archive a post
  * - GET /posts/:postId/preview - Preview a post (any status)
  * - POST /slug/check - Check slug availability
+ *
+ * @deprecated No frontend callers as of 2026-07-08; retained for built-before-wired workflow tooling.
  */
 
 import { Elysia } from 'elysia';

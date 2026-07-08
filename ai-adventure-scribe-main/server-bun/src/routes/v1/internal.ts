@@ -6,6 +6,8 @@
  * - POST /v1/internal/generate-api-key - Generate new API key (admin setup)
  *
  * Ported from /server/src/routes/v1/internal.ts
+ *
+ * @deprecated /v1/internal/generate-api-key has no frontend callers as of 2026-07-08.
  */
 
 import { Elysia } from 'elysia';

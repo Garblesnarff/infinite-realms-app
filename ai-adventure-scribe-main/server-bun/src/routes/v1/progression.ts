@@ -10,6 +10,8 @@
  * - Milestone leveling
  *
  * Ported from /server/src/routes/v1/progression.ts
+ *
+ * @deprecated Award XP, level-up, and milestone mutation endpoints have no frontend callers as of 2026-07-08.
  */
 
 import { Elysia } from 'elysia';

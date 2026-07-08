@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// @deprecated Hit-dice/history extras have no frontend callers as of 2026-07-08.
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';

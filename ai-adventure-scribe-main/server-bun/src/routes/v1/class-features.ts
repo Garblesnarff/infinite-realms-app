@@ -8,6 +8,8 @@
  * - Feature usage tracking
  *
  * Ported from /server/src/routes/v1/class-features.ts
+ *
+ * @deprecated No frontend callers as of 2026-07-08; retained for built-before-wired feature APIs.
  */
 
 import { Elysia } from 'elysia';

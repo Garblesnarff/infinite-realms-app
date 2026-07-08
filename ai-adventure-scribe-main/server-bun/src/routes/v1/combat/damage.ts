@@ -1,5 +1,7 @@
 import { Elysia } from 'elysia';
 
+// @deprecated Temp HP, death-save, and damage-log extras have no frontend callers as of 2026-07-08.
+
 import { verifyEncounterOwnership } from './helpers.js';
 import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
