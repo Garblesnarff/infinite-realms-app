@@ -3,16 +3,6 @@ import React, { useState, useMemo, useId } from 'react';
 
 import { SharedCharacterCard, type SharedCharacter } from './SharedCharacterCard';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -29,8 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useToast } from '@/hooks/use-toast';
-import { useTRPC, useTRPCUtils } from '@/infrastructure/api/trpc-hooks';
+import { useTRPC } from '@/infrastructure/api/trpc-hooks';
 import { PermissionLevel } from '@/types/character';
 
 /**
@@ -48,40 +37,13 @@ import { PermissionLevel } from '@/types/character';
  * Main SharedCharactersList component
  */
 export const SharedCharactersList: React.FC = () => {
-  const { toast } = useToast();
   const trpc = useTRPC();
-  const utils = useTRPCUtils();
   const filterSelectId = useId();
 
   const [filterPermission, setFilterPermission] = useState<string>('all');
-  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
 
   // Fetch shared characters
   const { data: sharedCharacters, isLoading, error } = trpc.characters.listShared.useQuery();
-
-  // Remove self mutation
-  const removeSelfMutation = trpc.characters.revokePermission.useMutation({
-    onSuccess: () => {
-      toast({
-        title: 'Access Removed',
-        description: 'You no longer have access to this character.',
-      });
-      utils.characters.listShared.invalidate();
-      setRemoveDialogOpen(false);
-      setSelectedCharacter(null);
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to remove access. Please try again.',
-        variant: 'destructive',
-      });
-    },
-  });
 
   // Filter characters by permission level
   const filteredCharacters = useMemo(() => {
@@ -95,24 +57,6 @@ export const SharedCharactersList: React.FC = () => {
       (char) => char.permissionLevel === filterPermission,
     );
   }, [sharedCharacters, filterPermission]);
-
-  const handleRemoveSelf = (characterId: string, characterName: string): void => {
-    setSelectedCharacter({ id: characterId, name: characterName });
-    setRemoveDialogOpen(true);
-  };
-
-  const confirmRemoveSelf = (): void => {
-    if (!selectedCharacter) return;
-
-    // In a real implementation, this would call the revoke endpoint with the current user's ID
-    // For now, we'll show a toast indicating the action
-    toast({
-      title: 'Feature Coming Soon',
-      description: 'Self-removal from shared characters will be available soon.',
-    });
-    setRemoveDialogOpen(false);
-    setSelectedCharacter(null);
-  };
 
   if (error) {
     return (
@@ -210,48 +154,10 @@ export const SharedCharactersList: React.FC = () => {
             <SharedCharacterCard
               key={character.id}
               character={character}
-              onRemoveSelf={handleRemoveSelf}
             />
           ))}
         </div>
       )}
-
-      {/* Remove Self Confirmation Dialog */}
-      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Access</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove your access to "{selectedCharacter?.name}"? You won't
-              be able to view or edit this character unless the owner shares it with you again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Cancel and keep access</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <AlertDialogAction
-                  onClick={confirmRemoveSelf}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  aria-label={`Confirm removing your access to ${selectedCharacter?.name}`}
-                >
-                  {removeSelfMutation.isPending ? 'Removing...' : 'Remove Access'}
-                </AlertDialogAction>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Confirm removing your access to {selectedCharacter?.name}</p>
-              </TooltipContent>
-            </Tooltip>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
     </TooltipProvider>
   );

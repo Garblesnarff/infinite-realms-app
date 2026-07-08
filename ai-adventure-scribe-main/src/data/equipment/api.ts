@@ -4,6 +4,7 @@ import { shields } from './shields';
 import { weapons } from './weapons';
 import magicItemData from '@/data/srd/magic-items.json';
 import startingEquipmentData from '@/data/srd/starting-equipment.json';
+import logger from '@/lib/logger';
 
 import type { Equipment } from './types';
 
@@ -145,8 +146,16 @@ type SrdStartingClass = {
 const startingClasses = startingEquipmentData as SrdStartingClass[];
 
 function equipmentOrPlaceholder(id: string, name: string): Equipment {
-  return EQUIPMENT_LOOKUP.get(id) ?? {
-    id, name, category: 'gear', cost: { amount: 0, currency: 'gp' }, description: 'SRD starting equipment',
+  const equipment = EQUIPMENT_LOOKUP.get(id);
+  if (equipment) return equipment;
+
+  logger.error('Unknown starting equipment id from SRD data', { id, name });
+  return {
+    id,
+    name,
+    category: 'gear',
+    cost: { amount: 0, currency: 'gp' },
+    description: 'SRD starting equipment',
   };
 }
 

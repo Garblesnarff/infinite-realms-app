@@ -79,7 +79,7 @@ export const PermissionBadge: React.FC<{ level: PermissionLevel }> = ({ level })
  */
 export const SharedCharacterCard: React.FC<{
   character: SharedCharacter;
-  onRemoveSelf: (characterId: string, characterName: string) => void;
+  onRemoveSelf?: (characterId: string, characterName: string) => void;
 }> = ({ character, onRemoveSelf }) => {
   const navigate = useNavigate();
 
@@ -180,23 +180,25 @@ export const SharedCharacterCard: React.FC<{
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => onRemoveSelf(character.id, character.name)}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label={`Remove my access to ${character.name}`}
-              >
-                <UserMinus className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Remove my access to {character.name}</p>
-            </TooltipContent>
-          </Tooltip>
+          {onRemoveSelf && (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRemoveSelf(character.id, character.name)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label={`Remove my access to ${character.name}`}
+                >
+                  <UserMinus className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Remove my access to {character.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </Card>

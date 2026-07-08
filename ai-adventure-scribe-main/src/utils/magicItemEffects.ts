@@ -204,13 +204,25 @@ export function applyMagicItemEffectsToParticipant(
   const saveBonus = getMagicSaveBonus(character);
   participant.magicSaveBonus = saveBonus;
 
-  // Apply ability score bonuses
-  const _abilityBonuses = getMagicAbilityBonuses(character);
-  // These would be applied to relevant calculations
+  // Apply ability score bonuses where combat participant state carries modifiers.
+  const abilityBonuses = getMagicAbilityBonuses(character);
+  participant.magicAbilityBonuses = abilityBonuses;
+  (['strength', 'dexterity', 'constitution'] as const).forEach((ability) => {
+    const bonus = abilityBonuses[ability];
+    const score = character.abilityScores?.[ability]?.score;
+    if (bonus === undefined || score === undefined) return;
+
+    participant.abilityScores = {
+      ...participant.abilityScores,
+      [ability]: {
+        ...participant.abilityScores?.[ability],
+        modifier: Math.floor((score + bonus - 10) / 2),
+      },
+    };
+  });
 
   // Apply special properties
-  const _specialProperties = getMagicSpecialProperties(character);
-  // These would be applied as needed
+  participant.magicSpecialProperties = getMagicSpecialProperties(character);
 
   return participant;
 }

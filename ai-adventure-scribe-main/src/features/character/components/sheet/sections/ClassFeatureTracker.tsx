@@ -1,8 +1,10 @@
 import React from 'react';
 
 import type { Character } from '@/types/character';
+import type { ClassFeature } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import { updateCharacterClassFeatures } from '@/services/class-features-api';
 import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 
@@ -24,6 +26,13 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   const classFeatures = character.class
     ? getClassFeatures(character.class.name, character.level || 1)
     : [];
+  const trackedClassFeatures = classFeatures.map((feature) => {
+    const tracked =
+      character.classFeatures?.[feature.name] ??
+      character.classFeatures?.[feature.name.replace(/_/g, '-')] ??
+      character.classFeatures?.[feature.name.replace(/_/g, ' ')];
+    return tracked && typeof tracked === 'object' ? { ...feature, ...tracked } : feature;
+  });
 
   // Get character resources
   const characterResources = character.class
@@ -47,19 +56,31 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   };
 
   // Handle using a resource
-  const handleUseResource = (resourceName: string) => {
-    // In a real implementation, this would update the character's resources
-    logger.info(`Using resource: ${resourceName}`);
+  const handleUseResource = async (feature: ClassFeature) => {
+    if (!character.id || feature.currentUses === undefined || feature.currentUses <= 0) return;
 
-    // This would be implemented with actual resource usage logic
-    // For example:
-    // const updatedResources = { ...character.resources };
-    // updatedResources[resourceName].current -= 1;
-    // onUpdate({ ...character, resources: updatedResources });
+    const featureState = {
+      ...feature,
+      currentUses: feature.currentUses - 1,
+    };
+    const classFeaturesState = {
+      ...(character.classFeatures ?? {}),
+      [feature.name]: featureState,
+    };
+    const updatedCharacter = { ...character, classFeatures: classFeaturesState };
+
+    onUpdate(updatedCharacter);
+    try {
+      await updateCharacterClassFeatures(character.id, classFeaturesState);
+      logger.info(`Used class feature: ${feature.name}`, featureState);
+    } catch (error) {
+      onUpdate(character);
+      logger.error(`Failed to use class feature: ${feature.name}`, error);
+    }
   };
 
   // If no class features or resources, don't render anything
-  if (classFeatures.length === 0 && !characterResources) {
+  if (trackedClassFeatures.length === 0 && !characterResources) {
     return null;
   }
 
@@ -68,7 +89,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
       {/* Class Features with Usage Tracking */}
       <FeatureSection
         character={character}
-        classFeatures={classFeatures}
+        classFeatures={trackedClassFeatures}
         onUseResource={handleUseResource}
       />
 

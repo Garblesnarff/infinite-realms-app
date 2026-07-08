@@ -8,6 +8,7 @@ import type { Character, CharacterClass } from '@/types/character';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getProficiencyBonus } from '@/data/levelProgression';
+import { useToast } from '@/hooks/use-toast';
 import { useMulticlassing } from '@/hooks/use-multiclassing';
 import logger from '@/lib/logger';
 
@@ -28,6 +29,7 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
   onUpdate,
   availableClasses = [],
 }) => {
+  const { toast } = useToast();
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
   const {
     isProcessing,
@@ -87,7 +89,11 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
   const handleAddClass = async (newClass: CharacterClass) => {
     const result = await addNewClass(newClass, 1);
     if (!result.success) {
-      // In a real implementation, you would show an error message to the user
+      toast({
+        title: 'Cannot add class',
+        description: result.message,
+        variant: 'destructive',
+      });
       logger.error(result.message);
     }
   };
@@ -98,7 +104,11 @@ const MulticlassManager: React.FC<MulticlassManagerProps> = ({
   const handleLevelUpClass = async (classId: string) => {
     const result = await levelUpSpecificClass(classId);
     if (!result.success) {
-      // In a real implementation, you would show an error message to the user
+      toast({
+        title: 'Cannot level up class',
+        description: result.message,
+        variant: 'destructive',
+      });
       logger.error(result.message);
     }
   };

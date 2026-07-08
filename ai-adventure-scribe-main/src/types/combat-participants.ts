@@ -45,6 +45,8 @@ export interface CombatParticipant {
   magicAttackBonus?: number;
   magicDamageBonus?: number;
   magicSaveBonus?: number;
+  magicAbilityBonuses?: Partial<Record<'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma', number>>;
+  magicSpecialProperties?: string[];
   initiative: number;
   initiativeBonus?: number;
   abilityScores?: {

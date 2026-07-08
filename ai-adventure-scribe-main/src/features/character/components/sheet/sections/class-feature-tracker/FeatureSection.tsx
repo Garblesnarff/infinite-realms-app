@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress';
 interface FeatureSectionProps {
   character: Character;
   classFeatures: ClassFeature[];
-  onUseResource: (resourceName: string) => void;
+  onUseResource: (feature: ClassFeature) => void;
 }
 
 /**
@@ -70,7 +70,7 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
               <Button
                 size="sm"
                 className="mt-2"
-                onClick={() => onUseResource(feature.name)}
+                onClick={() => onUseResource(feature)}
               >
                 <Zap className="w-4 h-4 mr-2" />
                 Use Feature
