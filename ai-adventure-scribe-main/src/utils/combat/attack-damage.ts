@@ -10,6 +10,7 @@ import type { CombatParticipant, DamageType, DiceRoll } from '@/types/combat';
 import type { DamageCalculation } from '@/utils/combat/attack-types';
 
 import { rollDamage, calculateDamage } from '@/utils/diceUtils';
+import { getWeaponDamageDice } from '@/data/equipment/weapons';
 
 /**
  * Calculate damage for an attack
@@ -21,6 +22,7 @@ export function calculateAttackDamage(
   options: {
     divineSmiteLevel?: number;
     sneakAttack?: boolean;
+    wieldedTwoHanded?: boolean;
   } = {},
 ): DamageCalculation {
   let damageRolls: DiceRoll[] = [];
@@ -49,7 +51,7 @@ export function calculateAttackDamage(
     damageType = 'bludgeoning';
   } else if (weapon.damage) {
     // Weapon damage
-    damageRolls = rollDamage(weapon.damage.dice, criticalHit, {});
+    damageRolls = rollDamage(getWeaponDamageDice(weapon, options.wieldedTwoHanded) ?? weapon.damage.dice, criticalHit, {});
     baseDamage = damageRolls.reduce((sum, roll) => sum + roll.total, 0);
     damageType = weapon.damage.type;
 

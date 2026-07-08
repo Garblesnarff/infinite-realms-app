@@ -13,4 +13,6 @@ export {
   convertCurrency,
   formatCurrency,
   getStartingEquipment,
+  getStartingEquipmentChoices,
 } from './equipment/api';
+export type { StartingEquipmentChoice, StartingEquipmentAlternative } from './equipment/api';

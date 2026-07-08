@@ -2,10 +2,13 @@ import { armor } from './armor';
 import { adventuringGear } from './gear';
 import { shields } from './shields';
 import { weapons } from './weapons';
+import magicItemData from '@/data/srd/magic-items.json';
+import startingEquipmentData from '@/data/srd/starting-equipment.json';
 
 import type { Equipment } from './types';
 
-const all: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear];
+export const magicItems = magicItemData as Equipment[];
+const all: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear, ...magicItems];
 
 /**
  * ⚡ Bolt: Local O(1) equipment lookup Map.
@@ -113,4 +116,65 @@ export function getStartingEquipment(className: string): Equipment[] {
         description: `Starting ${className} equipment`,
       },
   );
+}
+
+export interface StartingEquipmentAlternative {
+  label: string;
+  items: Array<{ equipment: Equipment; quantity: number }>;
+}
+
+export interface StartingEquipmentChoice {
+  description: string;
+  alternatives: StartingEquipmentAlternative[];
+}
+
+type SrdOption = {
+  option_type: 'counted_reference' | 'choice' | 'multiple';
+  count?: number;
+  of?: { index: string; name: string };
+  items?: SrdOption[];
+  choice?: { desc: string; from: { equipment_category?: { index: string }; options?: SrdOption[] } };
+};
+
+type SrdStartingClass = {
+  id: string;
+  fixed: Array<{ id: string; name: string; quantity: number }>;
+  choices: Array<{ desc: string; from: { options: SrdOption[] } }>;
+};
+
+const startingClasses = startingEquipmentData as SrdStartingClass[];
+
+function equipmentOrPlaceholder(id: string, name: string): Equipment {
+  return EQUIPMENT_LOOKUP.get(id) ?? {
+    id, name, category: 'gear', cost: { amount: 0, currency: 'gp' }, description: 'SRD starting equipment',
+  };
+}
+
+function expandOption(option: SrdOption): StartingEquipmentAlternative[] {
+  if (option.option_type === 'counted_reference' && option.of) {
+    return [{ label: `${option.count ?? 1}× ${option.of.name}`, items: [{ equipment: equipmentOrPlaceholder(option.of.index, option.of.name), quantity: option.count ?? 1 }] }];
+  }
+  if (option.option_type === 'multiple') {
+    const expanded = (option.items ?? []).flatMap(expandOption);
+    return [{ label: expanded.map((item) => item.label).join(' + '), items: expanded.flatMap((item) => item.items) }];
+  }
+  const nested = option.choice?.from;
+  if (nested?.options) return nested.options.flatMap(expandOption);
+  const category = nested?.equipment_category?.index ?? '';
+  const candidates = category.includes('martial') ? weapons.filter((item) => item.weaponType === 'martial')
+    : category.includes('simple') ? weapons.filter((item) => item.weaponType === 'simple')
+      : category.includes('weapon') ? weapons : all;
+  return candidates.map((equipment) => ({ label: equipment.name, items: [{ equipment, quantity: 1 }] }));
+}
+
+export function getStartingEquipmentChoices(className: string): {
+  fixed: Array<{ equipment: Equipment; quantity: number }>;
+  choices: StartingEquipmentChoice[];
+} {
+  const entry = startingClasses.find((item) => item.id === className.toLowerCase());
+  if (!entry) return { fixed: [], choices: [] };
+  return {
+    fixed: entry.fixed.map((item) => ({ equipment: equipmentOrPlaceholder(item.id, item.name), quantity: item.quantity })),
+    choices: entry.choices.map((choice) => ({ description: choice.desc, alternatives: choice.from.options.flatMap(expandOption) })),
+  };
 }

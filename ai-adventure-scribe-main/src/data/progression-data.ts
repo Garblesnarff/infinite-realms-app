@@ -1,4 +1,5 @@
 import type { AbilityScores } from '@/types/character';
+import progressionData from '@/data/srd/progressions.json';
 
 /**
  * D&D 5E Experience Point requirements for each level
@@ -113,7 +114,7 @@ export interface LevelFeature {
 /**
  * Class progression tables for each class
  */
-export const classProgressions: Record<string, LevelFeature[]> = {
+export const legacyClassProgressions: Record<string, LevelFeature[]> = {
   fighter: [
     { level: 1, featureName: 'Fighting Style', description: 'Choose a fighting style.' },
     { level: 1, featureName: 'Second Wind', description: 'Recover hit points as a bonus action.' },
@@ -409,6 +410,9 @@ export const classProgressions: Record<string, LevelFeature[]> = {
     },
   ],
 };
+
+/** All twelve 2014 SRD class progressions through level 20. */
+export const classProgressions = progressionData as Record<string, LevelFeature[]>;
 
 /**
  * Multiclassing proficiencies gained

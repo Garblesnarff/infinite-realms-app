@@ -7,6 +7,7 @@ import ClassFeatureTracker from '../sections/ClassFeatureTracker';
 import FightingStylesDisplay from '../sections/FightingStylesDisplay';
 
 import type { Character } from '@/types/character';
+import { getAllClassFeaturesUpToLevel } from '@/data/levelProgression';
 
 interface FeaturesTabProps {
   character: Character;
@@ -29,56 +30,16 @@ interface Feature {
  * Features & Traits tab showing racial traits, class features, and special abilities
  */
 const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
-  // Example features (would be calculated based on character's race, class, level, etc.)
+  const className = character.class?.name ?? '';
   const features: Feature[] = [
-    // Racial Features
-    {
-      name: 'Darkvision',
-      source: 'race',
-      description:
-        'You can see in dim light within 60 feet of you as if it were bright light, and in darkness as if it were dim light.',
-    },
-    {
-      name: 'Fey Ancestry',
-      source: 'race',
-      description:
-        'You have advantage on saving throws against being charmed, and magic cannot put you to sleep.',
-    },
-    // Class Features
-    {
-      name: 'Fighting Style: Defense',
-      source: 'class',
-      level: 1,
-      description: 'While you are wearing armor, you gain a +1 bonus to AC.',
-    },
-    {
-      name: 'Second Wind',
-      source: 'class',
-      level: 1,
-      description:
-        'You can use a bonus action to regain hit points equal to 1d10 + your fighter level.',
-      uses: { total: 1, used: 0, recharge: 'short' },
-    },
-    {
-      name: 'Action Surge',
-      source: 'class',
-      level: 2,
-      description: 'You can take one additional action on your turn.',
-      uses: { total: 1, used: 1, recharge: 'short' },
-    },
-    {
-      name: 'Martial Archetype: Champion',
-      source: 'class',
-      level: 3,
-      description: 'Your weapon attacks score a critical hit on a roll of 19 or 20.',
-    },
-    // Background Features
-    {
-      name: 'Guild Membership',
-      source: 'background',
-      description:
-        'As an established member of a guild, you can rely on certain benefits that membership provides.',
-    },
+    ...(character.race?.traits ?? []).map((trait) => ({ name: trait, source: 'race' as const, description: trait })),
+    ...getAllClassFeaturesUpToLevel(className, character.level ?? 1).map((feature) => ({
+      name: feature.featureName, source: 'class' as const, level: feature.level, description: feature.description,
+    })),
+    ...(character.subclass?.features ?? []).filter((feature) => feature.level <= (character.level ?? 1)).map((feature) => ({
+      name: feature.name, source: 'class' as const, level: feature.level, description: feature.description,
+    })),
+    ...(character.background ? [{ name: character.background.feature.name, source: 'background' as const, description: character.background.feature.description }] : []),
   ];
 
   const _getFeatureIcon = (source: string) => {
