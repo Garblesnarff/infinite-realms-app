@@ -127,7 +127,7 @@ const EncounterTracker: React.FC<{ round: number; combatants: CombatantVM[] }> =
             {String(c.initiative).padStart(2, '0')}
           </span>
           <span className="flex-1 truncate text-xs text-foreground/90">{c.name}</span>
-          <span className="h-3.5 w-3.5 rounded-[3px] border border-white/20" aria-hidden="true" />
+          <span className="h-3.5 w-3.5 rounded-sm border border-white/20" aria-hidden="true" />
         </div>
       ))}
     </div>
