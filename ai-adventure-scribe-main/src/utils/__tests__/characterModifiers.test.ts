@@ -42,6 +42,7 @@ describe('characterModifiers', () => {
       charisma: { score: 13, modifier: 1, savingThrow: false },
     },
     skillProficiencies: ['Athletics', 'Perception', 'Stealth'],
+    toolProficiencies: ["Thieves' Tools"],
     savingThrowProficiencies: ['strength', 'wisdom'],
   };
 
@@ -156,6 +157,15 @@ describe('characterModifiers', () => {
       expect(calculateSkillModifier(mockCharacter, 'Arcana')).toBe(-1);
     });
 
+    it('should double proficiency for expertise', () => {
+      expect(
+        calculateSkillModifier(
+          { ...mockCharacter, expertiseProficiencies: ['Stealth'] },
+          'Stealth',
+        ),
+      ).toBe(5);
+    });
+
     it('should return 0 and log warning for unknown skill', () => {
       expect(calculateSkillModifier(mockCharacter, 'Unknown')).toBe(0);
     });
@@ -230,6 +240,19 @@ describe('characterModifiers', () => {
       const result = calculateRollWithBreakdown(mockCharacter, 'check', 'wisdom');
       expect(result.formula).toBe('1d20+3');
       expect(result.breakdown).toContain('WIS +3');
+    });
+
+    it('should add proficiency for a selected tool at check resolution', () => {
+      const result = calculateRollWithBreakdown(
+        mockCharacter,
+        'check',
+        'dexterity',
+        "Thieves' Tools",
+      );
+
+      expect(result.isProficient).toBe(true);
+      expect(result.totalModifier).toBe(3);
+      expect(result.breakdown).toContain("Thieves' Tools Prof +2");
     });
 
     it('should handle skill roll breakdown', () => {

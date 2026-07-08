@@ -14,12 +14,7 @@ import logger from '@/lib/logger';
 
 // D&D 5e ability names
 export type AbilityName =
-  | 'strength'
-  | 'dexterity'
-  | 'constitution'
-  | 'intelligence'
-  | 'wisdom'
-  | 'charisma';
+  'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma';
 
 // D&D 5e skills and their associated abilities
 export const SKILL_ABILITIES: Record<string, AbilityName> = {
@@ -140,7 +135,10 @@ export function calculateSkillModifier(character: Character, skillName: string):
 
   const abilityMod = getAbilityModifier(character, ability);
   const proficient = isSkillProficient(character, skillName);
-  const proficiencyBonus = proficient ? getProficiencyBonus(character) : 0;
+  const expertise = character.expertiseProficiencies?.some(
+    (entry) => entry.toLowerCase() === skillName.toLowerCase(),
+  );
+  const proficiencyBonus = proficient ? getProficiencyBonus(character) * (expertise ? 2 : 1) : 0;
 
   return abilityMod + proficiencyBonus;
 }
@@ -269,10 +267,17 @@ export function calculateRollWithBreakdown(
       if (!ability) throw new Error('Ability required for ability check');
       usedAbility = ability;
       abilityMod = getAbilityModifier(character, ability);
-      // Ability checks generally don't add proficiency unless it's a skill
+      if (
+        skillName &&
+        character.toolProficiencies?.some((tool) => tool.toLowerCase() === skillName.toLowerCase())
+      ) {
+        isProficient = true;
+        proficiencyBonus = getProficiencyBonus(character);
+      }
       breakdown.push(
         `${ability.slice(0, 3).toUpperCase()} ${abilityMod >= 0 ? '+' : ''}${abilityMod}`,
       );
+      if (isProficient) breakdown.push(`${skillName} Prof +${proficiencyBonus}`);
       break;
 
     case 'skill': {
@@ -285,7 +290,10 @@ export function calculateRollWithBreakdown(
       usedAbility = skillAbility;
       abilityMod = getAbilityModifier(character, skillAbility);
       isProficient = isSkillProficient(character, skillName);
-      proficiencyBonus = isProficient ? getProficiencyBonus(character) : 0;
+      const hasExpertise = character.expertiseProficiencies?.some(
+        (entry) => entry.toLowerCase() === skillName.toLowerCase(),
+      );
+      proficiencyBonus = isProficient ? getProficiencyBonus(character) * (hasExpertise ? 2 : 1) : 0;
       breakdown.push(
         `${skillAbility.slice(0, 3).toUpperCase()} ${abilityMod >= 0 ? '+' : ''}${abilityMod}`,
       );
