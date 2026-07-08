@@ -86,7 +86,7 @@ export const chronicleRoutes = new Elysia({ prefix: '/chronicle' })
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.error('Failed to render chronicle share page', { error });
+      logger.error({ error }, 'Failed to render chronicle share page');
       set.status = 500;
       return new Response('Failed to render chronicle', {
         status: 500,

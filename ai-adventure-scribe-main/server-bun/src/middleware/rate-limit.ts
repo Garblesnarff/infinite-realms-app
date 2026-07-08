@@ -272,7 +272,7 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
         return;
       } catch (error) {
         // Fail-open on limiter errors
-        logger.error('Rate limiter error, failing open:', error);
+        logger.error({ error: error }, 'Rate limiter error, failing open:');
         return;
       }
     });
@@ -320,7 +320,7 @@ export function createSimpleRateLimit(options: { windowMs: number; max: number; 
         return;
       } catch (error) {
         // Fail-open on errors
-        logger.error('Simple rate limiter error, failing open:', error);
+        logger.error({ error: error }, 'Simple rate limiter error, failing open:');
         return;
       }
     });

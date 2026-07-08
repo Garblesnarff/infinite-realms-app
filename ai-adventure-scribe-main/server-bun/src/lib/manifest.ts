@@ -91,7 +91,7 @@ export async function resolveAssetsForEntries(entries: string[]): Promise<Resolv
   } catch (error) {
     if (!manifestWarningLogged) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.warn('Unable to resolve Vite manifest assets', { error });
+      logger.warn({ error }, 'Unable to resolve Vite manifest assets');
       manifestWarningLogged = true;
     }
     return null;

@@ -75,9 +75,9 @@ async function verifyWorkOSToken(accessToken: string) {
     };
   } catch (error) {
     if (error instanceof Error) {
-      logger.error('WorkOS token verification failed:', error.message);
+      logger.error({ error: error.message }, 'WorkOS token verification failed:');
     } else {
-      logger.error('WorkOS token verification failed:', error);
+      logger.error({ error: error }, 'WorkOS token verification failed:');
     }
     return null;
   }
@@ -101,7 +101,7 @@ async function resolveUserPlan(userId: string, headers: Record<string, string | 
       return String(rows[0].plan).toLowerCase();
     }
   } catch (error) {
-    logger.error('Failed to resolve user plan from database:', error);
+    logger.error({ error: error }, 'Failed to resolve user plan from database:');
   }
 
   // 3) Default
@@ -153,7 +153,7 @@ export const requireAuth = new Elysia({ name: 'require-auth' })
         error: null,
       };
     } catch (error) {
-      logger.error('Auth error:', error);
+      logger.error({ error: error }, 'Auth error:');
       set.status = 401;
       return {
         user: null,
@@ -205,7 +205,7 @@ export const optionalAuth = new Elysia({ name: 'optional-auth' })
         } as AuthTokenPayload,
       };
     } catch (error) {
-      logger.debug('Optional auth failed, continuing without user:', error);
+      logger.debug({ error: error }, 'Optional auth failed, continuing without user:');
       return { user: null };
     }
   });

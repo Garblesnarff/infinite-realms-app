@@ -88,7 +88,7 @@ export const metricsPlugin = new Elysia({ name: 'metrics' })
       logger.debug(`[Metrics] ${method} ${route} ${statusCode} ${duration.toFixed(3)}s`);
     } catch (error) {
       // Don't fail requests due to metrics errors
-      logger.error('Metrics collection error:', error);
+      logger.error({ error: error }, 'Metrics collection error:');
     }
   })
   .onError(({ request, error: _error, code, store, path }) => {
@@ -119,7 +119,7 @@ export const metricsPlugin = new Elysia({ name: 'metrics' })
       logger.debug(`[Metrics] ${method} ${route} ${statusCode} ${duration.toFixed(3)}s (error: ${code})`);
     } catch (metricsError) {
       // Don't fail requests due to metrics errors
-      logger.error('Metrics collection error in error handler:', metricsError);
+      logger.error({ error: metricsError }, 'Metrics collection error in error handler:');
     }
   });
 

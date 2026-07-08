@@ -95,7 +95,7 @@ export class BlogService {
       .order('published_at', { ascending: false });
 
     if (error) {
-      logger.error('Failed to fetch blog posts', { error });
+      logger.error({ error }, 'Failed to fetch blog posts');
       return [];
     }
 
@@ -133,7 +133,7 @@ export class BlogService {
     const { data, error } = await query.limit(limit);
 
     if (error) {
-      logger.error('Failed to fetch recent blog posts', { error });
+      logger.error({ error }, 'Failed to fetch recent blog posts');
       return [];
     }
 
@@ -162,7 +162,7 @@ export class BlogService {
       .maybeSingle();
 
     if (error) {
-      logger.error(`Failed to fetch blog post with slug ${slug}`, { error });
+      logger.error({ error }, `Failed to fetch blog post with slug ${slug}`);
       return null;
     }
 

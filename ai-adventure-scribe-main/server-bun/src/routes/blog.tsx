@@ -82,7 +82,7 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.error('Failed to render blog index', { error });
+      logger.error({ error }, 'Failed to render blog index');
       set.status = 500;
       return new Response('Failed to render blog index', {
         status: 500,
@@ -136,7 +136,7 @@ export const blogRoutes = new Elysia({ prefix: '/blog' })
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.error('Failed to render blog post', { error });
+      logger.error({ error }, 'Failed to render blog post');
       set.status = 500;
       return new Response('Failed to render blog post', {
         status: 500,

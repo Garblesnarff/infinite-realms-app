@@ -80,7 +80,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
           return { error: 'Too many login attempts. Please try again later.' };
         }
 
-        logger.info('[BlogAdminAuth] Login attempt for:', username);
+        logger.info({ value: username }, '[BlogAdminAuth] Login attempt for:');
 
         // Check if blog admin credentials are configured
         if (!BLOG_ADMIN_USERNAME || !BLOG_ADMIN_PASSWORD_HASH || !BLOG_ADMIN_JWT_SECRET) {
@@ -91,7 +91,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
 
         // Verify username
         if (username !== BLOG_ADMIN_USERNAME) {
-          logger.warn('[BlogAdminAuth] Invalid username attempt:', username);
+          logger.warn({ value: username }, '[BlogAdminAuth] Invalid username attempt:');
           set.status = 401;
           return { error: 'Invalid credentials' };
         }
@@ -99,7 +99,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
         // Verify password
         const isValidPassword = await bcrypt.compare(password, BLOG_ADMIN_PASSWORD_HASH);
         if (!isValidPassword) {
-          logger.warn('[BlogAdminAuth] Invalid password attempt for user:', username);
+          logger.warn({ value: username }, '[BlogAdminAuth] Invalid password attempt for user:');
           set.status = 401;
           return { error: 'Invalid credentials' };
         }
@@ -116,7 +116,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
           { expiresIn: '7d' } // Token valid for 7 days
         );
 
-        logger.info('[BlogAdminAuth] Successful login for:', username);
+        logger.info({ value: username }, '[BlogAdminAuth] Successful login for:');
         resetLoginAttempts(bucketKey);
 
         return {
@@ -125,7 +125,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
           expiresIn: 7 * 24 * 60 * 60, // 7 days in seconds
         };
       } catch (error) {
-        logger.error('[BlogAdminAuth] Login error:', error);
+        logger.error({ error: error }, '[BlogAdminAuth] Login error:');
         set.status = 500;
         return { error: 'Login failed' };
       }
@@ -182,7 +182,7 @@ export const blogAdminAuthRoutes = new Elysia({ prefix: '/v1/blog-admin' })
           role: payload.role,
         };
       } catch (error) {
-        logger.warn('[BlogAdminAuth] Token verification failed:', error);
+        logger.warn({ error: error }, '[BlogAdminAuth] Token verification failed:');
         set.status = 401;
         return { error: 'Unauthorized' };
       }

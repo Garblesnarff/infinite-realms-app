@@ -120,7 +120,7 @@ export const landingRoutes = new Elysia()
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.error('Failed to render AI Game Master page', { error });
+      logger.error({ error }, 'Failed to render AI Game Master page');
       return new Response('Failed to render landing page', {
         status: 500,
         headers: { 'Content-Type': 'text/plain' },
@@ -202,7 +202,7 @@ export const landingRoutes = new Elysia()
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
-      logger.error('Failed to render Solo Tabletop RPG page', { error });
+      logger.error({ error }, 'Failed to render Solo Tabletop RPG page');
       return new Response('Failed to render landing page', {
         status: 500,
         headers: { 'Content-Type': 'text/plain' },

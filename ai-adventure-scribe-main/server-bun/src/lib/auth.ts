@@ -42,7 +42,7 @@ async function resolveUserPlan(userId: string): Promise<string> {
       return plan;
     }
   } catch (e) {
-    logger.warn('Failed to resolve user plan from database:', e);
+    logger.warn({ error: e }, 'Failed to resolve user plan from database:');
   }
   return 'free';
 }
@@ -105,7 +105,7 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
       });
       return { user: null, error: 'Unauthorized' };
     }
-    logger.error('Auth verification failed:', error);
+    logger.error({ error: error }, 'Auth verification failed:');
     return { user: null, error: 'Unauthorized' };
   }
 }
