@@ -92,6 +92,7 @@ export interface MonsterDef {
   senses?: Record<string, string | number>;
   languages?: string;
   proficiencyBonus?: number;
+  savingThrows?: Record<string, number>;
   specialAbilities?: Array<{ name: string; desc: string }>;
   actions?: Array<Record<string, unknown>>;
   legendaryActions?: Array<Record<string, unknown>>;

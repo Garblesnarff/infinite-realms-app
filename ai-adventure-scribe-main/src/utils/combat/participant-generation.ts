@@ -15,6 +15,30 @@ export interface PlayerCharacterLike {
   };
 }
 
+const numberWords: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+
+/** Convert an SRD Multiattack description into an ordered sequence executable by combat UI. */
+export function parseMultiattackSequence(description: string, attackNames: string[]): string[] {
+  const lower = description.toLowerCase();
+  const sequence: string[] = [];
+  for (const name of attackNames) {
+    const singular = name.toLowerCase().replace(/s$/, '');
+    const match = lower.match(new RegExp(`(?:one|two|three|four|five|\\d+) (?:with (?:its|his|her) )?${singular}s?`));
+    if (match) {
+      const token = match[0].split(' ')[0];
+      const count = numberWords[token] ?? Number(token);
+      sequence.push(...Array(count).fill(name));
+    }
+  }
+  if (!sequence.length) {
+    const total = lower.match(/makes? (one|two|three|four|five|\\d+) .*?attacks?/);
+    const count = total ? (numberWords[total[1]] ?? Number(total[1])) : 0;
+    const sole = attackNames.find((name) => lower.includes(name.toLowerCase().replace(/s$/, '')));
+    if (sole && count) sequence.push(...Array(count).fill(sole));
+  }
+  return sequence;
+}
+
 /**
  * Generate combat participants from detected enemies
  */
@@ -56,22 +80,11 @@ export function createCombatParticipantsFromDetection(
     const monster = loadMonsters().find((entry) =>
       entry.id === enemy.monsterId || entry.name.toLowerCase() === enemy.name.toLowerCase());
 
-    // Parse CR (handle fractional strings like "1/4")
-    let numericCR = 1;
-    if (typeof enemy.estimatedCR === 'string') {
-      if (enemy.estimatedCR.includes('/')) {
-        const [num, den] = enemy.estimatedCR.split('/').map(Number);
-        numericCR = num / den;
-      } else {
-        numericCR = parseFloat(enemy.estimatedCR);
-      }
-    } else {
-      numericCR = Number(enemy.estimatedCR || 1);
-    }
-
-    // Estimate initiative modifier based on CR (higher CR = better dex)
-    // CR 0-2: +1, CR 3-5: +2, CR 6-10: +3, CR 11+: +4
-    const initiativeModifier = Math.min(4, Math.max(1, Math.floor(numericCR / 3) + 1));
+    const initiativeModifier = monster?.abilities?.dexterity != null
+      ? Math.floor((monster.abilities.dexterity - 10) / 2)
+      : 0;
+    const attackActions = monster?.actions?.filter((action) => action.attack_bonus !== undefined) ?? [];
+    const multiattack = monster?.actions?.find((action) => action.name === 'Multiattack');
 
     participants.push({
       id: `enemy-${enemy.name.toLowerCase()}-${i}`,
@@ -93,7 +106,7 @@ export function createCombatParticipantsFromDetection(
         challengeRating: String(monster?.cr ?? enemy.estimatedCR),
         alignment: monster?.alignment || 'hostile',
         specialAbilities: monster?.specialAbilities?.map((ability) => ability.name) || [],
-        attacks: monster?.actions?.filter((action) => action.attack_bonus !== undefined).map((action) => {
+        attacks: attackActions.map((action) => {
           const damage = Array.isArray(action.damage) ? action.damage[0] as any : undefined;
           const description = String(action.desc || '');
           return {
@@ -112,6 +125,9 @@ export function createCombatParticipantsFromDetection(
             description: 'A basic melee attack',
           },
         ],
+        multiattackSequence: multiattack ? parseMultiattackSequence(String(multiattack.desc || ''), attackActions.map((action) => String(action.name))) : undefined,
+        savingThrowBonuses: monster?.savingThrows ?? {},
+        hasLegendaryActions: Boolean(monster?.legendaryActions?.length),
       },
     });
   }

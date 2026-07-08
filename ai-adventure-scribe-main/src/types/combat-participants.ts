@@ -121,6 +121,10 @@ export interface CombatParticipant {
     alignment: string;
     specialAbilities: string[];
     attacks: MonsterAttack[];
+    /** Ordered attack names for the creature's Multiattack action. */
+    multiattackSequence?: string[];
+    savingThrowBonuses?: Record<string, number>;
+    hasLegendaryActions?: boolean;
   };
 }
 

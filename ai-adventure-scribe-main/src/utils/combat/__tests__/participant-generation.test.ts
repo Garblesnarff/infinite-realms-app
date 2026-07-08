@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { createCombatParticipantsFromDetection } from '../participant-generation';
+import { createCombatParticipantsFromDetection, parseMultiattackSequence } from '../participant-generation';
 
 import type { DetectedEnemy } from '@/utils/combatDetection';
 
@@ -35,7 +35,7 @@ describe('createCombatParticipantsFromDetection', () => {
     expect(participants[0].armorClass).toBe(15);
 
     expect(participants[1].name).toBe('Goblin');
-    expect(participants[1].initiative).toBe(1); // CR 1/4 -> mod 1
+    expect(participants[1].initiative).toBe(2); // real goblin DEX 14
     expect(participants[1].armorClass).toBe(15);
     expect(participants[1].monsterData?.type).toBe('humanoid');
   });
@@ -67,20 +67,10 @@ describe('createCombatParticipantsFromDetection', () => {
     expect(participants[1].name).toBe('Goblin 2');
   });
 
-  it('calculates initiative modifier based on CR correctly', () => {
-    const crTests: { cr: string; expected: number }[] = [
-      { cr: '1/4', expected: 1 },
-      { cr: '2', expected: 1 },
-      { cr: '3', expected: 2 },
-      { cr: '6', expected: 3 },
-      { cr: '11', expected: 4 },
-    ];
-
-    crTests.forEach(({ cr, expected }) => {
-      const testEnemies: DetectedEnemy[] = [{ ...enemies[0], estimatedCR: cr }];
-      const participants = createCombatParticipantsFromDetection(testEnemies, null);
-      expect(participants[0].initiative).toBe(expected);
-    });
+  it('uses real monster ability scores and attacks instead of CR guesses', () => {
+    const participant = createCombatParticipantsFromDetection(enemies, null)[0];
+    expect(participant.initiative).toBe(2);
+    expect(participant.monsterData?.attacks[0]).toMatchObject({ name: 'Scimitar', attackBonus: 4, damageRoll: '1d6+2' });
   });
 
   it('handles numeric and missing CR', () => {
@@ -90,6 +80,11 @@ describe('createCombatParticipantsFromDetection', () => {
 
     // @ts-expect-error - testing invalid input
     const participants2 = createCombatParticipantsFromDetection([{ ...enemies[0], estimatedCR: undefined }], null);
-    expect(participants2[0].initiative).toBe(1);
+    expect(participants2[0].initiative).toBe(2);
+  });
+
+  it('parses ordered multiattack sequences', () => {
+    expect(parseMultiattackSequence('The dragon makes three attacks: one with its bite and two with its claws.', ['Bite', 'Claw']))
+      .toEqual(['Bite', 'Claw', 'Claw']);
   });
 });
