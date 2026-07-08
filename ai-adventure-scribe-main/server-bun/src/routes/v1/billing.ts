@@ -17,7 +17,12 @@ import { authenticateRequest } from '../../lib/auth.js';
 import { sql } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { logger } from '../../lib/logger.js';
-import { claimStripeEvent, getPlanFromPriceId, resolveAllowedPriceId, validateCheckoutUrl } from '../../services/billing-hardening.js';
+import {
+  claimStripeEvent,
+  getPlanFromPriceId,
+  resolveAllowedPriceId,
+  validateCheckoutUrl,
+} from '../../services/stripe-checkout-security.js';
 
 // Initialize Stripe client (lazy - only if key is configured)
 let stripe: Stripe | null = null;

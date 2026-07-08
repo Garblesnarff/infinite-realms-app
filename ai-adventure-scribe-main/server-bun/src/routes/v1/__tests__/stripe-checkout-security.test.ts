@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-let billing: typeof import('../../../services/billing-hardening.js');
+let billing: typeof import('../../../services/stripe-checkout-security.js');
 
 beforeAll(async () => {
   Object.assign(process.env, { DATABASE_URL: 'postgres://test:test@localhost:5432/test', PORT: '3000', CORS_ORIGIN: 'http://localhost:5173', WORKOS_API_KEY: 'test', WORKOS_CLIENT_ID: 'test', STRIPE_PRICE_ID: 'price_pro', APP_ORIGIN: 'https://infiniterealms.app' });
-  billing = await import('../../../services/billing-hardening.js');
+  billing = await import('../../../services/stripe-checkout-security.js');
 });
 
 describe('billing hardening', () => {

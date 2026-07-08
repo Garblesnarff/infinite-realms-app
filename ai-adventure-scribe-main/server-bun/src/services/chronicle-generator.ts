@@ -5,7 +5,13 @@ import { randomBytes } from 'crypto';
 import { and, eq, asc, desc, or, exists } from 'drizzle-orm';
 
 import { db } from '../../../db/client';
-import { dialogueHistory, gameSessions, campaigns, characters } from '../../../db/schema/index';
+import {
+  dialogueHistory,
+  gameSessions,
+  campaigns,
+  characters,
+  sessionChronicles,
+} from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { getCircuitBreaker } from '../utils/circuit-breaker.js';
@@ -48,6 +54,25 @@ interface FalStatusResponse {
 
 const TEXT_TIMEOUT_MS = 60_000;
 const IMAGE_TIMEOUT_MS = 120_000;
+
+export async function persistChronicleFailure(
+  database: Pick<typeof db, 'transaction'>,
+  chronicleId: string,
+  error: unknown,
+): Promise<void> {
+  await database.transaction(async (tx) => {
+    await tx
+      .update(sessionChronicles)
+      .set({
+        status: 'failed',
+        errorMessage: error instanceof Error
+          ? error.message.slice(0, 500)
+          : 'Chronicle generation failed',
+        updatedAt: new Date(),
+      })
+      .where(eq(sessionChronicles.id, chronicleId));
+  });
+}
 
 // ─── ChronicleGenerator ─────────────────────────────────────────────────────
 

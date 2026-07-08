@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { persistChronicleFailure } from '../../../services/chronicle-status-service.js';
+import { persistChronicleFailure } from '../../../services/chronicle-generator.js';
 
 describe('chronicle status transaction', () => {
   it('persists failed status when generation throws', async () => {

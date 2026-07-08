@@ -21,8 +21,7 @@ import { planRateLimit } from '../../middleware/rate-limit.js';
 import { SessionService } from '../../services/session-service.js';
 import { db } from '../../../../db/client';
 import { sessionChronicles } from '../../../../db/schema/index';
-import { chronicleGenerator } from '../../services/chronicle-generator.js';
-import { persistChronicleFailure } from '../../services/chronicle-status-service.js';
+import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
