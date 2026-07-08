@@ -43,360 +43,377 @@ interface GameSidePanelProps extends MemoryPanelProps {
  * Main component for displaying and managing game memories and session notes
  * Provides filtering, sorting, and collapsible functionality
  */
-export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(({
-  sessionData,
-  updateGameSessionState,
-  combatMode,
-  isCollapsed,
-  onToggle,
-}) => {
-  // Get contexts
-  const { memories = [], isLoading: memoriesLoading } = useMemoryContext();
-  const { state: characterState } = useCharacter();
-  const { state: combatState } = useCombat();
-  const { state: campaignState } = useCampaign();
-  const { id: routeCampaignId } = useParams<{ id: string }>();
-  const isInCombat = combatMode || combatState.isInCombat;
+export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
+  ({ sessionData, updateGameSessionState, combatMode, isCollapsed, onToggle }) => {
+    // Get contexts
+    const { memories = [], isLoading: memoriesLoading } = useMemoryContext();
+    const { state: characterState } = useCharacter();
+    const { state: combatState } = useCombat();
+    const { state: campaignState } = useCampaign();
+    const { id: routeCampaignId } = useParams<{ id: string }>();
+    const isInCombat = combatMode || combatState.isInCombat;
 
-  // Use extracted panel resize and state hook
-  const {
-    isExpanded,
-    setIsExpanded,
-    activeTab,
-    setActiveTab,
-    panelWidth,
-    panelRef,
-    dragHandleRef,
-    isDraggingRef,
-    startDrag,
-    handleDrag,
-    stopDrag,
-  } = usePanelResize();
+    // Use extracted panel resize and state hook
+    const {
+      isExpanded,
+      setIsExpanded,
+      activeTab,
+      setActiveTab,
+      panelWidth,
+      panelRef,
+      dragHandleRef,
+      isDraggingRef,
+      startDrag,
+      handleDrag,
+      stopDrag,
+    } = usePanelResize();
 
-  // Local state
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [localSessionNotes, setLocalSessionNotes] = useState('');
-  const sessionNotesId = useId();
+    // Local state
+    const [selectedType, setSelectedType] = useState<string | null>(null);
+    const [localSessionNotes, setLocalSessionNotes] = useState('');
+    const sessionNotesId = useId();
 
-  // Mobile drawer state
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
-  const isMobile = window.innerWidth < 1024; // lg breakpoint
+    // Mobile drawer state
+    const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+    const isMobile = window.innerWidth < 1024; // lg breakpoint
 
-  // ⚡ Bolt: Memoize filter options to prevent redundant re-filtering on every render.
-  const filterOptions = useMemo(() => ({
-    types: selectedType ? [selectedType as MemoryType] : undefined,
-  }), [selectedType]);
+    // ⚡ Bolt: Memoize filter options to prevent redundant re-filtering on every render.
+    const filterOptions = useMemo(
+      () => ({
+        types: selectedType ? [selectedType as MemoryType] : undefined,
+      }),
+      [selectedType],
+    );
 
-  // Get filtered and sorted memories using custom hook (must be called unconditionally)
-  const sortedMemories = useMemoryFiltering(memories, filterOptions);
+    // Get filtered and sorted memories using custom hook (must be called unconditionally)
+    const sortedMemories = useMemoryFiltering(memories, filterOptions);
 
-  // Sync local notes from session state (unconditional hook)
-  useEffect(() => {
-    setLocalSessionNotes(sessionData?.session_notes || '');
-  }, [sessionData?.session_notes]);
+    // Sync local notes from session state (unconditional hook)
+    useEffect(() => {
+      setLocalSessionNotes(sessionData?.session_notes || '');
+    }, [sessionData?.session_notes]);
 
-  // ⚡ Bolt: Stabilize event handlers to prevent unnecessary re-renders of children.
-  const toggleMobileDrawer = useCallback((): void => {
-    setIsMobileDrawerOpen(prev => !prev);
-  }, []);
+    // ⚡ Bolt: Stabilize event handlers to prevent unnecessary re-renders of children.
+    const toggleMobileDrawer = useCallback((): void => {
+      setIsMobileDrawerOpen((prev) => !prev);
+    }, []);
 
-  const handleSaveNotes = useCallback((): void => {
-    if (sessionData) {
-      updateGameSessionState({ session_notes: localSessionNotes });
-    }
-  }, [sessionData, updateGameSessionState, localSessionNotes]);
+    const handleSaveNotes = useCallback((): void => {
+      if (sessionData) {
+        updateGameSessionState({ session_notes: localSessionNotes });
+      }
+    }, [sessionData, updateGameSessionState, localSessionNotes]);
 
-  const handleTabChange = useCallback((value: 'character' | 'memory' | 'combat'): void => {
-    setActiveTab(value);
-    // Auto-expand when switching tabs
-    setIsExpanded(true);
+    const handleTabChange = useCallback(
+      (value: 'character' | 'memory' | 'combat'): void => {
+        setActiveTab(value);
+        // Auto-expand when switching tabs
+        setIsExpanded(true);
 
-    // Stabilize analytics call by using current state values
-    const artStyle = analytics.detectArtStyle({
-      characterTheme: characterState?.character?.theme,
-      campaignGenre: campaignState?.campaign?.genre,
-    });
-    analytics.campaignTabViewed(value, { campaignId: routeCampaignId, artStyle });
-  }, [setActiveTab, setIsExpanded, characterState?.character?.theme, campaignState?.campaign?.genre, routeCampaignId]);
+        // Stabilize analytics call by using current state values
+        const artStyle = analytics.detectArtStyle({
+          characterTheme: characterState?.character?.theme,
+          campaignGenre: campaignState?.campaign?.genre,
+        });
+        analytics.campaignTabViewed(value, { campaignId: routeCampaignId, artStyle });
+      },
+      [
+        setActiveTab,
+        setIsExpanded,
+        characterState?.character?.theme,
+        campaignState?.campaign?.genre,
+        routeCampaignId,
+      ],
+    );
 
-  // Collapsed state rendering - mobile vs desktop
-  if (isCollapsed) {
-    if (isMobile) {
-      return (
-        <div className="fixed bottom-4 right-4 md:hidden" style={{ zIndex: Z_INDEX.STICKY }}>
-          <Sheet open={isMobileDrawerOpen} onOpenChange={setIsMobileDrawerOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleMobileDrawer}
-                aria-label="Open game panel"
-                title="Open game panel"
-                className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow ${
-                  isInCombat
-                    ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
-                    : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50'
-                }`}
-              >
-                <Menu className="h-5 w-5" />
-                {/* Context indicator */}
-                {(isInCombat || memories.length > 0) && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-infinite-gold rounded-full border border-background animate-pulse"></div>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
-              <GameSidePanelContent
-                sessionData={sessionData}
-                updateGameSessionState={updateGameSessionState}
-                combatMode={combatMode}
-                isExpanded={isExpanded}
-                setIsExpanded={setIsExpanded}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                selectedType={selectedType}
-                setSelectedType={setSelectedType}
-                localSessionNotes={localSessionNotes}
-                setLocalSessionNotes={setLocalSessionNotes}
-                memoriesLoading={memoriesLoading}
-                sortedMemories={sortedMemories}
-                characterState={characterState}
-                isInCombat={isInCombat}
-                panelWidth={panelWidth}
-                panelRef={panelRef}
-                dragHandleRef={dragHandleRef}
-                isDraggingRef={isDraggingRef}
-                startDrag={startDrag}
-                handleDrag={handleDrag}
-                stopDrag={stopDrag}
-                isMobileDrawerOpen={true}
-              />
-              <SheetClose asChild>
+    // Collapsed state rendering - mobile vs desktop
+    if (isCollapsed) {
+      if (isMobile) {
+        return (
+          <div className="fixed bottom-4 right-4 md:hidden" style={{ zIndex: Z_INDEX.STICKY }}>
+            <Sheet open={isMobileDrawerOpen} onOpenChange={setIsMobileDrawerOpen}>
+              <SheetTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="absolute left-4 top-4"
-                  aria-label="Close panel"
-                  title="Close panel"
+                  onClick={toggleMobileDrawer}
+                  aria-label="Open game panel"
+                  title="Open game panel"
+                  className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow ${
+                    isInCombat
+                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
+                      : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50'
+                  }`}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <Menu className="h-5 w-5" />
+                  {/* Context indicator */}
+                  {(isInCombat || memories.length > 0) && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-infinite-gold rounded-full border border-background animate-pulse"></div>
+                  )}
                 </Button>
-              </SheetClose>
-            </SheetContent>
-          </Sheet>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[80vw] max-w-sm p-0">
+                <GameSidePanelContent
+                  sessionData={sessionData}
+                  updateGameSessionState={updateGameSessionState}
+                  combatMode={combatMode}
+                  isExpanded={isExpanded}
+                  setIsExpanded={setIsExpanded}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  selectedType={selectedType}
+                  setSelectedType={setSelectedType}
+                  localSessionNotes={localSessionNotes}
+                  setLocalSessionNotes={setLocalSessionNotes}
+                  memoriesLoading={memoriesLoading}
+                  sortedMemories={sortedMemories}
+                  characterState={characterState}
+                  isInCombat={isInCombat}
+                  panelWidth={panelWidth}
+                  panelRef={panelRef}
+                  dragHandleRef={dragHandleRef}
+                  isDraggingRef={isDraggingRef}
+                  startDrag={startDrag}
+                  handleDrag={handleDrag}
+                  stopDrag={stopDrag}
+                  isMobileDrawerOpen={true}
+                />
+                <SheetClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute left-4 top-4"
+                    aria-label="Close panel"
+                    title="Close panel"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetContent>
+            </Sheet>
+          </div>
+        );
+      }
+
+      return (
+        <div className="hidden md:block fixed right-4 top-1/2" style={{ zIndex: Z_INDEX.STICKY }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToggle}
+            aria-label="Open game panel"
+            title="Open game panel"
+            className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow hover:scale-110 ${
+              isInCombat
+                ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
+                : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50'
+            }`}
+          >
+            <ChevronDown className="h-4 w-4 rotate-90" />
+            {/* Enhanced context indicators */}
+            <div className="absolute -top-2 -right-2 flex flex-col gap-1">
+              {isInCombat && (
+                <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse shadow-lg"></div>
+              )}
+              {memories.length > 0 && (
+                <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse shadow-lg"></div>
+              )}
+              {characterState.character && (
+                <div className="w-2 h-2 bg-infinite-teal rounded-full animate-pulse shadow-lg"></div>
+              )}
+            </div>
+          </Button>
         </div>
       );
     }
 
     return (
-      <div className="hidden md:block fixed right-4 top-1/2" style={{ zIndex: Z_INDEX.STICKY }}>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onToggle}
-          aria-label="Open game panel"
-          title="Open game panel"
-          className={`relative rounded-full p-3 h-auto shadow-xl border-2 transition-all duration-300 hover-glow focus-glow hover:scale-110 ${
+      <div
+        ref={panelRef}
+        className="h-full bg-transparent shadow-sm border-0 flex flex-col resize-x lg:resize-x-none min-w-[280px] max-w-[400px]"
+        style={{ width: panelWidth, minWidth: '280px', maxWidth: '400px' }}
+      >
+        {/* Drag Handle for Desktop */}
+        <div
+          ref={dragHandleRef}
+          className="absolute left-0 top-0 w-1 h-full bg-border hover:bg-primary cursor-col-resize hidden lg:block"
+          style={{ zIndex: Z_INDEX.DROPDOWN }}
+          onMouseDown={startDrag}
+        />
+
+        <Card
+          className={`ir-panel h-full flex flex-col overflow-hidden border shadow-2xl transition-all duration-500 ${
             isInCombat
-              ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-red-400/50 animate-pulse'
-              : 'bg-gradient-to-r from-infinite-purple/20 to-infinite-teal/20 border-infinite-purple/50'
+              ? 'border-red-400/40 bg-gradient-to-b from-red-950/20 to-[#0e1422]'
+              : 'border-white/10 bg-gradient-to-b from-[#111726] to-[#0e1422]'
           }`}
         >
-          <ChevronDown className="h-4 w-4 rotate-90" />
-          {/* Enhanced context indicators */}
-          <div className="absolute -top-2 -right-2 flex flex-col gap-1">
-            {isInCombat && (
-              <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse shadow-lg"></div>
-            )}
-            {memories.length > 0 && (
-              <div className="w-2 h-2 bg-infinite-gold rounded-full animate-pulse shadow-lg"></div>
-            )}
-            {characterState.character && (
-              <div className="w-2 h-2 bg-infinite-teal rounded-full animate-pulse shadow-lg"></div>
-            )}
-          </div>
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={panelRef}
-      className="h-full bg-transparent shadow-sm border-0 flex flex-col resize-x lg:resize-x-none min-w-[280px] max-w-[400px]"
-      style={{ width: panelWidth, minWidth: '280px', maxWidth: '400px' }}
-    >
-      {/* Drag Handle for Desktop */}
-      <div
-        ref={dragHandleRef}
-        className="absolute left-0 top-0 w-1 h-full bg-border hover:bg-primary cursor-col-resize hidden lg:block"
-        style={{ zIndex: Z_INDEX.DROPDOWN }}
-        onMouseDown={startDrag}
-      />
-
-      <Card
-        className={`h-full glass-strong shadow-2xl border-2 flex flex-col overflow-hidden transition-all duration-500 hover:shadow-3xl hover-glow bg-gradient-to-b from-card/95 to-card/90 backdrop-blur-sm ${
-          isInCombat
-            ? 'border-red-400/60 bg-gradient-to-b from-red-900/15 to-card/95'
-            : 'border-infinite-purple/40 bg-gradient-to-b from-infinite-purple/8 to-card/95'
-        }`}
-      >
-        <div className="p-3 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex gap-1 flex-shrink-0">
-              <Button
-                variant={activeTab === 'character' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTabChange('character')}
-                aria-label="Character Sheet"
-                title="Character Sheet"
-                aria-pressed={activeTab === 'character'}
-                className="h-8 px-2"
-              >
-                <User className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={activeTab === 'memory' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTabChange('memory')}
-                aria-label="Memories"
-                title="Memories"
-                aria-pressed={activeTab === 'memory'}
-                className={`h-8 px-2 transition-all duration-200 ${
-                  activeTab === 'memory'
-                    ? 'bg-infinite-teal text-white shadow-lg'
-                    : 'hover:bg-infinite-teal/20'
-                }`}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              {isInCombat && (
+          <div className="p-3 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex gap-1 flex-shrink-0">
                 <Button
-                  variant={activeTab === 'combat' ? 'default' : 'ghost'}
+                  variant={activeTab === 'character' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => handleTabChange('combat')}
-                  aria-label="Combat"
-                  title="Combat"
-                  aria-pressed={activeTab === 'combat'}
+                  onClick={() => handleTabChange('character')}
+                  aria-label="Character Sheet"
+                  title="Character Sheet"
+                  aria-pressed={activeTab === 'character'}
+                  className="h-8 px-2"
+                >
+                  <User className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={activeTab === 'memory' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleTabChange('memory')}
+                  aria-label="Memories"
+                  title="Memories"
+                  aria-pressed={activeTab === 'memory'}
                   className={`h-8 px-2 transition-all duration-200 ${
-                    activeTab === 'combat'
-                      ? 'bg-red-500 text-white shadow-lg animate-pulse'
-                      : 'hover:bg-red-500/20'
+                    activeTab === 'memory'
+                      ? 'bg-infinite-gold/15 text-infinite-gold shadow-glow-gold'
+                      : 'text-foreground/60 hover:bg-white/5 hover:text-infinite-gold'
                   }`}
                 >
-                  <Sword className="h-4 w-4" />
+                  <List className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
-            <h3 className="font-display font-semibold text-card-foreground capitalize truncate text-sm">
-              {activeTab === 'character' && '🎭 Character'}
-              {activeTab === 'memory' && '📚 Memories'}
-              {activeTab === 'combat' && '⚔️ Combat'}
-            </h3>
-          </div>
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setIsExpanded(!isExpanded);
-                if (isExpanded) onToggle();
-              }}
-              aria-label={isExpanded ? 'Minimize' : 'Expand'}
-              title={isExpanded ? 'Minimize' : 'Expand'}
-              className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
-            >
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggle()}
-              aria-label="Close Panel"
-              title="Close Panel"
-              className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {isExpanded && (
-          <div className="flex-grow flex flex-col overflow-hidden">
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) => handleTabChange(value as 'character' | 'memory' | 'combat')}
-              className="flex flex-col h-full"
-            >
-              <TabsContent value="character" className="flex-1 p-0 mt-0 border-0 bg-background">
-                <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
-                  <RightSheetLive />
-                </div>
-              </TabsContent>
-
-              <TabsContent
-                value="memory"
-                className="flex-1 mt-0 border-0 flex flex-col overflow-hidden bg-background"
-              >
-                {/* Compact Session Notes Section */}
-                <div className="p-4 border-b border-border">
-                  <Label
-                    htmlFor={sessionNotesId}
-                    className="font-display font-semibold mb-2 text-foreground text-sm block"
-                  >
-                    📝 Session Notes
-                  </Label>
-                  <Textarea
-                    id={sessionNotesId}
-                    value={localSessionNotes}
-                    onChange={(e) => setLocalSessionNotes(e.target.value)}
-                    placeholder="Type your session notes here..."
-                    rows={4}
-                    className="mb-3 text-sm bg-muted border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
-                  />
+                {isInCombat && (
                   <Button
-                    onClick={handleSaveNotes}
+                    variant={activeTab === 'combat' ? 'default' : 'ghost'}
                     size="sm"
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors duration-200"
+                    onClick={() => handleTabChange('combat')}
+                    aria-label="Combat"
+                    title="Combat"
+                    aria-pressed={activeTab === 'combat'}
+                    className={`h-8 px-2 transition-all duration-200 ${
+                      activeTab === 'combat'
+                        ? 'bg-red-500 text-white shadow-lg animate-pulse'
+                        : 'hover:bg-red-500/20'
+                    }`}
                   >
-                    Save Notes
+                    <Sword className="h-4 w-4" />
                   </Button>
-                </div>
+                )}
+              </div>
+              <h3 className="font-display font-semibold text-card-foreground capitalize truncate text-sm">
+                {activeTab === 'character' && '🎭 Character'}
+                {activeTab === 'memory' && '📚 Memories'}
+                {activeTab === 'combat' && '⚔️ Combat'}
+              </h3>
+            </div>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsExpanded(!isExpanded);
+                  if (isExpanded) onToggle();
+                }}
+                aria-label={isExpanded ? 'Minimize' : 'Expand'}
+                title={isExpanded ? 'Minimize' : 'Expand'}
+                className="h-8 w-8 p-0 rounded-full hover:bg-muted/20 transition-all duration-200 hover:scale-110"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggle()}
+                aria-label="Close Panel"
+                title="Close Panel"
+                className="h-8 w-8 p-0 rounded-full hover:bg-red-500/20 transition-all duration-200 hover:scale-110"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
 
-                {/* Memories Section */}
-                <div className="p-4 border-b flex-shrink-0">
-                  <MemoryFilter selectedType={selectedType} onTypeSelect={setSelectedType} />
-                </div>
-
-                <ScrollArea className="flex-1 p-4" style={{ maxHeight: '56vh' }}>
-                  {memoriesLoading && (
-                    <p className="text-xs text-muted-foreground">Loading memories...</p>
-                  )}
-                  {!memoriesLoading && sortedMemories.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No memories logged yet.</p>
-                  )}
-                  <div className="space-y-2">
-                    {sortedMemories.map((memory) => (
-                      <MemoryCard key={memory.id} memory={memory} />
-                    ))}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-
-              {isInCombat && (
-                <TabsContent value="combat" className="flex-1 mt-0 border-0 bg-background">
-                  <div style={{ maxHeight: '72vh', overflow: 'auto' }}>
-                    <CombatSummary />
+          {isExpanded && (
+            <div className="flex-grow flex flex-col overflow-hidden">
+              <Tabs
+                value={activeTab}
+                onValueChange={(value) =>
+                  handleTabChange(value as 'character' | 'memory' | 'combat')
+                }
+                className="flex flex-col h-full"
+              >
+                <TabsContent value="character" className="mt-0 flex-1 border-0 bg-transparent p-0">
+                  <div style={{ maxHeight: '78vh', overflow: 'auto' }} className="p-1">
+                    <RightSheetLive />
                   </div>
                 </TabsContent>
-              )}
-            </Tabs>
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-});
+
+                <TabsContent
+                  value="memory"
+                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent"
+                >
+                  {/* Compact Session Notes Section */}
+                  <section className="border-b border-white/5 p-4">
+                    <Label
+                      htmlFor={sessionNotesId}
+                      className="ir-display mb-2 block text-[11px] font-semibold uppercase tracking-[1.6px] text-infinite-gold"
+                    >
+                      Session Notes
+                    </Label>
+                    <Textarea
+                      id={sessionNotesId}
+                      value={localSessionNotes}
+                      onChange={(e) => setLocalSessionNotes(e.target.value)}
+                      placeholder="Type your session notes here..."
+                      rows={4}
+                      className="mb-3 resize-none rounded-lg border-white/10 bg-white/[0.03] text-sm focus:border-infinite-teal/50 focus:ring-2 focus:ring-infinite-teal/20"
+                    />
+                    <Button
+                      onClick={handleSaveNotes}
+                      size="sm"
+                      variant="ir-gold"
+                      className="px-4 py-2"
+                    >
+                      Save Notes
+                    </Button>
+                  </section>
+
+                  {/* Memories Section */}
+                  <div className="flex-shrink-0 border-b border-white/5 p-4">
+                    <MemoryFilter selectedType={selectedType} onTypeSelect={setSelectedType} />
+                  </div>
+
+                  <ScrollArea className="flex-1 bg-black/10 p-4" style={{ maxHeight: '56vh' }}>
+                    {memoriesLoading && (
+                      <p className="text-xs text-muted-foreground">Loading memories...</p>
+                    )}
+                    {!memoriesLoading && sortedMemories.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No memories logged yet.</p>
+                    )}
+                    <div className="space-y-2">
+                      {sortedMemories.map((memory) => (
+                        <MemoryCard key={memory.id} memory={memory} />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {isInCombat && (
+                  <TabsContent value="combat" className="mt-0 flex-1 border-0 bg-transparent">
+                    <div
+                      className="bg-gradient-to-b from-red-950/10 to-transparent p-2"
+                      style={{ maxHeight: '72vh', overflow: 'auto' }}
+                    >
+                      <CombatSummary />
+                    </div>
+                  </TabsContent>
+                )}
+              </Tabs>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  },
+);
 
 GameSidePanel.displayName = 'GameSidePanel';
-

@@ -42,11 +42,13 @@ vi.mock('@/features/game-session/hooks/use-panel-resize', () => ({
 vi.mock('../CombatSummary', () => ({
   CombatSummary: () => <div data-testid="combat-summary">Combat Summary</div>,
 }));
-vi.mock('../CompactCharacterHeader', () => ({
-  CompactCharacterHeader: () => <div data-testid="character-header">Character Header</div>,
+vi.mock('../overhaul/RightSheetLive', () => ({
+  RightSheetLive: () => <div data-testid="character-header">Character Sheet</div>,
 }));
 vi.mock('../memory/MemoryCard', () => ({
-  MemoryCard: ({ memory }: any) => <div data-testid={`memory-card-${memory.id}`}>{memory.content}</div>,
+  MemoryCard: ({ memory }: any) => (
+    <div data-testid={`memory-card-${memory.id}`}>{memory.content}</div>
+  ),
 }));
 vi.mock('../memory/MemoryFilter', () => ({
   MemoryFilter: ({ onTypeSelect }: any) => (
@@ -100,7 +102,7 @@ describe('GameSidePanel', () => {
             }
           />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
   };
 
@@ -216,7 +218,13 @@ describe('GameSidePanel', () => {
 
     // Test with memories
     const mockMemories = [
-      { id: '1', type: 'npc', content: 'Met a mysterious stranger', importance: 1, created_at: new Date().toISOString() },
+      {
+        id: '1',
+        type: 'npc',
+        content: 'Met a mysterious stranger',
+        importance: 1,
+        created_at: new Date().toISOString(),
+      },
     ];
     (useMemoryContext as any).mockReturnValue({ memories: mockMemories, isLoading: false });
 
@@ -236,7 +244,7 @@ describe('GameSidePanel', () => {
             }
           />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByTestId('memory-card-1')).toBeInTheDocument();
@@ -280,7 +288,11 @@ describe('GameSidePanel', () => {
 
     expect(screen.getByLabelText(/Open game panel/i)).toBeInTheDocument();
 
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: originalInnerWidth,
+    });
   });
 
   it('handles save notes when sessionData is null', async () => {
@@ -311,7 +323,7 @@ describe('GameSidePanel', () => {
             }
           />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     const saveButton = screen.getByText(/Save Notes/i);
@@ -333,7 +345,11 @@ describe('GameSidePanel', () => {
     expect(trigger).toHaveClass('animate-pulse');
     expect(trigger).toHaveClass('border-red-400/50');
 
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: originalInnerWidth,
+    });
   });
 
   it('opens mobile drawer and renders content', async () => {
@@ -367,20 +383,32 @@ describe('GameSidePanel', () => {
 
     // Wait for the memory tab content to be visible
     await waitFor(() => {
-        expect(screen.getByPlaceholderText(/Session notes.../i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Session notes.../i)).toBeInTheDocument();
     });
 
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: originalInnerWidth,
+    });
   });
 
   it('renders desktop collapsed trigger', () => {
     const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1200 });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1200,
+    });
 
     renderPanel({ isCollapsed: true });
 
     expect(screen.getByLabelText(/Open game panel/i)).toBeInTheDocument();
 
-    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: originalInnerWidth,
+    });
   });
 });
