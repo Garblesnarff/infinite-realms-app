@@ -154,7 +154,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
         style={{ zIndex: Z_INDEX.OVERLAY_EFFECT }}
       >
-        <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
+        <div className="absolute inset-0 shadow-inset-glow-purple" />
       </div>
 
       {/* Hero / background area */}

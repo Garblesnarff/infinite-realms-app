@@ -48,7 +48,7 @@ export const PlayableCharacterCard: React.FC<PlayableCharacterCardProps> = ({
         style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
         aria-hidden="true"
       >
-        <div className="absolute inset-0 shadow-[inset_0_0_30px_rgba(168,85,247,0.4)]" />
+        <div className="absolute inset-0 shadow-inset-glow-purple" />
       </div>
 
       <div

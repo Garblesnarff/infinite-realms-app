@@ -63,6 +63,12 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      boxShadow: {
+        'inset-glow-purple': 'inset 0 0 30px rgb(var(--c-infinite-purple) / 0.4)',
+        'glow-purple': '0 0 16px rgb(var(--c-infinite-purple) / 0.3)',
+        'glow-gold': '0 0 16px rgb(var(--c-infinite-gold) / 0.3)',
+        'glow-teal': '0 0 16px rgb(var(--c-infinite-teal) / 0.3)',
+      },
       keyframes,
       animation,
     },

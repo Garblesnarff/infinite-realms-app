@@ -100,7 +100,7 @@ export const CompactCharacterHeader: React.FC = React.memo(() => {
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
         style={{ zIndex: Z_INDEX.BACKGROUND_LAYER }}
       >
-        <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(168,85,247,0.3)]" />
+        <div className="absolute inset-0 shadow-inset-glow-purple opacity-75" />
       </div>
 
       {/* Avatar */}
