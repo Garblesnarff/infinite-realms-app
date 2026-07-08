@@ -1,5 +1,5 @@
 import { supabase } from '../../../src/infrastructure/database/index';
-import { logger } from '../utils/logger.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Blog Image Generator Service

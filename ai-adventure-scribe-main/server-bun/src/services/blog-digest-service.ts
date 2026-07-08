@@ -2,7 +2,7 @@
 import { BlogImageGenerator } from './blog-image-generator.js';
 import { BlogScreenshotService } from './blog-screenshot-service.js';
 import { supabase } from '../../../src/infrastructure/database/index';
-import { logger } from '../utils/logger.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Blog Digest Service
