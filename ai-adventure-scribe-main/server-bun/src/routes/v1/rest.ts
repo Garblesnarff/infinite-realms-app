@@ -4,9 +4,10 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
+import { type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { RestService } from '../../services/rest-service.js';
 
@@ -53,12 +54,11 @@ function mapRestError(
 }
 
 export const restRoutes = new Elysia({ prefix: '/v1/rest' })
+  .use(requireAuth)
   /**
-   * Centralized authentication and character ownership verification
+   * Centralized character ownership verification
    */
-  .derive(async ({ request, params }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-
+  .derive(async ({ user, params }) => {
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
@@ -66,14 +66,9 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
       character = await CharacterService.getById(params.id, user.userId);
     }
 
-    return { user, authError, character };
+    return { character };
   })
-  .onBeforeHandle(async ({ user, authError, params, character, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .onBeforeHandle(async ({ params, character, set }) => {
     if (params?.id && !character) {
       // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
       set.status = 404;

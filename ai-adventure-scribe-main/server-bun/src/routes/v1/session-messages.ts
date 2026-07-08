@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
 import { SessionService } from '../../services/session-service.js';
@@ -32,13 +32,7 @@ const mapMessage = (message: DialogueHistory) => ({
 });
 
 export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
-  .derive(async ({ request }) => authenticateRequest(request))
-  .onBeforeHandle(({ user, error, set }) => {
-    if (error || !user) {
-      set.status = 401;
-      return { error: error || 'Unauthorized' };
-    }
-  })
+  .use(requireAuth)
   .get(
     '/:id/messages',
     async ({ params, query, user }) => {

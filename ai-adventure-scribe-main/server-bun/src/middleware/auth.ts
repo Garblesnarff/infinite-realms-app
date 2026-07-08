@@ -21,9 +21,10 @@
  * ```
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, status } from 'elysia';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
 
+import { authenticateRequest } from '../lib/auth.js';
 import { sql } from '../lib/db.js';
 import { env } from '../lib/env.js';
 import { logger } from '../lib/logger.js';
@@ -114,59 +115,14 @@ async function resolveUserPlan(userId: string, headers: Record<string, string | 
  * Attaches user to context on success
  */
 export const requireAuth = new Elysia({ name: 'require-auth' })
-  .derive(async ({ request, set }) => {
-    const authHeader = request.headers.get('authorization');
-    const token = getBearerToken(authHeader);
+  .resolve({ as: 'global' }, async ({ request }) => {
+    const { user, error } = await authenticateRequest(request);
 
-    if (!token) {
-      set.status = 401;
-      return {
-        user: null,
-        error: { error: 'Missing token' },
-      };
+    if (!user) {
+      return status(401, { error: error || 'Unauthorized' });
     }
 
-    try {
-      const workosUser = await verifyWorkOSToken(token);
-      if (!workosUser) {
-        set.status = 401;
-        return {
-          user: null,
-          error: { error: 'Invalid token' },
-        };
-      }
-
-      // Convert headers to record for plan resolution
-      const headersRecord: Record<string, string | undefined> = {};
-      request.headers.forEach((value, key) => {
-        headersRecord[key] = value;
-      });
-
-      const plan = await resolveUserPlan(workosUser.userId, headersRecord);
-
-      return {
-        user: {
-          userId: workosUser.userId,
-          email: workosUser.email,
-          plan,
-        } as AuthTokenPayload,
-        error: null,
-      };
-    } catch (error) {
-      logger.error({ error: error }, 'Auth error:');
-      set.status = 401;
-      return {
-        user: null,
-        error: { error: 'Invalid token' },
-      };
-    }
-  })
-  .onBeforeHandle(({ user: _user, error, set }) => {
-    // Short-circuit if auth failed
-    if (error) {
-      set.status = 401;
-      return error;
-    }
+    return { user };
   });
 
 /**

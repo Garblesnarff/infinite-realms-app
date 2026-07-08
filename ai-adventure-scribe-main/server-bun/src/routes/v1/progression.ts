@@ -17,9 +17,9 @@
 import { Elysia } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
 
@@ -50,19 +50,11 @@ function mapProgressionError(
 }
 
 export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
+  .use(requireAuth)
   /**
-   * Centralized authentication and character ownership verification
+   * Centralized character ownership verification
    */
-  .derive(async ({ request }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    return { user, authError };
-  })
-  .onBeforeHandle(async ({ user, authError, params, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .onBeforeHandle(async ({ user, params, set }) => {
     if (params.id) {
       // Sentinel: Verify ownership directly in the database query
       // and throw 404 for unauthorized access to prevent existence leakage.
@@ -249,12 +241,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    * GET /v1/progression/xp-table
    * Get the D&D 5E XP threshold table
    */
-  .get('/xp-table', async ({ set, user, authError }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .get('/xp-table', async ({ set }) => {
     try {
       const xpTable = ProgressionService.getXPTable();
       return { xpTable };

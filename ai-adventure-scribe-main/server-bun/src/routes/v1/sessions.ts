@@ -16,7 +16,7 @@ import { eq } from 'drizzle-orm';
 
 import { logger } from '../../lib/logger.js';
 import { NotFoundError } from '../../lib/errors.js';
-import { authenticateRequest } from '../../lib/auth.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { SessionService } from '../../services/session-service.js';
 import { db } from '../../../../db/client';
@@ -59,16 +59,7 @@ const createSessionSchema = t.Object({
 });
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
-  .derive(async ({ request }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    return { user, authError };
-  })
-  .onBeforeHandle(({ user, authError, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-  })
+  .use(requireAuth)
 
   /**
    * POST /v1/sessions

@@ -15,9 +15,9 @@
 import { Elysia } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest, type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ClassFeaturesService } from '../../services/class-features-service.js';
 
@@ -25,7 +25,7 @@ import { ClassFeaturesService } from '../../services/class-features-service.js';
  * Helper to map and mask error responses
  */
 function mapClassFeaturesError(
-  set: { status: number | string },
+  set: { status?: number | string },
   error: unknown,
   fallbackMessage: string,
   notFoundMessage: string = 'Not found'
@@ -49,19 +49,11 @@ function mapClassFeaturesError(
 }
 
 export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
+  .use(requireAuth)
   /**
-   * Centralized authentication and character ownership verification
+   * Centralized character ownership verification
    */
-  .derive(async ({ request }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    return { user: user as AuthUser | null, authError };
-  })
-  .onBeforeHandle(async ({ user, authError, params, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .onBeforeHandle(async ({ user, params, set }) => {
     if (params.id) {
       // 🛡️ Sentinel: Use CharacterService.getById which verifies dual-ownership (userId/ownerId)
       // and masks existence by returning null for unauthorized access.

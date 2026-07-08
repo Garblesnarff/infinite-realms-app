@@ -14,9 +14,9 @@
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
-import { authenticateRequest } from '../../lib/auth.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { InventoryAttunementService } from '../../services/inventory/inventory-attunement-service.js';
 import { InventoryConsumableService } from '../../services/inventory/inventory-consumable-service.js';
 import { InventoryService } from '../../services/inventory-service.js';
@@ -77,18 +77,11 @@ function mapInventoryError(
 }
 
 export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
+  .use(requireAuth)
   /**
-   * Centralized authentication and character ownership verification
+   * Centralized character ownership verification
    */
-  .derive(async ({ request }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-    return { user, authError };
-  })
-  .onBeforeHandle(async ({ user, authError, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
+  .onBeforeHandle(async () => {
     // ⚡ Bolt: Removed redundant CharacterService.getById call.
     // InventoryService methods already perform atomic ownership verification and existence masking.
   })
@@ -143,7 +136,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
       try {
         const item = await InventoryService.addItem(
           {
-            ...body,
+            ...(body as any),
             characterId: params.id,
           },
           (user as any).userId
@@ -173,7 +166,7 @@ export const inventoryRoutes = new Elysia({ prefix: '/v1/characters' })
           params.itemId,
           params.id,
           (user as any).userId,
-          body
+          body as any
         );
 
         if (!item) {

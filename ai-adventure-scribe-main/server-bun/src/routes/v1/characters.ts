@@ -17,9 +17,9 @@
 import { TRPCError } from '@trpc/server';
 import { Elysia, t } from 'elysia';
 
-import { authenticateRequest } from '../../lib/auth.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
@@ -222,12 +222,11 @@ function mapCharacterToApi(character: Character & { stats?: any }): any {
 }
 
 export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
+  .use(requireAuth)
   /**
-   * Centralized authentication and character ownership verification
+   * Centralized character ownership verification
    */
-  .derive(async ({ request, params }) => {
-    const { user, error: authError } = await authenticateRequest(request);
-
+  .derive(async ({ user, params }) => {
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
@@ -235,14 +234,9 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       character = await CharacterService.getById(params.id, user.userId);
     }
 
-    return { user, authError, character };
+    return { character };
   })
-  .onBeforeHandle(async ({ user, authError, params, character, set }) => {
-    if (authError || !user) {
-      set.status = 401;
-      return { error: authError || 'Unauthorized' };
-    }
-
+  .onBeforeHandle(async ({ params, character, set }) => {
     if (params?.id && !character) {
       // 🛡️ Sentinel: Return 404 for unauthorized access to prevent existence leakage.
       set.status = 404;
@@ -558,7 +552,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get(
     '/:id/spells',
-    async ({ params, character, user }) => {
+    async ({ params, character, set, user }) => {
       const characterId = params.id;
       const userId = user!.userId;
 
@@ -570,6 +564,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       });
 
       // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
+      if (!character) {
+        set.status = 404;
+        return { error: 'Character not found' };
+      }
 
       logger.info({
         msg: 'CHARACTER_SPELLS_FOUND',
