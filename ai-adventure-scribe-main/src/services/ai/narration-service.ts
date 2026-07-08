@@ -5,6 +5,7 @@
  * The core storytelling engine for AI-powered D&D sessions.
  * Extracted from ai-service.ts (lines reduced from ~700 to <200).
  *
+ * @deprecated Compatibility facade for non-game callers. Live game narration uses AIService.chatWithDM.
  * @module narration-service
  */
 
