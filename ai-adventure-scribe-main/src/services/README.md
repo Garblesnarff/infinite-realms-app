@@ -12,7 +12,6 @@ Core business logic services for the AI Dungeon Master application. This directo
 - `character-image-generator.ts` - AI-powered character portrait generation
 - `character-loader.ts` - Character data loading and caching service
 - `characterSpellApi.ts` - API client for character spell management
-- `enhancement-ai-generator.ts` - AI service for generating enhancement descriptions
 - `enhancement-service.ts` - Service for managing character enhancements and upgrades
 - `gallery-service.ts` - Asset gallery management
 - `gemini-api-manager.ts` - Manages Gemini API connections, rate limiting, and failover
