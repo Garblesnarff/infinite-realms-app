@@ -11,6 +11,9 @@ export * from './users';
 // Export all waitlist tables and types
 export * from './waitlist';
 
+// Export all usage and billing idempotency tables and types
+export * from './usage';
+
 // Export all blog tables and types
 export * from './blog';
 

@@ -26,6 +26,7 @@ export const users = pgTable(
 
     // Subscription plan
     plan: text('plan').default('free').notNull(),
+    abVariant: text('ab_variant'),
 
     // Stripe subscription fields
     stripeCustomerId: text('stripe_customer_id'),
@@ -39,6 +40,7 @@ export const users = pgTable(
   (table) => ({
     emailIdx: index('idx_users_email').on(table.email),
     planIdx: index('idx_users_plan').on(table.plan),
+    abVariantIdx: index('idx_users_ab_variant').on(table.abVariant),
     stripeCustomerIdx: index('idx_users_stripe_customer').on(table.stripeCustomerId),
   })
 );
