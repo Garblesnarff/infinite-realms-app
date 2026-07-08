@@ -107,7 +107,7 @@ export default defineConfig({
       'src/utils/__tests__/lighting-integration.test.ts',
       'src/utils/animations/__tests__/utilities.test.ts',
       'src/utils/__tests__/multiclassing.test.ts',
-      'src/utils/__tests__/restMechanics.test.ts',
+      'src/services/__tests__/rest-api-state.test.ts',
       'src/utils/__tests__/conditionEffects.test.ts',
       'src/utils/__tests__/condition-definitions.test.ts',
       'src/utils/__tests__/twoWeaponFighting.test.ts',

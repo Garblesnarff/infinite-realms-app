@@ -3,9 +3,8 @@ import React from 'react';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
-import { restApi } from '@/services/rest-api';
+import { applyRestResultToCharacter, restApi } from '@/services/rest-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
-import { processLongRest, processShortRest } from '@/utils/restMechanics';
 
 import { FeatureSection } from './class-feature-tracker/FeatureSection';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
@@ -40,25 +39,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
         restType === 'short'
           ? await restApi.shortRest(character.id)
           : await restApi.longRest(character.id);
-      const processed =
-        restType === 'short'
-          ? processShortRest(character, 0).character
-          : processLongRest(character).character;
-      onUpdate({
-        ...processed,
-        hitPoints: processed.hitPoints
-          ? {
-              ...processed.hitPoints,
-              current:
-                restType === 'long'
-                  ? processed.hitPoints.maximum
-                  : Math.min(
-                      processed.hitPoints.maximum,
-                      processed.hitPoints.current + result.hpRestored,
-                    ),
-            }
-          : processed.hitPoints,
-      });
+      onUpdate(applyRestResultToCharacter(character, result));
       logger.info(`Completed ${restType} rest`, result);
     } catch (error) {
       logger.error(`Failed to complete ${restType} rest`, error);

@@ -25,6 +25,7 @@ import { NotFoundError } from '../lib/errors.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
 import { ExhaustionService } from './exhaustion-service.js';
+import { ClassFeaturesService } from './class-features-service.js';
 
 import type {
   HitDieType,
@@ -203,16 +204,19 @@ export class RestService {
       max?: number;
       current?: number;
     } | null;
+    const updatedPactSlots = pactSlots
+      ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+      : pactSlots;
+    const updatedClassFeatures = RestMechanics.restoreClassFeatures(character.classFeatures, 'short');
     await db
       .update(characters)
       .set({
-        pactSlots: pactSlots
-          ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
-          : pactSlots,
-        classFeatures: RestMechanics.restoreClassFeatures(character.classFeatures, 'short'),
+        pactSlots: updatedPactSlots,
+        classFeatures: updatedClassFeatures,
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
+    await ClassFeaturesService.restoreFeatures({ characterId, restType: 'short', userId });
 
     // Create rest event
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
@@ -254,6 +258,9 @@ export class RestService {
       hitDiceSpent,
       hitDiceRemaining: updatedHitDice,
       resourcesRestored,
+      spellSlots: character.spellSlots as Record<string, { max?: number; current?: number }> | null,
+      pactSlots: updatedPactSlots,
+      classFeatures: updatedClassFeatures,
       restEventId: restEvent.id,
     };
   }
@@ -314,19 +321,23 @@ export class RestService {
       max?: number;
       current?: number;
     } | null;
+    const updatedSpellSlots = RestMechanics.restoreSpellSlots(
+      character.spellSlots as Record<string, { max?: number; current?: number }> | null,
+    );
+    const updatedPactSlots = pactSlots
+      ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+      : pactSlots;
+    const updatedClassFeatures = RestMechanics.restoreClassFeatures(character.classFeatures, 'long');
     await db
       .update(characters)
       .set({
-        spellSlots: RestMechanics.restoreSpellSlots(
-          character.spellSlots as Record<string, { max?: number; current?: number }> | null,
-        ),
-        pactSlots: pactSlots
-          ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
-          : pactSlots,
-        classFeatures: RestMechanics.restoreClassFeatures(character.classFeatures, 'long'),
+        spellSlots: updatedSpellSlots,
+        pactSlots: updatedPactSlots,
+        classFeatures: updatedClassFeatures,
         updatedAt: new Date(),
       })
       .where(eq(characters.id, characterId));
+    await ClassFeaturesService.restoreFeatures({ characterId, restType: 'long', userId });
 
     const participants = await db.query.combatParticipants.findMany({
       where: eq(combatParticipants.characterId, characterId),
@@ -378,6 +389,9 @@ export class RestService {
       hitDiceRestored,
       hitDiceRemaining: updatedHitDice,
       resourcesRestored,
+      spellSlots: updatedSpellSlots,
+      pactSlots: updatedPactSlots,
+      classFeatures: updatedClassFeatures,
       restEventId: restEvent.id,
     };
   }

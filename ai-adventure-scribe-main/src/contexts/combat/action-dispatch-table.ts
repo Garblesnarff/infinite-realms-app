@@ -18,7 +18,7 @@ import type { CombatAction as CombatActionType, CombatParticipant } from '@/type
 export type ActionDispatchEntry = (
   action: Partial<CombatActionType>,
   participant: CombatParticipant,
-) => ActionHandlerResult | undefined;
+) => ActionHandlerResult | Promise<ActionHandlerResult> | undefined;
 
 export const actionDispatchTable: Record<string, ActionDispatchEntry> = {
   cast_spell: (action, participant) =>

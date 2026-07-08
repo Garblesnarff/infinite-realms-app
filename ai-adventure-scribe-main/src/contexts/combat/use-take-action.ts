@@ -70,7 +70,7 @@ export function useTakeAction({
 
       // Handle action based on type using dispatch table
       const handler = action.actionType ? actionDispatchTable[action.actionType] : undefined;
-      const handlerResult = handler?.(action, participant);
+      const handlerResult = await handler?.(action, participant);
 
       // Apply handler result if present
       if (handlerResult) {

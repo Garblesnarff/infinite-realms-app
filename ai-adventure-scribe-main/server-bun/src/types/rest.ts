@@ -51,6 +51,9 @@ export interface ShortRestResult {
   hitDiceSpent: number;
   hitDiceRemaining: HitDice[];
   resourcesRestored: RestorableResource[];
+  spellSlots: Record<string, { max?: number; current?: number }> | null;
+  pactSlots: Record<string, unknown> | null;
+  classFeatures: unknown;
   restEventId: string;
 }
 
@@ -64,6 +67,9 @@ export interface LongRestResult {
   hitDiceRestored: number;
   hitDiceRemaining: HitDice[];
   resourcesRestored: RestorableResource[];
+  spellSlots: Record<string, { max?: number; current?: number }> | null;
+  pactSlots: Record<string, unknown> | null;
+  classFeatures: unknown;
   restEventId: string;
 }
 
