@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { startingGoldByClass, EQUIPMENT_LOOKUP } from '@/data/equipmentOptions';
+import { startingGoldByClass, EQUIPMENT_LOOKUP, getStartingEquipmentChoices } from '@/data/equipmentOptions';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -33,6 +33,11 @@ const StartingEquipmentSelection: React.FC = () => {
   const [method, setMethod] = useState<'package' | 'gold'>('package');
   const [rolledGold, setRolledGold] = useState<number>(0);
   const [hasRolledGold, setHasRolledGold] = useState(false);
+  const [choiceSelections, setChoiceSelections] = useState<Record<number, number>>({});
+  const srdEquipment = React.useMemo(
+    () => getStartingEquipmentChoices(characterClass?.id ?? ''),
+    [characterClass?.id],
+  );
 
   /**
    * ⚡ Bolt: Memoized starting equipment calculation.
@@ -99,9 +104,13 @@ const StartingEquipmentSelection: React.FC = () => {
    */
   const applyEquipment = (): void => {
     if (method === 'package') {
-      const inventory = startingEquipment.map((equipment, _index) => ({
+      const chosen = srdEquipment.choices.flatMap((choice, index) => choice.alternatives[choiceSelections[index] ?? 0]?.items ?? []);
+      const selectedItems = srdEquipment.choices.length
+        ? [...srdEquipment.fixed, ...chosen]
+        : startingEquipment.map((equipment) => ({ equipment, quantity: 1 }));
+      const inventory = selectedItems.map(({ equipment, quantity }) => ({
         itemId: equipment.id,
-        quantity: 1,
+        quantity,
         equipped: false,
       }));
 
@@ -220,11 +229,28 @@ const StartingEquipmentSelection: React.FC = () => {
 
       {/* Equipment Package Preview */}
       {method === 'package' && (
-        <EquipmentPackagePreview
-          className={characterClass.name}
-          estimatedACValue={estimatedACValue}
-          startingEquipment={startingEquipment}
-        />
+        <div className="space-y-4">
+          <EquipmentPackagePreview
+            className={characterClass.name}
+            estimatedACValue={estimatedACValue}
+            startingEquipment={startingEquipment}
+          />
+          {srdEquipment.choices.map((choice, index) => (
+            <div key={choice.description} className="space-y-2">
+              <Label htmlFor={`equipment-choice-${index}`}>{choice.description}</Label>
+              <select
+                id={`equipment-choice-${index}`}
+                className="w-full rounded-md border bg-background p-2"
+                value={choiceSelections[index] ?? 0}
+                onChange={(event) => setChoiceSelections((current) => ({ ...current, [index]: Number(event.target.value) }))}
+              >
+                {choice.alternatives.map((alternative, optionIndex) => (
+                  <option key={`${alternative.label}-${optionIndex}`} value={optionIndex}>{alternative.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Starting Gold Option */}
