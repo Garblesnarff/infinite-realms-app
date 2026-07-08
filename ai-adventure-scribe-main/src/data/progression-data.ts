@@ -55,22 +55,44 @@ export const proficiencyBonusTable: Record<number, number> = {
 /**
  * Multiclassing ability score requirements
  */
-export const multiclassRequirements: Record<
-  string,
-  { ability: keyof AbilityScores; minimum: number }
-> = {
-  barbarian: { ability: 'strength', minimum: 13 },
-  bard: { ability: 'charisma', minimum: 13 },
-  cleric: { ability: 'wisdom', minimum: 13 },
-  druid: { ability: 'wisdom', minimum: 13 },
-  fighter: { ability: 'strength', minimum: 13 }, // or Dexterity 13
-  monk: { ability: 'dexterity', minimum: 13 }, // and Wisdom 13
-  paladin: { ability: 'strength', minimum: 13 }, // and Charisma 13
-  ranger: { ability: 'dexterity', minimum: 13 }, // and Wisdom 13
-  rogue: { ability: 'dexterity', minimum: 13 },
-  sorcerer: { ability: 'charisma', minimum: 13 },
-  warlock: { ability: 'charisma', minimum: 13 },
-  wizard: { ability: 'intelligence', minimum: 13 },
+export interface MulticlassRequirement {
+  allOf?: Array<{ ability: keyof AbilityScores; minimum: number }>;
+  anyOf?: Array<{ ability: keyof AbilityScores; minimum: number }>;
+}
+
+export const multiclassRequirements: Record<string, MulticlassRequirement> = {
+  barbarian: { allOf: [{ ability: 'strength', minimum: 13 }] },
+  bard: { allOf: [{ ability: 'charisma', minimum: 13 }] },
+  cleric: { allOf: [{ ability: 'wisdom', minimum: 13 }] },
+  druid: { allOf: [{ ability: 'wisdom', minimum: 13 }] },
+  fighter: {
+    anyOf: [
+      { ability: 'strength', minimum: 13 },
+      { ability: 'dexterity', minimum: 13 },
+    ],
+  },
+  monk: {
+    allOf: [
+      { ability: 'dexterity', minimum: 13 },
+      { ability: 'wisdom', minimum: 13 },
+    ],
+  },
+  paladin: {
+    allOf: [
+      { ability: 'strength', minimum: 13 },
+      { ability: 'charisma', minimum: 13 },
+    ],
+  },
+  ranger: {
+    allOf: [
+      { ability: 'dexterity', minimum: 13 },
+      { ability: 'wisdom', minimum: 13 },
+    ],
+  },
+  rogue: { allOf: [{ ability: 'dexterity', minimum: 13 }] },
+  sorcerer: { allOf: [{ ability: 'charisma', minimum: 13 }] },
+  warlock: { allOf: [{ ability: 'charisma', minimum: 13 }] },
+  wizard: { allOf: [{ ability: 'intelligence', minimum: 13 }] },
 };
 
 /**

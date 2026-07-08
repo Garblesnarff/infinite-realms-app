@@ -1,12 +1,4 @@
-import {
-  TrendingUp,
-  Star,
-  Award,
-  ChevronRight,
-  Plus,
-  AlertCircle,
-  Trophy,
-} from 'lucide-react';
+import { TrendingUp, Star, Award, ChevronRight, Plus, AlertCircle, Trophy } from 'lucide-react';
 import React, { useState } from 'react';
 
 import FeatSelection from './FeatSelection';
@@ -21,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import { useCharacter } from '@/contexts/CharacterContext';
+import { classes } from '@/data/classes';
 import {
   getExperienceForLevel,
   getProficiencyBonus,
@@ -28,6 +21,7 @@ import {
   getClassFeaturesForLevel,
   getAllClassFeaturesUpToLevel,
 } from '@/data/levelProgression';
+import { addMulticlass, validateMulticlass } from '@/utils/multiclassing';
 
 /**
  * CharacterAdvancement component for leveling up characters
@@ -143,15 +137,24 @@ const CharacterAdvancement: React.FC = () => {
   const handleMulticlass = (targetClass: string) => {
     if (!character) return;
 
-    // In a full implementation, this would:
-    // 1. Add the new class to character.classes array
-    // 2. Handle proficiency gains from multiclassing
-    // 3. Update spellcasting if applicable
-    // For now, we'll show a placeholder
+    const newClass = classes.find((candidate) => candidate.id === targetClass);
+    if (!newClass) return;
+    const validation = validateMulticlass(character, newClass);
+    if (!validation.canMulticlass) {
+      toast({
+        title: 'Multiclass requirements not met',
+        description: validation.missingRequirements.join(', '),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const updatedCharacter = addMulticlass(character, newClass);
+    dispatch({ type: 'UPDATE_CHARACTER', payload: updatedCharacter });
 
     toast({
-      title: 'Multiclassing Selected',
-      description: `Selected ${targetClass} for multiclassing. This feature is under development.`,
+      title: 'Multiclass Added',
+      description: `Added level 1 ${newClass.name}. Your class levels and hit points were recalculated.`,
     });
   };
 

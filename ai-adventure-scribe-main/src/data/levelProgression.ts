@@ -1,4 +1,3 @@
-
 import {
   experienceTable,
   proficiencyBonusTable,
@@ -50,50 +49,31 @@ export function canMulticlass(
   const requirements: string[] = [];
   let canMulticlass = true;
 
-  // Check current class requirements (to multiclass OUT of current class)
-  const currentReq = multiclassRequirements[currentClass.toLowerCase()];
-  if (currentReq) {
-    const currentAbility = abilityScores[currentReq.ability];
-    if (currentAbility.score < currentReq.minimum) {
-      requirements.push(`${currentClass}: ${currentReq.ability} ${currentReq.minimum}+`);
-      canMulticlass = false;
-    }
-  }
+  const checkRequirements = (className: string) => {
+    const requirement = multiclassRequirements[className.toLowerCase()];
+    if (!requirement) return;
 
-  // Check target class requirements (to multiclass INTO target class)
-  const targetReq = multiclassRequirements[targetClass.toLowerCase()];
-  if (targetReq) {
-    const targetAbility = abilityScores[targetReq.ability];
-    if (targetAbility.score < targetReq.minimum) {
-      requirements.push(`${targetClass}: ${targetReq.ability} ${targetReq.minimum}+`);
-      canMulticlass = false;
+    for (const item of requirement.allOf ?? []) {
+      if (abilityScores[item.ability].score < item.minimum) {
+        requirements.push(`${className}: ${item.ability} ${item.minimum}+`);
+        canMulticlass = false;
+      }
     }
-  }
 
-  // Special cases for classes with multiple requirements
-  if (targetClass.toLowerCase() === 'monk') {
-    const wisdom = abilityScores.wisdom;
-    if (wisdom.score < 13) {
-      requirements.push(`Monk: Wisdom 13+`);
+    const alternatives = requirement.anyOf ?? [];
+    if (
+      alternatives.length > 0 &&
+      !alternatives.some((item) => abilityScores[item.ability].score >= item.minimum)
+    ) {
+      requirements.push(
+        `${className}: ${alternatives.map((item) => `${item.ability} ${item.minimum}+`).join(' or ')}`,
+      );
       canMulticlass = false;
     }
-  }
+  };
 
-  if (targetClass.toLowerCase() === 'paladin') {
-    const charisma = abilityScores.charisma;
-    if (charisma.score < 13) {
-      requirements.push(`Paladin: Charisma 13+`);
-      canMulticlass = false;
-    }
-  }
-
-  if (targetClass.toLowerCase() === 'ranger') {
-    const wisdom = abilityScores.wisdom;
-    if (wisdom.score < 13) {
-      requirements.push(`Ranger: Wisdom 13+`);
-      canMulticlass = false;
-    }
-  }
+  checkRequirements(currentClass);
+  checkRequirements(targetClass);
 
   return { canMulticlass, requirements };
 }

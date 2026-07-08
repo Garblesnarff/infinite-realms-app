@@ -122,7 +122,20 @@ describe('multiclassing utilities', () => {
       };
       const result = validateMulticlass(weakFighter, mockWizard);
       expect(result.canMulticlass).toBe(false);
-      expect(result.missingRequirements).toContain('Fighter: Strength 13+');
+      expect(result.missingRequirements).toContain('Fighter: Strength 13+ or Dexterity 13+');
+    });
+
+    it('allows a fighter to multiclass with Dexterity 13 when Strength is below 13', () => {
+      const dexterityFighter = {
+        ...baseCharacter,
+        abilityScores: {
+          ...baseCharacter.abilityScores,
+          strength: { score: 10, modifier: 0, savingThrow: false },
+          dexterity: { score: 13, modifier: 1, savingThrow: false },
+        } as any,
+      };
+
+      expect(validateMulticlass(dexterityFighter, mockWizard).canMulticlass).toBe(true);
     });
 
     it('should handle complex requirements like Monk', () => {

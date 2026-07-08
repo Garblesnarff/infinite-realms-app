@@ -15,7 +15,6 @@ import {
   getAllClassFeaturesUpToLevel,
 } from '@/data/levelProgression';
 
-
 // Re-export spellcasting types and functions for backward compatibility
 export type { MulticlassSpellcastingResult };
 export { calculateMulticlassSpellcasting };
@@ -66,33 +65,26 @@ export function validateMulticlass(
     const classReq = multiclassRequirements[nameLower];
 
     if (classReq) {
-      const abilityScore = abilityScores[classReq.ability];
-      if (abilityScore.score < classReq.minimum) {
-        const reqText = `${className}: ${classReq.ability.charAt(0).toUpperCase() + classReq.ability.slice(1)} ${classReq.minimum}+`;
+      for (const requirement of classReq.allOf ?? []) {
+        const abilityScore = abilityScores[requirement.ability];
+        if (abilityScore.score >= requirement.minimum) continue;
+        const reqText = `${className}: ${requirement.ability.charAt(0).toUpperCase() + requirement.ability.slice(1)} ${requirement.minimum}+`;
         requirements.push(reqText);
         missingRequirements.push(reqText);
         canMulticlass = false;
       }
-    }
 
-    // Special cases for classes with multiple requirements
-    if (nameLower === 'monk') {
-      if (abilityScores.wisdom.score < 13) {
-        const reqText = 'Monk: Wisdom 13+';
-        requirements.push(reqText);
-        missingRequirements.push(reqText);
-        canMulticlass = false;
-      }
-    } else if (nameLower === 'paladin') {
-      if (abilityScores.charisma.score < 13) {
-        const reqText = 'Paladin: Charisma 13+';
-        requirements.push(reqText);
-        missingRequirements.push(reqText);
-        canMulticlass = false;
-      }
-    } else if (nameLower === 'ranger') {
-      if (abilityScores.wisdom.score < 13) {
-        const reqText = 'Ranger: Wisdom 13+';
+      const alternatives = classReq.anyOf ?? [];
+      if (
+        alternatives.length > 0 &&
+        !alternatives.some((item) => abilityScores[item.ability].score >= item.minimum)
+      ) {
+        const reqText = `${className}: ${alternatives
+          .map(
+            (item) =>
+              `${item.ability.charAt(0).toUpperCase() + item.ability.slice(1)} ${item.minimum}+`,
+          )
+          .join(' or ')}`;
         requirements.push(reqText);
         missingRequirements.push(reqText);
         canMulticlass = false;
