@@ -20,7 +20,7 @@ upstream infiniterealms_backend {
 server {
     listen 80;
     listen [::]:80;
-    server_name infiniterealms.com www.infiniterealms.com;
+    server_name infiniterealms.app www.infiniterealms.app;
 
     # Redirect all HTTP to HTTPS
     return 301 https://$host$request_uri;
@@ -30,12 +30,12 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name infiniterealms.com www.infiniterealms.com;
+    server_name infiniterealms.app www.infiniterealms.app;
 
     # SSL Certificate Configuration (Let's Encrypt)
-    ssl_certificate /etc/letsencrypt/live/infiniterealms.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/infiniterealms.com/privkey.pem;
-    ssl_trusted_certificate /etc/letsencrypt/live/infiniterealms.com/chain.pem;
+    ssl_certificate /etc/letsencrypt/live/infiniterealms.app/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/infiniterealms.app/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/infiniterealms.app/chain.pem;
 
     # SSL Security Settings
     ssl_protocols TLSv1.2 TLSv1.3;

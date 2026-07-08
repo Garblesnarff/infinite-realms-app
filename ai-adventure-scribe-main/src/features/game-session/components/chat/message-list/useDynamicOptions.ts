@@ -83,7 +83,7 @@ export const useDynamicOptions = ({
 
     optionsTimerRef.current = window.setTimeout(async () => {
       try {
-        const configuredBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? '').trim();
+        const configuredBaseUrl = String(import.meta.env.VITE_API_URL ?? '').trim();
         const optionsEndpoint = configuredBaseUrl
           ? `${configuredBaseUrl.replace(/\/+$/, '')}/dm/options`
           : '/dm/options';

@@ -21,6 +21,7 @@ interface Env {
 
   // Supabase (optional - only needed for certain features)
   SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_SERVICE_KEY?: string;
 
   // Optional: Node environment
@@ -68,6 +69,8 @@ function validateEnv(): Env {
     WORKOS_API_KEY: process.env.WORKOS_API_KEY!,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID!,
     SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY:
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
     NODE_ENV: process.env.NODE_ENV || 'development',
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
