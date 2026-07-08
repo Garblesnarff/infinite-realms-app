@@ -15,11 +15,11 @@ describe('hit-dice utilities', () => {
   });
 
   describe('calculateMaxHitDice', () => {
-    it('should return half level (floor) for single class', () => {
+    it('should return half level rounded up for single class', () => {
       const character: any = {
         classLevels: [{ level: 5 }]
       };
-      expect(calculateMaxHitDice(character)).toBe(2);
+      expect(calculateMaxHitDice(character)).toBe(3);
     });
 
     it('should return minimum 1 for level 1 character', () => {
@@ -41,7 +41,7 @@ describe('hit-dice utilities', () => {
          level: 5,
          classLevels: []
        };
-       expect(calculateMaxHitDice(character)).toBe(2);
+       expect(calculateMaxHitDice(character)).toBe(3);
     });
 
     it('should return minimum 1 for level 1 character with no classLevels', () => {
@@ -144,6 +144,15 @@ describe('hit-dice utilities', () => {
       };
       const updated = recoverHitDice(character);
       expect(updated.hitDice.remaining).toBe(10);
+    });
+
+    it('rounds half the character level up on odd levels', () => {
+      const character: any = {
+        level: 5,
+        hitDice: { total: 5, remaining: 0 },
+      };
+
+      expect(recoverHitDice(character).hitDice.remaining).toBe(3);
     });
   });
 });

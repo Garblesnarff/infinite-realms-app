@@ -283,11 +283,7 @@ export const useCombatMechanics = ({
       const participant = activeEncounter.participants.find((p) => p.id === participantId);
       if (!participant || !participant.activeConcentration) return;
 
-      // Inline concentration save logic
-      // CombatParticipant doesn't carry abilityScores, so this has always evaluated to 0
-      // regardless of the participant's real Constitution modifier - see bead
-      // ai-dungeon-master-d20 for wiring in the real value without changing behavior here.
-      const conMod = 0;
+      const conMod = participant.abilityScores?.constitution?.modifier ?? 0;
       const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
       const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
       const rollResult = Math.floor(Math.random() * 20) + 1 + saveBonus;

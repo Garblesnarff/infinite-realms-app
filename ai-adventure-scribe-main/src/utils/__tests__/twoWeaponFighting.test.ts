@@ -158,12 +158,10 @@ describe('twoWeaponFighting', () => {
 
       const action = makeMainHandAttack(p);
 
-      // DEX modifier is 2 (finesse), proficiency is 2 (level 1)
-      // Total attack bonus should be 4
-      expect(diceUtils.rollAttack).toHaveBeenCalledWith(4, expect.any(Object));
+      // Finesse uses the higher STR modifier (3), plus proficiency (2).
+      expect(diceUtils.rollAttack).toHaveBeenCalledWith(5, expect.any(Object));
 
-      // Total damage = 4 (roll) + 2 (DEX mod) = 6
-      expect(action.damageDealt).toBe(6);
+      expect(action.damageDealt).toBe(7);
     });
 
     it('should use STR if weapon is not finesse', () => {
@@ -183,6 +181,17 @@ describe('twoWeaponFighting', () => {
       makeMainHandAttack(p);
 
       // STR modifier is 3, proficiency is 2. Total = 5.
+      expect(diceUtils.rollAttack).toHaveBeenCalledWith(5, expect.any(Object));
+    });
+
+    it('uses the higher modifier for a finesse thrown weapon', () => {
+      const dagger = { ...mockLightWeapon, range: { normal: 20, long: 60 } };
+      const p = { ...participantWithAbilities, mainHandWeapon: dagger } as any;
+      (diceUtils.rollAttack as any).mockReturnValue({ total: 10, critical: false });
+      (diceUtils.rollDamage as any).mockReturnValue([{ keptResults: [3], modifier: 0 }]);
+
+      makeMainHandAttack(p);
+
       expect(diceUtils.rollAttack).toHaveBeenCalledWith(5, expect.any(Object));
     });
 
@@ -235,8 +244,8 @@ describe('twoWeaponFighting', () => {
 
       const action = makeOffHandAttack(p);
 
-      // Damage = 4 (roll) + 2 (DEX mod) = 6
-      expect(action.damageDealt).toBe(6);
+      // The fighting style adds the higher finesse modifier (STR +3).
+      expect(action.damageDealt).toBe(7);
     });
 
     it('should return 0 modifier if abilityScores is missing', () => {

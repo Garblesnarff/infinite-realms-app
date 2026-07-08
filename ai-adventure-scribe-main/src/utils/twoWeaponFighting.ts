@@ -77,8 +77,11 @@ export function makeMainHandAttack(
   };
   const strMod = getAbilityMod(participant, 'strength');
   const dexMod = getAbilityMod(participant, 'dexterity');
-  const usesDex = !!mainWeapon.weaponProperties?.finesse || !!mainWeapon.range;
-  const abilityModifier = usesDex ? dexMod : strMod;
+  const abilityModifier = mainWeapon.weaponProperties?.finesse
+    ? Math.max(strMod, dexMod)
+    : mainWeapon.range
+      ? dexMod
+      : strMod;
   const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const attackBonus = abilityModifier + proficiencyBonus + (mainWeapon.attackBonus || 0);
 
@@ -144,8 +147,11 @@ export function makeOffHandAttack(
   };
   const strMod = getAbilityMod(participant, 'strength');
   const dexMod = getAbilityMod(participant, 'dexterity');
-  const usesDex = !!offHandWeapon.weaponProperties?.finesse || !!offHandWeapon.range;
-  const abilityModifier = usesDex ? dexMod : strMod;
+  const abilityModifier = offHandWeapon.weaponProperties?.finesse
+    ? Math.max(strMod, dexMod)
+    : offHandWeapon.range
+      ? dexMod
+      : strMod;
   const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const attackBonus = abilityModifier + proficiencyBonus + (offHandWeapon.attackBonus || 0);
 

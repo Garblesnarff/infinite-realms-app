@@ -90,7 +90,11 @@ export function recoverSpellSlotsShortRest(
 
   // Warlock: All spell slots recover on short rest
   if (className.toLowerCase() === 'warlock') {
-    return restoreSpellSlots(character);
+    if (!character.pactSlots) return character;
+    return {
+      ...character,
+      pactSlots: { ...character.pactSlots, current: character.pactSlots.maximum },
+    };
   }
 
   return character;
@@ -165,7 +169,10 @@ export function processShortRest(character: Character, hitDiceToRoll: number = 0
     );
 
     // Calculate how many slots were recovered (simplified)
-    if (charWithSlots.spellSlots !== updatedCharacter.spellSlots) {
+    if (
+      charWithSlots.spellSlots !== updatedCharacter.spellSlots ||
+      charWithSlots.pactSlots !== updatedCharacter.pactSlots
+    ) {
       spellSlotsRecovered = 1; // Simplified count
     }
 

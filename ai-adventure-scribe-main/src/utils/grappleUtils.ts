@@ -34,10 +34,9 @@ export function canAttemptGrapple(participant: CombatParticipant): boolean {
  * Calculate grapple DC (typically 8 + proficiency bonus + Strength modifier)
  */
 export function calculateGrappleDC(participant: CombatParticipant): number {
-  // Simplified calculation - would normally use actual ability scores
   const baseDC = 8;
   const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
-  const strengthModifier = 3; // Simplified - would use actual Strength modifier
+  const strengthModifier = participant.abilityScores?.strength?.modifier ?? 0;
 
   return baseDC + proficiencyBonus + strengthModifier;
 }
@@ -57,7 +56,7 @@ export function rollGrappleCheck(
   const dc = calculateGrappleDC(participant);
 
   // Roll 1d20 + Strength modifier + proficiency bonus
-  const strengthModifier = 3; // Simplified - would use actual Strength modifier
+  const strengthModifier = participant.abilityScores?.strength?.modifier ?? 0;
   const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
   const modifier = strengthModifier + proficiencyBonus;
 
@@ -133,7 +132,7 @@ export function escapeGrapple(
   description: string;
 } {
   // Roll Strength (Athletics) check against grappler's grapple DC
-  const targetStrengthModifier = 3; // Simplified - would use actual Strength modifier
+  const targetStrengthModifier = target.abilityScores?.strength?.modifier ?? 0;
   const targetProficiencyBonus = calculateProficiencyBonus(target.level || 1);
   const targetModifier = targetStrengthModifier + targetProficiencyBonus;
 

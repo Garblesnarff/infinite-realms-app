@@ -42,14 +42,22 @@ export const calculateSkillModifiers = (
 ): SkillModifiers => {
   const pb = profBonus !== undefined ? profBonus : calculateProficiencyBonus(character.level || 1);
 
-  // ⚡ Bolt: Use a composite cache key for the combined proficiency set
-  const cacheKey = `${character.class?.name || 'none'}:${character.race?.name || 'none'}:${character.subrace?.name || 'none'}`;
+  // Character creation persists the complete set (class choices, background,
+  // race, and other bonuses). Prefer it whenever it is available.
+  const chosenProficiencies = character.skillProficiencies;
+  const cacheKey = chosenProficiencies
+    ? `chosen:${[...chosenProficiencies].sort().join('|')}`
+    : `${character.class?.name || 'none'}:${character.race?.name || 'none'}:${character.subrace?.name || 'none'}`;
   let profSet = combinedProficiencySetCache.get(cacheKey);
 
   if (!profSet) {
     const newSet = new Set<string>();
-    getClassSkillProficiencies(character.class).forEach((p) => newSet.add(p));
-    getRaceSkillProficiencies(character.race, character.subrace).forEach((p) => newSet.add(p));
+    if (chosenProficiencies) {
+      chosenProficiencies.forEach((p) => newSet.add(p));
+    } else {
+      getClassSkillProficiencies(character.class).forEach((p) => newSet.add(p));
+      getRaceSkillProficiencies(character.race, character.subrace).forEach((p) => newSet.add(p));
+    }
     profSet = newSet;
     combinedProficiencySetCache.set(cacheKey, profSet);
   }

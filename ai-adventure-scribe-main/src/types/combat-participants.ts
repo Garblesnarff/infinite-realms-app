@@ -44,6 +44,11 @@ export interface CombatParticipant {
   armorClass: number;
   initiative: number;
   initiativeBonus?: number;
+  abilityScores?: {
+    strength?: { modifier?: number };
+    dexterity?: { modifier?: number };
+    constitution?: { modifier?: number; savingThrow?: boolean };
+  };
   speed: number;
 
   // Turn tracking

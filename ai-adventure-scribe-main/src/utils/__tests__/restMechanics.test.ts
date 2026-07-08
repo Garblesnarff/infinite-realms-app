@@ -41,8 +41,8 @@ describe('restMechanics', () => {
       const character: any = {
         classLevels: [{ className: 'Fighter', level: 5 }],
       };
-      // 5 / 2 = 2.5 -> floor(2.5) = 2
-      expect(calculateMaxHitDice(character)).toBe(2);
+      // 5 / 2 = 2.5 -> round up to 3
+      expect(calculateMaxHitDice(character)).toBe(3);
     });
 
     it('should calculate hit dice for a multiclass character', () => {
@@ -230,18 +230,13 @@ describe('restMechanics', () => {
 
     it('should handle Warlock slot recovery', () => {
       const character: any = {
-        spellSlots: {
-          1: { max: 2, current: 0 },
-        },
+        pactSlots: { maximum: 2, current: 0, level: 1 },
       };
-      vi.mocked(spellManagement.restoreSpellSlots).mockImplementation((char: any) => ({
-        ...char,
-        spellSlots: { 1: { max: 2, current: 2 } },
-      }));
 
       const updated = recoverSpellSlotsShortRest(character, 'Warlock', 1);
-      expect(updated.spellSlots[1].current).toBe(2);
-      expect(spellManagement.restoreSpellSlots).toHaveBeenCalled();
+      expect(updated.pactSlots.current).toBe(2);
+      expect(updated.pactSlots.level).toBe(1);
+      expect(spellManagement.restoreSpellSlots).not.toHaveBeenCalled();
     });
 
     it('should do nothing for other classes', () => {

@@ -29,6 +29,7 @@ describe('grappleUtils', () => {
       name: 'Grappler',
       level: 5,
       conditions: [],
+      abilityScores: { strength: { modifier: 4 } },
       mainHandWeapon: {
         properties: {
           twoHanded: false,
@@ -40,6 +41,7 @@ describe('grappleUtils', () => {
       name: 'Target',
       level: 5,
       conditions: [],
+      abilityScores: { strength: { modifier: -1 } },
     };
   });
 
@@ -70,21 +72,20 @@ describe('grappleUtils', () => {
 
   describe('calculateGrappleDC', () => {
     it('should calculate the correct DC based on level', () => {
-      // level 5: prof bonus is 3. base 8 + prof 3 + str 3 = 14
-      expect(calculateGrappleDC(mockParticipant)).toBe(14);
+      expect(calculateGrappleDC(mockParticipant)).toBe(15);
 
       // level 1: prof bonus is 2. base 8 + prof 2 + str 3 = 13
       mockParticipant.level = 1;
-      expect(calculateGrappleDC(mockParticipant)).toBe(13);
+      expect(calculateGrappleDC(mockParticipant)).toBe(14);
 
       // level 12: prof bonus is 4. base 8 + prof 4 + str 3 = 15
       mockParticipant.level = 12;
-      expect(calculateGrappleDC(mockParticipant)).toBe(15);
+      expect(calculateGrappleDC(mockParticipant)).toBe(16);
     });
 
     it('should use level 1 if level is missing', () => {
       delete mockParticipant.level;
-      expect(calculateGrappleDC(mockParticipant)).toBe(13); // prof 2 + str 3 + base 8
+      expect(calculateGrappleDC(mockParticipant)).toBe(14);
     });
   });
 
@@ -96,9 +97,9 @@ describe('grappleUtils', () => {
       const result = rollGrappleCheck(mockParticipant, mockTarget);
 
       expect(result.success).toBe(true);
-      expect(result.dc).toBe(14);
+      expect(result.dc).toBe(15);
       expect(result.roll).toBe(mockRoll);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 6); // level 5 -> prof 3. prof 3 + str 3 = 6
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 7);
     });
 
     it('should return failure when roll is too low', () => {
@@ -116,7 +117,7 @@ describe('grappleUtils', () => {
       (diceUtils.rollDice as any).mockReturnValue(mockRoll);
 
       rollGrappleCheck(mockParticipant, mockTarget);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 5); // prof 2 + str 3
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 6);
     });
   });
 
@@ -160,7 +161,7 @@ describe('grappleUtils', () => {
       const result = escapeGrapple(mockTarget, mockParticipant);
 
       expect(result.success).toBe(true);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 6); // target prof 3 + str 3
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 2);
     });
 
     it('should return failure when escape roll is too low', () => {
@@ -178,7 +179,7 @@ describe('grappleUtils', () => {
       (diceUtils.rollDice as any).mockReturnValue(mockRoll);
 
       escapeGrapple(mockTarget, mockParticipant);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 5); // prof 2 + str 3
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 1);
     });
   });
 

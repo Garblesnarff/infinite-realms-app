@@ -20,6 +20,21 @@ describe('character-proficiency-calculations', () => {
   };
 
   describe('calculateSkillModifiers', () => {
+    it('uses the proficiencies actually chosen during character creation', () => {
+      const character = {
+        level: 1,
+        class: { name: 'Fighter' },
+        abilityScores: mockAbilityScores,
+        skillProficiencies: ['Stealth', 'Persuasion'],
+      } as Character;
+
+      const skillMods = calculateSkillModifiers(character);
+
+      expect(skillMods.Stealth).toMatchObject({ modifier: 4, proficient: true });
+      expect(skillMods.Persuasion).toMatchObject({ modifier: 4, proficient: true });
+      expect(skillMods.Athletics).toMatchObject({ modifier: 3, proficient: false });
+    });
+
     it('should calculate skill modifiers with proficiency bonus', () => {
       const character: Partial<Character> = {
         level: 1, // Proficiency bonus = 2

@@ -26,6 +26,7 @@ export interface CharacterData {
   isHidden?: boolean;
   stealthCheckBonus?: number;
   speed?: number;
+  abilityScores?: CombatParticipant['abilityScores'];
 }
 
 /**
@@ -87,6 +88,7 @@ export function createCombatParticipant(
     obscurement: partial.obscurement || 'clear',
     isHidden: partial.isHidden || false,
     stealthCheckBonus: partial.stealthCheckBonus || 0,
+    abilityScores: partial.abilityScores,
   };
 
   // Enrich player participants with character data
@@ -127,6 +129,7 @@ export function enrichParticipantWithCharacterData(
   participant.obscurement = characterData.obscurement || 'clear';
   participant.isHidden = characterData.isHidden || false;
   participant.stealthCheckBonus = characterData.stealthCheckBonus || 0;
+  participant.abilityScores = characterData.abilityScores;
   if (typeof characterData.speed === 'number') {
     participant.speed = characterData.speed;
     participant.movementRemaining = Math.max(0, characterData.speed - participant.movementUsed);

@@ -30,5 +30,6 @@ export function buildCharacterData(character: Character | null | undefined): Cha
     obscurement: character.obscurement,
     isHidden: character.isHidden,
     stealthCheckBonus: character.stealthCheckBonus,
+    abilityScores: character.abilityScores,
   };
 }

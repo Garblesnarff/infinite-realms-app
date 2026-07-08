@@ -658,7 +658,7 @@ describe('useCombatMechanics', () => {
       expect(mockTakeAction).toHaveBeenCalledWith(
         expect.objectContaining({
           actionType: 'concentration_save',
-          concentrationResult: expect.objectContaining({ succeeded: true }),
+          concentrationResult: expect.objectContaining({ succeeded: true, roll: 25 }),
         }),
       );
       expect(mockUpdateParticipant).not.toHaveBeenCalled();

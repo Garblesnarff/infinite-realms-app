@@ -8,12 +8,12 @@ import { rollDie } from '@/utils/diceRolls';
 export function calculateMaxHitDice(character: Character): number {
   if (!character.classLevels || character.classLevels.length === 0) {
     const level = character.level || 1;
-    return Math.max(1, Math.floor(level / 2));
+    return Math.max(1, Math.ceil(level / 2));
   }
 
   // For multiclass characters, take half of total level (minimum 1)
   const totalLevel = character.classLevels.reduce((sum, cls) => sum + cls.level, 0);
-  return Math.max(1, Math.floor(totalLevel / 2));
+  return Math.max(1, Math.ceil(totalLevel / 2));
 }
 
 /**
