@@ -8,6 +8,7 @@ import { db } from '../../../db/client';
 import { dialogueHistory, gameSessions, campaigns, characters } from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { getCircuitBreaker } from '../utils/circuit-breaker.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -237,12 +238,12 @@ Respond ONLY as JSON with exactly these fields:
   "illustrationPrompt": "..."
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('chronicle:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 2000,
       temperature: 0.9,
       messages: [{ role: 'user', content: prompt }],
-    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) });
+    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseProResponse(text, data);
@@ -279,12 +280,12 @@ Respond ONLY as JSON with exactly these fields:
   "previouslyOn": "..."
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('chronicle:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 600,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],
-    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) });
+    }, { signal: AbortSignal.timeout(TEXT_TIMEOUT_MS) }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseFreeResponse(text, data);

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 
 import { logger } from '../lib/logger.js';
+import { getCircuitBreaker } from '../utils/circuit-breaker.js';
 
 interface CommitData {
   hash: string;
@@ -64,11 +65,11 @@ Format your response as JSON with these fields:
   "suggestedTags": ["array", "of", "tags"]
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('blog:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseJsonResponse(text, version, 'changelog');
@@ -103,11 +104,11 @@ Format your response as JSON with these fields:
   "suggestedTags": ["array", "of", "tags"]
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('blog:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseJsonResponse(text, version, 'dev-diary');
@@ -165,12 +166,12 @@ Format your response as JSON with these fields:
   "suggestedTags": ["5-8 relevant tags including primary keyword"]
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('blog:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 4000,
       temperature: 0.8, // Slightly creative while maintaining quality
       messages: [{ role: 'user', content: prompt }],
-    });
+    }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseJsonResponse(text, topic, 'seo');
@@ -244,12 +245,12 @@ Format your response as JSON with these fields:
   "suggestedTags": ["relevant", "tags", "for", "categorization"]
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('blog:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: length === 'long' ? 6000 : 4000,
       temperature: tone === 'professional' || tone === 'technical' ? 0.7 : 0.8,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseJsonResponse(text, topic, 'blog');

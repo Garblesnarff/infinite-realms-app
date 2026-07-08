@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 
 import { logger } from '../lib/logger.js';
+import { getCircuitBreaker } from '../utils/circuit-breaker.js';
 
 interface BlogTopic {
   title: string;
@@ -108,12 +109,12 @@ Format your response as JSON:
   ]
 }`;
 
-    const response = await client.chat.completions.create({
+    const response = await getCircuitBreaker('blog:openrouter').exec(() => client.chat.completions.create({
       model: 'deepseek/deepseek-chat',
       max_tokens: 3000,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }));
 
     const text = response.choices[0]?.message?.content || '';
     return this.parseTopicIdeas(text);
