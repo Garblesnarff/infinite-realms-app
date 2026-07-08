@@ -19,6 +19,9 @@ vi.mock('../../../../db/client', () => ({
       restEvents: {
         findMany: vi.fn(),
       },
+      combatParticipants: {
+        findMany: vi.fn(),
+      },
     },
     select: vi.fn(() => {
       const mock = {
@@ -50,7 +53,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
   };
 });
 
@@ -60,6 +63,7 @@ describe('RestService Security', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (db.query.combatParticipants.findMany as any).mockResolvedValue([]);
   });
 
   describe('takeShortRest', () => {
@@ -67,8 +71,9 @@ describe('RestService Security', () => {
       // Mock character NOT found or NOT owned
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
-      await expect(RestService.takeShortRest(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(RestService.takeShortRest(mockCharacterId, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should succeed if character is owned by user', async () => {
@@ -77,12 +82,13 @@ describe('RestService Security', () => {
 
       // Mock internal hit dice lookup
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
+      (db.query.combatParticipants.findMany as any).mockResolvedValue([]);
 
       // Mock rest event insertion
       (db.insert as any).mockReturnValue({
         select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'event-123' }])
-        })
+          returning: vi.fn().mockResolvedValue([{ id: 'event-123' }]),
+        }),
       });
 
       const result = await RestService.takeShortRest(mockCharacterId, mockUserId);
@@ -96,21 +102,22 @@ describe('RestService Security', () => {
     it('should throw NotFoundError if character is not found or not owned by user', async () => {
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
-      await expect(RestService.takeLongRest(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(RestService.takeLongRest(mockCharacterId, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should succeed if character is owned by user', async () => {
       (db.query.characters.findFirst as any).mockResolvedValue({
         id: mockCharacterId,
-        stats: { constitution: 10 }
+        stats: { constitution: 10 },
       });
 
       (db.query.characterHitDice.findMany as any).mockResolvedValue([]);
       (db.insert as any).mockReturnValue({
         select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'event-456' }])
-        })
+          returning: vi.fn().mockResolvedValue([{ id: 'event-456' }]),
+        }),
       });
 
       const result = await RestService.takeLongRest(mockCharacterId, mockUserId);
@@ -123,8 +130,9 @@ describe('RestService Security', () => {
     it('should throw NotFoundError if character is not found or not owned by user', async () => {
       (db.query.characters.findFirst as any).mockResolvedValue(null);
 
-      await expect(RestService.initializeHitDice(mockCharacterId, mockUserId, 'Wizard', 1))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        RestService.initializeHitDice(mockCharacterId, mockUserId, 'Wizard', 1),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should succeed and return new hit dice if owned by user', async () => {
@@ -133,8 +141,8 @@ describe('RestService Security', () => {
 
       (db.insert as any).mockReturnValue({
         select: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'hd-123', characterId: mockCharacterId }])
-        })
+          returning: vi.fn().mockResolvedValue([{ id: 'hd-123', characterId: mockCharacterId }]),
+        }),
       });
 
       const result = await RestService.initializeHitDice(mockCharacterId, mockUserId, 'Wizard', 1);
@@ -149,9 +157,11 @@ describe('RestService Security', () => {
 
       await RestService.getHitDice(mockCharacterId, mockUserId);
 
-      expect(db.query.characterHitDice.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.any(Object)
-      }));
+      expect(db.query.characterHitDice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.any(Object),
+        }),
+      );
     });
   });
 });

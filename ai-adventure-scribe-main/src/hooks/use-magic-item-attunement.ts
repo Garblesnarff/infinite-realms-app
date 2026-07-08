@@ -9,6 +9,7 @@ import { useState, useCallback } from 'react';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
+import { restApi } from '@/services/rest-api';
 import { validateAttunementRequirements, getAttunedItemCount } from '@/utils/magicItemEffects';
 
 interface AttunementResult {
@@ -47,6 +48,13 @@ export const useMagicItemAttunement = (
           return { success: false, message: validation.reason };
         }
 
+        if (!character.id) {
+          return { success: false, message: 'Character must be saved before attuning an item' };
+        }
+
+        await restApi.shortRest(character.id);
+        await restApi.attuneItem(character.id, itemId);
+
         // Create updated character with attuned item
         const updatedCharacter = {
           ...character,
@@ -59,7 +67,10 @@ export const useMagicItemAttunement = (
         // Update character
         onCharacterUpdate(updatedCharacter);
 
-        return { success: true, message: `Successfully attuned to ${item.itemId}` };
+        return {
+          success: true,
+          message: `Completed a short rest and attuned to ${item.itemId}`,
+        };
       } catch (error) {
         logger.error('Error attuning to item:', error);
         return { success: false, message: 'Failed to attune to item' };

@@ -73,8 +73,8 @@ describe('RestMechanics', () => {
       const result = RestMechanics.calculateSpentHitDice(6, 0, mockHitDice, [5, 5, 5, 5, 5, 3]);
       expect(result.hpRestored).toBe(28);
       expect(result.updates).toHaveLength(2);
-      expect(result.updates.find(u => u.id === '1')?.newUsedDice).toBe(5);
-      expect(result.updates.find(u => u.id === '2')?.newUsedDice).toBe(1);
+      expect(result.updates.find((u) => u.id === '1')?.newUsedDice).toBe(5);
+      expect(result.updates.find((u) => u.id === '2')?.newUsedDice).toBe(1);
     });
   });
 
@@ -120,11 +120,36 @@ describe('RestMechanics', () => {
           totalDice: 10,
           usedDice: 2,
           dieType: 'd10',
-        }
+        },
       ] as any;
       const result = RestMechanics.calculateRestoredHitDice(mostlyFreshDice);
       expect(result.restoredCount).toBe(2); // Only 2 used, so only 2 restored even though maxRestore is 5
       expect(result.updates[0].newUsedDice).toBe(0);
+    });
+  });
+
+  describe('resource restoration', () => {
+    it('rounds recovered hit dice up for odd character levels', () => {
+      const dice = [{ id: 'odd', dieType: 'd8', totalDice: 5, usedDice: 5 }] as CharacterHitDice[];
+      expect(RestMechanics.calculateRestoredHitDice(dice).restoredCount).toBe(3);
+    });
+
+    it('restores spell slots and rest-cadence class features', () => {
+      expect(RestMechanics.restoreSpellSlots({ '1': { max: 4, current: 1 } })).toEqual({
+        '1': { max: 4, current: 4 },
+      });
+      const features = {
+        secondWind: { usesPerRest: 'short', maxUses: 1, currentUses: 0 },
+        rage: { usesPerRest: 'long', maxUses: 2, currentUses: 0 },
+      };
+      expect(RestMechanics.restoreClassFeatures(features, 'short')).toEqual({
+        secondWind: { usesPerRest: 'short', maxUses: 1, currentUses: 1 },
+        rage: { usesPerRest: 'long', maxUses: 2, currentUses: 0 },
+      });
+      expect(RestMechanics.restoreClassFeatures(features, 'long')).toEqual({
+        secondWind: { usesPerRest: 'short', maxUses: 1, currentUses: 1 },
+        rage: { usesPerRest: 'long', maxUses: 2, currentUses: 2 },
+      });
     });
   });
 
@@ -138,9 +163,9 @@ describe('RestMechanics', () => {
     it('should return correct resources for long rest', () => {
       const resources = RestMechanics.getRestorableResources('long');
       expect(resources).toHaveLength(4);
-      expect(resources.map(r => r.resourceType)).toContain('hp');
-      expect(resources.map(r => r.resourceType)).toContain('spell_slot');
-      expect(resources.map(r => r.resourceType)).toContain('hit_dice');
+      expect(resources.map((r) => r.resourceType)).toContain('hp');
+      expect(resources.map((r) => r.resourceType)).toContain('spell_slot');
+      expect(resources.map((r) => r.resourceType)).toContain('hit_dice');
     });
   });
 });

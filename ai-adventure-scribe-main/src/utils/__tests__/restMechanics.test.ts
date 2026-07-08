@@ -363,6 +363,8 @@ describe('restMechanics', () => {
   describe('Combat Participant Rest Functions', () => {
     it('processShortRestCombat should recover HP and reduce dice', () => {
       const participant: any = {
+        characterClass: 'Fighter',
+        abilityScores: { constitution: { modifier: 2 } },
         maxHitPoints: 50,
         currentHitPoints: 10,
         hitDice: { max: 5, current: 3 },
@@ -371,7 +373,7 @@ describe('restMechanics', () => {
 
       const updated = processShortRestCombat(participant, 1);
 
-      expect(updated.currentHitPoints).toBe(15); // 10 + 5 (no CON mod in simplified combat rest)
+      expect(updated.currentHitPoints).toBe(17);
       expect(updated.hitDice.current).toBe(2);
     });
 

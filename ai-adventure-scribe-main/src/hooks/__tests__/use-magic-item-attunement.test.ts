@@ -7,6 +7,7 @@ import { useMagicItemAttunement } from '../use-magic-item-attunement';
 
 import logger from '@/lib/logger';
 import { validateAttunementRequirements, getAttunedItemCount } from '@/utils/magicItemEffects';
+import { restApi } from '@/services/rest-api';
 
 // Mock dependencies
 vi.mock('@/lib/logger', () => ({
@@ -21,6 +22,13 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/utils/magicItemEffects', () => ({
   validateAttunementRequirements: vi.fn(),
   getAttunedItemCount: vi.fn(),
+}));
+
+vi.mock('@/services/rest-api', () => ({
+  restApi: {
+    shortRest: vi.fn().mockResolvedValue({ restType: 'short', hpRestored: 0 }),
+    attuneItem: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 describe('useMagicItemAttunement', () => {
@@ -134,7 +142,9 @@ describe('useMagicItemAttunement', () => {
       });
 
       expect(response.success).toBe(true);
-      expect(response.message).toContain('Successfully attuned');
+      expect(response.message).toContain('Completed a short rest');
+      expect(restApi.shortRest).toHaveBeenCalledWith('char-123');
+      expect(restApi.attuneItem).toHaveBeenCalledWith('char-123', 'magic-sword');
       expect(mockOnCharacterUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           inventory: expect.arrayContaining([

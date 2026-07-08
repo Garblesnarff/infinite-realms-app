@@ -13,6 +13,8 @@ import { and, desc, eq, exists, or, sql } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import {
   characters,
+  characterStats,
+  combatParticipants,
   restEvents,
   type Character,
   type CharacterHitDice,
@@ -22,6 +24,7 @@ import {
 import { NotFoundError } from '../lib/errors.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { RestMechanics } from './rest/rest-mechanics.js';
+import { ExhaustionService } from './exhaustion-service.js';
 
 import type {
   HitDieType,
@@ -61,7 +64,10 @@ export class RestService {
    * Verify user owns character (direct owner or shared owner field).
    * Throws NOT_FOUND to avoid disclosing character existence.
    */
-  private static async verifyCharacterOwnership(characterId: string, userId: string): Promise<void> {
+  private static async verifyCharacterOwnership(
+    characterId: string,
+    userId: string,
+  ): Promise<void> {
     return RestHitDiceService.verifyCharacterOwnership(characterId, userId);
   }
 
@@ -72,7 +78,7 @@ export class RestService {
     characterId: string,
     userId: string,
     className: string,
-    level: number
+    level: number,
   ): Promise<CharacterHitDice> {
     return RestHitDiceService.initializeHitDice(characterId, userId, className, level);
   }
@@ -102,10 +108,16 @@ export class RestService {
     preRolledValues?: number[],
     preFetchedData?: {
       character: Character & { stats: CharacterStats | null };
-      hitDice: CharacterHitDice[]
-    }
+      hitDice: CharacterHitDice[];
+    },
   ): Promise<SpendHitDiceResult> {
-    return RestHitDiceService.spendHitDice(characterId, userId, count, preRolledValues, preFetchedData);
+    return RestHitDiceService.spendHitDice(
+      characterId,
+      userId,
+      count,
+      preRolledValues,
+      preFetchedData,
+    );
   }
 
   /**
@@ -116,7 +128,7 @@ export class RestService {
     characterId: string,
     userId: string,
     count?: number,
-    preFetchedHitDice?: CharacterHitDice[]
+    preFetchedHitDice?: CharacterHitDice[],
   ): Promise<{ restoredCount: number; updatedHitDice: CharacterHitDice[] }> {
     return RestHitDiceService.restoreHitDice(characterId, userId, count, preFetchedHitDice);
   }
@@ -128,7 +140,7 @@ export class RestService {
     characterId: string,
     userId: string,
     restType: RestType,
-    preVerified: boolean = false
+    preVerified: boolean = false,
   ): Promise<RestorableResource[]> {
     if (!preVerified) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -147,20 +159,20 @@ export class RestService {
     userId: string,
     hitDiceToSpend: number = 0,
     sessionId?: string,
-    notes?: string
+    notes?: string,
   ): Promise<ShortRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
-    const character = await db.query.characters.findFirst({
+    const character = (await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       with: {
         stats: true,
         hitDice: true,
       },
-    }) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
+    })) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
@@ -186,28 +198,47 @@ export class RestService {
     // Get restorable resources
     const resourcesRestored = await this.getRestorableResources(characterId, userId, 'short', true);
 
+    const pactSlots = character.pactSlots as {
+      maximum?: number;
+      max?: number;
+      current?: number;
+    } | null;
+    await db
+      .update(characters)
+      .set({
+        pactSlots: pactSlots
+          ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+          : pactSlots,
+        classFeatures: RestMechanics.restoreClassFeatures(character.classFeatures, 'short'),
+        updatedAt: new Date(),
+      })
+      .where(eq(characters.id, characterId));
+
     // Create rest event
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [restEvent] = await db
       .insert(restEvents)
       .select(
-        db.select({
-          characterId: sql`${characterId}`,
-          sessionId: sql`${sessionId || null}`,
-          restType: sql`'short'`,
-          startedAt: sql`NOW()`,
-          completedAt: sql`NOW()`,
-          hpRestored: sql`${hpRestored}`,
-          hitDiceSpent: sql`${hitDiceSpent}`,
-          resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
-          interrupted: sql`false`,
-          notes: sql`${notes || null}`,
-        })
-        .from(characters)
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            sessionId: sql`${sessionId || null}`,
+            restType: sql`'short'`,
+            startedAt: sql`NOW()`,
+            completedAt: sql`NOW()`,
+            hpRestored: sql`${hpRestored}`,
+            hitDiceSpent: sql`${hitDiceSpent}`,
+            resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
+            interrupted: sql`false`,
+            notes: sql`${notes || null}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          ),
       )
       .returning();
 
@@ -235,20 +266,20 @@ export class RestService {
     characterId: string,
     userId: string,
     sessionId?: string,
-    notes?: string
+    notes?: string,
   ): Promise<LongRestResult> {
     // ⚡ Bolt: Consolidated character ownership verification, stats fetching, and hit dice retrieval
     // into a single database round-trip. This reduces sequential latency from 3-4 down to 1.
-    const character = await db.query.characters.findFirst({
+    const character = (await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       with: {
         stats: true,
         hitDice: true,
       },
-    }) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
+    })) as (Character & { stats: CharacterStats | null; hitDice: CharacterHitDice[] }) | undefined;
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
@@ -256,39 +287,82 @@ export class RestService {
 
     const hitDice = character.hitDice || [];
 
-    // Note: HP restoration would be handled by updating character's current HP
-    // This is a placeholder that calculates the theoretical HP restored
-    // In a full implementation, this would integrate with HP tracking system
-    const hpRestored = 0; // Would be: maxHP - currentHP
+    const hpRestored = character.stats
+      ? Math.max(0, character.stats.maxHitPoints - character.stats.currentHitPoints)
+      : 0;
+
+    if (character.stats) {
+      await db
+        .update(characterStats)
+        .set({ currentHitPoints: character.stats.maxHitPoints, updatedAt: new Date() })
+        .where(eq(characterStats.characterId, characterId));
+    }
 
     // Restore hit dice (half total, minimum 1)
-    const { restoredCount: hitDiceRestored, updatedHitDice } = await this.restoreHitDice(characterId, userId, undefined, hitDice);
+    const { restoredCount: hitDiceRestored, updatedHitDice } = await this.restoreHitDice(
+      characterId,
+      userId,
+      undefined,
+      hitDice,
+    );
 
     // Get restorable resources
     const resourcesRestored = await this.getRestorableResources(characterId, userId, 'long', true);
+
+    const pactSlots = character.pactSlots as {
+      maximum?: number;
+      max?: number;
+      current?: number;
+    } | null;
+    await db
+      .update(characters)
+      .set({
+        spellSlots: RestMechanics.restoreSpellSlots(
+          character.spellSlots as Record<string, { max?: number; current?: number }> | null,
+        ),
+        pactSlots: pactSlots
+          ? { ...pactSlots, current: pactSlots.maximum ?? pactSlots.max ?? pactSlots.current }
+          : pactSlots,
+        classFeatures: RestMechanics.restoreClassFeatures(character.classFeatures, 'long'),
+        updatedAt: new Date(),
+      })
+      .where(eq(characters.id, characterId));
+
+    const participants = await db.query.combatParticipants.findMany({
+      where: eq(combatParticipants.characterId, characterId),
+      columns: { id: true },
+    });
+    await Promise.all(
+      participants.map((participant) =>
+        ExhaustionService.reduceExhaustion(participant.id, userId).catch(() => undefined),
+      ),
+    );
 
     // Create rest event
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     const [restEvent] = await db
       .insert(restEvents)
       .select(
-        db.select({
-          characterId: sql`${characterId}`,
-          sessionId: sql`${sessionId || null}`,
-          restType: sql`'long'`,
-          startedAt: sql`NOW()`,
-          completedAt: sql`NOW()`,
-          hpRestored: sql`${hpRestored}`,
-          hitDiceSpent: sql`0`,
-          resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
-          interrupted: sql`false`,
-          notes: sql`${notes || null}`,
-        })
-        .from(characters)
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            sessionId: sql`${sessionId || null}`,
+            restType: sql`'long'`,
+            startedAt: sql`NOW()`,
+            completedAt: sql`NOW()`,
+            hpRestored: sql`${hpRestored}`,
+            hitDiceSpent: sql`0`,
+            resourcesRestored: sql`${JSON.stringify(resourcesRestored)}`,
+            interrupted: sql`false`,
+            notes: sql`${notes || null}`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          ),
       )
       .returning();
 
@@ -315,18 +389,21 @@ export class RestService {
     characterId: string,
     userId: string,
     sessionId?: string,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<RestEvent[]> {
     const conditions = [
       eq(restEvents.characterId, characterId),
       exists(
-        db.select()
+        db
+          .select()
           .from(characters)
-          .where(and(
-            eq(characters.id, characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
-      )
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          ),
+      ),
     ];
 
     if (sessionId) {
@@ -345,7 +422,10 @@ export class RestService {
   /**
    * Calculate hit dice for a class at a given level
    */
-  static calculateHitDiceForClass(className: string, level: number): {
+  static calculateHitDiceForClass(
+    className: string,
+    level: number,
+  ): {
     dieType: HitDieType;
     count: number;
   } {

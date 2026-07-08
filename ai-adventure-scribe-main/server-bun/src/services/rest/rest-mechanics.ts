@@ -11,11 +11,7 @@
 import { HIT_DICE_BY_CLASS } from '../../types/rest.js';
 
 import type { CharacterHitDice } from '../../../../db/schema/index';
-import type {
-  HitDieType,
-  RestorableResource,
-  RestType,
-} from '../../types/rest.js';
+import type { HitDieType, RestorableResource, RestType } from '../../types/rest.js';
 
 export class RestMechanics {
   /**
@@ -43,7 +39,10 @@ export class RestMechanics {
   /**
    * Calculate hit dice for a class at a given level
    */
-  static calculateHitDiceForClass(className: string, level: number): {
+  static calculateHitDiceForClass(
+    className: string,
+    level: number,
+  ): {
     dieType: HitDieType;
     count: number;
   } {
@@ -62,7 +61,7 @@ export class RestMechanics {
     count: number,
     conModifier: number,
     allHitDice: CharacterHitDice[],
-    preRolledValues?: number[]
+    preRolledValues?: number[],
   ): {
     hpRestored: number;
     hitDiceSpent: number;
@@ -121,7 +120,7 @@ export class RestMechanics {
    */
   static calculateRestoredHitDice(
     allHitDice: CharacterHitDice[],
-    count?: number
+    count?: number,
   ): {
     restoredCount: number;
     updates: Array<{ id: string; newUsedDice: number }>;
@@ -129,8 +128,9 @@ export class RestMechanics {
     // Calculate how many to restore
     const totalDice = allHitDice.reduce((sum, hd) => sum + hd.totalDice, 0);
     const usedDice = allHitDice.reduce((sum, hd) => sum + hd.usedDice, 0);
-    const maxRestore = Math.max(1, Math.floor(totalDice / 2));
-    const toRestore = count !== undefined ? Math.min(count, usedDice, maxRestore) : Math.min(usedDice, maxRestore);
+    const maxRestore = Math.max(1, Math.ceil(totalDice / 2));
+    const toRestore =
+      count !== undefined ? Math.min(count, usedDice, maxRestore) : Math.min(usedDice, maxRestore);
 
     if (toRestore === 0) {
       return { restoredCount: 0, updates: [] };
@@ -138,7 +138,7 @@ export class RestMechanics {
 
     // Restore hit dice (prefer largest dice first)
     const sortedHitDice = [...allHitDice]
-      .filter(hd => hd.usedDice > 0)
+      .filter((hd) => hd.usedDice > 0)
       .sort((a, b) => {
         const aSize = parseInt(a.dieType.substring(1));
         const bSize = parseInt(b.dieType.substring(1));
@@ -205,5 +205,41 @@ export class RestMechanics {
     }
 
     return resources;
+  }
+
+  static restoreSpellSlots(
+    spellSlots: Record<string, { max?: number; current?: number }> | null,
+  ): Record<string, { max?: number; current?: number }> | null {
+    if (!spellSlots) return spellSlots;
+    return Object.fromEntries(
+      Object.entries(spellSlots).map(([level, slot]) => [
+        level,
+        { ...slot, current: slot.max ?? slot.current },
+      ]),
+    );
+  }
+
+  static restoreClassFeatures(value: unknown, restType: RestType): unknown {
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.restoreClassFeatures(entry, restType));
+    }
+    if (!value || typeof value !== 'object') return value;
+
+    const feature = value as Record<string, unknown>;
+    const restored = Object.fromEntries(
+      Object.entries(feature).map(([key, entry]) => [
+        key,
+        this.restoreClassFeatures(entry, restType),
+      ]),
+    );
+    const cadence = feature.usesPerRest ?? feature.uses_per_rest;
+    if (
+      cadence === restType ||
+      (restType === 'long' && (cadence === 'short' || cadence === 'long'))
+    ) {
+      if (typeof feature.maxUses === 'number') restored.currentUses = feature.maxUses;
+      if (typeof feature.max === 'number') restored.current = feature.max;
+    }
+    return restored;
   }
 }

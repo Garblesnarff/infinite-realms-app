@@ -13,6 +13,7 @@ import { RestMechanics } from './rest-mechanics.js';
 import { db } from '../../../../db/client';
 import {
   characterHitDice,
+  characterStats,
   characters,
   type Character,
   type CharacterHitDice,
@@ -20,10 +21,7 @@ import {
 } from '../../../../db/schema/index';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 
-import type {
-  HitDieType,
-  SpendHitDiceResult,
-} from '../../types/rest.js';
+import type { HitDieType, SpendHitDiceResult } from '../../types/rest.js';
 
 /**
  * Rest Hit Dice Service
@@ -37,7 +35,7 @@ export class RestHitDiceService {
     const character = await db.query.characters.findFirst({
       where: and(
         eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
+        or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
       ),
       columns: { id: true },
     });
@@ -61,7 +59,7 @@ export class RestHitDiceService {
     characterId: string,
     userId: string,
     className: string,
-    level: number
+    level: number,
   ): Promise<CharacterHitDice> {
     await this.verifyCharacterOwnership(characterId, userId);
 
@@ -73,13 +71,16 @@ export class RestHitDiceService {
         eq(characterHitDice.characterId, characterId),
         eq(characterHitDice.className, className),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
     });
 
@@ -91,19 +92,24 @@ export class RestHitDiceService {
           totalDice: level,
           updatedAt: new Date(),
         })
-        .where(and(
-          eq(characterHitDice.id, existing.id),
-          eq(characterHitDice.characterId, characterId),
-          eq(characterHitDice.className, className),
-          exists(
-            db.select()
-              .from(characters)
-              .where(and(
-                eq(characters.id, characterHitDice.characterId),
-                or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-              ))
-          )
-        ))
+        .where(
+          and(
+            eq(characterHitDice.id, existing.id),
+            eq(characterHitDice.characterId, characterId),
+            eq(characterHitDice.className, className),
+            exists(
+              db
+                .select()
+                .from(characters)
+                .where(
+                  and(
+                    eq(characters.id, characterHitDice.characterId),
+                    or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+                  ),
+                ),
+            ),
+          ),
+        )
         .returning();
 
       if (!updated) {
@@ -119,18 +125,21 @@ export class RestHitDiceService {
     const [hitDice] = await db
       .insert(characterHitDice)
       .select(
-        db.select({
-          characterId: sql`${characterId}`,
-          className: sql`${className}`,
-          dieType: sql`${dieType}`,
-          totalDice: sql`${level}`,
-          usedDice: sql`0`,
-        })
-        .from(characters)
-        .where(and(
-          eq(characters.id, characterId),
-          or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-        ))
+        db
+          .select({
+            characterId: sql`${characterId}`,
+            className: sql`${className}`,
+            dieType: sql`${dieType}`,
+            totalDice: sql`${level}`,
+            usedDice: sql`0`,
+          })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, characterId),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          ),
       )
       .returning();
 
@@ -150,13 +159,16 @@ export class RestHitDiceService {
       where: and(
         eq(characterHitDice.characterId, characterId),
         exists(
-          db.select()
+          db
+            .select()
             .from(characters)
-            .where(and(
-              eq(characters.id, characterId),
-              or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-            ))
-        )
+            .where(
+              and(
+                eq(characters.id, characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
+        ),
       ),
     });
 
@@ -182,8 +194,8 @@ export class RestHitDiceService {
     preRolledValues?: number[],
     preFetchedData?: {
       character: Character & { stats: CharacterStats | null };
-      hitDice: CharacterHitDice[]
-    }
+      hitDice: CharacterHitDice[];
+    },
   ): Promise<SpendHitDiceResult> {
     if (!preFetchedData) {
       await this.verifyCharacterOwnership(characterId, userId);
@@ -194,15 +206,17 @@ export class RestHitDiceService {
     }
 
     // Get character and stats
-    const character = preFetchedData?.character || await db.query.characters.findFirst({
-      where: and(
-        eq(characters.id, characterId),
-        or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-      ),
-      with: {
-        stats: true,
-      },
-    }) as (Character & { stats: CharacterStats | null }) | undefined;
+    const character =
+      preFetchedData?.character ||
+      ((await db.query.characters.findFirst({
+        where: and(
+          eq(characters.id, characterId),
+          or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+        ),
+        with: {
+          stats: true,
+        },
+      })) as (Character & { stats: CharacterStats | null }) | undefined);
 
     if (!character) {
       throw new NotFoundError('Character', characterId);
@@ -213,7 +227,7 @@ export class RestHitDiceService {
     }
 
     // Get all hit dice
-    const allHitDice = preFetchedData?.hitDice || await this.getHitDice(characterId, userId);
+    const allHitDice = preFetchedData?.hitDice || (await this.getHitDice(characterId, userId));
 
     if (count === 0) {
       return {
@@ -225,15 +239,12 @@ export class RestHitDiceService {
     }
 
     const conModifier = RestMechanics.calculateConModifier(character.stats.constitution);
-    const availableCount = allHitDice.reduce(
-      (sum, hd) => sum + (hd.totalDice - hd.usedDice),
-      0
-    );
+    const availableCount = allHitDice.reduce((sum, hd) => sum + (hd.totalDice - hd.usedDice), 0);
 
     if (count > availableCount) {
       throw new BusinessLogicError(
         `Cannot spend ${count} hit dice. Only ${availableCount} available.`,
-        { requested: count, available: availableCount }
+        { requested: count, available: availableCount },
       );
     }
 
@@ -242,7 +253,7 @@ export class RestHitDiceService {
       count,
       conModifier,
       allHitDice,
-      preRolledValues
+      preRolledValues,
     );
 
     // ⚡ Bolt: Batch update hit dice usage in a single query instead of N updates.
@@ -277,9 +288,19 @@ export class RestHitDiceService {
         );
     }
 
+    if (hpRestored > 0) {
+      await db
+        .update(characterStats)
+        .set({
+          currentHitPoints: sql`least(${characterStats.maxHitPoints}, ${characterStats.currentHitPoints} + ${hpRestored})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(characterStats.characterId, characterId));
+    }
+
     // ⚡ Bolt: Return the updated state computed in-memory to avoid a final "refresh" round-trip.
-    const finalHitDice = allHitDice.map(hd => {
-      const update = updates.find(u => u.id === hd.id);
+    const finalHitDice = allHitDice.map((hd) => {
+      const update = updates.find((u) => u.id === hd.id);
       return update ? { ...hd, usedDice: update.newUsedDice } : hd;
     });
 
@@ -299,19 +320,16 @@ export class RestHitDiceService {
     characterId: string,
     userId: string,
     count?: number,
-    preFetchedHitDice?: CharacterHitDice[]
+    preFetchedHitDice?: CharacterHitDice[],
   ): Promise<{ restoredCount: number; updatedHitDice: CharacterHitDice[] }> {
-    const allHitDice = preFetchedHitDice || await this.getHitDice(characterId, userId);
+    const allHitDice = preFetchedHitDice || (await this.getHitDice(characterId, userId));
 
     if (allHitDice.length === 0) {
       return { restoredCount: 0, updatedHitDice: [] };
     }
 
     // Calculate hit dice to restore (delegated to RestMechanics)
-    const { restoredCount, updates } = RestMechanics.calculateRestoredHitDice(
-      allHitDice,
-      count
-    );
+    const { restoredCount, updates } = RestMechanics.calculateRestoredHitDice(allHitDice, count);
 
     if (restoredCount === 0) {
       return { restoredCount: 0, updatedHitDice: allHitDice };
@@ -350,8 +368,8 @@ export class RestHitDiceService {
     }
 
     // ⚡ Bolt: Return the updated state computed in-memory to avoid a final "refresh" round-trip.
-    const finalHitDice = allHitDice.map(hd => {
-      const update = updates.find(u => u.id === hd.id);
+    const finalHitDice = allHitDice.map((hd) => {
+      const update = updates.find((u) => u.id === hd.id);
       return update ? { ...hd, usedDice: update.newUsedDice } : hd;
     });
 
@@ -361,7 +379,10 @@ export class RestHitDiceService {
   /**
    * Calculate hit dice for a class at a given level
    */
-  static calculateHitDiceForClass(className: string, level: number): {
+  static calculateHitDiceForClass(
+    className: string,
+    level: number,
+  ): {
     dieType: HitDieType;
     count: number;
   } {

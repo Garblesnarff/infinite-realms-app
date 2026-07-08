@@ -3,7 +3,9 @@ import React from 'react';
 import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
+import { restApi } from '@/services/rest-api';
 import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
+import { processLongRest, processShortRest } from '@/utils/restMechanics';
 
 import { FeatureSection } from './class-feature-tracker/FeatureSection';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
@@ -18,7 +20,7 @@ interface ClassFeatureTrackerProps {
  * ClassFeatureTracker component displays and manages character class feature usage
  * including resources like spell slots, ki points, rages, etc.
  */
-const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate: _onUpdate }) => {
+const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate }) => {
   // Get class features for the character
   const classFeatures = character.class
     ? getClassFeatures(character.class.name, character.level || 1)
@@ -30,17 +32,37 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     : null;
 
   // Handle resource restoration (short rest or long rest)
-  const handleRest = (restType: 'short' | 'long') => {
-    if (!characterResources) return;
+  const handleRest = async (restType: 'short' | 'long') => {
+    if (!character.id) return;
 
-    // In a real implementation, this would update the character's resources
-    // For now, we'll just show a message
-    logger.info(`Restoring ${restType} rest resources`);
-
-    // This would be implemented with actual resource restoration logic
-    // For example:
-    // const updatedResources = restoreClassFeatures(classFeatures, characterResources, restType);
-    // onUpdate({ ...character, resources: updatedResources });
+    try {
+      const result =
+        restType === 'short'
+          ? await restApi.shortRest(character.id)
+          : await restApi.longRest(character.id);
+      const processed =
+        restType === 'short'
+          ? processShortRest(character, 0).character
+          : processLongRest(character).character;
+      onUpdate({
+        ...processed,
+        hitPoints: processed.hitPoints
+          ? {
+              ...processed.hitPoints,
+              current:
+                restType === 'long'
+                  ? processed.hitPoints.maximum
+                  : Math.min(
+                      processed.hitPoints.maximum,
+                      processed.hitPoints.current + result.hpRestored,
+                    ),
+            }
+          : processed.hitPoints,
+      });
+      logger.info(`Completed ${restType} rest`, result);
+    } catch (error) {
+      logger.error(`Failed to complete ${restType} rest`, error);
+    }
   };
 
   // Handle using a resource

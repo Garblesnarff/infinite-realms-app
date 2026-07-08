@@ -23,7 +23,6 @@ import { restoreClassFeatures, getCharacterResources } from '@/utils/classFeatur
 import { rollDie } from '@/utils/diceRolls';
 import { restoreSpellSlots } from '@/utils/spell-management';
 
-
 // Re-export for backward compatibility
 export { recoverExhaustion, calculateMaxHitDice, rollHitDice, recoverHitDice };
 
@@ -283,7 +282,22 @@ export function processShortRestCombat(
 
   // Roll hit dice for HP recovery
   if (hitDiceToRoll > 0 && participant.hitDice && participant.hitDice.current > 0) {
-    const hitDiceType = 8; // Default d8
+    const hitDiceTypeByClass: Record<string, number> = {
+      barbarian: 12,
+      fighter: 10,
+      paladin: 10,
+      ranger: 10,
+      bard: 8,
+      cleric: 8,
+      druid: 8,
+      monk: 8,
+      rogue: 8,
+      warlock: 8,
+      sorcerer: 6,
+      wizard: 6,
+    };
+    const hitDiceType = hitDiceTypeByClass[participant.characterClass?.toLowerCase() || ''] || 8;
+    const constitutionModifier = participant.abilityScores?.constitution?.modifier ?? 0;
     let totalRecovered = 0;
     let remainingDice = participant.hitDice.current;
     const diceToRoll = Math.min(hitDiceToRoll, remainingDice);
@@ -291,7 +305,7 @@ export function processShortRestCombat(
     // Roll hit dice
     for (let i = 0; i < diceToRoll; i++) {
       const roll = rollDie(hitDiceType);
-      const recovered = Math.max(1, roll); // Simplified - no CON modifier
+      const recovered = Math.max(1, roll + constitutionModifier);
       totalRecovered += recovered;
       remainingDice--;
     }

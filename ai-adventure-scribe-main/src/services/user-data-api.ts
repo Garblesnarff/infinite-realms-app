@@ -75,6 +75,7 @@ const CHARACTER_FIELDS = [
   'prepared_spells',
   'ritual_spells',
   'spell_slots',
+  'pact_slots',
   'active_concentration',
   'class_features',
   'fighting_styles',
@@ -103,6 +104,7 @@ function prepareCharacterPayload(payload: Record<string, unknown>): CharacterPay
   }
   for (const field of [
     'spell_slots',
+    'pact_slots',
     'class_features',
     'fighting_styles',
     'damage_resistances',

@@ -437,6 +437,7 @@ export function transformCharacterForStorage(character: Character) {
     ritual_spells: (character.ritualSpells || []).join(','),
     // New: Persist spell slots and concentration
     spell_slots: JSON.stringify(character.spellSlots || {}),
+    pact_slots: JSON.stringify(character.pactSlots || {}),
     active_concentration: character.activeConcentration || null,
     class_features: JSON.stringify(character.classFeatures || {}),
     // Fighting Styles

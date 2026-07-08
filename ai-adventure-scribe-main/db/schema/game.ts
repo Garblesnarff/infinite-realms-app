@@ -112,6 +112,7 @@ export const characters = pgTable(
     preparedSpells: text('prepared_spells'),
     ritualSpells: text('ritual_spells'),
     spellSlots: jsonb('spell_slots'),
+    pactSlots: jsonb('pact_slots'),
     activeConcentration: text('active_concentration'),
     classFeatures: jsonb('class_features'),
     fightingStyles: jsonb('fighting_styles'),
