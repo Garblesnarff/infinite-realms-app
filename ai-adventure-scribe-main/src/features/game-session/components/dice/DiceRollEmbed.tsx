@@ -138,7 +138,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
           variant="status"
           size="sm"
           pulse={true}
-          className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-[0_0_12px_rgba(6,182,212,0.5)] hover:shadow-[0_0_20px_rgba(6,182,212,0.7)] font-semibold"
+          className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-glow-teal-md hover:shadow-glow-teal-lg font-semibold"
           aria-label="Critical Hit"
         >
           Critical Hit!
@@ -158,7 +158,11 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   const getAdvantageIndicator = (result: DiceRollResult) => {
     if (result.advantage) {
       return (
-        <Badge variant="default" className="text-xs bg-green-600" aria-label="Rolled with advantage">
+        <Badge
+          variant="default"
+          className="text-xs bg-green-600"
+          aria-label="Rolled with advantage"
+        >
           Advantage
         </Badge>
       );
@@ -182,19 +186,12 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
       <Card className="p-4 my-2 bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div
-              className="flex items-center gap-1"
-              title={`Dice formula: ${expression}`}
-            >
+            <div className="flex items-center gap-1" title={`Dice formula: ${expression}`}>
               <Dice6 className="w-4 h-4 text-purple-600" aria-hidden="true" />
               <span className="font-mono text-sm font-semibold text-purple-800">{expression}</span>
             </div>
             {purpose && (
-              <Badge
-                variant="outline"
-                className="text-xs"
-                title={`Purpose: ${purpose}`}
-              >
+              <Badge variant="outline" className="text-xs" title={`Purpose: ${purpose}`}>
                 {purpose}
               </Badge>
             )}

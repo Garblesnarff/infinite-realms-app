@@ -94,7 +94,7 @@ export const CombatDiceResult: React.FC<CombatDiceResultProps> = ({ data }) => {
               pulse={success}
               className={
                 success
-                  ? 'text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-[0_0_8px_rgba(6,182,212,0.4)] font-semibold'
+                  ? 'text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-glow-teal-sm font-semibold'
                   : 'text-xs'
               }
             >
@@ -112,7 +112,7 @@ export const CombatDiceResult: React.FC<CombatDiceResultProps> = ({ data }) => {
             pulse={data.success}
             className={
               data.success
-                ? 'text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-[0_0_8px_rgba(6,182,212,0.4)] font-semibold'
+                ? 'text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-glow-teal-sm font-semibold'
                 : 'text-xs'
             }
           >

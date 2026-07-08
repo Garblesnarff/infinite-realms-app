@@ -28,11 +28,10 @@ const statDisplayVariants = cva(
       },
       color: {
         default: '',
-        purple:
-          'border-infinite-purple hover:border-infinite-purple hover:shadow-[0_0_16px_rgba(124,58,237,0.3)]',
-        gold: 'border-infinite-gold hover:border-infinite-gold hover:shadow-[0_0_16px_rgba(245,158,11,0.3)]',
-        teal: 'border-infinite-teal hover:border-infinite-teal hover:shadow-[0_0_16px_rgba(8,145,178,0.3)]',
-        danger: 'border-red-500 hover:border-red-500 hover:shadow-[0_0_16px_rgba(239,68,68,0.3)]',
+        purple: 'border-infinite-purple hover:border-infinite-purple hover:shadow-glow-purple',
+        gold: 'border-infinite-gold hover:border-infinite-gold hover:shadow-glow-gold',
+        teal: 'border-infinite-teal hover:border-infinite-teal hover:shadow-glow-teal',
+        danger: 'border-red-500 hover:border-red-500 hover:shadow-glow-danger',
       },
     },
     defaultVariants: {

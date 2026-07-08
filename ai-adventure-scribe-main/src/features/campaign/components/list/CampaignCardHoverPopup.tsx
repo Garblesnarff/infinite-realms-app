@@ -28,7 +28,7 @@ export const CampaignCardHoverPopup: React.FC<CampaignCardHoverPopupProps> = ({
 }) => (
   <div
     className={cn(
-      'hover-popup absolute left-1/2 top-1/2 transition-all duration-200 w-80 max-w-full filter drop-shadow-[0_10px_25px_rgba(0,0,0,0.2)]',
+      'hover-popup absolute left-1/2 top-1/2 w-80 max-w-full filter drop-shadow-popup transition-all duration-200',
       isHovered ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
     )}
     style={{ zIndex: isHovered ? Z_INDEX.CARD_HOVER : undefined }}

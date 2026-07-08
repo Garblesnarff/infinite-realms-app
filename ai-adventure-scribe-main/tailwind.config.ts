@@ -66,8 +66,17 @@ export default {
       boxShadow: {
         'inset-glow-purple': 'inset 0 0 30px rgb(var(--c-infinite-purple) / 0.4)',
         'glow-purple': '0 0 16px rgb(var(--c-infinite-purple) / 0.3)',
+        'glow-purple-lg': '0 0 20px rgb(var(--c-infinite-purple) / 0.4)',
         'glow-gold': '0 0 16px rgb(var(--c-infinite-gold) / 0.3)',
         'glow-teal': '0 0 16px rgb(var(--c-infinite-teal) / 0.3)',
+        'glow-teal-sm': '0 0 8px rgb(var(--c-infinite-teal) / 0.4)',
+        'glow-teal-md': '0 0 12px rgb(var(--c-infinite-teal) / 0.5)',
+        'glow-teal-lg': '0 0 20px rgb(var(--c-infinite-teal) / 0.7)',
+        'glow-danger': '0 0 16px rgb(239 68 68 / 0.3)',
+        'nav-panel': 'inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 30px rgb(0 0 0 / 0.25)',
+      },
+      dropShadow: {
+        popup: '0 10px 25px rgb(0 0 0 / 0.2)',
       },
       keyframes,
       animation,

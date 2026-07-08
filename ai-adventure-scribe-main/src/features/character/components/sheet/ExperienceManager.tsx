@@ -12,7 +12,6 @@ import type { Character } from '@/types/character';
 
 import { HexagonalBadge } from '@/components/ui/hexagonal-badge';
 
-
 interface ExperienceManagerProps {
   character: Character;
   onUpdate: (updatedCharacter: Character) => void;
@@ -61,7 +60,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
             <div
               role="status"
               aria-live="polite"
-              className="mt-4 p-3 bg-electricCyan/10 border border-electricCyan/40 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-shadow"
+              className="mt-4 rounded-lg border border-electricCyan/40 bg-electricCyan/10 p-3 shadow-glow-teal hover:shadow-glow-teal-lg transition-shadow"
             >
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 text-electricCyan" aria-hidden="true" />
@@ -69,7 +68,7 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
                   variant="status"
                   size="sm"
                   pulse={true}
-                  className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-[0_0_8px_rgba(6,182,212,0.4)] font-semibold"
+                  className="text-xs bg-electricCyan/20 text-electricCyan border-electricCyan/40 shadow-glow-teal-sm font-semibold"
                 >
                   Level Up Available!
                 </HexagonalBadge>
@@ -94,15 +93,10 @@ const ExperienceManager: React.FC<ExperienceManagerProps> = ({ character, onUpda
       />
 
       {/* Level Shortcuts */}
-      <ExperienceQuickLevelSet
-        currentLevel={currentLevel}
-        setToLevel={setToLevel}
-      />
+      <ExperienceQuickLevelSet currentLevel={currentLevel} setToLevel={setToLevel} />
 
       {/* Experience Table Reference */}
-      <ExperienceTableReference
-        currentLevel={currentLevel}
-      />
+      <ExperienceTableReference currentLevel={currentLevel} />
 
       {/* Experience History */}
       <ExperienceHistory
