@@ -12,6 +12,7 @@ import type {
 
 import logger from '@/lib/logger';
 import { processReactionResponse } from '@/utils/reactionSystem';
+import { createGrappledCondition, rollGrappleCheck, rollShoveCheck } from '@/utils/grappleUtils';
 import { checkConcentration } from '@/utils/spell-management';
 
 interface UseCombatActionHandlersProps {
@@ -74,6 +75,36 @@ export const useCombatActionHandlers = ({
         ...additionalData,
       };
 
+      if ((actionType === 'grapple' || actionType === 'shove') && targetId) {
+        const target = activeEncounter.participants.find((entry) => entry.id === targetId);
+        if (!target) return;
+        const check =
+          actionType === 'grapple'
+            ? rollGrappleCheck(participant, target)
+            : rollShoveCheck(participant, target);
+        action.attackRoll = check.roll;
+        action.hit = check.success;
+        action.description = `${participant.name} ${check.success ? 'succeeds' : 'fails'} to ${actionType} ${target.name} (${check.roll.total} vs ${check.opposingRoll.total})`;
+
+        if (check.success) {
+          const condition =
+            actionType === 'grapple'
+              ? createGrappledCondition(participantId, check.dc)
+              : {
+                  name: 'prone' as const,
+                  description: 'The creature is prone and must stand to end this condition.',
+                  duration: -1,
+                  concentrationRequired: false,
+                };
+          await updateParticipant(targetId, {
+            conditions: [
+              ...target.conditions.filter((entry) => entry.name !== condition.name),
+              condition,
+            ],
+          });
+        }
+      }
+
       // Validate action with AI rules interpreter
       try {
         const validation = await validateCombatAction(action, participant);
@@ -94,7 +125,7 @@ export const useCombatActionHandlers = ({
         await takeAction(action);
       }
     },
-    [activeEncounter, takeAction, validateCombatAction],
+    [activeEncounter, takeAction, updateParticipant, validateCombatAction],
   );
 
   // Handle enemy attack with AI integration

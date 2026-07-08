@@ -28,6 +28,7 @@ export interface CharacterData {
   stealthCheckBonus?: number;
   speed?: number;
   abilityScores?: CombatParticipant['abilityScores'];
+  skillProficiencies?: string[];
   inventory?: Character['inventory'];
 }
 
@@ -91,6 +92,7 @@ export function createCombatParticipant(
     isHidden: partial.isHidden || false,
     stealthCheckBonus: partial.stealthCheckBonus || 0,
     abilityScores: partial.abilityScores,
+    skillProficiencies: partial.skillProficiencies,
     magicAttackBonus: partial.magicAttackBonus,
     magicDamageBonus: partial.magicDamageBonus,
     magicSaveBonus: partial.magicSaveBonus,
@@ -135,6 +137,7 @@ export function enrichParticipantWithCharacterData(
   participant.isHidden = characterData.isHidden || false;
   participant.stealthCheckBonus = characterData.stealthCheckBonus || 0;
   participant.abilityScores = characterData.abilityScores;
+  participant.skillProficiencies = characterData.skillProficiencies;
   if (typeof characterData.speed === 'number') {
     participant.speed = characterData.speed;
     participant.movementRemaining = Math.max(0, characterData.speed - participant.movementUsed);

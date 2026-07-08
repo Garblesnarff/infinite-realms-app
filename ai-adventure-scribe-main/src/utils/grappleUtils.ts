@@ -49,28 +49,50 @@ export function rollGrappleCheck(
   target: CombatParticipant,
 ): {
   roll: DiceRoll;
+  opposingRoll: DiceRoll;
   description: string;
   success: boolean;
   dc: number;
 } {
-  const dc = calculateGrappleDC(participant);
-
-  // Roll 1d20 + Strength modifier + proficiency bonus
-  const strengthModifier = participant.abilityScores?.strength?.modifier ?? 0;
-  const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
-  const modifier = strengthModifier + proficiencyBonus;
+  const modifier = getSkillModifier(participant, 'Athletics');
+  const athleticsModifier = getSkillModifier(target, 'Athletics');
+  const acrobaticsModifier = getSkillModifier(target, 'Acrobatics');
+  const defenderSkill = acrobaticsModifier > athleticsModifier ? 'Acrobatics' : 'Athletics';
+  const defenderModifier = Math.max(athleticsModifier, acrobaticsModifier);
 
   const roll = rollDice(20, 1, modifier);
-  const success = roll.total >= dc;
+  const opposingRoll = rollDice(20, 1, defenderModifier);
+  const success = roll.total > opposingRoll.total;
+  const dc = opposingRoll.total;
 
-  const description = `${participant.name} attempts to grapple ${target.name} (DC ${dc})`;
+  const description = `${participant.name} contests ${target.name}'s ${defenderSkill} (${roll.total} vs ${opposingRoll.total})`;
 
   return {
     roll,
+    opposingRoll,
     description,
     success,
     dc,
   };
+}
+
+function getSkillModifier(
+  participant: CombatParticipant,
+  skill: 'Athletics' | 'Acrobatics',
+): number {
+  const ability = skill === 'Athletics' ? 'strength' : 'dexterity';
+  const abilityModifier = participant.abilityScores?.[ability]?.modifier ?? 0;
+  const proficient = participant.skillProficiencies?.some(
+    (entry) => entry.toLowerCase() === skill.toLowerCase(),
+  );
+  return abilityModifier + (proficient ? calculateProficiencyBonus(participant.level || 1) : 0);
+}
+
+export function rollShoveCheck(
+  participant: CombatParticipant,
+  target: CombatParticipant,
+): ReturnType<typeof rollGrappleCheck> {
+  return rollGrappleCheck(participant, target);
 }
 
 /**
@@ -106,7 +128,10 @@ export function canBeGrappled(target: CombatParticipant): boolean {
 /**
  * Check if grapple can be maintained
  */
-export function canMaintainGrapple(grappler: CombatParticipant, _grappledTargetId: string): boolean {
+export function canMaintainGrapple(
+  grappler: CombatParticipant,
+  _grappledTargetId: string,
+): boolean {
   // Must not be incapacitated
   const incapacitatingConditions = ['stunned', 'paralyzed', 'unconscious', 'petrified'];
   const isIncapacitated = grappler.conditions.some((c) =>

@@ -52,6 +52,7 @@ export interface CombatParticipant {
     dexterity?: { modifier?: number };
     constitution?: { modifier?: number; savingThrow?: boolean };
   };
+  skillProficiencies?: string[];
   speed: number;
 
   // Turn tracking

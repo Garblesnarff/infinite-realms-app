@@ -9,6 +9,7 @@ import {
   canBeGrappled,
   canMaintainGrapple,
   escapeGrapple,
+  rollShoveCheck,
   getGrappleActionDescription,
 } from '../grappleUtils';
 
@@ -92,14 +93,16 @@ describe('grappleUtils', () => {
   describe('rollGrappleCheck', () => {
     it('should return success when roll is high enough', () => {
       const mockRoll = { total: 15, naturalRoll: 12 };
-      (diceUtils.rollDice as any).mockReturnValue(mockRoll);
+      const opposingRoll = { total: 10, naturalRoll: 11 };
+      (diceUtils.rollDice as any).mockReturnValueOnce(mockRoll).mockReturnValueOnce(opposingRoll);
 
       const result = rollGrappleCheck(mockParticipant, mockTarget);
 
       expect(result.success).toBe(true);
-      expect(result.dc).toBe(15);
+      expect(result.dc).toBe(10);
       expect(result.roll).toBe(mockRoll);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 7);
+      expect(result.opposingRoll).toBe(opposingRoll);
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4);
     });
 
     it('should return failure when roll is too low', () => {
@@ -117,7 +120,28 @@ describe('grappleUtils', () => {
       (diceUtils.rollDice as any).mockReturnValue(mockRoll);
 
       rollGrappleCheck(mockParticipant, mockTarget);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 6);
+      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4);
+    });
+
+    it('uses the target better Athletics or Acrobatics modifier', () => {
+      mockTarget.abilityScores.dexterity = { modifier: 3 };
+      mockTarget.skillProficiencies = ['Acrobatics'];
+      (diceUtils.rollDice as any)
+        .mockReturnValueOnce({ total: 12 })
+        .mockReturnValueOnce({ total: 13 });
+
+      const result = rollGrappleCheck(mockParticipant, mockTarget);
+
+      expect(diceUtils.rollDice).toHaveBeenNthCalledWith(2, 20, 1, 6);
+      expect(result.success).toBe(false);
+    });
+
+    it('resolves shove through the same opposed-check rules', () => {
+      (diceUtils.rollDice as any)
+        .mockReturnValueOnce({ total: 18 })
+        .mockReturnValueOnce({ total: 11 });
+
+      expect(rollShoveCheck(mockParticipant, mockTarget).success).toBe(true);
     });
   });
 
