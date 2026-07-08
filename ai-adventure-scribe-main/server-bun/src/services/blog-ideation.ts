@@ -109,7 +109,7 @@ Format your response as JSON:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905',
+      model: 'deepseek/deepseek-chat',
       max_tokens: 3000,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],

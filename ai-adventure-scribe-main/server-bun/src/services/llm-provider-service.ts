@@ -331,7 +331,7 @@ export class LLMProviderService {
     const preferredModel = (typeof model === 'string' && model.trim())
       ? model.trim()
       : (process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash-lite');
-    const fallbackModel = (process.env.GEMINI_TEXT_FALLBACK || 'gemini-2.0-flash-lite').trim() || 'gemini-2.0-flash-lite';
+    const fallbackModel = (process.env.GEMINI_TEXT_FALLBACK || 'gemini-3.1-flash-lite-preview').trim() || 'gemini-3.1-flash-lite-preview';
     const variantEnv = (process.env.GEMINI_MODEL_VARIANTS || '')
       .split(',')
       .map(v => v.trim())

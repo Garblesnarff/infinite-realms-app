@@ -50,7 +50,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         body: JSON.stringify({
           text,
           voice_settings: voiceSettings,
-          model_id: 'eleven_turbo_v2_5',
+          model_id: 'eleven_flash_v2_5',
         }),
       });
 

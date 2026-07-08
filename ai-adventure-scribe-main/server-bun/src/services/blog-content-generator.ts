@@ -65,7 +65,7 @@ Format your response as JSON with these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905', // #1 creative writing model (~$0.01/post)
+      model: 'deepseek/deepseek-chat',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -104,7 +104,7 @@ Format your response as JSON with these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905', // #1 creative writing model (~$0.01/post)
+      model: 'deepseek/deepseek-chat',
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -166,7 +166,7 @@ Format your response as JSON with these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905',
+      model: 'deepseek/deepseek-chat',
       max_tokens: 4000,
       temperature: 0.8, // Slightly creative while maintaining quality
       messages: [{ role: 'user', content: prompt }],
@@ -245,7 +245,7 @@ Format your response as JSON with these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905',
+      model: 'deepseek/deepseek-chat',
       max_tokens: length === 'long' ? 6000 : 4000,
       temperature: tone === 'professional' || tone === 'technical' ? 0.7 : 0.8,
       messages: [{ role: 'user', content: prompt }],

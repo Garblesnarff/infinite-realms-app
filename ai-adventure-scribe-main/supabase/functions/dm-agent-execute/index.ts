@@ -9,7 +9,7 @@ import { buildStarterCampaignContext } from "./contextBuilder.ts";
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
 const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash-lite';
-const DEFAULT_FALLBACK_MODEL = 'gemini-2.0-flash-lite';
+const DEFAULT_FALLBACK_MODEL = 'gemini-3.1-flash-lite-preview';
 
 /**
  * Verbalized Sampling: Parse structured response and sample based on probabilities

@@ -235,7 +235,7 @@ Respond ONLY as JSON with exactly these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905',
+      model: 'deepseek/deepseek-chat',
       max_tokens: 2000,
       temperature: 0.9,
       messages: [{ role: 'user', content: prompt }],
@@ -277,7 +277,7 @@ Respond ONLY as JSON with exactly these fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: 'moonshotai/kimi-k2-0905',
+      model: 'deepseek/deepseek-chat',
       max_tokens: 600,
       temperature: 0.8,
       messages: [{ role: 'user', content: prompt }],

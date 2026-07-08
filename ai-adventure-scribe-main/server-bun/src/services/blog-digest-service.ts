@@ -58,7 +58,7 @@ export class BlogDigestService {
   private static readonly SYSTEM_AUTHOR_ID = process.env.BLOG_SYSTEM_AUTHOR_ID;
   private static readonly OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
   private static readonly TEXT_MODEL =
-    process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-flash-1.5';
+    process.env.OPENROUTER_TEXT_MODEL || 'google/gemini-3.1-flash-lite-preview';
 
   /**
    * Queue a commit for digest processing

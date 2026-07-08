@@ -61,7 +61,7 @@ export interface AISegment {
 }
 
 // Constants extracted from VoiceDirector
-export const ELEVENLABS_MODEL = 'eleven_turbo_v2_5';
+export const ELEVENLABS_MODEL = 'eleven_flash_v2_5';
 export const CHARACTER_VOICE_CACHE_KEY = 'voice-director-character-mappings';
 
 // Character voice assignments (persistent state)
