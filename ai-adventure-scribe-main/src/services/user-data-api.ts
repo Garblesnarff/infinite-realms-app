@@ -66,6 +66,7 @@ const CHARACTER_FIELDS = [
   'session_notes',
   'campaign_id',
   'skill_proficiencies',
+  'expertise_proficiencies',
   'tool_proficiencies',
   'saving_throw_proficiencies',
   'languages',
@@ -265,9 +266,13 @@ export const userDataApi = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
-  applyCharacterDamage: (characterId: string, amount: number): Promise<{ currentHitPoints: number; temporaryHitPoints: number }> =>
+  applyCharacterDamage: (
+    characterId: string,
+    amount: number,
+  ): Promise<{ currentHitPoints: number; temporaryHitPoints: number }> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}/damage`, {
-      method: 'POST', body: JSON.stringify({ amount }),
+      method: 'POST',
+      body: JSON.stringify({ amount }),
     }),
   deleteCharacter: (characterId: string): Promise<void> =>
     request(`/v1/characters/${encodeURIComponent(characterId)}`, { method: 'DELETE' }),

@@ -50,6 +50,7 @@ const characterSchema = t.Object({
   session_notes: t.Optional(t.Nullable(t.String())),
   campaign_id: t.Optional(t.Nullable(t.String())),
   skill_proficiencies: t.Optional(t.Nullable(t.String())),
+  expertise_proficiencies: t.Optional(t.Nullable(t.String())),
   tool_proficiencies: t.Optional(t.Nullable(t.String())),
   saving_throw_proficiencies: t.Optional(t.Nullable(t.String())),
   languages: t.Optional(t.Array(t.String())),
@@ -154,6 +155,7 @@ function mapCharacterToApi(character: Character & { stats?: any }): any {
     experience_points: character.experiencePoints,
     background: character.background,
     skill_proficiencies: character.skillProficiencies,
+    expertise_proficiencies: character.expertiseProficiencies,
     languages: character.languages,
     image_url: character.imageUrl,
     avatar_url: character.avatarUrl,
@@ -307,6 +309,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
             sessionNotes: body.session_notes,
             campaignId: body.campaign_id,
             skillProficiencies: body.skill_proficiencies,
+            expertiseProficiencies: body.expertise_proficiencies,
             toolProficiencies: body.tool_proficiencies,
             savingThrowProficiencies: body.saving_throw_proficiencies,
             languages: body.languages,
@@ -400,6 +403,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           theme: body.theme,
           sessionNotes: body.session_notes,
           skillProficiencies: body.skill_proficiencies,
+          expertiseProficiencies: body.expertise_proficiencies,
           toolProficiencies: body.tool_proficiencies,
           savingThrowProficiencies: body.saving_throw_proficiencies,
           languages: body.languages,
@@ -440,9 +444,8 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
 
   .post(
     '/:id/damage',
-    async ({ params, body, user }) => CharacterService.applyDamage(
-      params.id, user!.userId, body.amount,
-    ),
+    async ({ params, body, user }) =>
+      CharacterService.applyDamage(params.id, user!.userId, body.amount),
     { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
   )
 

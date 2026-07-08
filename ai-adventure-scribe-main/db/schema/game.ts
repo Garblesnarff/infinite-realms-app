@@ -92,6 +92,7 @@ export const characters = pgTable(
     experiencePoints: integer('experience_points').default(0),
     background: text('background'),
     skillProficiencies: text('skill_proficiencies'),
+    expertiseProficiencies: text('expertise_proficiencies'),
     toolProficiencies: text('tool_proficiencies'),
     savingThrowProficiencies: text('saving_throw_proficiencies'),
     languages: text('languages').array(),

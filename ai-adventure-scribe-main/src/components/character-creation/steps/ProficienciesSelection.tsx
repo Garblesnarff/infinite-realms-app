@@ -37,6 +37,9 @@ const ProficienciesSelection: React.FC = () => {
   const character = state.character;
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedExpertise, setSelectedExpertise] = useState<string[]>(
+    character?.expertiseProficiencies ?? [],
+  );
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
   // Get current selections
@@ -57,6 +60,23 @@ const ProficienciesSelection: React.FC = () => {
   const skillChoices = currentClass?.skillChoices || [];
   const numSkillChoices = currentClass?.numSkillChoices || 0;
   const hasSkillChoices = numSkillChoices > 0 && skillChoices.length > 0;
+  const className = currentClass?.id.toLowerCase();
+  const classLevel =
+    character?.classLevels?.find((entry) => entry.classId === currentClass?.id)?.level ??
+    character?.level ??
+    1;
+  const expertiseChoices =
+    className === 'rogue'
+      ? classLevel >= 6
+        ? 4
+        : 2
+      : className === 'bard'
+        ? classLevel >= 10
+          ? 4
+          : classLevel >= 3
+            ? 2
+            : 0
+        : 0;
 
   // Language choices from background
   const numLanguageChoices = currentBackground?.languages || 0;
@@ -109,6 +129,15 @@ const ProficienciesSelection: React.FC = () => {
       return;
     }
 
+    if (expertiseChoices > 0 && selectedExpertise.length !== expertiseChoices) {
+      toast({
+        title: 'Invalid Expertise Selection',
+        description: `Please select exactly ${expertiseChoices} proficient skills for Expertise.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const allSkills = [...new Set([...fixedSkills, ...selectedSkills])]; // Dedupe
     const allLanguages = [...new Set([...fixedLanguages, ...selectedLanguages])]; // Dedupe
 
@@ -116,6 +145,7 @@ const ProficienciesSelection: React.FC = () => {
       type: 'UPDATE_CHARACTER',
       payload: {
         skillProficiencies: allSkills,
+        expertiseProficiencies: selectedExpertise,
         toolProficiencies: fixedTools,
         savingThrowProficiencies: fixedSavingThrows,
         languages: allLanguages,
@@ -224,6 +254,42 @@ const ProficienciesSelection: React.FC = () => {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Language Choices */}
+      {expertiseChoices > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Choose Expertise ({selectedExpertise.length}/{expertiseChoices})
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              Expertise doubles your proficiency bonus for the selected skills.
+            </p>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2">
+            {[...new Set([...fixedSkills, ...selectedSkills])].map((skill) => (
+              <div key={skill} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`expertise-${skill}`}
+                  checked={selectedExpertise.includes(skill)}
+                  disabled={
+                    !selectedExpertise.includes(skill) &&
+                    selectedExpertise.length >= expertiseChoices
+                  }
+                  onCheckedChange={(checked) =>
+                    setSelectedExpertise((previous) =>
+                      checked ? [...previous, skill] : previous.filter((entry) => entry !== skill),
+                    )
+                  }
+                />
+                <label htmlFor={`expertise-${skill}`} className="text-sm">
+                  {skill}
+                </label>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

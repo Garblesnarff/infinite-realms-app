@@ -35,6 +35,20 @@ describe('character-proficiency-calculations', () => {
       expect(skillMods.Athletics).toMatchObject({ modifier: 3, proficient: false });
     });
 
+    it('doubles the proficiency bonus for persisted expertise selections', () => {
+      const character = {
+        level: 5,
+        abilityScores: mockAbilityScores,
+        skillProficiencies: ['Stealth', 'Persuasion'],
+        expertiseProficiencies: ['Stealth'],
+      } as Character;
+
+      const skillMods = calculateSkillModifiers(character);
+
+      expect(skillMods.Stealth).toEqual({ modifier: 8, proficient: true, expertise: true });
+      expect(skillMods.Persuasion).toEqual({ modifier: 5, proficient: true, expertise: false });
+    });
+
     it('should calculate skill modifiers with proficiency bonus', () => {
       const character: Partial<Character> = {
         level: 1, // Proficiency bonus = 2
@@ -103,7 +117,7 @@ describe('character-proficiency-calculations', () => {
 
       const skillMods = calculateSkillModifiers(character as Character);
 
-      Object.values(skillMods).forEach(mod => {
+      Object.values(skillMods).forEach((mod) => {
         expect(mod.proficient).toBe(false);
       });
     });
@@ -122,8 +136,8 @@ describe('character-proficiency-calculations', () => {
         level: 1,
         class: { name: 'Fighter' } as any,
         abilityScores: {
-          strength: { modifier: 3 }
-        } as any
+          strength: { modifier: 3 },
+        } as any,
       };
       const skillMods = calculateSkillModifiers(character as Character);
       expect(skillMods['Athletics'].modifier).toBe(5); // 3 + 2
@@ -163,7 +177,7 @@ describe('character-proficiency-calculations', () => {
     it('should combine race and subrace proficiencies', () => {
       const profs = getRaceSkillProficiencies(
         { name: 'Half-Elf' } as any,
-        { name: 'Wood Elf' } as any
+        { name: 'Wood Elf' } as any,
       );
       // Half-Elf: Deception, Persuasion
       // Wood Elf subrace: Stealth
@@ -185,7 +199,7 @@ describe('character-proficiency-calculations', () => {
       // Testing the case where characterSubrace exists but has no profs in map
       const profs = getRaceSkillProficiencies(
         { name: 'Half-Elf' } as any,
-        { name: 'GenericSubrace' } as any
+        { name: 'GenericSubrace' } as any,
       );
       expect(profs).toEqual(['Deception', 'Persuasion']);
     });

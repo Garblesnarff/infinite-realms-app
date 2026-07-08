@@ -259,6 +259,7 @@ export interface Character {
   equipment?: string[];
   selectedEquipmentOptionIndex?: number; // Tracks which equipment option was selected (for UI feedback)
   skillProficiencies?: string[];
+  expertiseProficiencies?: string[];
   toolProficiencies?: string[];
   savingThrowProficiencies?: (keyof AbilityScores)[];
   languages?: string[];
@@ -426,6 +427,7 @@ export function transformCharacterForStorage(character: Character) {
     backstory_elements: character.backstory_elements || '',
     session_notes: character.sessionNotes || '',
     skill_proficiencies: (character.skillProficiencies || []).join(','),
+    expertise_proficiencies: (character.expertiseProficiencies || []).join(','),
     tool_proficiencies: (character.toolProficiencies || []).join(','),
     saving_throw_proficiencies: (character.savingThrowProficiencies || []).join(','),
     languages: character.languages || [],

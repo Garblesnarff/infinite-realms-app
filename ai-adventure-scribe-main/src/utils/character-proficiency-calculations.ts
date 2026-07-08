@@ -45,6 +45,7 @@ export const calculateSkillModifiers = (
   // Character creation persists the complete set (class choices, background,
   // race, and other bonuses). Prefer it whenever it is available.
   const chosenProficiencies = character.skillProficiencies;
+  const expertiseSet = new Set(character.expertiseProficiencies ?? []);
   const cacheKey = chosenProficiencies
     ? `chosen:${[...chosenProficiencies].sort().join('|')}`
     : `${character.class?.name || 'none'}:${character.race?.name || 'none'}:${character.subrace?.name || 'none'}`;
@@ -67,7 +68,7 @@ export const calculateSkillModifiers = (
   Object.entries(SKILLS_MAP).forEach(([skill, ability]) => {
     const abilityMod = character.abilityScores?.[ability]?.modifier || 0;
     const proficient = profSet?.has(skill) ?? false;
-    const expertise = false; // Could be enhanced to track expertise
+    const expertise = proficient && expertiseSet.has(skill);
 
     skillMods[skill] = {
       modifier: abilityMod + (proficient ? pb : 0) + (expertise ? pb : 0),
