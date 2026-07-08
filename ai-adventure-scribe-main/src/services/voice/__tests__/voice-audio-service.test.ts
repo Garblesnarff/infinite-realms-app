@@ -16,6 +16,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'jwt' } } }) } },
+}));
+
 // Mock URL.createObjectURL
 if (typeof window !== 'undefined') {
   global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost:3000/mock-url');
@@ -59,10 +63,11 @@ describe('VoiceAudioService', () => {
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            'xi-api-key': mockApiKey,
+            Authorization: 'Bearer jwt',
           }),
         }),
       );
+      expect(global.fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ headers: expect.objectContaining({ 'xi-api-key': expect.anything() }) }));
       expect(result.audioBlob).toBeDefined();
       expect(result.audioUrl).toBe('blob:http://localhost:3000/mock-url');
       expect(result.isGenerating).toBe(false);

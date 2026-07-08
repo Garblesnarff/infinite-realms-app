@@ -2,7 +2,6 @@ import React from 'react';
 
 import { useToast } from '../use-toast';
 
-import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 
 /**
@@ -25,37 +24,9 @@ export const useVoiceApiKey = () => {
    */
   const fetchApiKey = React.useCallback(async () => {
     try {
-      logger.info('🔑 Attempting to retrieve ElevenLabs API key...');
-
-      // Try environment variable first (for development)
-      const envApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-      if (envApiKey) {
-        logger.info('✅ Using ElevenLabs API key from environment variable');
-        setApiKey(envApiKey);
-        apiKeyRef.current = envApiKey;
-        return;
-      }
-
-      logger.info('🔄 No environment variable found, trying Supabase edge function...');
-
-      // Fallback to Supabase edge function (for production)
-      const { data, error } = await supabase.functions.invoke('get-secret', {
-        body: { secretName: 'ELEVEN_LABS_API_KEY' },
-      });
-
-      if (error) {
-        logger.error('❌ Error calling get-secret function:', error);
-        throw new Error(`Failed to call get-secret: ${error.message}`);
-      }
-
-      if (data?.secret) {
-        logger.info('✅ Retrieved ElevenLabs API key from Supabase secrets');
-        setApiKey(data.secret);
-        apiKeyRef.current = data.secret;
-      } else {
-        logger.error('❌ Empty response from get-secret function:', data);
-        throw new Error('ElevenLabs API key is empty or not found');
-      }
+      const proxyMarker = 'server-proxy';
+      setApiKey(proxyMarker);
+      apiKeyRef.current = proxyMarker;
     } catch (err) {
       logger.error('❌ Error fetching API key for voice:', err);
 

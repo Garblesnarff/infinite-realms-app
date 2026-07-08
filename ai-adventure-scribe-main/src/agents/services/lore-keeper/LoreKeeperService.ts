@@ -32,11 +32,7 @@ export type { ChunkType, StarterCampaign, CampaignChunk, CampaignRule, SearchRes
  * Lore Keeper Service for querying canonical campaign lore
  */
 export class LoreKeeperService {
-  private googleApiKey?: string;
-
-  constructor(googleApiKey?: string) {
-    this.googleApiKey = googleApiKey || import.meta.env.VITE_GOOGLE_AI_API_KEY;
-  }
+  constructor(_googleApiKey?: string) {}
 
   /**
    * List available starter campaigns
@@ -228,11 +224,6 @@ export class LoreKeeperService {
       limit?: number;
     },
   ): Promise<SearchResult[]> {
-    if (!this.googleApiKey) {
-      logger.warn('[LoreKeeper] No Google AI API key - semantic search unavailable');
-      return [];
-    }
-
     try {
       // Generate embedding for query
       const embedding = await this.generateEmbedding(query);
@@ -341,29 +332,20 @@ export class LoreKeeperService {
 
   private async generateEmbedding(text: string): Promise<number[]> {
     // Gemini text-embedding-004 produces 768-dimensional vectors
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${this.googleApiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: {
-            parts: [{ text: text.substring(0, 8000) }], // Truncate for safety
-          },
-          taskType: 'RETRIEVAL_QUERY',
-        }),
-      },
-    );
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = import.meta.env.VITE_API_URL || '';
+    const response = await fetch(`${apiBase}/v1/ai-proxy/embeddings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+      body: JSON.stringify({ text: text.substring(0, 8000) }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Gemini embedding generation failed: ${response.status} - ${errorText}`);
+      throw new Error(`Embedding generation failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    return data.embedding.values;
+    return data.embedding;
   }
 }
 

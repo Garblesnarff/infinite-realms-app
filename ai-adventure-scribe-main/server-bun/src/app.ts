@@ -18,6 +18,7 @@ import { authRoutes } from './routes/v1/auth';
 import { charactersRoutes } from './routes/v1/characters';
 import { llmRoutes } from './routes/v1/llm';
 import { imageRoutes } from './routes/v1/images';
+import { aiProxyRoutes } from './routes/v1/ai-proxy';
 import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 import { billingRoutes } from './routes/v1/billing';
 import { combatRoutes } from './routes/v1/combat';
@@ -42,6 +43,9 @@ import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
 
 export function createApp() {
+  if (process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY_HEADERS !== 'true' && process.env.TRUST_PROXY_HEADERS !== '1') {
+    logger.error({ msg: 'SECURITY_CONFIG_ERROR', alert: true, setting: 'TRUST_PROXY_HEADERS', detail: 'Production rate limiting will collapse all proxied users into one IP bucket' });
+  }
   const app = new Elysia()
     // Request ID middleware
     .derive(({ request }) => {
@@ -318,6 +322,7 @@ export function createApp() {
 
   // Image routes (AI image generation)
   app.use(imageRoutes);
+  app.use(aiProxyRoutes);
 
   // Blog admin auth routes (separate from WorkOS)
   app.use(blogAdminAuthRoutes);

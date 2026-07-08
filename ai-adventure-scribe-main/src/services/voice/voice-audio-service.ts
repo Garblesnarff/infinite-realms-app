@@ -1,5 +1,6 @@
 import { type VoiceSegment, ELEVENLABS_MODEL } from '../voice-routing';
 
+import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 
 /**
@@ -62,7 +63,7 @@ export class VoiceAudioService {
   /**
    * Generate audio for a single segment with caching
    */
-  static async generateAudio(segment: VoiceSegment, apiKey: string): Promise<VoiceSegment> {
+  static async generateAudio(segment: VoiceSegment, _apiKey: string): Promise<VoiceSegment> {
     const cacheKey = VoiceAudioService.generateCacheKey(segment.voiceId, segment.text);
 
     // Check cache first
@@ -87,14 +88,16 @@ export class VoiceAudioService {
     );
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiBase = import.meta.env.VITE_API_URL || '';
       const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${segment.voiceId}`,
+        `${apiBase}/v1/ai-proxy/voice/${encodeURIComponent(segment.voiceId)}`,
         {
           method: 'POST',
           headers: {
             Accept: 'audio/mpeg',
             'Content-Type': 'application/json',
-            'xi-api-key': apiKey,
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
           body: JSON.stringify({
             text: segment.text,

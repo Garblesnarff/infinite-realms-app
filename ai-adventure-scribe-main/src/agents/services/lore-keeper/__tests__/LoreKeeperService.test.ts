@@ -11,6 +11,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
     rpc: vi.fn(),
+    auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'jwt' } } }) },
   },
 }));
 
@@ -245,7 +246,7 @@ describe('LoreKeeperService', () => {
       const mockEmbedding = Array(768).fill(0.1);
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: vi.fn().mockResolvedValue({ embedding: { values: mockEmbedding } }),
+        json: vi.fn().mockResolvedValue({ embedding: mockEmbedding }),
       });
 
       const mockData = [{ id: '1', entity_name: 'Match', similarity: 0.9 }];
@@ -262,11 +263,13 @@ describe('LoreKeeperService', () => {
       expect(result[0].similarity).toBe(0.9);
     });
 
-    it('should return empty if no API key', async () => {
+    it('does not require a browser API key', async () => {
       const noKeyService = new LoreKeeperService('');
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({ embedding: [0.1] }) });
+      (supabase.rpc as any).mockResolvedValue({ data: [], error: null });
       const result = await noKeyService.searchLore(mockCampaignId, 'query');
       expect(result).toEqual([]);
-      expect(logger.warn).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/v1/ai-proxy/embeddings'), expect.anything());
     });
 
     it('should handle fetch failure', async () => {

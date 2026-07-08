@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { handleAsyncError } from '@/utils/error-handler';
 
@@ -20,7 +21,7 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   text,
-  apiKey,
+  apiKey: _apiKey,
   audioRef,
   volume,
   isMuted,
@@ -33,19 +34,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setIsSpeaking(true);
 
       const VOICE_ID = 'T0GKiSwCb51L7pv1sshd';
-      const API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
+      const API_URL = `${import.meta.env.VITE_API_URL || ''}/v1/ai-proxy/voice`;
 
       const voiceSettings: VoiceSettings = {
         stability: 0.5,
         similarity_boost: 0.75,
       };
 
-      const response = await fetch(`${API_URL}/${VOICE_ID}/stream`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${API_URL}/${VOICE_ID}`, {
         method: 'POST',
         headers: {
           Accept: 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': apiKey,
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({
           text,

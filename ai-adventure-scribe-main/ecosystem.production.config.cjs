@@ -9,6 +9,7 @@ module.exports = {
       exec_mode: "fork",
       env: {
         NODE_ENV: "production",
+        TRUST_PROXY_HEADERS: "true",
         PORT: 8888,
         VITE_MANIFEST_PATH: "/var/www/infiniterealms/ai-adventure-scribe-main/dist/.vite/manifest.json"
       },
