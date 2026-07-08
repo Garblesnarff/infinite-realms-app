@@ -226,7 +226,6 @@ describe('LlmApiClient', () => {
         messageId: 'msg-123',
         image: { url: 'http://example.com/img.png' },
       });
-
       // 1st attempt fails, schedules retry
       await vi.runAllTimersAsync();
       await appendPromise;
@@ -245,6 +244,7 @@ describe('LlmApiClient', () => {
         messageId: 'msg-123',
         image: { url: 'http://example.com/img.png' },
       });
+      const rejection = expect(appendPromise).rejects.toThrow('API 404');
 
       // Advance through all 5 attempts
       // 1 (initial) + 4 (retries) = 5
@@ -254,7 +254,7 @@ describe('LlmApiClient', () => {
         await Promise.resolve();
       }
 
-      await expect(appendPromise).rejects.toThrow('API 404');
+      await rejection;
       expect(mockFetch).toHaveBeenCalledTimes(5);
     });
   });
