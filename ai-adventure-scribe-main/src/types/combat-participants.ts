@@ -42,6 +42,9 @@ export interface CombatParticipant {
   currentHitPoints: number;
   temporaryHitPoints: number;
   armorClass: number;
+  magicAttackBonus?: number;
+  magicDamageBonus?: number;
+  magicSaveBonus?: number;
   initiative: number;
   initiativeBonus?: number;
   abilityScores?: {

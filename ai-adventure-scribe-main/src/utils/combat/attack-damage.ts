@@ -55,7 +55,7 @@ export function calculateAttackDamage(
 
     if (weapon.weaponProperties?.finesse) {
       // For finesse, use STR if it's better (including rage bonus)
-      const useStr = !weapon.range && (strMod + rageBonus > dexMod);
+      const useStr = !weapon.range && strMod + rageBonus > dexMod;
       baseDamage += useStr ? strMod : dexMod;
     } else if (!weapon.range) {
       // Melee weapon uses STR
@@ -92,11 +92,14 @@ export function calculateAttackDamage(
   // Apply Barbarian Rage damage bonus if applicable
   // Rules: Melee weapon attacks using Strength
   const isMelee = !weapon || !weapon.range;
-  const usedStr = !weapon || (weapon.weaponProperties?.finesse ? (strMod + rageBonus > dexMod) : !weapon.range);
+  const usedStr =
+    !weapon || (weapon.weaponProperties?.finesse ? strMod + rageBonus > dexMod : !weapon.range);
 
   if (rageBonus > 0 && isMelee && usedStr) {
     baseDamage += rageBonus;
   }
+
+  baseDamage += attacker.magicDamageBonus ?? 0;
 
   const totalBeforeResistance = baseDamage;
 
@@ -128,7 +131,8 @@ export function getAbilityModifier(participant: CombatParticipant, ability: stri
   const abilityName = ability.toLowerCase();
 
   // 1. Check abilityScores object (Standard Character structure)
-  const abilityScores = participant.abilityScores as Record<string, Record<string, unknown>> | undefined;
+  const abilityScores = participant.abilityScores as
+    Record<string, Record<string, unknown>> | undefined;
   const scoreFromObject = abilityScores?.[abilityName]?.score;
   if (typeof scoreFromObject === 'number') {
     return Math.floor((scoreFromObject - 10) / 2);

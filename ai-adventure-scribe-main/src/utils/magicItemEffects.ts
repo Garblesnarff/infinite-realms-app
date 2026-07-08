@@ -27,24 +27,25 @@ type SpellEffect = {
   rechargeRate?: 'daily' | 'dawn' | 'dusk' | 'weekly' | 'monthly';
 };
 
+const isActiveMagicItem = (item: NonNullable<Character['inventory']>[number]): boolean =>
+  item.equipped && item.isMagic === true && (!item.requiresAttunement || item.isAttuned === true);
+
 /**
  * Calculate the total magical bonus to attack rolls from equipped magic weapons
  */
 export function getMagicAttackBonus(character: Character): number {
   if (!character.inventory) return 0;
 
-  return character.inventory
-    .filter((item) => item.equipped && item.isMagic)
-    .reduce((total, item) => {
-      if (item.magicEffects?.attackBonus !== undefined) {
-        return total + item.magicEffects.attackBonus;
-      }
-      // Fallback to magicBonus for appropriate item types
-      if (['weapon', 'rod', 'staff', 'wand'].includes(item.magicItemType || '')) {
-        return total + (item.magicBonus || 0);
-      }
-      return total;
-    }, 0);
+  return character.inventory.filter(isActiveMagicItem).reduce((total, item) => {
+    if (item.magicEffects?.attackBonus !== undefined) {
+      return total + item.magicEffects.attackBonus;
+    }
+    // Fallback to magicBonus for appropriate item types
+    if (['weapon', 'rod', 'staff', 'wand'].includes(item.magicItemType || '')) {
+      return total + (item.magicBonus || 0);
+    }
+    return total;
+  }, 0);
 }
 
 /**
@@ -53,18 +54,16 @@ export function getMagicAttackBonus(character: Character): number {
 export function getMagicDamageBonus(character: Character): number {
   if (!character.inventory) return 0;
 
-  return character.inventory
-    .filter((item) => item.equipped && item.isMagic)
-    .reduce((total, item) => {
-      if (item.magicEffects?.damageBonus !== undefined) {
-        return total + item.magicEffects.damageBonus;
-      }
-      // Fallback to magicBonus for weapons
-      if (item.magicItemType === 'weapon') {
-        return total + (item.magicBonus || 0);
-      }
-      return total;
-    }, 0);
+  return character.inventory.filter(isActiveMagicItem).reduce((total, item) => {
+    if (item.magicEffects?.damageBonus !== undefined) {
+      return total + item.magicEffects.damageBonus;
+    }
+    // Fallback to magicBonus for weapons
+    if (item.magicItemType === 'weapon') {
+      return total + (item.magicBonus || 0);
+    }
+    return total;
+  }, 0);
 }
 
 /**
@@ -73,18 +72,16 @@ export function getMagicDamageBonus(character: Character): number {
 export function getMagicACBonus(character: Character): number {
   if (!character.inventory) return 0;
 
-  return character.inventory
-    .filter((item) => item.equipped && item.isMagic)
-    .reduce((total, item) => {
-      if (item.magicEffects?.acBonus !== undefined) {
-        return total + item.magicEffects.acBonus;
-      }
-      // Fallback to magicBonus for armor/shields
-      if (['armor', 'shield'].includes(item.magicItemType || '')) {
-        return total + (item.magicBonus || 0);
-      }
-      return total;
-    }, 0);
+  return character.inventory.filter(isActiveMagicItem).reduce((total, item) => {
+    if (item.magicEffects?.acBonus !== undefined) {
+      return total + item.magicEffects.acBonus;
+    }
+    // Fallback to magicBonus for armor/shields
+    if (['armor', 'shield'].includes(item.magicItemType || '')) {
+      return total + (item.magicBonus || 0);
+    }
+    return total;
+  }, 0);
 }
 
 /**
@@ -93,23 +90,21 @@ export function getMagicACBonus(character: Character): number {
 export function getMagicSaveBonus(character: Character): number {
   if (!character.inventory) return 0;
 
-  return character.inventory
-    .filter((item) => item.equipped && item.isMagic)
-    .reduce((total, item) => {
-      if (item.magicEffects?.saveBonus !== undefined) {
-        return total + item.magicEffects.saveBonus;
-      }
-      // Some items like Ring of Protection might just have magicBonus
-      // but usually they should have specific effects.
-      // We'll only fallback if it's not a weapon/armor
-      if (
-        !['weapon', 'armor', 'shield'].includes(item.magicItemType || '') &&
-        item.magicBonus !== undefined
-      ) {
-        return total + item.magicBonus;
-      }
-      return total;
-    }, 0);
+  return character.inventory.filter(isActiveMagicItem).reduce((total, item) => {
+    if (item.magicEffects?.saveBonus !== undefined) {
+      return total + item.magicEffects.saveBonus;
+    }
+    // Some items like Ring of Protection might just have magicBonus
+    // but usually they should have specific effects.
+    // We'll only fallback if it's not a weapon/armor
+    if (
+      !['weapon', 'armor', 'shield'].includes(item.magicItemType || '') &&
+      item.magicBonus !== undefined
+    ) {
+      return total + item.magicBonus;
+    }
+    return total;
+  }, 0);
 }
 
 /**
@@ -130,7 +125,7 @@ export function getMagicAbilityBonuses(
   > = {};
 
   character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicEffects?.abilityScoreBonus)
+    .filter((item) => isActiveMagicItem(item) && item.magicEffects?.abilityScoreBonus)
     .forEach((item) => {
       const abilityBonus = item.magicEffects!.abilityScoreBonus!;
       bonuses[abilityBonus.ability] = (bonuses[abilityBonus.ability] || 0) + abilityBonus.bonus;
@@ -148,7 +143,7 @@ export function getMagicSpecialProperties(character: Character): string[] {
   const properties: string[] = [];
 
   character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicEffects?.specialProperties)
+    .filter((item) => isActiveMagicItem(item) && item.magicEffects?.specialProperties)
     .forEach((item) => {
       properties.push(...(item.magicEffects!.specialProperties || []));
     });
@@ -165,7 +160,7 @@ export function getMagicSpellEffects(character: Character): SpellEffect[] {
   const spellEffects: SpellEffect[] = [];
 
   character.inventory
-    .filter((item) => item.equipped && item.isMagic && item.magicEffects?.spellEffects)
+    .filter((item) => isActiveMagicItem(item) && item.magicEffects?.spellEffects)
     .forEach((item) => {
       spellEffects.push(...(item.magicEffects!.spellEffects || []));
     });
@@ -180,8 +175,7 @@ export function hasEquippedMagicItem(character: Character, itemName: string): bo
   if (!character.inventory) return false;
 
   return character.inventory.some(
-    (item) =>
-      item.equipped && item.isMagic && item.itemId.toLowerCase().includes(itemName.toLowerCase()),
+    (item) => isActiveMagicItem(item) && item.itemId.toLowerCase().includes(itemName.toLowerCase()),
   );
 }
 
@@ -194,15 +188,11 @@ export function applyMagicItemEffectsToParticipant(
 ): CombatParticipant {
   // Apply attack bonuses
   const attackBonus = getMagicAttackBonus(character);
-  if (attackBonus !== 0) {
-    // This would be applied during attack calculations
-  }
+  participant.magicAttackBonus = attackBonus;
 
   // Apply damage bonuses
   const damageBonus = getMagicDamageBonus(character);
-  if (damageBonus !== 0) {
-    // This would be applied during damage calculations
-  }
+  participant.magicDamageBonus = damageBonus;
 
   // Apply AC bonuses
   const acBonus = getMagicACBonus(character);
@@ -212,9 +202,7 @@ export function applyMagicItemEffectsToParticipant(
 
   // Apply save bonuses
   const saveBonus = getMagicSaveBonus(character);
-  if (saveBonus !== 0) {
-    // This would be applied during saving throw calculations
-  }
+  participant.magicSaveBonus = saveBonus;
 
   // Apply ability score bonuses
   const _abilityBonuses = getMagicAbilityBonuses(character);

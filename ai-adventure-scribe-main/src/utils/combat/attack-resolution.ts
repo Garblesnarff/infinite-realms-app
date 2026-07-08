@@ -59,6 +59,8 @@ export function resolveAttack(
     attackBonus += weapon.attackBonus || 0;
   }
 
+  attackBonus += attacker.magicAttackBonus ?? 0;
+
   // Apply condition-based advantage/disadvantage
   let hasAdvantage = options.advantage || false;
   let hasDisadvantage = options.disadvantage || false;
@@ -120,8 +122,9 @@ export function resolveAttack(
   let hit = roll.total >= targetAC;
 
   // Critical hit/fail rules
-  const targetIsHelpless = target.conditions.some((condition) =>
-    condition.name === 'paralyzed' || condition.name === 'unconscious');
+  const targetIsHelpless = target.conditions.some(
+    (condition) => condition.name === 'paralyzed' || condition.name === 'unconscious',
+  );
   const inferredDistance = options.distanceInFeet ?? (weapon?.range ? Number.POSITIVE_INFINITY : 5);
   const criticalHit = roll.naturalRoll === 20 || (hit && targetIsHelpless && inferredDistance <= 5);
   const criticalFail = roll.naturalRoll === 1;

@@ -5,6 +5,7 @@
  */
 
 import type { CombatParticipant, FightingStyleName } from '@/types/combat';
+import type { Character } from '@/types/character';
 
 import { rollDie } from '@/utils/diceRolls';
 import { FIGHTING_STYLES } from '@/utils/fightingStyles';
@@ -27,6 +28,7 @@ export interface CharacterData {
   stealthCheckBonus?: number;
   speed?: number;
   abilityScores?: CombatParticipant['abilityScores'];
+  inventory?: Character['inventory'];
 }
 
 /**
@@ -89,6 +91,9 @@ export function createCombatParticipant(
     isHidden: partial.isHidden || false,
     stealthCheckBonus: partial.stealthCheckBonus || 0,
     abilityScores: partial.abilityScores,
+    magicAttackBonus: partial.magicAttackBonus,
+    magicDamageBonus: partial.magicDamageBonus,
+    magicSaveBonus: partial.magicSaveBonus,
   };
 
   // Enrich player participants with character data
@@ -134,6 +139,28 @@ export function enrichParticipantWithCharacterData(
     participant.speed = characterData.speed;
     participant.movementRemaining = Math.max(0, characterData.speed - participant.movementUsed);
   }
+
+  if (characterData.inventory) {
+    const activeItems = characterData.inventory.filter(
+      (item) => item.equipped && item.isMagic && (!item.requiresAttunement || item.isAttuned),
+    );
+    participant.magicAttackBonus = activeItems.reduce(
+      (total, item) => total + (item.magicEffects?.attackBonus ?? 0),
+      0,
+    );
+    participant.magicDamageBonus = activeItems.reduce(
+      (total, item) => total + (item.magicEffects?.damageBonus ?? 0),
+      0,
+    );
+    participant.magicSaveBonus = activeItems.reduce(
+      (total, item) => total + (item.magicEffects?.saveBonus ?? 0),
+      0,
+    );
+    participant.armorClass += activeItems.reduce(
+      (total, item) => total + (item.magicEffects?.acBonus ?? 0),
+      0,
+    );
+  }
 }
 
 /**
@@ -141,7 +168,6 @@ export function enrichParticipantWithCharacterData(
  */
 export function sortByInitiative(participants: CombatParticipant[]): CombatParticipant[] {
   return [...participants].sort(
-    (a, b) => b.initiative - a.initiative ||
-      (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
+    (a, b) => b.initiative - a.initiative || (b.initiativeBonus ?? 0) - (a.initiativeBonus ?? 0),
   );
 }
