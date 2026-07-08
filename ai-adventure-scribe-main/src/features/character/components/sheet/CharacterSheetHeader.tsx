@@ -4,6 +4,7 @@ import React from 'react';
 import type { Character } from '@/types/character';
 
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 interface CharacterSheetHeaderProps {
   character: Character;
@@ -99,7 +100,7 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
           <div className="text-center">
             <div className="flex items-center gap-1 text-green-600">
               <Sword className="w-4 h-4" />
-              <span className="font-bold">+{Math.floor(((character.level || 1) - 1) / 4) + 2}</span>
+              <span className="font-bold">+{calculateProficiencyBonus(character.level || 1)}</span>
             </div>
             <div className="text-xs text-muted-foreground">PROF</div>
           </div>

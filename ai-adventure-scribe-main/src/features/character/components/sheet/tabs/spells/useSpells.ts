@@ -5,6 +5,7 @@ import type { CharacterSpellDisplay } from '@/utils/spell-lookup';
 
 import logger from '@/lib/logger';
 import { characterSpellService } from '@/services/characterSpellApi';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 import { getCharacterSpells } from '@/utils/spell-lookup';
 
 export interface SpellSlots {
@@ -113,7 +114,7 @@ export const useSpells = (character: Character): UseSpellsReturn => {
     [character.abilityScores, spellcastingAbility]
   );
   const proficiencyBonus = useMemo(() =>
-    Math.floor(((character.level || 1) - 1) / 4) + 2,
+    calculateProficiencyBonus(character.level || 1),
     [character.level]
   );
   const spellAttackBonus = useMemo(() =>

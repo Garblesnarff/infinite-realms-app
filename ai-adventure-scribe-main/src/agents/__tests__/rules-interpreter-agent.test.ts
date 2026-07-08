@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { AgentTask } from '../types';
 import type { EncounterSpec, MonsterDef } from '@/types/encounters';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 // Mock all dependencies before importing the agent
 vi.mock('../rules/services/ValidationService', () => ({
@@ -148,7 +149,7 @@ function getAbilityModifier(score: number): number {
  * Gets proficiency bonus by level
  */
 function getProficiencyBonus(level: number): number {
-  return Math.ceil(level / 4) + 1;
+  return calculateProficiencyBonus(level);
 }
 
 // ============================

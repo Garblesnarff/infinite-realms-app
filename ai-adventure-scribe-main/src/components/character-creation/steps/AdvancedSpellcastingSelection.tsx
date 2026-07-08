@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { metamagicOptions } from '@/data/spellcastingFeatures';
 import { useAdvancedSpellcasting } from '@/hooks/useAdvancedSpellcasting';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 /**
  * AdvancedSpellcastingSelection component for advanced spellcasting features
@@ -104,13 +105,13 @@ const AdvancedSpellcastingSelection: React.FC = () => {
             </div>
             <div className="text-center p-3 border rounded">
               <div className="text-2xl font-bold">
-                +{Math.floor((level - 1) / 4) + 2 + abilityModifier}
+                +{calculateProficiencyBonus(level) + abilityModifier}
               </div>
               <div className="text-xs text-muted-foreground">Spell Attack Bonus</div>
             </div>
             <div className="text-center p-3 border rounded">
               <div className="text-2xl font-bold">
-                {8 + Math.floor((level - 1) / 4) + 2 + abilityModifier}
+                {8 + calculateProficiencyBonus(level) + abilityModifier}
               </div>
               <div className="text-xs text-muted-foreground">Spell Save DC</div>
             </div>

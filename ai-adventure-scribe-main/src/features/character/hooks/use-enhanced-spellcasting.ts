@@ -5,6 +5,7 @@ import type { Character, Spell } from '@/types/character';
 import { metamagicOptions } from '@/data/spellcastingFeatures';
 import logger from '@/lib/logger';
 import { spellApi } from '@/services/spellApi';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 import { calculateSpellSlots } from '@/utils/spell-management';
 
 export interface SpellSlots {
@@ -76,7 +77,7 @@ export function useEnhancedSpellcasting(
   const spellcastingMod = spellcastingAbility
     ? character?.abilityScores?.[spellcastingAbility]?.modifier || 0
     : 0;
-  const proficiencyBonus = Math.floor((level - 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(level);
   const spellAttackBonus = spellcastingMod + proficiencyBonus;
   const spellSaveDC = 8 + spellcastingMod + proficiencyBonus;
 

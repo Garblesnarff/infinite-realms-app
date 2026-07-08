@@ -6,6 +6,7 @@ import type { Character } from '@/types/character';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Z_INDEX } from '@/constants/z-index';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 interface CharacterCardHoverContentProps {
   character: Partial<Character> & Required<Pick<Character, 'id' | 'name'>>;
@@ -41,8 +42,7 @@ const CharacterCardHoverContent = ({
 
   // Calculate proficiency bonus based on character level
   const getProficiencyBonus = (level?: number): number => {
-    if (!level) return 2;
-    return Math.ceil(level / 4) + 1;
+    return calculateProficiencyBonus(level || 1);
   };
 
   return (

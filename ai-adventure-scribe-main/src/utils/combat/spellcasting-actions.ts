@@ -5,6 +5,7 @@ import type { CombatParticipant, CombatAction } from '@/types/combat';
 import type { SpellSlotLevel } from '@/utils/spell-slots-table';
 
 import { spellApi } from '@/services/spellApi';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 /**
  * Handles spell casting logic: deduct slot, set concentration if applicable
@@ -118,7 +119,7 @@ export function checkConcentration(
   const conMod = constitution?.modifier || 0;
   const proficient = constitution?.savingThrow === true ||
     combatant.savingThrowProficiencies?.includes('constitution');
-  const proficiencyBonus = proficient ? 2 + Math.floor(((participant.level || 1) - 1) / 4) : 0;
+  const proficiencyBonus = proficient ? calculateProficiencyBonus(participant.level || 1) : 0;
   const roll = Math.floor(Math.random() * 20) + 1 + conMod + proficiencyBonus;
 
   const maintained = roll >= dc;

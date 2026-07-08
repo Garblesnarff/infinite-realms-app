@@ -14,6 +14,7 @@ import type {
 } from '@/types/environmentalHazards';
 
 import { rollDice, rollSavingThrow } from '@/utils/diceUtils';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 /**
  * Detect an environmental hazard
@@ -45,19 +46,19 @@ export function detectHazard(
     case 'perception':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
       if (character.skillProficiencies?.includes('Perception')) {
-        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
+        skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;
     case 'investigation':
       skillModifier = character.abilityScores?.intelligence?.modifier || 0;
       if (character.skillProficiencies?.includes('Investigation')) {
-        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
+        skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;
     case 'survival':
       skillModifier = character.abilityScores?.wisdom?.modifier || 0;
       if (character.skillProficiencies?.includes('Survival')) {
-        skillModifier += Math.floor(((character.level || 1) - 1) / 4) + 2;
+        skillModifier += calculateProficiencyBonus(character.level || 1);
       }
       break;
   }
@@ -115,7 +116,7 @@ export function interactWithHazard(
   }
 
   // Check for proficiency or special bonuses
-  const proficiencyBonus = Math.floor(((character.level || 1) - 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(character.level || 1);
 
   // Some classes have bonuses to certain saves
   let saveBonus = 0;

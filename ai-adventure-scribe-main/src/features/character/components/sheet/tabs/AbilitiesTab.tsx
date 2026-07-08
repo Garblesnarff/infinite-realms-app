@@ -6,6 +6,7 @@ import type { Character } from '@/types/character';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
 
 interface AbilitiesTabProps {
   character: Character;
@@ -42,7 +43,7 @@ type AbilityName = keyof typeof character.abilityScores;
  * Shows ability scores, modifiers, saves, and skills
  */
 const AbilitiesTab: React.FC<AbilitiesTabProps> = ({ character, onUpdate: _onUpdate }) => {
-  const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
+  const proficiencyBonus = calculateProficiencyBonus(character.level);
 
   // For demo purposes, assume some proficiencies based on class
   const getProficiencies = (): { skills: SkillName[]; saves: AbilityName[] } => {

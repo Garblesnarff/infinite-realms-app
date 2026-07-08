@@ -2,6 +2,8 @@ import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 
 import type { Character } from '@/types/character';
 
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
+
 export interface DiceRollResult {
   expression: string;
   total: number;
@@ -250,7 +252,7 @@ export class DiceEngine {
 
     // Calculate attack bonus: ability modifier + proficiency bonus
     const abilityMod = character?.abilityScores?.[abilityToUse]?.modifier ?? 0;
-    const proficiencyBonus = character?.level ? Math.floor((character.level - 1) / 4) + 2 : 2;
+    const proficiencyBonus = calculateProficiencyBonus(character?.level || 1);
     const attackBonus = abilityMod + proficiencyBonus;
 
     // Format the attack formula

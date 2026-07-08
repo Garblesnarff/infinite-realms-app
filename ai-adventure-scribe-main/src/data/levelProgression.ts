@@ -9,6 +9,8 @@ import {
 import type { LevelFeature } from './progression-data';
 import type { AbilityScores } from '@/types/character';
 
+import { calculateProficiencyBonus } from '@/utils/character/basic-math';
+
 // Re-export constants and types for backward compatibility
 export {
   experienceTable,
@@ -38,7 +40,7 @@ export function getLevelFromExperience(experience: number): number {
 }
 
 export function getProficiencyBonus(level: number): number {
-  return proficiencyBonusTable[Math.min(20, Math.max(1, level))] || 2;
+  return calculateProficiencyBonus(level);
 }
 
 export function canMulticlass(
