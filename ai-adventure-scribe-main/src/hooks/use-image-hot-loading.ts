@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { subscriptionManager } from '@/services/supabase-subscription-manager';
+import { userDataApi } from '@/services/user-data-api';
 
 // Polling configuration constants
 const POLLING_INTERVAL_MS = 2000; // 2 seconds
@@ -58,9 +57,31 @@ function isNewlyCreatedCharacter(
 }
 
 /**
- * Custom hook for hot loading background images with realtime updates
- * Uses centralized subscription manager to prevent over-subscription
- * Includes polling fallback for newly created records to handle race conditions
+ * Fetch a record through server-bun (campaigns/characters have no direct
+ * anon/authenticated grants — RLS is locked down with zero policies, so this
+ * must go through the backend, not supabase-js).
+ */
+async function fetchRecordImage(
+  tableName: 'campaigns' | 'characters',
+  recordId: string,
+  imageField: string,
+): Promise<string | null> {
+  const record =
+    tableName === 'campaigns'
+      ? await userDataApi.getCampaign(recordId)
+      : await userDataApi.getCharacter(recordId);
+
+  return record?.[imageField] ?? null;
+}
+
+/**
+ * Custom hook for hot loading background images, with polling fallback for
+ * newly created records to handle race conditions while an image generates.
+ *
+ * Note: this used to also subscribe to Supabase Realtime postgres_changes,
+ * but that requires the same RLS policies as direct table access, which were
+ * intentionally revoked for campaigns/characters. Polling is now the only
+ * update mechanism.
  */
 export const useImageHotLoading = ({
   tableName,
@@ -77,50 +98,16 @@ export const useImageHotLoading = ({
     pollingActive: false,
   });
 
-  const subscriptionIdRef = useRef<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
 
-  // Callback for realtime updates
-  const handleImageUpdate = useCallback(
-    (newImageUrl: string | null) => {
-      setState((prev) => ({
-        ...prev,
-        imageUrl: newImageUrl || fallbackImage,
-        hasImage: !!newImageUrl,
-        isLoading: false,
-        error: null,
-        pollingActive: false,
-      }));
-
-      // Clear polling if active
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        logger.info('Polling stopped: image received via realtime');
-      }
-    },
-    [fallbackImage],
-  );
-
-  // Polling function: query Supabase directly
+  // Polling function: fetch the record through server-bun
   const pollForImage = useCallback(async () => {
     if (!isMountedRef.current) return;
 
     try {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select(imageField)
-        .eq('id', recordId)
-        .single();
-
-      if (error) {
-        logger.error(`Polling error for ${tableName} ${recordId}:`, error);
-        return;
-      }
-
-      const imageUrl = data?.[imageField];
+      const imageUrl = await fetchRecordImage(tableName, recordId, imageField);
 
       if (imageUrl && isMountedRef.current) {
         logger.info(`Polling success: image found for ${tableName} ${recordId}`);
@@ -138,7 +125,7 @@ export const useImageHotLoading = ({
         }
       }
     } catch (error) {
-      logger.error('Polling fetch failed:', error);
+      logger.error(`Polling error for ${tableName} ${recordId}:`, error);
       // Don't stop polling on network errors
     }
   }, [tableName, recordId, imageField]);
@@ -194,25 +181,7 @@ export const useImageHotLoading = ({
       try {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-        const { data, error } = await supabase
-          .from(tableName)
-          .select(imageField)
-          .eq('id', recordId)
-          .single();
-
-        if (error) {
-          logger.error(`Error fetching initial ${imageField}:`, error);
-          if (isMountedRef.current) {
-            setState((prev) => ({
-              ...prev,
-              error: error.message,
-              isLoading: false,
-            }));
-          }
-          return;
-        }
-
-        const imageUrl = data?.[imageField];
+        const imageUrl = await fetchRecordImage(tableName, recordId, imageField);
         const hasImage = !!imageUrl;
 
         if (isMountedRef.current) {
@@ -231,37 +200,22 @@ export const useImageHotLoading = ({
           startPollingIfNeeded(hasImage);
         }
       } catch (err) {
-        logger.error('Failed to fetch initial image:', err);
+        logger.error(`Error fetching initial ${imageField}:`, err);
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
-            error: 'Failed to load image',
+            error: err instanceof Error ? err.message : 'Failed to load image',
             isLoading: false,
           }));
         }
       }
     };
 
-    // Subscribe to realtime updates via centralized manager
-    const subscriptionId = subscriptionManager.subscribe(
-      tableName,
-      recordId,
-      imageField,
-      handleImageUpdate,
-    );
-    subscriptionIdRef.current = subscriptionId;
-
-    // Initialize
     fetchInitialImage();
 
     // Cleanup function
     return () => {
       isMountedRef.current = false;
-
-      if (subscriptionIdRef.current) {
-        subscriptionManager.unsubscribe(tableName, subscriptionIdRef.current);
-        subscriptionIdRef.current = null;
-      }
 
       // Clear polling interval
       if (pollingIntervalRef.current) {
@@ -269,7 +223,7 @@ export const useImageHotLoading = ({
         pollingIntervalRef.current = null;
       }
     };
-  }, [tableName, recordId, imageField, fallbackImage, handleImageUpdate, startPollingIfNeeded]);
+  }, [tableName, recordId, imageField, fallbackImage, startPollingIfNeeded]);
 
   return state;
 };
