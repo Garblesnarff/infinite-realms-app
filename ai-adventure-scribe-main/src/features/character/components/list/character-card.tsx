@@ -190,16 +190,7 @@ const CharacterCardComponent = ({ character, onDelete }: CharacterCardProps): JS
           <div className="absolute inset-0 bg-gradient-to-br from-infinite-purple/20 via-infinite-dark/40 to-infinite-purple/20 backdrop-blur-sm flex items-center justify-center">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-infinite-gold mb-2"></div>
-              <div className="text-xs text-infinite-gold font-medium">
-                {connectionStatus === 'connecting' && 'Connecting...'}
-                {connectionStatus === 'connected' && 'Generating image...'}
-                {connectionStatus === 'timeout' && retryCount > 0 && `Retrying... (${retryCount})`}
-                {connectionStatus === 'error' && 'Checking for updates...'}
-                {!connectionStatus && 'Generating image...'}
-              </div>
-              {connectionStatus === 'error' && (
-                <div className="text-xs text-infinite-gold/70 mt-1">Using fallback polling</div>
-              )}
+              <div className="text-xs text-infinite-gold font-medium">Generating image...</div>
             </div>
           </div>
         )}
