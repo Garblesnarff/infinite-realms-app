@@ -24,6 +24,7 @@ export default defineConfig({
     },
     css: true, // If you have CSS imports in components
     include: [
+      'server-bun/src/tactical/**/*.test.ts',
       'src/data/__tests__/wave4-content.test.ts',
       'src/services/__tests__/ai-service.test.ts',
       'src/services/ai/__tests__/chat-persistence.test.ts',
