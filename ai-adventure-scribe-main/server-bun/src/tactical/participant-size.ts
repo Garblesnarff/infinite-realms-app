@@ -1,6 +1,6 @@
 import monsterCatalog from '../../../src/data/srd/monsters.json' with { type: 'json' };
 
-type Participant = { name: string; participantType: string };
+type Participant = { id?: string; name: string; participantType: string };
 type MonsterCatalogEntry = { id: string; name: string; size?: string };
 type EntitySize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
 const tacticalSizes = new Set<EntitySize>(['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan']);
