@@ -6,24 +6,57 @@ import { logger } from './lib/logger';
 const app = createApp();
 
 const PORT = Number(process.env.PORT || 8888);
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
 
 // Graceful shutdown handler
-function shutdown(signal: string) {
-  logger.info({ msg: `Received ${signal}, shutting down gracefully...` });
+let shutdownPromise: Promise<void> | undefined;
 
-  // Stop accepting new connections
-  app.stop();
+function shutdown(signal: string): Promise<void> {
+  if (shutdownPromise) {
+    logger.warn({ msg: `Received ${signal} while shutdown is already in progress` });
+    return shutdownPromise;
+  }
 
-  // Give ongoing requests time to complete
-  setTimeout(() => {
-    logger.info({ msg: 'Server stopped' });
-    process.exit(0);
-  }, 5000);
+  shutdownPromise = (async () => {
+    logger.info({ msg: `Received ${signal}, shutting down gracefully...` });
+
+    const server = app.server;
+    const forceCloseTimer = setTimeout(() => {
+      logger.warn({
+        msg: 'Graceful shutdown timed out; closing active connections',
+        timeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+      });
+      void server?.stop(true).catch((error) => {
+        logger.error({
+          msg: 'Failed to force-close active connections',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+
+    try {
+      // Bun closes the listening socket immediately, then resolves once
+      // in-flight requests and WebSockets have finished.
+      await app.stop();
+      logger.info({ msg: 'Server stopped' });
+      process.exit(0);
+    } catch (error) {
+      logger.error({
+        msg: 'Server shutdown failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      process.exit(1);
+    } finally {
+      clearTimeout(forceCloseTimer);
+    }
+  })();
+
+  return shutdownPromise;
 }
 
 // Register shutdown handlers
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 // Start server
 app.listen(PORT, () => {

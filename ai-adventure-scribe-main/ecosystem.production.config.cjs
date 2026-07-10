@@ -18,6 +18,7 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       merge_logs: true,
       autorestart: true,
+      kill_timeout: 8000,
       max_memory_restart: "1G",
       watch: false
     }
