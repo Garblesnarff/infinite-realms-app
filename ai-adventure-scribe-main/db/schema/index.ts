@@ -61,3 +61,6 @@ export * from './lore-keeper';
 
 // Export all spell slots tables and types
 export * from './spell-slots';
+
+// Server-authoritative tactical combat maps
+export * from './tactical-maps';

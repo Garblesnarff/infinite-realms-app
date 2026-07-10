@@ -64,6 +64,8 @@ export interface AIResponse {
   roll_requests?: unknown[];
   dice_rolls?: unknown[];
   combat_transition?: 'none' | 'start' | 'end';
+  scene_spec?: unknown | null;
+  map_actions?: unknown[];
   combat_actions?: unknown[];
   combatants?: unknown[];
   combatDetection?: {

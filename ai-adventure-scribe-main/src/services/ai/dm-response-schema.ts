@@ -28,6 +28,32 @@ export const dmResponseSchema: Record<string, unknown> = {
       },
     },
     combat_transition: { type: 'string', enum: ['none', 'start', 'end'] },
+    scene_spec: {
+      type: ['object', 'null'], additionalProperties: false,
+      properties: {
+        id: { type: ['string', 'null'] }, sessionId: { type: ['string', 'null'] },
+        environment: { type: 'string', enum: ['dungeon_room', 'cave', 'tavern', 'forest_clearing', 'road', 'ruins', 'ship_deck', 'open_field', 'corridor'] },
+        size: { type: ['string', 'null'], enum: ['small', 'medium', 'large', null] },
+        sceneDescription: { type: ['string', 'null'] }, seed: { type: ['number', 'null'] },
+        enemyPlacement: { type: ['string', 'null'], enum: ['ambush', 'guarding', 'formation', null] },
+      },
+      required: ['id', 'sessionId', 'environment', 'size', 'sceneDescription', 'seed', 'enemyPlacement'],
+    },
+    map_actions: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          action: { type: 'string', enum: ['move', 'place', 'remove', 'update_cell'] },
+          entityId: { type: ['string', 'null'] }, x: { type: ['number', 'null'] }, y: { type: ['number', 'null'] },
+          changes: { type: ['object', 'null'], additionalProperties: false, properties: {
+            terrain: { type: 'string', enum: ['floor', 'wall', 'door_closed', 'door_open', 'difficult', 'water', 'pit', 'obscured'] },
+            blocksMovement: { type: 'boolean' }, blocksSight: { type: 'boolean' }, cover: { type: 'number', enum: [0, 1, 2, 3] }, elevation: { type: 'number' }, decoration: { type: 'string' },
+          } },
+        },
+        required: ['action', 'entityId', 'x', 'y', 'changes'],
+      },
+    },
     combatants: {
       type: 'array',
       items: {
@@ -53,5 +79,5 @@ export const dmResponseSchema: Record<string, unknown> = {
       },
     },
   },
-  required: ['text', 'narration_segments', 'roll_requests', 'combat_transition', 'combatants', 'combat_actions'],
+  required: ['text', 'narration_segments', 'roll_requests', 'combat_transition', 'scene_spec', 'map_actions', 'combatants', 'combat_actions'],
 };

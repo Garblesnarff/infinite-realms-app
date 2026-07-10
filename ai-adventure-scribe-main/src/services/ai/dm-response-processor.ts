@@ -247,6 +247,8 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     roll_requests: structuredResponse?.roll_requests || roll_requests,
     dice_rolls,
     combat_transition: transition || 'none',
+    scene_spec: structuredResponse?.scene_spec ?? null,
+    map_actions: structuredResponse?.map_actions || [],
     combat_actions: structuredResponse?.combat_actions || [],
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
