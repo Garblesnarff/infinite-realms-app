@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia';
-import { getValidMoves } from '../../tactical/engine.js';
+import { checkLineOfSight, getCover, getDistance, getValidMoves } from '../../tactical/engine.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
 import { applyTacticalMapAction } from '../../services/combat/tactical-action-service.js';
@@ -23,6 +23,20 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
     const map = await loadActiveTacticalMap(params.id);
     if (!map) { set.status = 404; return { error: 'No active tactical map' }; }
     return { entityId: params.entityId, moves: getValidMoves(map, params.entityId) };
+  })
+  .get('/:id/tactical-map/check/:fromId/:toId', async ({ params, user, set }) => {
+    const access = await verifySessionOwnership(params.id, user.userId);
+    if (!access.success) { set.status = access.error!.status; return { error: access.error!.message }; }
+    const map = await loadActiveTacticalMap(params.id);
+    if (!map) { set.status = 404; return { error: 'No active tactical map' }; }
+    const from = map.entities.find((entity) => entity.id === params.fromId);
+    const to = map.entities.find((entity) => entity.id === params.toId);
+    if (!from || !to) { set.status = 404; return { error: 'Map entity not found' }; }
+    return {
+      distanceFeet: getDistance(from, to),
+      hasLineOfSight: checkLineOfSight(map, from.id, to.id),
+      cover: getCover(map, from.id, to.id),
+    };
   })
   .get('/:id/tactical-map/context/:entityId', async ({ params, user, set }) => {
     const access = await verifySessionOwnership(params.id, user.userId);
