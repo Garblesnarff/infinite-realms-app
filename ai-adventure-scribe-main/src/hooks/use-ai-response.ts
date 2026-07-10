@@ -5,6 +5,7 @@ import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
+import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
@@ -51,6 +52,7 @@ export interface EnhancedChatMessage extends ChatMessage {
   diceRolls?: DiceRoll[];
   rollRequests?: RollRequest[];
   imageRequests?: ImageRequest[];
+  sceneSpec?: SceneSpec | null;
   combatDetection?: {
     isCombat: boolean;
     confidence: number;
@@ -404,6 +406,7 @@ export const useAIResponse = () => {
           diceRolls,
           rollRequests: processedRolls.playerRollRequests,
           imageRequests,
+          sceneSpec: (result.scene_spec as SceneSpec | null | undefined) ?? null,
           combatDetection: {
             isCombat: result.combatDetection?.isCombat || false,
             confidence: result.combatDetection?.confidence || 1,
