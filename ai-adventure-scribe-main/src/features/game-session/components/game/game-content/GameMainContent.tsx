@@ -9,6 +9,7 @@ import { TimelineRail } from '../TimelineRail';
 import { SceneHeader } from '../overhaul/SceneHeader';
 import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { GamePanelControls } from './GamePanelControls';
+import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
 
@@ -177,6 +178,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 </Button>
               </div>
             )}
+
+            <TacticalMapBoard sessionId={sessionId} />
 
             <MessageHandler
               sessionId={sessionId}
