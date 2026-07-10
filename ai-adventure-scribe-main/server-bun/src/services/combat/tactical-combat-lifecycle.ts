@@ -3,6 +3,7 @@ import { generateMap } from '../../tactical/generator.js';
 import { resetMovement } from '../../tactical/engine.js';
 import { deactivateTacticalMap, loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
 import type { SceneSpec, TacticalMap } from '../../tactical/types.js';
+import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
 
 type Participant = { id: string; name: string; participantType: string; speed: number };
 
@@ -15,7 +16,7 @@ export async function createTacticalCombatMap(sessionId: string, participants: P
   const existing = await loadActiveTacticalMap(sessionId);
   if (existing) return existing;
   const entities = participants.map((participant) => ({
-    id: participant.id, name: participant.name, x: 0, y: 0, size: 'medium' as const,
+    id: participant.id, name: participant.name, x: 0, y: 0, size: tacticalSizeForParticipant(participant),
     type: participant.participantType === 'player' ? 'pc' as const : 'monster' as const,
     speedFeet: participant.speed || 30, movementRemaining: participant.speed || 30,
   }));

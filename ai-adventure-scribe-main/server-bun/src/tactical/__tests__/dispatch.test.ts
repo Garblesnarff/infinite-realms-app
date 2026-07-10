@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { dispatchMapAction } from '../dispatch.js';
 import { buildTacticalPrompt } from '../prompt.js';
+import { tacticalSizeForParticipant } from '../participant-size.js';
 import type { TacticalMap } from '../types.js';
 
 const map = (): TacticalMap => ({ id: 'map', sessionId: 'session', width: 6, height: 6, round: 1, sceneDescription: 'test', cells: Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => ({ terrain: 'floor', blocksMovement: false, blocksSight: false, cover: 0 as const, elevation: 0 }))), entities: [
@@ -21,5 +22,8 @@ describe('CM-2 tactical dispatch', () => {
   test('includes bounded map, digest, and non-negotiable narration instructions', () => {
     const prompt = buildTacticalPrompt(map(), 'pc-participant');
     expect(prompt.split(/\s+/).length).toBeLessThanOrEqual(500); expect(prompt).toContain('Spatial facts may only come from the tactical digest');
+  });
+  test('uses canonical SRD monster sizes while retaining combat participant IDs', () => {
+    expect(tacticalSizeForParticipant({ id: 'combat-participant-id', name: 'Aboleth', participantType: 'monster', speed: 40 })).toBe('large');
   });
 });
