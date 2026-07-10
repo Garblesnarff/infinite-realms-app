@@ -24,7 +24,7 @@ import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 
-import type { Character } from '../../../../db/schema/index';
+import type { Character, CharacterStats } from '../../../../db/schema/index';
 
 /**
  * Validation schema for character operations
@@ -141,7 +141,9 @@ function parseSpellString(value: string | string[] | null): string[] {
  * Map character object from database/service (camelCase) to API (snake_case)
  * for backward compatibility with frontend.
  */
-function mapCharacterToApi(character: Character & { stats?: any }): any {
+function mapCharacterToApi(
+  character: Character & { stats?: CharacterStats },
+): Record<string, unknown> | null {
   if (!character) return null;
 
   return {
@@ -226,7 +228,11 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   /**
    * Centralized character ownership verification
    */
-  .derive(async ({ user, params }) => {
+  // ⚠️ Must be .resolve(), not .derive(): Elysia runs derive() in the
+  // transform phase, before resolve() (which requireAuth uses) populates
+  // `user` in beforeHandle. A derive() here always sees user === undefined,
+  // so the ownership fetch is silently skipped and every /:id request 404s.
+  .resolve(async ({ user, params }) => {
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
@@ -255,7 +261,9 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         // 🛡️ Sentinel: Use CharacterService.listForUser which correctly checks
         // both userId AND ownerId for comprehensive character access.
         const characters = await CharacterService.listForUser(user!.userId, query.campaign_id);
-        return (characters || []).map((c) => mapCharacterToApi(c as any));
+        return (characters || []).map((c) =>
+          mapCharacterToApi(c as Character & { stats?: CharacterStats }),
+        );
       } catch (error) {
         logger.error({ msg: 'CHARACTERS_LIST error', error });
         throw error;
@@ -353,7 +361,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         );
 
         set.status = 201;
-        return mapCharacterToApi(character as any);
+        return mapCharacterToApi(character as Character & { stats?: CharacterStats });
       } catch (error) {
         logger.error({ msg: 'CHARACTER_CREATE error', error });
         throw error;
@@ -370,7 +378,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
    */
   .get('/:id', async ({ character }) => {
     // 🛡️ Sentinel: Already verified and fetched by derive/onBeforeHandle
-    return mapCharacterToApi(character as any);
+    return mapCharacterToApi(character as Character & { stats?: CharacterStats });
   })
 
   /**
@@ -429,7 +437,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           totalLevel: body.total_level,
         });
 
-        return mapCharacterToApi(updated as any);
+        return mapCharacterToApi(updated as Character & { stats?: CharacterStats });
       } catch (error) {
         logger.error({ msg: 'CHARACTER_UPDATE error', error });
         throw error;
@@ -521,7 +529,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         );
 
         return result;
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (error instanceof TRPCError) {
           set.status = 400; // Map TRPC errors to appropriate HTTP status
           return { error: error.message };

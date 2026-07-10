@@ -88,7 +88,11 @@ export const campaignsRoutes = new Elysia({ prefix: '/v1/campaigns' })
   /**
    * Centralized campaign ownership verification
    */
-  .derive(async ({ user, params }) => {
+  // ⚠️ Must be .resolve(), not .derive(): Elysia runs derive() in the
+  // transform phase, before resolve() (which requireAuth uses) populates
+  // `user` in beforeHandle. A derive() here always sees user === undefined,
+  // so the ownership fetch is silently skipped and every /:id request 404s.
+  .resolve(async ({ user, params }) => {
     let campaign = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch campaign once in derive block to avoid double-fetching.

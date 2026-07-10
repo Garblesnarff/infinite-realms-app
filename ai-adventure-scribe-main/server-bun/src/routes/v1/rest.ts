@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // @deprecated Hit-dice/history extras have no frontend callers as of 2026-07-08.
 import { Elysia, t } from 'elysia';
@@ -33,7 +32,7 @@ function mapRestError(
   set: any,
   error: unknown,
   fallbackMessage: string,
-  notFoundMessage: string = 'Not found'
+  notFoundMessage: string = 'Not found',
 ): { error: string } {
   if (error instanceof AppError) {
     if (error.statusCode === 404) {
@@ -58,7 +57,11 @@ export const restRoutes = new Elysia({ prefix: '/v1/rest' })
   /**
    * Centralized character ownership verification
    */
-  .derive(async ({ user, params }) => {
+  // ⚠️ Must be .resolve(), not .derive(): Elysia runs derive() in the
+  // transform phase, before resolve() (which requireAuth uses) populates
+  // `user` in beforeHandle. A derive() here always sees user === undefined,
+  // so the ownership fetch is silently skipped and every /:id request 404s.
+  .resolve(async ({ user, params }) => {
     let character = null;
     if (user && params?.id) {
       // 🛡️ Sentinel: Fetch character once in derive block to avoid double-fetching.
