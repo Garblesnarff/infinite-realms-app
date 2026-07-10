@@ -3,6 +3,7 @@ import { getValidMoves } from '../../tactical/engine.js';
 import { buildTacticalPrompt } from '../../tactical/prompt.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
 import { applyTacticalMapAction } from '../../services/combat/tactical-action-service.js';
+import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { verifySessionOwnership } from './combat/helpers.js';
 
@@ -48,4 +49,10 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
   }, { body: t.Object({
     action: t.Union([t.Literal('move'), t.Literal('place'), t.Literal('remove'), t.Literal('update_cell')]),
     entityId: t.Optional(t.Nullable(t.String())), x: t.Optional(t.Nullable(t.Number())), y: t.Optional(t.Nullable(t.Number())), changes: t.Optional(t.Nullable(t.Record(t.String(), t.Any()))),
-  }) });
+  }) })
+  .post('/:id/tactical-map/end', async ({ params, user, set }) => {
+    const access = await verifySessionOwnership(params.id, user.userId);
+    if (!access.success) { set.status = access.error!.status; return { error: access.error!.message }; }
+    await destroyTacticalCombatMap(params.id);
+    return { ok: true };
+  });

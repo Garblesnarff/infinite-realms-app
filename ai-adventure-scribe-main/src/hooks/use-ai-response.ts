@@ -282,6 +282,35 @@ export const useAIResponse = () => {
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
         const imageRequests: ImageRequest[] | undefined = undefined;
 
+        // A structured start is server-authoritative: the same transaction creates
+        // combat participants (whose IDs become tactical entity IDs) and the map.
+        if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
+          const token = window.localStorage.getItem('workos_access_token');
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+          const enemies = result.combatDetection?.enemies || [];
+          const participants = [
+            {
+              encounterId: '', characterId: (characterRecord.id as string) || null,
+              name: String(characterRecord.name || 'Player'), initiativeModifier: 0,
+            },
+            ...enemies.map((enemy) => ({ encounterId: '', name: enemy.name, initiativeModifier: 0 })),
+          ];
+          const startResponse = await fetch(`${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ participants, sceneSpec: result.scene_spec }),
+          });
+          if (!startResponse.ok) logger.warn('Server refused structured combat start', await startResponse.json());
+        }
+        if (sessionId && result.combat_transition === 'end') {
+          const token = window.localStorage.getItem('workos_access_token');
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+          const endResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
+            method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!endResponse.ok) logger.warn('Server refused tactical combat end', await endResponse.json());
+        }
+
         if (sessionId && result.map_actions?.length) {
           const token = window.localStorage.getItem('workos_access_token');
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
