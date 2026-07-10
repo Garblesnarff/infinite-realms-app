@@ -26,7 +26,6 @@ interface MessageRendererProps {
   isDM: boolean;
   expandedMessages: Set<string>;
   setExpandedMessages: React.Dispatch<React.SetStateAction<Set<string>>>;
-  dynamicOptions: { key: string; lines: string[] } | null;
   imageByMessage: Record<string, { url: string; prompt: string }>;
   generatingFor: Set<string>;
   genErrorByMessage: Record<string, string>;
@@ -50,7 +49,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     isDM,
     expandedMessages,
     setExpandedMessages,
-    dynamicOptions,
     imageByMessage,
     generatingFor,
     genErrorByMessage,
@@ -58,20 +56,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     onOptionSelect,
     characterName: _characterName,
   }) => {
-    // Compose display text with dynamic options overlay (DM last-in-group only)
-    const shouldOverlay = isDM && isLastInGroup && dynamicOptions?.key === messageId;
-    const messageWithOverlay =
-      shouldOverlay && dynamicOptions?.lines?.length
-        ? `${message.text}\n${dynamicOptions.lines.join('\n')}`
-        : message.text;
-
-    // Parse for this message (using overlay text when present)
-    const parsedMessage = isDM ? parseMessageOptions(messageWithOverlay) : null;
+    // Parse for this message
+    const parsedMessage = isDM ? parseMessageOptions(message.text) : null;
 
     // Truncation logic
-    const baseText = parsedMessage
-      ? parsedMessage.content || messageWithOverlay
-      : messageWithOverlay;
+    const baseText = parsedMessage ? parsedMessage.content || message.text : message.text;
     const isLongMessage = baseText.length > 200;
     const isExpanded = expandedMessages.has(messageId);
     const displayText =
@@ -151,9 +140,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             messageId={messageId}
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}
-            displayContent={
-              parsedMessage ? parsedMessage.content || messageWithOverlay : messageWithOverlay
-            }
+            displayContent={parsedMessage ? parsedMessage.content || message.text : message.text}
             isExpanded={isExpanded}
             onToggleExpanded={toggleExpanded}
             imageUrl={firstMessageImgUrl || ephemeralImgUrl}
@@ -179,7 +166,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
           <DynamicOptionsSection
             options={parsedMessage.options}
             onOptionSelect={onOptionSelect}
-            hasDynamicOverlay={dynamicOptions?.key === messageId}
+            hasDynamicOverlay={false}
           />
         )}
       </div>
@@ -211,17 +198,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     const errorMatch =
       prev.genErrorByMessage[prev.messageId] === next.genErrorByMessage[next.messageId];
 
-    // dynamicOptions only affects the last DM message in a group if it matches this messageId
-    const prevWasOverlay =
-      prev.isDM && prev.isLastInGroup && prev.dynamicOptions?.key === prev.messageId;
-    const nextIsOverlay =
-      next.isDM && next.isLastInGroup && next.dynamicOptions?.key === next.messageId;
-
-    let dynamicOptionsMatch = true;
-    if (prevWasOverlay || nextIsOverlay) {
-      dynamicOptionsMatch = prev.dynamicOptions === next.dynamicOptions;
-    }
-
-    return expandedMatch && generatingMatch && imageMatch && errorMatch && dynamicOptionsMatch;
+    return expandedMatch && generatingMatch && imageMatch && errorMatch;
   },
 );

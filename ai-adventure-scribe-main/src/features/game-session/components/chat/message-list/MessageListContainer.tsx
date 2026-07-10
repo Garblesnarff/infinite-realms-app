@@ -14,7 +14,6 @@ interface MessageListContainerProps {
   messagesRef: React.RefObject<HTMLDivElement>;
   expandedMessages: Set<string>;
   setExpandedMessages: React.Dispatch<React.SetStateAction<Set<string>>>;
-  dynamicOptions: { key: string; lines: string[] } | null;
   imageByMessage: Record<string, { url: string; prompt: string }>;
   generatingFor: Set<string>;
   genErrorByMessage: Record<string, string>;
@@ -41,7 +40,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     messagesRef: _messagesRef,
     expandedMessages,
     setExpandedMessages,
-    dynamicOptions,
     imageByMessage,
     generatingFor,
     genErrorByMessage,
@@ -160,7 +158,6 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       isDM={message.sender === 'dm'}
                       expandedMessages={expandedMessages}
                       setExpandedMessages={setExpandedMessages}
-                      dynamicOptions={dynamicOptions}
                       imageByMessage={imageByMessage}
                       generatingFor={generatingFor}
                       genErrorByMessage={genErrorByMessage}

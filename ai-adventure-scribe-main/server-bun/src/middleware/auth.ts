@@ -40,7 +40,7 @@ const JWKS = createRemoteJWKSet(
   new URL(`https://api.workos.com/sso/jwks/${env.WORKOS_CLIENT_ID}`),
   {
     cooldownDuration: 1000 * 60 * 5, // 5 minutes cooldown for JWKS refresh
-  }
+  },
 );
 
 /**
@@ -90,7 +90,10 @@ async function verifyWorkOSToken(accessToken: string) {
  * 2. Query database users table
  * 3. Default to 'free'
  */
-async function resolveUserPlan(userId: string, headers: Record<string, string | undefined>): Promise<string> {
+async function resolveUserPlan(
+  userId: string,
+  headers: Record<string, string | undefined>,
+): Promise<string> {
   // 1) Explicit header override (useful for tests): X-Plan: free|pro|enterprise
   const hdr = headers['x-plan']?.toLowerCase();
   if (hdr && process.env.NODE_ENV !== 'production') return hdr;
@@ -114,8 +117,9 @@ async function resolveUserPlan(userId: string, headers: Record<string, string | 
  * Returns 401 if token is missing or invalid
  * Attaches user to context on success
  */
-export const requireAuth = new Elysia({ name: 'require-auth' })
-  .resolve({ as: 'global' }, async ({ request }) => {
+export const requireAuth = new Elysia({ name: 'require-auth' }).resolve(
+  { as: 'scoped' },
+  async ({ request }) => {
     const { user, error } = await authenticateRequest(request);
 
     if (!user) {
@@ -123,45 +127,45 @@ export const requireAuth = new Elysia({ name: 'require-auth' })
     }
 
     return { user };
-  });
+  },
+);
 
 /**
  * Optional authentication plugin
  * Attaches user to context if authenticated, but allows request to continue if not
  * Useful for routes that work for both authenticated and unauthenticated users
  */
-export const optionalAuth = new Elysia({ name: 'optional-auth' })
-  .derive(async ({ request }) => {
-    const authHeader = request.headers.get('authorization');
-    const token = getBearerToken(authHeader);
+export const optionalAuth = new Elysia({ name: 'optional-auth' }).derive(async ({ request }) => {
+  const authHeader = request.headers.get('authorization');
+  const token = getBearerToken(authHeader);
 
-    if (!token) {
+  if (!token) {
+    return { user: null };
+  }
+
+  try {
+    const workosUser = await verifyWorkOSToken(token);
+    if (!workosUser) {
       return { user: null };
     }
 
-    try {
-      const workosUser = await verifyWorkOSToken(token);
-      if (!workosUser) {
-        return { user: null };
-      }
+    // Convert headers to record for plan resolution
+    const headersRecord: Record<string, string | undefined> = {};
+    request.headers.forEach((value, key) => {
+      headersRecord[key] = value;
+    });
 
-      // Convert headers to record for plan resolution
-      const headersRecord: Record<string, string | undefined> = {};
-      request.headers.forEach((value, key) => {
-        headersRecord[key] = value;
-      });
+    const plan = await resolveUserPlan(workosUser.userId, headersRecord);
 
-      const plan = await resolveUserPlan(workosUser.userId, headersRecord);
-
-      return {
-        user: {
-          userId: workosUser.userId,
-          email: workosUser.email,
-          plan,
-        } as AuthTokenPayload,
-      };
-    } catch (error) {
-      logger.debug({ error: error }, 'Optional auth failed, continuing without user:');
-      return { user: null };
-    }
-  });
+    return {
+      user: {
+        userId: workosUser.userId,
+        email: workosUser.email,
+        plan,
+      } as AuthTokenPayload,
+    };
+  } catch (error) {
+    logger.debug({ error: error }, 'Optional auth failed, continuing without user:');
+    return { user: null };
+  }
+});
