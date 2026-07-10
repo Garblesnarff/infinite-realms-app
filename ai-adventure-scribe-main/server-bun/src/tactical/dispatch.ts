@@ -24,3 +24,15 @@ export function dispatchMapAction(map: TacticalMap, action: MapAction): Dispatch
 export function dispatchMapActions(map: TacticalMap, actions: MapAction[]): DispatchResult[] {
   return actions.map((action) => dispatchMapAction(map, action));
 }
+
+/** Generic bounded retry coordinator used by the DM transport. It can never tool-loop. */
+export async function dispatchWithOneCorrectiveRetry(
+  action: MapAction,
+  dispatch: (action: MapAction) => Promise<DispatchResult>,
+  correctiveReprompt?: (refusal: Record<string, unknown>) => Promise<MapAction | null>,
+): Promise<DispatchResult> {
+  const initial = await dispatch(action);
+  if (initial.applied || !correctiveReprompt) return initial;
+  const replacement = await correctiveReprompt(initial.refusal);
+  return replacement ? dispatch(replacement) : initial;
+}

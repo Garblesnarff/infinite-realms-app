@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { dispatchMapAction } from '../dispatch.js';
+import { dispatchWithOneCorrectiveRetry } from '../dispatch.js';
 import { buildTacticalPrompt } from '../prompt.js';
 import { tacticalSizeForParticipant } from '../participant-size.js';
 import type { TacticalMap } from '../types.js';
@@ -25,5 +26,12 @@ describe('CM-2 tactical dispatch', () => {
   });
   test('uses canonical SRD monster sizes while retaining combat participant IDs', () => {
     expect(tacticalSizeForParticipant({ id: 'combat-participant-id', name: 'Aboleth', participantType: 'monster', speed: 40 })).toBe('large');
+  });
+  test('retries one refused DM action once, then drops a second refusal without looping', async () => {
+    const refusal = { applied: false as const, action: { action: 'move' as const }, refusal: { reason: 'blocked' } };
+    const apply = async () => refusal;
+    let prompts = 0;
+    const result = await dispatchWithOneCorrectiveRetry({ action: 'move' }, apply, async () => { prompts++; return { action: 'move' }; });
+    expect(result.applied).toBe(false); expect(prompts).toBe(1);
   });
 });

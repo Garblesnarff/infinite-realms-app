@@ -1,5 +1,5 @@
 import { broadcastToRoom } from '../collaboration/room-manager.js';
-import { dispatchMapAction } from '../../tactical/dispatch.js';
+import { dispatchMapAction, dispatchWithOneCorrectiveRetry } from '../../tactical/dispatch.js';
 import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
 import type { MapAction } from '../../tactical/dispatch.js';
 
@@ -28,12 +28,8 @@ export async function applyDmTacticalActions(sessionId: string, actions: MapActi
   const results = [];
   let retried = false;
   for (const action of actions) {
-    let result = await applyTacticalMapAction(sessionId, action);
-    if (!result.applied && !retried && correctiveReprompt) {
-      retried = true;
-      const correction = await correctiveReprompt(result.refusal);
-      if (correction) result = await applyTacticalMapAction(sessionId, correction);
-    }
+    const retry = !retried && correctiveReprompt ? async (refusal: Record<string, unknown>) => { retried = true; return correctiveReprompt(refusal); } : undefined;
+    const result = await dispatchWithOneCorrectiveRetry(action, (candidate) => applyTacticalMapAction(sessionId, candidate), retry);
     if (!result.applied) console.warn('[tactical] dropped invalid DM map action', { sessionId, action, refusal: result.refusal });
     results.push(result);
   }
