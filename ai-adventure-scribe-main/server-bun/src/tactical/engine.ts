@@ -1,3 +1,4 @@
+import ROT from 'rot-js';
 import type { AoEParams, AoEShape, AoETarget, Cell, MapEntity, MoveResult, PathResult, Point, TacticalMap } from './types';
 
 export const CELL_FEET = 5;
@@ -81,6 +82,11 @@ const neighbours = (p: Point) => [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dx => (
 export function findPath(map: TacticalMap, entityId: string, tx: number, ty: number): PathResult | null {
   const entity = getEntity(map, entityId); if (!entity || !canOccupy(map, entity, tx, ty) || !canOccupy(map, entity, entity.x, entity.y)) return null;
   const start = { x: entity.x, y: entity.y }, goal = { x: tx, y: ty }; const open = [start]; const came = new Map<string, Point>(); const cost = new Map<string, number>([[key(start), 0]]);
+  // ROT establishes topology-8 reachability. The weighted pass below is needed because
+  // ROT's A* has no terrain-cost hook, while difficult cells cost two five-foot steps.
+  const reachable: Point[] = [];
+  new ROT.Path.AStar(goal.x, goal.y, (x, y) => canOccupy(map, entity, x, y), { topology: 8 }).compute(start.x, start.y, (x, y) => reachable.push({ x, y }));
+  if (!reachable.some(p => p.x === goal.x && p.y === goal.y)) return null;
   while (open.length) { open.sort((a, b) => (cost.get(key(a))! + chebyshev(a, goal) * CELL_FEET) - (cost.get(key(b))! + chebyshev(b, goal) * CELL_FEET)); const current = open.shift()!;
     if (key(current) === key(goal)) { const path: Point[] = []; let cursor: Point | undefined = current; while (cursor) { path.unshift(cursor); cursor = came.get(key(cursor)); } return { path, costFeet: cost.get(key(current))! }; }
     for (const next of neighbours(current)) { if (!canOccupy(map, entity, next.x, next.y)) continue; const nextCost = cost.get(key(current))! + stepCost(map, entity, next.x, next.y); if (nextCost < (cost.get(key(next)) ?? Infinity)) { cost.set(key(next), nextCost); came.set(key(next), current); if (!open.some(p => key(p) === key(next))) open.push(next); } }
