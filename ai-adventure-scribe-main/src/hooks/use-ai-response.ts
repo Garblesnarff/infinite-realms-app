@@ -239,6 +239,24 @@ export const useAIResponse = () => {
           },
         };
 
+        // The tactical server computes geometry. The DM receives only its bounded
+        // ASCII/digest context and never derives distances or line of sight itself.
+        if (combatState.isInCombat && sessionId && combatState.activeEncounter?.currentTurnParticipantId) {
+          try {
+            const token = window.localStorage.getItem('workos_access_token');
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+            const tacticalResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(combatState.activeEncounter.currentTurnParticipantId)}`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (tacticalResponse.ok) {
+              const payload = await tacticalResponse.json() as { tacticalContext?: string };
+              if (payload.tacticalContext) aiContext.gameState.tacticalContext = payload.tacticalContext;
+            }
+          } catch (error) {
+            logger.warn('Unable to load tactical context; continuing without map context', error);
+          }
+        }
+
         logger.debug('AI Context with combat awareness:', {
           phase: gameState.currentPhase,
           inCombat: combatState.isInCombat,
@@ -261,6 +279,35 @@ export const useAIResponse = () => {
         let narrationSegments = result.narrationSegments;
         const diceRolls = (result.dice_rolls || []) as DiceRoll[];
         const imageRequests: ImageRequest[] | undefined = undefined;
+
+        if (sessionId && result.map_actions?.length) {
+          const token = window.localStorage.getItem('workos_access_token');
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
+          for (const action of result.map_actions) {
+            const actionResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(action),
+            });
+            if (!actionResponse.ok) {
+              const refusal = await actionResponse.json();
+              // Exactly one corrective structured pass: the engine refusal is authoritative.
+              const correction = await AIService.chatWithDM({
+                message: JSON.stringify({ tacticalRefusal: refusal, instruction: 'Replace only the refused map_action. Return no prose and no combat actions.' }),
+                context: { ...aiContext, gameState: { ...aiContext.gameState, tacticalCorrection: true } },
+                conversationHistory,
+                userPlan: userPlan || undefined,
+                turnCount,
+              });
+              const replacement = correction.map_actions?.[0];
+              if (replacement) {
+                const retry = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(replacement),
+                });
+                if (retry.ok) continue;
+              }
+              logger.warn('Dropped invalid DM tactical action after one corrective retry', refusal);
+            }
+          }
+        }
 
         if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
           const resolvedActions: Array<Record<string, unknown>> = [];

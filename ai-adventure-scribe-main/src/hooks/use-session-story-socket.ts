@@ -21,6 +21,9 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
       try {
         const message = JSON.parse(String(event.data));
         if (message.type === 'chat') callbackRef.current();
+        if (['map_created', 'entity_moved', 'cell_updated', 'map_destroyed'].includes(message.type)) {
+          window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
+        }
       } catch {
         /* ignore malformed peer frames */
       }
