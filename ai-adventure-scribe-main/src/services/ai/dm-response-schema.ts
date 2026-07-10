@@ -49,6 +49,8 @@ export const dmResponseSchema: Record<string, unknown> = {
           changes: { type: ['object', 'null'], additionalProperties: false, properties: {
             terrain: { type: 'string', enum: ['floor', 'wall', 'door_closed', 'door_open', 'difficult', 'water', 'pit', 'obscured'] },
             blocksMovement: { type: 'boolean' }, blocksSight: { type: 'boolean' }, cover: { type: 'number', enum: [0, 1, 2, 3] }, elevation: { type: 'number' }, decoration: { type: 'string' },
+            id: { type: 'string' }, name: { type: 'string' }, size: { type: 'string', enum: ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'] },
+            type: { type: 'string', enum: ['pc', 'npc', 'monster', 'object'] }, speedFeet: { type: 'number' }, movementRemaining: { type: 'number' }, isLiving: { type: 'boolean' },
           } },
         },
         required: ['action', 'entityId', 'x', 'y', 'changes'],

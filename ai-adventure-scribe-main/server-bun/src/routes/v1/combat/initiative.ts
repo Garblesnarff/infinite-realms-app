@@ -6,6 +6,7 @@ import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
+import { createTacticalCombatMap, destroyTacticalCombatMap, resetTacticalMovementForTurn } from '../../../services/combat/tactical-combat-lifecycle.js';
 
 import type { CreateParticipantInput } from '../../../types/combat.js';
 
@@ -52,9 +53,10 @@ export const initiativeRoutes = new Elysia()
         return { error: verification.error!.message };
       }
 
-      const { participants, surpriseRound } = body as {
+      const { participants, surpriseRound, sceneSpec } = body as {
         participants: CreateParticipantInput[];
         surpriseRound?: boolean;
+        sceneSpec?: import('../../../tactical/types.js').SceneSpec;
       };
 
       if (!participants || !Array.isArray(participants) || participants.length === 0) {
@@ -68,6 +70,8 @@ export const initiativeRoutes = new Elysia()
         surpriseRound || false,
         user.userId
       );
+
+      if (sceneSpec) await createTacticalCombatMap(params.sessionId, combatState.participants, sceneSpec);
 
       set.status = 201;
       return combatState;
@@ -138,6 +142,7 @@ export const initiativeRoutes = new Elysia()
       }
 
       const result = await CombatInitiativeService.advanceTurn(params.encounterId, user.userId);
+      if (verification.session) await resetTacticalMovementForTurn(verification.session.id, result.currentParticipant.id);
       return result;
     } catch (e) {
       logger.error({ msg: 'Advance turn error', error: e });
@@ -207,6 +212,7 @@ export const initiativeRoutes = new Elysia()
       }
 
       const updatedEncounter = await CombatEncounterService.endCombat(params.encounterId, user.userId);
+      if (verification.session) await destroyTacticalCombatMap(verification.session.id);
       return updatedEncounter;
     } catch (e) {
       logger.error({ msg: 'End combat error', error: e });
