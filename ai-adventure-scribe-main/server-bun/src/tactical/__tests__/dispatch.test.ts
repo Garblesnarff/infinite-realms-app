@@ -3,6 +3,7 @@ import { dispatchMapAction } from '../dispatch.js';
 import { dispatchWithOneCorrectiveRetry } from '../dispatch.js';
 import { buildTacticalPrompt } from '../prompt.js';
 import { tacticalSizeForParticipant } from '../participant-size.js';
+import { getAoETargets } from '../engine.js';
 import type { TacticalMap } from '../types.js';
 
 const map = (): TacticalMap => ({ id: 'map', sessionId: 'session', width: 6, height: 6, round: 1, sceneDescription: 'test', cells: Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => ({ terrain: 'floor', blocksMovement: false, blocksSight: false, cover: 0 as const, elevation: 0 }))), entities: [
@@ -33,5 +34,15 @@ describe('CM-2 tactical dispatch', () => {
     let prompts = 0;
     const result = await dispatchWithOneCorrectiveRetry({ action: 'move' }, apply, async () => { prompts++; return { action: 'move' }; });
     expect(result.applied).toBe(false); expect(prompts).toBe(1);
+  });
+  test('scripts three combat turns: movement, friendly-fire AoE, and a door update', () => {
+    const state = map();
+    state.entities[1].x = 3; state.entities[1].y = 1;
+    state.entities.push({ id: 'pc-ally', x: 2, y: 1, size: 'medium', type: 'pc', speedFeet: 30, movementRemaining: 30 });
+    expect(dispatchMapAction(state, { action: 'move', entityId: 'pc-participant', x: 1, y: 0 }).applied).toBe(true);
+    const targets = getAoETargets(state, 'sphere', { x: 2, y: 1 }, { radiusFeet: 5, sourceEntityId: 'pc-participant' });
+    expect(targets).toEqual(expect.arrayContaining([{ id: 'pc-ally', friendly: true }, { id: 'monster-participant', friendly: false }]));
+    expect(dispatchMapAction(state, { action: 'update_cell', x: 4, y: 1, changes: { terrain: 'door_open', blocksMovement: false, blocksSight: false, cover: 0 } }).applied).toBe(true);
+    expect(state.cells[1][4].terrain).toBe('door_open');
   });
 });
