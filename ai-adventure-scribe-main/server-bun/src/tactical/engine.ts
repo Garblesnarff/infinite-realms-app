@@ -20,8 +20,13 @@ export function getDistance(a: MapEntity, b: MapEntity): number {
   return nearest * CELL_FEET;
 }
 
-/** Inclusive Bresenham segment. Callers intentionally discard its endpoints. */
+/**
+ * Inclusive, direction-independent Bresenham segment.  Canonicalising the endpoint
+ * order fixes Bresenham's staircase tie-breaking so A→B and B→A see identical cells.
+ * Callers intentionally discard the endpoints.
+ */
 export function bresenham(from: Point, to: Point): Point[] {
+  if (from.x > to.x || (from.x === to.x && from.y > to.y)) return bresenham(to, from);
   const points: Point[] = []; let { x, y } = from;
   const dx = Math.abs(to.x - from.x), sx = from.x < to.x ? 1 : -1;
   const dy = -Math.abs(to.y - from.y), sy = from.y < to.y ? 1 : -1; let error = dx + dy;
@@ -35,6 +40,7 @@ export function checkLineOfSight(map: TacticalMap, fromId: string, toId: string)
   const from = getEntity(map, fromId), to = getEntity(map, toId); if (!from || !to) return false;
   return entityFootprint(from).some(a => entityFootprint(to).some(b => clearLine(map, a, b)));
 }
+/** Creatures never block sight; any creature, even gargantuan, grants cover 1 only. */
 function entityAt(map: TacticalMap, p: Point, except: Set<string>): boolean {
   return map.entities.some(e => !except.has(e.id) && entityFootprint(e).some(c => c.x === p.x && c.y === p.y));
 }
@@ -52,7 +58,8 @@ export function getCover(map: TacticalMap, fromId: string, toId: string): 0 | 1 
 function center(p: Point) { return { x: p.x + .5, y: p.y + .5 }; }
 function inAoE(cell: Point, shape: AoEShape, origin: Point, params: AoEParams): boolean {
   const length = (params.lengthFeet ?? params.radiusFeet ?? params.sizeFeet ?? 0) / CELL_FEET;
-  if (shape === 'sphere') return Math.hypot(cell.x - origin.x, cell.y - origin.y) <= (params.radiusFeet ?? 0) / CELL_FEET + .0001;
+  // Bursts follow the engine's "every diagonal = 5ft" convention: Chebyshev, not Euclidean.
+  if (shape === 'sphere') return chebyshev(cell, origin) <= (params.radiusFeet ?? 0) / CELL_FEET;
   if (shape === 'cube') return Math.max(Math.abs(cell.x - origin.x), Math.abs(cell.y - origin.y)) < (params.sizeFeet ?? 0) / CELL_FEET;
   const d = params.direction; if (!d || (!d.x && !d.y)) return false;
   const c = center(cell), o = center(origin), vx = c.x - o.x, vy = c.y - o.y, mag = Math.hypot(vx, vy), dm = Math.hypot(d.x, d.y);
@@ -76,6 +83,7 @@ function canOccupy(map: TacticalMap, entity: MapEntity, x: number, y: number, ow
   return true;
 }
 function stepCost(map: TacticalMap, entity: MapEntity, x: number, y: number): number { const n = sizeCells[entity.size]; let max = 1; for (let cy = y; cy < y + n; cy++) for (let cx = x; cx < x + n; cx++) max = Math.max(max, terrainCost(map.cells[cy][cx])); return max * CELL_FEET; }
+/** Diagonal movement (and LoS) through diagonal wall gaps is permitted; there is no corner-cutting rule. */
 const neighbours = (p: Point) => [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dx => ({ x: p.x + dx, y: p.y + dy }))).filter(n => n.x !== p.x || n.y !== p.y);
 
 /** Weighted A*; diagonal steps are deliberately the same five-foot cost as orthogonal steps. */
