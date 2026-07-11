@@ -2,7 +2,7 @@
 import type { CharacterClass } from '@/types/character';
 
 import { classes } from '@/data/classes';
-import { getEquipmentByName } from '@/data/equipment/api';
+import { normalizeEquipmentLookupKey, resolveEquipmentByName } from '@/data/equipment/resolver';
 import {
   calculateSpellsKnown,
   getPactMagicProgression,
@@ -24,7 +24,7 @@ export interface StarterCharacterTemplateLike {
   adapted_backstory?: string | null;
   skills?: string[];
   languages?: string[];
-  equipment?: string[];
+  equipment?: StarterTemplateEquipmentInput[];
   portraitUrl?: string | null;
   portrait_url?: string | null;
   abilityScores?: Record<string, number>;
@@ -46,6 +46,13 @@ const DEFAULT_ABILITY_SCORES = {
   wisdom: 10,
   charisma: 10,
 };
+
+export interface StarterTemplateEquipment {
+  name: string;
+  description?: string | null;
+}
+
+export type StarterTemplateEquipmentInput = string | StarterTemplateEquipment;
 
 function getTemplateValue<T>(
   template: StarterCharacterTemplateLike,
@@ -160,35 +167,98 @@ export interface StarterEquipmentRecord {
   item_type: string;
   quantity: number;
   equipped: boolean;
+  weight?: number;
+  description?: string;
 }
 
-/** Transform template item names into the validated character_equipment shape. */
-export function transformStarterEquipment(equipmentNames: string[] = []): StarterEquipmentRecord[] {
+export interface StarterInventoryRecord {
+  name: string;
+  item_type: 'custom';
+  quantity: number;
+  weight: number;
+  description: string;
+  is_equipped: boolean;
+}
+
+function templateEquipmentItem(item: StarterTemplateEquipmentInput): StarterTemplateEquipment {
+  return typeof item === 'string' ? { name: item } : item;
+}
+
+function customItemDescription(item: StarterTemplateEquipment): string {
+  return (
+    item.description?.trim() || `A campaign-specific item from the starter template: ${item.name}.`
+  );
+}
+
+function templateEquipmentKey(item: StarterTemplateEquipment): string {
+  const equipment = resolveEquipmentByName(item.name);
+  return equipment ? `srd:${equipment.id}` : `custom:${normalizeEquipmentLookupKey(item.name)}`;
+}
+
+function resolvedTemplateEquipment(
+  equipmentNames: StarterTemplateEquipmentInput[] = [],
+): Array<{ item: StarterTemplateEquipment; equipment: ReturnType<typeof resolveEquipmentByName> }> {
+  return equipmentNames.filter(Boolean).map((item) => {
+    const templateItem = templateEquipmentItem(item);
+    return { item: templateItem, equipment: resolveEquipmentByName(templateItem.name) };
+  });
+}
+
+/** Transform template items into the validated character_equipment shape. */
+export function transformStarterEquipment(
+  equipmentNames: StarterTemplateEquipmentInput[] = [],
+): StarterEquipmentRecord[] {
   const records = new Map<string, StarterEquipmentRecord>();
   let weaponCount = 0;
 
-  for (const itemName of equipmentNames.filter(Boolean)) {
-    const equipment = getEquipmentByName(itemName);
-    const key = equipment.id;
+  for (const { item, equipment } of resolvedTemplateEquipment(equipmentNames)) {
+    const key = templateEquipmentKey(item);
     const existing = records.get(key);
     if (existing) {
       existing.quantity += 1;
       continue;
     }
 
-    const shouldEquip =
-      equipment.category === 'armor' ||
-      equipment.category === 'shield' ||
-      (equipment.category === 'weapon' && weaponCount++ < 2);
+    const shouldEquip = equipment
+      ? equipment.category === 'armor' ||
+        equipment.category === 'shield' ||
+        (equipment.category === 'weapon' && weaponCount++ < 2)
+      : false;
 
     records.set(key, {
-      item_name: equipment.name,
-      item_type: equipment.category,
+      item_name: equipment?.name || item.name,
+      item_type: equipment?.category || 'custom',
       quantity: 1,
       equipped: shouldEquip,
+      ...(equipment ? {} : { description: customItemDescription(item), weight: 0 }),
     });
   }
 
+  return [...records.values()];
+}
+
+/** Build first-class inventory rows for campaign flavor items. */
+export function transformStarterInventory(
+  equipmentNames: StarterTemplateEquipmentInput[] = [],
+): StarterInventoryRecord[] {
+  const records = new Map<string, StarterInventoryRecord>();
+  for (const { item, equipment } of resolvedTemplateEquipment(equipmentNames)) {
+    if (equipment) continue;
+    const key = normalizeEquipmentLookupKey(item.name);
+    const existing = records.get(key);
+    if (existing) {
+      existing.quantity += 1;
+      continue;
+    }
+    records.set(key, {
+      name: item.name,
+      item_type: 'custom',
+      quantity: 1,
+      weight: 0,
+      description: customItemDescription(item),
+      is_equipped: false,
+    });
+  }
   return [...records.values()];
 }
 
@@ -204,6 +274,7 @@ export function buildStarterCharacterSeed(
   const skills = template.skills || [];
   const languages = template.languages || [];
   const equipment = transformStarterEquipment(template.equipment || []);
+  const inventoryItems = transformStarterInventory(template.equipment || []);
   const hitPoints = 10 + getModifier(abilityScores.constitution);
 
   return {
@@ -232,6 +303,7 @@ export function buildStarterCharacterSeed(
       armor_class: 10 + getModifier(abilityScores.dexterity),
     },
     equipment,
+    ...(inventoryItems.length > 0 ? { inventory_items: inventoryItems } : {}),
   };
 }
 

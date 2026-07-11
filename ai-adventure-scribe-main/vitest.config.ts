@@ -162,6 +162,7 @@ export default defineConfig({
       'src/services/ai/__tests__/class-equipment.test.ts',
       'src/services/ai/prompts/__tests__/game-context-prompts.test.ts',
       'src/services/character/__tests__/starter-character-seeding.test.ts',
+      'src/data/equipment/__tests__/template-resolver.test.ts',
       'src/services/auth/__tests__/TokenService.test.ts',
       'src/services/__tests__/analytics.test.ts',
       'src/features/game-session/components/chat/message-list/__tests__/sanitize-emphasis.test.ts',

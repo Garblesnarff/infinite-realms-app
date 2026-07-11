@@ -95,6 +95,7 @@ const CHARACTER_FIELDS = [
   'total_level',
   'stats',
   'equipment',
+  'inventory_items',
 ] as const;
 
 function prepareCharacterPayload(payload: Record<string, unknown>): CharacterPayload {

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStarterCharacterSeed,
   buildStarterSpellSeed,
+  transformStarterInventory,
   transformStarterEquipment,
 } from '../starter-character-seeding';
 
@@ -29,18 +30,55 @@ const clericTemplate = {
 };
 
 describe('starter-character-seeding', () => {
-  it('transforms known and unknown equipment into validated records', () => {
-    const equipment = transformStarterEquipment(['mace', 'mace', 'an item not in the SRD']);
+  it('transforms known equipment and preserves campaign items as custom records', () => {
+    const equipment = transformStarterEquipment([
+      'mace',
+      'mace',
+      { name: 'an item not in the SRD', description: 'A keepsake from the campaign.' },
+    ]);
 
     expect(equipment).toEqual([
       { item_name: 'Mace', item_type: 'weapon', quantity: 2, equipped: true },
       {
         item_name: 'an item not in the SRD',
-        item_type: 'gear',
+        item_type: 'custom',
         quantity: 1,
         equipped: false,
+        weight: 0,
+        description: 'A keepsake from the campaign.',
       },
     ]);
+    expect(
+      transformStarterInventory([
+        { name: 'an item not in the SRD', description: 'A keepsake from the campaign.' },
+      ]),
+    ).toEqual([
+      {
+        name: 'an item not in the SRD',
+        item_type: 'custom',
+        quantity: 1,
+        weight: 0,
+        description: 'A keepsake from the campaign.',
+        is_equipped: false,
+      },
+    ]);
+  });
+
+  it('resolves SRD names across case, pluralization, punctuation, and aliases', () => {
+    const equipment = transformStarterEquipment([
+      'HANDAXES',
+      'priest’s pack',
+      'lute',
+      'holy symbol',
+    ]);
+
+    expect(equipment.map((item) => item.item_name)).toEqual([
+      'Handaxe',
+      "Priest's Pack",
+      'Lute',
+      'Amulet',
+    ]);
+    expect(equipment.every((item) => item.item_type !== 'custom')).toBe(true);
   });
 
   it('uses class data for Cleric cantrips and WIS-based preparation', () => {

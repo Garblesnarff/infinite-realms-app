@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/* eslint-disable max-lines */
 /**
  * Repair starter-flow characters created before starter seeding was complete.
  *
@@ -12,6 +13,10 @@ import { join } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 
+import {
+  normalizeEquipmentLookupKey,
+  resolveEquipmentByName,
+} from '../src/data/equipment/resolver.ts';
 import { buildStarterCharacterSeed } from '../src/services/character/starter-character-seeding.ts';
 
 config();
@@ -45,11 +50,45 @@ type TemplateRow = Record<string, unknown> & {
   starter_campaign_id: string;
   name: string;
   class: string;
-  equipment?: string[];
+  equipment?: Array<string | { name: string; description?: string | null }>;
+};
+type ExistingEquipmentRow = {
+  character_id: string;
+  item_name: string;
+  item_type: string | null;
+  quantity: number | null;
+};
+type ExistingInventoryRow = {
+  character_id: string;
+  name: string;
+  item_type: string;
+  quantity: number;
 };
 
 function isEmpty(value: string | null | undefined): boolean {
   return !value || value.trim().length === 0;
+}
+
+function equipmentIdentity(name: string): string {
+  const resolved = resolveEquipmentByName(name);
+  return resolved ? `srd:${resolved.id}` : `custom:${normalizeEquipmentLookupKey(name)}`;
+}
+
+function hasEquipmentRow(
+  rows: ExistingEquipmentRow[],
+  name: string,
+): ExistingEquipmentRow | undefined {
+  const identity = equipmentIdentity(name);
+  return rows.find((row) => equipmentIdentity(row.item_name) === identity);
+}
+
+function hasInventoryRow(
+  rows: ExistingInventoryRow[],
+  name: string,
+): ExistingInventoryRow | undefined {
+  return rows.find(
+    (row) => normalizeEquipmentLookupKey(row.name) === normalizeEquipmentLookupKey(name),
+  );
 }
 
 function templateForCharacter(
@@ -129,8 +168,14 @@ async function main(): Promise<void> {
       )
       .in('id', characterIds),
     supabase.from('starter_character_templates').select('*').in('starter_campaign_id', campaignIds),
-    supabase.from('character_equipment').select('character_id').in('character_id', characterIds),
-    supabase.from('inventory_items').select('character_id').in('character_id', characterIds),
+    supabase
+      .from('character_equipment')
+      .select('character_id, item_name, item_type, quantity')
+      .in('character_id', characterIds),
+    supabase
+      .from('inventory_items')
+      .select('character_id, name, item_type, quantity')
+      .in('character_id', characterIds),
     supabase
       .from('character_stats')
       .select('character_id, strength, dexterity, constitution, intelligence, wisdom, charisma')
@@ -142,10 +187,8 @@ async function main(): Promise<void> {
   if (itemInventoryError) throw itemInventoryError;
   if (statsError) throw statsError;
 
-  const inventoryIds = new Set([
-    ...(equipmentInventory || []).map((row) => row.character_id),
-    ...(itemInventory || []).map((row) => row.character_id),
-  ]);
+  const equipmentRows = (equipmentInventory || []) as ExistingEquipmentRow[];
+  const inventoryRows = (itemInventory || []) as ExistingInventoryRow[];
   const statsByCharacter = new Map(
     (stats || []).map((row) => [
       row.character_id,
@@ -168,13 +211,6 @@ async function main(): Promise<void> {
 
   let repaired = 0;
   for (const character of (characters || []) as CharacterRow[]) {
-    if (
-      inventoryIds.has(character.id) ||
-      !isEmpty(character.cantrips) ||
-      !isEmpty(character.known_spells)
-    )
-      continue;
-
     const campaignId = campaignByCharacter.get(character.id);
     if (!campaignId) continue;
     const template = templateForCharacter(
@@ -192,30 +228,78 @@ async function main(): Promise<void> {
       'warlock',
       'wizard',
     ].includes(template.class.toLowerCase());
-    if (!hasEquipment && !classShouldHaveCantrips) continue;
+    if (!hasEquipment && !classShouldHaveCantrips && !isEmpty(character.cantrips)) continue;
 
     const seed = buildStarterCharacterSeed(template, campaignId);
-    const equipment = seed.equipment;
-    const { error: updateError } = await supabase
-      .from('characters')
-      .update({
-        cantrips: seed.cantrips,
-        known_spells: seed.known_spells,
-        prepared_spells: seed.prepared_spells,
-        spell_slots: seed.spell_slots,
-        total_level: seed.total_level,
-        avatar_url: character.avatar_url || character.image_url,
-      })
-      .eq('id', character.id);
-    if (updateError) throw updateError;
+    const equipment = (seed.equipment || []) as Array<Record<string, unknown>>;
+    const existingEquipment = equipmentRows.filter((row) => row.character_id === character.id);
+    const existingInventory = inventoryRows.filter((row) => row.character_id === character.id);
+    const missingEquipment = equipment.filter((item) => {
+      const existing = hasEquipmentRow(existingEquipment, String(item.item_name || ''));
+      return !existing;
+    });
 
-    if (Array.isArray(equipment) && equipment.length > 0) {
-      const { error: equipmentError } = await supabase
-        .from('character_equipment')
-        .insert(equipment.map((item) => ({ character_id: character.id, ...item })));
+    for (const item of equipment) {
+      if (item.item_type !== 'custom') continue;
+      const existing = hasEquipmentRow(existingEquipment, String(item.item_name || ''));
+      if (existing && existing.item_type !== 'custom') {
+        const { error } = await supabase
+          .from('character_equipment')
+          .update({ item_type: 'custom', quantity: item.quantity, equipped: false })
+          .eq('character_id', character.id)
+          .eq('item_name', existing.item_name);
+        if (error) throw error;
+      }
+    }
+
+    if (missingEquipment.length > 0) {
+      const { error: equipmentError } = await supabase.from('character_equipment').insert(
+        missingEquipment.map((item) => ({
+          character_id: character.id,
+          item_name: item.item_name,
+          item_type: item.item_type,
+          quantity: item.quantity,
+          equipped: item.equipped,
+        })),
+      );
       if (equipmentError) throw equipmentError;
     }
-    repaired += 1;
+
+    const inventoryItems = (seed.inventory_items || []) as Array<Record<string, unknown>>;
+    const missingInventory = inventoryItems.filter(
+      (item) => !hasInventoryRow(existingInventory, String(item.name || '')),
+    );
+    if (missingInventory.length > 0) {
+      const { error: inventoryError } = await supabase
+        .from('inventory_items')
+        .insert(missingInventory.map((item) => ({ character_id: character.id, ...item })));
+      if (inventoryError) throw inventoryError;
+    }
+
+    const characterPatch: Record<string, unknown> = {
+      avatar_url: character.avatar_url || character.image_url,
+      total_level: seed.total_level,
+    };
+    if (isEmpty(character.cantrips)) characterPatch.cantrips = seed.cantrips;
+    if (isEmpty(character.known_spells)) characterPatch.known_spells = seed.known_spells;
+    if (isEmpty(character.cantrips) || isEmpty(character.known_spells)) {
+      characterPatch.prepared_spells = seed.prepared_spells;
+      characterPatch.spell_slots = seed.spell_slots;
+    }
+    const shouldUpdateCharacter =
+      missingEquipment.length > 0 ||
+      missingInventory.length > 0 ||
+      isEmpty(character.cantrips) ||
+      isEmpty(character.known_spells) ||
+      !character.avatar_url;
+    if (shouldUpdateCharacter) {
+      const { error: updateError } = await supabase
+        .from('characters')
+        .update(characterPatch)
+        .eq('id', character.id);
+      if (updateError) throw updateError;
+      repaired += 1;
+    }
   }
 
   console.log(`Starter character backfill complete: repaired ${repaired} character(s).`);

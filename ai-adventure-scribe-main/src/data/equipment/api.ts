@@ -1,8 +1,8 @@
-/* eslint-disable max-lines */
 import { armor } from './armor';
-import { adventuringGear } from './gear';
-import { shields } from './shields';
+import { allEquipment, resolveEquipmentById, resolveEquipmentByName } from './resolver';
 import { weapons } from './weapons';
+
+export { normalizeEquipmentLookupKey } from './resolver';
 
 import type { Equipment } from './types';
 
@@ -11,12 +11,6 @@ import startingEquipmentData from '@/data/srd/starting-equipment.json';
 import logger from '@/lib/logger';
 
 export const magicItems = magicItemData as Equipment[];
-const all: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear, ...magicItems];
-
-/**
- * ⚡ Bolt: Local O(1) equipment lookup Map.
- */
-const EQUIPMENT_LOOKUP = new Map(all.map((eq) => [eq.id, eq] as const));
 
 export function calculateArmorClass(
   equippedArmor: Equipment | null,
@@ -58,7 +52,7 @@ export function calculateArmorClass(
 }
 
 export function getEquipmentByCategory(category: Equipment['category']): Equipment[] {
-  return all.filter((item) => item.category === category);
+  return allEquipment.filter((item) => item.category === category);
 }
 
 export function getWeaponsByType(weaponType: 'simple' | 'martial'): Equipment[] {
@@ -111,7 +105,7 @@ export function getStartingEquipment(className: string): Equipment[] {
   // ⚡ Bolt: Using pre-calculated Map to avoid O(N) allocation on every call.
   return equipmentIds.map(
     (id) =>
-      EQUIPMENT_LOOKUP.get(id) || {
+      resolveEquipmentById(id) || {
         id,
         name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
         category: 'gear' as const,
@@ -151,7 +145,7 @@ type SrdStartingClass = {
 const startingClasses = startingEquipmentData as SrdStartingClass[];
 
 function equipmentOrPlaceholder(id: string, name: string): Equipment {
-  const equipment = EQUIPMENT_LOOKUP.get(id);
+  const equipment = resolveEquipmentById(id);
   if (equipment) return equipment;
 
   logger.error('Unknown starting equipment id from SRD data', { id, name });
@@ -164,27 +158,13 @@ function equipmentOrPlaceholder(id: string, name: string): Equipment {
   };
 }
 
-function normalizeEquipmentLookupKey(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[’']/g, '')
-    .replace(/[^a-z0-9]/g, '');
-}
-
 /**
  * Resolve a template's human-readable equipment name to SRD data.
- * Unknown names intentionally use the same logged placeholder path as the
- * SRD starting-equipment resolver so starter characters remain playable.
+ * Unknown names are campaign content and are handled by starter seeding as
+ * custom inventory items rather than being logged as SRD errors.
  */
-export function getEquipmentByName(name: string): Equipment {
-  const lookupKey = normalizeEquipmentLookupKey(name);
-  const equipment = all.find(
-    (item) =>
-      normalizeEquipmentLookupKey(item.name) === lookupKey ||
-      normalizeEquipmentLookupKey(item.id) === lookupKey,
-  );
-
-  return equipment || equipmentOrPlaceholder(`template-${lookupKey || 'unknown'}`, name);
+export function getEquipmentByName(name: string): Equipment | undefined {
+  return resolveEquipmentByName(name);
 }
 
 function expandOption(option: SrdOption): StartingEquipmentAlternative[] {
@@ -219,7 +199,7 @@ function expandOption(option: SrdOption): StartingEquipmentAlternative[] {
       ? weapons.filter((item) => item.weaponType === 'simple')
       : category.includes('weapon')
         ? weapons
-        : all;
+        : allEquipment;
   return candidates.map((equipment) => ({
     label: equipment.name,
     items: [{ equipment, quantity: 1 }],

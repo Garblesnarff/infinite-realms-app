@@ -112,6 +112,21 @@ const characterSchema = t.Object({
       }),
     ),
   ),
+  inventory_items: t.Optional(
+    t.Array(
+      t.Object({
+        name: t.String({ minLength: 1 }),
+        item_type: t.String({ minLength: 1 }),
+        quantity: t.Optional(t.Number({ minimum: 0 })),
+        weight: t.Optional(t.Number({ minimum: 0 })),
+        description: t.Optional(t.Nullable(t.String())),
+        is_equipped: t.Optional(t.Boolean()),
+        is_attuned: t.Optional(t.Boolean()),
+        requires_attunement: t.Optional(t.Boolean()),
+        properties: t.Optional(t.Nullable(t.String())),
+      }),
+    ),
+  ),
 });
 
 const updateCharacterSchema = t.Partial(characterSchema);
@@ -358,6 +373,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
               }
             : undefined,
           body.equipment,
+          body.inventory_items,
         );
 
         set.status = 201;
