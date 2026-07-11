@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { seedStarterCharacter } from '@/services/character/starter-character-seeding';
 import { userDataApi } from '@/services/user-data-api';
 
 export interface Character {
@@ -158,40 +159,9 @@ export function useCharacterSelection({
     setIsCreating(true);
 
     try {
-      // Create character from template
-      const abilityScores = template.ability_scores || {
-        strength: 10,
-        dexterity: 10,
-        constitution: 10,
-        intelligence: 10,
-        wisdom: 10,
-        charisma: 10,
-      };
-      const character = await userDataApi.createCharacter({
-        name: template.name,
-        race: template.race,
-        subrace: template.subrace,
-        class: template.class,
-        level: template.level,
-        background: template.background,
-        backstory_elements: template.adapted_backstory,
-        description: template.tagline,
-        campaign_id: campaignId,
-        skill_proficiencies: template.skills.join(', '),
-        languages: template.languages,
-        image_url: template.portrait_url,
-        stats: {
-          strength: abilityScores.strength,
-          dexterity: abilityScores.dexterity,
-          constitution: abilityScores.constitution,
-          intelligence: abilityScores.intelligence,
-          wisdom: abilityScores.wisdom,
-          charisma: abilityScores.charisma,
-          max_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-          current_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-          armor_class: 10 + Math.floor((abilityScores.dexterity - 10) / 2),
-        },
-      });
+      const character = await seedStarterCharacter(template, campaignId, (payload) =>
+        userDataApi.createCharacter(payload),
+      );
 
       toast({
         title: 'Starting Adventure!',

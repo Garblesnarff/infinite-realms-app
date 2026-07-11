@@ -1,12 +1,5 @@
 import { useMemo } from 'react';
 
-import { useCampaign } from '@/contexts/CampaignContext';
-import { useCharacter } from '@/contexts/CharacterContext';
-import { useCombat } from '@/contexts/CombatContext';
-import { getExperienceForLevel } from '@/data/levelProgression';
-import type { Character } from '@/types/character';
-import { calculateAllCharacterStats } from '@/utils/character-calculations';
-
 import type {
   AttackVM,
   CharacterSheetVM,
@@ -18,6 +11,13 @@ import type {
   NamedModVM,
   PartyMemberVM,
 } from './types';
+import type { Character } from '@/types/character';
+
+import { useCampaign } from '@/contexts/CampaignContext';
+import { useCharacter } from '@/contexts/CharacterContext';
+import { useCombat } from '@/contexts/CombatContext';
+import { getExperienceForLevel } from '@/data/levelProgression';
+import { calculateAllCharacterStats } from '@/utils/character-calculations';
 
 const ABILITY_ORDER: { key: string; label: string }[] = [
   { key: 'strength', label: 'STR' },
@@ -57,7 +57,16 @@ const WEAPON_HINTS = [
   'dart',
 ];
 
-const ARMOR_HINTS = ['mail', 'armor', 'armour', 'plate', 'leather', 'shield', 'breastplate', 'cuirass'];
+const ARMOR_HINTS = [
+  'mail',
+  'armor',
+  'armour',
+  'plate',
+  'leather',
+  'shield',
+  'breastplate',
+  'cuirass',
+];
 
 const fmt = (n: number): string => (n >= 0 ? `+${n}` : `${n}`);
 
@@ -97,7 +106,12 @@ function buildCharacterSheet(character: Character | null): CharacterSheetVM {
     stats = calculateAllCharacterStats(character);
   } catch {
     // Never let a malformed character crash the game page — show identity only.
-    return { ...empty, name: character.name ?? 'Adventurer', subtitle: [character.race?.name, character.class?.name].filter(Boolean).join(' · '), level: character.level ?? 1 };
+    return {
+      ...empty,
+      name: character.name ?? 'Adventurer',
+      subtitle: [character.race?.name, character.class?.name].filter(Boolean).join(' · '),
+      level: character.level ?? 1,
+    };
   }
   const level = character.level ?? 1;
   const xpCurrent = character.experience ?? getExperienceForLevel(level);
@@ -109,20 +123,27 @@ function buildCharacterSheet(character: Character | null): CharacterSheetVM {
   );
 
   const abilityScores = ABILITY_ORDER.map((a) => {
-    const score = character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score ?? 10;
+    const score =
+      character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score ?? 10;
     return { label: a.label, score, modifier: fmt(abilityMod(score)) };
   });
 
   const savingThrows: NamedModVM[] = ABILITY_ORDER.map((a) => ({
     label: a.label,
-    modifier: fmt(stats.savingThrowModifiers?.[a.key]?.modifier ?? abilityMod(character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score)),
+    modifier: fmt(
+      stats.savingThrowModifiers?.[a.key]?.modifier ??
+        abilityMod(character.abilityScores?.[a.key as keyof typeof character.abilityScores]?.score),
+    ),
   }));
 
   // Prefer proficient skills; fall back to a representative set so the panel isn't empty.
   const skillEntries = Object.entries(stats.skillModifiers ?? {});
   const proficient = skillEntries.filter(([, v]) => v.proficient);
   const chosen = (proficient.length ? proficient : skillEntries).slice(0, 8);
-  const skills: NamedModVM[] = chosen.map(([name, v]) => ({ label: name, modifier: fmt(v.modifier) }));
+  const skills: NamedModVM[] = chosen.map(([name, v]) => ({
+    label: name,
+    modifier: fmt(v.modifier),
+  }));
 
   const inv = character.inventory ?? [];
   const profBonus = stats.proficiencyBonus;
@@ -227,7 +248,9 @@ export function useOverhaulViewModel(opts?: {
       ? players.map((p) => ({
           id: p.id,
           name: p.name,
-          subtitle: [p.level ? `Level ${p.level}` : null, p.characterClass].filter(Boolean).join(' '),
+          subtitle: [p.level ? `Level ${p.level}` : null, p.characterClass]
+            .filter(Boolean)
+            .join(' '),
           currentHp: p.currentHitPoints,
           maxHp: p.maxHitPoints,
           avatarUrl: p.portraitUrl,
@@ -240,7 +263,7 @@ export function useOverhaulViewModel(opts?: {
               subtitle: [`Level ${sheet.level}`, character.class?.name].filter(Boolean).join(' '),
               currentHp: sheet.hpCurrent,
               maxHp: sheet.hpMax,
-              avatarUrl: character.avatar_url,
+              avatarUrl: character.image_url ?? character.avatar_url,
             },
           ]
         : [];

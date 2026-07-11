@@ -20,20 +20,32 @@ export class GameContextPrompts {
     relevantMemories: Memory[],
   ): Promise<string> {
     let section = `<game_context>`;
+    const rawCampaignDetails = context.campaignDetails || {};
+    const nestedCampaignDetails =
+      (rawCampaignDetails.campaign as Record<string, unknown> | undefined) ||
+      (rawCampaignDetails.basic as Record<string, unknown> | undefined) ||
+      rawCampaignDetails;
+    const campaignName =
+      nestedCampaignDetails.name || nestedCampaignDetails.title || 'Unnamed Campaign';
+    const campaignDescription =
+      nestedCampaignDetails.description || nestedCampaignDetails.premise || '';
 
     if (context.campaignDetails) {
       section += `<campaign_details>
-CAMPAIGN: "${context.campaignDetails.name}"
-DESCRIPTION: ${context.campaignDetails.description}
+CAMPAIGN: "${campaignName}"
+DESCRIPTION: ${campaignDescription}
 </campaign_details>`;
     }
 
     // Lore handling (Async)
-    let starterCampaignId = context.starterCampaignId;
+    let starterCampaignId =
+      context.starterCampaignId ||
+      (rawCampaignDetails.starter_campaign_id as string | undefined) ||
+      (rawCampaignDetails.starterCampaignId as string | undefined);
 
     // Fallback: if no starterCampaignId but campaign name matches a starter campaign
-    if (!starterCampaignId && context.campaignDetails?.name) {
-      const campaignName = String(context.campaignDetails.name).toLowerCase().trim();
+    if (!starterCampaignId && campaignName) {
+      const normalizedCampaignName = String(campaignName).toLowerCase().trim();
       const nameToSlug: Record<string, string> = {
         'the eternal feast': 'the-eternal-feast',
         'eternal feast': 'the-eternal-feast',
@@ -41,7 +53,7 @@ DESCRIPTION: ${context.campaignDetails.description}
         'academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
         'the academy of arcane gastronomy': 'academy-of-arcane-gastronomy',
       };
-      starterCampaignId = nameToSlug[campaignName];
+      starterCampaignId = nameToSlug[normalizedCampaignName];
       if (starterCampaignId) {
         logger.info(
           `[ContextBuilder] Inferred starter campaign '${starterCampaignId}' from campaign name`,
@@ -61,16 +73,25 @@ DESCRIPTION: ${context.campaignDetails.description}
           ]);
 
         if (campaignOverview) {
+          const overview = campaignOverview as unknown as Record<string, unknown>;
+          const overviewTitle = overview.title || overview.name || 'Unnamed Starter Campaign';
+          const premise =
+            overview.premise || overview.description || 'A mysterious adventure awaits.';
+          const creativeBrief =
+            overview.creativeBrief ||
+            overview.creative_brief ||
+            'Maintain an immersive, atmospheric tone.';
+          const campaignOverviewText = overview.overview || overview.setting_details || '';
           section += `
 <starter_campaign_lore>
 <canonical_setting>
-TITLE: ${campaignOverview.title}
-PREMISE: ${campaignOverview.premise || 'A mysterious adventure awaits.'}
-OVERVIEW: ${campaignOverview.overview || ''}
+TITLE: ${overviewTitle}
+PREMISE: ${premise}
+OVERVIEW: ${campaignOverviewText}
 </canonical_setting>
 
 <creative_direction>
-${campaignOverview.creativeBrief || 'Maintain an immersive, atmospheric tone.'}
+${creativeBrief}
 </creative_direction>`;
 
           if (campaignRules && campaignRules.length > 0) {
@@ -81,8 +102,15 @@ ${campaignRules.map((rule: any) => `- ${rule.condition} → ${rule.effect}${rule
 </world_rules>`;
           }
 
-          const { npcs, locations, factions, monsters } = campaignEntities;
-          const totalEntities = npcs.length + locations.length + factions.length + monsters.length;
+          const {
+            npcs = [],
+            locations = [],
+            factions = [],
+            items = [],
+            monsters = [],
+          } = campaignEntities || {};
+          const totalEntities =
+            npcs.length + locations.length + factions.length + items.length + monsters.length;
 
           if (totalEntities > 0) {
             section += `
@@ -136,6 +164,20 @@ ${f.content}
   )
   .join('\n')}
 </factions>`;
+            }
+
+            if (items.length > 0) {
+              section += `
+
+<items count="${items.length}">
+${items
+  .map(
+    (item: any) => `<item name="${item.entityName}">
+${item.content}
+</item>`,
+  )
+  .join('\n')}
+</items>`;
             }
 
             if (monsters.length > 0) {

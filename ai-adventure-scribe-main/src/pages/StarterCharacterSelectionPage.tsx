@@ -25,6 +25,7 @@ import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
 import { useStarterCharacterTemplates } from '@/hooks/use-starter-character-templates';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
+import { seedStarterCharacter } from '@/services/character/starter-character-seeding';
 import { userDataApi } from '@/services/user-data-api';
 
 /**
@@ -57,33 +58,9 @@ const StarterCharacterSelectionPage: React.FC = () => {
     setIsCreating(true);
 
     try {
-      // Create character from template (using correct schema columns)
-      const character = await userDataApi.createCharacter({
-        name: selectedTemplate.name,
-        race: selectedTemplate.race,
-        subrace: selectedTemplate.subrace,
-        class: selectedTemplate.class,
-        level: selectedTemplate.level,
-        background: selectedTemplate.background,
-        backstory_elements: selectedTemplate.adaptedBackstory,
-        description: selectedTemplate.tagline,
-        campaign_id: campaignId,
-        skill_proficiencies: selectedTemplate.skills.join(', '),
-        languages: selectedTemplate.languages,
-        image_url: selectedTemplate.portraitUrl,
-        stats: {
-          strength: selectedTemplate.abilityScores.strength,
-          dexterity: selectedTemplate.abilityScores.dexterity,
-          constitution: selectedTemplate.abilityScores.constitution,
-          intelligence: selectedTemplate.abilityScores.intelligence,
-          wisdom: selectedTemplate.abilityScores.wisdom,
-          charisma: selectedTemplate.abilityScores.charisma,
-          max_hit_points: 10 + Math.floor((selectedTemplate.abilityScores.constitution - 10) / 2),
-          current_hit_points:
-            10 + Math.floor((selectedTemplate.abilityScores.constitution - 10) / 2),
-          armor_class: 10 + Math.floor((selectedTemplate.abilityScores.dexterity - 10) / 2),
-        },
-      });
+      const character = await seedStarterCharacter(selectedTemplate, campaignId, (payload) =>
+        userDataApi.createCharacter(payload),
+      );
 
       toast({
         title: 'Adventure Begins!',

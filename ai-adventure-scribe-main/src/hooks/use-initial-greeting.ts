@@ -67,11 +67,15 @@ export const useInitialGreeting = ({
   const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
+    const onlyFallbackMessage =
+      messages.length === 1 &&
+      messages[0].sender === 'dm' &&
+      messages[0].context?.isFallback === true;
     const shouldGenerateGreeting =
       sessionId &&
       sessionData &&
       sessionData.turn_count === 0 &&
-      messages.length === 0 &&
+      (messages.length === 0 || onlyFallbackMessage) &&
       characterId &&
       campaignId &&
       !state.hasGenerated &&
@@ -101,13 +105,16 @@ export const useInitialGreeting = ({
       logger.info('[Initial Greeting] Starting generation for session:', sessionId);
 
       // Ensure we are not resuming an existing conversation
-      const { total: existingMessageCount } = await userDataApi.listSessionMessages(
-        sessionId!,
-        0,
-        1,
-      );
+      const { total: existingMessageCount, messages: existingMessages } =
+        await userDataApi.listSessionMessages(sessionId!, 0, 10);
 
-      if ((existingMessageCount ?? 0) > 0) {
+      const isOnlyFallbackMessage =
+        existingMessageCount === 1 &&
+        existingMessages?.length === 1 &&
+        existingMessages[0]?.speaker_type === 'dm' &&
+        existingMessages[0]?.context?.isFallback === true;
+
+      if ((existingMessageCount ?? 0) > 0 && !isOnlyFallbackMessage) {
         logger.info(
           '[Initial Greeting] Detected existing dialogue entries; skipping automated greeting.',
         );
@@ -228,7 +235,15 @@ export const useInitialGreeting = ({
         hasGenerated: true,
       }));
     } catch (error) {
-      logger.error('[Initial Greeting] Error generating greeting:', error);
+      logger.error('[Initial Greeting] Error generating greeting:', {
+        error,
+        sessionId,
+        characterId,
+        campaignId,
+        starterCampaignId: sessionData?.starter_campaign_id,
+        turnCount: sessionData?.turn_count,
+        loadedMessageCount: messages.length,
+      });
 
       setState((prev) => ({
         ...prev,
@@ -244,6 +259,7 @@ export const useInitialGreeting = ({
           sender: 'dm',
           text: 'You find yourself standing at the threshold of adventure. The world stretches before you, full of mysteries waiting to be uncovered. What do you do?',
           timestamp: new Date().toISOString(),
+          context: { isFallback: true },
         };
         await onGreetingGenerated(fallbackMessage);
 

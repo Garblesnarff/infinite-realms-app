@@ -7,6 +7,7 @@ import { useInitialGreeting } from '../use-initial-greeting';
 
 import { supabase } from '@/integrations/supabase/client';
 import { AIService } from '@/services/ai-service';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
 vi.mock('@/integrations/supabase/client', () => ({
@@ -27,6 +28,14 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/services/ai-service', () => ({
   AIService: {
     generateOpeningMessage: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listSessionMessages: vi.fn(),
+    getCharacter: vi.fn(),
+    getCampaign: vi.fn(),
   },
 }));
 
@@ -106,6 +115,20 @@ describe('useInitialGreeting', () => {
     (global.fetch as any).mockResolvedValue({
       ok: false, // Default to no recap
     });
+    (userDataApi.listSessionMessages as any).mockResolvedValue({ total: 0, messages: [] });
+    (userDataApi.getCharacter as any).mockResolvedValue({
+      id: characterId,
+      name: 'Hero',
+      race: 'Human',
+      class: 'Fighter',
+      background: 'Soldier',
+      level: 1,
+    });
+    (userDataApi.getCampaign as any).mockResolvedValue({
+      id: campaignId,
+      name: 'Epic Quest',
+      description: 'Save the world',
+    });
   });
 
   it('should generate initial greeting for a new session', async () => {
@@ -158,6 +181,10 @@ describe('useInitialGreeting', () => {
   });
 
   it('should skip generation if messages already exist', async () => {
+    (userDataApi.listSessionMessages as any).mockResolvedValue({
+      total: 5,
+      messages: [{ speaker_type: 'dm', context: {} }],
+    });
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'dialogue_history') {
         return {
@@ -378,6 +405,7 @@ describe('useInitialGreeting', () => {
   });
 
   it('should handle character data load error', async () => {
+    (userDataApi.getCharacter as any).mockRejectedValueOnce(new Error('Char Error'));
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'characters') {
         return {
@@ -405,6 +433,7 @@ describe('useInitialGreeting', () => {
   });
 
   it('should handle campaign data load error', async () => {
+    (userDataApi.getCampaign as any).mockRejectedValueOnce(new Error('Camp Error'));
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'campaigns') {
         return {

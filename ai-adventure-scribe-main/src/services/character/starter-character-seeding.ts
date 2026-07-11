@@ -1,0 +1,245 @@
+/* eslint-disable max-lines */
+import type { CharacterClass } from '@/types/character';
+
+import { classes } from '@/data/classes';
+import { getEquipmentByName } from '@/data/equipment/api';
+import {
+  calculateSpellsKnown,
+  getPactMagicProgression,
+  getSpellSlotsByLevel,
+} from '@/data/spellcastingFeatures';
+import { getClassSpells } from '@/data/spells/api';
+import { getSpellcastingInfo } from '@/utils/spell-validation';
+
+export interface StarterCharacterTemplateLike {
+  name: string;
+  race: string;
+  subrace?: string | null;
+  class: string;
+  background?: string | null;
+  level?: number;
+  tagline?: string | null;
+  description?: string | null;
+  adaptedBackstory?: string | null;
+  adapted_backstory?: string | null;
+  skills?: string[];
+  languages?: string[];
+  equipment?: string[];
+  portraitUrl?: string | null;
+  portrait_url?: string | null;
+  abilityScores?: Record<string, number>;
+  ability_scores?: Record<string, number>;
+  /** Optional forward-compatible curated spell shape. */
+  spells?: { cantrips?: string[]; knownSpells?: string[]; preparedSpells?: string[] };
+}
+
+export type StarterCharacterCreatePayload = Record<string, unknown> & { name: string };
+export type CreateStarterCharacter = (
+  payload: StarterCharacterCreatePayload,
+) => Promise<{ id: string }>;
+
+const DEFAULT_ABILITY_SCORES = {
+  strength: 10,
+  dexterity: 10,
+  constitution: 10,
+  intelligence: 10,
+  wisdom: 10,
+  charisma: 10,
+};
+
+function getTemplateValue<T>(
+  template: StarterCharacterTemplateLike,
+  camel: keyof StarterCharacterTemplateLike,
+  snake?: keyof StarterCharacterTemplateLike,
+): T | undefined {
+  return (template[camel] ?? (snake ? template[snake] : undefined)) as T | undefined;
+}
+
+function getAbilityScores(template: StarterCharacterTemplateLike): Record<string, number> {
+  return {
+    ...DEFAULT_ABILITY_SCORES,
+    ...(getTemplateValue<Record<string, number>>(template, 'abilityScores', 'ability_scores') ||
+      {}),
+  };
+}
+
+function getModifier(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function findClass(className: string): CharacterClass | undefined {
+  const normalized = className.trim().toLowerCase();
+  return classes.find(
+    (characterClass) =>
+      characterClass.id === normalized || characterClass.name.toLowerCase() === normalized,
+  );
+}
+
+function getSpellSlots(className: string, level: number): Record<string, number> | undefined {
+  if (className.toLowerCase() === 'warlock') {
+    const pact = getPactMagicProgression(level);
+    return pact
+      ? { caster_level: level, pact_slots: pact.pactSlots, pact_slot_level: pact.pactSlotLevel }
+      : undefined;
+  }
+
+  const slots = getSpellSlotsByLevel(className, level);
+  if (slots.length === 0 || slots.every((slot) => slot === 0)) return undefined;
+
+  return {
+    caster_level: level,
+    ...Object.fromEntries(slots.map((slot, index) => [`spell_slots_${index + 1}`, slot])),
+  };
+}
+
+export interface StarterSpellSeed {
+  cantrips: string[];
+  knownSpells: string[];
+  preparedSpells: string[];
+  spellSlots?: Record<string, number>;
+}
+
+/**
+ * Build class-appropriate spell state from the same class and SRD sources as
+ * the character wizard. Prepared casters get a prepared list based on their
+ * casting ability modifier; known-spell casters get their level-based quota.
+ */
+export function buildStarterSpellSeed(
+  template: StarterCharacterTemplateLike,
+  abilityScores = getAbilityScores(template),
+): StarterSpellSeed {
+  const level = Math.max(1, template.level || 1);
+  const className = template.class || '';
+  const characterClass = findClass(className);
+  if (!characterClass?.spellcasting) {
+    return { cantrips: [], knownSpells: [], preparedSpells: [] };
+  }
+
+  const info = getSpellcastingInfo(characterClass, level);
+  const available = getClassSpells(characterClass.name);
+  if (!info) return { cantrips: [], knownSpells: [], preparedSpells: [] };
+
+  const curated = template.spells;
+  const validCantrips = new Set(available.cantrips.map((spell) => spell.id));
+  const validSpells = new Set(available.spells.map((spell) => spell.id));
+  const curatedCantrips = (curated?.cantrips || []).filter((id) => validCantrips.has(id));
+  const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
+  const cantripCount = info.cantripsKnown;
+  const cantrips = (
+    curatedCantrips.length > 0 ? curatedCantrips : available.cantrips.map((spell) => spell.id)
+  ).slice(0, cantripCount);
+
+  const ability = characterClass.spellcasting.ability;
+  const abilityModifier = getModifier(abilityScores[ability] || 10);
+  const canPrepareSpells = ['cleric', 'druid', 'paladin', 'wizard'].includes(characterClass.id);
+  const spellCount = canPrepareSpells
+    ? calculateSpellsKnown(characterClass.id, level, abilityModifier)
+    : info.spellsKnown || 0;
+  const maxSpellLevel = Math.min(5, Math.ceil(level / 2));
+  const availableKnownSpells = available.spells
+    .filter((spell) => spell.level <= maxSpellLevel)
+    .map((spell) => spell.id);
+  const knownSpells = (
+    curatedKnownSpells.length > 0 ? curatedKnownSpells : availableKnownSpells
+  ).slice(0, spellCount);
+  const curatedPreparedSpells = (curated?.preparedSpells || []).filter((id) => validSpells.has(id));
+  const preparedSpells = canPrepareSpells
+    ? (curatedPreparedSpells.length > 0 ? curatedPreparedSpells : knownSpells).slice(0, spellCount)
+    : [];
+
+  return {
+    cantrips,
+    knownSpells,
+    preparedSpells,
+    spellSlots: getSpellSlots(className, level),
+  };
+}
+
+export interface StarterEquipmentRecord {
+  item_name: string;
+  item_type: string;
+  quantity: number;
+  equipped: boolean;
+}
+
+/** Transform template item names into the validated character_equipment shape. */
+export function transformStarterEquipment(equipmentNames: string[] = []): StarterEquipmentRecord[] {
+  const records = new Map<string, StarterEquipmentRecord>();
+  let weaponCount = 0;
+
+  for (const itemName of equipmentNames.filter(Boolean)) {
+    const equipment = getEquipmentByName(itemName);
+    const key = equipment.id;
+    const existing = records.get(key);
+    if (existing) {
+      existing.quantity += 1;
+      continue;
+    }
+
+    const shouldEquip =
+      equipment.category === 'armor' ||
+      equipment.category === 'shield' ||
+      (equipment.category === 'weapon' && weaponCount++ < 2);
+
+    records.set(key, {
+      item_name: equipment.name,
+      item_type: equipment.category,
+      quantity: 1,
+      equipped: shouldEquip,
+    });
+  }
+
+  return [...records.values()];
+}
+
+export function buildStarterCharacterSeed(
+  template: StarterCharacterTemplateLike,
+  campaignId: string,
+): StarterCharacterCreatePayload {
+  const abilityScores = getAbilityScores(template);
+  const level = Math.max(1, template.level || 1);
+  const portraitUrl =
+    getTemplateValue<string | null>(template, 'portraitUrl', 'portrait_url') || null;
+  const spellSeed = buildStarterSpellSeed(template, abilityScores);
+  const skills = template.skills || [];
+  const languages = template.languages || [];
+  const equipment = transformStarterEquipment(template.equipment || []);
+  const hitPoints = 10 + getModifier(abilityScores.constitution);
+
+  return {
+    name: template.name,
+    race: template.race,
+    subrace: template.subrace || null,
+    class: template.class,
+    level,
+    background: template.background || null,
+    backstory_elements: template.adaptedBackstory ?? template.adapted_backstory ?? null,
+    description: template.description ?? template.tagline ?? null,
+    campaign_id: campaignId,
+    skill_proficiencies: skills.join(', '),
+    languages,
+    image_url: portraitUrl,
+    avatar_url: portraitUrl,
+    cantrips: spellSeed.cantrips.join(', '),
+    known_spells: spellSeed.knownSpells.join(', '),
+    prepared_spells: spellSeed.preparedSpells.join(', '),
+    ...(spellSeed.spellSlots ? { spell_slots: spellSeed.spellSlots } : {}),
+    total_level: level,
+    stats: {
+      ...abilityScores,
+      max_hit_points: hitPoints,
+      current_hit_points: hitPoints,
+      armor_class: 10 + getModifier(abilityScores.dexterity),
+    },
+    equipment,
+  };
+}
+
+/** Create a starter character through the caller's authenticated data API. */
+export function seedStarterCharacter(
+  template: StarterCharacterTemplateLike,
+  campaignId: string,
+  createCharacter: CreateStarterCharacter,
+): Promise<{ id: string }> {
+  return createCharacter(buildStarterCharacterSeed(template, campaignId));
+}
