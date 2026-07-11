@@ -36,10 +36,16 @@ for (const template of templateLists) {
   for (const item of transformStarterInventory(template.equipment)) {
     if (!item.description.trim()) customWithoutDescription.push(item.name);
   }
-  if (records.some((record) => record.item_type === 'custom' && !record.description?.trim())) {
+  if (
+    records.some(
+      (record) =>
+        (record.item_type === 'custom' || record.item_type === 'trinket') &&
+        !record.description?.trim(),
+    )
+  ) {
     customWithoutDescription.push(
       ...records
-        .filter((record) => record.item_type === 'custom')
+        .filter((record) => record.item_type === 'custom' || record.item_type === 'trinket')
         .map((record) => record.item_name),
     );
   }

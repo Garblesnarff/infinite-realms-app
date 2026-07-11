@@ -173,7 +173,7 @@ export interface StarterEquipmentRecord {
 
 export interface StarterInventoryRecord {
   name: string;
-  item_type: 'custom';
+  item_type: 'trinket';
   quantity: number;
   weight: number;
   description: string;
@@ -195,12 +195,24 @@ function templateEquipmentKey(item: StarterTemplateEquipment): string {
   return equipment ? `srd:${equipment.id}` : `custom:${normalizeEquipmentLookupKey(item.name)}`;
 }
 
+const QUIVER_WITH_ARROWS_KEY = normalizeEquipmentLookupKey('quiver with 20 arrows');
+
 function resolvedTemplateEquipment(
   equipmentNames: StarterTemplateEquipmentInput[] = [],
 ): Array<{ item: StarterTemplateEquipment; equipment: ReturnType<typeof resolveEquipmentByName> }> {
-  return equipmentNames.filter(Boolean).map((item) => {
+  return equipmentNames.filter(Boolean).flatMap((item) => {
     const templateItem = templateEquipmentItem(item);
-    return { item: templateItem, equipment: resolveEquipmentByName(templateItem.name) };
+    const equipment = resolveEquipmentByName(templateItem.name);
+    const resolved = [{ item: templateItem, equipment }];
+
+    // The template phrase describes a bundle. Keep the quiver as flavor when
+    // the SRD has one, but make the 20 arrows a real equipment row.
+    if (normalizeEquipmentLookupKey(templateItem.name) === QUIVER_WITH_ARROWS_KEY) {
+      const quiver = resolveEquipmentByName('quiver');
+      if (quiver) resolved.push({ item: { name: quiver.name }, equipment: quiver });
+    }
+
+    return resolved;
   });
 }
 
@@ -227,7 +239,7 @@ export function transformStarterEquipment(
 
     records.set(key, {
       item_name: equipment?.name || item.name,
-      item_type: equipment?.category || 'custom',
+      item_type: equipment?.category || 'trinket',
       quantity: 1,
       equipped: shouldEquip,
       ...(equipment ? {} : { description: customItemDescription(item), weight: 0 }),
@@ -252,7 +264,7 @@ export function transformStarterInventory(
     }
     records.set(key, {
       name: item.name,
-      item_type: 'custom',
+      item_type: 'trinket',
       quantity: 1,
       weight: 0,
       description: customItemDescription(item),

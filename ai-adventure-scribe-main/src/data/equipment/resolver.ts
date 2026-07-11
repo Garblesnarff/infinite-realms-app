@@ -112,6 +112,13 @@ function lookupKeys(value: string): string[] {
 /** Genuine naming differences, rather than spelling/pluralization variants. */
 export const EQUIPMENT_NAME_ALIASES: Record<string, string> = {
   [normalizeEquipmentLookupKey('holy symbol')]: 'amulet',
+  [normalizeEquipmentLookupKey('fine clothes')]: 'clothes-fine',
+  [normalizeEquipmentLookupKey('quiver with 20 arrows')]: 'arrows-20',
+  [normalizeEquipmentLookupKey("ranger's pack")]: 'explorers-pack',
+  [normalizeEquipmentLookupKey('journal')]: 'book',
+  [normalizeEquipmentLookupKey('pan pipes')]: 'pan-flute',
+  [normalizeEquipmentLookupKey('costume collection')]: 'clothes-costume',
+  [normalizeEquipmentLookupKey('wine flask')]: 'flask-or-tankard',
 };
 
 const equipmentByLookupKey = new Map<string, Equipment>();

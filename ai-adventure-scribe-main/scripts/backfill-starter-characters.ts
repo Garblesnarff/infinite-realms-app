@@ -53,6 +53,7 @@ type TemplateRow = Record<string, unknown> & {
   equipment?: Array<string | { name: string; description?: string | null }>;
 };
 type ExistingEquipmentRow = {
+  id: string;
   character_id: string;
   item_name: string;
   item_type: string | null;
@@ -89,6 +90,10 @@ function hasInventoryRow(
   return rows.find(
     (row) => normalizeEquipmentLookupKey(row.name) === normalizeEquipmentLookupKey(name),
   );
+}
+
+function isTrinketType(itemType: string | null | undefined): boolean {
+  return itemType === 'custom' || itemType === 'trinket';
 }
 
 function templateForCharacter(
@@ -170,7 +175,7 @@ async function main(): Promise<void> {
     supabase.from('starter_character_templates').select('*').in('starter_campaign_id', campaignIds),
     supabase
       .from('character_equipment')
-      .select('character_id, item_name, item_type, quantity')
+      .select('id, character_id, item_name, item_type, quantity')
       .in('character_id', characterIds),
     supabase
       .from('inventory_items')
@@ -234,21 +239,42 @@ async function main(): Promise<void> {
     const equipment = (seed.equipment || []) as Array<Record<string, unknown>>;
     const existingEquipment = equipmentRows.filter((row) => row.character_id === character.id);
     const existingInventory = inventoryRows.filter((row) => row.character_id === character.id);
+
+    // Starter rows created before the resolver aliases were added were stored
+    // as custom/trinket. Canonicalize those rows in place so rerunning this
+    // script is safe and never resets an existing quantity.
+    for (const existing of existingEquipment) {
+      if (!isTrinketType(existing.item_type)) continue;
+      const resolved = resolveEquipmentByName(existing.item_name);
+      if (!resolved) continue;
+      if (existing.item_name === resolved.name && existing.item_type === resolved.category) {
+        continue;
+      }
+
+      const { error } = await supabase
+        .from('character_equipment')
+        .update({ item_name: resolved.name, item_type: resolved.category })
+        .eq('id', existing.id);
+      if (error) throw error;
+      existing.item_name = resolved.name;
+      existing.item_type = resolved.category;
+    }
+
     const missingEquipment = equipment.filter((item) => {
       const existing = hasEquipmentRow(existingEquipment, String(item.item_name || ''));
       return !existing;
     });
 
     for (const item of equipment) {
-      if (item.item_type !== 'custom') continue;
+      if (!isTrinketType(String(item.item_type || ''))) continue;
       const existing = hasEquipmentRow(existingEquipment, String(item.item_name || ''));
-      if (existing && existing.item_type !== 'custom') {
+      if (existing && existing.item_type !== item.item_type) {
         const { error } = await supabase
           .from('character_equipment')
-          .update({ item_type: 'custom', quantity: item.quantity, equipped: false })
-          .eq('character_id', character.id)
-          .eq('item_name', existing.item_name);
+          .update({ item_type: item.item_type })
+          .eq('id', existing.id);
         if (error) throw error;
+        existing.item_type = String(item.item_type);
       }
     }
 

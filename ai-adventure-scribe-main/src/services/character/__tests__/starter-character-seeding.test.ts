@@ -30,7 +30,7 @@ const clericTemplate = {
 };
 
 describe('starter-character-seeding', () => {
-  it('transforms known equipment and preserves campaign items as custom records', () => {
+  it('transforms known equipment and preserves campaign items as trinket records', () => {
     const equipment = transformStarterEquipment([
       'mace',
       'mace',
@@ -41,7 +41,7 @@ describe('starter-character-seeding', () => {
       { item_name: 'Mace', item_type: 'weapon', quantity: 2, equipped: true },
       {
         item_name: 'an item not in the SRD',
-        item_type: 'custom',
+        item_type: 'trinket',
         quantity: 1,
         equipped: false,
         weight: 0,
@@ -55,7 +55,7 @@ describe('starter-character-seeding', () => {
     ).toEqual([
       {
         name: 'an item not in the SRD',
-        item_type: 'custom',
+        item_type: 'trinket',
         quantity: 1,
         weight: 0,
         description: 'A keepsake from the campaign.',
@@ -79,6 +79,15 @@ describe('starter-character-seeding', () => {
       'Amulet',
     ]);
     expect(equipment.every((item) => item.item_type !== 'custom')).toBe(true);
+  });
+
+  it('grants arrows and the SRD quiver for the quiver-with-arrows bundle', () => {
+    expect(transformStarterEquipment(['quiver with 20 arrows'])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ item_name: 'Arrows (20)', item_type: 'gear', quantity: 1 }),
+        expect.objectContaining({ item_name: 'Quiver', item_type: 'gear', quantity: 1 }),
+      ]),
+    );
   });
 
   it('uses class data for Cleric cantrips and WIS-based preparation', () => {

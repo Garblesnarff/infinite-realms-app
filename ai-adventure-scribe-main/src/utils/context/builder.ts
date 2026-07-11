@@ -38,7 +38,7 @@ class GameContextBuilder {
       userDataApi.getCharacter(characterId),
       supabase
         .from('character_equipment')
-        .select('item_name, item_type, equipped')
+        .select('item_name, item_type, description, equipped')
         .eq('character_id', characterId),
       supabase
         .from('quest_progress')
@@ -112,7 +112,7 @@ class GameContextBuilder {
         },
         equipment: (character.character_equipment || []).map((item: CharacterEquipmentRow) => ({
           name: item.item_name,
-          type: item.item_type,
+          type: formatEquipmentContextType(item),
           equipped: item.equipped || false,
         })),
       };
@@ -177,6 +177,7 @@ interface CharacterStatsRow {
 interface CharacterEquipmentRow {
   item_name: string;
   item_type?: string;
+  description?: string | null;
   equipped?: boolean;
 }
 
@@ -188,4 +189,11 @@ interface CharacterRow {
   level?: number | null;
   character_stats?: CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;
+}
+
+export function formatEquipmentContextType(item: CharacterEquipmentRow): string {
+  if (item.item_type === 'trinket' || item.item_type === 'custom') {
+    return `${item.item_name}${item.description?.trim() ? ` (${item.description.trim()})` : ''}`;
+  }
+  return item.item_type || 'equipment';
 }

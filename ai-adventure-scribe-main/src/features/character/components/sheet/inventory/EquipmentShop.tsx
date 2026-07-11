@@ -27,7 +27,7 @@ interface EquipmentShopProps {
   currency: Currency;
   purchaseItem: (equipment: Equipment) => void;
   addToInventory: (equipment: Equipment) => void;
-  getItemIcon: (category: Equipment['category']) => React.ReactNode;
+  getItemIcon: (category: Equipment['category'] | 'custom') => React.ReactNode;
 }
 
 export const EquipmentShop: React.FC<EquipmentShopProps> = ({
@@ -93,8 +93,8 @@ export const EquipmentShop: React.FC<EquipmentShopProps> = ({
                   <div>
                     <h4 className="font-medium">{equipment.name}</h4>
                     <div className="flex gap-1 mt-1">
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {equipment.category}
+                      <Badge variant="outline" className="text-xs">
+                        {equipment.category === 'trinket' ? 'Trinket' : equipment.category}
                       </Badge>
                       {equipment.weaponType && (
                         <Badge variant="secondary" className="text-xs capitalize">

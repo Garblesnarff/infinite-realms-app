@@ -304,6 +304,8 @@ export interface Character {
   // Equipment & Inventory
   inventory?: Array<{
     itemId: string;
+    itemType?: string;
+    description?: string;
     quantity: number;
     weight?: number;
     equipped: boolean;

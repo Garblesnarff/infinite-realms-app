@@ -2,6 +2,14 @@ import type { Equipment } from './types';
 
 export const adventuringGear: Equipment[] = [
   {
+    id: 'arrows-20',
+    name: 'Arrows (20)',
+    category: 'gear',
+    cost: { amount: 1, currency: 'gp' },
+    weight: 1,
+    description: 'A bundle of 20 arrows for use with a bow.',
+  },
+  {
     id: 'backpack',
     name: 'Backpack',
     category: 'gear',

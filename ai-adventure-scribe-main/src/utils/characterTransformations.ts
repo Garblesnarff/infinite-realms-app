@@ -45,7 +45,7 @@ export const transformEquipmentForStorage = (character: Character, characterId: 
   return character.inventory.map((item) => ({
     character_id: characterId,
     item_name: item.itemId, // This should be the item name, not the ID
-    item_type: 'equipment',
+    item_type: item.itemType || 'equipment',
     quantity: item.quantity || 1,
     equipped: item.equipped || false,
     // Magic item properties
