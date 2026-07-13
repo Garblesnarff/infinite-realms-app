@@ -1,12 +1,13 @@
-export const DEFAULT_OPENROUTER_TEXT_MODEL = 'openrouter/auto';
+// Verified against https://openrouter.ai/api/v1/models on 2026-07-12.
+// Structured DM responses require both response_format and structured_outputs.
+export const DEFAULT_OPENROUTER_TEXT_MODEL = 'google/gemini-3.1-flash-lite';
 export const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
-  'tencent/hy3:free',
-  'poolside/laguna-xs-2.1:free',
   'nex-agi/nex-n2-mini',
+  'inclusionai/ling-2.6-1t',
 ];
 export const DEFAULT_GEMINI_TEXT_MODEL = 'gemini-2.5-flash-lite';
 export const DEFAULT_GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite-preview';
-export const DEFAULT_OPENROUTER_EXTRACTION_MODEL = 'google/gemini-3.1-flash-lite-preview';
+export const DEFAULT_OPENROUTER_EXTRACTION_MODEL = 'google/gemini-3.1-flash-lite';
 export const DEFAULT_OPENROUTER_EXTRACTION_FALLBACK_MODEL = 'nex-agi/nex-n2-mini';
 
 const dedupe = (values: string[]): string[] => {

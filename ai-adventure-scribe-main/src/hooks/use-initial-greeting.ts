@@ -36,6 +36,36 @@ interface InitialGreetingState {
   error: string | null;
 }
 
+const GREETING_MIN_LENGTH = 50;
+
+const storedMessageText = (message: Record<string, unknown> | undefined): string => {
+  const text = message?.text ?? message?.message;
+  return typeof text === 'string' ? text.trim() : '';
+};
+
+const isShortStoredGreeting = (message: Record<string, unknown> | undefined): boolean =>
+  storedMessageText(message).length > 0 && storedMessageText(message).length < GREETING_MIN_LENGTH;
+
+const replaceOpeningSceneMemory = async (sessionId: string, greetingText: string): Promise<boolean> => {
+  try {
+    const memories = await userDataApi.listMemories(sessionId, { limit: 200 });
+    const openingScene = memories.find(
+      (memory) =>
+        typeof memory?.id === 'string' &&
+        typeof memory?.content === 'string' &&
+        memory.content.startsWith('Opening Scene:'),
+    );
+    if (openingScene) {
+      await userDataApi.updateMemoryContent(openingScene.id, `Opening Scene: ${greetingText}`);
+      logger.info('[Initial Greeting] Repaired existing Opening Scene memory', openingScene.id);
+      return true;
+    }
+  } catch (error) {
+    logger.warn('[Initial Greeting] Could not replace existing Opening Scene memory:', error);
+  }
+  return false;
+};
+
 /**
  * useInitialGreeting Hook
  *
@@ -70,7 +100,8 @@ export const useInitialGreeting = ({
     const onlyFallbackMessage =
       messages.length === 1 &&
       messages[0].sender === 'dm' &&
-      messages[0].context?.isFallback === true;
+      (messages[0].context?.isFallback === true ||
+        isShortStoredGreeting(messages[0] as unknown as Record<string, unknown>));
     const shouldGenerateGreeting =
       sessionId &&
       sessionData &&
@@ -112,7 +143,8 @@ export const useInitialGreeting = ({
         existingMessageCount === 1 &&
         existingMessages?.length === 1 &&
         existingMessages[0]?.speaker_type === 'dm' &&
-        existingMessages[0]?.context?.isFallback === true;
+        (existingMessages[0]?.context?.isFallback === true ||
+          isShortStoredGreeting(existingMessages[0] as Record<string, unknown>));
 
       if ((existingMessageCount ?? 0) > 0 && !isOnlyFallbackMessage) {
         logger.info(
@@ -171,6 +203,9 @@ export const useInitialGreeting = ({
           characterDetails: characterData as unknown as Record<string, unknown>,
         },
       });
+      if (typeof openingText !== 'string' || openingText.trim().length < GREETING_MIN_LENGTH) {
+        throw new Error('Opening message was too short to be a valid scene');
+      }
 
       // Only parse structured ROLL_REQUESTS_V1 blocks from the opening message.
       // Regex-based prose detection is intentionally skipped here: option descriptions
@@ -220,12 +255,16 @@ export const useInitialGreeting = ({
 
       // Create initial memories if callback is provided (use displayText to avoid raw ROLL_REQUESTS blocks)
       if (onMemoryCreated && sessionId) {
+        const openingSceneReplaced = isOnlyFallbackMessage
+          ? await replaceOpeningSceneMemory(sessionId, displayText)
+          : false;
         await createInitialMemories(
           sessionId,
           characterData as unknown as Character,
           campaignData as unknown as Campaign,
           displayText,
           onMemoryCreated,
+          { skipOpeningScene: openingSceneReplaced },
         );
       }
 

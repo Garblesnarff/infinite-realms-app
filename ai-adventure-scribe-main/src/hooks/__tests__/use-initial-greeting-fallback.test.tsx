@@ -3,9 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useInitialGreeting } from '../use-initial-greeting';
 
-const { listSessionMessages, getCharacter, getCampaign, generateOpeningMessage } = vi.hoisted(
+const {
+  listSessionMessages,
+  listMemories,
+  updateMemoryContent,
+  getCharacter,
+  getCampaign,
+  generateOpeningMessage,
+} = vi.hoisted(
   () => ({
     listSessionMessages: vi.fn(),
+    listMemories: vi.fn(),
+    updateMemoryContent: vi.fn(),
     getCharacter: vi.fn(),
     getCampaign: vi.fn(),
     generateOpeningMessage: vi.fn(),
@@ -13,7 +22,13 @@ const { listSessionMessages, getCharacter, getCampaign, generateOpeningMessage }
 );
 
 vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { listSessionMessages, getCharacter, getCampaign },
+  userDataApi: {
+    listSessionMessages,
+    listMemories,
+    updateMemoryContent,
+    getCharacter,
+    getCampaign,
+  },
 }));
 vi.mock('@/services/ai-service', () => ({
   AIService: { generateOpeningMessage },
@@ -33,7 +48,9 @@ describe('useInitialGreeting fallback recovery', () => {
     });
     getCharacter.mockResolvedValue({ id: 'character-id', name: 'Hero', class: 'Cleric', level: 1 });
     getCampaign.mockResolvedValue({ id: 'campaign-id', name: 'The Eternal Feast' });
-    generateOpeningMessage.mockResolvedValue('The real opening scene.');
+    generateOpeningMessage.mockResolvedValue(
+      'The real opening scene unfolds beneath a copper sky as the first watch bell echoes across the valley.',
+    );
     const onGreetingGenerated = vi.fn().mockResolvedValue(undefined);
 
     renderHook(() =>
@@ -56,9 +73,51 @@ describe('useInitialGreeting fallback recovery', () => {
 
     await waitFor(() =>
       expect(onGreetingGenerated).toHaveBeenCalledWith(
-        expect.objectContaining({ text: 'The real opening scene.' }),
+        expect.objectContaining({
+          text: 'The real opening scene unfolds beneath a copper sky as the first watch bell echoes across the valley.',
+        }),
       ),
     );
     expect(generateOpeningMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('regenerates a short stored greeting and replaces its Opening Scene memory', async () => {
+    listSessionMessages.mockResolvedValue({
+      total: 1,
+      messages: [{ speaker_type: 'dm', message: '{' }],
+    });
+    listMemories.mockResolvedValue([
+      { id: 'opening-memory', content: 'Opening Scene: {' },
+    ]);
+    updateMemoryContent.mockResolvedValue(undefined);
+    getCharacter.mockResolvedValue({ id: 'character-id', name: 'Hero', class: 'Bard', level: 1 });
+    getCampaign.mockResolvedValue({ id: 'campaign-id', name: 'The Eternal Feast' });
+    generateOpeningMessage.mockResolvedValue(
+      'The market square awakens beneath amber light as rain beads on the old cobblestones.',
+    );
+    const onGreetingGenerated = vi.fn().mockResolvedValue(undefined);
+    const onMemoryCreated = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useInitialGreeting({
+        sessionId: 'session-id',
+        sessionData: { turn_count: 0 },
+        characterId: 'character-id',
+        campaignId: 'campaign-id',
+        messages: [{ sender: 'dm', text: '{', context: {} } as any],
+        messagesLoading: false,
+        onGreetingGenerated,
+        onMemoryCreated,
+      }),
+    );
+
+    await waitFor(() => expect(updateMemoryContent).toHaveBeenCalledTimes(1));
+    expect(updateMemoryContent).toHaveBeenCalledWith(
+      'opening-memory',
+      'Opening Scene: The market square awakens beneath amber light as rain beads on the old cobblestones.',
+    );
+    expect(onMemoryCreated).not.toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('Opening Scene:') }),
+    );
   });
 });

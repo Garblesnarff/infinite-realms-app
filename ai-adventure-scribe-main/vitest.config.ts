@@ -278,6 +278,7 @@ export default defineConfig({
       'src/services/__tests__/voice-mapper.test.ts',
       'src/services/voice/__tests__/voice-utils.test.ts',
       'src/services/__tests__/character-loader.test.ts',
+      'src/services/__tests__/load-character-with-spells.test.ts',
       'src/features/campaign/hooks/__tests__/use-character-selection.test.ts',
       'src/features/campaign/components/list/__tests__/character-selection-modal.accessibility.test.tsx',
       'src/hooks/memory/__tests__/useMemoryCreation.test.tsx',

@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { logger } from './lib/logger';
-import { startModelHealthChecks } from './services/model-health.js';
+import { startModelHealthChecks, validateConfiguredModels } from './services/model-health.js';
 
 // Note: Environment validation is done in lib/env.ts
 // For development without full env setup, comment out the env import in app.ts
@@ -58,6 +58,11 @@ function shutdown(signal: string): Promise<void> {
 // Register shutdown handlers
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
+
+// Validate provider model capabilities before accepting traffic. The health
+// check is advisory for availability, but configured structured-output models
+// are surfaced as degraded when they lack the required capability flags.
+await validateConfiguredModels();
 
 // Start server
 app.listen(PORT, () => {

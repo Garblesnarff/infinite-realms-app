@@ -108,6 +108,14 @@ export const memoryRoutes = new Elysia({ prefix: '/v1/memories' })
     mapMemory(await MemoryService.getById(params.id, user!.userId)),
   )
   .patch(
+    '/:id',
+    async ({ params, body, user }) => {
+      await MemoryService.updateContent(params.id, user!.userId, body.content);
+      return { ok: true };
+    },
+    { body: t.Object({ content: t.String({ minLength: 1, maxLength: 100_000 }) }) },
+  )
+  .patch(
     '/:id/scores',
     async ({ params, body, user }) => {
       await MemoryService.updateScores(params.id, user!.userId, {

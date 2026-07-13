@@ -39,7 +39,7 @@ describe('LLM provider resilience', () => {
     process.env.CB_FAILURE_THRESHOLD = '1';
     resetCircuitBreakersForTests();
     const requestedModels: string[] = [];
-    globalThis.fetch = (async (_input, init) => {
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { model: string };
       requestedModels.push(body.model);
       if (body.model === 'stale/model') return new Response('not found', { status: 404 });
@@ -47,7 +47,7 @@ describe('LLM provider resilience', () => {
         JSON.stringify({ choices: [{ message: { content: 'fallback response' } }] }),
         { status: 200 },
       );
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await LLMProviderService.generate({ prompt: 'hello' });
 
@@ -60,6 +60,32 @@ describe('LLM provider resilience', () => {
     expect(() => getCircuitBreaker('llm:openrouter').allowOrThrow()).not.toThrow();
   });
 
+  it('retries invalid structured output once on the same model before falling back', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.OPENROUTER_TEXT_MODEL = 'broken/structured-model';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'fallback/structured-model';
+    const requests: string[] = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { model: string; response_format?: unknown };
+      requests.push(body.model);
+      if (body.model === 'broken/structured-model') {
+        return new Response('not json soup', { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ text: 'valid response' }) } }] }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const result = await LLMProviderService.generate({
+      prompt: 'hello',
+      responseSchema: { type: 'object', properties: { text: { type: 'string' } } },
+    });
+
+    expect(requests).toEqual(['broken/structured-model', 'broken/structured-model', 'fallback/structured-model']);
+    expect(result).toMatchObject({ text: JSON.stringify({ text: 'valid response' }), model: 'fallback/structured-model' });
+  });
+
   it('trips the circuit breaker only after the complete fallback chain fails', async () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.OPENROUTER_TEXT_MODEL = 'stale/model';
@@ -70,7 +96,7 @@ describe('LLM provider resilience', () => {
     globalThis.fetch = (async () => {
       requestCount += 1;
       return new Response('not found', { status: 404 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const first = await LLMProviderService.generate({ prompt: 'hello' });
     const second = await LLMProviderService.generate({ prompt: 'hello' });
@@ -90,12 +116,37 @@ describe('LLM provider resilience', () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ data: listedModels }), {
         status: 200,
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     const health = await validateConfiguredModels();
 
     expect(health.status).toBe('degraded');
     expect(health.openrouter.unlistedModels).toContain('stale/model');
     expect(getModelHealthStatus().status).toBe('degraded');
+  });
+
+  it('reports a listed model without structured output capability as degraded health', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.OPENROUTER_TEXT_MODEL = 'listed/but-plain';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'listed/schema';
+    const configured = getConfiguredOpenRouterModels();
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: configured.map((id) => ({
+            id,
+            supported_parameters:
+              id === 'listed/but-plain'
+                ? ['response_format']
+                : ['response_format', 'structured_outputs'],
+          })),
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch;
+
+    const health = await validateConfiguredModels();
+
+    expect(health.status).toBe('degraded');
+    expect(health.openrouter.structuredOutputUnsupportedModels).toEqual(['listed/but-plain']);
   });
 });

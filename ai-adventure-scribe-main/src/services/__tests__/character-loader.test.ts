@@ -107,8 +107,8 @@ describe('CharacterLoaderService', () => {
       });
 
       (characterSpellService.getCharacterSpells as any).mockResolvedValue({
-        cantrips: [{ spell_id: 'uuid-firebolt' }],
-        spells: [{ spell_id: 'uuid-fireball' }],
+        cantrips: [{ id: 'uuid-firebolt', name: 'Fire Bolt', level: 0 }],
+        spells: [{ id: 'uuid-fireball', name: 'Fireball', level: 1 }],
       });
 
       // Act

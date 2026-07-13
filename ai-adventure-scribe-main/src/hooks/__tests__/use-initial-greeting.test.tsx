@@ -132,7 +132,8 @@ describe('useInitialGreeting', () => {
   });
 
   it('should generate initial greeting for a new session', async () => {
-    const greetingText = 'Welcome to the adventure! The air is fresh.';
+    const greetingText =
+      'Welcome to the adventure! The air is fresh, and distant bells echo beyond the forest road.';
     (AIService.generateOpeningMessage as any).mockResolvedValue(greetingText);
 
     renderHook(() => useInitialGreeting(defaultProps));
@@ -218,7 +219,9 @@ describe('useInitialGreeting', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({ result: { data: { previouslyOn: recapText } } }),
     });
-    (AIService.generateOpeningMessage as any).mockResolvedValue('Opening message');
+    (AIService.generateOpeningMessage as any).mockResolvedValue(
+      'Opening message: the ruined watchtower rises above the valley while morning fog curls around its stones.',
+    );
 
     renderHook(() => useInitialGreeting(props));
 
@@ -246,14 +249,16 @@ describe('useInitialGreeting', () => {
       sessionData: { turn_count: 0, session_number: 2 },
     };
     (global.fetch as any).mockRejectedValue(new Error('Fetch failed'));
-    (AIService.generateOpeningMessage as any).mockResolvedValue('Opening message');
+    (AIService.generateOpeningMessage as any).mockResolvedValue(
+      'Opening message: the ruined watchtower rises above the valley while morning fog curls around its stones.',
+    );
 
     renderHook(() => useInitialGreeting(props));
 
     await waitFor(() => expect(onGreetingGenerated).toHaveBeenCalledTimes(1), { timeout: 2000 });
     expect(onGreetingGenerated).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: 'Opening message',
+        text: 'Opening message: the ruined watchtower rises above the valley while morning fog curls around its stones.',
       }),
     );
   });
@@ -484,7 +489,14 @@ describe('useInitialGreeting', () => {
   it('should not trigger if messages are already present in props', async () => {
     const props = {
       ...defaultProps,
-      messages: [{ id: '1', text: 'Hi', sender: 'dm' as const, timestamp: 'now' }],
+      messages: [
+        {
+          id: '1',
+          text: 'A previously stored opening scene is already present in this session.',
+          sender: 'dm' as const,
+          timestamp: 'now',
+        },
+      ],
     };
 
     renderHook(() => useInitialGreeting(props));

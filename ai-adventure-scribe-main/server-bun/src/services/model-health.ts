@@ -9,6 +9,7 @@ export interface ProviderModelHealth {
   configured: boolean;
   checked: boolean;
   unlistedModels: string[];
+  structuredOutputUnsupportedModels: string[];
   error?: string;
 }
 
@@ -23,6 +24,7 @@ const initialProviderHealth = (): ProviderModelHealth => ({
   configured: false,
   checked: false,
   unlistedModels: [],
+  structuredOutputUnsupportedModels: [],
 });
 
 let modelHealth: ModelHealthStatus = {
@@ -32,20 +34,31 @@ let modelHealth: ModelHealthStatus = {
   gemini: initialProviderHealth(),
 };
 
-const parseModelIds = (data: unknown): Set<string> => {
-  const records = (data as { data?: Array<{ id?: unknown }> })?.data;
-  return new Set(
-    (records || []).map((model) => model.id).filter((id): id is string => typeof id === 'string'),
+type OpenRouterModel = { id?: unknown; supported_parameters?: unknown };
+
+const parseOpenRouterModels = (data: unknown): Map<string, Set<string>> => {
+  const records = (data as { data?: OpenRouterModel[] })?.data;
+  return new Map(
+    (records || [])
+      .filter((model): model is { id: string; supported_parameters?: unknown } => typeof model.id === 'string')
+      .map((model) => [
+        model.id,
+        new Set(
+          Array.isArray(model.supported_parameters)
+            ? model.supported_parameters.filter((parameter): parameter is string => typeof parameter === 'string')
+            : [],
+        ),
+      ]),
   );
 };
 
-const fetchOpenRouterModelIds = async (apiKey: string): Promise<Set<string>> => {
+const fetchOpenRouterModels = async (apiKey: string): Promise<Map<string, Set<string>>> => {
   const response = await fetch(OPENROUTER_MODELS_URL, {
     headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(MODEL_HEALTH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`OpenRouter model list failed (${response.status})`);
-  return parseModelIds(await response.json());
+  return parseOpenRouterModels(await response.json());
 };
 
 const parseGeminiModelIds = (data: unknown): Set<string> => {
@@ -92,13 +105,47 @@ const checkProvider = async (
       ? process.env.OPENROUTER_API_KEY
       : process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
-  if (!apiKey) return { configured: false, checked: false, unlistedModels: [] };
+  if (!apiKey) {
+    return {
+      configured: false,
+      checked: false,
+      unlistedModels: [],
+      structuredOutputUnsupportedModels: [],
+    };
+  }
 
   try {
-    const available =
-      provider === 'openrouter'
-        ? await fetchOpenRouterModelIds(apiKey)
-        : await fetchGeminiModelIds(apiKey);
+    if (provider === 'openrouter') {
+      const available = await fetchOpenRouterModels(apiKey);
+      const unlistedModels = models.filter((model) => !available.has(model));
+      const structuredOutputUnsupportedModels = models.filter((model) => {
+        const parameters = available.get(model);
+        return (
+          parameters !== undefined &&
+          (!parameters.has('response_format') || !parameters.has('structured_outputs'))
+        );
+      });
+      for (const model of unlistedModels) {
+        logger.error({
+          msg: `!!!!!!!!!!!!!!!! ${provider.toUpperCase()} MODEL NOT LISTED: ${model} !!!!!!!!!!!!!!!!`,
+          alert: true,
+          provider,
+          model,
+        });
+      }
+      for (const model of structuredOutputUnsupportedModels) {
+        logger.error({
+          msg: 'OPENROUTER MODEL LACKS STRUCTURED OUTPUT SUPPORT',
+          alert: true,
+          provider,
+          model,
+          requiredParameters: ['response_format', 'structured_outputs'],
+        });
+      }
+      return { configured: true, checked: true, unlistedModels, structuredOutputUnsupportedModels };
+    }
+
+    const available = await fetchGeminiModelIds(apiKey);
     const unlistedModels = models.filter((model) => !available.has(model));
     for (const model of unlistedModels) {
       logger.error({
@@ -108,13 +155,14 @@ const checkProvider = async (
         model,
       });
     }
-    return { configured: true, checked: true, unlistedModels };
+    return { configured: true, checked: true, unlistedModels, structuredOutputUnsupportedModels: [] };
   } catch (error) {
     logger.error({ msg: 'LLM_MODEL_HEALTH_CHECK_FAILED', provider, error });
     return {
       configured: true,
       checked: true,
       unlistedModels: [],
+      structuredOutputUnsupportedModels: [],
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -128,6 +176,7 @@ export const validateConfiguredModels = async (): Promise<ModelHealthStatus> => 
   modelHealth = {
     status:
       openrouter.unlistedModels.length ||
+      openrouter.structuredOutputUnsupportedModels.length ||
       gemini.unlistedModels.length ||
       openrouter.error ||
       gemini.error
@@ -142,8 +191,10 @@ export const validateConfiguredModels = async (): Promise<ModelHealthStatus> => 
 
 export const getModelHealthStatus = (): ModelHealthStatus => modelHealth;
 
+export const getStructuredOutputUnsupportedModels = (): string[] =>
+  modelHealth.openrouter.structuredOutputUnsupportedModels;
+
 export const startModelHealthChecks = (): ReturnType<typeof setInterval> => {
-  void validateConfiguredModels();
   const interval = setInterval(() => void validateConfiguredModels(), MODEL_HEALTH_INTERVAL_MS);
   if (typeof interval.unref === 'function') interval.unref();
   return interval;

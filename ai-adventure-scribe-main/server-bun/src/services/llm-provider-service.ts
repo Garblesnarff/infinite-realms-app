@@ -9,6 +9,7 @@ import {
   getGeminiModelCandidates,
   getOpenRouterModelCandidates,
 } from './llm-model-config.js';
+import { getStructuredOutputUnsupportedModels } from './model-health.js';
 
 /**
  * Extracted from routes/v1/llm.ts
@@ -49,6 +50,28 @@ export interface LLMResponse {
 const GEMINI_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TEXT_PROVIDER_TIMEOUT_MS = 60_000;
 let geminiModelCache: { ids: Set<string>; fetchedAt: number } | null = null;
+
+export const validateStructuredResponseText = (
+  text: string,
+  responseSchema?: Record<string, unknown>,
+): void => {
+  if (!responseSchema) return;
+  let parsed: unknown;
+  try {
+    const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    parsed = JSON.parse(cleaned);
+  } catch (error) {
+    throw new Error(`Structured response is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    Array.isArray(parsed) ||
+    typeof (parsed as { text?: unknown }).text !== 'string'
+  ) {
+    throw new Error('Structured response must be an object containing text:string');
+  }
+};
 
 /**
  * Check if error indicates model is unavailable
@@ -129,6 +152,17 @@ const pickGeminiApiVersion = (modelId: string): 'v1' | 'v1beta' => {
 
 export class LLMProviderService {
   static async stream(options: LLMGenerateOptions): Promise<ReadableStream<Uint8Array>> {
+    if (options.responseSchema) {
+      const result = await this.generate(options);
+      if (result.error) throw new Error(result.error);
+      const payload = new TextEncoder().encode(result.text);
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(payload);
+          controller.close();
+        },
+      });
+    }
     if (options.provider === 'gemini') {
       const result = await this.generate(options);
       if (result.error) throw new Error(result.error);
@@ -327,7 +361,17 @@ export class LLMProviderService {
 
     const textModel =
       model?.trim() || process.env.OPENROUTER_TEXT_MODEL || DEFAULT_OPENROUTER_TEXT_MODEL;
-    const candidateModels = getOpenRouterModelCandidates(textModel);
+    const unsupportedStructuredModels = new Set(getStructuredOutputUnsupportedModels());
+    const candidateModels = getOpenRouterModelCandidates(textModel).filter((candidate) => {
+      const allowed = !responseSchema || !unsupportedStructuredModels.has(candidate);
+      if (!allowed) {
+        logger.warn({
+          msg: 'LLM_OPENROUTER_MODEL_SKIPPED_UNSUPPORTED_STRUCTURED_OUTPUT',
+          model: candidate,
+        });
+      }
+      return allowed;
+    });
     const messages: ChatMessage[] = [];
 
     if (Array.isArray(history)) {
@@ -349,7 +393,6 @@ export class LLMProviderService {
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidate = candidateModels[index];
-      attempts.push(candidate);
       const reqBody = {
         model: candidate,
         messages,
@@ -365,8 +408,10 @@ export class LLMProviderService {
           : {}),
       };
 
-      try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
+        attempts.push(candidate);
+        try {
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -376,49 +421,58 @@ export class LLMProviderService {
           },
           body: JSON.stringify(reqBody),
           signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
-        });
-
-        if (response.ok) {
-          breaker.onSuccess();
-          const data = (await response.json()) as ORChatResp;
-          const text: string = data.choices?.[0]?.message?.content ?? '';
-          const inputTokens = data.usage?.prompt_tokens ?? 0;
-          const outputTokens = data.usage?.completion_tokens ?? 0;
-          return {
-            text,
-            model: candidate,
-            provider: 'openrouter',
-            usage: {
-              inputTokens,
-              outputTokens,
-              totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens,
-            },
-          };
-        }
-
-        const errText = await response.text();
-        lastFailure = { status: response.status, details: errText };
-        const nextCandidate = candidateModels[index + 1];
-        if (nextCandidate) {
-          logger.warn({
-            msg: 'LLM_OPENROUTER_FALLBACK',
-            requested: textModel,
-            failedModel: candidate,
-            upstreamStatus: response.status,
-            using: nextCandidate,
           });
+
+          if (response.ok) {
+            const data = (await response.json()) as ORChatResp;
+            const text: string = data.choices?.[0]?.message?.content ?? '';
+            if (responseSchema) {
+              try {
+                validateStructuredResponseText(text, responseSchema);
+              } catch (validationError) {
+                lastFailure = {
+                  status: 502,
+                  details: validationError instanceof Error ? validationError.message : String(validationError),
+                };
+                logger.warn({
+                  msg: 'LLM_OPENROUTER_STRUCTURED_RESPONSE_INVALID',
+                  model: candidate,
+                  retry: retry + 1,
+                  error: lastFailure.details,
+                });
+                continue;
+              }
+            }
+            breaker.onSuccess();
+            const inputTokens = data.usage?.prompt_tokens ?? 0;
+            const outputTokens = data.usage?.completion_tokens ?? 0;
+            return {
+              text,
+              model: candidate,
+              provider: 'openrouter',
+              usage: {
+                inputTokens,
+                outputTokens,
+                totalTokens: data.usage?.total_tokens ?? inputTokens + outputTokens,
+              },
+            };
+          }
+
+          const errText = await response.text();
+          lastFailure = { status: response.status, details: errText };
+        } catch (error) {
+          const details = error instanceof Error ? error.message : String(error);
+          if (error instanceof DOMException && error.name === 'TimeoutError') timedOut = true;
+          lastFailure = { status: 503, details };
         }
-      } catch (error) {
-        const details = error instanceof Error ? error.message : String(error);
-        if (error instanceof DOMException && error.name === 'TimeoutError') timedOut = true;
-        lastFailure = { status: 503, details };
+        if (retry === 0 && responseSchema) continue;
         const nextCandidate = candidateModels[index + 1];
         if (nextCandidate) {
           logger.warn({
             msg: 'LLM_OPENROUTER_FALLBACK',
             requested: textModel,
             failedModel: candidate,
-            error,
+            upstreamStatus: lastFailure?.status,
             using: nextCandidate,
           });
         }
@@ -510,53 +564,79 @@ export class LLMProviderService {
 
     for (const candidate of candidateModels) {
       const version = pickGeminiApiVersion(candidate);
-      attempts.push(`${candidate} [${version}]`);
+      for (let retry = 0; retry < (responseSchema ? 2 : 1); retry += 1) {
+        attempts.push(`${candidate} [${version}]`);
+        let response: Response;
+        try {
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(geminiBody),
+              signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
+            },
+          );
+        } catch (error) {
+          lastFailure = { status: 503, details: error instanceof Error ? error.message : String(error) };
+          break;
+        }
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(geminiBody),
-          signal: AbortSignal.timeout(TEXT_PROVIDER_TIMEOUT_MS),
-        },
-      );
+        if (response.ok) {
+          const payload = await response.json();
+          if (responseSchema) {
+            const candidateText = ((payload as any)?.candidates?.[0]?.content?.parts || [])
+              .map((part: { text?: string }) => part?.text)
+              .filter(Boolean)
+              .join('\n');
+            try {
+              validateStructuredResponseText(candidateText, responseSchema);
+            } catch (validationError) {
+              lastFailure = {
+                status: 502,
+                details: validationError instanceof Error ? validationError.message : String(validationError),
+              };
+              logger.warn({
+                msg: 'LLM_GEMINI_STRUCTURED_RESPONSE_INVALID',
+                model: candidate,
+                retry: retry + 1,
+                error: lastFailure.details,
+              });
+              continue;
+            }
+          }
+          successPayload = payload;
+          successModel = candidate;
+          break;
+        }
 
-      if (response.ok) {
-        successPayload = await response.json();
-        successModel = candidate;
+        const errText = await response.text();
+        lastFailure = { status: response.status, details: errText };
+
+        if (isModelUnavailableError(response.status, errText)) {
+          if (!availableModels) {
+            try {
+              availableModels = await getGeminiModelIds(apiKey);
+            } catch (fetchErr) {
+              logger.warn({ msg: 'LLM_GEMINI_MODEL_LIST_FETCH_FAILED', error: fetchErr });
+            }
+          }
+          if (availableModels && !availableModels.has(candidate)) {
+            logger.warn({
+              msg: 'LLM_GEMINI_MODEL_UNAVAILABLE',
+              candidate,
+              available: Array.from(availableModels).join(', '),
+            });
+          } else {
+            logger.warn({ msg: 'LLM_GEMINI_MODEL_REJECTED', candidate, errText });
+          }
+          break;
+        }
+
+        logger.warn({ msg: 'LLM_GEMINI_REQUEST_FAILED', candidate, status: response.status, errText });
         break;
       }
-
-      const errText = await response.text();
-      lastFailure = { status: response.status, details: errText };
-
-      if (isModelUnavailableError(response.status, errText)) {
-        if (!availableModels) {
-          try {
-            availableModels = await getGeminiModelIds(apiKey);
-          } catch (fetchErr) {
-            logger.warn({ msg: 'LLM_GEMINI_MODEL_LIST_FETCH_FAILED', error: fetchErr });
-          }
-        }
-        if (availableModels && !availableModels.has(candidate)) {
-          logger.warn({
-            msg: 'LLM_GEMINI_MODEL_UNAVAILABLE',
-            candidate,
-            available: Array.from(availableModels).join(', '),
-          });
-        } else {
-          logger.warn({ msg: 'LLM_GEMINI_MODEL_REJECTED', candidate, errText });
-        }
-        continue;
-      }
-
-      logger.warn({
-        msg: 'LLM_GEMINI_REQUEST_FAILED',
-        candidate,
-        status: response.status,
-        errText,
-      });
+      if (successPayload && successModel) break;
     }
 
     if (!successPayload || !successModel) {

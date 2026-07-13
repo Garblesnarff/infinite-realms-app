@@ -226,6 +226,11 @@ export const userDataApi = {
     request('/v1/memories', { method: 'POST', body: JSON.stringify(records) }),
   getMemory: (memoryId: string): Promise<any> =>
     request(`/v1/memories/${encodeURIComponent(memoryId)}`),
+  updateMemoryContent: (memoryId: string, content: string): Promise<void> =>
+    request(`/v1/memories/${encodeURIComponent(memoryId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    }),
   updateMemoryScores: (
     memoryId: string,
     updates: { importance?: number; narrative_weight?: number },

@@ -1,6 +1,6 @@
 # LLM provider resilience
 
-The server validates configured OpenRouter and Gemini model IDs at boot and every six hours. An invalid model makes `/health` report `status: "degraded"` while the process remains available. The OpenRouter text path tries `OPENROUTER_TEXT_MODEL`, then the comma-separated `OPENROUTER_FALLBACK_MODELS` list. Defaults are three low-cost, currently listed models; set the environment variable in production to control the chain.
+The server validates configured OpenRouter and Gemini model IDs at boot and every six hours. An invalid model or an OpenRouter text model without both `response_format` and `structured_outputs` support makes `/health` report `status: "degraded"` while the process remains available. The OpenRouter text path tries `OPENROUTER_TEXT_MODEL`, then the comma-separated `OPENROUTER_FALLBACK_MODELS` list. Defaults are currently listed, low-cost, schema-capable models: `google/gemini-3.1-flash-lite`, `nex-agi/nex-n2-mini`, and `inclusionai/ling-2.6-1t`.
 
 Provider HTTP errors never pass their status through to clients. Exhausted provider model chains return HTTP 502 with `error: "upstream_model_error"`, the provider/model, the upstream status, and a retryability flag. Circuit breakers open only after the complete candidate chain fails.
 
