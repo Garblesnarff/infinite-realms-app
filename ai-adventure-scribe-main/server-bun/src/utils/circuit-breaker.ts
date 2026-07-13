@@ -67,3 +67,7 @@ export function getCircuitBreaker(key: string, opts?: { failureThreshold?: numbe
   if (!breakers.has(key)) breakers.set(key, new CircuitBreaker(opts));
   return breakers.get(key)!;
 }
+
+export function resetCircuitBreakersForTests(): void {
+  breakers.clear();
+}

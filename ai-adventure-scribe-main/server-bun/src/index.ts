@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { logger } from './lib/logger';
+import { startModelHealthChecks } from './services/model-health.js';
 
 // Note: Environment validation is done in lib/env.ts
 // For development without full env setup, comment out the env import in app.ts
@@ -68,6 +69,7 @@ app.listen(PORT, () => {
   logger.info({
     msg: `Swagger documentation available at http://localhost:${PORT}/swagger`,
   });
+  startModelHealthChecks();
 });
 
 // Handle uncaught errors

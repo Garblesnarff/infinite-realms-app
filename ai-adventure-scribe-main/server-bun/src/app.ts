@@ -42,10 +42,20 @@ import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
 import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
+import { getModelHealthStatus } from './services/model-health.js';
 
 export function createApp() {
-  if (process.env.NODE_ENV === 'production' && process.env.TRUST_PROXY_HEADERS !== 'true' && process.env.TRUST_PROXY_HEADERS !== '1') {
-    logger.error({ msg: 'SECURITY_CONFIG_ERROR', alert: true, setting: 'TRUST_PROXY_HEADERS', detail: 'Production rate limiting will collapse all proxied users into one IP bucket' });
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.TRUST_PROXY_HEADERS !== 'true' &&
+    process.env.TRUST_PROXY_HEADERS !== '1'
+  ) {
+    logger.error({
+      msg: 'SECURITY_CONFIG_ERROR',
+      alert: true,
+      setting: 'TRUST_PROXY_HEADERS',
+      detail: 'Production rate limiting will collapse all proxied users into one IP bucket',
+    });
   }
   const app = new Elysia()
     // Request ID middleware
@@ -236,10 +246,11 @@ export function createApp() {
     .get(
       '/health',
       () => ({
-        status: 'healthy',
+        status: getModelHealthStatus().status,
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
+        modelHealth: getModelHealthStatus(),
       }),
       {
         detail: {
