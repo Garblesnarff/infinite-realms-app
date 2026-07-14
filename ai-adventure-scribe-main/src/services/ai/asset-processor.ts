@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { generateAssetKey } from '@/utils/asset-key';
 
 // Asset type definition for post-processing
@@ -139,11 +140,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
     // ⚡ Bolt: Parallelize fetching of character templates and campaign chunks
     // to reduce total latency in the AI prompt generation pipeline.
     const [charactersResult, chunksResult] = await Promise.all([
-      supabase
-        .from('starter_character_templates')
-        .select('template_key, name, portrait_url')
-        .eq('starter_campaign_id', starterCampaignId)
-        .not('portrait_url', 'is', null),
+      userDataApi.listStarterCharacterTemplates(starterCampaignId),
       supabase
         .from('campaign_chunks')
         .select('entity_name, chunk_type, metadata')
@@ -152,7 +149,7 @@ export async function fetchCampaignAssetsForPrompt(starterCampaignId: string): P
         .not('metadata->image_url', 'is', null),
     ]);
 
-    const characters = charactersResult.data;
+    const characters = charactersResult;
     const chunks = chunksResult.data;
 
     if (characters) {

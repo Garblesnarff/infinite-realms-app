@@ -21,14 +21,10 @@ class GameContextBuilder {
     const [campaign, worldsResult, questsResult] = await Promise.all([
       userDataApi.getCampaign(campaignId),
       supabase.from('worlds').select('id, name, description').eq('campaign_id', campaignId),
-      supabase
-        .from('quests')
-        .select('id, title, description, status')
-        .eq('campaign_id', campaignId),
+      userDataApi.listQuests(campaignId),
     ]);
     if (worldsResult.error) throw worldsResult.error;
-    if (questsResult.error) throw questsResult.error;
-    return { ...campaign, worlds: worldsResult.data, quests: questsResult.data } as CampaignRow;
+    return { ...campaign, worlds: worldsResult.data, quests: questsResult } as CampaignRow;
   }
 
   private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
@@ -40,17 +36,13 @@ class GameContextBuilder {
         .from('character_equipment')
         .select('item_name, item_type, description, equipped')
         .eq('character_id', characterId),
-      supabase
-        .from('quest_progress')
-        .select('status, updated_at, quests(title)')
-        .eq('character_id', characterId),
+      userDataApi.listCharacterQuestProgress(characterId),
     ]);
     if (equipmentResult.error) throw equipmentResult.error;
-    if (questResult.error) throw questResult.error;
     return {
       ...character,
       character_equipment: equipmentResult.data,
-      quest_progress: questResult.data,
+      quest_progress: questResult,
     } as CharacterRow;
   }
 

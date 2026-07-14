@@ -6,12 +6,20 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, desc, sql, or } from 'drizzle-orm';
+import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
-import { gameSessions, campaigns, characters, characterStats, type GameSession, type DialogueHistory } from '../../../db/schema/index';
+import {
+  gameSessions,
+  campaigns,
+  characters,
+  characterStats,
+  sessionChronicles,
+  type GameSession,
+  type DialogueHistory,
+} from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 
 export { type MessagePage };
@@ -93,12 +101,21 @@ export class SessionService {
   /**
    * Create a new game session
    */
-  static async createSession(data: {
-    campaignId?: string | null;
-    characterId?: string | null;
-    sessionNumber?: number;
-    status?: string;
-  }, userId: string): Promise<GameSession> {
+  static async createSession(
+    data: {
+      campaignId?: string | null;
+      characterId?: string | null;
+      sessionNumber?: number;
+      status?: string;
+      summary?: string | null;
+      currentSceneDescription?: string | null;
+      sessionNotes?: string | null;
+      turnCount?: number;
+      starterCampaignId?: string | null;
+      campaignVersion?: number | null;
+    },
+    userId: string,
+  ): Promise<GameSession> {
     // 🛡️ Sentinel: Incorporate ownership check into the INSERT query using SELECT for defense-in-depth.
     // This ensures that sessions can only be created for campaigns or characters the user is authorized to access
     // while masking resource existence in a single atomic database round-trip.
@@ -108,56 +125,78 @@ export class SessionService {
       [session] = await db
         .insert(gameSessions)
         .select(
-          db.select({
-            campaignId: sql`${data.campaignId}`,
-            characterId: sql`${data.characterId}`,
-            sessionNumber: sql`${data.sessionNumber || 1}`,
-            status: sql`${data.status || 'active'}`,
-            startTime: sql`NOW()`,
-          })
-          .from(campaigns)
-          .innerJoin(characters, eq(characters.id, data.characterId))
-          .where(and(
-            eq(campaigns.id, data.campaignId),
-            eq(campaigns.userId, userId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
+          db
+            .select({
+              campaignId: sql`${data.campaignId}`,
+              characterId: sql`${data.characterId}`,
+              sessionNumber: sql`${data.sessionNumber || 1}`,
+              status: sql`${data.status || 'active'}`,
+              startTime: sql`NOW()`,
+              summary: sql`${data.summary ?? null}`,
+              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
+              sessionNotes: sql`${data.sessionNotes ?? null}`,
+              turnCount: sql`${data.turnCount ?? 0}`,
+              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
+              campaignVersion: sql`${data.campaignVersion ?? null}`,
+            })
+            .from(campaigns)
+            .innerJoin(characters, eq(characters.id, data.characterId))
+            .where(
+              and(
+                eq(campaigns.id, data.campaignId),
+                eq(campaigns.userId, userId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
         )
         .returning();
     } else if (data.campaignId) {
       [session] = await db
         .insert(gameSessions)
         .select(
-          db.select({
-            campaignId: sql`${data.campaignId}`,
-            characterId: sql`NULL::uuid`,
-            sessionNumber: sql`${data.sessionNumber || 1}`,
-            status: sql`${data.status || 'active'}`,
-            startTime: sql`NOW()`,
-          })
-          .from(campaigns)
-          .where(and(
-            eq(campaigns.id, data.campaignId),
-            eq(campaigns.userId, userId)
-          ))
+          db
+            .select({
+              campaignId: sql`${data.campaignId}`,
+              characterId: sql`NULL::uuid`,
+              sessionNumber: sql`${data.sessionNumber || 1}`,
+              status: sql`${data.status || 'active'}`,
+              startTime: sql`NOW()`,
+              summary: sql`${data.summary ?? null}`,
+              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
+              sessionNotes: sql`${data.sessionNotes ?? null}`,
+              turnCount: sql`${data.turnCount ?? 0}`,
+              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
+              campaignVersion: sql`${data.campaignVersion ?? null}`,
+            })
+            .from(campaigns)
+            .where(and(eq(campaigns.id, data.campaignId), eq(campaigns.userId, userId))),
         )
         .returning();
     } else if (data.characterId) {
       [session] = await db
         .insert(gameSessions)
         .select(
-          db.select({
-            campaignId: sql`NULL::uuid`,
-            characterId: sql`${data.characterId}`,
-            sessionNumber: sql`${data.sessionNumber || 1}`,
-            status: sql`${data.status || 'active'}`,
-            startTime: sql`NOW()`,
-          })
-          .from(characters)
-          .where(and(
-            eq(characters.id, data.characterId),
-            or(eq(characters.userId, userId), eq(characters.ownerId, userId))
-          ))
+          db
+            .select({
+              campaignId: sql`NULL::uuid`,
+              characterId: sql`${data.characterId}`,
+              sessionNumber: sql`${data.sessionNumber || 1}`,
+              status: sql`${data.status || 'active'}`,
+              startTime: sql`NOW()`,
+              summary: sql`${data.summary ?? null}`,
+              currentSceneDescription: sql`${data.currentSceneDescription ?? null}`,
+              sessionNotes: sql`${data.sessionNotes ?? null}`,
+              turnCount: sql`${data.turnCount ?? 0}`,
+              starterCampaignId: sql`${data.starterCampaignId ?? null}`,
+              campaignVersion: sql`${data.campaignVersion ?? null}`,
+            })
+            .from(characters)
+            .where(
+              and(
+                eq(characters.id, data.characterId),
+                or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+              ),
+            ),
         )
         .returning();
     } else {
@@ -170,13 +209,22 @@ export class SessionService {
           sessionNumber: data.sessionNumber || 1,
           status: data.status || 'active',
           startTime: new Date(),
+          summary: data.summary,
+          currentSceneDescription: data.currentSceneDescription,
+          sessionNotes: data.sessionNotes,
+          turnCount: data.turnCount,
+          starterCampaignId: data.starterCampaignId,
+          campaignVersion: data.campaignVersion,
         })
         .returning();
     }
 
     if (!session) {
       // 🛡️ Sentinel: Throw NotFoundError for unauthorized access to mask resource existence.
-      throw new NotFoundError('Campaign or Character', data.campaignId || data.characterId || 'unknown');
+      throw new NotFoundError(
+        'Campaign or Character',
+        data.campaignId || data.characterId || 'unknown',
+      );
     }
 
     return session;
@@ -195,6 +243,77 @@ export class SessionService {
     return session;
   }
 
+  static async listSessions(
+    filters: {
+      campaignId?: string;
+      characterId?: string;
+      status?: string;
+      starterOnly?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+    userId: string,
+  ) {
+    const conditions: SQL[] = [getOwnershipCondition(userId) as SQL];
+    if (filters.campaignId) conditions.push(eq(gameSessions.campaignId, filters.campaignId));
+    if (filters.characterId) conditions.push(eq(gameSessions.characterId, filters.characterId));
+    if (filters.status) conditions.push(eq(gameSessions.status, filters.status));
+    if (filters.starterOnly) conditions.push(sql`${gameSessions.starterCampaignId} IS NOT NULL`);
+
+    const rows = await db
+      .select({
+        session: gameSessions,
+        character: { id: characters.id, name: characters.name, image_url: characters.imageUrl },
+        chronicle: {
+          id: sessionChronicles.id,
+          status: sessionChronicles.status,
+          chapter_title: sessionChronicles.chapterTitle,
+          share_token: sessionChronicles.shareToken,
+        },
+      })
+      .from(gameSessions)
+      .leftJoin(characters, eq(characters.id, gameSessions.characterId))
+      .leftJoin(sessionChronicles, eq(sessionChronicles.sessionId, gameSessions.id))
+      .where(and(...conditions))
+      .orderBy(desc(gameSessions.createdAt))
+      .limit(Math.min(filters.limit ?? 50, 100))
+      .offset(filters.offset ?? 0);
+
+    return rows.map((row) => ({
+      ...mapSessionContextCore(row.session),
+      session_state: row.session.sessionState,
+      character: row.character?.id ? row.character : null,
+      session_chronicles: row.chronicle?.id ? [row.chronicle] : [],
+    }));
+  }
+
+  static async updateSession(
+    sessionId: string,
+    userId: string,
+    updates: Partial<
+      Pick<
+        GameSession,
+        | 'status'
+        | 'summary'
+        | 'currentSceneDescription'
+        | 'sessionNotes'
+        | 'turnCount'
+        | 'sessionState'
+        | 'starterCampaignId'
+        | 'campaignVersion'
+        | 'endTime'
+      >
+    >,
+  ): Promise<GameSession> {
+    const [updated] = await db
+      .update(gameSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)))
+      .returning();
+    if (!updated) throw new NotFoundError('Session', sessionId);
+    return updated;
+  }
+
   /**
    * Get session with message history
    * Delegates to SessionMessageService.
@@ -205,7 +324,7 @@ export class SessionService {
     options?: {
       limit?: number;
       offset?: number;
-    }
+    },
   ): Promise<{
     session: GameSession;
     messages: DialogueHistory[];
@@ -217,10 +336,13 @@ export class SessionService {
   /**
    * Get active session for campaign/character
    */
-  static async getActiveSession(params: {
-    campaignId?: string;
-    characterId?: string;
-  }, userId: string): Promise<GameSession | null> {
+  static async getActiveSession(
+    params: {
+      campaignId?: string;
+      characterId?: string;
+    },
+    userId: string,
+  ): Promise<GameSession | null> {
     const session = await db.query.gameSessions.findFirst({
       where: (session, { and, eq, isNull }) =>
         and(
@@ -259,7 +381,7 @@ export class SessionService {
   static async completeSession(
     sessionId: string,
     userId: string,
-    summary?: string
+    summary?: string,
   ): Promise<GameSession> {
     // ⚡ Bolt: Removed redundant getSessionById call.
     // The update query already enforces ownership via the WHERE clause.
@@ -271,10 +393,7 @@ export class SessionService {
         summary: summary || null,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(gameSessions.id, sessionId),
-        getOwnershipCondition(userId)
-      ))
+      .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)))
       .returning();
 
     if (!updated) throw new NotFoundError('Session', sessionId);
@@ -287,7 +406,7 @@ export class SessionService {
   static async updateSessionNotes(
     sessionId: string,
     userId: string,
-    notes: string
+    notes: string,
   ): Promise<GameSession> {
     // ⚡ Bolt: Removed redundant getSessionById call.
     // Ownership is verified atomically within the UPDATE query's WHERE clause.
@@ -297,10 +416,7 @@ export class SessionService {
         sessionNotes: notes,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(gameSessions.id, sessionId),
-        getOwnershipCondition(userId)
-      ))
+      .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)))
       .returning();
 
     if (!updated) throw new NotFoundError('Session', sessionId);
@@ -311,14 +427,17 @@ export class SessionService {
    * Add message to session
    * Delegates to SessionMessageService.
    */
-  static async addMessage(data: {
-    sessionId: string;
-    speakerType: string;
-    speakerId?: string;
-    message: string;
-    context?: Record<string, unknown>;
-    images?: unknown[];
-  }, userId: string): Promise<DialogueHistory> {
+  static async addMessage(
+    data: {
+      sessionId: string;
+      speakerType: string;
+      speakerId?: string;
+      message: string;
+      context?: Record<string, unknown>;
+      images?: unknown[];
+    },
+    userId: string,
+  ): Promise<DialogueHistory> {
     return SessionMessageService.addMessage(data, userId);
   }
 
@@ -330,7 +449,7 @@ export class SessionService {
     sessionId: string,
     userId: string,
     limit: number = 50,
-    offset: number = 0
+    offset: number = 0,
   ): Promise<MessagePage> {
     return SessionMessageService.getRecentMessages(sessionId, userId, limit, offset);
   }
@@ -338,20 +457,14 @@ export class SessionService {
   /**
    * Get session history for campaign
    */
-  static async getCampaignSessions(
-    campaignId: string,
-    userId: string
-  ): Promise<GameSession[]> {
+  static async getCampaignSessions(campaignId: string, userId: string): Promise<GameSession[]> {
     // 🛡️ Sentinel: Combined campaign ownership/access and session retrieval into a single query.
     // This ensures atomic verification and masks resource existence for unauthorized users.
     // ⚡ Bolt: Optimized to exclude heavy text/JSONB fields (sessionNotes, summary, sceneDescription)
     // for list view. This reduces data transfer and memory usage.
-    return await db.query.gameSessions.findMany({
+    return (await db.query.gameSessions.findMany({
       where: (session, { and, eq }) =>
-        and(
-          eq(session.campaignId, campaignId),
-          getOwnershipCondition(userId, session),
-        ),
+        and(eq(session.campaignId, campaignId), getOwnershipCondition(userId, session)),
       columns: {
         id: true,
         campaignId: true,
@@ -372,7 +485,7 @@ export class SessionService {
         summary: false,
       },
       orderBy: desc(gameSessions.sessionNumber),
-    }) as GameSession[];
+    })) as GameSession[];
   }
 
   /**
@@ -382,7 +495,7 @@ export class SessionService {
     sessionId: string,
     userId: string,
     entry: unknown,
-    maxEntries: number = 500
+    maxEntries: number = 500,
   ): Promise<void> {
     // ⚡ Bolt: Optimized to fetch only the sessionNotes column instead of the entire session record.
     // This avoids over-fetching large columns like summary or currentSceneDescription.
@@ -411,9 +524,7 @@ export class SessionService {
     };
 
     const merged = [...combatLog, newEntry];
-    const trimmed = merged.length > maxEntries
-      ? merged.slice(merged.length - maxEntries)
-      : merged;
+    const trimmed = merged.length > maxEntries ? merged.slice(merged.length - maxEntries) : merged;
 
     // Store updated log back to session notes
     await this.updateSessionNotes(sessionId, userId, JSON.stringify({ combatLog: trimmed }));
@@ -425,11 +536,16 @@ export class SessionService {
   static async appendRollEvent(
     sessionId: string,
     userId: string,
-    event: { kind: string; payload: unknown }
+    event: { kind: string; payload: unknown },
   ): Promise<void> {
-    await this.appendCombatLog(sessionId, userId, {
-      kind: event.kind,
-      payload: event.payload,
-    }, 500);
+    await this.appendCombatLog(
+      sessionId,
+      userId,
+      {
+        kind: event.kind,
+        payload: event.payload,
+      },
+      500,
+    );
   }
 }

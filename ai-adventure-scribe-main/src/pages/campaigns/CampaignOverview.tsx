@@ -8,7 +8,7 @@ import { CampaignOverviewSkeleton } from './CampaignOverviewSkeleton';
 import CampaignGallery from '@/components/gallery/CampaignGallery';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 interface CampaignOverviewProps {
   campaign?: {
@@ -43,16 +43,8 @@ const CampaignOverview: React.FC<CampaignOverviewProps> = ({ campaign, onStartNe
     queryFn: async () => {
       if (!campaignId) return null;
 
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('id, character_id, status, start_time, created_at')
-        .eq('campaign_id', campaignId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error || !data) return null;
+      const [data] = await userDataApi.listSessions({ campaignId, status: 'active', limit: 1 });
+      if (!data) return null;
 
       // Check if expired (24 hours)
       const start = data.start_time || data.created_at;

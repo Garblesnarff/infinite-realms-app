@@ -40,6 +40,7 @@ import { adminRoutes } from './routes/v1/admin';
 import { spellsRoutes } from './routes/v1/spells';
 import { waitlistRoutes } from './routes/v1/waitlist';
 import { internalRoutes } from './routes/v1/internal';
+import { securedGameDataRoutes } from './routes/v1/secured-game-data';
 import { blogApiRoutes } from './routes/v1/blog';
 import { llmsRoutes } from './routes/llms.js';
 import { getModelHealthStatus } from './services/model-health.js';
@@ -374,6 +375,7 @@ export function createApp() {
 
   // Sessions routes (game session management)
   app.use(sessionsRoutes);
+  app.use(securedGameDataRoutes);
   app.use(sessionMessageRoutes);
   app.use(memoryRoutes);
 

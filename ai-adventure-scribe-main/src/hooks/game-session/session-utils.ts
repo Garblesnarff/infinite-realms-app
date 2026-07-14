@@ -5,7 +5,6 @@
 
 import type { GameSession } from '@/types/game';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -158,29 +157,22 @@ export async function createSessionInDatabase(
   campaignId: string,
   characterId: string,
 ): Promise<ExtendedGameSession | null> {
-  const { data, error } = await supabase
-    .from('game_sessions')
-    .insert([
-      {
-        session_number: 1,
-        status: 'active',
-        campaign_id: campaignId,
-        character_id: characterId,
-        turn_count: 0,
-        current_scene_description: 'The adventure begins...',
-        session_notes: '',
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) {
+  try {
+    const data = await userDataApi.createSession({
+      session_number: 1,
+      status: 'active',
+      campaign_id: campaignId,
+      character_id: characterId,
+      turn_count: 0,
+      current_scene_description: 'The adventure begins...',
+      session_notes: '',
+    });
+    logger.info('✅ [createSessionInDatabase] Session created successfully:', data.id);
+    return data as ExtendedGameSession;
+  } catch (error) {
     logger.error('[createSessionInDatabase] Error creating game session:', error);
     return null;
   }
-
-  logger.info('✅ [createSessionInDatabase] Session created successfully:', data.id);
-  return data as ExtendedGameSession;
 }
 
 /**
@@ -190,16 +182,9 @@ export async function cleanupSessionInDatabase(
   sessionId: string,
   summary: string,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('game_sessions')
-    .update({
-      end_time: new Date().toISOString(),
-      summary,
-      status: 'completed' as const,
-    })
-    .eq('id', sessionId);
-
-  if (error) {
+  try {
+    await userDataApi.completeSession(sessionId, summary);
+  } catch (error) {
     logger.error('[cleanupSessionInDatabase] Error cleaning up session:', error);
     return false;
   }
@@ -217,20 +202,16 @@ export async function fetchExistingSessions(
   limit: number = 5,
 ): Promise<ExtendedGameSession[]> {
   // ⚡ Bolt: Use explicit core columns to avoid fetching heavy JSONB fields during list view
-  const { data, error } = await supabase
-    .from('game_sessions')
-    .select(SESSION_CORE_COLUMNS)
-    .eq('campaign_id', campaignId)
-    .eq('character_id', characterId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
+  try {
+    return (await userDataApi.listSessions({
+      campaignId,
+      characterId,
+      limit,
+    })) as ExtendedGameSession[];
+  } catch (error) {
     logger.error('[fetchExistingSessions] Error fetching sessions:', error);
     return [];
   }
-
-  return (data || []) as ExtendedGameSession[];
 }
 
 /**
@@ -238,18 +219,12 @@ export async function fetchExistingSessions(
  */
 export async function fetchSessionById(sessionId: string): Promise<ExtendedGameSession | null> {
   // ⚡ Bolt: Use explicit core columns to avoid fetching heavy JSONB fields
-  const { data, error } = await supabase
-    .from('game_sessions')
-    .select(SESSION_CORE_COLUMNS)
-    .eq('id', sessionId)
-    .single();
-
-  if (error) {
+  try {
+    return (await userDataApi.getSession(sessionId)) as ExtendedGameSession;
+  } catch (error) {
     logger.error('[fetchSessionById] Error fetching session:', error);
     return null;
   }
-
-  return data as ExtendedGameSession;
 }
 
 /**
@@ -259,17 +234,13 @@ export async function updateSessionInDatabase(
   sessionId: string,
   updates: Partial<ExtendedGameSession>,
 ): Promise<ExtendedGameSession | null> {
-  const { data, error } = await supabase
-    .from('game_sessions')
-    .update(updates)
-    .eq('id', sessionId)
-    .select()
-    .single();
-
-  if (error) {
+  try {
+    return (await userDataApi.updateSession(
+      sessionId,
+      updates as Record<string, unknown>,
+    )) as ExtendedGameSession;
+  } catch (error) {
     logger.error('[updateSessionInDatabase] Error updating session:', error);
     return null;
   }
-
-  return data as ExtendedGameSession;
 }

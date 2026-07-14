@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 export interface GameSession {
   id: string;
@@ -39,14 +39,7 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
 
       try {
         // Get the next session number
-        const { data: existingSessions, error: countError } = await supabase
-          .from('game_sessions')
-          .select('session_number')
-          .eq('campaign_id', campaignId)
-          .order('session_number', { ascending: false })
-          .limit(1);
-
-        if (countError) throw countError;
+        const existingSessions = await userDataApi.listSessions({ campaignId, limit: 1 });
 
         const nextSessionNumber =
           existingSessions.length > 0 && existingSessions[0]?.session_number
@@ -54,18 +47,12 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
             : 1;
 
         // Create new session
-        const { data, error } = await supabase
-          .from('game_sessions')
-          .insert({
-            campaign_id: campaignId,
-            character_id: characterId,
-            session_number: nextSessionNumber,
-            status: 'active',
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await userDataApi.createSession({
+          campaign_id: campaignId,
+          character_id: characterId,
+          session_number: nextSessionNumber,
+          status: 'active',
+        });
 
         setSession(data as GameSession);
         return data as GameSession;
@@ -92,21 +79,11 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
 
       try {
         // Look for existing sessions, both active and completed
-        const { data: existingSessions, error } = await supabase
-          .from('game_sessions')
-          .select(
-            'id, campaign_id, character_id, session_number, status, start_time, end_time, current_scene_description, summary, session_notes, starter_campaign_id, campaign_version',
-          )
-          .eq('campaign_id', campaignId)
-          .eq('character_id', characterId)
-          .order('created_at', { ascending: false })
-          .limit(5); // Get last 5 sessions to find the best one to resume
-
-        if (error) {
-          logger.error('Error fetching existing sessions:', error);
-          // If we can't fetch sessions, create a new one
-          return await createGameSession(campaignId, characterId);
-        }
+        const existingSessions = await userDataApi.listSessions({
+          campaignId,
+          characterId,
+          limit: 5,
+        });
 
         // Look for an active session first
         const sessionToResume = existingSessions?.find((s) => s.status === 'active');
@@ -130,20 +107,14 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
           const sessionNumber =
             Math.max(...(existingSessions?.map((s) => s.session_number || 1) || [1])) + 1;
 
-          const { data: newSession, error: createError } = await supabase
-            .from('game_sessions')
-            .insert({
-              campaign_id: campaignId,
-              character_id: characterId,
-              session_number: sessionNumber,
-              status: 'active',
-              // Add a summary note about continuity
-              summary: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
-            })
-            .select()
-            .single();
-
-          if (createError) throw createError;
+          const newSession = await userDataApi.createSession({
+            campaign_id: campaignId,
+            character_id: characterId,
+            session_number: sessionNumber,
+            status: 'active',
+            // Add a summary note about continuity
+            summary: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
+          });
 
           setSession(newSession as GameSession);
           return newSession as GameSession;
@@ -170,16 +141,7 @@ export const useSimpleGameSession = (campaignId?: string, characterId?: string) 
   const endSession = useCallback(
     async (sessionId: string, summary?: string) => {
       try {
-        const { error } = await supabase
-          .from('game_sessions')
-          .update({
-            status: 'completed',
-            end_time: new Date().toISOString(),
-            summary: summary,
-          })
-          .eq('id', sessionId);
-
-        if (error) throw error;
+        await userDataApi.completeSession(sessionId, summary);
 
         if (session?.id === sessionId) {
           setSession({

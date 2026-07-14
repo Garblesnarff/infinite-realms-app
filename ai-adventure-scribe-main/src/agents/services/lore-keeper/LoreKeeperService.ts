@@ -26,6 +26,7 @@ import {
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 // Re-export types for backward compatibility
 export type { ChunkType, StarterCampaign, CampaignChunk, CampaignRule, SearchResult };
@@ -289,20 +290,20 @@ export class LoreKeeperService {
     campaignId?: string;
     campaignVersion?: number;
   }> {
-    const { data, error } = await supabase
-      .from('game_sessions')
-      .select('starter_campaign_id, campaign_version')
-      .eq('id', sessionId)
-      .single();
-
-    if (error || !data?.starter_campaign_id) {
+    let data: Record<string, unknown>;
+    try {
+      data = await userDataApi.getSession(sessionId);
+    } catch {
+      return { isStarter: false };
+    }
+    if (!data?.starter_campaign_id) {
       return { isStarter: false };
     }
 
     return {
       isStarter: true,
-      campaignId: data.starter_campaign_id,
-      campaignVersion: data.campaign_version,
+      campaignId: data.starter_campaign_id as string,
+      campaignVersion: data.campaign_version as number | undefined,
     };
   }
 
@@ -334,10 +335,16 @@ export class LoreKeeperService {
 
   private async generateEmbedding(text: string): Promise<number[]> {
     // Gemini text-embedding-004 produces 768-dimensional vectors
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const apiBase = import.meta.env.VITE_API_URL || '';
     const response = await fetch(`${apiBase}/v1/ai-proxy/embeddings`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify({ text: text.substring(0, EMBEDDING_MAX_INPUT_CHARS) }),
     });
 

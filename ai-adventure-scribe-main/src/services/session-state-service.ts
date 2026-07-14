@@ -1,6 +1,6 @@
 import type { SessionStatePayload } from '@/types/session-state';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import { createDefaultSessionState } from '@/types/session-state';
 
 /**
@@ -12,13 +12,8 @@ export class SessionStateService {
   /** Load state snapshot for a session. */
   static async getState(sessionId: string): Promise<SessionStatePayload> {
     try {
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('id, session_state')
-        .eq('id', sessionId)
-        .single();
-
-      if (error || !data) {
+      const data = await userDataApi.getSession(sessionId);
+      if (!data) {
         // Column may not exist yet or row missing; return default
         return createDefaultSessionState(sessionId);
       }
@@ -45,12 +40,9 @@ export class SessionStateService {
         lastUpdate: new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({ session_state: next })
-        .eq('id', sessionId);
-
-      if (error) {
+      try {
+        await userDataApi.updateSession(sessionId, { session_state: next });
+      } catch {
         // If update fails (e.g., column absent), just return the merged snapshot
         return next;
       }
@@ -84,7 +76,7 @@ export class SessionStateService {
     };
 
     try {
-      await supabase.from('game_sessions').update({ session_state: updated }).eq('id', sessionId);
+      await userDataApi.updateSession(sessionId, { session_state: updated });
     } catch {
       // safe failure
     }

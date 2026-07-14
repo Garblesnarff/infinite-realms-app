@@ -21,8 +21,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { NavigateFunction } from 'react-router-dom';
 
 import { type useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 interface ContinueOrResumeSessionParams {
   session: SessionListItem;
@@ -76,27 +76,18 @@ export async function continueOrResumeSession({
   setContinuingId(session.id);
 
   try {
-    const { data: newSession, error: createError } = await supabase
-      .from('game_sessions')
-      .insert({
-        campaign_id: campaignId,
-        character_id: session.character.id,
-        status: 'active',
-        session_number: (session.session_number ?? 0) + 1,
-        current_scene_description:
-          session.current_scene_description ?? 'Continuing your adventure...',
-        session_notes: session.summary
-          ? `Continuing from Session ${session.session_number ?? ''}`
-          : null,
-        turn_count: 0,
-        start_time: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (createError || !newSession) {
-      throw createError || new Error('Failed to create continuation session.');
-    }
+    const newSession = await userDataApi.createSession({
+      campaign_id: campaignId,
+      character_id: session.character.id,
+      status: 'active',
+      session_number: (session.session_number ?? 0) + 1,
+      current_scene_description:
+        session.current_scene_description ?? 'Continuing your adventure...',
+      session_notes: session.summary
+        ? `Continuing from Session ${session.session_number ?? ''}`
+        : null,
+      turn_count: 0,
+    });
 
     const createdSession = newSession as SessionListItem;
 

@@ -200,6 +200,7 @@ export const gameSessions = pgTable(
     summary: text('summary'),
     sessionNotes: text('session_notes'),
     turnCount: integer('turn_count').default(0),
+    sessionState: jsonb('session_state').default({}),
     // Starter campaign support
     starterCampaignId: text('starter_campaign_id'), // References starter_campaigns if this is a starter playthrough
     campaignVersion: integer('campaign_version'), // Locked version at session start

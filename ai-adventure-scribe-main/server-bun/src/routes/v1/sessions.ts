@@ -23,6 +23,7 @@ import { SessionService } from '../../services/session-service.js';
 import { db } from '../../../../db/client';
 import { sessionChronicles } from '../../../../db/schema/index';
 import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
+import { getSessionContextRouteResult } from './session-context-handler.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
@@ -42,6 +43,7 @@ const mapSessionToApi = (session: GameSession): any => ({
   summary: session.summary,
   session_notes: session.sessionNotes,
   turn_count: session.turnCount,
+  session_state: session.sessionState,
   starter_campaign_id: session.starterCampaignId,
   campaign_version: session.campaignVersion,
   ruleset: session.ruleset,
@@ -57,7 +59,27 @@ const createSessionSchema = t.Object({
   character_id: t.Optional(t.Nullable(t.String())),
   session_number: t.Optional(t.Number({ minimum: 1 })),
   status: t.Optional(t.String()),
+  summary: t.Optional(t.Nullable(t.String())),
+  current_scene_description: t.Optional(t.Nullable(t.String())),
+  session_notes: t.Optional(t.Nullable(t.String())),
+  turn_count: t.Optional(t.Number()),
+  starter_campaign_id: t.Optional(t.Nullable(t.String())),
+  campaign_version: t.Optional(t.Nullable(t.Number())),
 });
+
+const updateSessionSchema = t.Partial(
+  t.Object({
+    status: t.String(),
+    summary: t.Nullable(t.String()),
+    current_scene_description: t.Nullable(t.String()),
+    session_notes: t.Nullable(t.String()),
+    turn_count: t.Number(),
+    session_state: t.Any(),
+    starter_campaign_id: t.Nullable(t.String()),
+    campaign_version: t.Nullable(t.Number()),
+    end_time: t.Nullable(t.String()),
+  }),
+);
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
@@ -79,6 +101,12 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
             characterId: character_id,
             sessionNumber: session_number,
             status: status || undefined,
+            summary: body.summary,
+            currentSceneDescription: body.current_scene_description,
+            sessionNotes: body.session_notes,
+            turnCount: body.turn_count,
+            starterCampaignId: body.starter_campaign_id,
+            campaignVersion: body.campaign_version,
           },
           (user as { userId: string }).userId,
         );
@@ -98,6 +126,20 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     {
       body: createSessionSchema,
     },
+  )
+
+  .get('/', async ({ query, user }) =>
+    SessionService.listSessions(
+      {
+        campaignId: query.campaign_id,
+        characterId: query.character_id,
+        status: query.status,
+        starterOnly: query.starter_only === 'true',
+        limit: query.limit ? Number(query.limit) : undefined,
+        offset: query.offset ? Number(query.offset) : undefined,
+      },
+      (user as { userId: string }).userId,
+    ),
   )
 
   /**
@@ -127,20 +169,56 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    */
   .get('/:id/context', async ({ params, set, user }) => {
     try {
-      return await SessionService.getSessionContext(
+      const result = await getSessionContextRouteResult(
         params.id,
         (user as { userId: string }).userId,
+        SessionService.getSessionContext,
       );
+      set.status = result.status;
+      return result.body;
     } catch (error) {
-      if (error instanceof NotFoundError) {
-        set.status = 404;
-        return { error: 'Not found' };
-      }
       logger.error({ msg: 'SESSION_CONTEXT_GET error', sessionId: params.id, error });
       set.status = 500;
       return { error: 'Failed to fetch session context' };
     }
   })
+
+  .patch(
+    '/:id',
+    async ({ params, body, set, user }) => {
+      try {
+        const payload = body as Record<string, unknown>;
+        const updated = await SessionService.updateSession(
+          params.id,
+          (user as { userId: string }).userId,
+          {
+            status: payload.status as string | undefined,
+            summary: payload.summary as string | null | undefined,
+            currentSceneDescription: payload.current_scene_description as string | null | undefined,
+            sessionNotes: payload.session_notes as string | null | undefined,
+            turnCount: payload.turn_count as number | undefined,
+            sessionState: payload.session_state,
+            starterCampaignId: payload.starter_campaign_id as string | null | undefined,
+            campaignVersion: payload.campaign_version as number | null | undefined,
+            endTime:
+              typeof payload.end_time === 'string'
+                ? new Date(payload.end_time)
+                : payload.end_time === null
+                  ? null
+                  : undefined,
+          },
+        );
+        return mapSessionToApi(updated);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: 'Not found' };
+        }
+        throw error;
+      }
+    },
+    { body: updateSessionSchema },
+  )
 
   /**
    * POST /v1/sessions/:id/complete
@@ -166,9 +244,14 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           let chronicleId: string | undefined;
           try {
             chronicleId = await db.transaction(async (tx) => {
-              const [row] = await tx.insert(sessionChronicles).values({
-                  sessionId: sessionIdForChronicle, userId: sessionUserId, status: 'generating',
-                }).returning({ id: sessionChronicles.id });
+              const [row] = await tx
+                .insert(sessionChronicles)
+                .values({
+                  sessionId: sessionIdForChronicle,
+                  userId: sessionUserId,
+                  status: 'generating',
+                })
+                .returning({ id: sessionChronicles.id });
               if (!row) throw new Error('Failed to create chronicle row');
               return row.id;
             });
@@ -184,16 +267,19 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
             const completedChronicleId = chronicleId;
 
             await db.transaction(async (tx) => {
-              await tx.update(sessionChronicles).set({
-                status: 'ready',
-                chronicleText: content.chronicleText,
-                chapterTitle: content.chapterTitle,
-                previouslyOn: content.previouslyOn,
-                illustrationUrl,
-                shareToken: chronicleGenerator.generateShareToken(),
-                generatedAt: new Date(),
-                updatedAt: new Date(),
-              }).where(eq(sessionChronicles.id, completedChronicleId));
+              await tx
+                .update(sessionChronicles)
+                .set({
+                  status: 'ready',
+                  chronicleText: content.chronicleText,
+                  chapterTitle: content.chapterTitle,
+                  previouslyOn: content.previouslyOn,
+                  illustrationUrl,
+                  shareToken: chronicleGenerator.generateShareToken(),
+                  generatedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(sessionChronicles.id, completedChronicleId));
             });
 
             logger.info({
@@ -205,7 +291,12 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
               try {
                 await persistChronicleFailure(db, chronicleId, err);
               } catch (statusError) {
-                logger.error({ msg: '[Sessions] Chronicle failure status update failed', sessionId: sessionIdForChronicle, chronicleId, error: statusError });
+                logger.error({
+                  msg: '[Sessions] Chronicle failure status update failed',
+                  sessionId: sessionIdForChronicle,
+                  chronicleId,
+                  error: statusError,
+                });
               }
             }
             logger.error({

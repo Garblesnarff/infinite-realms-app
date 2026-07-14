@@ -3,7 +3,6 @@ import { MemoryManager } from '../memory-manager';
 import type { QuestRequest, GeneratedQuest } from '@/services/world-builders/quest-types';
 
 import { llmApiClient } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import {
@@ -128,12 +127,7 @@ export class QuestGenerator {
         },
       };
 
-      const { data, error } = await supabase.from('quests').insert(questData).select('id').single();
-
-      if (error) {
-        logger.error('Error saving quest:', error);
-        throw new Error('Failed to save quest to database');
-      }
+      const data = await userDataApi.createQuest(questData);
 
       logger.info(`💾 Saved quest "${quest.title}" with ID: ${data.id}`);
       return data.id;

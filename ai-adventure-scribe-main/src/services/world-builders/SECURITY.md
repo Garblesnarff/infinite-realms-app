@@ -55,12 +55,7 @@ All world builders now include validation:
 
 2. **Campaign Ownership Validation**  
    ```typescript
-   const { data: campaign } = await supabase
-     .from('campaigns')
-     .select('*')
-     .eq('id', campaignId)
-     .eq('user_id', user.id) // Only user's campaigns
-     .single();
+   const campaign = await userDataApi.getCampaign(campaignId);
    ```
 
 3. **Security Logging**

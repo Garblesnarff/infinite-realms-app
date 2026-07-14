@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { generateAssetKey } from '@/utils/asset-key';
 
 export interface CampaignAsset {
@@ -69,11 +70,7 @@ export function useCampaignAssets(
         // ⚡ Bolt: Parallelize asset loading to reduce total latency.
         // Instead of 3 sequential await calls, Promise.all executes them concurrently.
         const [charResult, chunkResult, campaignResult] = await Promise.all([
-          supabase
-            .from('starter_character_templates')
-            .select('template_key, name, tagline, portrait_url')
-            .eq('starter_campaign_id', starterCampaignId)
-            .not('portrait_url', 'is', null),
+          userDataApi.listStarterCharacterTemplates(starterCampaignId),
           supabase
             .from('campaign_chunks')
             .select('entity_name, chunk_type, metadata')
@@ -88,10 +85,8 @@ export function useCampaignAssets(
         ]);
 
         // 1. Process character templates with portraits
-        if (charResult.error) {
-          logger.warn('[CampaignAssets] Failed to load characters:', charResult.error);
-        } else if (charResult.data) {
-          for (const char of charResult.data) {
+        if (charResult) {
+          for (const char of charResult) {
             if (char.portrait_url) {
               loadedAssets.push({
                 type: 'character',

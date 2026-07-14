@@ -38,9 +38,9 @@ Provide **API clients, types, and helpers** to interact with:
 ## **Usage Example**
 
 ```typescript
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-const { data, error } = await supabase.from('game_sessions').select('*');
+const sessions = await userDataApi.listSessions({ campaignId });
 ```
 
 ---

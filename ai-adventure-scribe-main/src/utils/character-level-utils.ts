@@ -5,8 +5,8 @@
  * and other systems that need to generate content appropriate to party level.
  */
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 export interface PartyLevelInfo {
   averageLevel: number;
@@ -27,13 +27,8 @@ export interface PartyLevelInfo {
 export async function getSessionPartyLevel(sessionId: string): Promise<PartyLevelInfo> {
   try {
     // Get characters from the session's campaign
-    const { data: session, error: sessionError } = await supabase
-      .from('game_sessions')
-      .select('campaign_id')
-      .eq('id', sessionId)
-      .single();
-
-    if (sessionError || !session) {
+    const session = await userDataApi.getSession(sessionId);
+    if (!session) {
       logger.warn('Could not find session, using default party level');
       return getDefaultPartyLevel();
     }
@@ -51,29 +46,15 @@ export async function getSessionPartyLevel(sessionId: string): Promise<PartyLeve
 export async function getCampaignPartyLevel(campaignId: string): Promise<PartyLevelInfo> {
   try {
     // Get all characters in the campaign
-    const { data: characters, error } = await supabase
-      .from('campaign_characters')
-      .select(
-        `
-        character_id,
-        characters (
-          id,
-          name,
-          level,
-          class
-        )
-      `,
-      )
-      .eq('campaign_id', campaignId);
+    const characters = await userDataApi.listCharacters(campaignId);
 
-    if (error || !characters || characters.length === 0) {
+    if (!characters || characters.length === 0) {
       logger.warn('No characters found for campaign, using default party level');
       return getDefaultPartyLevel();
     }
 
     // Extract character data and filter out null characters
     const validCharacters = characters
-      .map((cc) => cc.characters)
       .filter((char) => char && char.level && char.level > 0)
       .map((char) => ({
         id: char.id,

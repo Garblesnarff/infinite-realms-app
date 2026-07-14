@@ -53,15 +53,14 @@ export class WorldBuilderRepository {
       const [locations, npcs, quests] = await Promise.all([
         supabase.from('locations').select('id').eq('campaign_id', campaignId),
         supabase.from('npcs').select('id').eq('campaign_id', campaignId),
-        supabase.from('quests').select('id').eq('campaign_id', campaignId),
+        userDataApi.listQuests(campaignId),
       ]);
 
       return {
         locations: locations.data?.length || 0,
         npcs: npcs.data?.length || 0,
-        quests: quests.data?.length || 0,
-        totalElements:
-          (locations.data?.length || 0) + (npcs.data?.length || 0) + (quests.data?.length || 0),
+        quests: quests.length,
+        totalElements: (locations.data?.length || 0) + (npcs.data?.length || 0) + quests.length,
       };
     } catch (error) {
       logger.error('Failed to get world stats:', error);
@@ -174,50 +173,15 @@ export class WorldBuilderRepository {
     quest: { name: string; update: string },
   ): Promise<boolean> {
     try {
-      // Check if quest already exists (by name in this campaign)
-      const { data: existing } = await supabase
-        .from('quests')
-        .select('id, status')
-        .eq('campaign_id', campaignId)
-        .ilike('title', quest.name)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
-        // Quest exists - update its status/description
-        const { error } = await supabase
-          .from('quests')
-          .update({
-            description: quest.update,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing[0].id);
-
-        if (error) {
-          logger.warn(`[WorldBuilder] Failed to update quest "${quest.name}":`, error);
-          return false;
-        } else {
-          logger.debug(`[WorldBuilder] Updated quest "${quest.name}" from XML`);
-          return true;
-        }
-      }
-
-      // Create new quest
-      const { error } = await supabase.from('quests').insert({
+      await userDataApi.upsertQuest({
         campaign_id: campaignId,
-        session_id: sessionId,
         title: quest.name,
         description: quest.update,
         status: 'active',
         quest_type: 'side', // Default type for XML-extracted quests
       });
-
-      if (error) {
-        logger.warn(`[WorldBuilder] Failed to save quest "${quest.name}":`, error);
-        return false;
-      } else {
-        logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML`);
-        return true;
-      }
+      logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML for session ${sessionId}`);
+      return true;
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving quest "${quest.name}":`, error);
       return false;

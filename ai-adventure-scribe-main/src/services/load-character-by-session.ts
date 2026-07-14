@@ -28,18 +28,8 @@ export async function loadCharacterBySession(
   userId?: string,
 ): Promise<Character | undefined> {
   try {
-    // Build session query with ownership validation if userId provided
-    let sessionQuery = supabase
-      .from('game_sessions')
-      .select('character_id, user_id')
-      .eq('id', sessionId);
-
-    // SECURITY: Validate session ownership if userId provided
-    if (userId) {
-      sessionQuery = sessionQuery.eq('user_id', userId);
-    }
-
-    const { data: session } = await sessionQuery.single();
+    // The authenticated server route performs the ownership check. game_sessions has no user_id column.
+    const session = await userDataApi.getSession(sessionId);
 
     if (!session?.character_id) return undefined;
 

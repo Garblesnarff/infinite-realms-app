@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { trpc } from '@/infrastructure/api';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 const PAGE_SIZE = 10;
 // Session expiry times
@@ -52,32 +52,11 @@ const CampaignSessions: React.FC = () => {
       queryKey: ['campaign', campaignId, 'sessions'],
       queryFn: async ({ pageParam = 0 }): Promise<SessionListItem[]> => {
         if (!campaignId) return [];
-        const from = pageParam * PAGE_SIZE;
-        const to = from + PAGE_SIZE - 1;
-        const { data: rows, error: fetchError } = await supabase
-          .from('game_sessions')
-          .select(
-            `
-          id,
-          session_number,
-          status,
-          start_time,
-          end_time,
-          summary,
-          current_scene_description,
-          turn_count,
-          created_at,
-          character:characters ( id, name, image_url ),
-          session_chronicles ( id, status, chapter_title, share_token )
-        `,
-          )
-          .eq('campaign_id', campaignId)
-          .order('created_at', { ascending: false })
-          .range(from, to);
-
-        if (fetchError) {
-          throw fetchError;
-        }
+        const rows = await userDataApi.listSessions({
+          campaignId,
+          limit: PAGE_SIZE,
+          offset: pageParam * PAGE_SIZE,
+        });
 
         logger.debug('[CampaignSessions] Query results', {
           campaignId,
@@ -90,6 +69,7 @@ const CampaignSessions: React.FC = () => {
       getNextPageParam: (lastPage, pages) =>
         lastPage.length === PAGE_SIZE ? pages.length : undefined,
       enabled: Boolean(campaignId),
+      refetchInterval: 10_000,
     });
 
   const sessions = React.useMemo(() => {
@@ -100,29 +80,6 @@ const CampaignSessions: React.FC = () => {
     });
     return flattened;
   }, [data?.pages]);
-
-  React.useEffect(() => {
-    if (!campaignId) return;
-    const channel = supabase
-      .channel(`campaign-sessions-${campaignId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'game_sessions',
-          filter: `campaign_id=eq.${campaignId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['campaign', campaignId, 'sessions'] });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [campaignId, queryClient]);
 
   const openStartSession = React.useCallback(() => {
     if (!campaignId) {

@@ -16,7 +16,7 @@
  */
 
 // External/SDK Imports
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 // Project Types
 import { CampaignContext } from '@/types/dm';
@@ -24,16 +24,10 @@ import { logger } from '../../../lib/logger';
 
 export class OpportunityGenerator {
   async generateOpportunities(campaignId: string, context: CampaignContext) {
-    const { data: quests, error: questError } = await supabase
-      .from('quests')
-      .select('id, title, description, status') // Specify columns
-      .eq('campaign_id', campaignId)
-      .eq('status', 'available'); // Ensure this status matches enum or actual values
-
-    if (questError) {
-      logger.error('Error fetching quests:', questError);
-      // Decide how to handle quest fetching errors, e.g., return empty or a default hook
-    }
+    const quests = await userDataApi.listQuests(campaignId, 'available').catch((error) => {
+      logger.error('Error fetching quests:', error);
+      return [];
+    });
 
     return {
       immediate: this.generateImmediateActions(context.setting),

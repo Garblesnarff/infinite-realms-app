@@ -127,11 +127,7 @@ export class DMResponseGenerator {
    * @returns {Promise<void>}
    */
   private async loadCharacterDetails(): Promise<void> {
-    const { data: session } = await supabase
-      .from('game_sessions')
-      .select('character_id')
-      .eq('id', this.sessionId)
-      .single();
+    const session = await userDataApi.getSession(this.sessionId).catch(() => null);
 
     if (session?.character_id) {
       const characterData = await userDataApi.getCharacter(session.character_id);

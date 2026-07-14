@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { seedStarterCharacter } from '@/services/character/starter-character-seeding';
 import { userDataApi } from '@/services/user-data-api';
@@ -96,20 +95,8 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!user?.id) return null;
 
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('starter_campaign_id')
-        .eq('campaign_id', campaignId)
-        .not('starter_campaign_id', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        logger.error('Error checking starter campaign link:', error);
-        return null;
-      }
-
-      return data?.starter_campaign_id || null;
+      const [session] = await userDataApi.listSessions({ campaignId, starterOnly: true, limit: 1 });
+      return session?.starter_campaign_id || null;
     },
     enabled: !!user?.id && isOpen,
   });
@@ -120,18 +107,9 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!starterCampaignId) return [];
 
-      const { data, error } = await supabase
-        .from('starter_character_templates')
-        .select('*')
-        .eq('starter_campaign_id', starterCampaignId)
-        .order('display_order');
-
-      if (error) {
-        logger.error('Error fetching templates:', error);
-        return [];
-      }
-
-      return (data || []) as StarterTemplate[];
+      return userDataApi.listStarterCharacterTemplates(starterCampaignId) as Promise<
+        StarterTemplate[]
+      >;
     },
     enabled: !!starterCampaignId,
   });
