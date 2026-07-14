@@ -1,8 +1,14 @@
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { DynamicOptionsSection } from '../DynamicOptionsSection';
+
+const combat = vi.hoisted(() => ({ isInCombat: false, activeEncounter: null as any }));
+vi.mock('@/contexts/CombatContext', () => ({ useCombat: () => ({ state: combat }) }));
+vi.mock('@/services/combat/combat-action-executor', () => ({
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue({}),
+}));
 
 // Mock the dependent component
 vi.mock('@/components/game/ActionOptions', () => ({
@@ -23,6 +29,12 @@ describe('DynamicOptionsSection', () => {
     { id: '2', text: 'Option 2', number: 2 },
   ];
   const mockOnOptionSelect = vi.fn();
+
+  beforeEach(() => {
+    combat.isInCombat = false;
+    combat.activeEncounter = null;
+    vi.restoreAllMocks();
+  });
 
   it('renders correctly when options are provided', () => {
     const { getByTestId, getByText } = render(
@@ -102,5 +114,19 @@ describe('DynamicOptionsSection', () => {
     );
 
     expect(getByText('Option 1')).toBeDefined();
+  });
+
+  it('replaces narration exploration options with server legal actions during combat', async () => {
+    combat.isInCombat = true;
+    combat.activeEncounter = { id: 'enc-1', currentTurnParticipantId: 'pc-1' };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ actorId: 'pc-1', actions: [{ type: 'dodge', label: 'Dodge' }] }),
+    } as Response);
+    const { queryByText, getByText } = render(
+      <DynamicOptionsSection options={mockOptions as any} onOptionSelect={mockOnOptionSelect} hasDynamicOverlay={false} />,
+    );
+    await waitFor(() => expect(getByText('Dodge')).toBeDefined());
+    expect(queryByText('Option 1')).toBeNull();
   });
 });

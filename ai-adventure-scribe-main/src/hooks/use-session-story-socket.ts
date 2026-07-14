@@ -21,8 +21,16 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
       try {
         const message = JSON.parse(String(event.data));
         if (message.type === 'chat') callbackRef.current();
-        if (['map_created', 'entity_moved', 'cell_updated', 'map_destroyed'].includes(message.type)) {
+        if (['map_created', 'entity_moved', 'movement_updated', 'cell_updated', 'map_destroyed'].includes(message.type)) {
           window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
+        }
+        if (message.type === 'combat_state_updated') {
+          window.dispatchEvent(new CustomEvent('combat-state-updated', { detail: message }));
+          if (message.tacticalMap) {
+            window.dispatchEvent(new CustomEvent('tactical-map-delta', {
+              detail: { type: 'map_created', map: message.tacticalMap },
+            }));
+          }
         }
       } catch {
         /* ignore malformed peer frames */

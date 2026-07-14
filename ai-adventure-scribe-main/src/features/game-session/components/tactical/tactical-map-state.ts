@@ -36,7 +36,8 @@ export interface TacticalMap {
 export type TacticalDelta =
   | { type: 'map_created'; map: TacticalMap }
   | { type: 'map_destroyed' }
-  | { type: 'entity_moved'; entityId: string; path: Point[]; movementReset?: boolean }
+  | { type: 'entity_moved'; entityId: string; path: Point[]; movementReset?: boolean; movementRemaining?: number }
+  | { type: 'movement_updated'; entityId: string; movementRemaining: number }
   | { type: 'cell_updated'; x: number; y: number; changes?: Partial<TacticalCell>; cell?: Partial<TacticalCell> };
 
 /** Pure websocket reducer: animation is kept separately so server state stays canonical. */
@@ -46,7 +47,14 @@ export function applyTacticalDelta(map: TacticalMap | null, delta: TacticalDelta
   if (delta.type === 'entity_moved') {
     const destination = delta.path.at(-1);
     if (!destination) return map;
-    return { ...map, entities: map.entities.map((entity) => entity.id === delta.entityId ? { ...entity, ...destination } : entity) };
+    return { ...map, entities: map.entities.map((entity) => entity.id === delta.entityId ? {
+      ...entity, ...destination,
+      movementRemaining: delta.movementRemaining ?? entity.movementRemaining,
+    } : entity) };
+  }
+  if (delta.type === 'movement_updated') {
+    return { ...map, entities: map.entities.map((entity) =>
+      entity.id === delta.entityId ? { ...entity, movementRemaining: delta.movementRemaining } : entity) };
   }
   const changes = delta.changes ?? delta.cell ?? {};
   if (!map.cells[delta.y]?.[delta.x]) return map;
