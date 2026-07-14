@@ -25,6 +25,7 @@ import {
   type CombatParticipant,
 } from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
+import { resetTurnResources } from './combat/combat-turn-resources.js';
 
 import type {
   CreateParticipantInput,
@@ -295,6 +296,8 @@ export class CombatInitiativeService {
     if (!currentParticipant) {
       throw new BusinessLogicError('No participant found at turn order position', { nextTurnOrder });
     }
+
+    await resetTurnResources(currentParticipant.id, newRoundNumber);
 
     return {
       previousParticipant,

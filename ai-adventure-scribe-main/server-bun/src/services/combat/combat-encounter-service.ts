@@ -7,7 +7,7 @@
  * Extracted from CombatInitiativeService.
  */
 
-import { eq, and, or, sql, exists } from 'drizzle-orm';
+import { eq, and, or, sql, exists, inArray } from 'drizzle-orm';
 
 import {
   verifyCharactersAccessBatch,
@@ -21,6 +21,9 @@ import {
   gameSessions,
   campaigns,
   characters,
+  characterStats,
+  npcs,
+  combatParticipantStatus,
   type CombatEncounter,
   type CombatParticipant,
 } from '../../../../db/schema/index';
@@ -109,17 +112,43 @@ export class CombatEncounterService {
 
     // Batch insert all participants (single query instead of N queries)
     if (participantInputs.length > 0) {
+      const characterIds = participantInputs.flatMap((input) => input.characterId ? [input.characterId] : []);
+      const npcIds = participantInputs.flatMap((input) => input.npcId ? [input.npcId] : []);
+      const [characterRows, npcRows] = await Promise.all([
+        characterIds.length ? db.select({ character: characters, stats: characterStats })
+          .from(characters).leftJoin(characterStats, eq(characters.id, characterStats.characterId))
+          .where(inArray(characters.id, characterIds)) : [],
+        npcIds.length ? db.select().from(npcs).where(inArray(npcs.id, npcIds)) : [],
+      ]);
+      const charactersById = new Map(characterRows.map((row) => [row.character.id, row]));
+      const npcsById = new Map(npcRows.map((row) => [row.id, row]));
+
       // ⚡ Bolt: Calculate initiative and turn order in-memory to avoid redundant DB round-trips.
       const participantsWithInitiative = participantInputs.map(input => {
+        const character = input.characterId ? charactersById.get(input.characterId) : undefined;
+        const npc = input.npcId ? npcsById.get(input.npcId) : undefined;
+        const npcStats = (npc?.stats ?? {}) as Record<string, unknown>;
+        const dexterity = Number(character?.stats?.dexterity ?? npcStats.dexterity ?? npcStats.dex ?? 10);
+        const initiativeModifier = Number(
+          character?.stats?.initiativeBonus ?? npcStats.initiativeModifier ?? Math.floor((dexterity - 10) / 2),
+        );
+        const armorClass = Number(character?.stats?.armorClass ?? npcStats.armorClass ?? npcStats.ac ?? 10);
+        const maxHp = Number(character?.stats?.maxHitPoints ?? npcStats.maxHp ?? npcStats.hitPoints ?? input.hpMax ?? 10);
+        const currentHp = Number(character?.stats?.currentHitPoints ?? npcStats.currentHp ?? npcStats.hitPoints ?? input.hpCurrent ?? maxHp);
+        const speed = Number(character?.stats?.speed ?? npcStats.speed ?? 30);
         const roll = rollD20();
-        const initiative = InitiativeMechanics.calculateInitiative(roll, input.initiativeModifier);
+        const initiative = InitiativeMechanics.calculateInitiative(roll, initiativeModifier);
         return {
           encounterId: encounter.id,
           characterId: input.characterId || null,
           npcId: input.npcId || null,
           name: input.name,
           initiative,
-          initiativeModifier: input.initiativeModifier,
+          initiativeModifier,
+          armorClass,
+          maxHp,
+          speed,
+          currentHp,
           participantType: input.characterId ? 'player' as const : input.npcId ? 'npc' as const : 'other' as const,
         };
       });
@@ -127,13 +156,23 @@ export class CombatEncounterService {
       // Sort by initiative (desc), then by modifier (desc) for ties to match calculateTurnOrder logic
       const sortedValues = InitiativeMechanics.sortParticipants(participantsWithInitiative);
 
-      const participantValues = sortedValues.map((p, index) => ({
+      const participantValues = sortedValues.map(({ currentHp: _currentHp, ...p }, index) => ({
         ...p,
         turnOrder: index,
         isActive: true,
+        resourcesRound: surpriseRound ? 0 : 1,
       }));
 
       const insertedParticipants = await db.insert(combatParticipants).values(participantValues).returning();
+      const currentHpByEntity = new Map(sortedValues.map((participant) => [
+        participant.characterId ?? participant.npcId ?? participant.name,
+        participant.currentHp,
+      ]));
+      await db.insert(combatParticipantStatus).values(insertedParticipants.map((participant) => ({
+        participantId: participant.id,
+        currentHp: currentHpByEntity.get(participant.characterId ?? participant.npcId ?? participant.name) ?? participant.maxHp,
+        maxHp: participant.maxHp,
+      })));
       // Ensure participants are sorted by turnOrder to match getCombatState behavior
       participants = insertedParticipants.sort((a, b) => a.turnOrder - b.turnOrder);
     }
@@ -241,6 +280,10 @@ export class CombatEncounterService {
       with: {
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
+          with: {
+            status: true,
+            conditions: { with: { condition: true } },
+          },
         },
       },
     });

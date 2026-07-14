@@ -12,7 +12,10 @@ export async function applyTacticalMapAction(sessionId: string, action: MapActio
   const result = dispatchMapAction(map, action);
   if (!result.applied) return result;
   await saveTacticalMap(map);
-  if (action.action === 'move') broadcast(sessionId, { type: 'entity_moved', entityId: action.entityId, path: result.path });
+  if (action.action === 'move') broadcast(sessionId, {
+    type: 'entity_moved', entityId: action.entityId, path: result.path,
+    movementRemaining: map.entities.find((entity) => entity.id === action.entityId)?.movementRemaining,
+  });
   else if (action.action === 'update_cell') broadcast(sessionId, { type: 'cell_updated', x: action.x, y: action.y, changes: action.changes });
   else broadcast(sessionId, { type: action.action === 'place' ? 'entity_placed' : 'entity_removed', entityId: action.entityId });
   return result;

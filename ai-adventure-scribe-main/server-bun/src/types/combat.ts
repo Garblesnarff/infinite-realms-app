@@ -275,6 +275,7 @@ export interface CombatEncounter {
   currentRound: number;
   currentTurnOrder: number;
   status: string; // CombatStatus but stored as text in DB
+  version: number;
   location: string | null;
   difficulty: string | null;
   experienceAwarded: number | null;
@@ -310,6 +311,12 @@ export interface CombatParticipant {
   armorClass: number;
   maxHp: number;
   speed: number;
+  resourcesRound: number;
+  actionUsed: boolean;
+  bonusActionUsed: boolean;
+  reactionUsed: boolean;
+  isDodging: boolean;
+  isDisengaged: boolean;
 }
 
 /**

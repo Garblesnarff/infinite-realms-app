@@ -7,6 +7,8 @@ import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import { CombatInitiativeService } from '../../../services/combat-initiative-service.js';
 import { createTacticalCombatMap, destroyTacticalCombatMap, resetTacticalMovementForTurn } from '../../../services/combat/tactical-combat-lifecycle.js';
+import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
+import { trackCombatEvent } from '../../../services/combat/combat-events.js';
 
 import type { CreateParticipantInput } from '../../../types/combat.js';
 
@@ -73,6 +75,10 @@ export const initiativeRoutes = new Elysia()
 
       if (sceneSpec) await createTacticalCombatMap(params.sessionId, combatState.participants, sceneSpec);
 
+      trackCombatEvent('combat_started', { encounterId: combatState.encounter.id, sessionId: params.sessionId });
+      trackCombatEvent('initiative_completed', { encounterId: combatState.encounter.id, participants: combatState.participants.length });
+      await publishCombatState(combatState.encounter.id, user.userId, 'combat_started');
+
       set.status = 201;
       return combatState;
     } catch (e) {
@@ -116,6 +122,9 @@ export const initiativeRoutes = new Elysia()
         user.userId
       );
 
+      trackCombatEvent('initiative_completed', { encounterId: params.encounterId, participantId });
+      await publishCombatState(params.encounterId, user.userId, 'initiative_completed');
+
       return result;
     } catch (e) {
       logger.error({ msg: 'Roll initiative error', error: e });
@@ -143,6 +152,7 @@ export const initiativeRoutes = new Elysia()
 
       const result = await CombatInitiativeService.advanceTurn(params.encounterId, user.userId);
       if (verification.session) await resetTacticalMovementForTurn(verification.session.id, result.currentParticipant.id);
+      await publishCombatState(params.encounterId, user.userId, 'turn_advanced');
       return result;
     } catch (e) {
       logger.error({ msg: 'Advance turn error', error: e });
@@ -213,10 +223,29 @@ export const initiativeRoutes = new Elysia()
 
       const updatedEncounter = await CombatEncounterService.endCombat(params.encounterId, user.userId);
       if (verification.session) await destroyTacticalCombatMap(verification.session.id);
+      trackCombatEvent('combat_ended', { encounterId: params.encounterId, sessionId: verification.session?.id });
+      await publishCombatState(params.encounterId, user.userId, 'combat_ended');
       return updatedEncounter;
     } catch (e) {
       logger.error({ msg: 'End combat error', error: e });
       return mapCombatError(set, e, 'Failed to end combat encounter', 'Encounter not found');
+    }
+  })
+
+  .post('/:encounterId/abandon', async ({ request, params, set }) => {
+    const { user, error: authError } = await authenticateRequest(request);
+    if (authError || !user) { set.status = 401; return { error: authError || 'Unauthorized' }; }
+    try {
+      const verification = await verifyEncounterOwnership(params.encounterId, user.userId);
+      if (!verification.success) { set.status = verification.error!.status; return { error: verification.error!.message }; }
+      const updated = await CombatEncounterService.endCombat(params.encounterId, user.userId);
+      if (verification.session) await destroyTacticalCombatMap(verification.session.id);
+      trackCombatEvent('abandonment', { encounterId: params.encounterId, sessionId: verification.session?.id });
+      await publishCombatState(params.encounterId, user.userId, 'abandonment');
+      return updated;
+    } catch (e) {
+      logger.error({ msg: 'Abandon combat error', error: e });
+      return mapCombatError(set, e, 'Failed to abandon combat encounter', 'Encounter not found');
     }
   })
 
