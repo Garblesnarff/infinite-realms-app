@@ -97,6 +97,54 @@ describe('SessionService', () => {
     });
   });
 
+  describe('getSessionContext', () => {
+    function mockContextQuery(rows: any[]) {
+      const where = vi.fn().mockResolvedValue(rows);
+      const builder: any = {
+        innerJoin: vi.fn(() => builder),
+        leftJoin: vi.fn(() => builder),
+        where,
+      };
+      vi.mocked(db.select).mockReturnValue({ from: vi.fn(() => builder) } as any);
+      return { builder, where };
+    }
+
+    it('returns the joined API shape in one ownership-filtered query', async () => {
+      const session = {
+        id: sessionId,
+        campaignId: 'campaign-1',
+        characterId: 'character-1',
+        sessionNumber: 2,
+        starterCampaignId: 'starter-1',
+        turnCount: 3,
+      };
+      const campaign = { id: 'campaign-1', name: 'Lost Mine', description: 'A dark road' };
+      const character = { id: 'character-1', name: 'Gundren', level: 3, race: 'Dwarf', class: 'Fighter', background: 'Noble' };
+      const stats = { strength: 16, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 11, charisma: 9 };
+      mockContextQuery([{ session, campaign, character, stats }]);
+
+      const result = await SessionService.getSessionContext(sessionId, userId);
+
+      expect(result).toMatchObject({
+        id: sessionId,
+        campaign_id: 'campaign-1',
+        character_id: 'character-1',
+        starter_campaign_id: 'starter-1',
+        campaign,
+        character: { ...character, character_stats: [stats] },
+      });
+      expect(db.select).toHaveBeenCalled();
+    });
+
+    it('masks a session not owned by the authenticated user as not found', async () => {
+      mockContextQuery([]);
+
+      await expect(SessionService.getSessionContext(sessionId, 'non-owner')).rejects.toThrow(
+        NotFoundError,
+      );
+    });
+  });
+
   describe('getRecentMessages', () => {
     it('should parallelize session verification and combined message/count query', async () => {
       const mockSession = { id: sessionId, userId };

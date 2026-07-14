@@ -44,6 +44,14 @@ export type MemoryQuery = {
   minNarrativeWeight?: number;
   top?: boolean;
 };
+export type SessionContextPayload = Record<string, unknown> & {
+  id: string;
+  campaign_id: string | null;
+  character_id: string | null;
+  starter_campaign_id?: string | null;
+  campaign: Record<string, unknown>;
+  character: Record<string, unknown> & { character_stats?: Record<string, number>[] };
+};
 
 const CHARACTER_FIELDS = [
   'name',
@@ -177,6 +185,8 @@ function normalizeCharacter<T extends Record<string, any>>(character: T): T {
 }
 
 export const userDataApi = {
+  getSessionContext: (sessionId: string): Promise<SessionContextPayload> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/context`),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>
     request(`/v1/campaigns/${encodeURIComponent(campaignId)}`),

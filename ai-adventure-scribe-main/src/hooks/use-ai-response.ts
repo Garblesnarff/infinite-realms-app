@@ -13,11 +13,11 @@ import { useGame } from '@/contexts/GameContext';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
+import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 
 // Voice narration types
@@ -83,26 +83,7 @@ const fetchGameContext = async (
   try {
     logger.info('Fetching game session details for:', sessionId);
 
-    // ⚡ Bolt: Explicit column selection to avoid over-fetching and include character stats.
-    const { data: sessionData, error: sessionError } = await supabase
-      .from('game_sessions')
-      .select(
-        `
-        id, campaign_id, character_id, starter_campaign_id,
-        campaigns:campaign_id (id, name, description),
-        characters:character_id (
-          id, name, level, race, class, background,
-          character_stats(strength, dexterity, constitution, intelligence, wisdom, charisma)
-        )
-      `,
-      )
-      .eq('id', sessionId)
-      .single();
-
-    if (sessionError) {
-      logger.error('Error fetching session:', sessionError);
-      return null;
-    }
+    const sessionData = await userDataApi.getSessionContext(sessionId);
 
     if (!sessionData?.campaign_id || !sessionData?.character_id) {
       logger.error('No campaign or character IDs found in session');
@@ -111,9 +92,9 @@ const fetchGameContext = async (
 
     return {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      campaign: (sessionData.campaigns as any) || {},
+      campaign: sessionData.campaign || {},
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      character: (sessionData.characters as any) || {},
+      character: sessionData.character || {},
       starterCampaignId: sessionData.starter_campaign_id as string,
     };
   } catch (error) {

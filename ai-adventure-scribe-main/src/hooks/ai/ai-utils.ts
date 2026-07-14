@@ -15,7 +15,6 @@ import type { Character } from '@/types/character';
 import type { ChatMessage } from '@/types/game';
 import type { Memory } from '@/types/memory';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { isValidMemoryType } from '@/types/memory';
@@ -50,22 +49,7 @@ export async function fetchGameContext(
   sessionId: string,
 ): Promise<{ campaign: Partial<Campaign>; character: Partial<Character> } | null> {
   try {
-    const { data: sessionData, error: sessionError } = await supabase
-      .from('game_sessions')
-      .select(
-        `
-        *,
-        campaigns:campaign_id (*),
-        characters:character_id (*)
-      `,
-      )
-      .eq('id', sessionId)
-      .single();
-
-    if (sessionError) {
-      logger.error('Error fetching session:', sessionError);
-      return null;
-    }
+    const sessionData = await userDataApi.getSessionContext(sessionId);
 
     if (!sessionData?.campaign_id || !sessionData?.character_id) {
       logger.error('No campaign or character IDs found in session');
@@ -73,8 +57,8 @@ export async function fetchGameContext(
     }
 
     return {
-      campaign: (sessionData.campaigns || {}) as Partial<Campaign>,
-      character: (sessionData.characters || {}) as Partial<Character>,
+      campaign: (sessionData.campaign || {}) as Partial<Campaign>,
+      character: (sessionData.character || {}) as Partial<Character>,
     };
   } catch (error) {
     logger.error('Error in fetchGameContext:', error);

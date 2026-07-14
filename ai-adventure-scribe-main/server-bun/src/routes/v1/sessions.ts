@@ -5,6 +5,7 @@
  * Provides game session endpoints:
  * - POST /v1/sessions - Create game session
  * - GET /v1/sessions/:id - Get session
+ * - GET /v1/sessions/:id/context - Get joined gameplay context
  * - POST /v1/sessions/:id/complete - Complete session
  *
  * Refactored to use SessionService with proper ownership verification
@@ -117,6 +118,27 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       logger.error({ msg: 'SESSION_GET error', error });
       set.status = 500;
       return { error: 'Failed to fetch session' };
+    }
+  })
+
+  /**
+   * GET /v1/sessions/:id/context
+   * Get session, campaign, character, and stats with ownership verification.
+   */
+  .get('/:id/context', async ({ params, set, user }) => {
+    try {
+      return await SessionService.getSessionContext(
+        params.id,
+        (user as { userId: string }).userId,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        set.status = 404;
+        return { error: 'Not found' };
+      }
+      logger.error({ msg: 'SESSION_CONTEXT_GET error', sessionId: params.id, error });
+      set.status = 500;
+      return { error: 'Failed to fetch session context' };
     }
   })
 

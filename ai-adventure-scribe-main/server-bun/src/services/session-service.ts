@@ -11,16 +11,85 @@ import { eq, and, desc, sql, or } from 'drizzle-orm';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
-import { gameSessions, campaigns, characters, type GameSession, type DialogueHistory } from '../../../db/schema/index';
+import { gameSessions, campaigns, characters, characterStats, type GameSession, type DialogueHistory } from '../../../db/schema/index';
 import { NotFoundError } from '../lib/errors.js';
 
 export { type MessagePage };
+
+function mapSessionContextCore(session: GameSession) {
+  return {
+    id: session.id,
+    campaign_id: session.campaignId,
+    character_id: session.characterId,
+    session_number: session.sessionNumber,
+    start_time: session.startTime,
+    end_time: session.endTime,
+    status: session.status,
+    current_scene_description: session.currentSceneDescription,
+    summary: session.summary,
+    session_notes: session.sessionNotes,
+    turn_count: session.turnCount,
+    starter_campaign_id: session.starterCampaignId,
+    campaign_version: session.campaignVersion,
+    ruleset: session.ruleset,
+    created_at: session.createdAt,
+    updated_at: session.updatedAt,
+  };
+}
 
 /**
  * Session Service
  * Provides type-safe database operations for game sessions and messages
  */
 export class SessionService {
+  /**
+   * Get the joined gameplay context in one database round trip.
+   * The nested response intentionally matches the legacy Supabase embed shape.
+   */
+  static async getSessionContext(sessionId: string, userId: string) {
+    const [row] = await db
+      .select({
+        session: gameSessions,
+        campaign: {
+          id: campaigns.id,
+          name: campaigns.name,
+          description: campaigns.description,
+        },
+        character: {
+          id: characters.id,
+          name: characters.name,
+          level: characters.level,
+          race: characters.race,
+          class: characters.class,
+          background: characters.background,
+        },
+        stats: {
+          strength: characterStats.strength,
+          dexterity: characterStats.dexterity,
+          constitution: characterStats.constitution,
+          intelligence: characterStats.intelligence,
+          wisdom: characterStats.wisdom,
+          charisma: characterStats.charisma,
+        },
+      })
+      .from(gameSessions)
+      .innerJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
+      .innerJoin(characters, eq(characters.id, gameSessions.characterId))
+      .leftJoin(characterStats, eq(characterStats.characterId, characters.id))
+      .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)));
+
+    if (!row) throw new NotFoundError('Session', sessionId);
+
+    return {
+      ...mapSessionContextCore(row.session),
+      campaign: row.campaign,
+      character: {
+        ...row.character,
+        character_stats: row.stats?.strength == null ? [] : [row.stats],
+      },
+    };
+  }
+
   /**
    * Create a new game session
    */
