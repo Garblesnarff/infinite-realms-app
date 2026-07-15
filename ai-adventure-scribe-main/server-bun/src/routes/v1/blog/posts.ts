@@ -382,7 +382,7 @@ export const blogPostRoutes = new Elysia()
       }
 
       return mapBlogPost(data as unknown as BlogPostRow);
-    } catch (_error) {
+    } catch (error) {
       if (error instanceof Error && error.message === 'BLOG_AUTHOR_NOT_FOUND') {
         set.status = 400;
         return { error: 'Author not found' };
@@ -440,7 +440,7 @@ export const blogPostRoutes = new Elysia()
 
       set.status = 204;
       return null;
-    } catch (_error) {
+    } catch (error) {
       if (error instanceof Error && error.message === 'BLOG_POST_NOT_FOUND') {
         set.status = 404;
         return { error: 'Blog post not found' };
