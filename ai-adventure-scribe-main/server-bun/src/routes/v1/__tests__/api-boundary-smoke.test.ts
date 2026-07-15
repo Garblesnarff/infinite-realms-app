@@ -67,9 +67,9 @@ describe('v1 route API boundaries', () => {
     expect(member.status).toBe(403);
   });
 
-  // TODO(ai-adventure-scribe-main-4ru): requireApiKey is local-scoped, so this
-  // real request reaches the handler and returns 500 instead of 401.
-  it.skip('denies unauthenticated internal automation requests instead of creating a post', async () => {
+  // Regression for bead -4ru: requireApiKey must be { as: 'scoped' } or it is
+  // silently inert and this request reaches the handler.
+  it('denies unauthenticated internal automation requests instead of creating a post', async () => {
     const response = await app.handle(new Request('http://localhost/v1/internal/release-post', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -14,7 +14,7 @@ import { getBlogRole, type BlogRole } from './blog-author.js';
  * Returns 403 if user is not an admin
  */
 export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
-  .derive(async ({ user, set }) => {
+  .derive({ as: 'scoped' }, async ({ user, set }) => {
     if (!user?.userId) {
       set.status = 401;
       return {
@@ -51,7 +51,7 @@ export const requireBlogAdmin = new Elysia({ name: 'require-blog-admin' })
       };
     }
   })
-  .onBeforeHandle(({ blogAdminError, set: _set }) => {
+  .onBeforeHandle({ as: 'scoped' }, ({ blogAdminError, set: _set }) => {
     if (blogAdminError) {
       return blogAdminError;
     }

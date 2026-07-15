@@ -50,11 +50,11 @@ function normalizeRoute(route: string): string {
  * Tracks request count and duration for all routes
  */
 export const metricsPlugin = new Elysia({ name: 'metrics' })
-  .onBeforeHandle(({ request: _request, store }) => {
+  .onBeforeHandle({ as: 'scoped' }, ({ request: _request, store }) => {
     // Store start time for duration calculation
     (store as any).metricsStartTime = Date.now();
   })
-  .onAfterHandle(({ request, response, store, path }) => {
+  .onAfterHandle({ as: 'scoped' }, ({ request, response, store, path }) => {
     try {
       // Calculate duration
       const startTime = (store as any).metricsStartTime || Date.now();

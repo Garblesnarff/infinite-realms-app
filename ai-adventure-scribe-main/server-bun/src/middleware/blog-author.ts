@@ -69,7 +69,7 @@ export async function canManagePost(postId: string, userId: string): Promise<boo
  * Returns 403 if user is a viewer
  */
 export const requireBlogAuthor = new Elysia({ name: 'require-blog-author' })
-  .derive(async ({ user, set }) => {
+  .derive({ as: 'scoped' }, async ({ user, set }) => {
     if (!user?.userId) {
       set.status = 401;
       return {
@@ -97,7 +97,7 @@ export const requireBlogAuthor = new Elysia({ name: 'require-blog-author' })
       };
     }
   })
-  .onBeforeHandle(({ blogError, set: _set }) => {
+  .onBeforeHandle({ as: 'scoped' }, ({ blogError, set: _set }) => {
     if (blogError) {
       return blogError;
     }

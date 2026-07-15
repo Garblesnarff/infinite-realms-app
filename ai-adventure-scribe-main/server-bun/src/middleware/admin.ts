@@ -41,7 +41,9 @@ export function isAdmin(user: { plan?: string; email?: string; userId?: string }
  * Returns 403 if user is not an admin
  */
 export const requireAdmin = new Elysia({ name: 'require-admin' })
-  .onBeforeHandle(({ user, set }) => {
+  // 'scoped' is REQUIRED: local-by-default hooks make a hook-only plugin
+  // inert for the parent's routes (same bug class as bead -4ru).
+  .onBeforeHandle({ as: 'scoped' }, ({ user, set }) => {
     if (!isAdmin(user)) {
       set.status = 403;
       return { error: 'Admin access required' };
