@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.10.4](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.3...v0.10.4) (2026-07-15)
+
+
+### Bug Fixes
+
+* **auth:** test-login always 404s in production; close bead -3n9 ([a132fd9](https://github.com/Garblesnarff/infinite-realms-production/commit/a132fd94e833fd09a272a22ba326a75690ecb658))
+
+
+### Refactoring
+
+* **auth:** centralize WorkOS token access ([2fbdca2](https://github.com/Garblesnarff/infinite-realms-production/commit/2fbdca24bfe9b911850dd58d737a30ef5a47e220))
+* centralize AI response tactical transport ([4de1cbc](https://github.com/Garblesnarff/infinite-realms-production/commit/4de1cbcbcd49138f482a6d9a2398e67e6694e9a6))
+
+
+### Documentation
+
+* migration-tree consolidation plan (bead -a6f, investigated) ([effab55](https://github.com/Garblesnarff/infinite-realms-production/commit/effab5548a395c0fc32f557d397fb7451b9288dc))
+
 ### [0.10.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.2...v0.10.3) (2026-07-15)
 
 
