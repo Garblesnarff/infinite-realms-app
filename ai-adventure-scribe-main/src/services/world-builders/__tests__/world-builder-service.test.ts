@@ -11,7 +11,6 @@ import { WorldBuilderService } from '../world-builder-service';
 import { WorldBuildingAnalyzer } from '../world-building-analyzer';
 
 import { isWorldBuilderEnabled } from '@/config/featureFlags';
-import { supabase } from '@/integrations/supabase/client';
 
 // Mock dependencies
 vi.mock('../location-generator', () => ({
@@ -58,16 +57,6 @@ vi.mock('@/config/featureFlags', () => ({
   isWorldBuilderEnabled: vi.fn(),
 }));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn(),
-    })),
-  },
-}));
-
 vi.mock('@/lib/logger', () => ({
   default: {
     info: vi.fn(),
@@ -81,6 +70,7 @@ describe('WorldBuilderService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isWorldBuilderEnabled).mockReturnValue(true);
+    vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockResolvedValue(true);
   });
 
   describe('expandWorld', () => {
@@ -119,12 +109,7 @@ describe('WorldBuilderService', () => {
       expect(result.locations).toHaveLength(0);
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): expandWorld() now fetches the campaign via
-    // userDataApi.getCampaign() (a real fetch() to the Bun server, see
-    // src/services/user-data-api.ts) instead of the mocked supabase.from('campaigns')
-    // chain used elsewhere in this file, so it hits a real (failing) network call.
-    // Needs a userDataApi.getCampaign mock.
-    it.skip('should generate locations, NPCs, and quests when confidence is high and suggestions are provided', async () => {
+    it('should generate locations, NPCs, and quests when confidence is high and suggestions are provided', async () => {
       vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockResolvedValue(true);
       vi.mocked(WorldBuildingAnalyzer.analyzeBuildingNeeds).mockResolvedValue({
         confidence: 0.8,
@@ -140,13 +125,6 @@ describe('WorldBuilderService', () => {
       vi.mocked(QuestGenerator.generateMemoryBasedQuest).mockResolvedValue(mockQuest as any);
       vi.mocked(WorldBuildingAnalyzer.inferQuestTypeFromAction).mockReturnValue('fetch');
 
-      // Mock supabase for genre
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { genre: 'fantasy' }, error: null }),
-      });
-
       const result = await WorldBuilderService.expandWorld(mockContext);
 
       expect(result.locations).toContain(mockLocation);
@@ -154,6 +132,9 @@ describe('WorldBuilderService', () => {
       expect(result.quests).toContain(mockQuest);
       expect(result.narrativeElements.hooks).toContain('Help me find my axe');
       expect(result.narrativeElements.opportunities).toContain('Find the axe');
+      expect(LocationGenerator.generateContextualLocation).toHaveBeenCalledWith(
+        'camp-123', 'sess-456', 'I enter the dark cave', undefined, 'user-000',
+      );
     });
 
     it('should handle errors in generators gracefully', async () => {
@@ -185,9 +166,7 @@ describe('WorldBuilderService', () => {
       expect(result).toBeNull();
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above -
-    // expandWorld() reads campaign genre via userDataApi.getCampaign(), not supabase.
-    it.skip('should expand world if confidence is high', async () => {
+    it('should expand world if confidence is high', async () => {
       vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockResolvedValue(true);
       vi.mocked(WorldBuildingAnalyzer.analyzeBuildingNeeds).mockResolvedValue({
         confidence: 0.7,
@@ -198,12 +177,6 @@ describe('WorldBuilderService', () => {
       // expandWorld will be called internally
       const mockLocation = { id: 'loc-1', name: 'Dark Cave' };
       vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(mockLocation as any);
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { genre: 'fantasy' }, error: null }),
-      });
-
       const result = await WorldBuilderService.respondToPlayerAction(...args);
       expect(result).not.toBeNull();
       expect(result?.locations).toHaveLength(1);
@@ -222,12 +195,6 @@ describe('WorldBuilderService', () => {
 
       const mockLocation = { id: 'loc-1', name: 'Dark Cave' };
       vi.mocked(LocationGenerator.generateContextualLocation).mockResolvedValue(mockLocation as any);
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { genre: 'fantasy' }, error: null }),
-      });
-
       const result = await WorldBuilderService.respondToPlayerAction(...args);
       expect(result).not.toBeNull();
     });
@@ -250,6 +217,7 @@ describe('WorldBuilderService', () => {
       campaignId: 'camp-1',
       sessionId: 'sess-1',
       characterId: 'char-1',
+      userId: 'user-1',
     };
 
     it('should generate location on demand', async () => {
@@ -328,25 +296,16 @@ describe('WorldBuilderService', () => {
   describe('edge cases and coverage', () => {
     it('should handle responseToPlayerAction failure gracefully', async () => {
       vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockRejectedValue(new Error('DB error'));
-      const result = await WorldBuilderService.respondToPlayerAction('c', 's', 'ch', 'msg', 'ai');
+      const result = await WorldBuilderService.respondToPlayerAction('c', 's', 'ch', 'msg', 'ai', 'user-1');
       expect(result).toBeNull();
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above -
-    // expandWorld() reads campaign genre via userDataApi.getCampaign(), not supabase.
-    it.skip('should use genre from context or fallback to fantasy in expandWorld', async () => {
+    it('should pass the owning user to contextual generators', async () => {
       vi.mocked(WorldBuilderRepository.validateUserCampaignAccess).mockResolvedValue(true);
       vi.mocked(WorldBuildingAnalyzer.analyzeBuildingNeeds).mockResolvedValue({
         confidence: 0.8,
         suggestions: { locations: true },
       } as any);
-
-      // Mock campaign genre to be missing
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
 
       const contextWithGenre = {
         campaignId: 'camp-123',
@@ -359,11 +318,9 @@ describe('WorldBuilderService', () => {
 
       await WorldBuilderService.expandWorld(contextWithGenre);
 
-      // Verify campaign was queried for genre
-      expect(supabase.from).toHaveBeenCalledWith('campaigns');
-
-      // Verify generator was called
-      expect(LocationGenerator.generateContextualLocation).toHaveBeenCalled();
+      expect(LocationGenerator.generateContextualLocation).toHaveBeenCalledWith(
+        'camp-123', 'sess-456', 'I enter the dark cave', undefined, 'user-000',
+      );
     });
   });
 });

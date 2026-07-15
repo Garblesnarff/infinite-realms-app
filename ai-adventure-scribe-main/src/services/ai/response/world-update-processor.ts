@@ -101,37 +101,44 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
           savedLocations = 0,
           savedQuests = 0;
 
-        for (const npc of xmlParsed.worldUpdates.npcs) {
-          if (
-            await WorldBuilderRepository.saveNPCFromXML(
-              context.campaignId,
-              context.sessionId!,
-              npc,
-            )
-          ) {
-            savedNPCs++;
+        if (!context.userId) {
+          logger.warn('[WorldBuilder] Skipping XML world updates without a user ID');
+        } else {
+          for (const npc of xmlParsed.worldUpdates.npcs) {
+            if (
+              await WorldBuilderRepository.saveNPCFromXML(
+                context.campaignId,
+                context.sessionId!,
+                npc,
+                context.userId,
+              )
+            ) {
+              savedNPCs++;
+            }
           }
-        }
-        for (const loc of xmlParsed.worldUpdates.locations) {
-          if (
-            await WorldBuilderRepository.saveLocationFromXML(
-              context.campaignId,
-              context.sessionId!,
-              loc,
-            )
-          ) {
-            savedLocations++;
+          for (const loc of xmlParsed.worldUpdates.locations) {
+            if (
+              await WorldBuilderRepository.saveLocationFromXML(
+                context.campaignId,
+                context.sessionId!,
+                loc,
+                context.userId,
+              )
+            ) {
+              savedLocations++;
+            }
           }
-        }
-        for (const quest of xmlParsed.worldUpdates.quests) {
-          if (
-            await WorldBuilderRepository.saveQuestFromXML(
-              context.campaignId,
-              context.sessionId!,
-              quest,
-            )
-          ) {
-            savedQuests++;
+          for (const quest of xmlParsed.worldUpdates.quests) {
+            if (
+              await WorldBuilderRepository.saveQuestFromXML(
+                context.campaignId,
+                context.sessionId!,
+                quest,
+                context.userId,
+              )
+            ) {
+              savedQuests++;
+            }
           }
         }
 
@@ -201,13 +208,16 @@ export async function processWorldAndMemories(params: WorldUpdateParams): Promis
   }
 
   try {
-    const worldExpansion = await WorldBuilderService.respondToPlayerAction(
-      context.campaignId,
-      context.sessionId!,
-      context.characterId,
-      message,
-      text,
-    );
+    const worldExpansion = context.userId
+      ? await WorldBuilderService.respondToPlayerAction(
+          context.campaignId,
+          context.sessionId!,
+          context.characterId,
+          message,
+          text,
+          context.userId,
+        )
+      : null;
 
     if (
       worldExpansion &&

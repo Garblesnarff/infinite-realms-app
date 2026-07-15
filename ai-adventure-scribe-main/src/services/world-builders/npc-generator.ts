@@ -5,7 +5,6 @@ import type { NPCRequest, GeneratedNPC } from './npc-types';
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export class NPCGenerator {
@@ -150,24 +149,30 @@ export class NPCGenerator {
    * Generate an NPC based on current game context and player action
    */
   /**
-   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   * @param userId - User ID for ownership validation
    */
   static async generateContextualNPC(
     campaignId: string,
     sessionId: string,
     playerAction: string,
     locationName?: string,
-    userId?: string,
+    userId: string,
   ): Promise<GeneratedNPC> {
     try {
-      // Security check: Verify user ownership of campaign
+      // RLS cannot scope this WorkOS-authenticated Supabase client. Fail closed
+      // and scope the campaign lookup before generating or persisting an NPC.
       if (!userId) {
-        logger.warn('[NPCGenerator] No userId provided - this is insecure');
+        throw new Error('User ID is required for NPC generation');
       }
 
-      const campaign = await userDataApi.getCampaign(campaignId);
+      const { data: campaign, error } = await supabase
+        .from('campaigns')
+        .select('genre')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
 
-      if (!campaign) {
+      if (error || !campaign) {
         throw new Error('Campaign not found or access denied');
       }
 

@@ -7,6 +7,7 @@ import { QuestGenerator } from '../quest-generator';
 
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import { buildQuestPromptTemplate } from '@/services/world-builders/quest-prompts';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
@@ -49,6 +50,12 @@ vi.mock('@/services/world-builders/quest-prompts', () => ({
 
 vi.mock('@/utils/character-level-utils', () => ({
   getAveragePartyLevel: vi.fn(),
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createQuest: vi.fn(),
+  },
 }));
 
 describe('QuestGenerator', () => {
@@ -212,13 +219,7 @@ describe('QuestGenerator', () => {
   });
 
   describe('saveQuest', () => {
-    // TODO(vitest-config-audit, 2026-07-14): saveQuest() persists via
-    // userDataApi.createQuest() (a real fetch() to the Bun server, see
-    // src/services/user-data-api.ts) and rethrows whatever error that call produces
-    // verbatim - it no longer touches supabase.from('quests') or wraps failures in a
-    // "Failed to save quest to database" message. These mocks/assertions are stale;
-    // needs a userDataApi.createQuest mock instead.
-    it.skip('should save quest successfully', async () => {
+    it('should save quest successfully through the owned-data API', async () => {
       const mockQuest: any = {
         title: 'Save the King',
         description: 'Rescue the king.',
@@ -227,48 +228,34 @@ describe('QuestGenerator', () => {
         metadata: { campaignId: 'c1', createdAt: new Date() },
       };
 
-      const mockFrom = vi.mocked(supabase.from);
-      mockFrom.mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'quest-123' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.createQuest).mockResolvedValue({ id: 'quest-123' } as any);
 
       const id = await QuestGenerator.saveQuest(mockQuest);
       expect(id).toBe('quest-123');
-      expect(mockFrom).toHaveBeenCalledWith('quests');
+      expect(userDataApi.createQuest).toHaveBeenCalledWith(expect.objectContaining({
+        campaign_id: 'c1',
+        title: 'Save the King',
+      }));
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same as above - stale supabase mock.
-    it.skip('should throw error on database failure', async () => {
+    it('should rethrow owned-data API failures', async () => {
       const mockQuest: any = {
         title: 'Fail Quest',
         metadata: { createdAt: new Date() },
       };
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
-      } as any);
+      vi.mocked(userDataApi.createQuest).mockRejectedValue(new Error('DB Error'));
 
-      await expect(QuestGenerator.saveQuest(mockQuest)).rejects.toThrow('Failed to save quest to database');
+      await expect(QuestGenerator.saveQuest(mockQuest)).rejects.toThrow('DB Error');
     });
   });
 
   describe('createQuest', () => {
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase.from('quests') mock as
-    // saveQuest() above - createQuest() calls saveQuest() internally, which now goes
-    // through userDataApi.createQuest().
-    it.skip('should generate and save quest', async () => {
+    it('should generate and save quest', async () => {
       const mockQuestData = { title: 'New Quest', type: 'side' };
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify(mockQuestData));
 
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'quest-123' }, error: null }),
-      } as any);
+      vi.mocked(userDataApi.createQuest).mockResolvedValue({ id: 'quest-123' } as any);
 
       const result = await QuestGenerator.createQuest({ context: { campaignId: 'c1' } } as any);
       expect(result.id).toBe('quest-123');
@@ -277,12 +264,7 @@ describe('QuestGenerator', () => {
 
     it('should return quest even if save fails', async () => {
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ title: 'Unsaved Quest' }));
-
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Save Error' } }),
-      } as any);
+      vi.mocked(userDataApi.createQuest).mockRejectedValue(new Error('Save Error'));
 
       const result = await QuestGenerator.createQuest({ context: { campaignId: 'c1' } } as any);
       expect(result.title).toBe('Unsaved Quest');
@@ -291,13 +273,7 @@ describe('QuestGenerator', () => {
   });
 
   describe('generateMemoryBasedQuest', () => {
-    // TODO(vitest-config-audit, 2026-07-14): generateMemoryBasedQuest() fetches the
-    // campaign via userDataApi.getCampaign(), not a mocked supabase.from('campaigns')
-    // chain, and no longer runs a `.eq('user_id', ...)` ownership filter - it only logs
-    // a warning when userId is missing (see location-generator.test.ts for the same
-    // pattern). Needs a userDataApi mock and/or a security review of whether ownership
-    // filtering was intentionally moved server-side.
-    it.skip('should verify campaign ownership and generate quest', async () => {
+    it('should verify campaign ownership and generate quest', async () => {
       const mockFrom = vi.mocked(supabase.from);
       const mockEq = vi.fn().mockReturnThis();
       mockFrom.mockReturnValue({
@@ -310,6 +286,8 @@ describe('QuestGenerator', () => {
       vi.mocked(getAveragePartyLevel).mockResolvedValue(3);
       vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ title: 'Memory Quest' }));
 
+      vi.mocked(userDataApi.createQuest).mockResolvedValue({ id: 'quest-123' } as any);
+
       await QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'main', 'u1');
 
       expect(mockEq).toHaveBeenCalledWith('id', 'c1');
@@ -317,26 +295,29 @@ describe('QuestGenerator', () => {
       expect(MemoryManager.getRelevantMemories).toHaveBeenCalledWith('s1', 'quest opportunities', 5);
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above - the
-    // "campaign not found" path is driven by userDataApi.getCampaign() resolving falsy.
-    it.skip('should throw if campaign not found', async () => {
+    it('should fail closed when userId is missing', async () => {
+      await expect(
+        QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', undefined as any),
+      ).rejects.toThrow('User ID is required for quest generation');
+      expect(supabase.from).not.toHaveBeenCalled();
+    });
+
+    it('should throw if campaign is not owned by the user', async () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
       } as any);
 
-      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1')).rejects.toThrow('Campaign not found or access denied');
+      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Campaign not found or access denied');
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): mocks supabase.from to throw, but
-    // generateMemoryBasedQuest() no longer calls supabase at all.
-    it.skip('should handle errors during memory-based quest generation', async () => {
+    it('should handle campaign lookup errors during memory-based quest generation', async () => {
       vi.mocked(supabase.from).mockImplementation(() => {
         throw new Error('Network error');
       });
 
-      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1')).rejects.toThrow('Network error');
+      await expect(QuestGenerator.generateMemoryBasedQuest('c1', 's1', 'char1', 'side', 'u1')).rejects.toThrow('Network error');
     });
   });
 

@@ -6,7 +6,6 @@ import type { LocationRequest, GeneratedLocation } from './location-types';
 import { llmApiClient } from '@/infrastructure/api';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
 import { getAveragePartyLevel } from '@/utils/character-level-utils';
 
 export class LocationGenerator {
@@ -117,24 +116,30 @@ export class LocationGenerator {
 
   /**
    * Generate a location based on current game context
-   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   * @param userId - User ID for ownership validation
    */
   static async generateContextualLocation(
     campaignId: string,
     sessionId: string,
     playerAction: string,
     currentLocationId?: string,
-    userId?: string,
+    userId: string,
   ): Promise<GeneratedLocation> {
     try {
-      // Security check: Verify user ownership of campaign
+      // RLS cannot scope this WorkOS-authenticated Supabase client. Fail closed
+      // and scope the campaign lookup before generating or persisting a location.
       if (!userId) {
-        logger.warn('[LocationGenerator] No userId provided - this is insecure');
+        throw new Error('User ID is required for location generation');
       }
 
-      const campaign = await userDataApi.getCampaign(campaignId);
+      const { data: campaign, error } = await supabase
+        .from('campaigns')
+        .select('genre')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
 
-      if (!campaign) {
+      if (error || !campaign) {
         throw new Error('Campaign not found or access denied');
       }
 
