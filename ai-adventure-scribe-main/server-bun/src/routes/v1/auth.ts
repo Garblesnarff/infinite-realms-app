@@ -29,6 +29,15 @@ const TEST_USER_ID = 'user_TEST_AUTOMATION_BOT_001';
 const OAUTH_STATE_COOKIE = 'ir_oauth_state';
 const OAUTH_STATE_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
 
+if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TEST_AUTH !== undefined) {
+  logger.warn({
+    msg: 'SECURITY_CONFIG_WARNING',
+    alert: true,
+    setting: 'ENABLE_TEST_AUTH',
+    detail: 'Test authentication is disabled unconditionally in production',
+  });
+}
+
 function createOAuthState(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
@@ -218,11 +227,11 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
    * Test authentication endpoint for automated testing
    * GET /v1/auth/test-login (requires x-test-auth-secret header)
    *
-   * SECURITY: Disabled in production unless ENABLE_TEST_AUTH is set.
+   * SECURITY: Available only outside production when ENABLE_TEST_AUTH is set.
    */
   .get('/test-login', async ({ query, headers, redirect, set }) => {
-    // SECURITY: Disable in production environment
-    if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_TEST_AUTH) {
+    // SECURITY: Never expose this route in production, regardless of configuration.
+    if (process.env.NODE_ENV === 'production' || !process.env.ENABLE_TEST_AUTH) {
       set.status = 404;
       return { error: 'Not found' };
     }
