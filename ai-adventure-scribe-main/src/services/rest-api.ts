@@ -1,6 +1,8 @@
 import type { Character } from '@/types/character';
 import type { CombatParticipant } from '@/types/combat';
 
+import { getAuthHeaders } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export interface RestHitDie {
@@ -127,14 +129,13 @@ async function requestRest(
   restType: 'short' | 'long',
   hitDiceToSpend: number = 0,
 ): Promise<RestApiResult> {
-  const token = window.localStorage.getItem('workos_access_token');
   const response = await fetch(
     `${API_BASE_URL}/v1/rest/characters/${encodeURIComponent(characterId)}/${restType}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...getAuthHeaders(),
       },
       body: JSON.stringify(restType === 'short' ? { hitDiceToSpend } : {}),
     },
@@ -151,12 +152,11 @@ export const restApi = {
     requestRest(characterId, 'short', hitDiceToSpend),
   longRest: (characterId: string) => requestRest(characterId, 'long'),
   attuneItem: async (characterId: string, itemId: string): Promise<void> => {
-    const token = window.localStorage.getItem('workos_access_token');
     const response = await fetch(
       `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/attune/${encodeURIComponent(itemId)}`,
       {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: getAuthHeaders(),
       },
     );
     if (!response.ok) {

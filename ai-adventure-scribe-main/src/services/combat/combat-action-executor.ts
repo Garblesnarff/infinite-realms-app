@@ -1,5 +1,7 @@
 import type { DamageType } from '@/types/combat';
 
+import { getAuthHeaders } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export interface StructuredCombatAction {
@@ -42,8 +44,7 @@ export async function executeAuthoritativeCombatIntent(
   source: 'player' | 'dm' = 'player',
   dmStartedAt?: number,
 ): Promise<unknown> {
-  const token = window.localStorage.getItem('workos_access_token');
-  const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
   let authoritativeIntent = intent;
   if ('expectedVersion' in intent && intent.expectedVersion === undefined) {
     const statusResponse = await fetch(`${API_BASE_URL}/v1/combat/${encodeURIComponent(encounterId)}/status`, { headers });

@@ -10,6 +10,30 @@ export const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 1 minute before expiry
 
 /**
+ * Read the current WorkOS access token from browser storage.
+ *
+ * Keeping the storage access here prevents API callers from depending on the
+ * storage key or on browser globals directly.
+ */
+export const getAccessToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('workos_access_token');
+};
+
+/**
+ * Build the WorkOS authorization header for requests that allow anonymous access.
+ * Set `includeEmptyToken` only for legacy callers that intentionally sent an
+ * empty Bearer token when no authenticated session was available.
+ */
+export const getAuthHeaders = (
+  { includeEmptyToken = false }: { includeEmptyToken?: boolean } = {},
+): Record<string, string> => {
+  const accessToken = getAccessToken();
+  if (!accessToken && !includeEmptyToken) return {};
+  return { Authorization: `Bearer ${accessToken ?? ''}` };
+};
+
+/**
  * Decode JWT and extract expiration time
  */
 export const getTokenExpiry = (token: string): number | null => {
@@ -66,7 +90,7 @@ export const loadCachedSession = (): WorkOSSession | null => {
   if (typeof window === 'undefined') return null;
 
   // Check for tokens in localStorage (set by CallbackPage)
-  const accessToken = window.localStorage.getItem('workos_access_token');
+  const accessToken = getAccessToken();
   const refreshToken =
     window.sessionStorage.getItem('workos_refresh_token') ||
     window.localStorage.getItem('workos_refresh_token');

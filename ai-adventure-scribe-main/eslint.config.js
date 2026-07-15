@@ -178,6 +178,34 @@ export default tseslint.config(
       ],
     },
   },
+  // WorkOS token migration guardrail - direct token reads are being consolidated
+  // in TokenService. This intentionally uses `no-restricted-syntax` (rather
+  // than adding to an existing `no-restricted-imports` rule) because ESLint's
+  // flat config merges `rules` per rule-name: a second top-level entry for the
+  // *same* rule name would silently replace the existing configuration instead
+  // of layering on top of it. Using a distinct rule name lets this guardrail
+  // run at 'warn' without changing other architectural restrictions.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='getItem'][arguments.0.value='workos_access_token']",
+          message:
+            'Read WorkOS tokens through services/auth/TokenService instead of localStorage directly.',
+        },
+      ],
+    },
+  },
+  // TokenService is the one intentional owner of direct WorkOS token storage access.
+  {
+    files: ['src/services/auth/TokenService.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
   // Shared layer restrictions - cannot depend on features
   {
     files: ['src/shared/**/*'],

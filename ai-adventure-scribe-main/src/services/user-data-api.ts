@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
+import { getAuthHeaders } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export type CharacterStatsPayload = Partial<{
@@ -159,12 +161,11 @@ function prepareCampaignPayload(payload: Record<string, unknown>): CampaignPaylo
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = window.localStorage.getItem('workos_access_token');
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getAuthHeaders(),
       ...init.headers,
     },
   });
