@@ -204,7 +204,10 @@ export function planRateLimit(configOrKey?: Partial<PlanRateConfig> | string) {
   }
 
   return new Elysia({ name: `rate-limit-${cfg.key}` })
-    .onBeforeHandle(({ request, set, user }) => {
+    // 'scoped' is REQUIRED: Elysia plugin hooks are local by default, meaning a
+    // hook-only plugin never applies to the routes of the instance that .use()s
+    // it. Without this, the limiter silently never fires (prod bug, 2026-07-14).
+    .onBeforeHandle({ as: 'scoped' }, ({ request, set, user }) => {
       try {
         const ip = getClientIp(request);
         const userId = user?.userId || null;
@@ -288,7 +291,8 @@ export function createSimpleRateLimit(options: { windowMs: number; max: number; 
   const { windowMs, max, key = 'simple' } = options;
 
   return new Elysia({ name: `simple-rate-limit-${key}` })
-    .onBeforeHandle(({ request, set }) => {
+    // 'scoped' is REQUIRED — see comment in planRateLimit above.
+    .onBeforeHandle({ as: 'scoped' }, ({ request, set }) => {
       try {
         const ip = getClientIp(request);
         const bucketKey = `${key}:${ip}`;
