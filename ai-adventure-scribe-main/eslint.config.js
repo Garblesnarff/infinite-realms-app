@@ -147,6 +147,37 @@ export default tseslint.config(
       ],
     },
   },
+  // Supabase migration guardrail - direct Supabase access is being phased out
+  // in favor of the server-routed API. This intentionally uses the
+  // `@typescript-eslint` flavor of `no-restricted-imports` (rather than
+  // adding to the core `no-restricted-imports` rule above) because ESLint's
+  // flat config merges `rules` per rule-name: a second top-level entry for
+  // the *same* rule name would silently replace the existing error-level
+  // vertical-slice-architecture config instead of layering on top of it.
+  // Using a distinct rule name lets this guardrail run at 'warn' without
+  // touching that rule's severity or patterns.
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'warn',
+        {
+          patterns: [
+            {
+              group: [
+                '@/integrations/supabase',
+                '@/integrations/supabase/**',
+                '**/integrations/supabase',
+                '**/integrations/supabase/**',
+              ],
+              message:
+                'Direct Supabase access is being migrated out — use the server-routed API (services/user-data-api, services/rest-api, or tRPC) instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Shared layer restrictions - cannot depend on features
   {
     files: ['src/shared/**/*'],
@@ -413,12 +444,10 @@ export default tseslint.config(
       'src/components/blog-admin/blog-post-editor/media-manager.tsx',
       'src/features/game-session/hooks/use-chat-history.ts',
       'src/features/game-session/components/chat/message-list/MessageAssetDisplay.tsx',
-      'src/features/game-session/components/chat/SimpleGameChatWithVoice.tsx',
       'src/features/game-session/components/chat/chat/DMChatBubble.tsx',
       'src/features/game-session/components/chat/chat/DMBubbleVoiceSection.tsx',
       'src/features/game-session/components/chat/ChatInput.tsx',
       'src/features/game-session/components/chat/DiceRollRequest.tsx',
-      'src/features/game-session/hooks/use-simple-chat-logic.ts',
       'src/features/game-session/hooks/use-dice-roll-request.ts',
       'src/components/spells/SpellCard.tsx',
       'src/features/character/components/spells/SpellCard.tsx',
