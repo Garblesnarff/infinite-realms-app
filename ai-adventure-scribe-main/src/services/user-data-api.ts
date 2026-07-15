@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
-import { getAuthHeaders } from '@/services/auth/TokenService';
+import { waitForAuth } from '@/lib/auth-gate';
+import { getAuthHeaders, loadCachedSession } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -53,6 +54,27 @@ export type SessionContextPayload = Record<string, unknown> & {
   starter_campaign_id?: string | null;
   campaign: Record<string, unknown>;
   character: Record<string, unknown> & { character_stats?: Record<string, number>[] };
+};
+
+export type TacticalMapActionPayload = {
+  action: 'move' | 'place' | 'remove' | 'update_cell';
+  entityId?: string | null;
+  x?: number | null;
+  y?: number | null;
+  changes?: Record<string, unknown> | null;
+};
+
+export type StructuredCombatStartPayload = {
+  participants: Array<{
+    encounterId: string;
+    characterId?: string | null;
+    npcId?: string | null;
+    name: string;
+    initiativeModifier: number;
+    hpCurrent?: number | null;
+    hpMax?: number | null;
+  }>;
+  sceneSpec: unknown;
 };
 
 const CHARACTER_FIELDS = [
@@ -160,6 +182,18 @@ function prepareCampaignPayload(payload: Record<string, unknown>): CampaignPaylo
   return prepared as CampaignPayload;
 }
 
+async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  await waitForAuth();
+  const token = loadCachedSession()?.access_token;
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  });
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -236,6 +270,32 @@ export const userDataApi = {
     request(`/v1/characters/${encodeURIComponent(characterId)}/quest-progress`),
   getSessionContext: (sessionId: string): Promise<SessionContextPayload> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/context`),
+  getTacticalMapContext: (sessionId: string, entityId: string): Promise<Response> =>
+    requestResponse(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(entityId)}`,
+    ),
+  startStructuredCombat: (
+    sessionId: string,
+    payload: StructuredCombatStartPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  endTacticalMap: (sessionId: string): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
+      method: 'POST',
+    }),
+  applyTacticalMapAction: (
+    sessionId: string,
+    action: TacticalMapActionPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action),
+    }),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>
     request(`/v1/campaigns/${encodeURIComponent(campaignId)}`),
