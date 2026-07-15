@@ -27,10 +27,10 @@ import type {
 } from '../../types/spell-slots.js';
 
 const useSpellSlotSchema = t.Object({
-  spellName: t.String({ minLength: 1 }),
+  spellName: t.String({ minLength: 1, maxLength: 255 }),
   spellLevel: t.Number({ minimum: 0, maximum: 9 }),
   slotLevelUsed: t.Number({ minimum: 1, maximum: 9 }),
-  sessionId: t.Optional(t.String()),
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
 });
 
 const restoreSpellSlotsSchema = t.Object({
@@ -41,10 +41,40 @@ const restoreSpellSlotsSchema = t.Object({
 const initializeSpellSlotsSchema = t.Object({
   classes: t.Array(
     t.Object({
-      className: t.String({ minLength: 1 }),
+      className: t.String({ minLength: 1, maxLength: 100 }),
       level: t.Number({ minimum: 1, maximum: 20 }),
-    })
+    }),
+    { maxItems: 20 },
   ),
+});
+
+const characterIdParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const spellSlotHistoryQuery = t.Object({
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  limit: t.Optional(t.String({ minLength: 1, maxLength: 6 })),
+  offset: t.Optional(t.String({ minLength: 1, maxLength: 10 })),
+});
+
+const calculateSpellSlotsQuery = t.Object({
+  className: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  level: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+});
+
+const calculateMulticlassSchema = t.Object({
+  // Optional retains the route's existing missing-array validation response.
+  classes: t.Optional(t.Array(t.Object({
+    className: t.String({ minLength: 1, maxLength: 100 }),
+    level: t.Number({ minimum: 1, maximum: 20 }),
+  }), { minItems: 1, maxItems: 20 })),
+});
+
+const canUpcastQuery = t.Object({
+  spellName: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  baseLevel: t.Optional(t.String({ minLength: 1, maxLength: 2 })),
+  targetLevel: t.Optional(t.String({ minLength: 1, maxLength: 2 })),
 });
 
 function mapSpellSlotsError(
@@ -108,7 +138,7 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         details: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  })
+  }, { params: characterIdParams })
 
   /**
    * POST /v1/characters/:id/spell-slots/use
@@ -146,6 +176,7 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
       }
     },
     {
+      params: characterIdParams,
       body: useSpellSlotSchema,
     }
   )
@@ -176,6 +207,7 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
       }
     },
     {
+      params: characterIdParams,
       body: restoreSpellSlotsSchema,
     }
   )
@@ -188,9 +220,9 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
     try {
       const usageQuery: SpellSlotUsageQuery = {
         characterId: params.id,
-        sessionId: query.sessionId as string | undefined,
-        limit: query.limit ? parseInt(query.limit as string, 10) : 50,
-        offset: query.offset ? parseInt(query.offset as string, 10) : 0,
+        sessionId: query.sessionId,
+        limit: query.limit ? parseInt(query.limit, 10) : 50,
+        offset: query.offset ? parseInt(query.offset, 10) : 0,
       };
 
       const history = await SpellSlotsService.getSpellSlotUsageHistory(
@@ -206,7 +238,7 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
         details: error instanceof Error ? error.message : 'Unknown error',
       };
     }
-  })
+  }, { params: characterIdParams, query: spellSlotHistoryQuery })
 
   /**
    * POST /v1/characters/:id/spell-slots/initialize
@@ -232,6 +264,7 @@ export const spellSlotsCharacterRoutes = new Elysia({ prefix: '/v1/characters' }
       }
     },
     {
+      params: characterIdParams,
       body: initializeSpellSlotsSchema,
     }
   );
@@ -258,7 +291,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
         return { error: 'level is required' };
       }
 
-      const parsedLevel = parseInt(level as string, 10);
+      const parsedLevel = parseInt(level, 10);
 
       if (isNaN(parsedLevel) || parsedLevel < 1 || parsedLevel > 20) {
         set.status = 400;
@@ -275,7 +308,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       logger.error({ msg: 'SPELL_SLOTS_CALC error', error });
       return mapSpellSlotsError(set, error, 'Failed to calculate spell slots');
     }
-  })
+  }, { query: calculateSpellSlotsQuery })
 
   /**
    * POST /v1/spell-slots/calculate-multiclass
@@ -283,7 +316,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
    */
   .post('/calculate-multiclass', async ({ body, set }) => {
     try {
-      const { classes } = body as { classes: Array<{ className: ClassName; level: number }> };
+      const { classes } = body;
 
       if (!classes || !Array.isArray(classes) || classes.length === 0) {
         set.status = 400;
@@ -302,13 +335,15 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
         }
       }
 
-      const calculation = SpellSlotsService.calculateMulticlassSpellSlots(classes);
+      const calculation = SpellSlotsService.calculateMulticlassSpellSlots(
+        classes as Array<{ className: ClassName; level: number }>,
+      );
       return calculation;
     } catch (error) {
       logger.error({ msg: 'SPELL_SLOTS_MULTICLASS error', error });
       return mapSpellSlotsError(set, error, 'Failed to calculate multiclass spell slots');
     }
-  })
+  }, { body: calculateMulticlassSchema })
 
   /**
    * GET /v1/spell-slots/can-upcast
@@ -333,8 +368,8 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
         return { error: 'targetLevel is required' };
       }
 
-      const parsedBaseLevel = parseInt(baseLevel as string, 10);
-      const parsedTargetLevel = parseInt(targetLevel as string, 10);
+      const parsedBaseLevel = parseInt(baseLevel, 10);
+      const parsedTargetLevel = parseInt(targetLevel, 10);
 
       if (isNaN(parsedBaseLevel) || parsedBaseLevel < 0 || parsedBaseLevel > 9) {
         set.status = 400;
@@ -347,7 +382,7 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       }
 
       const validation = SpellSlotsService.canUpcast(
-        spellName as string,
+        spellName,
         parsedBaseLevel,
         parsedTargetLevel
       );
@@ -357,4 +392,4 @@ export const spellSlotsUtilityRoutes = new Elysia({ prefix: '/v1/spell-slots' })
       logger.error({ msg: 'SPELL_SLOTS_UPCAST error', error });
       return mapSpellSlotsError(set, error, 'Failed to check upcast');
     }
-  });
+  }, { query: canUpcastQuery });
