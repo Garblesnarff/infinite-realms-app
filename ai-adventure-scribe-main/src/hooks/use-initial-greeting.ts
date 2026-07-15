@@ -9,6 +9,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { getAccessToken } from '@/services/auth/TokenService';
 import { userDataApi } from '@/services/user-data-api';
 import { createInitialMemories } from '@/utils/game-session/initial-greeting-memories';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
@@ -175,7 +176,7 @@ export const useInitialGreeting = ({
         sessionId
       ) {
         try {
-          const token = localStorage.getItem('workos_access_token');
+          const token = getAccessToken();
           const res = await fetch(
             `/api/trpc/chronicles.getPreviouslyOn?input=${encodeURIComponent(
               JSON.stringify({ newSessionId: sessionId, campaignId }),

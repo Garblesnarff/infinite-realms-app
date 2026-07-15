@@ -2,6 +2,7 @@ import type { Spell } from '../types/character';
 
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
+import { getAccessToken as getStoredAccessToken } from '@/services/auth/TokenService';
 
 export interface CharacterSpellData extends Spell {
   is_prepared: boolean;
@@ -33,8 +34,7 @@ class CharacterSpellService {
   private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
   private async getAccessToken(): Promise<string> {
-    // Get WorkOS token from localStorage
-    const token = window.localStorage.getItem('workos_access_token');
+    const token = getStoredAccessToken();
     if (token) {
       return token;
     }

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { ActionOptions } from '@/components/game/ActionOptions';
-import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
+import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
+import { getAuthHeaders } from '@/services/auth/TokenService';
 import { executeAuthoritativeCombatIntent, type ClientCombatIntent } from '@/services/combat/combat-action-executor';
+import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 type LegalAction = {
@@ -37,9 +38,8 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
 
     const refreshLegalActions = useCallback(async () => {
       if (!combatState.isInCombat || !encounter?.id) return;
-      const token = window.localStorage.getItem('workos_access_token');
       const response = await fetch(`${apiBase}/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: getAuthHeaders(),
       });
       if (!response.ok) return;
       const payload = await response.json() as { actorId?: string; actions?: LegalAction[] };

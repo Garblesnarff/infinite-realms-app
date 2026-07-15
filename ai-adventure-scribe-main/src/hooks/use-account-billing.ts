@@ -6,6 +6,7 @@ import type { UserPlan } from '@/contexts/AuthContext';
 
 import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
+import { getAccessToken } from '@/services/auth/TokenService';
 
 export interface SubscriptionStatus {
   plan: string;
@@ -71,7 +72,7 @@ export function useAccountBilling(
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
       try {
-        const token = localStorage.getItem('workos_access_token');
+        const token = getAccessToken();
         if (!token) return;
 
         // ⚡ Bolt: Parallelize subscription and quota fetching to reduce loading latency
@@ -109,7 +110,7 @@ export function useAccountBilling(
       priceId: ACCOUNT_UPGRADE_PRICE.priceId,
     });
     try {
-      const token = localStorage.getItem('workos_access_token');
+      const token = getAccessToken();
       if (!token) {
         toast.error('Please sign in to upgrade');
         return;
@@ -149,7 +150,7 @@ export function useAccountBilling(
     setLoading(true);
     analytics.track('manage_subscription_clicked');
     try {
-      const token = localStorage.getItem('workos_access_token');
+      const token = getAccessToken();
       if (!token) {
         toast.error('Please sign in');
         return;

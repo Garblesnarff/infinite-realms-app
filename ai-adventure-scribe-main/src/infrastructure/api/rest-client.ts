@@ -1,5 +1,6 @@
 import { waitForAuth } from '@/lib/auth-gate';
 import logger from '@/lib/logger';
+import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -67,14 +68,12 @@ class LlmApiClient {
     }
 
     await waitForAuth();
-    const token = window.localStorage.getItem('workos_access_token');
-
     try {
       const res = await fetch(`${API_BASE_URL}${path}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
+          ...getAuthHeaders(),
           ...options.headers,
         },
       });

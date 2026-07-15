@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
+import { getAccessToken } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export function useSessionStorySocket(sessionId: string | null, onRemoteMessage: () => void) {
@@ -9,7 +11,7 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = window.localStorage.getItem('workos_access_token');
+    const token = getAccessToken();
     if (!sessionId || !token) return;
     const base = new URL(API_BASE_URL);
     const protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { applyTacticalDelta, type Point, type TacticalDelta, type TacticalMap } from './tactical-map-state';
 
+import { getAuthHeaders } from '@/services/auth/TokenService';
+
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-const headers = () => ({ Authorization: `Bearer ${window.localStorage.getItem('workos_access_token') ?? ''}` });
+const headers = () => getAuthHeaders({ includeEmptyToken: true });
 
 export function useTacticalMap(sessionId: string) {
   const [map, setMap] = useState<TacticalMap | null>(null);
