@@ -156,7 +156,6 @@
     "jsdom": "^26.1.0",
     "knip": "^5.69.1",
     "lint-staged": "^16.2.7",
-    "lovable-tagger": "^1.0.19",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",
     "rollup-plugin-visualizer": "^6.0.5",
