@@ -12,7 +12,6 @@ import type { WorldBuildingContext, WorldExpansionResult } from './types';
 
 import { isWorldBuilderEnabled } from '@/config/featureFlags';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
 
 export class WorldBuilderService {
   /**
@@ -56,11 +55,6 @@ export class WorldBuilderService {
         return result;
       }
 
-      // Get campaign details for context
-      const campaign = await userDataApi.getCampaign(context.campaignId);
-
-      const _genre = campaign?.genre || context.genre || 'fantasy';
-
       // Generate locations if needed
       if (buildingNeeds.suggestions.locations) {
         try {
@@ -69,6 +63,7 @@ export class WorldBuilderService {
             context.sessionId,
             context.playerAction,
             context.currentLocation,
+            context.userId,
           );
           result.locations.push(location);
           result.narrativeElements.hooks.push(
@@ -87,6 +82,7 @@ export class WorldBuilderService {
             context.sessionId,
             context.playerAction,
             result.locations[0]?.name || context.currentLocation,
+            context.userId,
           );
           result.npcs.push(npc);
           result.narrativeElements.hooks.push(...npc.questHooks.slice(0, 2));
@@ -107,6 +103,7 @@ export class WorldBuilderService {
             context.sessionId,
             context.characterId,
             WorldBuildingAnalyzer.inferQuestTypeFromAction(context.playerAction),
+            context.userId,
           );
           result.quests.push(quest);
           result.narrativeElements.opportunities.push(...quest.hooks.initial);
@@ -133,7 +130,7 @@ export class WorldBuilderService {
 
   /**
    * Smart world building that responds to player actions
-   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   * @param userId - User ID for ownership validation
    */
   static async respondToPlayerAction(
     campaignId: string,
@@ -141,7 +138,7 @@ export class WorldBuilderService {
     characterId: string,
     playerMessage: string,
     aiResponse: string,
-    userId?: string,
+    userId: string,
   ): Promise<WorldExpansionResult | null> {
     if (!isWorldBuilderEnabled()) {
       logger.debug('World building disabled via feature flag');
@@ -199,6 +196,7 @@ export class WorldBuilderService {
     campaignId: string;
     sessionId: string;
     characterId: string;
+    userId: string;
     specifications?: Partial<{
       locationType: string;
       size: string;
@@ -217,9 +215,14 @@ export class WorldBuilderService {
       return null;
     }
 
-    const { type, campaignId, sessionId, characterId, specifications = {} } = request;
+    const { type, campaignId, sessionId, characterId, userId, specifications = {} } = request;
 
     try {
+      const hasAccess = await WorldBuilderRepository.validateUserCampaignAccess(campaignId, userId);
+      if (!hasAccess) {
+        throw new Error('Campaign not found or access denied');
+      }
+
       switch (type) {
         case 'location': {
           const locationRequest: LocationRequest = {

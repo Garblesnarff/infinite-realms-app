@@ -205,16 +205,7 @@ describe('LocationGenerator', () => {
   });
 
   describe('generateContextualLocation', () => {
-    // TODO(vitest-config-audit, 2026-07-14): generateContextualLocation() now fetches the
-    // campaign via userDataApi.getCampaign() (a real fetch() to the Bun server, see
-    // src/services/user-data-api.ts) instead of a mocked supabase.from('campaigns')...eq(...)
-    // chain, so this mock never intercepts the call and the test fails on a real network
-    // error. Separately, the source no longer runs a `.eq('user_id', userId)` ownership
-    // filter at all - it only logs a warning when userId is missing - so this test also
-    // asserts on a query filter that doesn't exist anymore. Needs either an updated mock
-    // (userDataApi.getCampaign) or a security review of whether campaign-ownership
-    // filtering was intentionally moved server-side.
-    it.skip('should verify campaign ownership and generate location', async () => {
+    it('should verify campaign ownership and generate location', async () => {
       const mockFrom = vi.mocked(supabase.from);
       const mockEq = vi.fn().mockReturnThis();
       mockFrom.mockReturnValue({
@@ -233,34 +224,21 @@ describe('LocationGenerator', () => {
       expect(getAveragePartyLevel).toHaveBeenCalledWith('c1', 's1');
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): mocks supabase.from('campaigns'), but
-    // generateContextualLocation() no longer queries supabase directly - see reason above.
-    it.skip('should handle missing userId insecurely but still proceed', async () => {
-       vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'c1' }, error: null }),
-      } as any);
-
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'Room' }));
-
-      await LocationGenerator.generateContextualLocation('c1', 's1', 'Action');
-
-      const mockFrom = vi.mocked(supabase.from);
-      expect(mockFrom).toHaveBeenCalledWith('campaigns');
+    it('should fail closed when userId is missing', async () => {
+      await expect(
+        LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, undefined as any),
+      ).rejects.toThrow('User ID is required for location generation');
+      expect(supabase.from).not.toHaveBeenCalled();
     });
 
-    // TODO(vitest-config-audit, 2026-07-14): same stale supabase mock as above - the
-    // "campaign not found" path is driven by userDataApi.getCampaign() resolving falsy,
-    // not by a mocked supabase `single()` result.
-    it.skip('should throw if campaign not found', async () => {
+    it('should throw if campaign is not owned by the user', async () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
       } as any);
 
-      await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action')).rejects.toThrow('Campaign not found or access denied');
+      await expect(LocationGenerator.generateContextualLocation('c1', 's1', 'Action', undefined, 'u1')).rejects.toThrow('Campaign not found or access denied');
     });
   });
 

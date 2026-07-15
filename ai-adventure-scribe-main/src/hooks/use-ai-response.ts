@@ -117,7 +117,7 @@ const fetchGameContext = async (
 export const useAIResponse = () => {
   const { setGamePhase, state: gameState } = useGame();
   const { state: combatState } = useCombat();
-  const { userPlan } = useAuth();
+  const { user, userPlan } = useAuth();
   const lastSigRef = useRef<string>('');
   // Track processed roll request signatures to prevent infinite re-parsing loops
   const processedRollRequestsRef = useRef<Set<string>>(new Set());
@@ -201,6 +201,7 @@ export const useAIResponse = () => {
           campaignId: (campaignRecord.id as string) || '',
           characterId: (characterRecord.id as string) || '',
           sessionId,
+          userId: user?.id,
           starterCampaignId: gameContext.starterCampaignId,
           campaignDetails: gameContext.campaign,
           characterDetails: gameContext.character,

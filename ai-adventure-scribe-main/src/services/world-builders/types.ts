@@ -8,7 +8,7 @@ export interface WorldBuildingContext {
   sessionId: string;
   characterId: string;
   playerAction: string;
-  userId?: string; // SECURITY: Required for ownership validation
+  userId: string;
   currentLocation?: string;
   recentMemories?: Memory[];
   genre?: string;
