@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.10.3](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.2...v0.10.3) (2026-07-15)
+
+
+### Bug Fixes
+
+* **auth:** exchange OAuth tokens with one-time code ([1d61f89](https://github.com/Garblesnarff/infinite-realms-production/commit/1d61f89ba22523d79286c2627d27b011ca1e7ab2))
+
+
+### Tests
+
+* **e2e:** start role auth servers ([719855e](https://github.com/Garblesnarff/infinite-realms-production/commit/719855e122ee788f1cd4ec3111867a46a0d94439))
+
 ### [0.10.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.1...v0.10.2) (2026-07-15)
 
 
