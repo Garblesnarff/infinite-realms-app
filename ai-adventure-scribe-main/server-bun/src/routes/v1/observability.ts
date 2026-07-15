@@ -12,7 +12,7 @@
  * Ported from /server/src/routes/v1/observability.ts
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { logger } from '../../lib/logger.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
@@ -55,6 +55,14 @@ export const observabilityRoutes = new Elysia({ prefix: '/v1/observability' })
     logger.error(payload);
 
     return new Response(null, { status: 204 });
+  }, {
+    // Types enforced at the framework layer; handler still truncates lengths.
+    // Generous maxLengths bound payload size without rejecting real error reports.
+    body: t.Object({
+      message: t.Optional(t.String({ maxLength: 10_000 })),
+      stack: t.Optional(t.String({ maxLength: 50_000 })),
+      extra: t.Optional(t.Unknown()),
+    }),
   })
 
   /**
@@ -85,4 +93,10 @@ export const observabilityRoutes = new Elysia({ prefix: '/v1/observability' })
     logger.info(payload);
 
     return new Response(null, { status: 204 });
+  }, {
+    body: t.Object({
+      name: t.String({ minLength: 1, maxLength: 100 }),
+      value: t.Optional(t.Number()),
+      tags: t.Optional(t.Array(t.String({ maxLength: 100 }), { maxItems: 10 })),
+    }),
   });

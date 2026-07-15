@@ -10,7 +10,7 @@
  * @deprecated /v1/internal/generate-api-key has no frontend callers as of 2026-07-08.
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
@@ -221,6 +221,13 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
       set.status = 500;
       return { error: 'Internal server error' };
     }
+  }, {
+    body: t.Object({
+      // Used in slug construction — restrict to safe chars
+      version: t.String({ minLength: 1, maxLength: 50, pattern: '^[0-9A-Za-z.\\-]+$' }),
+      changelog: t.String({ minLength: 1, maxLength: 100_000 }),
+      commitHash: t.Optional(t.String({ maxLength: 64, pattern: '^[0-9a-fA-F]+$' })),
+    }),
   })
 
   /**
@@ -290,4 +297,10 @@ export const internalRoutes = new Elysia({ prefix: '/v1/internal' })
       permissions: data.permissions,
       expiresAt: data.expires_at,
     };
+  }, {
+    body: t.Object({
+      name: t.String({ minLength: 1, maxLength: 200 }),
+      permissions: t.Array(t.String({ minLength: 1, maxLength: 100 }), { maxItems: 50 }),
+      expiresInDays: t.Optional(t.Number({ minimum: 1, maximum: 3650 })),
+    }),
   });

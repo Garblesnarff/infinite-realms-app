@@ -12,7 +12,7 @@
  * @deprecated Session archive endpoints have no frontend callers as of 2026-07-08.
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { authenticateRequest } from '../../lib/auth.js';
 import { logger } from '../../lib/logger.js';
@@ -77,6 +77,13 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
         message: 'An internal error occurred. Please check server logs.',
       };
     }
+  }, {
+    body: t.Optional(
+      t.Object({
+        retentionDays: t.Optional(t.Number({ minimum: 30, maximum: 3650 })),
+        dryRun: t.Optional(t.Boolean()),
+      }),
+    ),
   })
 
   /**
@@ -131,6 +138,10 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
         message: 'An internal error occurred. Please check server logs.',
       };
     }
+  }, {
+    params: t.Object({
+      sessionId: t.String({ minLength: 1, maxLength: 100 }),
+    }),
   })
 
   /**
@@ -227,4 +238,9 @@ export const adminRoutes = new Elysia({ prefix: '/v1/admin' })
         message: 'An internal error occurred. Please check server logs.',
       };
     }
+  }, {
+    query: t.Object({
+      retentionDays: t.Optional(t.String({ maxLength: 10 })),
+      limit: t.Optional(t.String({ maxLength: 10 })),
+    }),
   });
