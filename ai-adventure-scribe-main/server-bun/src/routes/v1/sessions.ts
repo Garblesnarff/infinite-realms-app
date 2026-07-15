@@ -55,31 +55,48 @@ const mapSessionToApi = (session: GameSession): any => ({
  * Validation schema for creating a session
  */
 const createSessionSchema = t.Object({
-  campaign_id: t.Optional(t.Nullable(t.String())),
-  character_id: t.Optional(t.Nullable(t.String())),
-  session_number: t.Optional(t.Number({ minimum: 1 })),
-  status: t.Optional(t.String()),
-  summary: t.Optional(t.Nullable(t.String())),
-  current_scene_description: t.Optional(t.Nullable(t.String())),
-  session_notes: t.Optional(t.Nullable(t.String())),
-  turn_count: t.Optional(t.Number()),
-  starter_campaign_id: t.Optional(t.Nullable(t.String())),
-  campaign_version: t.Optional(t.Nullable(t.Number())),
+  campaign_id: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 255 }))),
+  character_id: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 255 }))),
+  session_number: t.Optional(t.Number({ minimum: 1, maximum: 100_000 })),
+  status: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  summary: t.Optional(t.Nullable(t.String({ maxLength: 100_000 }))),
+  current_scene_description: t.Optional(t.Nullable(t.String({ maxLength: 100_000 }))),
+  session_notes: t.Optional(t.Nullable(t.String({ maxLength: 100_000 }))),
+  turn_count: t.Optional(t.Number({ minimum: 0, maximum: 10_000_000 })),
+  starter_campaign_id: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 255 }))),
+  campaign_version: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 1_000_000 }))),
 });
 
 const updateSessionSchema = t.Partial(
   t.Object({
-    status: t.String(),
-    summary: t.Nullable(t.String()),
-    current_scene_description: t.Nullable(t.String()),
-    session_notes: t.Nullable(t.String()),
-    turn_count: t.Number(),
+    status: t.String({ minLength: 1, maxLength: 100 }),
+    summary: t.Nullable(t.String({ maxLength: 100_000 })),
+    current_scene_description: t.Nullable(t.String({ maxLength: 100_000 })),
+    session_notes: t.Nullable(t.String({ maxLength: 100_000 })),
+    turn_count: t.Number({ minimum: 0, maximum: 10_000_000 }),
     session_state: t.Any(),
-    starter_campaign_id: t.Nullable(t.String()),
-    campaign_version: t.Nullable(t.Number()),
-    end_time: t.Nullable(t.String()),
+    starter_campaign_id: t.Nullable(t.String({ minLength: 1, maxLength: 255 })),
+    campaign_version: t.Nullable(t.Number({ minimum: 0, maximum: 1_000_000 })),
+    end_time: t.Nullable(t.String({ minLength: 1, maxLength: 100 })),
   }),
 );
+
+const sessionIdParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const listSessionsQuery = t.Object({
+  campaign_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  character_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  status: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  starter_only: t.Optional(t.String({ minLength: 1, maxLength: 10 })),
+  limit: t.Optional(t.String({ minLength: 1, maxLength: 6 })),
+  offset: t.Optional(t.String({ minLength: 1, maxLength: 10 })),
+});
+
+const completeSessionSchema = t.Object({
+  summary: t.Optional(t.String({ maxLength: 100_000 })),
+});
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
@@ -140,6 +157,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       },
       (user as { userId: string }).userId,
     ),
+    { query: listSessionsQuery },
   )
 
   /**
@@ -161,7 +179,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 500;
       return { error: 'Failed to fetch session' };
     }
-  })
+  }, { params: sessionIdParams })
 
   /**
    * GET /v1/sessions/:id/context
@@ -181,29 +199,28 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 500;
       return { error: 'Failed to fetch session context' };
     }
-  })
+  }, { params: sessionIdParams })
 
   .patch(
     '/:id',
     async ({ params, body, set, user }) => {
       try {
-        const payload = body as Record<string, unknown>;
         const updated = await SessionService.updateSession(
           params.id,
           (user as { userId: string }).userId,
           {
-            status: payload.status as string | undefined,
-            summary: payload.summary as string | null | undefined,
-            currentSceneDescription: payload.current_scene_description as string | null | undefined,
-            sessionNotes: payload.session_notes as string | null | undefined,
-            turnCount: payload.turn_count as number | undefined,
-            sessionState: payload.session_state,
-            starterCampaignId: payload.starter_campaign_id as string | null | undefined,
-            campaignVersion: payload.campaign_version as number | null | undefined,
+            status: body.status,
+            summary: body.summary,
+            currentSceneDescription: body.current_scene_description,
+            sessionNotes: body.session_notes,
+            turnCount: body.turn_count,
+            sessionState: body.session_state,
+            starterCampaignId: body.starter_campaign_id,
+            campaignVersion: body.campaign_version,
             endTime:
-              typeof payload.end_time === 'string'
-                ? new Date(payload.end_time)
-                : payload.end_time === null
+              typeof body.end_time === 'string'
+                ? new Date(body.end_time)
+                : body.end_time === null
                   ? null
                   : undefined,
           },
@@ -217,7 +234,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         throw error;
       }
     },
-    { body: updateSessionSchema },
+    { params: sessionIdParams, body: updateSessionSchema },
   )
 
   /**
@@ -226,7 +243,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
    */
   .post('/:id/complete', async ({ params, body, set, user }) => {
     const { id } = params;
-    const { summary } = body as { summary?: string };
+    const { summary } = body;
 
     try {
       const session = await SessionService.completeSession(
@@ -318,4 +335,4 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       set.status = 500;
       return { error: 'Failed to complete session' };
     }
-  });
+  }, { params: sessionIdParams, body: completeSessionSchema });
