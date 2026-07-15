@@ -6,6 +6,8 @@ import { AppError, NotFoundError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CharacterService } from '../../../services/character-service.js';
 import { CombatAttackService } from '../../../services/combat-attack-service.js';
+import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
+import { trackCombatEvent } from '../../../services/combat/combat-events.js';
 
 import type {
   AttackRollInput,
@@ -70,6 +72,10 @@ export const actionRoutes = new Elysia()
         user.userId
       );
 
+      trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: attackInput.attackerId, action: 'attack', source: 'legacy_route' });
+      if (result.finalDamage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: attackInput.attackerId, damage: result.finalDamage });
+      await publishCombatState(params.encounterId, user.userId, 'attack');
+
       return result;
     } catch (e) {
       logger.error({ msg: 'Resolve attack error', error: e });
@@ -117,6 +123,11 @@ export const actionRoutes = new Elysia()
         spellInput,
         user.userId
       );
+
+      trackCombatEvent('action_accepted', { encounterId: params.encounterId, actorId: spellInput.casterId, action: 'spell', source: 'legacy_route' });
+      const damage = result.results.reduce((total, outcome) => total + outcome.finalDamage, 0);
+      if (damage > 0) trackCombatEvent('damage_applied', { encounterId: params.encounterId, actorId: spellInput.casterId, damage });
+      await publishCombatState(params.encounterId, user.userId, 'spell');
 
       return result;
     } catch (e) {

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
+/* eslint-disable max-lines */
 import React, { useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
@@ -18,6 +18,14 @@ import { useInitialGreeting } from '@/hooks/use-initial-greeting';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import logger from '@/lib/logger';
 import { handleAsyncError } from '@/utils/error-handler';
+import type { CharacterState } from '@/contexts/character/types';
+import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-session/session-utils';
+import type { ChatMessage } from '@/types/game';
+import type { CombatDetectionResult } from '@/utils/combatDetection';
+
+interface GameAIResponse extends ChatMessage {
+  combatDetection?: CombatDetectionResult;
+}
 
 /**
  * GameContent Component
@@ -60,7 +68,7 @@ const GameContent: React.FC = () => {
     setTimeout(() => sessionStorage.removeItem('manualCombatToggle'), 30000);
   }, []);
 
-  const handleAIResponse = useCallback(async (message: any) => {
+  const handleAIResponse = useCallback(async (message: GameAIResponse) => {
     logger.info(
       'AI response received in outer component:',
       message.text?.substring(0, 100) + '...',
@@ -146,13 +154,13 @@ interface GameContentInnerProps {
   sessionId: string;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
-  sessionData: any;
-  updateGameSessionState: any;
-  characterState: any;
+  sessionData: ExtendedGameSession;
+  updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
+  characterState: CharacterState;
   combatMode: boolean;
   setCombatMode: (mode: boolean) => void;
   handleCombatToggle: () => void;
-  handleAIResponse: (message: any) => Promise<void>;
+  handleAIResponse: (message: GameAIResponse) => Promise<void>;
   isDM: boolean;
   showSceneBlurb: boolean;
   onSceneBlurbToggle: () => void;
@@ -235,7 +243,7 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
   }, [combatAI.isInCombat]);
 
   const innerHandleAIResponse = React.useCallback(
-    async (message: any) => {
+    async (message: GameAIResponse) => {
       try {
         logger.info(
           'Processing AI response for combat detection:',
@@ -277,11 +285,11 @@ const GameContentInner: React.FC<GameContentInnerProps> = ({
     if (prevInCombatRef.current && !combatState.isInCombat) {
       const enc = combatState.activeEncounter;
       const rounds = enc?.currentRound || enc?.roundsElapsed || 1;
-      const participants = (enc?.participants || []).map((p: any) => ({
+      const participants = (enc?.participants || []).map((p) => ({
         name: p.name,
         damageDealt: (enc?.actions || [])
-          .filter((a: any) => a.participantId === p.id && a.damageDealt)
-          .reduce((s: number, a: any) => s + (a.damageDealt || 0), 0),
+          .filter((a) => a.participantId === p.id && a.damageDealt)
+          .reduce((s, a) => s + (a.damageDealt || 0), 0),
         damageTaken: Math.max(0, (p.maxHitPoints || 0) - (p.currentHitPoints || 0)),
         status: p.isDead ? 'dead' : p.isUnconscious ? 'unconscious' : 'ok',
       }));

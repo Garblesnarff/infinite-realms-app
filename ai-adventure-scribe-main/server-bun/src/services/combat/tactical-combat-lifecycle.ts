@@ -34,6 +34,16 @@ export async function resetTacticalMovementForTurn(sessionId: string, entityId: 
   return map;
 }
 
+export async function grantTacticalDash(sessionId: string, entityId: string): Promise<TacticalMap | null> {
+  const map = await loadActiveTacticalMap(sessionId);
+  const entity = map?.entities.find((candidate) => candidate.id === entityId);
+  if (!map || !entity) return map;
+  entity.movementRemaining += entity.speedFeet;
+  await saveTacticalMap(map);
+  broadcast(sessionId, { type: 'movement_updated', entityId, movementRemaining: entity.movementRemaining });
+  return map;
+}
+
 export async function destroyTacticalCombatMap(sessionId: string): Promise<void> {
   if (!await loadActiveTacticalMap(sessionId)) return;
   await deactivateTacticalMap(sessionId);

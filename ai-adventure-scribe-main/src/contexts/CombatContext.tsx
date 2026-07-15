@@ -19,6 +19,7 @@ import { useCombatLifecycle } from './combat/use-combat-lifecycle';
 import { useParticipantManagement } from './combat/use-participant-management';
 import { useTakeAction } from './combat/use-take-action';
 import { createWeaponHandlers } from './combat/weapon-handlers';
+import { useAuthoritativeCombatSync } from './combat/use-authoritative-combat-sync';
 
 import type { CombatContextValue } from '@/types/combat';
 
@@ -47,10 +48,11 @@ interface CombatProviderProps {
 
 export const CombatProvider: React.FC<CombatProviderProps> = ({
   children,
-  sessionId: _sessionId,
+  sessionId,
 }) => {
   const [state, dispatch] = useReducer(combatReducer, initialCombatState);
   const { state: characterState } = useCharacter();
+  useAuthoritativeCombatSync(sessionId, dispatch);
 
   // Ref to provide current state to extracted handlers without stale closures
   const stateRef = useRef(state);

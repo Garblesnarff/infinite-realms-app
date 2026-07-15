@@ -3,11 +3,11 @@ import { useState, useCallback } from 'react';
 import type { ActionType, CombatAction, CombatEncounter, CombatParticipant } from '@/types/combat';
 
 import logger from '@/lib/logger';
-import { calculateAttackDamage } from '@/utils/attackUtils';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { getRageDamageBonus, canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves, rollDeathSave } from '@/utils/combat/deathSaves';
-import { rollDice, rollAttack } from '@/utils/diceUtils';
+import { rollDice } from '@/utils/diceUtils';
 import {
   createDefaultLightWeapons,
   equipMainHandWeapon,
@@ -58,93 +58,20 @@ export const useCombatMechanics = ({
     async (
       participantId: string,
       targetId?: string,
-      actionType: ActionType = 'attack',
+      _actionType: ActionType = 'attack',
       hasAdvantage: boolean = false,
       hasDisadvantage: boolean = false,
-      divineSmiteSlotLevel?: number, // For Paladin's Divine Smite
+      _divineSmiteSlotLevel?: number, // Server support is required before this modifier can be accepted.
     ) => {
       if (!activeEncounter) return;
 
-      const participant = activeEncounter.participants.find((p) => p.id === participantId);
-      if (!participant) return;
-
-      // Roll attack with advantage/disadvantage
-      const attackBonus = 5; // This would come from character stats
-      const attackRoll = rollAttack(attackBonus, {
-        advantage: hasAdvantage,
-        disadvantage: hasDisadvantage,
-        halflingLucky: participant.racialTraits?.some((t) => t.name === 'lucky') || false,
+      if (!targetId) return;
+      await executeAuthoritativeCombatIntent(activeEncounter.id, {
+        type: 'attack', actorId: participantId, targetId,
+        advantage: hasAdvantage, disadvantage: hasDisadvantage,
       });
-
-      // Check for critical hit
-      const isCritical = attackRoll.critical || false;
-
-      // Calculate base damage with sneak attack and divine smite
-      // TODO: this hardcoded Longsword stand-in should come from the participant's
-      // actual equipped weapon/character stats once that's wired up.
-      const damageResult = calculateAttackDamage(
-        {
-          id: 'placeholder-longsword',
-          name: 'Longsword',
-          category: 'weapon',
-          cost: { amount: 15, currency: 'gp' },
-          description: 'A standard longsword.',
-          damage: { dice: '1d8+3', type: 'slashing' },
-        },
-        participant,
-        isCritical,
-        {
-          divineSmiteLevel: divineSmiteSlotLevel,
-          sneakAttack: false, // Logic for determining this could be added later
-        },
-      );
-
-      const damageRolls = damageResult.rolls;
-      let totalDamage = damageResult.totalBeforeResistance;
-
-      // Ensure Rage damage is applied for Barbarians if not already included by calculateAttackDamage
-      // The utility calculateAttackDamage normally handles this, but we keep this as a safety check
-      if (participant.isRaging && participant.characterClass === 'barbarian') {
-        const hasRageBonus = damageResult.rolls.some((r) => r.isRageBonus);
-        if (!hasRageBonus) {
-          // If utility didn't add it (e.g. if it's an older version or different implementation),
-          // we add it here using our class features utility.
-          const rageBonus = getRageDamageBonus(participant.level || 1);
-          totalDamage += rageBonus;
-        }
-      }
-
-      const action = {
-        participantId,
-        targetParticipantId: targetId,
-        actionType,
-        description: `${participant.name} attacks${hasAdvantage ? ' with advantage' : hasDisadvantage ? ' with disadvantage' : ''}${isCritical ? ' - CRITICAL HIT!' : ''}`,
-        attackRoll: {
-          dieType: attackRoll.dieType,
-          count: attackRoll.count,
-          modifier: attackRoll.modifier,
-          results: attackRoll.results,
-          total: attackRoll.total,
-          advantage: attackRoll.advantage,
-          disadvantage: attackRoll.disadvantage,
-          critical: attackRoll.critical,
-          naturalRoll: attackRoll.naturalRoll,
-        },
-        damageRolls: damageRolls.map((roll) => ({
-          dieType: roll.dieType,
-          count: roll.count,
-          modifier: roll.modifier,
-          results: roll.results,
-          total: roll.total,
-        })),
-        hit: attackRoll.total >= 15, // Would check against target AC
-        damageDealt: totalDamage,
-        damageType: 'slashing',
-      };
-
-      await handleCombatAction(actionType, participantId, targetId, action);
     },
-    [activeEncounter, handleCombatAction],
+    [activeEncounter],
   );
 
   // Handle racial trait usage

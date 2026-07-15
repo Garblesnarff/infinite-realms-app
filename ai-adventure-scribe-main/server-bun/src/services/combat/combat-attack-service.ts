@@ -25,8 +25,8 @@ import {
   getCreatureStatsBatch,
   createWeaponAttack,
   getParticipantAbilityProfile,
-  claimEncounterVersion,
   getActiveConditionNames,
+  getEquippedWeaponProfile,
 } from './data-access.js';
 import { checkHit, checkAutoCrit } from './hit-check.js';
 import { aggregateResistances } from './resistance-resolver.js';
@@ -37,6 +37,10 @@ import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { BusinessLogicError } from '../../lib/errors.js';
 import { getSpellById, getSpellByName } from '../../data/spellData.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
+import { resolveAttackRules } from './combat-rules.js';
+import { claimTurnAction, claimTurnBonusAction } from './combat-turn-resources.js';
+import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 
 import type { WeaponAttack, CreatureStats } from '../../../../db/schema/index';
 import type {
@@ -101,6 +105,15 @@ export class CombatAttackService {
     return selected === undefined ? undefined : damageByLevel[String(selected)];
   }
 
+  private healingDice(spellId: string, slotLevel: number): { die: number; count: number; fixed?: number } | null {
+    if (spellId === 'healing-word') return { die: 4, count: slotLevel };
+    if (spellId === 'cure-wounds') return { die: 8, count: slotLevel };
+    if (spellId === 'mass-healing-word') return { die: 4, count: Math.max(1, slotLevel - 2) };
+    if (spellId === 'mass-cure-wounds') return { die: 8, count: Math.max(3, slotLevel - 2) };
+    if (spellId === 'heal') return { die: 1, count: 0, fixed: 70 + Math.max(0, slotLevel - 6) * 10 };
+    return null;
+  }
+
   /**
    * Check if an attack hits the target
    * Delegates to hit-check module.
@@ -138,59 +151,71 @@ export class CombatAttackService {
       expectedVersion,
       targetId,
       weaponId,
-      attackType,
       advantage = false,
       disadvantage = false,
     } = input;
 
     await this.assertCurrentTurn(encounterId, attackerId, userId);
-    await claimEncounterVersion(encounterId, expectedVersion);
-    const attackRoll = this.rollD20(advantage, disadvantage);
 
     // ⚡ Bolt: Batch fetch both attacker and target with their stats in a single query.
     // This reduces database round-trips from 3 down to 2 (1 for participants, 1 for weapon).
     // Authorization is handled atomically within getParticipantsWithStatsBatch.
-    const [participantDataMap, weapon] = await Promise.all([
-      getParticipantsWithStatsBatch([attackerId, targetId], encounterId, userId),
-      weaponId ? getWeaponAttack(weaponId, userId) : Promise.resolve(null),
-    ]);
-
+    const participantDataMap = await getParticipantsWithStatsBatch(
+      [attackerId, targetId], encounterId, userId,
+    );
     const targetData = participantDataMap.get(targetId);
     const attackerData = participantDataMap.get(attackerId);
 
-    if (!targetData) {
-      throw new NotFoundError('Target participant', targetId);
-    }
+    if (!targetData) throw new NotFoundError('Target participant', targetId);
+    if (!attackerData) throw new NotFoundError('Attacker participant', attackerId);
 
-    if (!attackerData) {
-      throw new NotFoundError('Attacker participant', attackerId);
-    }
-
+    const [weapon, attackerProfile, attackerConditions, targetConditions, tacticalMap] = await Promise.all([
+      getEquippedWeaponProfile(attackerData.participant, weaponId),
+      getParticipantAbilityProfile(attackerData.participant),
+      getActiveConditionNames(attackerId),
+      getActiveConditionNames(targetId),
+      loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
+    ]);
     const { participant: targetParticipant, stats: targetStats } = targetData;
-
-    if (weaponId && !weapon) {
-      throw new NotFoundError('Weapon', weaponId);
+    const baseTargetAc = targetParticipant.armorClass !== 10
+      ? targetParticipant.armorClass
+      : targetStats?.armorClass || 10;
+    const from = tacticalMap?.entities.find((entity) => entity.id === attackerId);
+    const to = tacticalMap?.entities.find((entity) => entity.id === targetId);
+    const geometry = tacticalMap && from && to ? {
+      distanceFeet: getDistance(from, to),
+      hasLineOfSight: checkLineOfSight(tacticalMap, attackerId, targetId),
+      cover: getCover(tacticalMap, attackerId, targetId),
+    } : undefined;
+    const rules = resolveAttackRules({
+      strength: attackerProfile.scores.str ?? 10,
+      dexterity: attackerProfile.scores.dex ?? 10,
+      level: attackerProfile.level,
+      baseTargetAc,
+      weapon,
+      geometry,
+      requestedAdvantage: advantage,
+      requestedDisadvantage: disadvantage || targetParticipant.isDodging,
+      attackerConditions,
+      targetConditions,
+    });
+    if (!rules.legal) {
+      throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
     }
 
-    const attackerProfile = await getParticipantAbilityProfile(attackerData.participant);
-    const attackAbility = attackType === 'ranged' ? 'dex' : 'str';
-    const serverAttackBonus = weapon?.attackBonus ??
-      this.abilityModifier(attackerProfile.scores[attackAbility]) + this.proficiencyBonus(attackerProfile.level);
+    // Version and action claims happen only after all legal-action checks pass.
+    await claimTurnAction(attackerId, encounterId, expectedVersion);
+    const attackRoll = this.rollD20(rules.advantage, rules.disadvantage);
 
-    // Determine target AC: Use combat participant AC (allows for temporary modifications)
-    // with fallback to base creature stats if participant AC is the default 10.
-    const targetAC =
-      targetParticipant.armorClass !== 10
-        ? targetParticipant.armorClass
-        : targetStats?.armorClass || 10;
+    const targetAC = rules.targetAc;
 
     // Check if attack hits
     const hitCheck = checkHit({
       attackRoll,
-      attackBonus: serverAttackBonus,
+      attackBonus: rules.attackBonus,
       targetAC,
-      advantage: false,
-      disadvantage: false,
+      advantage: rules.advantage,
+      disadvantage: rules.disadvantage,
     });
 
     if (!hitCheck.hit) {
@@ -211,32 +236,15 @@ export class CombatAttackService {
 
     // Hit - calculate damage
     // D&D 5E: Paralyzed/unconscious targets within 5ft = auto-crit
-    const targetConditions = await getActiveConditionNames(targetId);
-    const autoCrit = checkAutoCrit(targetConditions, attackType === 'melee' ? 5 : undefined);
+    const autoCrit = checkAutoCrit(targetConditions, !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : undefined);
     const isCrit = hitCheck.isCritical || autoCrit;
-
-    if (!weapon) {
-      // No weapon - return hit with no damage calculated
-      return {
-        hit: true,
-        targetAC,
-        totalAttackRoll: hitCheck.totalAttackRoll,
-        effectiveResistance: false,
-        effectiveVulnerability: false,
-        effectiveImmunity: false,
-        finalDamage: 0,
-        isCritical: isCrit,
-        isNaturalOne: hitCheck.isNaturalOne,
-        isNaturalTwenty: hitCheck.isNaturalTwenty,
-      };
-    }
 
     // Aggregate resistances using the extracted module
     const defenses = aggregateResistances(targetParticipant, targetStats);
 
     const damageCalc = calculateDamage({
       damageDice: weapon.damageDice,
-      damageBonus: weapon.damageBonus,
+      damageBonus: rules.damageBonus,
       damageType: weapon.damageType as DamageType,
       isCritical: isCrit,
       resistances: defenses.resistances,
@@ -264,7 +272,7 @@ export class CombatAttackService {
 
       return {
         hit: true,
-        targetAC: targetParticipant.armorClass,
+        targetAC,
         totalAttackRoll: hitCheck.totalAttackRoll,
         damage: damageCalc.baseDamage,
         damageType: weapon.damageType as DamageType,
@@ -304,7 +312,6 @@ export class CombatAttackService {
     } = input;
 
     await this.assertCurrentTurn(encounterId, casterId, userId);
-    await claimEncounterVersion(encounterId, expectedVersion);
     const spell = spellId ? getSpellById(spellId) : getSpellByName(spellName);
     if (!spell) throw new NotFoundError('Spell', spellId || spellName);
 
@@ -328,6 +335,42 @@ export class CombatAttackService {
       !casterProfile.spellIds.includes(spell.name.toLowerCase())) {
       throw new BusinessLogicError('Caster does not know or have this spell prepared', { spellId: spell.id });
     }
+    const tacticalMap = await loadActiveTacticalMap(casterData.participant.encounter.sessionId);
+    const spellRange = Number(spell.range.match(/\d+/)?.[0] ?? (spell.attackType === 'melee' ? 5 : 0));
+    const casterConditions = await getActiveConditionNames(casterId);
+    const spellRules = new Map<string, ReturnType<typeof resolveAttackRules>>();
+    for (const targetId of targetIds) {
+      const targetData = allParticipantDataMap.get(targetId);
+      if (!targetData) throw new NotFoundError('Target participant', targetId);
+      const targetConditions = await getActiveConditionNames(targetId);
+      const targetAc = targetData.participant.armorClass !== 10
+        ? targetData.participant.armorClass
+        : targetData.stats?.armorClass || 10;
+      const from = tacticalMap?.entities.find((entity) => entity.id === casterId);
+      const to = tacticalMap?.entities.find((entity) => entity.id === targetId);
+      const rules = resolveAttackRules({
+        strength: casterProfile.scores.str ?? 10,
+        dexterity: casterProfile.scores.dex ?? 10,
+        level: casterProfile.level,
+        baseTargetAc: targetAc,
+        weapon: {
+          id: spell.id, name: spell.name, damageDice: '1d1', damageType: spell.damageType ?? 'force',
+          normalRange: spellRange, magicBonus: 0, finesse: false,
+          ranged: spell.attackType !== 'melee', proficient: true,
+        },
+        geometry: tacticalMap && from && to ? {
+          distanceFeet: getDistance(from, to),
+          hasLineOfSight: checkLineOfSight(tacticalMap, casterId, targetId),
+          cover: getCover(tacticalMap, casterId, targetId),
+        } : undefined,
+        attackerConditions: casterConditions,
+        targetConditions,
+      });
+      if (!rules.legal) throw new BusinessLogicError(`Spell refused: ${rules.refusal}`, { targetId, refusal: rules.refusal });
+      spellRules.set(targetId, rules);
+    }
+    const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
+    await (usesBonusAction ? claimTurnBonusAction : claimTurnAction)(casterId, encounterId, expectedVersion);
     if (casterData.participant.characterId && spell.level > 0) {
       await SpellSlotsService.useSpellSlot({
         characterId: casterData.participant.characterId,
@@ -346,6 +389,8 @@ export class CombatAttackService {
       spell.damageByLevel, spell.level, slotLevel, casterProfile.level,
     );
     const damageType = spell.damageType as DamageType | undefined;
+    const effectiveSlotLevel = Math.max(spell.level, slotLevel || spell.level);
+    const healing = this.healingDice(spell.id, effectiveSlotLevel);
 
     const results: AttackResult[] = [];
 
@@ -358,19 +403,35 @@ export class CombatAttackService {
 
       const { participant: targetParticipant, stats: targetStats } = targetData;
 
+      if (healing) {
+        const rolledHealing = healing.fixed ?? Array.from(
+          { length: healing.count },
+          () => Math.floor(Math.random() * healing.die) + 1,
+        ).reduce((total, roll) => total + roll, 0) + spellModifier;
+        const hpResult = await CombatHPService.healDamage(
+          targetId, encounterId, Math.max(1, rolledHealing), spell.name, userId,
+        );
+        return {
+          hit: true, targetAC: 0, totalAttackRoll: 0, finalDamage: 0,
+          targetNewHp: hpResult.newCurrentHp, targetIsConscious: true, targetIsDead: false,
+          effectiveResistance: false, effectiveVulnerability: false, effectiveImmunity: false,
+          isCritical: false, isNaturalOne: false, isNaturalTwenty: false,
+        };
+      }
+
       // Determine target AC: Use combat participant AC (allows for temporary modifications)
       // with fallback to base creature stats if participant AC is the default 10.
-      const targetAC =
-        targetParticipant.armorClass !== 10
-          ? targetParticipant.armorClass
-          : targetStats?.armorClass || 10;
+      const targetAC = spellRules.get(targetId)?.targetAc ?? (
+        targetParticipant.armorClass !== 10 ? targetParticipant.armorClass : targetStats?.armorClass || 10
+      );
 
       // Aggregate resistances using the extracted module
       const defenses = aggregateResistances(targetParticipant, targetStats);
 
       if (spell.attackType) {
         // Spell attack roll
-        const attackRoll = this.rollD20();
+        const attackRules = spellRules.get(targetId);
+        const attackRoll = this.rollD20(attackRules?.advantage, attackRules?.disadvantage);
         const hitCheckResult = checkHit({
           attackRoll,
           attackBonus: spellAttackBonus,

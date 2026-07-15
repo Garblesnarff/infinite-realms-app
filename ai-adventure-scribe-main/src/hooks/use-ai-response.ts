@@ -15,7 +15,7 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import { executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import { executeAuthoritativeCombatIntent, executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
 import { userDataApi } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
@@ -116,7 +116,7 @@ const fetchGameContext = async (
  */
 export const useAIResponse = () => {
   const { setGamePhase, state: gameState } = useGame();
-  const { state: combatState, updateParticipant, nextTurn } = useCombat();
+  const { state: combatState } = useCombat();
   const { userPlan } = useAuth();
   const lastSigRef = useRef<string>('');
   // Track processed roll request signatures to prevent infinite re-parsing loops
@@ -326,12 +326,9 @@ export const useAIResponse = () => {
           for (const action of result.combat_actions as StructuredCombatAction[]) {
             const outcomes = await executeStructuredCombatAction(combatState.activeEncounter.id, action);
             resolvedActions.push({ action, outcomes });
-            for (const outcome of outcomes) {
-              if (outcome.newHp !== undefined) {
-                await updateParticipant(outcome.participantId, { currentHitPoints: outcome.newHp });
-              }
-            }
-            await nextTurn();
+            await executeAuthoritativeCombatIntent(combatState.activeEncounter.id, {
+              type: 'end_turn', actorId: action.actor_id,
+            }, 'dm');
           }
           const narrationResult = await AIService.chatWithDM({
             message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),

@@ -29,11 +29,139 @@ import {
   characterSpells,
   spells,
   npcs,
+  inventoryItems,
+  characterEquipment,
 } from '../../../../db/schema/index';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 
 import type { WeaponAttack, CreatureStats, CombatParticipant } from '../../../../db/schema/index';
 import type { CreateWeaponAttackInput } from '../../types/combat.js';
+import type { WeaponRuleProfile } from './combat-rules.js';
+
+import weaponCatalog from '../../../../src/data/srd/weapons.json';
+
+type CatalogWeapon = {
+  id: string;
+  name: string;
+  subcategory?: string;
+  damage?: { dice?: string; type?: string };
+  range?: { normal?: number; long?: number };
+  weaponProperties?: { finesse?: boolean };
+};
+
+const catalogWeapons = weaponCatalog as CatalogWeapon[];
+const normalizeWeaponName = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+const findCatalogWeapon = (value: string): CatalogWeapon | undefined => {
+  const key = normalizeWeaponName(value);
+  return catalogWeapons.find((weapon) =>
+    normalizeWeaponName(weapon.id) === key || normalizeWeaponName(weapon.name) === key);
+};
+
+type EquippedWeaponCandidate = {
+  id: string;
+  name: string;
+  magicBonus: number;
+  properties: Record<string, unknown>;
+};
+
+function characterCanUseWeapon(className: string | null | undefined, weapon: CatalogWeapon): boolean {
+  if (weapon.subcategory?.startsWith('simple')) return true;
+  const normalized = className?.toLowerCase() ?? '';
+  if (['barbarian', 'fighter', 'paladin', 'ranger'].some((name) => normalized.includes(name))) return true;
+  const weaponId = weapon.id.toLowerCase();
+  if (normalized.includes('bard') || normalized.includes('rogue')) {
+    return ['hand-crossbow', 'longsword', 'rapier', 'shortsword'].includes(weaponId);
+  }
+  if (normalized.includes('druid') && weaponId === 'scimitar') return true;
+  return normalized.includes('monk') && weaponId === 'shortsword';
+}
+
+function parseInventoryProperties(properties: string | null): Record<string, unknown> {
+  if (!properties) return {};
+  try { return JSON.parse(properties) as Record<string, unknown>; } catch { return {}; }
+}
+
+/** Resolve the participant's equipped weapon from inventory/equipment, never a client stand-in. */
+export async function getEquippedWeaponProfile(
+  participant: any,
+  requestedWeaponId?: string,
+): Promise<WeaponRuleProfile> {
+  if (participant.characterId) {
+    const [inventory, legacy, character] = await Promise.all([
+      db.select().from(inventoryItems).where(and(
+        eq(inventoryItems.characterId, participant.characterId),
+        eq(inventoryItems.isEquipped, true),
+        eq(inventoryItems.itemType, 'weapon'),
+      )),
+      db.select().from(characterEquipment).where(and(
+        eq(characterEquipment.characterId, participant.characterId),
+        eq(characterEquipment.equipped, true),
+        eq(characterEquipment.itemType, 'weapon'),
+      )),
+      db.query.characters.findFirst({
+        where: eq(characters.id, participant.characterId),
+        columns: { class: true },
+      }),
+    ]);
+    const candidates: EquippedWeaponCandidate[] = [
+      ...inventory.map((item) => ({
+        id: item.id, name: item.name, magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
+        properties: parseInventoryProperties(item.properties),
+      })),
+      ...legacy.map((item) => ({
+        id: item.id, name: item.itemName, magicBonus: item.magicBonus ?? 0, properties: {} as Record<string, unknown>,
+      })),
+    ];
+    const selected = requestedWeaponId
+      ? candidates.find((item) => item.id === requestedWeaponId || findCatalogWeapon(item.name)?.id === requestedWeaponId)
+      : candidates[0];
+    if (requestedWeaponId && !selected) {
+      throw new BusinessLogicError('Requested weapon is not equipped', { requestedWeaponId });
+    }
+    if (selected) {
+      const catalog = findCatalogWeapon(selected.name);
+      const damage = (selected.properties.damage ?? {}) as Record<string, unknown>;
+      const range = (selected.properties.range ?? {}) as Record<string, unknown>;
+      const normalRange = Number(range.normal ?? catalog?.range?.normal ?? 5);
+      return {
+        id: selected.id,
+        name: selected.name,
+        damageDice: String(damage.dice ?? catalog?.damage?.dice ?? '1'),
+        damageType: String(damage.type ?? catalog?.damage?.type ?? 'bludgeoning'),
+        normalRange,
+        longRange: Number(range.long ?? catalog?.range?.long) || undefined,
+        magicBonus: selected.magicBonus,
+        finesse: Boolean(selected.properties.finesse ?? catalog?.weaponProperties?.finesse),
+        ranged: normalRange > 5,
+        proficient: catalog ? characterCanUseWeapon(character?.class, catalog) : false,
+      };
+    }
+  }
+
+  if (participant.npcId) {
+    const npc = await db.query.npcs.findFirst({ where: eq(npcs.id, participant.npcId) });
+    const stats = (npc?.stats ?? {}) as Record<string, any>;
+    const attacks = (stats.actions ?? stats.attacks ?? []) as Array<Record<string, any>>;
+    const selected = attacks.find((attack) =>
+      !requestedWeaponId || attack.id === requestedWeaponId || normalizeWeaponName(String(attack.name)) === normalizeWeaponName(requestedWeaponId));
+    if (selected) {
+      const range = Number(selected.range?.normal ?? selected.range ?? (String(selected.type).includes('ranged') ? 80 : 5));
+      return {
+        id: String(selected.id ?? selected.name), name: String(selected.name ?? 'Natural attack'),
+        damageDice: String(selected.damageDice ?? selected.damage?.dice ?? '1d4'),
+        damageType: String(selected.damageType ?? selected.damage?.type ?? 'bludgeoning'),
+        normalRange: range, longRange: Number(selected.range?.long) || undefined,
+        magicBonus: Number(selected.magicBonus ?? 0), finesse: false, ranged: range > 5, proficient: true,
+      };
+    }
+  }
+
+  // Unarmed strike is a real rules fallback, not a fabricated weapon record.
+  return {
+    id: 'unarmed-strike', name: 'Unarmed Strike', damageDice: '1d1', damageType: 'bludgeoning',
+    normalRange: 5, magicBonus: 0, finesse: false, ranged: false, proficient: true,
+  };
+}
 
 export interface AbilityProfile {
   level: number;

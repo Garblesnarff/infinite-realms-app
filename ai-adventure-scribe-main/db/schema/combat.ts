@@ -92,6 +92,15 @@ export const combatParticipants = pgTable(
     maxHp: integer('max_hp').notNull().default(10),
     speed: integer('speed').notNull().default(30),
 
+    // Persisted per-turn resources. These are reset when this participant's turn begins,
+    // so reconnects restore the exact action-economy state instead of reconstructing it.
+    resourcesRound: integer('resources_round').notNull().default(0),
+    actionUsed: boolean('action_used').notNull().default(false),
+    bonusActionUsed: boolean('bonus_action_used').notNull().default(false),
+    reactionUsed: boolean('reaction_used').notNull().default(false),
+    isDodging: boolean('is_dodging').notNull().default(false),
+    isDisengaged: boolean('is_disengaged').notNull().default(false),
+
     // Damage modifiers
     damageResistances: text('damage_resistances').array().default([]),
     damageImmunities: text('damage_immunities').array().default([]),
