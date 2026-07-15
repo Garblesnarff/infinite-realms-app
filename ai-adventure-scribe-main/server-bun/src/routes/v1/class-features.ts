@@ -12,7 +12,7 @@
  * @deprecated No frontend callers as of 2026-07-08; retained for built-before-wired feature APIs.
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { AppError } from '../../lib/errors.js';
@@ -20,6 +20,59 @@ import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ClassFeaturesService } from '../../services/class-features-service.js';
+
+const characterIdParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const featureIdParams = t.Object({
+  featureId: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const characterFeatureParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+  featureId: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const classNameParams = t.Object({
+  className: t.String({ minLength: 1, maxLength: 100 }),
+});
+
+const characterClassParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+  className: t.String({ minLength: 1, maxLength: 100 }),
+});
+
+const featuresLibraryQuery = t.Object({
+  className: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  subclass: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  level: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+});
+
+const grantFeatureSchema = t.Object({
+  acquiredAtLevel: t.Number({ minimum: 1, maximum: 20 }),
+});
+
+const useFeatureSchema = t.Object({
+  context: t.Optional(t.String({ maxLength: 10_000 })),
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+});
+
+const restoreFeaturesSchema = t.Object({
+  restType: t.Union([t.Literal('short'), t.Literal('long')]),
+});
+
+const setSubclassSchema = t.Object({
+  className: t.String({ minLength: 1, maxLength: 100 }),
+  subclassName: t.String({ minLength: 1, maxLength: 100 }),
+  level: t.Number({ minimum: 1, maximum: 20 }),
+});
+
+const featureHistoryQuery = t.Object({
+  featureId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  limit: t.Optional(t.String({ minLength: 1, maxLength: 6 })),
+});
 
 /**
  * Helper to map and mask error responses
@@ -71,11 +124,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .get('/', async ({ query, set }) => {
     try {
-      const { className, subclass, level } = query as {
-        className?: string;
-        subclass?: string;
-        level?: string;
-      };
+      const { className, subclass, level } = query;
 
       const features = await ClassFeaturesService.getFeaturesLibrary({
         className,
@@ -88,7 +137,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_LIBRARY error', error });
       return mapClassFeaturesError(set, error, 'Failed to get features');
     }
-  })
+  }, { query: featuresLibraryQuery })
 
   /**
    * GET /v1/class-features/subclasses/:className
@@ -102,7 +151,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_SUBCLASSES error', error });
       return mapClassFeaturesError(set, error, 'Failed to get subclasses');
     }
-  })
+  }, { params: classNameParams })
 
   /**
    * GET /v1/class-features/characters/:id/features
@@ -119,7 +168,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_CHARACTER error', error });
       return mapClassFeaturesError(set, error, 'Failed to get character features', 'Character not found');
     }
-  })
+  }, { params: characterIdParams })
 
   /**
    * POST /v1/class-features/characters/:id/features/:featureId/grant
@@ -127,7 +176,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .post('/characters/:id/features/:featureId/grant', async ({ params, body, set, user }) => {
     try {
-      const { acquiredAtLevel } = body as { acquiredAtLevel: number };
+      const { acquiredAtLevel } = body;
 
       if (!acquiredAtLevel || acquiredAtLevel < 1 || acquiredAtLevel > 20) {
         set.status = 400;
@@ -147,7 +196,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_GRANT error', error });
       return mapClassFeaturesError(set, error, 'Failed to grant feature', 'Character not found');
     }
-  })
+  }, { params: characterFeatureParams, body: grantFeatureSchema })
 
   /**
    * POST /v1/class-features/characters/:id/features/:featureId/use
@@ -155,10 +204,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .post('/characters/:id/features/:featureId/use', async ({ params, body, set, user }) => {
     try {
-      const { context, sessionId } = body as {
-        context?: string;
-        sessionId?: string;
-      };
+      const { context, sessionId } = body;
 
       if (sessionId) {
         const verification = await verifySessionOwnership(sessionId, user!.userId);
@@ -186,7 +232,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_USE error', error });
       return mapClassFeaturesError(set, error, 'Failed to use feature', 'Character not found');
     }
-  })
+  }, { params: characterFeatureParams, body: useFeatureSchema })
 
   /**
    * POST /v1/class-features/characters/:id/features/restore
@@ -194,7 +240,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .post('/characters/:id/features/restore', async ({ params, body, set, user }) => {
     try {
-      const { restType } = body as { restType: 'short' | 'long' };
+      const { restType } = body;
 
       if (!restType || (restType !== 'short' && restType !== 'long')) {
         set.status = 400;
@@ -212,7 +258,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_RESTORE error', error });
       return mapClassFeaturesError(set, error, 'Failed to restore features', 'Character not found');
     }
-  })
+  }, { params: characterIdParams, body: restoreFeaturesSchema })
 
   /**
    * POST /v1/class-features/characters/:id/subclass
@@ -220,11 +266,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .post('/characters/:id/subclass', async ({ params, body, set, user }) => {
     try {
-      const { className, subclassName, level } = body as {
-        className: string;
-        subclassName: string;
-        level: number;
-      };
+      const { className, subclassName, level } = body;
 
       if (!className || !subclassName || !level) {
         set.status = 400;
@@ -250,7 +292,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_SET_SUBCLASS error', error });
       return mapClassFeaturesError(set, error, 'Failed to set subclass', 'Character not found');
     }
-  })
+  }, { params: characterIdParams, body: setSubclassSchema })
 
   /**
    * GET /v1/class-features/characters/:id/subclass/:className
@@ -274,7 +316,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_GET_SUBCLASS error', error });
       return mapClassFeaturesError(set, error, 'Failed to get subclass', 'Character not found');
     }
-  })
+  }, { params: characterClassParams })
 
   /**
    * GET /v1/class-features/characters/:id/features/history
@@ -282,11 +324,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
    */
   .get('/characters/:id/features/history', async ({ params, query, set, user }) => {
     try {
-      const { featureId, sessionId, limit } = query as {
-        featureId?: string;
-        sessionId?: string;
-        limit?: string;
-      };
+      const { featureId, sessionId, limit } = query;
 
       if (sessionId) {
         const verification = await verifySessionOwnership(sessionId, user!.userId);
@@ -309,7 +347,7 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_HISTORY error', error });
       return mapClassFeaturesError(set, error, 'Failed to get feature history', 'Character not found');
     }
-  })
+  }, { params: characterIdParams, query: featureHistoryQuery })
 
   /**
    * GET /v1/class-features/:featureId
@@ -329,4 +367,4 @@ export const classFeaturesRoutes = new Elysia({ prefix: '/v1/class-features' })
       logger.error({ msg: 'CLASS_FEATURES_GET error', error });
       return mapClassFeaturesError(set, error, 'Failed to get feature', 'Feature not found');
     }
-  });
+  }, { params: featureIdParams });
