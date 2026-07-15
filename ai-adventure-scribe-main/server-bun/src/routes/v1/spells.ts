@@ -15,7 +15,7 @@
 
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import {
   allSpells,
@@ -31,6 +31,39 @@ import { logger } from '../../lib/logger.js';
 import { supabaseService } from '../../lib/supabase.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 
+const spellFiltersQuery = t.Object({
+  level: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+  school: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  class: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+  ritual: t.Optional(t.String({ minLength: 1, maxLength: 10 })),
+  components: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+});
+
+const classLevelParams = t.Object({
+  className: t.String({ minLength: 1, maxLength: 100 }),
+  level: t.String({ minLength: 1, maxLength: 3 }),
+});
+
+const classNameParams = t.Object({
+  className: t.String({ minLength: 1, maxLength: 100 }),
+});
+
+const casterLevelParams = t.Object({
+  casterLevel: t.String({ minLength: 1, maxLength: 3 }),
+});
+
+const spellIdParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const multiclassCalculationSchema = t.Object({
+  // Optional keeps the existing route-level error for a missing classLevels array.
+  classLevels: t.Optional(t.Array(t.Object({
+    className: t.String({ minLength: 1, maxLength: 100 }),
+    level: t.Number({ minimum: 1, maximum: 20 }),
+  }), { maxItems: 20 })),
+});
+
 export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
 
   /**
@@ -45,13 +78,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       return { error: authError || 'Unauthorized' };
     }
 
-    const { level, school, class: className, ritual, components } = query as {
-      level?: string;
-      school?: string;
-      class?: string;
-      ritual?: string;
-      components?: string;
-    };
+    const { level, school, class: className, ritual, components } = query;
 
     try {
       let spells: any[];
@@ -107,7 +134,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to fetch spells' };
     }
-  })
+  }, { query: spellFiltersQuery })
 
   /**
    * GET /v1/spells/class/:className/level/:level
@@ -148,7 +175,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to fetch class spells' };
     }
-  })
+  }, { params: classLevelParams })
 
   /**
    * GET /v1/spells/progression/:className
@@ -177,7 +204,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to fetch spell progression' };
     }
-  })
+  }, { params: classNameParams })
 
   /**
    * GET /v1/spells/multiclass/slots/:casterLevel
@@ -219,7 +246,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to fetch multiclass spell slots' };
     }
-  })
+  }, { params: casterLevelParams })
 
   /**
    * GET /v1/spells/classes
@@ -268,7 +295,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to fetch spell' };
     }
-  })
+  }, { params: spellIdParams })
 
   /**
    * POST /v1/spells/multiclass/calculate
@@ -281,7 +308,7 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       return { error: authError || 'Unauthorized' };
     }
 
-    const { classLevels } = body as { classLevels?: any[] };
+    const { classLevels } = body;
 
     if (!Array.isArray(classLevels)) {
       set.status = 400;
@@ -353,4 +380,4 @@ export const spellsRoutes = new Elysia({ prefix: '/v1/spells' })
       set.status = 500;
       return { error: 'Failed to calculate multiclass caster level' };
     }
-  });
+  }, { body: multiclassCalculationSchema });
