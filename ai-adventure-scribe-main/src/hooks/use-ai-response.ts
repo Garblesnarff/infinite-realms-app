@@ -17,7 +17,7 @@ import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
 import { executeAuthoritativeCombatIntent, executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
-import { userDataApi } from '@/services/user-data-api';
+import { userDataApi, type TacticalMapActionPayload } from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 
 // Voice narration types
@@ -227,11 +227,10 @@ export const useAIResponse = () => {
         // ASCII/digest context and never derives distances or line of sight itself.
         if (combatState.isInCombat && sessionId && combatState.activeEncounter?.currentTurnParticipantId) {
           try {
-            const token = window.localStorage.getItem('workos_access_token');
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-            const tacticalResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(combatState.activeEncounter.currentTurnParticipantId)}`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
+            const tacticalResponse = await userDataApi.getTacticalMapContext(
+              sessionId,
+              combatState.activeEncounter.currentTurnParticipantId,
+            );
             if (tacticalResponse.ok) {
               const payload = await tacticalResponse.json() as { tacticalContext?: string };
               if (payload.tacticalContext) aiContext.gameState.tacticalContext = payload.tacticalContext;
@@ -267,8 +266,6 @@ export const useAIResponse = () => {
         // A structured start is server-authoritative: the same transaction creates
         // combat participants (whose IDs become tactical entity IDs) and the map.
         if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
-          const token = window.localStorage.getItem('workos_access_token');
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
           const enemies = result.combatDetection?.enemies || [];
           const participants = [
             {
@@ -277,29 +274,23 @@ export const useAIResponse = () => {
             },
             ...enemies.map((enemy) => ({ encounterId: '', name: enemy.name, initiativeModifier: 0 })),
           ];
-          const startResponse = await fetch(`${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ participants, sceneSpec: result.scene_spec }),
+          const startResponse = await userDataApi.startStructuredCombat(sessionId, {
+            participants,
+            sceneSpec: result.scene_spec,
           });
           if (!startResponse.ok) logger.warn('Server refused structured combat start', await startResponse.json());
         }
         if (sessionId && result.combat_transition === 'end') {
-          const token = window.localStorage.getItem('workos_access_token');
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-          const endResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
-            method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
+          const endResponse = await userDataApi.endTacticalMap(sessionId);
           if (!endResponse.ok) logger.warn('Server refused tactical combat end', await endResponse.json());
         }
 
         if (sessionId && result.map_actions?.length) {
-          const token = window.localStorage.getItem('workos_access_token');
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
           for (const action of result.map_actions) {
-            const actionResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(action),
-            });
+            const actionResponse = await userDataApi.applyTacticalMapAction(
+              sessionId,
+              action as TacticalMapActionPayload,
+            );
             if (!actionResponse.ok) {
               const refusal = await actionResponse.json();
               // Exactly one corrective structured pass: the engine refusal is authoritative.
@@ -312,9 +303,10 @@ export const useAIResponse = () => {
               });
               const replacement = correction.map_actions?.[0];
               if (replacement) {
-                const retry = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
-                  method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(replacement),
-                });
+                const retry = await userDataApi.applyTacticalMapAction(
+                  sessionId,
+                  replacement as TacticalMapActionPayload,
+                );
                 if (retry.ok) continue;
               }
               logger.warn('Dropped invalid DM tactical action after one corrective retry', refusal);

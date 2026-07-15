@@ -38,6 +38,10 @@ vi.mock('@/contexts/GameContext', () => ({
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getSessionContext: vi.fn(),
+    getTacticalMapContext: vi.fn(),
+    startStructuredCombat: vi.fn(),
+    endTacticalMap: vi.fn(),
+    applyTacticalMapAction: vi.fn(),
   },
 }));
 
@@ -263,5 +267,123 @@ describe('useAIResponse', () => {
 
     await expect(result.current.getAIResponse(mockMessages as any, mockSessionId))
       .rejects.toThrow('AI Offline');
+  });
+
+  it('loads tactical context through userDataApi without interrupting the AI turn', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const { useCombat } = await import('@/contexts/CombatContext');
+
+    vi.mocked(useCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: { currentTurnParticipantId: 'turn-entity', participants: [] },
+      },
+    } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
+    vi.mocked(userDataApi.getTacticalMapContext).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ tacticalContext: 'Tactical digest' }),
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({ text: 'Advance carefully.' });
+
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(userDataApi.getTacticalMapContext).toHaveBeenCalledWith(mockSessionId, 'turn-entity');
+    expect(AIService.chatWithDM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          gameState: expect.objectContaining({ tacticalContext: 'Tactical digest' }),
+        }),
+      }),
+    );
+  });
+
+  it('delegates structured combat start and end responses to userDataApi', async () => {
+    const { AIService } = await import('@/services/ai-service');
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: { id: 'ch', name: 'Rook' },
+    } as any);
+    vi.mocked(userDataApi.startStructuredCombat).mockResolvedValue({ ok: true } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'A goblin ambushes!',
+      combat_transition: 'start',
+      scene_spec: { width: 10, height: 10 },
+      combatDetection: { enemies: [{ name: 'Goblin' }] },
+    });
+
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(userDataApi.startStructuredCombat).toHaveBeenCalledWith(mockSessionId, {
+      participants: [
+        { encounterId: '', characterId: 'ch', name: 'Rook', initiativeModifier: 0 },
+        { encounterId: '', name: 'Goblin', initiativeModifier: 0 },
+      ],
+      sceneSpec: { width: 10, height: 10 },
+    });
+
+    vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as any);
+    (AIService.chatWithDM as any).mockResolvedValue({
+      text: 'The encounter is over.',
+      combat_transition: 'end',
+    });
+    await result.current.getAIResponse(
+      [
+        { text: 'I finish the last foe.', sender: 'player', timestamp: new Date().toISOString() },
+      ] as any,
+      mockSessionId,
+    );
+
+    expect(userDataApi.endTacticalMap).toHaveBeenCalledWith(mockSessionId);
+  });
+
+  it('keeps the single corrective retry for refused tactical map actions', async () => {
+    const { AIService } = await import('@/services/ai-service');
+    const refusedAction = { action: 'move', entityId: 'goblin-1', x: 3, y: 4 };
+    const replacement = { action: 'move', entityId: 'goblin-1', x: 2, y: 4 };
+
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
+    vi.mocked(userDataApi.applyTacticalMapAction)
+      .mockResolvedValueOnce({
+        ok: false,
+        json: vi.fn().mockResolvedValue({ error: 'Blocked' }),
+      } as any)
+      .mockResolvedValueOnce({ ok: true } as any);
+    (AIService.chatWithDM as any)
+      .mockResolvedValueOnce({ text: 'The goblin moves.', map_actions: [refusedAction] })
+      .mockResolvedValueOnce({ map_actions: [replacement] });
+
+    const { result } = renderHook(() => useAIResponse());
+    await result.current.getAIResponse(mockMessages as any, mockSessionId);
+
+    expect(userDataApi.applyTacticalMapAction).toHaveBeenNthCalledWith(
+      1,
+      mockSessionId,
+      refusedAction,
+    );
+    expect(userDataApi.applyTacticalMapAction).toHaveBeenNthCalledWith(
+      2,
+      mockSessionId,
+      replacement,
+    );
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
   });
 });
