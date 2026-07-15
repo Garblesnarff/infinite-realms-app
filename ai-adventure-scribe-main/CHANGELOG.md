@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.10.2](https://github.com/Garblesnarff/infinite-realms-production/compare/v0.10.1...v0.10.2) (2026-07-15)
+
+
+### Bug Fixes
+
+* **combat:** validate combat intent requests ([8338f8c](https://github.com/Garblesnarff/infinite-realms-production/commit/8338f8c8e285fd3f6a671612d0ca4ef59413f084))
+* **combat:** validate initiative route inputs ([70f0aef](https://github.com/Garblesnarff/infinite-realms-production/commit/70f0aeff99a72baace05fc62d04571e58613193e))
+* **routes:** validate class feature requests ([7ae2266](https://github.com/Garblesnarff/infinite-realms-production/commit/7ae2266a7d4bd8a09d82ab1988956b1e3357cb80))
+* **routes:** validate encounter telemetry inputs ([f5c81f9](https://github.com/Garblesnarff/infinite-realms-production/commit/f5c81f999f6694a7fb55115267522c1e1ca950e2))
+* **routes:** validate progression requests ([494b3c8](https://github.com/Garblesnarff/infinite-realms-production/commit/494b3c810c04e2cd5573654e986abdd8241e9f35))
+* **routes:** validate session route inputs ([3b5c981](https://github.com/Garblesnarff/infinite-realms-production/commit/3b5c98149a85172037793ff039e93bd9f0588f23))
+* **routes:** validate spell route inputs ([a503c50](https://github.com/Garblesnarff/infinite-realms-production/commit/a503c50336f3b4c2b0f7f29e0996e1bbcaf93ce4))
+* **routes:** validate spell slot inputs ([8fac970](https://github.com/Garblesnarff/infinite-realms-production/commit/8fac970053c364447250d7572118486042e1b61c))
+* **security:** restore world builder ownership checks ([d727ee5](https://github.com/Garblesnarff/infinite-realms-production/commit/d727ee504d576482bfb59a607c517ab2bdb6081d))
+* **server:** unauthenticated /v1/internal/release-post - scope all middleware hooks ([77906cc](https://github.com/Garblesnarff/infinite-realms-production/commit/77906cc20818800711a9fed3684a9f7e91805a65))
+
+
+### Tests
+
+* **server:** add API-boundary tests for auth, Stripe webhook, route smoke ([55d88d8](https://github.com/Garblesnarff/infinite-realms-production/commit/55d88d87f953a846ef5db45e928919cd8b929fd3))
+
 ### 0.10.1 (2026-07-15)
 
 
