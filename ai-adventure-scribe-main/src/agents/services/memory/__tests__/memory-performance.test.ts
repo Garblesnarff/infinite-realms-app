@@ -2,58 +2,55 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRepository } from '../MemoryRepository';
 import { MemoryService } from '../MemoryService';
 import * as featureFlags from '@/config/featureFlags';
+
+// MemoryRepository (src/agents/services/memory/MemoryRepository.ts) was migrated from
+// supabase.from('memories')...select() and supabase.rpc() to userDataApi.listMemories()
+// and userDataApi.matchMemories() (real fetch() calls to the Bun server). Only
+// invokeEmbedding() (supabase.functions.invoke('generate-embedding')) still uses
+// supabase directly. The mocks below were updated to match: `mockRpc` became
+// `mockMatchMemories` (returning the match array directly, not a { data, error }
+// envelope), and `setQueryResult`/`mockFrom` now back userDataApi.listMemories().
 const {
-  mockRpc: baseMockRpc,
+  mockMatchMemories: baseMockMatchMemories,
   mockFunctionsInvoke: baseMockFunctionsInvoke,
   setQueryResult,
-  mockFrom,
+  mockListMemories: baseMockListMemories,
 } = vi.hoisted(() => {
-  let queryResult: { data: any; error: any } = { data: [], error: null };
+  let queryResult: any = [];
 
-  const rpc = vi.fn();
+  const matchMemories = vi.fn();
   const functionsInvoke = vi.fn();
-
-  const createQueryBuilder = () => {
-    const builder: Record<string, any> = {};
-    const chainMethods = ['select', 'eq', 'neq', 'gte', 'lte', 'order', 'limit', 'delete'];
-
-    chainMethods.forEach((method) => {
-      builder[method] = vi.fn(() => builder);
-    });
-
-    builder.single = vi.fn(async () => queryResult);
-    builder.insert = vi.fn(async () => ({ data: null, error: null }));
-    builder.update = vi.fn(() => builder);
-    builder.then = (onFulfilled: any, onRejected: any) =>
-      Promise.resolve(queryResult).then(onFulfilled, onRejected);
-    builder.catch = (onRejected: any) => Promise.resolve(queryResult).catch(onRejected);
-    builder.finally = (onFinally: any) => Promise.resolve(queryResult).finally(onFinally);
-
-    return builder;
-  };
+  const listMemories = vi.fn(async () => queryResult);
 
   return {
-    mockRpc: rpc,
+    mockMatchMemories: matchMemories,
     mockFunctionsInvoke: functionsInvoke,
     setQueryResult: (result: { data: any; error: any }) => {
-      queryResult = result;
+      queryResult = result.data;
     },
-    mockFrom: vi.fn(() => createQueryBuilder()),
+    mockListMemories: listMemories,
   };
 });
 
-// Mock Supabase client
+// Mock Supabase client (only functions.invoke is still used by MemoryRepository)
 vi.mock('@/integrations/supabase/client', () => {
   return {
     supabase: {
-      from: mockFrom,
-      rpc: baseMockRpc,
       functions: {
         invoke: baseMockFunctionsInvoke,
       },
     },
   };
 });
+
+// Mock userDataApi - MemoryRepository's real backing store as of the REST API
+// migration (see src/agents/services/memory/MemoryRepository.ts).
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    matchMemories: baseMockMatchMemories,
+    listMemories: baseMockListMemories,
+  },
+}));
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -80,8 +77,8 @@ describe('Memory Performance Tests', () => {
     vi.spyOn(featureFlags, 'isSemanticMemoriesEnabled').mockReturnValue(true);
     repository = new MemoryRepository();
 
-    // Setup mock functions
-    mockRpc = baseMockRpc;
+    // Setup mock functions (mockRpc now backs userDataApi.matchMemories())
+    mockRpc = baseMockMatchMemories;
     mockFunctionsInvoke = baseMockFunctionsInvoke;
     setQueryResult({ data: [], error: null });
   });
@@ -115,10 +112,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 10)); // Simulate 10ms DB latency
-        return {
-          data: mockMemories,
-          error: null,
-        };
+        return mockMemories;
       });
 
       const startTime = performance.now();
@@ -184,10 +178,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
-        return {
-          data: mockMemories,
-          error: null,
-        };
+        return mockMemories;
       });
 
       const queries = [
@@ -236,10 +227,7 @@ describe('Memory Performance Tests', () => {
       mockRpc.mockImplementation(async () => {
         // Simulate realistic DB query time for large dataset
         await new Promise((resolve) => setTimeout(resolve, 30));
-        return {
-          data: mockMemories,
-          error: null,
-        };
+        return mockMemories;
       });
 
       const startTime = performance.now();
@@ -311,11 +299,9 @@ describe('Memory Performance Tests', () => {
           metadata: null,
         }));
 
-      // Mock should only return requested limit, not entire dataset
-      mockRpc.mockResolvedValue({
-        data: largeMemorySet.slice(0, 10),
-        error: null,
-      });
+      // Mock should only return requested limit, not entire dataset. matchMemories()
+      // (backing mockRpc) now returns the array directly, not a { data, error } envelope.
+      mockRpc.mockResolvedValue(largeMemorySet.slice(0, 10));
 
       const mockEmbedding = JSON.stringify(Array(1536).fill(0.5));
       mockFunctionsInvoke.mockResolvedValue({
@@ -340,8 +326,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
-        return {
-          data: Array(5)
+        return Array(5)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -353,9 +338,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       const startTime = performance.now();
@@ -382,8 +365,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
-        return {
-          data: Array(3)
+        return Array(3)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -395,9 +377,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       const startTime = performance.now();
@@ -428,8 +408,7 @@ describe('Memory Performance Tests', () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         requestCount++;
         requestTimes.push(performance.now() - reqStartTime);
-        return {
-          data: Array(5)
+        return Array(5)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -441,9 +420,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       // Simulate sustained load over time
@@ -479,8 +456,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 25)); // Simulate vector search
-        return {
-          data: Array(10)
+        return Array(10)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -492,9 +468,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       const startTime = performance.now();
@@ -545,8 +519,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
-        return {
-          data: Array(10)
+        return Array(10)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -558,9 +531,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       const semanticStart = performance.now();
@@ -655,8 +626,7 @@ describe('Memory Performance Tests', () => {
 
       mockRpc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
-        return {
-          data: Array(5)
+        return Array(5)
             .fill(null)
             .map((_, i) => ({
               id: `${i}`,
@@ -668,9 +638,7 @@ describe('Memory Performance Tests', () => {
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               metadata: null,
-            })),
-          error: null,
-        };
+            }));
       });
 
       const operations = [];

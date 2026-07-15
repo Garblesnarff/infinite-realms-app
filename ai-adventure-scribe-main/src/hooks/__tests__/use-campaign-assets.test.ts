@@ -10,6 +10,17 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+// useCampaignAssets is a hybrid: character template loading moved from
+// supabase.from('starter_character_templates') to userDataApi.listStarterCharacterTemplates()
+// (the Bun server's REST API client), while campaign_chunks/starter_campaigns are still
+// queried directly via supabase.from() - see src/hooks/use-campaign-assets.ts. Both need
+// to be mocked.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listStarterCharacterTemplates: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   default: {
     debug: vi.fn(),
@@ -22,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
 import { useCampaignAssets } from '../use-campaign-assets';
 
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 /**
  * Helper to create a chainable Supabase-like mock
@@ -119,12 +131,11 @@ describe('useCampaignAssets', () => {
       banner_image_url: 'http://example.com/banner.jpg',
     };
 
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+
     const mockFromSpy = vi.spyOn(supabase, 'from');
 
     (mockFromSpy as any).mockImplementation((table: string) => {
-      if (table === 'starter_character_templates') {
-        return createMockChain(mockCharacters);
-      }
       if (table === 'campaign_chunks') {
         return createMockChain(mockChunks);
       }
@@ -140,8 +151,8 @@ describe('useCampaignAssets', () => {
     // but we can at least wait for completion
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    // Verify all tables were called
-    expect(supabase.from).toHaveBeenCalledWith('starter_character_templates');
+    // Verify all sources were called
+    expect(userDataApi.listStarterCharacterTemplates).toHaveBeenCalledWith(mockCampaignId);
     expect(supabase.from).toHaveBeenCalledWith('campaign_chunks');
     expect(supabase.from).toHaveBeenCalledWith('starter_campaigns');
 
@@ -201,10 +212,9 @@ describe('useCampaignAssets', () => {
       { entity_name: 'Orc', chunk_type: 'monster', metadata: { image_url: 'url' } },
     ];
 
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+
     (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'starter_character_templates') {
-        return createMockChain(mockCharacters);
-      }
       if (table === 'campaign_chunks') {
         return createMockChain(mockChunks);
       }
@@ -230,12 +240,16 @@ describe('useCampaignAssets', () => {
   });
 
   it('should handle mixed successful and failed requests', async () => {
+    // The character template load failing is now expressed as userDataApi rejecting
+    // (it returns a plain array, not a {data,error} tuple) - the hook doesn't catch this
+    // per-source, so a rejection here would fail the whole Promise.all. Resolve with an
+    // empty array instead to isolate this test to the still-supabase-backed chunk/campaign
+    // error paths it's actually exercising.
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce([]);
+
     const mockFromSpy = vi.spyOn(supabase, 'from');
 
     (mockFromSpy as any).mockImplementation((table: string) => {
-      if (table === 'starter_character_templates') {
-        return createMockChain([], { message: 'Char failed' });
-      }
       if (table === 'campaign_chunks') {
         return createMockChain([], { message: 'Chunks failed' });
       }
@@ -284,12 +298,9 @@ describe('useCampaignAssets', () => {
       },
     ];
 
-    (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'starter_character_templates') {
-        return createMockChain(mockCharacters);
-      }
-      return createMockChain(null);
-    });
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockCharacters as any);
+
+    (supabase.from as any).mockImplementation(() => createMockChain(null));
 
     const { result } = renderHook(() => useCampaignAssets(mockCampaignId));
 

@@ -6,12 +6,23 @@ import { mapCampaignRow } from '../data-mapping';
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
     rpc: vi.fn(),
     auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'jwt' } } }) },
+  },
+}));
+
+// isStarterCampaignSession() (see src/agents/services/lore-keeper/LoreKeeperService.ts,
+// line ~295) resolves the session via userDataApi.getSession() (a real fetch() to the
+// Bun server) rather than supabase.from('game_sessions')...single(), so it needs its
+// own mock target.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getSession: vi.fn(),
   },
 }));
 
@@ -317,13 +328,9 @@ describe('LoreKeeperService', () => {
 
   describe('isStarterCampaignSession', () => {
     it('should return starter campaign info if present', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: { starter_campaign_id: 'camp-1', campaign_version: 1 },
-          error: null
-        }),
+      vi.mocked(userDataApi.getSession).mockResolvedValue({
+        starter_campaign_id: 'camp-1',
+        campaign_version: 1,
       });
 
       const result = await service.isStarterCampaignSession('session-1');
@@ -332,11 +339,7 @@ describe('LoreKeeperService', () => {
     });
 
     it('should return false if not a starter campaign session', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
+      vi.mocked(userDataApi.getSession).mockResolvedValue({});
 
       const result = await service.isStarterCampaignSession('session-1');
       expect(result.isStarter).toBe(false);

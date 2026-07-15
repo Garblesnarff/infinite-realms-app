@@ -4,11 +4,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { gameContextBuilder } from '../builder';
 
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-// Mock Supabase client
+// GameContextBuilder is a hybrid: campaign/character/memory *entities* now come
+// from userDataApi (the Bun server's REST API client), while `worlds` and
+// `character_equipment` are still joined directly via supabase.from(). Both
+// need to be mocked - see src/utils/context/builder.ts fetchCampaign /
+// fetchCharacter / fetchMemories.
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
+    listQuests: vi.fn(),
+    getCharacter: vi.fn(),
+    listCharacterQuestProgress: vi.fn(),
+    listMemories: vi.fn(),
   },
 }));
 
@@ -21,6 +36,38 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
   },
 }));
+
+/** Queue up a fully-successful userDataApi + supabase response set for one build() call. */
+function mockSuccessfulBuild({
+  campaign,
+  character,
+  memories,
+  equipment = [],
+}: {
+  campaign: Record<string, unknown>;
+  character: Record<string, unknown> | null;
+  memories: unknown[];
+  equipment?: unknown[];
+}): void {
+  vi.mocked(userDataApi.getCampaign).mockResolvedValueOnce(campaign as any);
+  vi.mocked(userDataApi.listQuests).mockResolvedValueOnce([]);
+  vi.mocked(userDataApi.getCharacter).mockResolvedValueOnce(character as any);
+  vi.mocked(userDataApi.listCharacterQuestProgress).mockResolvedValueOnce([]);
+  vi.mocked(userDataApi.listMemories).mockResolvedValueOnce(memories as any);
+
+  const fromSpy = vi.mocked(supabase.from);
+  // fetchCampaign() queries `worlds` first, fetchCharacter() queries
+  // `character_equipment` second - both run synchronously before either
+  // awaits, so the mockReturnValueOnce queue must match that call order.
+  fromSpy.mockReturnValueOnce({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+  } as any);
+  fromSpy.mockReturnValueOnce({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockResolvedValue({ data: equipment, error: null }),
+  } as any);
+}
 
 describe('GameContextBuilder', () => {
   beforeEach(() => {
@@ -76,30 +123,15 @@ describe('GameContextBuilder', () => {
       { id: 'm4', type: 'plot_point', content: 'Found the ancient artifact', importance: 10 },
     ];
 
-    // Setup Supabase chain mocks
-    const fromSpy = vi.mocked(supabase.from);
-
-    // Mock for campaigns
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: mockCampaign, error: null }),
-    } as any);
-
-    // Mock for characters
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: mockCharacter, error: null }),
-    } as any);
-
-    // Mock for memories
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: mockMemories, error: null }),
-    } as any);
+    mockSuccessfulBuild({
+      campaign: mockCampaign,
+      character: mockCharacter,
+      memories: mockMemories,
+      equipment: [
+        { item_name: 'Staff', item_type: 'weapon', equipped: true },
+        { item_name: 'Robes', item_type: 'armor', equipped: true },
+      ],
+    });
 
     const context = await gameContextBuilder.build(mockParams);
 
@@ -108,43 +140,25 @@ describe('GameContextBuilder', () => {
     const mockCharacterNoStats = {
       id: 'char-no-stats',
       name: 'Statless',
-      character_stats: null
+      character_stats: null,
     };
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'C' }, error: null }),
-    } as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: mockCharacterNoStats, error: null }),
-    } as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-    } as any);
+    mockSuccessfulBuild({
+      campaign: { name: 'C' },
+      character: mockCharacterNoStats,
+      memories: [],
+    });
 
     const contextNoStats = await gameContextBuilder.build(mockParams);
     expect(contextNoStats.character?.stats.health.max).toBe(10);
     expect(contextNoStats.character?.stats.abilities.strength).toBe(10);
 
-    // Campaign with missing fields
+    // Campaign with missing fields, no character
     const mockCampaignPartial = { name: 'Partial' };
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: mockCampaignPartial, error: null }),
-    } as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    } as any).mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-    } as any);
+    mockSuccessfulBuild({
+      campaign: mockCampaignPartial,
+      character: null,
+      memories: [],
+    });
 
     const contextPartial = await gameContextBuilder.build(mockParams);
     expect(contextPartial.campaign.setting.era).toBe('unknown');
@@ -169,29 +183,29 @@ describe('GameContextBuilder', () => {
   });
 
   it('should handle partial failures gracefully', async () => {
-    // Setup Supabase chain mocks
+    // Campaign - Success
+    vi.mocked(userDataApi.getCampaign).mockResolvedValueOnce({ name: 'Campaign' } as any);
+    vi.mocked(userDataApi.listQuests).mockResolvedValueOnce([]);
+
+    // Character - Failure (Rejected). fetchCharacter() awaits
+    // Promise.all([getCharacter(), supabase.from('character_equipment')..., listCharacterQuestProgress()]),
+    // so a single rejection is enough to make the whole fetchCharacter() call reject.
+    vi.mocked(userDataApi.getCharacter).mockRejectedValueOnce(new Error('DB Error'));
+    vi.mocked(userDataApi.listCharacterQuestProgress).mockResolvedValueOnce([]);
+
+    // Memories - Success
+    vi.mocked(userDataApi.listMemories).mockResolvedValueOnce([]);
+
     const fromSpy = vi.mocked(supabase.from);
-
-    // Mock for campaigns - Success
+    // fetchCampaign()'s `worlds` lookup
     fromSpy.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { name: 'Campaign' }, error: null }),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     } as any);
-
-    // Mock for characters - Failure (Rejected)
+    // fetchCharacter()'s `character_equipment` lookup
     fromSpy.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockRejectedValue(new Error('DB Error')),
-    } as any);
-
-    // Mock for memories - Success
-    fromSpy.mockReturnValueOnce({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     } as any);
 
     const context = await gameContextBuilder.build(mockParams);
@@ -224,15 +238,20 @@ describe('GameContextBuilder', () => {
   });
 
   it('should handle missing data gracefully', async () => {
-    const fromSpy = vi.mocked(supabase.from);
+    // fetchCampaign()/fetchCharacter() always return an object shape (spreading
+    // the entity onto {worlds/quests} or {character_equipment/quest_progress}),
+    // so a *resolved* null/undefined entity is still a truthy result - it does
+    // not by itself fall back to the default context. The Bun API client throws
+    // on a "not found" response, so simulate that with a rejection to exercise
+    // the same "missing data -> default context" path this test is named for.
+    vi.mocked(userDataApi.getCampaign).mockRejectedValueOnce(new Error('Not found'));
+    vi.mocked(userDataApi.getCharacter).mockRejectedValueOnce(new Error('Not found'));
+    vi.mocked(userDataApi.listMemories).mockResolvedValueOnce([]);
 
-    // Return null data (not found)
+    const fromSpy = vi.mocked(supabase.from);
     fromSpy.mockReturnValue({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      limit: vi.fn().mockResolvedValue({ data: null, error: null }),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     } as any);
 
     const context = await gameContextBuilder.build(mockParams);

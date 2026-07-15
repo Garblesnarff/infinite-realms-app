@@ -4,67 +4,75 @@ import * as featureFlags from '@/config/featureFlags';
 import type { Memory, MemoryType } from '@/types/memory';
 import { llmApiClient } from '@/infrastructure/api';
 
+// MemoryRepository (src/agents/services/memory/MemoryRepository.ts) was migrated from
+// supabase.from('memories')...insert()/update()/select() and supabase.rpc() to
+// userDataApi.createMemories()/updateMemoryScores()/listMemories()/getMemory()/
+// matchMemories() (real fetch() calls to the Bun server). Only insertCommunication()
+// and invokeEmbedding() (still supabase.functions.invoke('generate-embedding')) remain
+// on supabase. The mocks below were updated to match the current call sites; a
+// `queryResult`-style helper (`setQueryResult`) is kept so the many call sites below
+// didn't need renaming, but it now backs userDataApi.listMemories/getMemory rather than
+// a supabase query builder.
 const {
   mockInsert: baseMockInsert,
   mockUpdate: baseMockUpdate,
-  mockRpc: baseMockRpc,
+  mockMatchMemories: baseMockMatchMemories,
+  mockListMemories: baseMockListMemories,
+  mockGetMemory: baseMockGetMemory,
   mockFunctionsInvoke: baseMockFunctionsInvoke,
   setQueryResult,
-  mockFrom,
 } = vi.hoisted(() => {
-  let queryResult: { data: any; error: any } = { data: [], error: null };
+  // Shared result queue used by both listMemories() and getMemory() - tests call
+  // setQueryResult() before invoking the code under test to control what the "backend"
+  // returns next, mirroring the old supabase query-builder `queryResult` pattern.
+  let queryResult: any = [];
 
-  const insert = vi.fn(async () => ({ data: null, error: null }));
-  const update = vi.fn(async () => ({ data: null, error: null }));
-  const rpc = vi.fn();
+  const insert = vi.fn(async () => []);
+  const update = vi.fn(async () => undefined);
+  const matchMemories = vi.fn(async () => []);
+  const listMemories = vi.fn(async () => queryResult);
+  const getMemory = vi.fn(async () => queryResult);
   const functionsInvoke = vi.fn();
-
-  const createQueryBuilder = () => {
-    const builder: Record<string, any> = {};
-    const chainMethods = ['select', 'eq', 'neq', 'gte', 'lte', 'order', 'limit', 'delete'];
-
-    chainMethods.forEach((method) => {
-      builder[method] = vi.fn(() => builder);
-    });
-
-    builder.single = vi.fn(async () => queryResult);
-    builder.insert = insert;
-    builder.update = vi.fn((...args: any[]) => {
-      update(...args);
-      return builder;
-    });
-    builder.then = (onFulfilled: any, onRejected: any) =>
-      Promise.resolve(queryResult).then(onFulfilled, onRejected);
-    builder.catch = (onRejected: any) => Promise.resolve(queryResult).catch(onRejected);
-    builder.finally = (onFinally: any) => Promise.resolve(queryResult).finally(onFinally);
-
-    return builder;
-  };
 
   return {
     mockInsert: insert,
     mockUpdate: update,
-    mockRpc: rpc,
+    mockMatchMemories: matchMemories,
+    mockListMemories: listMemories,
+    mockGetMemory: getMemory,
     mockFunctionsInvoke: functionsInvoke,
     setQueryResult: (result: { data: any; error: any }) => {
-      queryResult = result;
+      queryResult = result.data;
     },
-    mockFrom: vi.fn(() => createQueryBuilder()),
   };
 });
 
-// Mock Supabase client
+// Mock Supabase client (only functions.invoke and insertCommunication's `.from()` are
+// still used by MemoryRepository)
 vi.mock('@/integrations/supabase/client', () => {
   return {
     supabase: {
-      from: mockFrom,
-      rpc: baseMockRpc,
+      from: vi.fn(() => ({
+        insert: vi.fn(async () => ({ data: null, error: null })),
+      })),
       functions: {
         invoke: baseMockFunctionsInvoke,
       },
     },
   };
 });
+
+// Mock userDataApi - MemoryRepository's real backing store as of the REST API
+// migration (see src/agents/services/memory/MemoryRepository.ts).
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createMemories: baseMockInsert,
+    updateMemoryScores: baseMockUpdate,
+    matchMemories: baseMockMatchMemories,
+    listMemories: baseMockListMemories,
+    getMemory: baseMockGetMemory,
+  },
+}));
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -119,7 +127,7 @@ vi.mock('@/infrastructure/api', () => ({
 describe('Memory Service Integration', () => {
   let mockInsert: any;
   let mockUpdate: any;
-  let mockRpc: any;
+  let mockMatchMemories: any;
   let mockFunctionsInvoke: any;
 
   beforeEach(() => {
@@ -128,7 +136,7 @@ describe('Memory Service Integration', () => {
 
     mockInsert = baseMockInsert;
     mockUpdate = baseMockUpdate;
-    mockRpc = baseMockRpc;
+    mockMatchMemories = baseMockMatchMemories;
     mockFunctionsInvoke = baseMockFunctionsInvoke;
     setQueryResult({ data: [], error: null });
     vi.mocked(llmApiClient.extractMemories).mockResolvedValue(
@@ -208,10 +216,9 @@ describe('Memory Service Integration', () => {
         },
       };
 
-      mockRpc.mockResolvedValue({
-        data: [mockMemory],
-        error: null,
-      });
+      // userDataApi.matchMemories() (see MemoryRepository.matchMemories) returns the
+      // match array directly, not a supabase-style { data, error } envelope.
+      mockMatchMemories.mockResolvedValue([mockMemory]);
 
       // Retrieve via semantic search
       const results = await memoryService.retrieveMemories({
@@ -669,7 +676,10 @@ describe('Memory Service Integration', () => {
 
       await MemoryService.reinforceMemory('memory-123', 1);
 
-      expect(mockUpdate).toHaveBeenCalledWith({
+      // repository.updateMemoryScores() now calls userDataApi.updateMemoryScores(memoryId,
+      // updates) - the memoryId is a separate first argument, not folded into the update
+      // payload (see MemoryRepository.updateMemoryScores).
+      expect(mockUpdate).toHaveBeenCalledWith('memory-123', {
         importance: 4,
         narrative_weight: 6,
       });
@@ -694,7 +704,7 @@ describe('Memory Service Integration', () => {
 
       await MemoryService.reinforceMemory('memory-123', 2);
 
-      expect(mockUpdate).toHaveBeenCalledWith({
+      expect(mockUpdate).toHaveBeenCalledWith('memory-123', {
         importance: 5, // Should not exceed 5
         narrative_weight: 10, // Should not exceed 10
       });

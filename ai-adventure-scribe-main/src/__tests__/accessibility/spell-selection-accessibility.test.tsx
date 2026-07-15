@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -143,17 +143,29 @@ const AccessibleSpellSelection: React.FC<{ character: Character }> = ({ characte
     });
   };
 
+  // Roving tabindex: `tabIndex={focusedIndex === index ? 0 : -1}` only controls which
+  // element is reachable by Tab - changing React state does not itself move the browser's
+  // actual DOM focus. Each branch below both updates `focusedIndex` (so the right element
+  // becomes tabbable) AND imperatively calls .focus() on the target DOM node (scoped via
+  // `event.currentTarget.parentElement`, i.e. the enclosing listbox) so focus actually moves.
+  const focusOptionAt = (event: React.KeyboardEvent, newIndex: number) => {
+    setFocusedIndex(newIndex);
+    const container = (event.currentTarget as HTMLElement).parentElement;
+    const target = container?.children[newIndex] as HTMLElement | undefined;
+    target?.focus();
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent, type: 'cantrip' | 'spell', index: number) => {
     const items = type === 'cantrip' ? cantripsData : spellsData;
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        setFocusedIndex(Math.min(index + 1, items.length - 1));
+        focusOptionAt(event, Math.min(index + 1, items.length - 1));
         break;
       case 'ArrowUp':
         event.preventDefault();
-        setFocusedIndex(Math.max(index - 1, 0));
+        focusOptionAt(event, Math.max(index - 1, 0));
         break;
       case 'Enter':
       case ' ':
@@ -166,11 +178,11 @@ const AccessibleSpellSelection: React.FC<{ character: Character }> = ({ characte
         break;
       case 'Home':
         event.preventDefault();
-        setFocusedIndex(0);
+        focusOptionAt(event, 0);
         break;
       case 'End':
         event.preventDefault();
-        setFocusedIndex(items.length - 1);
+        focusOptionAt(event, items.length - 1);
         break;
     }
   };
@@ -433,7 +445,9 @@ describe('Spell Selection Accessibility Tests', () => {
 
       // Main structure
       expect(screen.getByRole('main')).toBeInTheDocument();
-      expect(screen.getByLabelledBy('spell-selection-title')).toBeInTheDocument();
+      // `getByLabelledBy` isn't a real Testing Library query; assert the aria-labelledby
+      // wiring directly on the landmark it's meant to label.
+      expect(screen.getByRole('main')).toHaveAttribute('aria-labelledby', 'spell-selection-title');
 
       // Sections
       expect(screen.getAllByRole('group')).toHaveLength(3); // Cantrips, spells, summary
@@ -526,17 +540,24 @@ describe('Spell Selection Accessibility Tests', () => {
 
       render(<AccessibleSpellSelection character={wizardCharacter} />);
 
-      // Get all focusable elements
-      const focusableElements = screen.getAllByRole('option');
+      // The cantrips and spells sections are two independent listbox widgets, each with
+      // its own roving tabindex (per WAI-ARIA listbox authoring practices). So the first
+      // option *within each listbox* should be tabbable, not just the very first option
+      // on the page - checking a single flat list across both listboxes was the wrong
+      // assumption here.
+      const listboxes = screen.getAllByRole('listbox');
+      expect(listboxes).toHaveLength(2);
 
-      // Each option should have appropriate tabindex
-      focusableElements.forEach((element, index) => {
-        const tabIndex = element.getAttribute('tabindex');
-        if (index === 0) {
-          expect(tabIndex).toBe('0'); // First element should be focusable
-        } else {
-          expect(tabIndex).toBe('-1'); // Others should not be in tab order
-        }
+      listboxes.forEach((listbox) => {
+        const options = within(listbox).getAllByRole('option');
+        options.forEach((element, index) => {
+          const tabIndex = element.getAttribute('tabindex');
+          if (index === 0) {
+            expect(tabIndex).toBe('0'); // First element in this listbox should be focusable
+          } else {
+            expect(tabIndex).toBe('-1'); // Others should not be in tab order
+          }
+        });
       });
     });
 
@@ -611,8 +632,12 @@ describe('Spell Selection Accessibility Tests', () => {
 
       await user.click(screen.getByTestId('cantrip-option-minor-illusion'));
 
-      // Error message should be specific and actionable
-      expect(screen.getByText('Cannot select more than 3 cantrips')).toBeInTheDocument();
+      // Error message should be specific and actionable. It legitimately appears twice -
+      // once in the visible error list, once in the sr-only live region announcement - so
+      // a single getByText would throw on the ambiguous match.
+      const errorMessages = screen.getAllByText('Cannot select more than 3 cantrips');
+      expect(errorMessages.length).toBeGreaterThanOrEqual(1);
+      expect(within(screen.getByTestId('error-alert')).getByText('Cannot select more than 3 cantrips')).toBeInTheDocument();
       expect(screen.getByText('Validation Errors')).toBeInTheDocument();
     });
 

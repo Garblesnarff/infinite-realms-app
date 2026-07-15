@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -72,6 +72,11 @@ describe('Character creation completion analytics', () => {
     const btn = await screen.findByRole('button', { name: /Complete Character/i });
     fireEvent.click(btn);
 
-    expect(spy).toHaveBeenCalled();
+    // handleNext (WizardContent.tsx) -> saveCharacterAndNavigate() is async and isn't
+    // awaited by fireEvent.click, so asserting synchronously right after the click races
+    // the save/analytics work and fails before it resolves - wait for the spy instead.
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalled();
+    });
   });
 });

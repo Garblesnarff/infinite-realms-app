@@ -1,7 +1,15 @@
 import { render, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { Token } from '../Token';
+// TODO(vitest-config-audit, 2026-07-14): src/components/battle-map/Token.tsx (and its
+// siblings TokenImage.tsx, TokenBorder.tsx, TokenNameplate.tsx referenced below) no
+// longer exist anywhere under src/components/battle-map - the component this file
+// tests appears to have been removed/renamed during a source cleanup, so the import
+// below fails Vite module resolution before any test can run. Whole suite skipped
+// until someone confirms whether token rendering moved elsewhere (e.g. into
+// BattleScene.tsx / hooks) and, if so, rewrites this file against the new location.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// import { Token } from '../Token';
 
 import type { Token as TokenData } from '@/types/token';
 
@@ -99,7 +107,7 @@ vi.mock('../TokenNameplate', () => ({
   ),
 }));
 
-describe('Token', () => {
+describe.skip('Token', () => {
   const baseToken: TokenData = {
     id: 'token-1',
     sceneId: 'scene-1',

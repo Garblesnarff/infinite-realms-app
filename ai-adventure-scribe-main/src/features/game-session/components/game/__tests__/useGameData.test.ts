@@ -5,7 +5,7 @@ import { useGameData } from '../useGameData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import { characterLoaderService } from '@/services/character-loader';
 import logger from '@/lib/logger';
 
@@ -21,13 +21,14 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
 }));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn(),
-    })),
+// useGameData now fetches the campaign via userDataApi.getCampaign() (a real fetch()
+// to the Bun server, see src/features/game-session/components/game/useGameData.ts line 60)
+// instead of supabase.from('campaigns')...single(), so the mock target was updated to
+// match. userDataApi.getCampaign() resolves the campaign object directly (or throws on a
+// non-ok response) rather than returning a {data,error} shape.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
   },
 }));
 
@@ -71,11 +72,7 @@ describe('useGameData', () => {
     const mockCampaign = { id: 'camp-1', name: 'Adventure', user_id: 'user-1' };
 
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue(mockCharacter);
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockCampaign, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue(mockCampaign);
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
@@ -106,11 +103,7 @@ describe('useGameData', () => {
 
   it('should handle character load failure', async () => {
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue(null);
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'camp-1' }, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue({ id: 'camp-1' });
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
@@ -121,26 +114,22 @@ describe('useGameData', () => {
 
   it('should handle campaign load failure', async () => {
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue({ id: 'char-1' });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
-    });
+    // userDataApi.getCampaign() rethrows the server error verbatim (see request() in
+    // src/services/user-data-api.ts) rather than returning a {data,error} shape, and
+    // useGameData no longer wraps it with a "Failed to load campaign: ..." prefix - it
+    // just surfaces err.message directly (useGameData.ts line 98).
+    (userDataApi.getCampaign as any).mockRejectedValue(new Error('DB Error'));
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.error).toBe('Failed to load campaign: DB Error');
+    expect(result.current.error).toBe('DB Error');
   });
 
   it('should handle campaign not found (no error, no data)', async () => {
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue({ id: 'char-1' });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue(null);
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
@@ -154,11 +143,7 @@ describe('useGameData', () => {
     const mockCampaign = { id: 'camp-1', user_id: 'other-user' };
 
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue(mockCharacter);
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockCampaign, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue(mockCampaign);
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
@@ -174,11 +159,7 @@ describe('useGameData', () => {
     const mockCampaign = { id: 'camp-1', user_id: 'other-user' };
 
     (characterLoaderService.loadCharacterWithSpells as any).mockResolvedValue(mockCharacter);
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockCampaign, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue(mockCampaign);
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 
@@ -189,11 +170,7 @@ describe('useGameData', () => {
 
   it('should handle general error during load', async () => {
     (characterLoaderService.loadCharacterWithSpells as any).mockRejectedValue(new Error('Unknown Error'));
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'camp-1' }, error: null }),
-    });
+    (userDataApi.getCampaign as any).mockResolvedValue({ id: 'camp-1' });
 
     const { result } = renderHook(() => useGameData('char-1', 'camp-1'));
 

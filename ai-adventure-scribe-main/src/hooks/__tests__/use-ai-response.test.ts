@@ -4,13 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAIResponse } from '../use-ai-response';
 
-// Create stable mock objects for chainable calls
-const mockSingle = vi.fn();
-const mockSupabaseChain = {
-  select: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  single: mockSingle,
-};
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
 vi.mock('@/contexts/AuthContext', () => ({
@@ -36,9 +30,14 @@ vi.mock('@/contexts/GameContext', () => ({
   })),
 }));
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => mockSupabaseChain),
+// fetchGameContext() (see src/hooks/use-ai-response.ts) now fetches session/campaign/character
+// data via userDataApi.getSessionContext() (a single Bun server REST call) instead of a
+// supabase.from('game_sessions').select(...).single() join, so the mock target was updated
+// to match. The real payload shape uses singular `campaign`/`character` keys (not the old
+// `campaigns`/`characters` join aliases).
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getSessionContext: vi.fn(),
   },
 }));
 
@@ -113,13 +112,14 @@ describe('useAIResponse', () => {
     const { AIService } = await import('@/services/ai-service');
 
     const mockSessionData = {
+      id: mockSessionId,
       campaign_id: 'camp-1',
       character_id: 'char-1',
-      campaigns: { id: 'camp-1', name: 'Camp' },
-      characters: { id: 'char-1', name: 'Char' },
+      campaign: { id: 'camp-1', name: 'Camp' },
+      character: { id: 'char-1', name: 'Char' },
     };
 
-    mockSingle.mockResolvedValue({ data: mockSessionData, error: null });
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue(mockSessionData as any);
 
     (AIService.chatWithDM as any).mockResolvedValue({
       text: 'Greetings traveler!',
@@ -143,10 +143,13 @@ describe('useAIResponse', () => {
     const { updateGamePhase, clampCombatIntentFlags } = await import('@/hooks/ai/game-phase-updater');
     const { detectCombatFromText } = await import('@/utils/combatDetection');
 
-    mockSingle.mockResolvedValue({
-      data: { campaign_id: 'c', character_id: 'ch' },
-      error: null,
-    });
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
 
     const mockNarration = [{ type: 'narration', text: 'You see a dragon.' }];
     const mockDiceRolls = [{ type: 'attack', dice_notation: '1d20+5', result: 18 }];
@@ -181,10 +184,13 @@ describe('useAIResponse', () => {
     const { AIService } = await import('@/services/ai-service');
     const { processRollRequests } = await import('@/hooks/ai/roll-processor');
 
-    mockSingle.mockResolvedValue({
-      data: { campaign_id: 'c', character_id: 'ch' },
-      error: null,
-    });
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
 
     (AIService.chatWithDM as any).mockResolvedValue({
       text: 'The goblin attacks!',
@@ -208,10 +214,13 @@ describe('useAIResponse', () => {
   it('should skip processing for duplicate message signatures', async () => {
     const { AIService } = await import('@/services/ai-service');
 
-    mockSingle.mockResolvedValue({
-      data: { campaign_id: 'c', character_id: 'ch' },
-      error: null,
-    });
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
 
     (AIService.chatWithDM as any).mockResolvedValue({ text: 'Response' });
 
@@ -229,7 +238,7 @@ describe('useAIResponse', () => {
   });
 
   it('should throw an error if fetching game context fails', async () => {
-    mockSingle.mockResolvedValue({ data: null, error: new Error('DB Error') });
+    vi.mocked(userDataApi.getSessionContext).mockRejectedValue(new Error('DB Error'));
 
     const { result } = renderHook(() => useAIResponse());
 
@@ -240,10 +249,13 @@ describe('useAIResponse', () => {
   it('should handle AI service failures', async () => {
     const { AIService } = await import('@/services/ai-service');
 
-    mockSingle.mockResolvedValue({
-      data: { campaign_id: 'c', character_id: 'ch' },
-      error: null,
-    });
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: mockSessionId,
+      campaign_id: 'c',
+      character_id: 'ch',
+      campaign: {},
+      character: {},
+    } as any);
 
     (AIService.chatWithDM as any).mockRejectedValue(new Error('AI Offline'));
 

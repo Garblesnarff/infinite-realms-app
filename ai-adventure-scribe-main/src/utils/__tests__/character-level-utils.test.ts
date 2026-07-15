@@ -10,11 +10,15 @@ import {
 } from '../character-level-utils';
 import { canChooseAbilityScoreImprovement } from '../asi-levels';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
+// character-level-utils now fetches data through userDataApi (the Bun server's
+// REST API client) instead of querying Supabase directly, so the mock target
+// was updated to match. See src/utils/character-level-utils.ts.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getSession: vi.fn(),
+    listCharacters: vi.fn(),
   },
 }));
 
@@ -43,24 +47,12 @@ describe('character-level-utils', () => {
     it('should return party level for a valid session', async () => {
       const mockSession = { campaign_id: 'campaign-123' };
       const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 5, class: 'Fighter' } },
-        { characters: { id: 'char-2', name: 'Hero 2', level: 3, class: 'Wizard' } },
+        { id: 'char-1', name: 'Hero 1', level: 5, class: 'Fighter' },
+        { id: 'char-2', name: 'Hero 2', level: 3, class: 'Wizard' },
       ];
 
-      const fromSpy = vi.mocked(supabase.from);
-
-      // Mock session lookup
-      fromSpy.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      } as any);
-
-      // Mock campaign characters lookup
-      fromSpy.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getSession).mockResolvedValueOnce(mockSession);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters);
 
       const result = await getSessionPartyLevel('session-123');
 
@@ -73,11 +65,7 @@ describe('character-level-utils', () => {
     });
 
     it('should return default party level if session is not found', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
-      } as any);
+      vi.mocked(userDataApi.getSession).mockResolvedValueOnce(null);
 
       const result = await getSessionPartyLevel('invalid-session');
 
@@ -87,9 +75,9 @@ describe('character-level-utils', () => {
     });
 
     it('should handle exceptions and return default party level', async () => {
-      vi.mocked(supabase.from).mockImplementation(() => {
-        throw new Error('Database connection failed');
-      });
+      vi.mocked(userDataApi.getSession).mockRejectedValueOnce(
+        new Error('Database connection failed'),
+      );
 
       const result = await getSessionPartyLevel('session-123');
 
@@ -101,15 +89,12 @@ describe('character-level-utils', () => {
   describe('getCampaignPartyLevel', () => {
     it('should calculate party info correctly', async () => {
       const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 10, class: 'Paladin' } },
-        { characters: { id: 'char-2', name: 'Hero 2', level: 12, class: 'Cleric' } },
-        { characters: { id: 'char-3', name: 'Hero 3', level: 8, class: 'Rogue' } },
+        { id: 'char-1', name: 'Hero 1', level: 10, class: 'Paladin' },
+        { id: 'char-2', name: 'Hero 2', level: 12, class: 'Cleric' },
+        { id: 'char-3', name: 'Hero 3', level: 8, class: 'Rogue' },
       ];
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters);
 
       const result = await getCampaignPartyLevel('campaign-123');
 
@@ -121,15 +106,12 @@ describe('character-level-utils', () => {
 
     it('should filter out invalid characters', async () => {
       const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 5 } },
-        { characters: null }, // Null character
-        { characters: { id: 'char-2', name: 'Hero 2', level: 0 } }, // Zero level
+        { id: 'char-1', name: 'Hero 1', level: 5 },
+        null, // Null character
+        { id: 'char-2', name: 'Hero 2', level: 0 }, // Zero level
       ];
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters as any);
 
       const result = await getCampaignPartyLevel('campaign-123');
 
@@ -138,15 +120,9 @@ describe('character-level-utils', () => {
     });
 
     it('should return default if all characters are filtered out', async () => {
-      const mockCharacters = [
-        { characters: { id: 'char-1', name: 'Hero 1', level: 0 } },
-        { characters: null },
-      ];
+      const mockCharacters = [{ id: 'char-1', name: 'Hero 1', level: 0 }, null];
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters as any);
 
       const result = await getCampaignPartyLevel('campaign-123');
 
@@ -155,31 +131,17 @@ describe('character-level-utils', () => {
     });
 
     it('should return default if no valid characters found', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce([]);
 
       const result = await getCampaignPartyLevel('campaign-empty');
 
       expect(result.averageLevel).toBe(3);
     });
 
-    it('should handle database error by returning default level', async () => {
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database error' } }),
-      } as any);
-
-      const result = await getCampaignPartyLevel('campaign-123');
-
-      expect(result.averageLevel).toBe(3);
-    });
-
     it('should handle exceptions and return default party level', async () => {
-      vi.mocked(supabase.from).mockImplementation(() => {
-        throw new Error('Database connection failed');
-      });
+      vi.mocked(userDataApi.listCharacters).mockRejectedValueOnce(
+        new Error('Database connection failed'),
+      );
 
       const result = await getCampaignPartyLevel('campaign-123');
 
@@ -227,31 +189,19 @@ describe('character-level-utils', () => {
   describe('getAveragePartyLevel', () => {
     it('should work with sessionId', async () => {
       const mockSession = { campaign_id: 'campaign-123' };
-      const mockCharacters = [{ characters: { id: 'char-1', name: 'Hero 1', level: 6 } }];
+      const mockCharacters = [{ id: 'char-1', name: 'Hero 1', level: 6 }];
 
-      const fromSpy = vi.mocked(supabase.from);
-      fromSpy.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      } as any);
-
-      fromSpy.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.getSession).mockResolvedValueOnce(mockSession);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters);
 
       const level = await getAveragePartyLevel(undefined, 'session-123');
       expect(level).toBe(6);
     });
 
     it('should work with campaignId', async () => {
-      const mockCharacters = [{ characters: { id: 'char-1', name: 'Hero 1', level: 4 } }];
+      const mockCharacters = [{ id: 'char-1', name: 'Hero 1', level: 4 }];
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: mockCharacters, error: null }),
-      } as any);
+      vi.mocked(userDataApi.listCharacters).mockResolvedValueOnce(mockCharacters);
 
       const level = await getAveragePartyLevel('campaign-123');
       expect(level).toBe(4);
@@ -263,10 +213,8 @@ describe('character-level-utils', () => {
     });
 
     it('should handle exceptions and return default level', async () => {
-      // Force getSessionPartyLevel to throw by mocking supabase.from to throw
-      vi.mocked(supabase.from).mockImplementation(() => {
-        throw new Error('Unexpected error');
-      });
+      // Force getSessionPartyLevel to throw by mocking userDataApi.getSession to reject
+      vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new Error('Unexpected error'));
 
       const level = await getAveragePartyLevel(undefined, 'session-123');
       expect(level).toBe(3);

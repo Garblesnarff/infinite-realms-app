@@ -16,6 +16,15 @@ describe('MessageMetadata', () => {
     },
   };
 
+  // MessageMetadata.tsx formats the timestamp with `toLocaleTimeString()`, which is
+  // timezone-dependent - hardcoding "/10:00/" (the UTC hour) fails whenever the test
+  // runner's TZ isn't UTC (e.g. it renders "05:00 AM" in a UTC-5 sandbox). Compute the
+  // expected string the same way the component does so the assertion is TZ-agnostic.
+  const expectedTime = new Date(mockMessage.timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   it('renders correctly with all props', () => {
     const { getByText } = render(
       <MessageMetadata
@@ -28,7 +37,7 @@ describe('MessageMetadata', () => {
 
     expect(getByText('Mysterious')).toBeDefined();
     expect(getByText('Dark Dungeon')).toBeDefined();
-    expect(getByText(/10:00/)).toBeDefined();
+    expect(getByText(expectedTime)).toBeDefined();
   });
 
   it('renders correctly for player messages', () => {
@@ -80,7 +89,7 @@ describe('MessageMetadata', () => {
       />,
     );
 
-    expect(queryByText(/10:00/)).toBeNull();
+    expect(queryByText(expectedTime)).toBeNull();
   });
 
   it('handles missing timestamp gracefully', () => {

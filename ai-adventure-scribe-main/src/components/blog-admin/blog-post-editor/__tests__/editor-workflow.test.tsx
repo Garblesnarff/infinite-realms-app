@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 import { BlogPostEditor } from '../blog-post-editor';
 
@@ -66,6 +66,21 @@ const createWrapper = () => {
 };
 
 describe('Blog Editor Happy Path Workflow', () => {
+  // jsdom is missing ResizeObserver (used by the Radix Switch fields) and
+  // PointerEvent.hasPointerCapture/scrollIntoView (used by the Radix Select status
+  // field) - without these, interacting with those controls throws. Same fix as
+  // blog-post-editor.test.tsx / ToolOptionsAccessibility.test.tsx / SceneSettingsAccessibility.test.tsx.
+  beforeAll(() => {
+    global.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+    Element.prototype.releasePointerCapture = vi.fn();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreatePost.mockResolvedValue({
@@ -85,7 +100,9 @@ describe('Blog Editor Happy Path Workflow', () => {
 
     expect(screen.getByText(/create blog post/i)).toBeInTheDocument();
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'My First Blog Post');
 
     await waitFor(() => {
@@ -123,7 +140,9 @@ describe('Blog Editor Happy Path Workflow', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'Test Post');
 
     const contentTextarea = screen.getByPlaceholderText(/write your post content/i);
@@ -161,7 +180,9 @@ describe('Blog Editor Happy Path Workflow', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'Scheduled Post');
 
     const contentTextarea = screen.getByPlaceholderText(/write your post content/i);
@@ -197,7 +218,9 @@ describe('Blog Editor Happy Path Workflow', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'Preview Test');
 
     const contentTextarea = screen.getByPlaceholderText(/write your post content/i);
@@ -223,7 +246,9 @@ describe('Blog Editor Happy Path Workflow', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'SEO Test Post');
 
     const excerptTextarea = screen.getByLabelText(/excerpt/i);
@@ -246,14 +271,19 @@ describe('Blog Editor Happy Path Workflow', () => {
     const onCancel = vi.fn();
     render(<BlogPostEditor onCancel={onCancel} />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'Unsaved Post');
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
 
+    // The confirm dialog has both a heading "Unsaved Changes" and a body paragraph
+    // containing "unsaved changes" - /unsaved changes/i as a text query matches both,
+    // so query the heading specifically (same fix as blog-post-editor.test.tsx).
     await waitFor(() => {
-      expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /unsaved changes/i })).toBeInTheDocument();
     });
 
     const continueButton = screen.getByRole('button', { name: /continue editing/i });
@@ -297,7 +327,9 @@ describe('Blog Editor Happy Path Workflow', () => {
 
     expect(screen.getByText(/edit blog post/i)).toBeInTheDocument();
 
-    const titleInput = screen.getByLabelText(/title/i);
+    // /title/i alone also matches the "SEO Title" field added to the SEO Settings
+    // card; anchor to the label's start so only the primary Title field matches.
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.clear(titleInput);
     await user.type(titleInput, 'Updated Post Title');
 
