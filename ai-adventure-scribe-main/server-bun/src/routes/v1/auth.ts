@@ -19,8 +19,9 @@ import jwt from 'jsonwebtoken';
 import { users } from '../../../../db/schema/index';
 import { db } from '../../lib/drizzle';
 import { logger } from '../../lib/logger';
+import { authTokenExchangeRoutes } from './auth-token-exchange.js';
+import { authTokenExchangeCodes } from '../../services/auth-token-exchange.js';
 import { workos, authConfig } from '../../services/workos';
-
 
 // Test auth configuration
 const TEST_AUTH_SECRET = process.env.TEST_AUTH_SECRET;
@@ -49,7 +50,14 @@ function buildOAuthStateCookie(value: string, maxAgeSec: number): string {
   return `${OAUTH_STATE_COOKIE}=${value}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAgeSec}${secure}`;
 }
 
+function createFrontendTokenExchangeRedirect(accessToken: string, refreshToken: string): string {
+  const exchangeCode = authTokenExchangeCodes.issue({ accessToken, refreshToken });
+  const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
+  return `${frontendUrl}/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
+}
+
 export const authRoutes = new Elysia({ prefix: '/v1/auth' })
+  .use(authTokenExchangeRoutes)
   /**
    * Start OAuth flow - redirect to WorkOS hosted login
    * GET /v1/auth/login
@@ -110,11 +118,10 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
 
     try {
       // Exchange authorization code for user session
-      const { user, accessToken, refreshToken } =
-        await workos.userManagement.authenticateWithCode({
-          code,
-          clientId: authConfig.clientId,
-        });
+      const { user, accessToken, refreshToken } = await workos.userManagement.authenticateWithCode({
+        code,
+        clientId: authConfig.clientId,
+      });
 
       // ⚡ Bolt: Optimized N+1 query pattern by replacing 'find-then-upsert' with a single atomic UPSERT.
       // This reduces database round-trips from 2 down to 1 for every authentication callback.
@@ -137,11 +144,7 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
           },
         });
 
-      // Redirect to frontend with tokens in URL hash
-      const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
-      const redirectUrl = `${frontendUrl}/auth/callback#access_token=${accessToken}&refresh_token=${refreshToken}`;
-
-      return redirect(redirectUrl);
+      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
     } catch (error) {
       logger.error({ msg: 'OAuth callback error', error });
       const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
@@ -263,21 +266,16 @@ export const authRoutes = new Elysia({ prefix: '/v1/auth' })
           exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
         },
         TEST_AUTH_SECRET,
-        { algorithm: 'HS256' }
+        { algorithm: 'HS256' },
       );
 
-      const refreshToken = jwt.sign(
-        { sub: testUser.id, type: 'refresh' },
-        TEST_AUTH_SECRET,
-        { algorithm: 'HS256', expiresIn: '7d' }
-      );
-
-      // Redirect to frontend callback with tokens
-      const frontendUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'https://infiniterealms.app';
-      const redirectUrl = `${frontendUrl}/auth/callback#access_token=${accessToken}&refresh_token=${refreshToken}`;
+      const refreshToken = jwt.sign({ sub: testUser.id, type: 'refresh' }, TEST_AUTH_SECRET, {
+        algorithm: 'HS256',
+        expiresIn: '7d',
+      });
 
       logger.info({ msg: '[TEST AUTH] Generated tokens for test user', email: testUser.email });
-      return redirect(redirectUrl);
+      return redirect(createFrontendTokenExchangeRedirect(accessToken, refreshToken));
     } catch (error) {
       logger.error({ msg: 'Test login error', error });
       set.status = 500;
