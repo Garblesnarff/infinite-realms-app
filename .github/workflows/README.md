@@ -45,14 +45,14 @@ Uploads the coverage report as a build artifact (`frontend-coverage`,
 
 ### release.yml — Release & Changelog
 Triggers: `push` to `main` scoped to `paths: ai-adventure-scribe-main/**`, and
-manual `workflow_dispatch` (choose `auto`/`patch`/`minor`/`major`).
+manual `workflow_dispatch`.
 
-Runs `standard-version` (config: `ai-adventure-scribe-main/.versionrc.json`)
-to bump the version in `ai-adventure-scribe-main/package.json`, regenerate
-`ai-adventure-scribe-main/CHANGELOG.md`, commit, tag, and push back to `main`.
-Creates a GitHub Release from the new changelog section, then makes a
-best-effort (non-fatal if it fails) POST to an internal blog API to publish a
-release announcement.
+Runs `googleapis/release-please-action@v4` in manifest mode for
+`ai-adventure-scribe-main/`. It keeps the existing `v0.x.y` tag format and
+changelog section conventions. The first run opens a release PR instead of
+tagging immediately; merging that PR updates `package.json` and `CHANGELOG.md`,
+creates the GitHub Release/tag, then makes the same best-effort (non-fatal)
+POST to the internal blog API.
 
 ### dast-nightly.yml — Nightly DAST
 Triggers: nightly cron (`0 3 * * *`) and manual `workflow_dispatch`.
