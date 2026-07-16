@@ -195,6 +195,9 @@ async function requestResponse(path: string, init: RequestInit = {}): Promise<Re
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // Wait for AuthContext to verify/refresh the session before reading the
+  // token — otherwise cold page loads race out with a stale/expired token.
+  await waitForAuth();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
