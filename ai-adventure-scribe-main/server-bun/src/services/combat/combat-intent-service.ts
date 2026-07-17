@@ -62,7 +62,7 @@ export async function executeCombatIntent(
     let result: unknown;
     if (intent.type === 'move') {
       result = await applyTacticalMapAction(encounter.sessionId, {
-        action: 'move', entityId: intent.actorId, x: intent.x, y: intent.y,
+        action: 'move', entityId: intent.actorId, x: intent.x, y: intent.y, changes: null,
       });
       if (!(result as { applied?: boolean }).applied) {
         throw new BusinessLogicError('Movement refused', (result as { refusal?: Record<string, unknown> }).refusal);

@@ -2,13 +2,13 @@ import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
+import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import {
   applyDmTacticalActions,
   applyTacticalMapAction,
   consumeDmTacticalCorrection,
 } from '../../services/combat/tactical-action-service.js';
-import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
-import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';

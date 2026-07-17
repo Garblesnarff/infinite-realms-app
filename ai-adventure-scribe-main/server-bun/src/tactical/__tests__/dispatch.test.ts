@@ -54,6 +54,7 @@ describe('CM-2 tactical dispatch', () => {
       entityId: 'pc-participant',
       x: 2,
       y: 0,
+      changes: null,
     });
     expect(result.applied).toBe(true);
     expect(state.entities[0].x).toBe(2);
@@ -66,6 +67,7 @@ describe('CM-2 tactical dispatch', () => {
       entityId: 'pc-participant',
       x: 5,
       y: 0,
+      changes: null,
     });
     expect(result.applied).toBe(false);
     if (!result.applied) expect(result.refusal).toHaveProperty('validMoves');
@@ -88,14 +90,14 @@ describe('CM-2 tactical dispatch', () => {
   test('retries one refused DM action once, then drops a second refusal without looping', async () => {
     const refusal = {
       applied: false as const,
-      action: { action: 'move' as const },
+      action: { action: 'move' as const, entityId: null, x: null, y: null, changes: null },
       refusal: { reason: 'blocked' },
     };
     const apply = async () => refusal;
     let prompts = 0;
-    const result = await dispatchWithOneCorrectiveRetry({ action: 'move' }, apply, async () => {
+    const result = await dispatchWithOneCorrectiveRetry({ action: 'move', entityId: null, x: null, y: null, changes: null }, apply, async () => {
       prompts++;
-      return { action: 'move' };
+      return { action: 'move', entityId: null, x: null, y: null, changes: null };
     });
     expect(result.applied).toBe(false);
     expect(prompts).toBe(1);
@@ -187,7 +189,7 @@ describe('CM-2 tactical dispatch', () => {
       movementRemaining: 30,
     });
     expect(
-      dispatchMapAction(state, { action: 'move', entityId: 'pc-participant', x: 1, y: 0 }).applied,
+      dispatchMapAction(state, { action: 'move', entityId: 'pc-participant', x: 1, y: 0, changes: null }).applied,
     ).toBe(true);
     const targets = getAoETargets(
       state,
@@ -204,6 +206,7 @@ describe('CM-2 tactical dispatch', () => {
     expect(
       dispatchMapAction(state, {
         action: 'update_cell',
+        entityId: null,
         x: 4,
         y: 1,
         changes: { terrain: 'door_open', blocksMovement: false, blocksSight: false, cover: 0 },
