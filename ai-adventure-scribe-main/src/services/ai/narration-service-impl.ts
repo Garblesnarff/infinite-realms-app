@@ -18,7 +18,7 @@ import {
   buildOpeningScenePrompt,
 } from './shared/prompts';
 import { addEquipmentContext } from './shared/utils';
-import { dmResponseSchema } from './dm-response-schema';
+import { dmResponseSchema } from '../../../server-bun/src/services/dm/dm-response-schema';
 
 import type { Memory, MemoryContext } from '../memory-manager';
 import type { SessionVoiceContext } from '../voice-consistency-service';

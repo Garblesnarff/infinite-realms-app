@@ -299,6 +299,15 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
     }),
+  applyDmTacticalActions: (
+    sessionId: string,
+    actions: TacticalMapActionPayload[],
+  ): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/dm-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actions }),
+    }),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>
     request(`/v1/campaigns/${encodeURIComponent(campaignId)}`),

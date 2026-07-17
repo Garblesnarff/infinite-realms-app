@@ -42,6 +42,7 @@ vi.mock('@/services/user-data-api', () => ({
     startStructuredCombat: vi.fn(),
     endTacticalMap: vi.fn(),
     applyTacticalMapAction: vi.fn(),
+    applyDmTacticalActions: vi.fn(),
   },
 }));
 
@@ -349,10 +350,9 @@ describe('useAIResponse', () => {
     expect(userDataApi.endTacticalMap).toHaveBeenCalledWith(mockSessionId);
   });
 
-  it('keeps the single corrective retry for refused tactical map actions', async () => {
+  it('sends DM map actions as one server batch and never retries client-side', async () => {
     const { AIService } = await import('@/services/ai-service');
-    const refusedAction = { action: 'move', entityId: 'goblin-1', x: 3, y: 4 };
-    const replacement = { action: 'move', entityId: 'goblin-1', x: 2, y: 4 };
+    const mapAction = { action: 'move', entityId: 'goblin-1', x: 3, y: 4 };
 
     vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
       id: mockSessionId,
@@ -361,29 +361,23 @@ describe('useAIResponse', () => {
       campaign: {},
       character: {},
     } as any);
-    vi.mocked(userDataApi.applyTacticalMapAction)
-      .mockResolvedValueOnce({
-        ok: false,
-        json: vi.fn().mockResolvedValue({ error: 'Blocked' }),
-      } as any)
-      .mockResolvedValueOnce({ ok: true } as any);
-    (AIService.chatWithDM as any)
-      .mockResolvedValueOnce({ text: 'The goblin moves.', map_actions: [refusedAction] })
-      .mockResolvedValueOnce({ map_actions: [replacement] });
+    vi.mocked(userDataApi.applyDmTacticalActions).mockResolvedValue({
+      ok: false,
+      json: vi.fn().mockResolvedValue({ error: 'Blocked' }),
+    } as any);
+    (AIService.chatWithDM as any).mockResolvedValueOnce({
+      text: 'The goblin moves.',
+      map_actions: [mapAction],
+    });
 
     const { result } = renderHook(() => useAIResponse());
     await result.current.getAIResponse(mockMessages as any, mockSessionId);
 
-    expect(userDataApi.applyTacticalMapAction).toHaveBeenNthCalledWith(
-      1,
-      mockSessionId,
-      refusedAction,
-    );
-    expect(userDataApi.applyTacticalMapAction).toHaveBeenNthCalledWith(
-      2,
-      mockSessionId,
-      replacement,
-    );
-    expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
+    // The server owns legality and the single corrective retry; the client
+    // submits the whole batch once and does not re-prompt on refusal.
+    expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledTimes(1);
+    expect(userDataApi.applyDmTacticalActions).toHaveBeenCalledWith(mockSessionId, [mapAction]);
+    expect(userDataApi.applyTacticalMapAction).not.toHaveBeenCalled();
+    expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
   });
 });

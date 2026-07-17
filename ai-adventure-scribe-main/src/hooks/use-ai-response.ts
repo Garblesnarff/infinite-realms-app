@@ -22,7 +22,7 @@ import { voiceConsistencyService } from '@/services/voice-consistency-service';
 
 // Voice narration types
 export interface NarrationSegment {
-  type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character';
+  type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character' | 'transition';
   text: string;
   character?: string;
   voice_category?: string;
@@ -285,33 +285,15 @@ export const useAIResponse = () => {
           if (!endResponse.ok) logger.warn('Server refused tactical combat end', await endResponse.json());
         }
 
+        // DM map intents are one authenticated server batch. The server owns
+        // legality, the single corrective LLM retry, persistence, and broadcast.
         if (sessionId && result.map_actions?.length) {
-          for (const action of result.map_actions) {
-            const actionResponse = await userDataApi.applyTacticalMapAction(
-              sessionId,
-              action as TacticalMapActionPayload,
-            );
-            if (!actionResponse.ok) {
-              const refusal = await actionResponse.json();
-              // Exactly one corrective structured pass: the engine refusal is authoritative.
-              const correction = await AIService.chatWithDM({
-                message: JSON.stringify({ tacticalRefusal: refusal, instruction: 'Replace only the refused map_action. Return no prose and no combat actions.' }),
-                context: { ...aiContext, gameState: { ...aiContext.gameState, tacticalCorrection: true } },
-                conversationHistory,
-                userPlan: userPlan || undefined,
-                turnCount,
-              });
-              const replacement = correction.map_actions?.[0];
-              if (replacement) {
-                const retry = await userDataApi.applyTacticalMapAction(
-                  sessionId,
-                  replacement as TacticalMapActionPayload,
-                );
-                if (retry.ok) continue;
-              }
-              logger.warn('Dropped invalid DM tactical action after one corrective retry', refusal);
-            }
-          }
+          const actionResponse = await userDataApi.applyDmTacticalActions(
+            sessionId,
+            result.map_actions as TacticalMapActionPayload[],
+          );
+          if (!actionResponse.ok)
+            logger.warn('Server refused DM tactical action batch', await actionResponse.json());
         }
 
         if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
