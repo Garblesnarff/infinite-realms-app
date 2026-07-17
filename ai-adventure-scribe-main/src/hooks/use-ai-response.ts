@@ -1,11 +1,12 @@
 // External/SDK Imports
 import { useRef, useCallback } from 'react';
 
+import type { DMAoESpellAction } from '../../../server-bun/src/services/dm/dm-response-schema';
+import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
 import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
-import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
@@ -91,9 +92,7 @@ const fetchGameContext = async (
     }
 
     return {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       campaign: sessionData.campaign || {},
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       character: sessionData.character || {},
       starterCampaignId: sessionData.starter_campaign_id as string,
     };
@@ -296,9 +295,29 @@ export const useAIResponse = () => {
             logger.warn('Server refused DM tactical action batch', await actionResponse.json());
         }
 
+        if (sessionId && result.combat_actions?.length) {
+          const aoeActions = result.combat_actions.filter(
+            (action): action is DMAoESpellAction => action.action_type === 'cast_spell' && 'origin' in action,
+          );
+          for (const action of aoeActions) {
+            const response = await userDataApi.resolveAoECast(sessionId, {
+              phase: 'propose',
+              actorId: action.actor_id,
+              spellId: action.spell_id,
+              origin: action.origin,
+              direction: action.direction,
+              slotLevel: action.slot_level,
+            });
+            if (!response.ok) logger.warn('Server refused AoE spell proposal', await response.json());
+          }
+        }
+
         if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
           const resolvedActions: Array<Record<string, unknown>> = [];
-          for (const action of result.combat_actions as StructuredCombatAction[]) {
+          const targetedActions = result.combat_actions.filter(
+            (action): action is StructuredCombatAction => 'target_ids' in action,
+          );
+          for (const action of targetedActions) {
             const outcomes = await executeStructuredCombatAction(combatState.activeEncounter.id, action);
             resolvedActions.push({ action, outcomes });
             await executeAuthoritativeCombatIntent(combatState.activeEncounter.id, {

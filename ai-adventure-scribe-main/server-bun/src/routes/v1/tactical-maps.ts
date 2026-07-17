@@ -1,7 +1,9 @@
+/* eslint-disable max-lines */
 import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { proposeAoECast, resolveAoECast } from '../../services/combat/aoe-cast-service.js';
 import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
 import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import {
@@ -212,6 +214,46 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       return applied;
     },
     { body: t.Object({ actions: t.Array(t.Any()) }) },
+  )
+  .post(
+    '/:id/tactical-map/aoe-cast',
+    async ({ params, body, user, set }) => {
+      const access = await verifySessionOwnership(params.id, user.userId);
+      if (!access.success) {
+        set.status = access.error!.status;
+        return { error: access.error!.message };
+      }
+      const request = {
+        actorId: body.actorId,
+        spellId: body.spellId,
+        origin: body.origin,
+        direction: body.direction,
+        slotLevel: body.slotLevel,
+      };
+      try {
+        if (body.phase === 'resolve') return { delta: await resolveAoECast(params.id, request, user.userId) };
+        const proposal = await proposeAoECast(params.id, request);
+        if (proposal.autoConfirm) return { delta: await resolveAoECast(params.id, request, user.userId) };
+        if (proposal.hostile) {
+          await Bun.sleep(1500);
+          return { delta: await resolveAoECast(params.id, request, user.userId) };
+        }
+        return proposal;
+      } catch (error) {
+        set.status = 422;
+        return { error: error instanceof Error ? error.message : 'AoE cast refused' };
+      }
+    },
+    {
+      body: t.Object({
+        phase: t.Union([t.Literal('propose'), t.Literal('resolve')]),
+        actorId: t.String(),
+        spellId: t.String(),
+        origin: t.Object({ x: t.Number(), y: t.Number() }),
+        direction: t.Nullable(t.Object({ x: t.Number(), y: t.Number() })),
+        slotLevel: t.Nullable(t.Number({ minimum: 1, maximum: 9 })),
+      }),
+    },
   )
   .post('/:id/tactical-map/end', async ({ params, user, set }) => {
     const access = await verifySessionOwnership(params.id, user.userId);

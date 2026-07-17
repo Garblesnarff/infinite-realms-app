@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   applyTacticalDelta,
+  type AoETemplate,
   type Point,
   type TacticalDelta,
   type TacticalMap,
@@ -23,6 +24,7 @@ export function useTacticalMap(sessionId: string) {
   } | null>(null);
   const [queuedDeltas, setQueuedDeltas] = useState<TacticalDelta[]>([]);
   const [degradeLine, setDegradeLine] = useState<string | null>(null);
+  const [aoeTemplate, setAoeTemplate] = useState<AoETemplate | null>(null);
   const frameRef = useRef<number>();
 
   const applyDelta = useCallback((delta: TacticalDelta) => {
@@ -66,16 +68,38 @@ export function useTacticalMap(sessionId: string) {
           | TacticalDelta
           | { type: 'tactical_action_queue'; actions: TacticalDelta[] }
           | { type: 'tactical_degraded'; text: string }
+          | { type: 'aoe_preview'; state: 'player-pending' | 'hostile-telegraph'; actorId: string; spellId: string; slotLevel: number | null; geometry: AoETemplate['geometry'] }
+          | { type: 'aoe_cast'; state: 'player-confirmed' | 'hostile-telegraph'; actorId: string; spellId: string; geometry: AoETemplate['geometry']; forcedMoves: Array<{ entityId: string; path: Point[] }> }
         >
       ).detail;
       if (detail.type === 'tactical_action_queue')
         setQueuedDeltas((current) => [...current, ...detail.actions]);
       else if (detail.type === 'tactical_degraded') setDegradeLine(detail.text);
+      else if (detail.type === 'aoe_preview') setAoeTemplate(detail);
+      else if (detail.type === 'aoe_cast') {
+        setAoeTemplate({ ...detail, slotLevel: null });
+        for (const move of detail.forcedMoves) {
+          const delta: TacticalDelta = {
+            type: 'entity_moved',
+            entityId: move.entityId,
+            path: move.path,
+            forced: true,
+            mode: 'shove',
+          };
+          applyDelta(delta);
+        }
+      }
       else applyDelta(detail);
     };
     window.addEventListener('tactical-map-delta', listener);
     return () => window.removeEventListener('tactical-map-delta', listener);
   }, [applyDelta]);
+
+  useEffect(() => {
+    if (aoeTemplate?.state !== 'player-confirmed') return;
+    const timeout = window.setTimeout(() => setAoeTemplate(null), 900);
+    return () => window.clearTimeout(timeout);
+  }, [aoeTemplate]);
 
   useEffect(() => {
     if (!animation) return;
@@ -113,5 +137,5 @@ export function useTacticalMap(sessionId: string) {
     [sessionId],
   );
 
-  return { map, animation, applyDelta, request, degradeLine };
+  return { map, animation, applyDelta, request, degradeLine, aoeTemplate, setAoeTemplate };
 }

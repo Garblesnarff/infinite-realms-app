@@ -77,6 +77,15 @@ export type StructuredCombatStartPayload = {
   sceneSpec: unknown;
 };
 
+export type AoECastPayload = {
+  phase: 'propose' | 'resolve';
+  actorId: string;
+  spellId: string;
+  origin: { x: number; y: number };
+  direction: { x: number; y: number } | null;
+  slotLevel: number | null;
+};
+
 const CHARACTER_FIELDS = [
   'name',
   'description',
@@ -307,6 +316,12 @@ export const userDataApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actions }),
+    }),
+  resolveAoECast: (sessionId: string, payload: AoECastPayload): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/aoe-cast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     }),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>

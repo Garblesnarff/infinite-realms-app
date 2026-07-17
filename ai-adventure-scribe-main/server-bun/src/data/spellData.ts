@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import srdSpells from '../../../src/data/srd/spells.json';
+/* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
 import nonSrdSupplement from '../../../src/data/spells/non-srd-supplement.json';
+import srdSpells from '../../../src/data/srd/spells.json';
 
 // Server-side spell data - converted from the bundled SRD dataset.
 // This provides comprehensive D&D 5E spell data without requiring database queries
 
-interface Spell {
+export interface Spell {
   id: string;
   name: string;
   level: number;
@@ -29,6 +29,14 @@ interface Spell {
   saveSuccess?: string;
   damageType?: string;
   damageByLevel?: Record<string, string>;
+  areaOfEffect?: {
+    shape: 'sphere' | 'cone' | 'cube' | 'line';
+    sizeFeet: number;
+  };
+  forcedMove?: {
+    distanceFeet: number;
+    direction: 'away' | 'toward';
+  };
 }
 
 // Class-to-spell mappings for D&D 5E classes
@@ -125,6 +133,15 @@ export const allSpells: Spell[] = sourceSpells.map((spell) => ({
   saveSuccess: spell.save_success,
   damageType: spell.damage_type,
   damageByLevel: spell.damage_by_level,
+  areaOfEffect: spell.area_of_effect
+    ? { shape: spell.area_of_effect.shape, sizeFeet: spell.area_of_effect.size_feet }
+    : undefined,
+  forcedMove: spell.forced_move
+    ? {
+        distanceFeet: spell.forced_move.distance_feet,
+        direction: spell.forced_move.direction,
+      }
+    : undefined,
 }));
 
 // Helper functions

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import ROT from 'rot-js';
 
 import type {
@@ -121,7 +122,7 @@ export function getCover(map: TacticalMap, fromId: string, toId: string): 0 | 1 
 function center(p: Point) {
   return { x: p.x + 0.5, y: p.y + 0.5 };
 }
-function inAoE(cell: Point, shape: AoEShape, origin: Point, params: AoEParams): boolean {
+export function isAoECell(cell: Point, shape: AoEShape, origin: Point, params: AoEParams): boolean {
   const length = (params.lengthFeet ?? params.radiusFeet ?? params.sizeFeet ?? 0) / CELL_FEET;
   // Bursts follow the engine's "every diagonal = 5ft" convention: Chebyshev, not Euclidean.
   if (shape === 'sphere') return chebyshev(cell, origin) <= (params.radiusFeet ?? 0) / CELL_FEET;
@@ -149,6 +150,24 @@ function inAoE(cell: Point, shape: AoEShape, origin: Point, params: AoEParams): 
     perpendicular <= (params.widthFeet ?? CELL_FEET) / CELL_FEET / 2
   );
 }
+
+/**
+ * The canonical template geometry.  Targeting and rendering both consume this
+ * exact list so the highlighted cells cannot drift from the engine decision.
+ */
+export function getAoECells(
+  map: TacticalMap,
+  shape: AoEShape,
+  origin: Point,
+  params: AoEParams,
+): Point[] {
+  const cells: Point[] = [];
+  for (let y = 0; y < map.height; y++)
+    for (let x = 0; x < map.width; x++)
+      if (isAoECell({ x, y }, shape, origin, params)) cells.push({ x, y });
+  return cells;
+}
+
 export function getAoETargets(
   map: TacticalMap,
   shape: AoEShape,
@@ -156,8 +175,9 @@ export function getAoETargets(
   params: AoEParams,
 ): AoETarget[] {
   const source = params.sourceEntityId ? getEntity(map, params.sourceEntityId) : undefined;
+  const cells = new Set(getAoECells(map, shape, origin, params).map(key));
   return map.entities
-    .filter((e) => entityFootprint(e).some((c) => inAoE(c, shape, origin, params)))
+    .filter((e) => entityFootprint(e).some((c) => cells.has(key(c))))
     .map((e) => ({ id: e.id, friendly: !!source && e.type === source.type }));
 }
 

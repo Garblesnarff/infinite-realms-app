@@ -1,4 +1,4 @@
-import { Crosshair, Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,7 +19,7 @@ type MoveResponse = {
 };
 
 export function TacticalMapBoard({ sessionId }: Props) {
-  const { map, animation, request, degradeLine } = useTacticalMap(sessionId);
+  const { map, animation, request, degradeLine, aoeTemplate, setAoeTemplate } = useTacticalMap(sessionId);
   const { state: combatState } = useCombat();
   const currentTurnId = combatState.activeEncounter?.currentTurnParticipantId;
   const [collapsed, setCollapsed] = useState(false);
@@ -33,7 +33,6 @@ export function TacticalMapBoard({ sessionId }: Props) {
     cover: number;
     hasLineOfSight: boolean;
   } | null>(null);
-  const [targetArea, setTargetArea] = useState(false);
   const activePlayer = useMemo(
     () =>
       map?.entities.find((entity) => entity.id === currentTurnId && entity.type === 'pc') ?? null,
@@ -59,14 +58,6 @@ export function TacticalMapBoard({ sessionId }: Props) {
           entity.y +
             { tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 }[entity.size],
     );
-    if (targetArea) {
-      window.dispatchEvent(
-        new CustomEvent('tactical-aoe-declared', { detail: { sessionId, origin: point } }),
-      );
-      setTargetArea(false);
-      toast.success('Area target declared to the DM');
-      return;
-    }
     if (occupant && occupant.id === activePlayer?.id) {
       const response = await request<{ moves: Point[] }>(
         `/valid-moves/${encodeURIComponent(occupant.id)}`,
@@ -111,6 +102,22 @@ export function TacticalMapBoard({ sessionId }: Props) {
     setSelectedId(null);
   };
 
+  const confirmAoE = async () => {
+    if (aoeTemplate?.state !== 'player-pending') return;
+    const response = await request<{ delta?: unknown; error?: string }>('/aoe-cast', {
+      method: 'POST',
+      body: JSON.stringify({
+        phase: 'resolve',
+        actorId: aoeTemplate.actorId,
+        spellId: aoeTemplate.spellId,
+        origin: aoeTemplate.geometry.origin,
+        direction: aoeTemplate.geometry.direction,
+        slotLevel: aoeTemplate.slotLevel,
+      }),
+    });
+    if (!response.ok) toast.error(response.data.error ?? 'The spell could not be resolved.');
+  };
+
   return (
     <section
       className="mx-3 mt-3 shrink-0 rounded-lg border border-infinite-gold/25 bg-infinite-dark/40"
@@ -122,14 +129,11 @@ export function TacticalMapBoard({ sessionId }: Props) {
           {activePlayer ? ' · your turn' : ''}
         </span>
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={targetArea ? 'default' : 'outline'}
-            onClick={() => setTargetArea((value) => !value)}
-          >
-            <Crosshair className="mr-1 h-4 w-4" />
-            Target area
-          </Button>
+          {aoeTemplate?.state === 'player-pending' && (
+            <Button size="sm" onClick={confirmAoE}>
+              Confirm spell area
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -148,7 +152,29 @@ export function TacticalMapBoard({ sessionId }: Props) {
             path={previewPath}
             animation={animation}
             los={lineOfSight}
-            aoeOrigin={targetArea ? hovered : null}
+            aoeTemplate={aoeTemplate}
+            onAoeOriginChange={(origin) =>
+              setAoeTemplate((current) =>
+                current?.state === 'player-pending'
+                  ? (() => {
+                      const dx = origin.x - current.geometry.origin.x;
+                      const dy = origin.y - current.geometry.origin.y;
+                      return {
+                        ...current,
+                        geometry: {
+                          ...current.geometry,
+                          origin,
+                          // A translated template remains exactly the same cell shape;
+                          // the server recomputes and authorizes it on confirmation.
+                          cells: current.geometry.cells
+                            .map((cell) => ({ x: cell.x + dx, y: cell.y + dy }))
+                            .filter((cell) => cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height),
+                        },
+                      };
+                    })()
+                  : current,
+              )
+            }
             onCellClick={click}
             onCellHover={setHovered}
           />
