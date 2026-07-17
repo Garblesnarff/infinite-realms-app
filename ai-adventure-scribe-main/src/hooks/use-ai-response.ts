@@ -1,11 +1,16 @@
 // External/SDK Imports
 import { useRef, useCallback } from 'react';
 
+import type { SceneSpec } from '../../server-bun/src/tactical/types';
 import type { ImageRequest } from '@/hooks/ai/types';
+import type { AIResponse, ChatMessage as AIChatMessage } from '@/services/ai/shared/types';
 import type { ChatMessage } from '@/types/game';
 import type { RollRequest } from '@/types/roll-request';
-import type { DetectedEnemy, DetectedCombatAction } from '@/utils/combatDetection';
-import type { SceneSpec } from '../../../server-bun/src/tactical/types';
+import type {
+  CombatDetectionResult,
+  DetectedEnemy,
+  DetectedCombatAction,
+} from '@/utils/combatDetection';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCombat } from '@/contexts/CombatContext';
@@ -16,13 +21,16 @@ import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import { executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import {
+  executeStructuredCombatAction,
+  type StructuredCombatAction,
+} from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 
 // Voice narration types
 export interface NarrationSegment {
-  type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character';
+  type: 'narration' | 'dialogue' | 'action' | 'thought' | 'dm' | 'character' | 'transition';
   text: string;
   character?: string;
   voice_category?: string;
@@ -205,12 +213,12 @@ export const useAIResponse = () => {
         });
 
         // Build conversation history for AIService
-        const conversationHistory = messages.slice(0, -1).map((msg) => ({
+        const conversationHistory: AIChatMessage[] = messages.slice(0, -1).map((msg) => ({
           id: `msg_${Date.now()}_${Math.random()}`,
           role: msg.sender === 'player' ? ('user' as const) : ('assistant' as const),
           content: msg.text,
           timestamp: new Date(),
-          narrationSegments: msg.narrationSegments,
+          narrationSegments: msg.narrationSegments as AIChatMessage['narrationSegments'],
         }));
 
         // Create AI context with combat awareness
@@ -229,30 +237,40 @@ export const useAIResponse = () => {
             currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
             pendingRolls: gameState.diceRollQueue.pendingRolls.length,
             round: combatState.activeEncounter?.currentRound,
-            participants: (combatState.activeEncounter?.participants || []).map((participant) => ({
-              id: participant.id,
-              name: participant.name,
-              type: participant.participantType,
-              hp: participant.currentHitPoints,
-              maxHp: participant.maxHitPoints,
-              armorClass: participant.armorClass,
-              conditions: (participant.conditions || []).map((condition) => condition.name),
-            })) || [],
+            participants:
+              (combatState.activeEncounter?.participants || []).map((participant) => ({
+                id: participant.id,
+                name: participant.name,
+                type: participant.participantType,
+                hp: participant.currentHitPoints,
+                maxHp: participant.maxHitPoints,
+                armorClass: participant.armorClass,
+                conditions: (participant.conditions || []).map((condition) => condition.name),
+              })) || [],
           },
         };
 
         // The tactical server computes geometry. The DM receives only its bounded
         // ASCII/digest context and never derives distances or line of sight itself.
-        if (combatState.isInCombat && sessionId && combatState.activeEncounter?.currentTurnParticipantId) {
+        if (
+          combatState.isInCombat &&
+          sessionId &&
+          combatState.activeEncounter?.currentTurnParticipantId
+        ) {
           try {
             const token = window.localStorage.getItem('workos_access_token');
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-            const tacticalResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(combatState.activeEncounter.currentTurnParticipantId)}`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
+            const tacticalResponse = await fetch(
+              `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(combatState.activeEncounter.currentTurnParticipantId)}`,
+              {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              },
+            );
             if (tacticalResponse.ok) {
-              const payload = await tacticalResponse.json() as { tacticalContext?: string };
-              if (payload.tacticalContext) aiContext.gameState.tacticalContext = payload.tacticalContext;
+              const payload = (await tacticalResponse.json()) as { tacticalContext?: string };
+              if (payload.tacticalContext)
+                (aiContext.gameState as Record<string, unknown>).tacticalContext =
+                  payload.tacticalContext;
             }
           } catch (error) {
             logger.warn('Unable to load tactical context; continuing without map context', error);
@@ -267,7 +285,7 @@ export const useAIResponse = () => {
         });
 
         // Call AIService
-        let result = await AIService.chatWithDM({
+        let result: AIResponse = await AIService.chatWithDM({
           message: latestMessage.text,
           context: aiContext,
           conversationHistory,
@@ -287,63 +305,79 @@ export const useAIResponse = () => {
         if (sessionId && result.combat_transition === 'start' && result.scene_spec) {
           const token = window.localStorage.getItem('workos_access_token');
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-          const enemies = result.combatDetection?.enemies || [];
+          const enemies = (result.combatDetection?.enemies || []) as DetectedEnemy[];
           const participants = [
             {
-              encounterId: '', characterId: (characterRecord.id as string) || null,
-              name: String(characterRecord.name || 'Player'), initiativeModifier: 0,
+              encounterId: '',
+              characterId: (characterRecord.id as string) || null,
+              name: String(characterRecord.name || 'Player'),
+              initiativeModifier: 0,
             },
-            ...enemies.map((enemy) => ({ encounterId: '', name: enemy.name, initiativeModifier: 0 })),
+            ...enemies.map((enemy) => ({
+              encounterId: '',
+              name: enemy.name,
+              initiativeModifier: 0,
+            })),
           ];
-          const startResponse = await fetch(`${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ participants, sceneSpec: result.scene_spec }),
-          });
-          if (!startResponse.ok) logger.warn('Server refused structured combat start', await startResponse.json());
+          const startResponse = await fetch(
+            `${apiBase}/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ participants, sceneSpec: result.scene_spec }),
+            },
+          );
+          if (!startResponse.ok)
+            logger.warn('Server refused structured combat start', await startResponse.json());
         }
         if (sessionId && result.combat_transition === 'end') {
           const token = window.localStorage.getItem('workos_access_token');
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-          const endResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
-            method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-          if (!endResponse.ok) logger.warn('Server refused tactical combat end', await endResponse.json());
+          const endResponse = await fetch(
+            `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`,
+            {
+              method: 'POST',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            },
+          );
+          if (!endResponse.ok)
+            logger.warn('Server refused tactical combat end', await endResponse.json());
         }
 
+        // DM map intents are one authenticated server batch. The server owns
+        // legality, the single corrective LLM retry, persistence, and broadcast.
         if (sessionId && result.map_actions?.length) {
           const token = window.localStorage.getItem('workos_access_token');
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8888';
-          for (const action of result.map_actions) {
-            const actionResponse = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(action),
-            });
-            if (!actionResponse.ok) {
-              const refusal = await actionResponse.json();
-              // Exactly one corrective structured pass: the engine refusal is authoritative.
-              const correction = await AIService.chatWithDM({
-                message: JSON.stringify({ tacticalRefusal: refusal, instruction: 'Replace only the refused map_action. Return no prose and no combat actions.' }),
-                context: { ...aiContext, gameState: { ...aiContext.gameState, tacticalCorrection: true } },
-                conversationHistory,
-                userPlan: userPlan || undefined,
-                turnCount,
-              });
-              const replacement = correction.map_actions?.[0];
-              if (replacement) {
-                const retry = await fetch(`${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
-                  method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(replacement),
-                });
-                if (retry.ok) continue;
-              }
-              logger.warn('Dropped invalid DM tactical action after one corrective retry', refusal);
-            }
-          }
+          const actionResponse = await fetch(
+            `${apiBase}/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/dm-actions`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ actions: result.map_actions }),
+            },
+          );
+          if (!actionResponse.ok)
+            logger.warn('Server refused DM tactical action batch', await actionResponse.json());
         }
 
-        if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
+        if (
+          combatState.isInCombat &&
+          combatState.activeEncounter &&
+          result.combat_actions?.length
+        ) {
           const resolvedActions: Array<Record<string, unknown>> = [];
           for (const action of result.combat_actions as StructuredCombatAction[]) {
-            const outcomes = await executeStructuredCombatAction(combatState.activeEncounter.id, action);
+            const outcomes = await executeStructuredCombatAction(
+              combatState.activeEncounter.id,
+              action,
+            );
             resolvedActions.push({ action, outcomes });
             for (const outcome of outcomes) {
               if (outcome.newHp !== undefined) {
@@ -355,10 +389,15 @@ export const useAIResponse = () => {
           const narrationResult = await AIService.chatWithDM({
             message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),
             context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
-            conversationHistory: [...conversationHistory, {
-              id: `resolution-setup-${Date.now()}`, role: 'assistant' as const,
-              content: result.text, timestamp: new Date(),
-            }],
+            conversationHistory: [
+              ...conversationHistory,
+              {
+                id: `resolution-setup-${Date.now()}`,
+                role: 'assistant' as const,
+                content: result.text,
+                timestamp: new Date(),
+              },
+            ],
             userPlan: userPlan || undefined,
             turnCount,
           });
@@ -370,7 +409,7 @@ export const useAIResponse = () => {
         // Process roll requests (parse, deduplicate, execute NPC rolls)
         const processedRolls = await processRollRequests({
           responseText,
-          existingRequests: result.roll_requests || [],
+          existingRequests: (result.roll_requests || []) as RollRequest[],
           isDiceRollMessage: !!isDiceRollMessage,
           processedSet: processedRollRequestsRef.current,
           aiContext,
@@ -383,10 +422,10 @@ export const useAIResponse = () => {
 
         // Update game phase based on combat detection (delegated to game-phase-updater)
         updateGamePhase({
-          combatDetection: result.combatDetection,
+          combatDetection: result.combatDetection as CombatDetectionResult | undefined,
           currentPhase: gameState.currentPhase,
           isInCombat: combatState.isInCombat,
-          setGamePhase,
+          setGamePhase: setGamePhase as (phase: string) => void,
         });
 
         // Process voice assignments if we have narration segments
@@ -431,7 +470,7 @@ export const useAIResponse = () => {
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
           },
-          narrationSegments,
+          narrationSegments: narrationSegments as NarrationSegment[] | undefined,
           diceRolls,
           rollRequests: processedRolls.playerRollRequests,
           imageRequests,
@@ -442,8 +481,8 @@ export const useAIResponse = () => {
             combatType: result.combatDetection?.combatType || 'none',
             shouldStartCombat,
             shouldEndCombat,
-            enemies: result.combatDetection?.enemies || [],
-            combatActions: result.combatDetection?.combatActions || [],
+            enemies: (result.combatDetection?.enemies || []) as DetectedEnemy[],
+            combatActions: (result.combatDetection?.combatActions || []) as DetectedCombatAction[],
           },
         };
       } catch (error) {

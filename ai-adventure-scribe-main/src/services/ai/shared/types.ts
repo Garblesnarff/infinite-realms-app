@@ -1,3 +1,5 @@
+import type { DMMapAction } from '../../../../server-bun/src/services/dm/dm-response-schema';
+
 /**
  * Shared TypeScript types and interfaces for AI service modules
  * Extracted from ai-service.ts for reusability across modules
@@ -65,7 +67,7 @@ export interface AIResponse {
   dice_rolls?: unknown[];
   combat_transition?: 'none' | 'start' | 'end';
   scene_spec?: unknown | null;
-  map_actions?: unknown[];
+  map_actions?: DMMapAction[];
   combat_actions?: unknown[];
   combatants?: unknown[];
   combatDetection?: {
