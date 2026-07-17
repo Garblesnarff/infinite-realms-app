@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
+import { waitForAuth } from '@/lib/auth-gate';
+import { getAuthHeaders, loadCachedSession } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export type CharacterStatsPayload = Partial<{
@@ -43,6 +46,35 @@ export type MemoryQuery = {
   recentMinutes?: number;
   minNarrativeWeight?: number;
   top?: boolean;
+};
+export type SessionContextPayload = Record<string, unknown> & {
+  id: string;
+  campaign_id: string | null;
+  character_id: string | null;
+  starter_campaign_id?: string | null;
+  campaign: Record<string, unknown>;
+  character: Record<string, unknown> & { character_stats?: Record<string, number>[] };
+};
+
+export type TacticalMapActionPayload = {
+  action: 'move' | 'place' | 'remove' | 'update_cell';
+  entityId?: string | null;
+  x?: number | null;
+  y?: number | null;
+  changes?: Record<string, unknown> | null;
+};
+
+export type StructuredCombatStartPayload = {
+  participants: Array<{
+    encounterId: string;
+    characterId?: string | null;
+    npcId?: string | null;
+    name: string;
+    initiativeModifier: number;
+    hpCurrent?: number | null;
+    hpMax?: number | null;
+  }>;
+  sceneSpec: unknown;
 };
 
 const CHARACTER_FIELDS = [
@@ -95,6 +127,7 @@ const CHARACTER_FIELDS = [
   'total_level',
   'stats',
   'equipment',
+  'inventory_items',
 ] as const;
 
 function prepareCharacterPayload(payload: Record<string, unknown>): CharacterPayload {
@@ -149,13 +182,27 @@ function prepareCampaignPayload(payload: Record<string, unknown>): CampaignPaylo
   return prepared as CampaignPayload;
 }
 
+async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  await waitForAuth();
+  const token = loadCachedSession()?.access_token;
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  });
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = window.localStorage.getItem('workos_access_token');
+  // Wait for AuthContext to verify/refresh the session before reading the
+  // token — otherwise cold page loads race out with a stale/expired token.
+  await waitForAuth();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getAuthHeaders(),
       ...init.headers,
     },
   });
@@ -176,6 +223,91 @@ function normalizeCharacter<T extends Record<string, any>>(character: T): T {
 }
 
 export const userDataApi = {
+  createSession: (payload: Record<string, unknown>): Promise<any> =>
+    request('/v1/sessions', { method: 'POST', body: JSON.stringify(payload) }),
+  getSession: (sessionId: string): Promise<any> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}`),
+  listSessions: (
+    filters: {
+      campaignId?: string;
+      characterId?: string;
+      status?: string;
+      starterOnly?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<any[]> => {
+    const query = new URLSearchParams();
+    if (filters.campaignId) query.set('campaign_id', filters.campaignId);
+    if (filters.characterId) query.set('character_id', filters.characterId);
+    if (filters.status) query.set('status', filters.status);
+    if (filters.starterOnly) query.set('starter_only', 'true');
+    if (filters.limit != null) query.set('limit', String(filters.limit));
+    if (filters.offset != null) query.set('offset', String(filters.offset));
+    return request(`/v1/sessions?${query.toString()}`);
+  },
+  updateSession: (sessionId: string, payload: Record<string, unknown>): Promise<any> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  completeSession: (sessionId: string, summary?: string): Promise<any> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ summary }),
+    }),
+  listQuests: (campaignId: string, status?: string): Promise<any[]> => {
+    const query = new URLSearchParams({ campaign_id: campaignId });
+    if (status) query.set('status', status);
+    return request(`/v1/quests?${query.toString()}`);
+  },
+  createQuest: (payload: Record<string, unknown>): Promise<any> =>
+    request('/v1/quests', { method: 'POST', body: JSON.stringify(payload) }),
+  upsertQuest: (payload: Record<string, unknown>): Promise<any> =>
+    request('/v1/quests/upsert', { method: 'POST', body: JSON.stringify(payload) }),
+  listStarterCharacterTemplates: (campaignId: string): Promise<any[]> =>
+    request(`/v1/starter-character-templates?campaign_id=${encodeURIComponent(campaignId)}`),
+  getStarterCharacterTemplate: (templateId: string): Promise<any | null> =>
+    request(`/v1/starter-character-templates?id=${encodeURIComponent(templateId)}`),
+  listCharacterQuestProgress: (characterId: string): Promise<any[]> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/quest-progress`),
+  getSessionContext: (sessionId: string): Promise<SessionContextPayload> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/context`),
+  getTacticalMapContext: (sessionId: string, entityId: string): Promise<Response> =>
+    requestResponse(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/context/${encodeURIComponent(entityId)}`,
+    ),
+  startStructuredCombat: (
+    sessionId: string,
+    payload: StructuredCombatStartPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/combat/sessions/${encodeURIComponent(sessionId)}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  endTacticalMap: (sessionId: string): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/end`, {
+      method: 'POST',
+    }),
+  applyTacticalMapAction: (
+    sessionId: string,
+    action: TacticalMapActionPayload,
+  ): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action),
+    }),
+  applyDmTacticalActions: (
+    sessionId: string,
+    actions: TacticalMapActionPayload[],
+  ): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/dm-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actions }),
+    }),
   listCampaigns: (): Promise<any[]> => request('/v1/campaigns'),
   getCampaign: (campaignId: string): Promise<any> =>
     request(`/v1/campaigns/${encodeURIComponent(campaignId)}`),
@@ -225,6 +357,11 @@ export const userDataApi = {
     request('/v1/memories', { method: 'POST', body: JSON.stringify(records) }),
   getMemory: (memoryId: string): Promise<any> =>
     request(`/v1/memories/${encodeURIComponent(memoryId)}`),
+  updateMemoryContent: (memoryId: string, content: string): Promise<void> =>
+    request(`/v1/memories/${encodeURIComponent(memoryId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    }),
   updateMemoryScores: (
     memoryId: string,
     updates: { importance?: number; narrative_weight?: number },

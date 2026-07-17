@@ -13,20 +13,24 @@ export class WorldBuilderRepository {
    * @param userId - The user ID to check ownership against (required for security)
    * @returns true if user owns campaign, false otherwise
    */
-  static async validateUserCampaignAccess(campaignId: string, userId?: string): Promise<boolean> {
+  static async validateUserCampaignAccess(campaignId: string, userId: string): Promise<boolean> {
     try {
       // SECURITY: Require userId for proper validation
       if (!userId) {
-        logger.warn(
-          '[WorldBuilder] No userId provided for campaign access validation - denying access',
-        );
+        logger.warn('[WorldBuilder] No userId provided for campaign access validation - denying access');
         return false;
       }
 
-      // Check if campaign exists and user owns it
-      const campaign = await userDataApi.getCampaign(campaignId);
+      // RLS cannot scope this WorkOS-authenticated Supabase client, so the
+      // ownership predicate is required on every direct campaign lookup.
+      const { data: campaign, error } = await supabase
+        .from('campaigns')
+        .select('id')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
 
-      if (!campaign) {
+      if (error || !campaign) {
         logger.warn(
           `[WorldBuilder] Campaign ${campaignId} not found or user ${userId} does not have access`,
         );
@@ -43,25 +47,28 @@ export class WorldBuilderRepository {
   /**
    * Get world building statistics
    */
-  static async getWorldStats(campaignId: string): Promise<{
+  static async getWorldStats(campaignId: string, userId: string): Promise<{
     locations: number;
     npcs: number;
     quests: number;
     totalElements: number;
   }> {
     try {
+      if (!(await this.validateUserCampaignAccess(campaignId, userId))) {
+        return { locations: 0, npcs: 0, quests: 0, totalElements: 0 };
+      }
+
       const [locations, npcs, quests] = await Promise.all([
         supabase.from('locations').select('id').eq('campaign_id', campaignId),
         supabase.from('npcs').select('id').eq('campaign_id', campaignId),
-        supabase.from('quests').select('id').eq('campaign_id', campaignId),
+        userDataApi.listQuests(campaignId),
       ]);
 
       return {
         locations: locations.data?.length || 0,
         npcs: npcs.data?.length || 0,
-        quests: quests.data?.length || 0,
-        totalElements:
-          (locations.data?.length || 0) + (npcs.data?.length || 0) + (quests.data?.length || 0),
+        quests: quests.length,
+        totalElements: (locations.data?.length || 0) + (npcs.data?.length || 0) + quests.length,
       };
     } catch (error) {
       logger.error('Failed to get world stats:', error);
@@ -81,8 +88,13 @@ export class WorldBuilderRepository {
     campaignId: string,
     _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
     npc: { name: string; description: string; location: string },
+    userId: string,
   ): Promise<boolean> {
     try {
+      if (!(await this.validateUserCampaignAccess(campaignId, userId))) {
+        return false;
+      }
+
       // Check if NPC already exists (by name in this campaign)
       const { data: existing } = await supabase
         .from('npcs')
@@ -126,8 +138,13 @@ export class WorldBuilderRepository {
     campaignId: string,
     _sessionId: string, // Kept for API compatibility but not used (column doesn't exist)
     location: { name: string; description: string; status?: string }, // status is optional, not saved
+    userId: string,
   ): Promise<boolean> {
     try {
+      if (!(await this.validateUserCampaignAccess(campaignId, userId))) {
+        return false;
+      }
+
       // Check if location already exists (by name in this campaign)
       const { data: existing } = await supabase
         .from('locations')
@@ -172,52 +189,22 @@ export class WorldBuilderRepository {
     campaignId: string,
     sessionId: string,
     quest: { name: string; update: string },
+    userId: string,
   ): Promise<boolean> {
     try {
-      // Check if quest already exists (by name in this campaign)
-      const { data: existing } = await supabase
-        .from('quests')
-        .select('id, status')
-        .eq('campaign_id', campaignId)
-        .ilike('title', quest.name)
-        .limit(1);
-
-      if (existing && existing.length > 0) {
-        // Quest exists - update its status/description
-        const { error } = await supabase
-          .from('quests')
-          .update({
-            description: quest.update,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing[0].id);
-
-        if (error) {
-          logger.warn(`[WorldBuilder] Failed to update quest "${quest.name}":`, error);
-          return false;
-        } else {
-          logger.debug(`[WorldBuilder] Updated quest "${quest.name}" from XML`);
-          return true;
-        }
+      if (!(await this.validateUserCampaignAccess(campaignId, userId))) {
+        return false;
       }
 
-      // Create new quest
-      const { error } = await supabase.from('quests').insert({
+      await userDataApi.upsertQuest({
         campaign_id: campaignId,
-        session_id: sessionId,
         title: quest.name,
         description: quest.update,
         status: 'active',
         quest_type: 'side', // Default type for XML-extracted quests
       });
-
-      if (error) {
-        logger.warn(`[WorldBuilder] Failed to save quest "${quest.name}":`, error);
-        return false;
-      } else {
-        logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML`);
-        return true;
-      }
+      logger.debug(`[WorldBuilder] Saved quest "${quest.name}" from XML for session ${sessionId}`);
+      return true;
     } catch (error) {
       logger.warn(`[WorldBuilder] Error saving quest "${quest.name}":`, error);
       return false;

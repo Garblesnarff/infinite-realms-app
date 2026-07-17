@@ -13,6 +13,7 @@ import {
   sortMemoriesByRelevance,
   validateGameContext,
 } from '../contextValidation';
+import { formatEquipmentContextType } from '../builder';
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -26,6 +27,24 @@ vi.mock('@/lib/logger', () => ({
 describe('Context Utilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('equipment prompt context', () => {
+    it('uses trinket names and descriptions instead of custom category labels', () => {
+      expect(
+        formatEquipmentContextType({
+          item_name: 'hospitality vestments',
+          item_type: 'custom',
+          description: 'ceremonial serving attire',
+        }),
+      ).toBe('hospitality vestments (ceremonial serving attire)');
+    });
+
+    it('keeps standard equipment categories concise', () => {
+      expect(formatEquipmentContextType({ item_name: 'Longsword', item_type: 'weapon' })).toBe(
+        'weapon',
+      );
+    });
   });
 
   describe('contextValidation', () => {
@@ -242,9 +261,7 @@ describe('Context Utilities', () => {
       });
 
       it('should cap importance at 10', () => {
-        const memories: any[] = [
-          { importance: 8, metadata: { significance: 5 } },
-        ];
+        const memories: any[] = [{ importance: 8, metadata: { significance: 5 } }];
         const enhanced = enhanceMemoryContext(memories);
         expect(enhanced.recent[0].importance).toBe(10);
       });

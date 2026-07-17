@@ -7,6 +7,8 @@ import {
   applyTacticalMapAction,
   consumeDmTacticalCorrection,
 } from '../../services/combat/tactical-action-service.js';
+import { CombatEncounterService } from '../../services/combat/combat-encounter-service.js';
+import { executeCombatIntent } from '../../services/combat/combat-intent-service.js';
 import { destroyTacticalCombatMap } from '../../services/combat/tactical-combat-lifecycle.js';
 import { loadActiveTacticalMap } from '../../services/combat/tactical-map-store.js';
 import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
@@ -92,22 +94,23 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
         set.status = access.error!.status;
         return { error: access.error!.message };
       }
-      const result = await applyTacticalMapAction(params.id, {
-        action: 'move',
-        entityId: body.entityId,
-        x: body.x,
-        y: body.y,
-        changes: null,
-      });
-      if (!result.applied && (result.refusal as { reason?: string }).reason === 'no_active_map') {
+      const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
+      if (!encounter) {
         set.status = 404;
-        return { error: 'No active tactical map' };
+        return { error: 'No active combat encounter' };
       }
-      if (!result.applied) {
+      try {
+        const result = await executeCombatIntent(
+          encounter.id,
+          { type: 'move', actorId: body.entityId, x: body.x, y: body.y },
+          user.userId,
+          'player',
+        );
+        return { result };
+      } catch (error) {
         set.status = 422;
-        return result;
+        return { error: error instanceof Error ? error.message : 'Movement refused' };
       }
-      return { result };
     },
     { body: t.Object({ entityId: t.String(), x: t.Number(), y: t.Number() }) },
   )
@@ -118,6 +121,25 @@ export const tacticalMapRoutes = new Elysia({ prefix: '/v1/sessions' })
       if (!access.success) {
         set.status = access.error!.status;
         return { error: access.error!.message };
+      }
+      if (body.action === 'move' && body.entityId && body.x != null && body.y != null) {
+        const encounter = await CombatEncounterService.getActiveEncounter(params.id, user.userId);
+        if (!encounter) {
+          set.status = 404;
+          return { error: 'No active combat encounter' };
+        }
+        try {
+          const result = await executeCombatIntent(
+            encounter.id,
+            { type: 'move', actorId: body.entityId, x: body.x, y: body.y },
+            user.userId,
+            'player',
+          );
+          return { result };
+        } catch (error) {
+          set.status = 422;
+          return { error: error instanceof Error ? error.message : 'Movement refused' };
+        }
       }
       const result = await applyTacticalMapAction(params.id, body as unknown as MapAction);
       if (!result.applied && (result.refusal as { reason?: string }).reason === 'no_active_map') {

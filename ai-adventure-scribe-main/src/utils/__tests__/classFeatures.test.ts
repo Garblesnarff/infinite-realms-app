@@ -147,6 +147,10 @@ describe('classFeatures utilities', () => {
       expect(getCharacterResources('cleric', 18).channelDivinity.max).toBe(3);
     });
 
+    // Paladins unlock Channel Divinity at 3rd level per D&D 5e rules (unlike
+    // Clerics, who get it at 2nd level), and it holds at a flat 1 use rather
+    // than scaling with level. See getInitialCharacterResources's 'paladin'
+    // case in src/utils/character/class-definitions.ts.
     it('should initialize paladin resources including channel divinity scaling', () => {
       const p1 = getCharacterResources('paladin', 1);
       expect(p1.layOnHands.max).toBe(5);
@@ -154,13 +158,17 @@ describe('classFeatures utilities', () => {
 
       const p2 = getCharacterResources('paladin', 2);
       expect(p2.layOnHands.max).toBe(10);
-      expect(p2.channelDivinity.max).toBe(1);
+      expect(p2.channelDivinity).toBeUndefined();
+
+      const p3 = getCharacterResources('paladin', 3);
+      expect(p3.layOnHands.max).toBe(15);
+      expect(p3.channelDivinity.max).toBe(1);
 
       const p6 = getCharacterResources('paladin', 6);
-      expect(p6.channelDivinity.max).toBe(2);
+      expect(p6.channelDivinity.max).toBe(1);
 
       const p18 = getCharacterResources('paladin', 18);
-      expect(p18.channelDivinity.max).toBe(3);
+      expect(p18.channelDivinity.max).toBe(1);
     });
   });
 

@@ -14,6 +14,23 @@ export const logger = pino({
       return { level: label };
     },
   },
+  // Redact known-sensitive fields wherever they appear in logged objects so
+  // secrets never reach log output/aggregators, regardless of which module
+  // logged them.
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      '*.apiKey',
+      '*.api_key',
+      '*.token',
+      '*.accessToken',
+      '*.refreshToken',
+      '*.password',
+      '*.secret',
+    ],
+    censor: '[REDACTED]',
+  },
 });
 
 // Create child loggers for different modules (matching Winston interface)

@@ -5,7 +5,7 @@ import { TacticalMapBoard } from './TacticalMapBoard';
 import type { TacticalMap } from './tactical-map-state';
 
 vi.mock('./TacticalMapCanvas', () => ({ TacticalMapCanvas: ({ map, onCellClick }: { map: TacticalMap; onCellClick: (point: { x: number; y: number }) => void }) => <div data-testid="canvas">{map.width}×{map.height}<button onClick={() => onCellClick({ x: 0, y: 0 })}>own</button><button onClick={() => onCellClick({ x: 1, y: 1 })}>destination</button></div> }));
-vi.mock('@/stores/useCombatStore', () => ({ useCombatStore: (selector: (state: unknown) => unknown) => selector({ activeEncounter: { currentTurnParticipantId: 'pc' } }) }));
+vi.mock('@/contexts/CombatContext', () => ({ useCombat: () => ({ state: { activeEncounter: { currentTurnParticipantId: 'pc' } } }) }));
 
 const map = (): TacticalMap => ({ id: 'map', sessionId: 's', width: 2, height: 2, round: 1, sceneDescription: 'room', cells: Array.from({ length: 2 }, () => Array.from({ length: 2 }, () => ({ terrain: 'floor', blocksMovement: false, blocksSight: false, cover: 0 as const, elevation: 0 }))), entities: [{ id: 'pc', x: 0, y: 0, size: 'medium', type: 'pc', speedFeet: 30, movementRemaining: 30, name: 'Ada' }, { id: 'enemy', x: 1, y: 0, size: 'medium', type: 'monster', speedFeet: 30, movementRemaining: 30, name: 'Goblin' }] });
 

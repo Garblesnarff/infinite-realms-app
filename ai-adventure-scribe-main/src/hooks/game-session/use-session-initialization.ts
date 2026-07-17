@@ -1,14 +1,9 @@
 import { useEffect, useRef } from 'react';
 
-import {
-  type ExtendedGameSession,
-  type SessionState,
-  isSessionExpired,
-  SESSION_CORE_COLUMNS,
-} from './session-utils';
+import { type ExtendedGameSession, type SessionState, isSessionExpired } from './session-utils';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 interface UseSessionInitializationProps {
   campaignId?: string;
@@ -145,13 +140,18 @@ export const useSessionInitialization = ({
         if (specificSessionId) {
           logger.info('[Session Init] Loading specific session:', specificSessionId);
           // ⚡ Bolt: Use explicit core columns to avoid over-fetching
-          const { data: specificSession, error: specificError } = await supabase
-            .from('game_sessions')
-            .select(SESSION_CORE_COLUMNS)
-            .eq('id', specificSessionId)
-            .eq('campaign_id', campaignId)
-            .eq('character_id', characterId)
-            .single();
+          let specificSession: ExtendedGameSession | null = null;
+          let specificError: unknown;
+          try {
+            const candidate = (await userDataApi.getSession(
+              specificSessionId,
+            )) as ExtendedGameSession;
+            if (candidate.campaign_id === campaignId && candidate.character_id === characterId)
+              specificSession = candidate;
+            else specificError = new Error('Session does not match campaign and character');
+          } catch (error) {
+            specificError = error;
+          }
 
           if (abortSignal.aborted || !mountedRef.current) {
             logger.info('[Session Init] Aborted after specific session fetch');
@@ -172,13 +172,17 @@ export const useSessionInitialization = ({
 
         // Find recent sessions
         // ⚡ Bolt: Use explicit core columns to avoid over-fetching during session lookup
-        const { data: existingSessions, error: existingSessionError } = await supabase
-          .from('game_sessions')
-          .select(SESSION_CORE_COLUMNS)
-          .eq('campaign_id', campaignId)
-          .eq('character_id', characterId)
-          .order('created_at', { ascending: false })
-          .limit(5);
+        let existingSessions: ExtendedGameSession[] = [];
+        let existingSessionError: unknown;
+        try {
+          existingSessions = (await userDataApi.listSessions({
+            campaignId,
+            characterId,
+            limit: 5,
+          })) as ExtendedGameSession[];
+        } catch (error) {
+          existingSessionError = error;
+        }
 
         if (abortSignal.aborted || !mountedRef.current) {
           logger.info('[Session Init] Aborted after fetching sessions');
@@ -235,30 +239,31 @@ export const useSessionInitialization = ({
           const sessionNumber =
             Math.max(...(existingSessions?.map((s) => s.session_number || 1) || [1])) + 1;
 
-          const { data, error } = await supabase
-            .from('game_sessions')
-            .insert([
-              {
-                session_number: sessionNumber,
-                status: 'active',
-                campaign_id: campaignId,
-                character_id: characterId,
-                turn_count: 0,
-                current_scene_description:
-                  lastCompletedSession.current_scene_description || 'Continuing your adventure...',
-                session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
-                starter_campaign_id: starterCampaignId || null,
-              },
-            ])
-            .select()
-            .single();
+          try {
+            const data = await userDataApi.createSession({
+              session_number: sessionNumber,
+              status: 'active',
+              campaign_id: campaignId,
+              character_id: characterId,
+              turn_count: 0,
+              current_scene_description:
+                lastCompletedSession.current_scene_description || 'Continuing your adventure...',
+              session_notes: `Continuing from Session ${lastCompletedSession.session_number || 1}`,
+              starter_campaign_id: starterCampaignId || null,
+            });
 
-          if (abortSignal.aborted || !mountedRef.current) {
-            logger.info('[Session Init] Aborted after continuation session insert');
+            if (abortSignal.aborted || !mountedRef.current) {
+              logger.info('[Session Init] Aborted after continuation session insert');
+              return;
+            }
+
+            if (mountedRef.current) {
+              setSessionData(data as ExtendedGameSession);
+              setSessionState('active');
+              sessionInitializedRef.current = true;
+            }
             return;
-          }
-
-          if (error) {
+          } catch (error) {
             logger.error('[Session Init] Error creating continuation session:', error);
             setSessionState('error');
             toastRef.current({
@@ -268,12 +273,6 @@ export const useSessionInitialization = ({
             });
             return;
           }
-
-          setSessionData(data as ExtendedGameSession);
-          setSessionState('active');
-          sessionInitializedRef.current = true;
-          logger.info('✅ [Session Init] Continuation session created:', data.id);
-          return;
         }
 
         // No existing sessions found, create the first one

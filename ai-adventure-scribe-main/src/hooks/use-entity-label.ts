@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -52,16 +51,18 @@ export function useEntityLabel(type: EntityType, id: string | null) {
             logger.warn('[useEntityLabel] Failed to load character label', { id, error });
           }
         } else if (type === 'session') {
-          const { data, error } = await supabase
-            .from('game_sessions')
-            .select('session_number')
-            .eq('id', id)
-            .limit(1);
+          let data: Record<string, unknown> | null = null;
+          let error: unknown;
+          try {
+            data = await userDataApi.getSession(entityId);
+          } catch (caught) {
+            error = caught;
+          }
           if (cancelled) return;
           if (error) {
             logger.warn('[useEntityLabel] Failed to load session label', { id, error });
           } else {
-            const n = data?.[0]?.session_number as number | null | undefined;
+            const n = data?.session_number as number | null | undefined;
             const value = n ? `Session ${n}` : 'Game';
             cache.set(key, value);
             setLabel(value);

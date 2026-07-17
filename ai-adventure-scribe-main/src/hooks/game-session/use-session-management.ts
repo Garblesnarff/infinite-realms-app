@@ -9,8 +9,8 @@ import {
   generateSessionSummary,
 } from './session-utils';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
 interface UseSessionManagementProps {
   setSessionData: React.Dispatch<React.SetStateAction<ExtendedGameSession | null>>;
@@ -54,30 +54,29 @@ export const useSessionManagement = ({
         setSessionState('loading');
       }
 
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .insert([
-          {
-            session_number: 1,
-            status: 'active',
-            campaign_id: campId,
-            character_id: charId,
-            turn_count: 0,
-            current_scene_description: 'The adventure begins...',
-            session_notes: '',
-            starter_campaign_id: starterCampaignId || null,
-          },
-        ])
-        .select()
-        .single();
+      try {
+        const data = await userDataApi.createSession({
+          session_number: 1,
+          status: 'active',
+          campaign_id: campId,
+          character_id: charId,
+          turn_count: 0,
+          current_scene_description: 'The adventure begins...',
+          session_notes: '',
+          starter_campaign_id: starterCampaignId || null,
+        });
 
-      // Guard: Check if component unmounted during async operation
-      if (!mountedRef.current) {
-        logger.warn('⚠️ [createGameSession] Component unmounted during session creation');
-        return null;
-      }
+        // Guard: Check if component unmounted during async operation
+        if (!mountedRef.current) {
+          logger.warn('⚠️ [createGameSession] Component unmounted during session creation');
+          return null;
+        }
 
-      if (error) {
+        setSessionData(data as ExtendedGameSession);
+        setSessionState('active');
+        logger.info('✅ [createGameSession] Session created successfully:', data.id);
+        return data.id;
+      } catch (error) {
         logger.error('[createGameSession] Error creating game session:', error);
         setSessionState('error');
         toastRef.current({
@@ -87,11 +86,6 @@ export const useSessionManagement = ({
         });
         return null;
       }
-
-      setSessionData(data as ExtendedGameSession);
-      setSessionState('active');
-      logger.info('✅ [createGameSession] Session created successfully:', data.id);
-      return data.id;
     },
     [setSessionData, setSessionState, mountedRef, toastRef, starterCampaignId],
   );
@@ -119,14 +113,12 @@ export const useSessionManagement = ({
         return summary;
       }
 
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({
-          end_time: new Date().toISOString(),
-          summary,
-          status: 'completed' as const,
-        })
-        .eq('id', sessionIdToClean);
+      let saveError: unknown;
+      try {
+        await userDataApi.completeSession(sessionIdToClean, summary);
+      } catch (error) {
+        saveError = error;
+      }
 
       // Guard: Check if component unmounted during database update
       if (!mountedRef.current) {
@@ -134,8 +126,8 @@ export const useSessionManagement = ({
         return summary;
       }
 
-      if (error) {
-        logger.error('[cleanupSession] Error cleaning up session:', error);
+      if (saveError) {
+        logger.error('[cleanupSession] Error cleaning up session:', saveError);
         toastRef.current({
           title: 'Error',
           description: 'Failed to cleanup session properly',
@@ -266,20 +258,24 @@ export const useSessionManagement = ({
         return;
       }
 
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .update(resolvedState)
-        .eq('id', sessId)
-        .select()
-        .single();
+      let data: ExtendedGameSession | null = null;
+      let saveError: unknown;
+      try {
+        data = (await userDataApi.updateSession(
+          sessId,
+          resolvedState as Record<string, unknown>,
+        )) as ExtendedGameSession;
+      } catch (error) {
+        saveError = error;
+      }
 
       if (!mountedRef.current) {
         logger.warn('⚠️ [updateGameSessionState] Component unmounted during update');
         return;
       }
 
-      if (error) {
-        logger.error('[updateGameSessionState] Error updating game session state:', error);
+      if (saveError) {
+        logger.error('[updateGameSessionState] Error updating game session state:', saveError);
         toastRef.current({
           title: 'Error',
           description: 'Failed to save game state. Changes may be lost.',

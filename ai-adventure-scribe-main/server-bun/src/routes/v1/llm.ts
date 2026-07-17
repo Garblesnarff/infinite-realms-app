@@ -17,6 +17,17 @@ import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService, type UsageType } from '../../services/ai-usage-service.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
 
+const safeInternalLLMStatus = (status?: number): 400 | 500 | 503 => {
+  if (status === 400) return 400;
+  if (status === 503) return 503;
+  return 500;
+};
+import {
+  createUpstreamModelErrorBody,
+  LLMUpstreamError,
+  toUpstreamModelError,
+} from '../../services/llm-errors.js';
+
 export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
   .use(planRateLimit('llm'))
 
@@ -78,17 +89,24 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
       // 🛡️ Sentinel: Restrict 'system' requests to admins to prevent quota bypass.
       const isAdminUser = isAdmin(user as AuthUser);
-      const requestType = (rawRequestType === 'system' && isAdminUser) ? 'system' : 'user';
+      const requestType = rawRequestType === 'system' && isAdminUser ? 'system' : 'user';
 
       const userId = user.userId;
       const plan = user.plan;
 
       // Quota check
       const quotaType: UsageType = requestType === 'system' ? 'llm_system' : 'llm';
-      const quota = await AIUsageService.checkQuotaAndConsume({ userId, plan, type: quotaType, units: 1 });
+      const quota = await AIUsageService.checkQuotaAndConsume({
+        userId,
+        plan,
+        type: quotaType,
+        units: 1,
+      });
       if (!quota.allowed) {
         set.status = 402;
-        set.headers['Retry-After'] = String(Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)));
+        set.headers['Retry-After'] = String(
+          Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
+        );
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
@@ -103,23 +121,32 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       });
 
       if (result.error) {
-        if (result.status) {
-          set.status = result.status;
+        const upstreamError = toUpstreamModelError(result);
+        if (upstreamError) {
+          set.status = 502;
+          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
+          return upstreamError;
         }
+        set.status = safeInternalLLMStatus(result.status);
         if (result.retryAfter) {
           set.headers['Retry-After'] = String(Math.max(1, result.retryAfter));
         }
         return {
           error: result.error,
           details: result.details,
-          attempts: result.attempts
+          attempts: result.attempts,
         };
       }
 
       if (result.usage && result.provider) {
         await AIUsageService.recordProviderUsage({
-          userId, plan, type: quotaType, provider: result.provider, model: result.model,
-          inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens,
+          userId,
+          plan,
+          type: quotaType,
+          provider: result.provider,
+          model: result.model,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
         });
       }
 
@@ -131,15 +158,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         model: t.Optional(t.String()),
         maxTokens: t.Optional(t.Number()),
         temperature: t.Optional(t.Number()),
-        history: t.Optional(t.Array(t.Object({
-          role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
-          content: t.String(),
-        }))),
+        history: t.Optional(
+          t.Array(
+            t.Object({
+              role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
+              content: t.String(),
+            }),
+          ),
+        ),
         provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
         requestType: t.Optional(t.Union([t.Literal('user'), t.Literal('system')])),
         responseSchema: t.Optional(t.Any()),
       }),
-    }
+    },
   )
 
   .post(
@@ -151,11 +182,19 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         return { error: authError || 'Unauthorized' };
       }
       const {
-        prompt, model, maxTokens = 1000, temperature = 0.8, history,
-        provider = 'openrouter', responseSchema,
+        prompt,
+        model,
+        maxTokens = 1000,
+        temperature = 0.8,
+        history,
+        provider = 'openrouter',
+        responseSchema,
       } = body || {};
       const quota = await AIUsageService.checkQuotaAndConsume({
-        userId: user.userId, plan: user.plan, type: 'llm', units: 1,
+        userId: user.userId,
+        plan: user.plan,
+        type: 'llm',
+        units: 1,
       });
       if (!quota.allowed) {
         set.status = 402;
@@ -163,7 +202,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       }
       try {
         const stream = await LLMProviderService.stream({
-          prompt, model, maxTokens, temperature, history, provider, responseSchema,
+          prompt,
+          model,
+          maxTokens,
+          temperature,
+          history,
+          provider,
+          responseSchema,
         });
         return new Response(stream, {
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' },
@@ -171,17 +216,33 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       } catch (error) {
         logger.error({ msg: 'LLM_STREAM_ERROR', error });
         set.status = 502;
+        if (error instanceof LLMUpstreamError) {
+          const upstreamError = createUpstreamModelErrorBody(
+            error.provider,
+            error.model,
+            error.upstreamStatus,
+            error.retryable,
+          );
+          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
+          return upstreamError;
+        }
         return { error: 'LLM stream failed' };
       }
     },
     {
       body: t.Object({
-        prompt: t.String(), model: t.Optional(t.String()), maxTokens: t.Optional(t.Number()),
+        prompt: t.String(),
+        model: t.Optional(t.String()),
+        maxTokens: t.Optional(t.Number()),
         temperature: t.Optional(t.Number()),
-        history: t.Optional(t.Array(t.Object({
-          role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
-          content: t.String(),
-        }))),
+        history: t.Optional(
+          t.Array(
+            t.Object({
+              role: t.Union([t.Literal('user'), t.Literal('assistant'), t.Literal('system')]),
+              content: t.String(),
+            }),
+          ),
+        ),
         provider: t.Optional(t.Union([t.Literal('openrouter'), t.Literal('gemini')])),
         responseSchema: t.Optional(t.Any()),
       }),
@@ -230,16 +291,25 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       });
 
       if (result.error) {
-        if (result.status) {
-          set.status = result.status;
+        const upstreamError = toUpstreamModelError(result);
+        if (upstreamError) {
+          set.status = 502;
+          logger.error({ msg: 'LLM_UPSTREAM_MODEL_ERROR', ...upstreamError });
+          return upstreamError;
         }
+        set.status = safeInternalLLMStatus(result.status);
         return { error: result.error };
       }
 
       if (result.usage && result.provider) {
         await AIUsageService.recordProviderUsage({
-          userId: user.userId, plan: user.plan, type: 'llm_system', provider: result.provider,
-          model: result.model, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens,
+          userId: user.userId,
+          plan: user.plan,
+          type: 'llm_system',
+          provider: result.provider,
+          model: result.model,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
         });
       }
 
@@ -250,5 +320,5 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         prompt: t.String(),
         maxTokens: t.Optional(t.Number()),
       }),
-    }
+    },
   );

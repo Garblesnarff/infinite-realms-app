@@ -104,24 +104,52 @@ describe('processDMResponse', () => {
       const params = {
         ...defaultParams,
         isFirstMessage: true,
-        rawResponse: '```\nWelcome to the adventure!\n```',
+        rawResponse:
+          '```\nWelcome to the adventure! The old gate groans open as moonlight spills across the road.\n```',
       };
 
       const result = await processDMResponse(params);
 
-      expect(result.text).toBe('Welcome to the adventure!');
+      expect(result.text).toBe(
+        'Welcome to the adventure! The old gate groans open as moonlight spills across the road.',
+      );
     });
 
     it('should strip leading metadata blocks from opening messages', async () => {
       const params = {
         ...defaultParams,
         isFirstMessage: true,
-        rawResponse: '```json\n{"meta": "data"}\n```\nReal narrative starts here.',
+        rawResponse:
+          '```json\n{"meta": "data"}\n```\nReal narrative starts here, where lanterns burn beside the road and distant bells mark the hour.',
       };
 
       const result = await processDMResponse(params);
 
-      expect(result.text).toBe('Real narrative starts here.');
+      expect(result.text).toBe(
+        'Real narrative starts here, where lanterns burn beside the road and distant bells mark the hour.',
+      );
+    });
+
+    it('uses the text field from a valid structured opening response', async () => {
+      const openingText =
+        'The harbor wakes beneath a violet dawn while gulls wheel above the silent watchtowers.';
+      const result = await processDMResponse({
+        ...defaultParams,
+        isFirstMessage: true,
+        rawResponse: JSON.stringify({ text: openingText, narration_segments: [] }),
+      });
+
+      expect(result.text).toBe(openingText);
+    });
+
+    it('rejects JSON soup instead of persisting a leading brace', async () => {
+      await expect(
+        processDMResponse({
+          ...defaultParams,
+          isFirstMessage: true,
+          rawResponse: '{"text":"A long response that is never closed',
+        }),
+      ).rejects.toThrow('structured-output integrity');
     });
   });
 

@@ -7,7 +7,7 @@ import { TacticalMapCanvas } from './TacticalMapCanvas';
 import { useTacticalMap } from './useTacticalMap';
 
 import { Button } from '@/components/ui/button';
-import { useCombatStore } from '@/stores/useCombatStore';
+import { useCombat } from '@/contexts/CombatContext';
 
 type Props = { sessionId: string };
 type MoveResponse = {
@@ -20,7 +20,8 @@ type MoveResponse = {
 
 export function TacticalMapBoard({ sessionId }: Props) {
   const { map, animation, request, degradeLine } = useTacticalMap(sessionId);
-  const currentTurnId = useCombatStore((state) => state.activeEncounter?.currentTurnParticipantId);
+  const { state: combatState } = useCombat();
+  const currentTurnId = combatState.activeEncounter?.currentTurnParticipantId;
   const [collapsed, setCollapsed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [moves, setMoves] = useState<Point[]>([]);

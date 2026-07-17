@@ -204,11 +204,6 @@ export class CombatHPService {
     // ⚡ Bolt: Consolidated authorization and data retrieval into a single query.
     const { status } = await getParticipantWithFullContext(participantId, encounterId, userId);
 
-    const currentParticipant = await CombatInitiativeService.getCurrentTurn(encounterId, userId);
-    if (!currentParticipant || currentParticipant.id !== participantId) {
-      throw new BusinessLogicError('Death saves can only be rolled on the participant’s turn');
-    }
-
     // Delegate to HPMechanics
     const result = HPMechanics.calculateHealingResult(
       participantId,

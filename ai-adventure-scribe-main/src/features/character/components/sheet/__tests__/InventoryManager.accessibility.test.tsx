@@ -8,10 +8,33 @@ import type { Character } from '@/types/character';
 
 // Mock the hook
 vi.mock('@/features/character/hooks/use-inventory-manager', () => ({
+  currencyToCopper: (currency: { gp: number }) => currency.gp * 100,
   useInventoryManager: () => ({
     inventory: [
-      { id: '1', name: 'Longsword', category: 'weapon', quantity: 1, equipped: true, description: 'A sharp sword.' },
-      { id: '2', name: 'Shield', category: 'shield', quantity: 1, equipped: false, description: 'A sturdy shield.' },
+      {
+        id: '1',
+        name: 'Longsword',
+        category: 'weapon',
+        quantity: 1,
+        equipped: true,
+        description: 'A sharp sword.',
+      },
+      {
+        id: '2',
+        name: 'Shield',
+        category: 'shield',
+        quantity: 1,
+        equipped: false,
+        description: 'A sturdy shield.',
+      },
+      {
+        id: '3',
+        name: 'Hospitality vestments',
+        category: 'trinket',
+        quantity: 1,
+        equipped: false,
+        description: 'Ceremonial serving attire.',
+      },
     ],
     currency: { cp: 0, sp: 0, ep: 0, gp: 10, pp: 0 },
     searchTerm: '',
@@ -53,15 +76,21 @@ describe('InventoryManager Accessibility', () => {
     expect(shieldCheckbox).toBeInTheDocument();
   });
 
+  it('renders the trinket badge label', () => {
+    render(<InventoryManager character={mockCharacter} onUpdate={vi.fn()} />);
+
+    expect(screen.getByText('Trinket')).toBeInTheDocument();
+  });
+
   it('should have correct aria-label and title for the item removal button', () => {
     render(<InventoryManager character={mockCharacter} onUpdate={vi.fn()} />);
 
     // Get all "Remove from inventory" buttons
     const removeButtons = screen.getAllByLabelText('Remove from inventory');
-    expect(removeButtons).toHaveLength(2); // One for Longsword, one for Shield
+    expect(removeButtons).toHaveLength(3); // One for each inventory item
 
     // Check titles
-    removeButtons.forEach(button => {
+    removeButtons.forEach((button) => {
       expect(button).toHaveAttribute('title', 'Remove from inventory');
     });
   });

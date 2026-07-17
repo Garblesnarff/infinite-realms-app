@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 import { BlogPostEditor } from '../blog-post-editor';
 
@@ -53,6 +53,25 @@ const createWrapper = () => {
 };
 
 describe('BlogPostEditor', () => {
+  // jsdom doesn't implement ResizeObserver, which the Radix Switch (used by the
+  // status/published toggles rendered inside this form) relies on. Same fix already
+  // used in ToolOptionsAccessibility.test.tsx / SceneSettingsAccessibility.test.tsx.
+  //
+  // jsdom also doesn't implement PointerEvent.hasPointerCapture/scrollIntoView, which
+  // the Radix Select in the "status" field (blog-post-editor.tsx's EditorSidebar) needs
+  // during pointer-driven open/select interactions - without these, user.click() on the
+  // select trigger/option throws "target.hasPointerCapture is not a function".
+  beforeAll(() => {
+    global.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+    Element.prototype.releasePointerCapture = vi.fn();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -60,7 +79,10 @@ describe('BlogPostEditor', () => {
   it('renders the form with all required fields', () => {
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    // /title/i alone now matches both the "Title *" and "SEO Title" fields (the SEO
+    // Settings card added a second field whose label contains "Title") - anchor to the
+    // start of the label so only the primary title field matches.
+    expect(screen.getByLabelText(/^title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/slug/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/excerpt/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
@@ -70,7 +92,7 @@ describe('BlogPostEditor', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    const titleInput = screen.getByLabelText(/^title/i);
     const slugInput = screen.getByLabelText(/slug/i);
 
     await user.type(titleInput, 'My First Blog Post');
@@ -95,7 +117,7 @@ describe('BlogPostEditor', () => {
 
     render(<BlogPostEditor post={existingPost} />, { wrapper: createWrapper() });
 
-    expect(screen.getByLabelText(/title/i)).toHaveValue('Existing Post');
+    expect(screen.getByLabelText(/^title/i)).toHaveValue('Existing Post');
     expect(screen.getByLabelText(/slug/i)).toHaveValue('existing-post');
     expect(screen.getByLabelText(/excerpt/i)).toHaveValue('Test excerpt');
   });
@@ -116,7 +138,7 @@ describe('BlogPostEditor', () => {
     const user = userEvent.setup();
     render(<BlogPostEditor />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    const titleInput = screen.getByLabelText(/^title/i);
     const slugInput = screen.getByLabelText(/slug/i);
 
     await user.type(titleInput, 'Test Post');
@@ -152,7 +174,7 @@ describe('BlogPostEditor', () => {
 
     render(<BlogPostEditor onSuccess={onSuccess} />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'New Post');
 
     const contentTextarea = screen.getByPlaceholderText(/write your post content/i);
@@ -172,14 +194,17 @@ describe('BlogPostEditor', () => {
 
     render(<BlogPostEditor onCancel={onCancel} />, { wrapper: createWrapper() });
 
-    const titleInput = screen.getByLabelText(/title/i);
+    const titleInput = screen.getByLabelText(/^title/i);
     await user.type(titleInput, 'Changed Title');
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
 
+    // The confirm dialog (AlertDialog in blog-post-editor.tsx) has both a heading
+    // "Unsaved Changes" and a body paragraph containing "unsaved changes" - the loose
+    // /unsaved changes/i text query matches both, so query the heading specifically.
     await waitFor(() => {
-      expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /unsaved changes/i })).toBeInTheDocument();
     });
   });
 });

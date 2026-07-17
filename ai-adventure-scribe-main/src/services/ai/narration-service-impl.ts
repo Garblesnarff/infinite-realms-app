@@ -282,13 +282,16 @@ async function postProcessMemoriesAndWorld(
   }
 
   try {
-    const worldExpansion = await WorldBuilderService.respondToPlayerAction(
-      params.context.campaignId,
-      params.context.sessionId!,
-      params.context.characterId,
-      params.message,
-      responseText,
-    );
+    const worldExpansion = params.context.userId
+      ? await WorldBuilderService.respondToPlayerAction(
+          params.context.campaignId,
+          params.context.sessionId!,
+          params.context.characterId,
+          params.message,
+          responseText,
+          params.context.userId,
+        )
+      : null;
 
     if (
       worldExpansion &&

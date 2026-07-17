@@ -6,11 +6,26 @@ import * as sessionUtils from '../game-session/session-utils';
 import { useGameSession } from '../use-game-session';
 
 import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
+  },
+}));
+
+// createGameSession (delegated to useSessionManagement, see
+// src/hooks/game-session/use-session-management.ts) now creates sessions via
+// userDataApi.createSession() (the Bun server's REST API client) instead of
+// supabase.from('game_sessions').insert(...).select().single(), so the mock target was
+// updated to match. The supabase.from mock above is left in place - it's still used
+// elsewhere in this hook tree and is harmless dead weight for the tests that don't touch it.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createSession: vi.fn(),
+    completeSession: vi.fn(),
+    updateSession: vi.fn(),
   },
 }));
 
@@ -113,11 +128,7 @@ describe('useGameSession', () => {
 
     it('should insert new session and update state', async () => {
       const mockNewSession = { id: 'new-sess-1', status: 'active' };
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockNewSession, error: null }),
-      });
+      vi.mocked(userDataApi.createSession).mockResolvedValue(mockNewSession);
 
       const { result } = renderHook(() => useGameSession(campaignId, characterId));
 

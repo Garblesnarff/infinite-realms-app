@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
+import { seedStarterCharacter } from '@/services/character/starter-character-seeding';
 import { userDataApi } from '@/services/user-data-api';
 
 export interface Character {
@@ -95,20 +95,8 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!user?.id) return null;
 
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('starter_campaign_id')
-        .eq('campaign_id', campaignId)
-        .not('starter_campaign_id', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        logger.error('Error checking starter campaign link:', error);
-        return null;
-      }
-
-      return data?.starter_campaign_id || null;
+      const [session] = await userDataApi.listSessions({ campaignId, starterOnly: true, limit: 1 });
+      return session?.starter_campaign_id || null;
     },
     enabled: !!user?.id && isOpen,
   });
@@ -119,18 +107,9 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!starterCampaignId) return [];
 
-      const { data, error } = await supabase
-        .from('starter_character_templates')
-        .select('*')
-        .eq('starter_campaign_id', starterCampaignId)
-        .order('display_order');
-
-      if (error) {
-        logger.error('Error fetching templates:', error);
-        return [];
-      }
-
-      return (data || []) as StarterTemplate[];
+      return userDataApi.listStarterCharacterTemplates(starterCampaignId) as Promise<
+        StarterTemplate[]
+      >;
     },
     enabled: !!starterCampaignId,
   });
@@ -158,40 +137,9 @@ export function useCharacterSelection({
     setIsCreating(true);
 
     try {
-      // Create character from template
-      const abilityScores = template.ability_scores || {
-        strength: 10,
-        dexterity: 10,
-        constitution: 10,
-        intelligence: 10,
-        wisdom: 10,
-        charisma: 10,
-      };
-      const character = await userDataApi.createCharacter({
-        name: template.name,
-        race: template.race,
-        subrace: template.subrace,
-        class: template.class,
-        level: template.level,
-        background: template.background,
-        backstory_elements: template.adapted_backstory,
-        description: template.tagline,
-        campaign_id: campaignId,
-        skill_proficiencies: template.skills.join(', '),
-        languages: template.languages,
-        image_url: template.portrait_url,
-        stats: {
-          strength: abilityScores.strength,
-          dexterity: abilityScores.dexterity,
-          constitution: abilityScores.constitution,
-          intelligence: abilityScores.intelligence,
-          wisdom: abilityScores.wisdom,
-          charisma: abilityScores.charisma,
-          max_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-          current_hit_points: 10 + Math.floor((abilityScores.constitution - 10) / 2),
-          armor_class: 10 + Math.floor((abilityScores.dexterity - 10) / 2),
-        },
-      });
+      const character = await seedStarterCharacter(template, campaignId, (payload) =>
+        userDataApi.createCharacter(payload),
+      );
 
       toast({
         title: 'Starting Adventure!',

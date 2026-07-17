@@ -16,6 +16,7 @@ import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { AIUsageService } from '../../services/ai-usage-service.js';
+import { createUpstreamModelErrorBody } from '../../services/llm-errors.js';
 import { getCircuitBreaker, CircuitOpenError } from '../../utils/circuit-breaker.js';
 
 const IMAGE_PROVIDER_TIMEOUT_MS = 120_000;
@@ -24,7 +25,9 @@ const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function estimateBase64Bytes(value: string): number {
   const base64 = value.includes(',') ? value.slice(value.indexOf(',') + 1) : value;
-  return Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+  return (
+    Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0)
+  );
 }
 
 /**
@@ -62,7 +65,11 @@ const extractFromMessage = (msg: any): string | null => {
   // images array
   if (Array.isArray(msg?.images)) {
     for (const it of msg.images) {
-      const u = firstUrlLike(it?.image_url) || firstUrlLike(it?.url) || firstDataUriLike(it?.image) || firstDataUriLike(it?.data);
+      const u =
+        firstUrlLike(it?.image_url) ||
+        firstUrlLike(it?.url) ||
+        firstDataUriLike(it?.image) ||
+        firstDataUriLike(it?.data);
       if (u) return u;
     }
   }
@@ -72,7 +79,11 @@ const extractFromMessage = (msg: any): string | null => {
     for (const p of msg.content) {
       if (p && typeof p === 'object') {
         if (['image', 'image_url', 'output_image'].includes(String(p.type || '').toLowerCase())) {
-          const u = firstUrlLike(p?.image_url) || firstUrlLike(p?.url) || firstDataUriLike(p?.image) || firstDataUriLike(p?.data);
+          const u =
+            firstUrlLike(p?.image_url) ||
+            firstUrlLike(p?.url) ||
+            firstDataUriLike(p?.image) ||
+            firstDataUriLike(p?.data);
           if (u) return u;
         }
         const nested = extractFromMessage(p);
@@ -95,7 +106,8 @@ const extractFromMessage = (msg: any): string | null => {
   }
 
   // simple fields
-  const simple = firstUrlLike(msg?.image_url) || firstDataUriLike(msg?.image) || firstUrlLike(msg?.url);
+  const simple =
+    firstUrlLike(msg?.image_url) || firstDataUriLike(msg?.image) || firstUrlLike(msg?.url);
   if (simple) return simple;
 
   // tool calls / attachments / nested
@@ -131,7 +143,11 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
     }
 
     try {
-      const quotaStatus = await AIUsageService.getQuotaStatus({ userId: user.userId, plan: user.plan, type: 'image' });
+      const quotaStatus = await AIUsageService.getQuotaStatus({
+        userId: user.userId,
+        plan: user.plan,
+        type: 'image',
+      });
       return quotaStatus;
     } catch (err) {
       logger.error({ msg: 'IMAGE_QUOTA_ERROR', error: err });
@@ -164,7 +180,11 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         set.status = 400;
         return { error: `Prompt must be ${MAX_PROMPT_LENGTH} characters or fewer` };
       }
-      if (referenceImages?.some((image: string) => estimateBase64Bytes(image) > MAX_REFERENCE_IMAGE_BYTES)) {
+      if (
+        referenceImages?.some(
+          (image: string) => estimateBase64Bytes(image) > MAX_REFERENCE_IMAGE_BYTES,
+        )
+      ) {
         set.status = 400;
         return { error: 'Each reference image must be 5 MB or smaller' };
       }
@@ -173,10 +193,17 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
       const plan = user.plan;
 
       // Quota check
-      const quota = await AIUsageService.checkQuotaAndConsume({ userId, plan, type: 'image', units: 1 });
+      const quota = await AIUsageService.checkQuotaAndConsume({
+        userId,
+        plan,
+        type: 'image',
+        units: 1,
+      });
       if (!quota.allowed) {
         set.status = 402;
-        set.headers['Retry-After'] = String(Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)));
+        set.headers['Retry-After'] = String(
+          Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
+        );
         return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
       }
 
@@ -201,9 +228,10 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
 
         // If caller passed an OpenAI image model, pick a valid OpenRouter image-capable default instead
         const isOpenAIModel = typeof model === 'string' && /^gpt-image/i.test(model);
-        const imageModel = (!model || isOpenAIModel)
-          ? (process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image')
-          : model;
+        const imageModel =
+          !model || isOpenAIModel
+            ? process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image'
+            : model;
 
         // Build message content based on whether we have reference images
         let content: any = prompt;
@@ -212,8 +240,8 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
             { type: 'text', text: prompt },
             ...referenceImages.map((img: string) => ({
               type: 'image_url',
-              image_url: { url: `data:image/png;base64,${img}` }
-            }))
+              image_url: { url: `data:image/png;base64,${img}` },
+            })),
           ];
         }
 
@@ -228,7 +256,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.APP_ORIGIN || 'http://localhost:3000',
             'X-Title': 'AI Adventure Scribe',
@@ -240,13 +268,11 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         if (!response.ok) {
           const errText = await response.text();
           const status = response.status;
-          logger.error({ msg: 'IMAGE_OPENROUTER_ERROR', status, errText });
+          const upstreamError = createUpstreamModelErrorBody('openrouter', imageModel, status);
+          logger.error({ msg: 'IMAGE_OPENROUTER_ERROR', ...upstreamError, errText });
           breaker.onFailure();
-          set.status = status;
-          if (process.env.NODE_ENV !== 'production') {
-            return { error: 'Image request failed', details: errText };
-          }
-          return { error: 'Image request failed' };
+          set.status = 502;
+          return upstreamError;
         }
 
         breaker.onSuccess();
@@ -259,7 +285,10 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         const imageRef = extractFromMessage(choice?.message) || extractFromMessage(data);
 
         if (!imageRef) {
-          logger.warn({ msg: 'IMAGE_NO_DATA', details: 'OpenRouter parsing found no image fields' });
+          logger.warn({
+            msg: 'IMAGE_NO_DATA',
+            details: 'OpenRouter parsing found no image fields',
+          });
           set.status = 502;
           return { error: 'No image data in provider response' };
         }
@@ -273,7 +302,9 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
 
         // Otherwise assume remote URL; fetch and convert
         try {
-          const r2 = await fetch(imageRef, { signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS) });
+          const r2 = await fetch(imageRef, {
+            signal: AbortSignal.timeout(IMAGE_PROVIDER_TIMEOUT_MS),
+          });
           if (!r2.ok) {
             logger.warn({ msg: 'IMAGE_FETCH_FAILED', url: imageRef, status: r2.status });
             set.status = 502;
@@ -310,7 +341,7 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         referenceImages: t.Optional(t.Array(t.String(), { maxItems: 4 })),
         quality: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high')])),
       }),
-    }
+    },
   )
 
   /**
@@ -417,5 +448,5 @@ export const imageRoutes = new Elysia({ prefix: '/v1/images' })
         model: t.Optional(t.String()),
         quality: t.Optional(t.String()),
       }),
-    }
+    },
   );

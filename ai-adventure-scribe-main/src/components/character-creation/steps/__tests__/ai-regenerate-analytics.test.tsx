@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -27,6 +27,17 @@ vi.mock('@/contexts/CharacterContext', async () => {
   };
 });
 
+// use-character-finalization.ts (src/components/character-creation/steps/character-finalization/
+// use-character-finalization.ts) now also calls useCampaign() to read the campaign's default
+// art style - CharacterFinalization previously didn't need a CampaignProvider ancestor, so
+// this test never wrapped it in one. Without a mock/provider, useCampaign() throws
+// "must be used within a CampaignProvider" before the component can render at all.
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({
+    state: { campaign: null },
+  }),
+}));
+
 // Toast can be a no-op
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: () => {} }) }));
 
@@ -52,8 +63,13 @@ describe('AI regenerate analytics', () => {
     const btn = await screen.findByRole('button', { name: /Regenerate with AI/i });
     fireEvent.click(btn);
 
-    // The handler should be called and analytics dispatched
-    expect(spy).toHaveBeenCalled();
-    expect(characterDescriptionGenerator.generateDescription).toHaveBeenCalled();
+    // The click handler dispatches analytics and calls the (async) description
+    // generator without fireEvent.click awaiting it, so asserting synchronously right
+    // after the click can race the handler and fail before it runs - wait instead (same
+    // race fixed in wizard-completion-analytics.test.tsx).
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalled();
+      expect(characterDescriptionGenerator.generateDescription).toHaveBeenCalled();
+    });
   });
 });

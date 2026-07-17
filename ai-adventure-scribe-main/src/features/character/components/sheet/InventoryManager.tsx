@@ -1,4 +1,4 @@
-import { Package, Shield, Sword } from 'lucide-react';
+import { Package, Shield, Sparkles, Sword } from 'lucide-react';
 import React from 'react';
 
 import type { Character } from '@/types/character';
@@ -53,22 +53,30 @@ const InventoryManager: React.FC<InventoryManagerProps> = ({ character, onUpdate
     { value: 'tool', label: 'Tools' },
     { value: 'gear', label: 'Gear' },
     { value: 'consumable', label: 'Consumables' },
+    { value: 'trinket', label: 'Trinkets' },
   ];
 
   // Filter equipment for shop
   const filteredEquipment = allEquipment.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const category = item.category as string;
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      category === selectedCategory ||
+      (selectedCategory === 'trinket' && category === 'custom');
     return matchesSearch && matchesCategory;
   });
 
-  const getItemIcon = (category: Equipment['category']): React.ReactNode => {
+  const getItemIcon = (category: Equipment['category'] | 'custom'): React.ReactNode => {
     switch (category) {
       case 'weapon':
         return <Sword className="w-4 h-4" />;
       case 'armor':
       case 'shield':
         return <Shield className="w-4 h-4" />;
+      case 'trinket':
+      case 'custom':
+        return <Sparkles className="w-4 h-4" />;
       default:
         return <Package className="w-4 h-4" />;
     }

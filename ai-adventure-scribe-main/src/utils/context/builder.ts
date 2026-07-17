@@ -21,14 +21,10 @@ class GameContextBuilder {
     const [campaign, worldsResult, questsResult] = await Promise.all([
       userDataApi.getCampaign(campaignId),
       supabase.from('worlds').select('id, name, description').eq('campaign_id', campaignId),
-      supabase
-        .from('quests')
-        .select('id, title, description, status')
-        .eq('campaign_id', campaignId),
+      userDataApi.listQuests(campaignId),
     ]);
     if (worldsResult.error) throw worldsResult.error;
-    if (questsResult.error) throw questsResult.error;
-    return { ...campaign, worlds: worldsResult.data, quests: questsResult.data } as CampaignRow;
+    return { ...campaign, worlds: worldsResult.data, quests: questsResult } as CampaignRow;
   }
 
   private async fetchCharacter(characterId: string): Promise<CharacterRow | null> {
@@ -38,19 +34,15 @@ class GameContextBuilder {
       userDataApi.getCharacter(characterId),
       supabase
         .from('character_equipment')
-        .select('item_name, item_type, equipped')
+        .select('item_name, item_type, description, equipped')
         .eq('character_id', characterId),
-      supabase
-        .from('quest_progress')
-        .select('status, updated_at, quests(title)')
-        .eq('character_id', characterId),
+      userDataApi.listCharacterQuestProgress(characterId),
     ]);
     if (equipmentResult.error) throw equipmentResult.error;
-    if (questResult.error) throw questResult.error;
     return {
       ...character,
       character_equipment: equipmentResult.data,
-      quest_progress: questResult.data,
+      quest_progress: questResult,
     } as CharacterRow;
   }
 
@@ -112,7 +104,7 @@ class GameContextBuilder {
         },
         equipment: (character.character_equipment || []).map((item: CharacterEquipmentRow) => ({
           name: item.item_name,
-          type: item.item_type,
+          type: formatEquipmentContextType(item),
           equipped: item.equipped || false,
         })),
       };
@@ -177,6 +169,7 @@ interface CharacterStatsRow {
 interface CharacterEquipmentRow {
   item_name: string;
   item_type?: string;
+  description?: string | null;
   equipped?: boolean;
 }
 
@@ -188,4 +181,11 @@ interface CharacterRow {
   level?: number | null;
   character_stats?: CharacterStatsRow[] | null;
   character_equipment?: CharacterEquipmentRow[] | null;
+}
+
+export function formatEquipmentContextType(item: CharacterEquipmentRow): string {
+  if (item.item_type === 'trinket' || item.item_type === 'custom') {
+    return `${item.item_name}${item.description?.trim() ? ` (${item.description.trim()})` : ''}`;
+  }
+  return item.item_type || 'equipment';
 }

@@ -1,0 +1,23 @@
+{
+  "packages": {
+    "ai-adventure-scribe-main": {
+      "release-type": "node",
+      "package-name": "infinite-realms",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "style", "section": "Styling" },
+        { "type": "test", "section": "Tests" },
+        { "type": "build", "section": "Build System" },
+        { "type": "ci", "section": "CI/CD" },
+        { "type": "chore", "hidden": true }
+      ]
+    }
+  }
+}

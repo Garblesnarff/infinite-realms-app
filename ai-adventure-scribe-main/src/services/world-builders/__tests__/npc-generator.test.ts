@@ -176,24 +176,14 @@ describe('NPCGenerator', () => {
   });
 
   describe('generateContextualNPC', () => {
-    it('should handle missing userId insecurely but still proceed', async () => {
-      const mockFrom = vi.mocked(supabase.from);
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { id: 'c1', genre: 'fantasy' }, error: null }),
-      } as any);
-
-      vi.mocked(llmApiClient.generateText).mockResolvedValue(JSON.stringify({ name: 'Barnaby', personality: { traits: [] } }));
-      vi.mocked(getAveragePartyLevel).mockResolvedValue(3);
-
-      await NPCGenerator.generateContextualNPC('c1', 's1', 'The party goes to a shop');
-
-      // Should have queried campaigns without user_id filter
-      expect(mockFrom).toHaveBeenCalledWith('campaigns');
+    it('should fail closed when userId is missing', async () => {
+      await expect(
+        NPCGenerator.generateContextualNPC('c1', 's1', 'The party goes to a shop', undefined, undefined as any),
+      ).rejects.toThrow('User ID is required for NPC generation');
+      expect(supabase.from).not.toHaveBeenCalled();
     });
 
-    it('should include userId in query if provided', async () => {
+    it('should include userId in query', async () => {
       const mockFrom = vi.mocked(supabase.from);
       const mockEq = vi.fn().mockReturnThis();
       mockFrom.mockReturnValue({
@@ -209,14 +199,14 @@ describe('NPCGenerator', () => {
       expect(mockEq).toHaveBeenCalledWith('user_id', 'user-456');
     });
 
-    it('should throw error if campaign not found', async () => {
+    it('should throw error if campaign is not owned by the user', async () => {
        vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
       } as any);
 
-       await expect(NPCGenerator.generateContextualNPC('c1', 's1', 'action')).rejects.toThrow('Campaign not found or access denied');
+       await expect(NPCGenerator.generateContextualNPC('c1', 's1', 'action', undefined, 'user-456')).rejects.toThrow('Campaign not found or access denied');
     });
   });
 

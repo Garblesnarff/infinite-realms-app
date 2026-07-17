@@ -14,7 +14,7 @@
  * @deprecated Award XP, level-up, and milestone mutation endpoints have no frontend callers as of 2026-07-08.
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { AppError } from '../../lib/errors.js';
@@ -23,7 +23,57 @@ import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { ProgressionService } from '../../services/progression-service.js';
 
-import type { XPSource, LevelUpInput } from '../../types/progression.js';
+import type { XPSource } from '../../types/progression.js';
+
+const characterIdParams = t.Object({
+  id: t.String({ minLength: 1, maxLength: 255 }),
+});
+
+const awardXPSchema = t.Object({
+  // Optional fields retain the established manual validation errors for omissions.
+  xp: t.Optional(t.Number({ minimum: 0, maximum: 1_000_000 })),
+  source: t.Optional(t.Union([
+    t.Literal('combat'),
+    t.Literal('quest'),
+    t.Literal('roleplay'),
+    t.Literal('milestone'),
+    t.Literal('other'),
+  ])),
+  description: t.Optional(t.String({ maxLength: 10_000 })),
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+});
+
+const levelUpSchema = t.Object({
+  hpRoll: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
+  abilityScoreImprovements: t.Optional(t.Array(t.Object({
+    ability: t.Union([
+      t.Literal('strength'),
+      t.Literal('dexterity'),
+      t.Literal('constitution'),
+      t.Literal('intelligence'),
+      t.Literal('wisdom'),
+      t.Literal('charisma'),
+    ]),
+    increase: t.Number({ minimum: 1, maximum: 2 }),
+  }), { maxItems: 2 })),
+  featSelected: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  classFeatures: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 255 }), { maxItems: 100 })),
+  spellsLearned: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 255 }), { maxItems: 100 })),
+});
+
+const levelUpOptionsQuery = t.Object({
+  newLevel: t.Optional(t.String({ minLength: 1, maxLength: 3 })),
+});
+
+const xpHistoryQuery = t.Object({
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  limit: t.Optional(t.String({ minLength: 1, maxLength: 6 })),
+});
+
+const milestoneLevelSchema = t.Object({
+  level: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
+  reason: t.Optional(t.String({ maxLength: 10_000 })),
+});
 
 function mapProgressionError(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,12 +123,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
   .post('/characters/:id/experience/award', async ({ params, body, set, user }) => {
     try {
 
-      const { xp, source, description, sessionId } = body as {
-        xp: number;
-        source: XPSource;
-        description?: string;
-        sessionId?: string;
-      };
+      const { xp, source, description, sessionId } = body;
 
       if (sessionId) {
         const verification = await verifySessionOwnership(sessionId, (user as { userId: string }).userId);
@@ -115,7 +160,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_AWARD_XP error', error });
       return mapProgressionError(set, error, 'Failed to award XP');
     }
-  })
+  }, { params: characterIdParams, body: awardXPSchema })
 
   /**
    * GET /v1/progression/characters/:id/progression
@@ -129,7 +174,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_GET error', error });
       return mapProgressionError(set, error, 'Failed to get progression');
     }
-  })
+  }, { params: characterIdParams })
 
   /**
    * POST /v1/progression/characters/:id/level-up
@@ -146,10 +191,9 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
         return { error: 'Character does not have enough XP to level up' };
       }
 
-      const input = body as Omit<LevelUpInput, 'characterId'>;
       const result = await ProgressionService.levelUp({
         characterId: params.id,
-        ...input,
+        ...body,
       }, userId);
 
       return result;
@@ -157,7 +201,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_LEVELUP error', error });
       return mapProgressionError(set, error, 'Failed to level up');
     }
-  })
+  }, { params: characterIdParams, body: levelUpSchema })
 
   /**
    * GET /v1/progression/characters/:id/level-up-options
@@ -165,7 +209,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    */
   .get('/characters/:id/level-up-options', async ({ params, query, set, user }) => {
     try {
-      const { newLevel } = query as { newLevel?: string };
+      const { newLevel } = query;
 
       if (!newLevel) {
         set.status = 400;
@@ -184,7 +228,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_LEVELUP_OPTIONS error', error });
       return mapProgressionError(set, error, 'Failed to get level-up options');
     }
-  })
+  }, { params: characterIdParams, query: levelUpOptionsQuery })
 
   /**
    * GET /v1/progression/characters/:id/experience-history
@@ -192,7 +236,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    */
   .get('/characters/:id/experience-history', async ({ params, query, set, user }) => {
     try {
-      const { sessionId, limit } = query as { sessionId?: string; limit?: string };
+      const { sessionId, limit } = query;
 
       if (sessionId) {
         const verification = await verifySessionOwnership(sessionId, (user as { userId: string }).userId);
@@ -214,7 +258,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_HISTORY error', error });
       return mapProgressionError(set, error, 'Failed to get XP history');
     }
-  })
+  }, { params: characterIdParams, query: xpHistoryQuery })
 
   /**
    * POST /v1/progression/characters/:id/milestone-level
@@ -222,7 +266,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
    */
   .post('/characters/:id/milestone-level', async ({ params, body, set, user }) => {
     try {
-      const { level, reason } = body as { level: number; reason?: string };
+      const { level, reason } = body;
 
       if (level === undefined || level < 1 || level > 20) {
         set.status = 400;
@@ -235,7 +279,7 @@ export const progressionRoutes = new Elysia({ prefix: '/v1/progression' })
       logger.error({ msg: 'PROGRESSION_MILESTONE error', error });
       return mapProgressionError(set, error, 'Failed to set milestone level');
     }
-  })
+  }, { params: characterIdParams, body: milestoneLevelSchema })
 
   /**
    * GET /v1/progression/xp-table

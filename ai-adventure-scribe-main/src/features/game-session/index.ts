@@ -13,8 +13,6 @@
 
 // Components
 export {
-  SimpleGameChat,
-  SimpleGameChatWithVoice,
   MessageList,
   ChatInput,
   ChatImage,

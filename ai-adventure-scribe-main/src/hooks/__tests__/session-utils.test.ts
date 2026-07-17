@@ -14,16 +14,25 @@ import {
   SESSION_EXPIRY_TIME,
 } from '../game-session/session-utils';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-// Mock Supabase
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-    })),
+// session-utils' database operations (createSessionInDatabase, cleanupSessionInDatabase,
+// fetchExistingSessions, fetchSessionById, updateSessionInDatabase, generateSessionSummary)
+// were migrated from supabase.from('game_sessions'/'dialogue_history') calls to userDataApi
+// (the Bun server's REST API client) - see src/hooks/game-session/session-utils.ts. The mock
+// target was updated to match; each function's real error-handling catch block already
+// returns null/[]/default-message on failure, which is why the "should handle error..." /
+// "should return null/empty..." tests kept passing even before this fix (an unmocked
+// userDataApi call rejects with a real fetch error, which the catch block swallows) - only
+// the "success" tests needed a working mock to get real data back.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createSession: vi.fn(),
+    completeSession: vi.fn(),
+    listSessions: vi.fn(),
+    getSession: vi.fn(),
+    updateSession: vi.fn(),
+    listSessionMessages: vi.fn(),
   },
 }));
 
@@ -133,43 +142,32 @@ describe('session-utils', () => {
   describe('database operations', () => {
     it('should create a session in the database', async () => {
       const mockSession = { id: 's1', campaign_id: 'c1', character_id: 'ch1' };
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
+      vi.mocked(userDataApi.createSession).mockResolvedValueOnce(mockSession);
 
       const result = await createSessionInDatabase('c1', 'ch1');
       expect(result).toEqual(mockSession);
-      expect(supabase.from).toHaveBeenCalledWith('game_sessions');
+      expect(userDataApi.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ campaign_id: 'c1', character_id: 'ch1' }),
+      );
     });
 
     it('should handle error when creating a session', async () => {
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
-      });
+      vi.mocked(userDataApi.createSession).mockRejectedValueOnce(new Error('error'));
 
       const result = await createSessionInDatabase('c1', 'ch1');
       expect(result).toBeNull();
     });
 
     it('should cleanup a session in the database', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      });
+      vi.mocked(userDataApi.completeSession).mockResolvedValueOnce({});
 
       const result = await cleanupSessionInDatabase('s1', 'summary');
       expect(result).toBe(true);
+      expect(userDataApi.completeSession).toHaveBeenCalledWith('s1', 'summary');
     });
 
     it('should handle error when cleaning up a session', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: { message: 'error' } }),
-      });
+      vi.mocked(userDataApi.completeSession).mockRejectedValueOnce(new Error('error'));
 
       const result = await cleanupSessionInDatabase('s1', 'summary');
       expect(result).toBe(false);
@@ -177,24 +175,14 @@ describe('session-utils', () => {
 
     it('should fetch existing sessions', async () => {
       const mockSessions = [{ id: 's1' }, { id: 's2' }];
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ data: mockSessions, error: null }),
-      });
+      vi.mocked(userDataApi.listSessions).mockResolvedValueOnce(mockSessions);
 
       const result = await fetchExistingSessions('c1', 'ch1');
       expect(result).toEqual(mockSessions);
     });
 
     it('should return empty array if fetching existing sessions fails', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
-      });
+      vi.mocked(userDataApi.listSessions).mockRejectedValueOnce(new Error('error'));
 
       const result = await fetchExistingSessions('c1', 'ch1');
       expect(result).toEqual([]);
@@ -202,22 +190,14 @@ describe('session-utils', () => {
 
     it('should fetch session by id', async () => {
       const mockSession = { id: 's1' };
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
+      vi.mocked(userDataApi.getSession).mockResolvedValueOnce(mockSession);
 
       const result = await fetchSessionById('s1');
       expect(result).toEqual(mockSession);
     });
 
     it('should return null if fetching session by id fails', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
-      });
+      vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new Error('error'));
 
       const result = await fetchSessionById('s1');
       expect(result).toBeNull();
@@ -225,24 +205,14 @@ describe('session-utils', () => {
 
     it('should update a session in the database', async () => {
       const mockSession = { id: 's1', turn_count: 5 };
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
+      vi.mocked(userDataApi.updateSession).mockResolvedValueOnce(mockSession);
 
       const result = await updateSessionInDatabase('s1', { turn_count: 5 });
       expect(result).toEqual(mockSession);
     });
 
     it('should return null if updating session fails', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'error' } }),
-      });
+      vi.mocked(userDataApi.updateSession).mockRejectedValueOnce(new Error('error'));
 
       const result = await updateSessionInDatabase('s1', { turn_count: 5 });
       expect(result).toBeNull();
@@ -257,10 +227,10 @@ describe('session-utils', () => {
         { message: 'I attack', speaker_type: 'player' },
       ];
 
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockMessages, error: null }),
+      vi.mocked(userDataApi.listSessionMessages).mockResolvedValueOnce({
+        messages: mockMessages as any,
+        total: mockMessages.length,
+        hasMore: false,
       });
 
       const summary = await generateSessionSummary('session-123');
@@ -270,10 +240,10 @@ describe('session-utils', () => {
     });
 
     it('should handle empty dialogue history', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      vi.mocked(userDataApi.listSessionMessages).mockResolvedValueOnce({
+        messages: [],
+        total: 0,
+        hasMore: false,
       });
 
       const summary = await generateSessionSummary('session-123');
@@ -286,11 +256,7 @@ describe('session-utils', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB Error' } }),
-      });
+      vi.mocked(userDataApi.listSessionMessages).mockRejectedValueOnce(new Error('DB Error'));
 
       const summary = await generateSessionSummary('session-123');
       expect(summary).toBe('No activity recorded in this session');

@@ -164,7 +164,10 @@ describe('combatDetection', () => {
       const enemyPart = participants.find((p) => p.participantType === 'monster');
       expect(enemyPart?.name).toBe('Goblin');
       expect(enemyPart?.maxHitPoints).toBe(7);
-      expect(enemyPart?.initiative).toBe(1); // Estimated from CR 1/4
+      // createCombatParticipantsFromDetection looks the enemy up in the real SRD
+      // monster data (src/data/srd/monsters.json) rather than estimating from CR.
+      // SRD Goblin has DEX 14 -> +2 initiative modifier (not a CR-based estimate).
+      expect(enemyPart?.initiative).toBe(2);
     });
 
     it('should handle missing player character', () => {

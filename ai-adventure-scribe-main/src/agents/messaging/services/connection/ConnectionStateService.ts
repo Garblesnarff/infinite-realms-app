@@ -25,6 +25,7 @@
 
 // External/SDK Imports
 import { supabase } from '@/integrations/supabase/client';
+import { getAccessToken } from '@/services/auth/TokenService';
 
 // Project Services & Utilities
 import { ConnectionStateManager } from './ConnectionStateManager';
@@ -80,14 +81,14 @@ export class ConnectionStateService {
     // Listen for WorkOS auth events (not Supabase auth - we use WorkOS AuthKit)
     // WorkOS tokens are stored in localStorage and dispatched via custom events
     window.addEventListener('auth-tokens-updated', () => {
-      const hasToken = !!localStorage.getItem('workos_access_token');
+      const hasToken = !!getAccessToken();
       if (hasToken) {
         this.handleOnline();
       }
     });
 
     window.addEventListener('auth-ready', () => {
-      const hasToken = !!localStorage.getItem('workos_access_token');
+      const hasToken = !!getAccessToken();
       if (hasToken) {
         this.handleOnline();
       } else {
@@ -124,7 +125,7 @@ export class ConnectionStateService {
   private async attemptReconnection(): Promise<void> {
     try {
       // Check WorkOS token instead of Supabase session
-      const accessToken = localStorage.getItem('workos_access_token');
+      const accessToken = getAccessToken();
       if (!accessToken) {
         throw new Error('No WorkOS access token found');
       }

@@ -18,6 +18,7 @@ import { db } from '../../../db/client';
 import {
   characterPermissions,
   characterEquipment,
+  inventoryItems,
   characterStats,
   characters,
 } from '../../../db/schema/index';
@@ -124,6 +125,7 @@ export class CharacterService {
     data: Partial<NewCharacter>,
     stats?: Omit<Partial<NewCharacterStats>, 'characterId'>,
     equipment?: Array<Record<string, unknown>>,
+    inventory?: Array<Record<string, unknown>>,
   ): Promise<Character> {
     return db.transaction(async (tx) => {
       const [character] = await tx
@@ -166,6 +168,23 @@ export class CharacterService {
             magicItemType: item.magic_item_type ? String(item.magic_item_type) : null,
             magicItemRarity: String(item.magic_item_rarity || 'common'),
             magicEffects: item.magic_effects ? String(item.magic_effects) : null,
+          })),
+        );
+      }
+
+      if (inventory?.length) {
+        await tx.insert(inventoryItems).values(
+          inventory.map((item) => ({
+            characterId: character.id,
+            name: String(item.name || ''),
+            itemType: String(item.item_type || 'custom'),
+            quantity: Number(item.quantity || 1),
+            weight: String(item.weight ?? 0),
+            description: item.description ? String(item.description) : null,
+            properties: item.properties ? String(item.properties) : null,
+            isEquipped: Boolean(item.is_equipped),
+            isAttuned: Boolean(item.is_attuned),
+            requiresAttunement: Boolean(item.requires_attunement),
           })),
         );
       }

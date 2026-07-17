@@ -1,20 +1,16 @@
 import { armor } from './armor';
-import { adventuringGear } from './gear';
-import { shields } from './shields';
+import { allEquipment, resolveEquipmentById, resolveEquipmentByName } from './resolver';
 import { weapons } from './weapons';
+
+export { normalizeEquipmentLookupKey } from './resolver';
+
+import type { Equipment } from './types';
+
 import magicItemData from '@/data/srd/magic-items.json';
 import startingEquipmentData from '@/data/srd/starting-equipment.json';
 import logger from '@/lib/logger';
 
-import type { Equipment } from './types';
-
 export const magicItems = magicItemData as Equipment[];
-const all: Equipment[] = [...weapons, ...armor, ...shields, ...adventuringGear, ...magicItems];
-
-/**
- * ⚡ Bolt: Local O(1) equipment lookup Map.
- */
-const EQUIPMENT_LOOKUP = new Map(all.map((eq) => [eq.id, eq] as const));
 
 export function calculateArmorClass(
   equippedArmor: Equipment | null,
@@ -56,7 +52,7 @@ export function calculateArmorClass(
 }
 
 export function getEquipmentByCategory(category: Equipment['category']): Equipment[] {
-  return all.filter((item) => item.category === category);
+  return allEquipment.filter((item) => item.category === category);
 }
 
 export function getWeaponsByType(weaponType: 'simple' | 'martial'): Equipment[] {
@@ -109,7 +105,7 @@ export function getStartingEquipment(className: string): Equipment[] {
   // ⚡ Bolt: Using pre-calculated Map to avoid O(N) allocation on every call.
   return equipmentIds.map(
     (id) =>
-      EQUIPMENT_LOOKUP.get(id) || {
+      resolveEquipmentById(id) || {
         id,
         name: id.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
         category: 'gear' as const,
@@ -134,7 +130,10 @@ type SrdOption = {
   count?: number;
   of?: { index: string; name: string };
   items?: SrdOption[];
-  choice?: { desc: string; from: { equipment_category?: { index: string }; options?: SrdOption[] } };
+  choice?: {
+    desc: string;
+    from: { equipment_category?: { index: string }; options?: SrdOption[] };
+  };
 };
 
 type SrdStartingClass = {
@@ -146,7 +145,7 @@ type SrdStartingClass = {
 const startingClasses = startingEquipmentData as SrdStartingClass[];
 
 function equipmentOrPlaceholder(id: string, name: string): Equipment {
-  const equipment = EQUIPMENT_LOOKUP.get(id);
+  const equipment = resolveEquipmentById(id);
   if (equipment) return equipment;
 
   logger.error('Unknown starting equipment id from SRD data', { id, name });
@@ -159,21 +158,52 @@ function equipmentOrPlaceholder(id: string, name: string): Equipment {
   };
 }
 
+/**
+ * Resolve a template's human-readable equipment name to SRD data.
+ * Unknown names are campaign content and are handled by starter seeding as
+ * custom inventory items rather than being logged as SRD errors.
+ */
+export function getEquipmentByName(name: string): Equipment | undefined {
+  return resolveEquipmentByName(name);
+}
+
 function expandOption(option: SrdOption): StartingEquipmentAlternative[] {
   if (option.option_type === 'counted_reference' && option.of) {
-    return [{ label: `${option.count ?? 1}× ${option.of.name}`, items: [{ equipment: equipmentOrPlaceholder(option.of.index, option.of.name), quantity: option.count ?? 1 }] }];
+    return [
+      {
+        label: `${option.count ?? 1}× ${option.of.name}`,
+        items: [
+          {
+            equipment: equipmentOrPlaceholder(option.of.index, option.of.name),
+            quantity: option.count ?? 1,
+          },
+        ],
+      },
+    ];
   }
   if (option.option_type === 'multiple') {
     const expanded = (option.items ?? []).flatMap(expandOption);
-    return [{ label: expanded.map((item) => item.label).join(' + '), items: expanded.flatMap((item) => item.items) }];
+    return [
+      {
+        label: expanded.map((item) => item.label).join(' + '),
+        items: expanded.flatMap((item) => item.items),
+      },
+    ];
   }
   const nested = option.choice?.from;
   if (nested?.options) return nested.options.flatMap(expandOption);
   const category = nested?.equipment_category?.index ?? '';
-  const candidates = category.includes('martial') ? weapons.filter((item) => item.weaponType === 'martial')
-    : category.includes('simple') ? weapons.filter((item) => item.weaponType === 'simple')
-      : category.includes('weapon') ? weapons : all;
-  return candidates.map((equipment) => ({ label: equipment.name, items: [{ equipment, quantity: 1 }] }));
+  const candidates = category.includes('martial')
+    ? weapons.filter((item) => item.weaponType === 'martial')
+    : category.includes('simple')
+      ? weapons.filter((item) => item.weaponType === 'simple')
+      : category.includes('weapon')
+        ? weapons
+        : allEquipment;
+  return candidates.map((equipment) => ({
+    label: equipment.name,
+    items: [{ equipment, quantity: 1 }],
+  }));
 }
 
 export function getStartingEquipmentChoices(className: string): {
@@ -183,7 +213,13 @@ export function getStartingEquipmentChoices(className: string): {
   const entry = startingClasses.find((item) => item.id === className.toLowerCase());
   if (!entry) return { fixed: [], choices: [] };
   return {
-    fixed: entry.fixed.map((item) => ({ equipment: equipmentOrPlaceholder(item.id, item.name), quantity: item.quantity })),
-    choices: entry.choices.map((choice) => ({ description: choice.desc, alternatives: choice.from.options.flatMap(expandOption) })),
+    fixed: entry.fixed.map((item) => ({
+      equipment: equipmentOrPlaceholder(item.id, item.name),
+      quantity: item.quantity,
+    })),
+    choices: entry.choices.map((choice) => ({
+      description: choice.desc,
+      alternatives: choice.from.options.flatMap(expandOption),
+    })),
   };
 }

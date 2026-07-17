@@ -1,0 +1,100 @@
+name: Test Coverage Report
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "ai-adventure-scribe-main/**"
+  push:
+    branches: [main, master, develop]
+    paths:
+      - "ai-adventure-scribe-main/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+defaults:
+  run:
+    working-directory: ai-adventure-scribe-main
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run frontend tests with coverage
+        run: bunx vitest run --coverage --reporter=json --reporter=html
+        continue-on-error: true
+
+      - name: Generate coverage summary
+        id: coverage
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(node -p "Math.round(require('./coverage/coverage-summary.json').total.lines.pct)")
+            echo "frontend_coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "Frontend Coverage: $COVERAGE%"
+          else
+            echo "frontend_coverage=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check coverage thresholds
+        run: |
+          FRONTEND_COV=${{ steps.coverage.outputs.frontend_coverage }}
+
+          echo "Frontend Coverage: $FRONTEND_COV%"
+
+          if [ "$FRONTEND_COV" -lt 40 ]; then
+            echo "⚠️ Frontend coverage ($FRONTEND_COV%) is below 40% threshold"
+            echo "::warning::Frontend coverage is below 40% target"
+          else
+            echo "✅ Frontend coverage ($FRONTEND_COV%) meets 40% threshold"
+          fi
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: ai-adventure-scribe-main/coverage/
+          retention-days: 30
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let frontendCov = '${{ steps.coverage.outputs.frontend_coverage }}';
+
+            const comment = `## 📊 Test Coverage Report
+
+            | Component | Coverage | Status |
+            |-----------|----------|--------|
+            | Frontend | ${frontendCov}% | ${frontendCov >= 40 ? '✅' : '⚠️'} |
+
+            **Target:** 40% minimum
+
+            ${frontendCov >= 40 ? '✅ Coverage target met!' : '⚠️ Coverage below threshold'}
+
+            ---
+            *Coverage reports available in workflow artifacts*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

@@ -3,23 +3,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { formatDMTask, fetchGameContext, fetchMemories } from '../ai-utils';
 
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
-import { MEMORY_SELECT_COLUMNS } from '@/types/memory';
+import { userDataApi } from '@/services/user-data-api';
 
 // Mock dependencies
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
-}));
-
 vi.mock('@/lib/logger', () => ({
   default: {
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getSessionContext: vi.fn(),
+    listMemories: vi.fn(),
   },
 }));
 
@@ -67,57 +67,32 @@ describe('ai-utils', () => {
         id: 'session-123',
         campaign_id: 'campaign-456',
         character_id: 'char-789',
-        campaigns: { id: 'campaign-456', name: 'Lost Mine' },
-        characters: { id: 'char-789', name: 'Gundren' },
+        campaign: { id: 'campaign-456', name: 'Lost Mine' },
+        character: { id: 'char-789', name: 'Gundren' },
       };
-
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({ data: mockSession, error: null });
-
-      (supabase.from as any).mockReturnValue({
-        select: mockSelect,
-      });
-      mockSelect.mockReturnValue({
-        eq: mockEq,
-      });
-      mockEq.mockReturnValue({
-        single: mockSingle,
-      });
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue(mockSession as any);
 
       const result = await fetchGameContext('session-123');
 
-      expect(supabase.from).toHaveBeenCalledWith('game_sessions');
+      expect(userDataApi.getSessionContext).toHaveBeenCalledWith('session-123');
       expect(result).toEqual({
-        campaign: mockSession.campaigns,
-        character: mockSession.characters,
+        campaign: mockSession.campaign,
+        character: mockSession.character,
       });
     });
 
-    it('should return null and log error if session fetch fails', async () => {
-      const mockError = { message: 'Database error' };
-
-      const mockSingle = vi.fn().mockResolvedValue({ data: null, error: mockError });
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: mockSingle,
-      });
+    it('should return null and log error if the context route fails', async () => {
+      vi.mocked(userDataApi.getSessionContext).mockRejectedValue(new Error('Request failed'));
 
       const result = await fetchGameContext('session-123');
 
       expect(result).toBeNull();
-      expect(logger.error).toHaveBeenCalledWith('Error fetching session:', mockError);
+      expect(logger.error).toHaveBeenCalledWith('Error in fetchGameContext:', expect.any(Error));
     });
 
     it('should return null if campaign_id or character_id is missing', async () => {
-      const mockSession = { id: 'session-123', campaign_id: null, character_id: 'char-789' };
-
-      const mockSingle = vi.fn().mockResolvedValue({ data: mockSession, error: null });
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: mockSingle,
+      vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+        id: 'session-123', campaign_id: null, character_id: 'char-789', campaign: {}, character: {},
       });
 
       const result = await fetchGameContext('session-123');
@@ -126,16 +101,6 @@ describe('ai-utils', () => {
       expect(logger.error).toHaveBeenCalledWith('No campaign or character IDs found in session');
     });
 
-    it('should handle exceptions and return null', async () => {
-      (supabase.from as any).mockImplementation(() => {
-        throw new Error('Unexpected error');
-      });
-
-      const result = await fetchGameContext('session-123');
-
-      expect(result).toBeNull();
-      expect(logger.error).toHaveBeenCalledWith('Error in fetchGameContext:', expect.any(Error));
-    });
   });
 
   describe('fetchMemories', () => {
@@ -146,18 +111,11 @@ describe('ai-utils', () => {
         { id: 'm3', content: 'It was rainy', type: null },
       ];
 
-      const mockEq = vi.fn().mockResolvedValue({ data: mockMemories, error: null });
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: mockEq,
-      });
+      vi.mocked(userDataApi.listMemories).mockResolvedValue(mockMemories as any);
 
       const result = await fetchMemories('session-123');
 
-      expect(supabase.from).toHaveBeenCalledWith('memories');
-      // Verify explicit columns used
-      const selectCall = (supabase.from as any).mock.results[0].value.select;
-      expect(selectCall).toHaveBeenCalledWith(MEMORY_SELECT_COLUMNS);
+      expect(userDataApi.listMemories).toHaveBeenCalledWith('session-123');
 
       expect(result).toHaveLength(3);
       expect(result[0].type).toBe('npc');
@@ -169,10 +127,7 @@ describe('ai-utils', () => {
     });
 
     it('should return empty array if no memories found', async () => {
-      (supabase.from as any).mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
+      vi.mocked(userDataApi.listMemories).mockResolvedValue([]);
 
       const result = await fetchMemories('session-123');
 

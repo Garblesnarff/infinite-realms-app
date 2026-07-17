@@ -16,7 +16,7 @@ interface InventoryTabContentProps {
   toggleEquipped: (id: string) => void;
   sellItem: (item: InventoryItem) => void;
   removeFromInventory: (id: string) => void;
-  getItemIcon: (category: Equipment['category']) => React.ReactNode;
+  getItemIcon: (category: Equipment['category'] | 'custom') => React.ReactNode;
 }
 
 export const InventoryTabContent: React.FC<InventoryTabContentProps> = ({
@@ -55,7 +55,7 @@ export const InventoryTabContent: React.FC<InventoryTabContentProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    {getItemIcon(item.category)}
+                    {getItemIcon(item.category as Equipment['category'] | 'custom')}
                     <Checkbox
                       checked={item.equipped}
                       onCheckedChange={() => toggleEquipped(item.id)}
@@ -73,8 +73,10 @@ export const InventoryTabContent: React.FC<InventoryTabContentProps> = ({
                           Equipped
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {item.category}
+                      <Badge variant="outline" className="text-xs">
+                        {item.category === 'trinket' || (item.category as string) === 'custom'
+                          ? 'Trinket'
+                          : item.category}
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">{item.description}</div>

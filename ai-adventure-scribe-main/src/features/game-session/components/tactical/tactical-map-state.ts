@@ -49,9 +49,11 @@ export type TacticalDelta =
       entityId: string;
       path: Point[];
       movementReset?: boolean;
+      movementRemaining?: number;
       forced?: boolean;
       mode?: 'shove' | 'pull' | 'teleport';
     }
+  | { type: 'movement_updated'; entityId: string; movementRemaining: number }
   | { type: 'entity_placed'; entity: TacticalEntity }
   | { type: 'entity_removed'; entityId: string }
   | {
@@ -75,10 +77,25 @@ export function applyTacticalDelta(
     return {
       ...map,
       entities: map.entities.map((entity) =>
-        entity.id === delta.entityId ? { ...entity, ...destination } : entity,
+        entity.id === delta.entityId
+          ? {
+              ...entity,
+              ...destination,
+              movementRemaining: delta.movementRemaining ?? entity.movementRemaining,
+            }
+          : entity,
       ),
     };
   }
+  if (delta.type === 'movement_updated')
+    return {
+      ...map,
+      entities: map.entities.map((entity) =>
+        entity.id === delta.entityId
+          ? { ...entity, movementRemaining: delta.movementRemaining }
+          : entity,
+      ),
+    };
   if (delta.type === 'entity_placed')
     return {
       ...map,

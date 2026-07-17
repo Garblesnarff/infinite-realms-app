@@ -74,15 +74,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Verify token and get user data from backend
       const apiUrl = import.meta.env?.VITE_API_URL || '';
-      const response = await fetch(`${apiUrl}/api/trpc/auth.me`, {
-        headers: {
-          Authorization: `Bearer ${cachedSession.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const verifyToken = async (accessToken: string) => {
+        const res = await fetch(`${apiUrl}/api/trpc/auth.me`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!res.ok) return { ok: false as const, status: res.status };
+        const payload = await res.json();
+        return { ok: true as const, userData: payload.result?.data };
+      };
 
-      if (!response.ok) {
-        // Token invalid, clear session
+      let activeSession = cachedSession;
+      let result = await verifyToken(activeSession.access_token);
+
+      // Access token may simply be expired (15 min TTL) — refresh with the
+      // stored refresh token before wiping the session. Without this, any
+      // page load after idle silently signed the user out and the first
+      // API calls raced out with a stale token (cold-load 401 bug).
+      if (!result.ok && result.status === 401 && cachedSession.refresh_token) {
+        try {
+          const newTokens = await refreshAccessToken(cachedSession.refresh_token);
+          if (newTokens) {
+            activeSession = {
+              access_token: newTokens.accessToken,
+              refresh_token: newTokens.refreshToken,
+            };
+            persistSession(activeSession);
+            result = await verifyToken(activeSession.access_token);
+          }
+        } catch (refreshError) {
+          logger.error('Token refresh during session verification failed:', refreshError);
+        }
+      }
+
+      if (!result.ok) {
+        // Token invalid and refresh failed/unavailable, clear session
         persistSession(null);
         setSession(null);
         setUser(null);
@@ -91,11 +119,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const data = await response.json();
-      const userData = data.result?.data;
+      const userData = result.userData;
 
       if (userData) {
-        setSession(cachedSession);
+        setSession(activeSession);
         setUser({
           id: userData.id,
           email: userData.email,

@@ -59,6 +59,14 @@ export class MemoryService {
       .where(eq(memories.id, memoryId));
   }
 
+  static async updateContent(memoryId: string, userId: string, content: string): Promise<void> {
+    await this.getById(memoryId, userId);
+    await db
+      .update(memories)
+      .set({ content, updatedAt: new Date() })
+      .where(eq(memories.id, memoryId));
+  }
+
   static async match(
     sessionId: string,
     userId: string,

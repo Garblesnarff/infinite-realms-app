@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
+import { getAccessToken } from '@/services/auth/TokenService';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export function useSessionStorySocket(sessionId: string | null, onRemoteMessage: () => void) {
@@ -9,7 +11,7 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const token = window.localStorage.getItem('workos_access_token');
+    const token = getAccessToken();
     if (!sessionId || !token) return;
     const base = new URL(API_BASE_URL);
     const protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -27,6 +29,7 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
             'entity_moved',
             'entity_placed',
             'entity_removed',
+            'movement_updated',
             'cell_updated',
             'map_destroyed',
             'tactical_action_queue',
@@ -34,6 +37,14 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
           ].includes(message.type)
         ) {
           window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
+        }
+        if (message.type === 'combat_state_updated') {
+          window.dispatchEvent(new CustomEvent('combat-state-updated', { detail: message }));
+          if (message.tacticalMap) {
+            window.dispatchEvent(new CustomEvent('tactical-map-delta', {
+              detail: { type: 'map_created', map: message.tacticalMap },
+            }));
+          }
         }
       } catch {
         /* ignore malformed peer frames */

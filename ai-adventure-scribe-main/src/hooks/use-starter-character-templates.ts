@@ -8,7 +8,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 export interface StarterCharacterTemplate {
   id: string;
@@ -116,19 +116,8 @@ export function useStarterCharacterTemplates(
 
     async function fetchTemplates(): Promise<void> {
       try {
-        const { data, error: queryError } = await supabase
-          .from('starter_character_templates')
-          .select(
-            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
-          )
-          .eq('starter_campaign_id', campaignId)
-          .order('display_order');
-
-        if (queryError) {
-          throw new Error(queryError.message);
-        }
-
-        const mapped = (data || []).map(mapTemplateRow);
+        const data = await userDataApi.listStarterCharacterTemplates(campaignId!);
+        const mapped = data.map(mapTemplateRow);
         setTemplates(mapped);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch character templates'));
@@ -167,23 +156,8 @@ export function useStarterCharacterTemplate(templateId: string | undefined): {
 
     async function fetchTemplate(): Promise<void> {
       try {
-        const { data, error: queryError } = await supabase
-          .from('starter_character_templates')
-          .select(
-            'id, starter_campaign_id, template_key, name, tagline, race, subrace, class, background, level, ability_scores, personality, skills, languages, equipment, adapted_backstory, campaign_hook, portrait_url, portrait_prompt, display_order',
-          )
-          .eq('id', templateId)
-          .single();
-
-        if (queryError) {
-          if (queryError.code === 'PGRST116') {
-            setTemplate(null);
-          } else {
-            throw new Error(queryError.message);
-          }
-        } else {
-          setTemplate(mapTemplateRow(data));
-        }
+        const data = await userDataApi.getStarterCharacterTemplate(templateId!);
+        setTemplate(data ? mapTemplateRow(data) : null);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch character template'));
       } finally {

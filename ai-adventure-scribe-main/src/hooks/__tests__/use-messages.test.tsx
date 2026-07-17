@@ -7,12 +7,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useMessages } from '../use-messages';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-// Mock Supabase client
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
+// useMessages was migrated from supabase.from('dialogue_history').select()...range() /
+// .insert() to userDataApi.listSessionMessages() / userDataApi.saveSessionMessages()
+// (real fetch() calls to the Bun server) - see src/hooks/use-messages.ts. The mocks and
+// per-test response shapes below were updated to match the new client's return shape
+// ({ messages, total, hasMore }) and call signature (sessionId, offset, limit).
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listSessionMessages: vi.fn(),
+    saveSessionMessages: vi.fn(),
   },
 }));
 
@@ -85,17 +90,11 @@ describe('useMessages', () => {
       },
     ];
 
-    const mockFrom = vi.mocked(supabase.from);
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({
-        data: mockMessages,
-        error: null,
-        count: 2,
-      }),
-    } as any);
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: mockMessages,
+      total: 2,
+      hasMore: false,
+    });
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -112,10 +111,8 @@ describe('useMessages', () => {
   });
 
   it('should handle pagination with loadMore', async () => {
-    const mockFrom = vi.mocked(supabase.from);
-
     const page0Results = {
-      data: Array.from({ length: 50 }, (_, i) => ({
+      messages: Array.from({ length: 50 }, (_, i) => ({
         id: `msg-${i}`,
         message: `Message ${i}`,
         speaker_type: 'player',
@@ -123,12 +120,12 @@ describe('useMessages', () => {
         sequence_number: i,
         game_sessions: {},
       })),
-      error: null,
-      count: 100,
+      total: 100,
+      hasMore: true,
     };
 
     const page1Results = {
-      data: Array.from({ length: 50 }, (_, i) => ({
+      messages: Array.from({ length: 50 }, (_, i) => ({
         id: `msg-${i + 50}`,
         message: `Message ${i + 50}`,
         speaker_type: 'player',
@@ -136,19 +133,16 @@ describe('useMessages', () => {
         sequence_number: i + 50,
         game_sessions: {},
       })),
-      error: null,
-      count: 100,
+      total: 100,
+      hasMore: false,
     };
 
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockImplementation((start: number) => {
-        if (start === 0) return Promise.resolve(page0Results);
-        return Promise.resolve(page1Results);
-      }),
-    } as any);
+    // useMessages() calls userDataApi.listSessionMessages(sessionId, offset, limit) -
+    // offset is page * PAGE_SIZE(50), so branch on offset to serve the right page.
+    vi.mocked(userDataApi.listSessionMessages).mockImplementation((_sessionId, offset = 0) => {
+      if (offset === 0) return Promise.resolve(page0Results);
+      return Promise.resolve(page1Results);
+    });
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -163,18 +157,10 @@ describe('useMessages', () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  it('should handle Supabase errors gracefully', async () => {
-    const mockFrom = vi.mocked(supabase.from);
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: 'Database error' },
-        count: 0,
-      }),
-    } as any);
+  it('should handle errors gracefully', async () => {
+    // The Bun REST client throws on a failed request (rather than returning a
+    // { data, error } tuple like supabase-js did), so simulate a failure with a rejection.
+    vi.mocked(userDataApi.listSessionMessages).mockRejectedValue(new Error('Database error'));
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -183,16 +169,12 @@ describe('useMessages', () => {
   });
 
   it('should add a message successfully', async () => {
-    const mockFrom = vi.mocked(supabase.from);
-    const mockInsert = vi.fn().mockResolvedValue({ error: null });
-
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockReturnThis(),
-      insert: mockInsert,
-    } as any);
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [],
+      total: 0,
+      hasMore: false,
+    });
+    vi.mocked(userDataApi.saveSessionMessages).mockResolvedValue({});
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -212,11 +194,11 @@ describe('useMessages', () => {
       await result.current.addMessage(newMessage);
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(
+    expect(userDataApi.saveSessionMessages).toHaveBeenCalledWith(
+      sessionId,
       expect.objectContaining({
         id: 'new-msg',
         message: 'New message',
-        session_id: sessionId,
         context: {
           location: 'Forest',
           emotion: 'Happy',
@@ -227,16 +209,13 @@ describe('useMessages', () => {
   });
 
   it('should handle error when adding a message', async () => {
-    const mockFrom = vi.mocked(supabase.from);
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [],
+      total: 0,
+      hasMore: false,
+    });
     const mockError = { message: 'Insert failed' };
-
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockResolvedValue({ error: mockError }),
-    } as any);
+    vi.mocked(userDataApi.saveSessionMessages).mockRejectedValue(mockError);
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -247,29 +226,24 @@ describe('useMessages', () => {
       timestamp: new Date().toISOString(),
     };
 
+    // addMessage() rethrows whatever userDataApi.saveSessionMessages() rejects with verbatim.
     await expect(result.current.addMessage(newMessage)).rejects.toEqual(mockError);
   });
 
   it('should reset pagination', async () => {
-    const mockFrom = vi.mocked(supabase.from);
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: 'msg-1',
-            message: 'Hello',
-            speaker_type: 'player',
-            timestamp: new Date().toISOString(),
-            sequence_number: 1,
-          },
-        ],
-        error: null,
-        count: 1,
-      }),
-    } as any);
+    vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+      messages: [
+        {
+          id: 'msg-1',
+          message: 'Hello',
+          speaker_type: 'player',
+          timestamp: new Date().toISOString(),
+          sequence_number: 1,
+        },
+      ],
+      total: 1,
+      hasMore: false,
+    });
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 
@@ -283,10 +257,8 @@ describe('useMessages', () => {
   });
 
   it('should deduplicate messages when merging pages', async () => {
-    const mockFrom = vi.mocked(supabase.from);
-
     const page0Results = {
-      data: [
+      messages: [
         {
           id: 'msg-1',
           message: 'M1',
@@ -304,12 +276,12 @@ describe('useMessages', () => {
           game_sessions: {},
         },
       ],
-      error: null,
-      count: 100,
+      total: 100,
+      hasMore: true,
     };
 
     const page1Results = {
-      data: [
+      messages: [
         {
           id: 'msg-2',
           message: 'M2',
@@ -327,19 +299,14 @@ describe('useMessages', () => {
           game_sessions: {},
         },
       ],
-      error: null,
-      count: 100,
+      total: 100,
+      hasMore: false,
     };
 
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockImplementation((start: number) => {
-        if (start === 0) return Promise.resolve(page0Results);
-        return Promise.resolve(page1Results);
-      }),
-    } as any);
+    vi.mocked(userDataApi.listSessionMessages).mockImplementation((_sessionId, offset = 0) => {
+      if (offset === 0) return Promise.resolve(page0Results);
+      return Promise.resolve(page1Results);
+    });
 
     const { result } = renderHook(() => useMessages(sessionId), { wrapper });
 

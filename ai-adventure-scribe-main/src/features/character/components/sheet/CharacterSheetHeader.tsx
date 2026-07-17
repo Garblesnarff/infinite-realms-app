@@ -42,14 +42,16 @@ function calculateArmorClass(character: Character): number {
 }
 
 export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ character }) => {
+  const portraitUrl = character.image_url ?? character.avatar_url;
+
   return (
     <IRPanel className="mb-6 p-4">
       <div className="flex items-center gap-4">
         {/* Character Portrait/Avatar */}
         <div className="flex-shrink-0">
-          {character.avatar_url ? (
+          {portraitUrl ? (
             <IRThumb
-              src={character.avatar_url}
+              src={portraitUrl}
               alt={`${character.name || 'Character'} avatar`}
               size={64}
               className="rounded-full"

@@ -76,7 +76,11 @@ async function verifyApiKey(authHeader: string | null): Promise<ApiKeyPayload | 
  * Returns 401 if API key is missing or invalid
  */
 export const requireApiKey = new Elysia({ name: 'require-api-key' })
-  .derive(async ({ request, set }) => {
+  // 'scoped' is REQUIRED: Elysia hooks/derive are local by default, so a
+  // hook-only plugin never applies to the routes of the instance that .use()s
+  // it. Without this, requireApiKey was silently inert and
+  // /v1/internal/release-post was unauthenticated (bead -4ru, 2026-07-14).
+  .derive({ as: 'scoped' }, async ({ request, set }) => {
     const authHeader = request.headers.get('authorization');
     const apiKey = await verifyApiKey(authHeader);
 
@@ -90,7 +94,7 @@ export const requireApiKey = new Elysia({ name: 'require-api-key' })
 
     return { apiKey, error: null };
   })
-  .onBeforeHandle(({ apiKey: _apiKey, error, set }) => {
+  .onBeforeHandle({ as: 'scoped' }, ({ apiKey: _apiKey, error, set }) => {
     if (error) {
       set.status = 401;
       return error;
@@ -102,7 +106,8 @@ export const requireApiKey = new Elysia({ name: 'require-api-key' })
  */
 export function hasPermission(permission: string) {
   return new Elysia({ name: `has-permission-${permission}` })
-    .onBeforeHandle(({ apiKey, set }) => {
+    // 'scoped' is REQUIRED — see requireApiKey above.
+    .onBeforeHandle({ as: 'scoped' }, ({ apiKey, set }) => {
       if (!apiKey) {
         set.status = 401;
         return { error: 'Unauthorized' };

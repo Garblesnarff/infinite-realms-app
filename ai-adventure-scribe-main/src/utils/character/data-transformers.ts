@@ -18,6 +18,8 @@ export interface CharacterStatsRow {
 export interface CharacterEquipmentRow {
   id: string;
   item_name: string;
+  item_type?: string;
+  description?: string | null;
   quantity?: number;
   equipped?: boolean;
   is_magic?: boolean;
@@ -209,6 +211,8 @@ export const transformCharacterData = (
   inventory:
     equipmentData?.map((item) => ({
       itemId: item.id,
+      itemType: item.item_type,
+      description: item.description || undefined,
       quantity: item.quantity || 1,
       equipped: item.equipped || false,
       // Magic item properties

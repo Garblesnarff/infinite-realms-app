@@ -24,7 +24,12 @@ export const waitlistRoutes = new Elysia({ prefix: '/v1/waitlist' })
   /**
    * POST /v1/waitlist
    * Add email to waitlist
+   *
+   * Unauthenticated endpoint that inserts a DB row and sends a confirmation
+   * email per request, so it must be rate limited to prevent email-bomb /
+   * DB-flood abuse from a single IP.
    */
+  .use(createSimpleRateLimit({ windowMs: 60_000, max: 5, key: 'waitlist:post' }))
   .post('/', async ({ body, set }) => {
     try {
       const {

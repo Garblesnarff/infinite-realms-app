@@ -2,21 +2,26 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dependencies BEFORE importing module under test
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      single: vi.fn(),
-    })),
+// useStarterCharacterTemplates/useStarterCharacterTemplate now fetch data through
+// userDataApi (the Bun server's REST API client) instead of querying Supabase directly,
+// so the mock target was updated to match. See
+// src/hooks/use-starter-character-templates.ts. Note that userDataApi's methods return
+// the array/object directly (no { data, error } wrapper), and neither method has any
+// PGRST116 "not found" special-casing anymore - a missing row is just a falsy/empty
+// result, not an error.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listStarterCharacterTemplates: vi.fn(),
+    getStarterCharacterTemplate: vi.fn(),
   },
 }));
 
-import { useStarterCharacterTemplates, useStarterCharacterTemplate } from '../use-starter-character-templates';
+import {
+  useStarterCharacterTemplates,
+  useStarterCharacterTemplate,
+} from '../use-starter-character-templates';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
 describe('useStarterCharacterTemplates', () => {
   const mockCampaignId = 'campaign-123';
@@ -51,12 +56,7 @@ describe('useStarterCharacterTemplates', () => {
       },
     ];
 
-    const mockOrder = vi.fn().mockResolvedValue({ data: mockData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: mockOrder,
-    });
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockData);
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
 
@@ -72,13 +72,8 @@ describe('useStarterCharacterTemplates', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('should handle empty data from supabase', async () => {
-    const mockOrder = vi.fn().mockResolvedValue({ data: null, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: mockOrder,
-    });
+  it('should handle empty array from userDataApi', async () => {
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce([]);
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
 
@@ -95,13 +90,9 @@ describe('useStarterCharacterTemplates', () => {
   });
 
   it('should handle fetch errors', async () => {
-    const mockError = { message: 'Database error' };
-    const mockOrder = vi.fn().mockResolvedValue({ data: null, error: mockError });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: mockOrder,
-    });
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockRejectedValueOnce(
+      new Error('Database error'),
+    );
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
 
@@ -112,15 +103,8 @@ describe('useStarterCharacterTemplates', () => {
   });
 
   it('should handle non-Error catch objects', async () => {
-    const mockOrder = vi.fn().mockImplementation(() => {
-      // eslint-disable-next-line no-throw-literal
-      throw 'string error';
-    });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: mockOrder,
-    });
+    // eslint-disable-next-line prefer-promise-reject-errors
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockRejectedValueOnce('string error');
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
 
@@ -143,12 +127,7 @@ describe('useStarterCharacterTemplates', () => {
       },
     ];
 
-    const mockOrder = vi.fn().mockResolvedValue({ data: mockData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: mockOrder,
-    });
+    vi.mocked(userDataApi.listStarterCharacterTemplates).mockResolvedValueOnce(mockData);
 
     const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
 
@@ -176,12 +155,7 @@ describe('useStarterCharacterTemplate', () => {
       class: 'Ranger',
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: mockSingle,
-    });
+    vi.mocked(userDataApi.getStarterCharacterTemplate).mockResolvedValueOnce(mockData);
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));
 
@@ -191,14 +165,11 @@ describe('useStarterCharacterTemplate', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('should handle template not found (PGRST116)', async () => {
-    const mockError = { code: 'PGRST116', message: 'Not found' };
-    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: mockError });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: mockSingle,
-    });
+  it('should handle template not found', async () => {
+    // getStarterCharacterTemplate() has no PGRST116/"not found" error concept anymore -
+    // a missing template is just a null/undefined resolved value, not a thrown error. See
+    // src/hooks/use-starter-character-templates.ts.
+    vi.mocked(userDataApi.getStarterCharacterTemplate).mockResolvedValueOnce(null);
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));
 
@@ -209,13 +180,9 @@ describe('useStarterCharacterTemplate', () => {
   });
 
   it('should handle general fetch errors', async () => {
-    const mockError = { message: 'Some other error' };
-    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: mockError });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: mockSingle,
-    });
+    vi.mocked(userDataApi.getStarterCharacterTemplate).mockRejectedValueOnce(
+      new Error('Some other error'),
+    );
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));
 
@@ -224,15 +191,10 @@ describe('useStarterCharacterTemplate', () => {
     expect(result.current.error?.message).toBe('Some other error');
   });
 
-  it('should handle non-Error catch objects in single fetch', async () => {
-    const mockSingle = vi.fn().mockImplementation(() => {
-      throw new Error('Something went wrong');
-    });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: mockSingle,
-    });
+  it('should handle Error catch objects in single fetch', async () => {
+    vi.mocked(userDataApi.getStarterCharacterTemplate).mockRejectedValueOnce(
+      new Error('Something went wrong'),
+    );
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));
 
@@ -242,15 +204,8 @@ describe('useStarterCharacterTemplate', () => {
   });
 
   it('should handle string throw in single fetch', async () => {
-    const mockSingle = vi.fn().mockImplementation(() => {
-      // eslint-disable-next-line no-throw-literal
-      throw 'string error';
-    });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: mockSingle,
-    });
+    // eslint-disable-next-line prefer-promise-reject-errors
+    vi.mocked(userDataApi.getStarterCharacterTemplate).mockRejectedValueOnce('string error');
 
     const { result } = renderHook(() => useStarterCharacterTemplate(mockTemplateId));
 

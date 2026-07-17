@@ -7,6 +7,8 @@ import { authenticateRequest } from '../../../lib/auth.js';
 import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatHPService } from '../../../services/combat-hp-service.js';
+import { publishCombatState } from '../../../services/combat/combat-sync-service.js';
+import { trackCombatEvent } from '../../../services/combat/combat-events.js';
 
 
 function mapCombatError(
@@ -87,6 +89,14 @@ export const damageRoutes = new Elysia()
         user.userId
       );
 
+      trackCombatEvent('damage_applied', {
+        encounterId: params.encounterId,
+        participantId,
+        damage: result.modifiedDamage,
+        source: 'direct_route',
+      });
+      await publishCombatState(params.encounterId, user.userId, 'damage_applied');
+
       return result;
     } catch (e) {
       logger.error({ msg: 'Apply damage error', error: e });
@@ -132,6 +142,8 @@ export const damageRoutes = new Elysia()
         sourceDescription,
         user.userId
       );
+
+      await publishCombatState(params.encounterId, user.userId, 'healing_applied');
 
       return result;
     } catch (e) {

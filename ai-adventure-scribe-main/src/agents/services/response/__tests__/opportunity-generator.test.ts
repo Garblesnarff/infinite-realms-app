@@ -6,14 +6,15 @@ import { OpportunityGenerator } from '../opportunity-generator';
 
 import type { CampaignContext } from '@/types/dm';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-    })),
+// OpportunityGenerator now fetches quests via userDataApi.listQuests() (a real fetch()
+// to the Bun server) instead of supabase.from('quests')... - see
+// src/agents/services/response/opportunity-generator.ts. The mock target was updated
+// to match.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    listQuests: vi.fn(),
   },
 }));
 
@@ -48,11 +49,7 @@ describe('OpportunityGenerator', () => {
       { id: '2', title: 'Clear the Goblins', status: 'available' },
     ];
 
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: mockQuests, error: null })),
-    });
+    vi.mocked(userDataApi.listQuests).mockResolvedValue(mockQuests as any);
 
     const result = await generator.generateOpportunities('camp-123', mockContext);
 
@@ -64,11 +61,7 @@ describe('OpportunityGenerator', () => {
   it('should handle quest fetching error', async () => {
     const mockError = { message: 'Database error' };
 
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: null, error: mockError })),
-    });
+    vi.mocked(userDataApi.listQuests).mockRejectedValue(mockError);
 
     const result = await generator.generateOpportunities('camp-123', mockContext);
 
@@ -77,11 +70,7 @@ describe('OpportunityGenerator', () => {
   });
 
   it('should generate dangerous actions', async () => {
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: [], error: null })),
-    });
+    vi.mocked(userDataApi.listQuests).mockResolvedValue([]);
 
     const dangerousContext = {
       ...mockContext,
@@ -93,11 +82,7 @@ describe('OpportunityGenerator', () => {
   });
 
   it('should generate mysterious actions', async () => {
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: [], error: null })),
-    });
+    vi.mocked(userDataApi.listQuests).mockResolvedValue([]);
 
     const mysteriousContext = {
       ...mockContext,
@@ -109,11 +94,7 @@ describe('OpportunityGenerator', () => {
   });
 
   it('should generate tavern actions', async () => {
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: [], error: null })),
-    });
+    vi.mocked(userDataApi.listQuests).mockResolvedValue([]);
 
     const tavernContext = {
       ...mockContext,
@@ -126,11 +107,7 @@ describe('OpportunityGenerator', () => {
   });
 
   it('should handle undefined thematic elements', async () => {
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((callback) => callback({ data: [], error: null })),
-    });
+    vi.mocked(userDataApi.listQuests).mockResolvedValue([]);
 
     const emptyContext: CampaignContext = { setting: { location: 'Nowhere' } } as any;
 

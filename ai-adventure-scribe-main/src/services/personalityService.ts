@@ -1,4 +1,5 @@
 import logger from '@/lib/logger';
+import { getAuthHeaders } from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -32,15 +33,12 @@ export class PersonalityService {
       throw new Error('API unavailable, using local fallback');
     }
 
-    // Get WorkOS token from localStorage
-    const token = window.localStorage.getItem('workos_access_token');
-
     try {
       const response = await fetch(`${API_BASE_URL}${url}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
+          ...getAuthHeaders(),
           ...options.headers,
         },
       });

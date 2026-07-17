@@ -116,3 +116,7 @@ _PROJECT_PLANS/
 
 # Vercel
 .vercel
+
+# Beads SQLite runtime artifacts
+.beads/*.db-shm
+.beads/*.db-wal

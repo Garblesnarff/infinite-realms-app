@@ -5,18 +5,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as sessionUtils from '../session-utils';
 import { useSessionManagement } from '../use-session-management';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 
-// Mock Supabase
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-    })),
+// use-session-management.ts (src/hooks/game-session/use-session-management.ts) no longer
+// talks to Supabase directly - createGameSession/cleanupSession/updateGameSessionState now
+// call userDataApi.createSession()/completeSession()/updateSession() (real fetch() calls to
+// the Bun server, see src/services/user-data-api.ts), so the mock target was updated to match.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    createSession: vi.fn(),
+    completeSession: vi.fn(),
+    updateSession: vi.fn(),
   },
 }));
 
@@ -86,11 +85,7 @@ describe('useSessionManagement', () => {
   describe('createGameSession', () => {
     it('should create a session successfully', async () => {
       const mockSession = { id: 'sess-1' };
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockSession, error: null }),
-      });
+      vi.mocked(userDataApi.createSession).mockResolvedValue(mockSession);
 
       const { result } = setupHook({ starterCampaignId: 'starter-1' });
       let sessionId;
@@ -126,11 +121,7 @@ describe('useSessionManagement', () => {
     });
 
     it('should handle Supabase errors', async () => {
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB error' } }),
-      });
+      vi.mocked(userDataApi.createSession).mockRejectedValue(new Error('DB error'));
 
       const { result } = setupHook();
       let sessionId;
@@ -146,13 +137,9 @@ describe('useSessionManagement', () => {
     });
 
     it('should respect mountedRef after Supabase call', async () => {
-      (supabase.from as any).mockReturnValue({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          mockMountedRef.current = false;
-          return Promise.resolve({ data: { id: 'sess-1' }, error: null });
-        }),
+      vi.mocked(userDataApi.createSession).mockImplementation(() => {
+        mockMountedRef.current = false;
+        return Promise.resolve({ id: 'sess-1' });
       });
 
       const { result } = setupHook();
@@ -168,10 +155,7 @@ describe('useSessionManagement', () => {
 
   describe('cleanupSession', () => {
     it('should cleanup session successfully', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      });
+      vi.mocked(userDataApi.completeSession).mockResolvedValue(undefined);
 
       const { result } = setupHook();
       let summary;
@@ -204,10 +188,7 @@ describe('useSessionManagement', () => {
     });
 
     it('should handle update error during cleanup', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: { message: 'Update error' } }),
-      });
+      vi.mocked(userDataApi.completeSession).mockRejectedValue(new Error('Update error'));
 
       const { result } = setupHook();
       await act(async () => {
@@ -238,12 +219,9 @@ describe('useSessionManagement', () => {
     });
 
     it('should respect mountedRef after Supabase update', async () => {
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockImplementation(() => {
-          mockMountedRef.current = false;
-          return Promise.resolve({ error: null });
-        }),
+      vi.mocked(userDataApi.completeSession).mockImplementation(() => {
+        mockMountedRef.current = false;
+        return Promise.resolve(undefined);
       });
 
       const { result } = setupHook();
@@ -267,19 +245,17 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { ...initialSession, turn_count: 2 }, error: null }),
-      });
+      vi.mocked(userDataApi.updateSession).mockResolvedValue({ ...initialSession, turn_count: 2 });
 
       const { result } = setupHook();
       await act(async () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
 
-      expect(supabase.from).toHaveBeenCalledWith('game_sessions');
+      expect(userDataApi.updateSession).toHaveBeenCalledWith(
+        'sess-1',
+        expect.objectContaining({ turn_count: 2 }),
+      );
       expect(mockSetSessionData).toHaveBeenCalled();
     });
 
@@ -291,12 +267,7 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: { ...initialSession, turn_count: 2 }, error: null }),
-      });
+      vi.mocked(userDataApi.updateSession).mockResolvedValue({ ...initialSession, turn_count: 2 });
 
       const { result } = setupHook();
       await act(async () => {
@@ -328,7 +299,7 @@ describe('useSessionManagement', () => {
       await act(async () => {
         await result.current.updateGameSessionState(() => null as any);
       });
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should handle update with only immutable fields', async () => {
@@ -342,7 +313,7 @@ describe('useSessionManagement', () => {
       await act(async () => {
         await result.current.updateGameSessionState({ id: 'new-id' });
       });
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should not update if session is loading', async () => {
@@ -363,7 +334,7 @@ describe('useSessionManagement', () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
 
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should not update if session is in error state', async () => {
@@ -384,7 +355,7 @@ describe('useSessionManagement', () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
 
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should not update if session id is missing', async () => {
@@ -400,7 +371,7 @@ describe('useSessionManagement', () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
 
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should handle empty update', async () => {
@@ -416,7 +387,7 @@ describe('useSessionManagement', () => {
         await result.current.updateGameSessionState({});
       });
 
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
 
     it('should handle Supabase update error', async () => {
@@ -427,12 +398,7 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Update failed' } }),
-      });
+      vi.mocked(userDataApi.updateSession).mockRejectedValue(new Error('Update failed'));
 
       const { result } = setupHook();
       await act(async () => {
@@ -452,14 +418,9 @@ describe('useSessionManagement', () => {
         return updater;
       });
 
-      (supabase.from as any).mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockImplementation(() => {
-          mockMountedRef.current = false;
-          return Promise.resolve({ data: { id: 'sess-1' }, error: null });
-        }),
+      vi.mocked(userDataApi.updateSession).mockImplementation(() => {
+        mockMountedRef.current = false;
+        return Promise.resolve({ id: 'sess-1' });
       });
 
       const { result } = setupHook();
@@ -484,7 +445,7 @@ describe('useSessionManagement', () => {
         await result.current.updateGameSessionState({ turn_count: 2 });
       });
 
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(userDataApi.updateSession).not.toHaveBeenCalled();
     });
   });
 });

@@ -3,17 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { CampaignContextLoader } from '../campaign-context-loader';
 
-import { supabase } from '@/integrations/supabase/client';
-import { logger } from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 
-// Mock dependencies
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn(),
-    })),
+// CampaignContextLoader.loadCampaignContext() now fetches the campaign via
+// userDataApi.getCampaign() (a real fetch() to the Bun server) instead of
+// supabase.from('campaigns')...single() - see
+// src/agents/services/campaign/campaign-context-loader.ts. The current source also no
+// longer wraps errors (it rethrows userDataApi failures verbatim) or logs a "without
+// userId validation" warning, so the mocks and assertions below were updated to match.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCampaign: vi.fn(),
   },
 }));
 
@@ -61,17 +61,11 @@ describe('CampaignContextLoader', () => {
       },
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockCampaignData, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(mockCampaignData);
 
     const result = await loader.loadCampaignContext(mockCampaignId, mockUserId);
 
-    expect(supabase.from).toHaveBeenCalledWith('campaigns');
-    expect(mockSelect).toHaveBeenCalled();
-    expect(mockEq).toHaveBeenCalledWith('id', mockCampaignId);
-    expect(mockEq).toHaveBeenCalledWith('user_id', mockUserId);
+    expect(userDataApi.getCampaign).toHaveBeenCalledWith(mockCampaignId);
 
     expect(result).toEqual({
       id: mockCampaignId,
@@ -103,14 +97,9 @@ describe('CampaignContextLoader', () => {
       thematic_elements: null,
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockCampaignData, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(mockCampaignData);
 
     const result = await loader.loadCampaignContext(mockCampaignId);
-
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('without userId validation'));
 
     expect(result).toEqual({
       id: mockCampaignId,
@@ -148,10 +137,7 @@ describe('CampaignContextLoader', () => {
       },
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockCampaignData, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(mockCampaignData);
 
     const result = await loader.loadCampaignContext(mockCampaignId);
 
@@ -174,10 +160,7 @@ describe('CampaignContextLoader', () => {
       },
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockCampaignData, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(mockCampaignData);
 
     const result = await loader.loadCampaignContext(mockCampaignId);
 
@@ -191,10 +174,7 @@ describe('CampaignContextLoader', () => {
       thematic_elements: 'not-an-object',
     };
 
-    const mockSingle = vi.fn().mockResolvedValue({ data: mockCampaignData, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(mockCampaignData);
 
     const result = await loader.loadCampaignContext(mockCampaignId);
 
@@ -212,26 +192,23 @@ describe('CampaignContextLoader', () => {
   });
 
   it('should throw error when campaign is not found', async () => {
-    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    vi.mocked(userDataApi.getCampaign).mockResolvedValue(null);
 
     await expect(loader.loadCampaignContext(mockCampaignId)).rejects.toThrow(
       `Campaign with ID ${mockCampaignId} not found or access denied.`,
     );
   });
 
+  // loadCampaignContext() no longer wraps userDataApi.getCampaign() failures with a
+  // "Failed to load campaign context: ..." message or logs via logger.error - it just
+  // rethrows verbatim (see src/agents/services/campaign/campaign-context-loader.ts,
+  // which has no try/catch around the userDataApi.getCampaign() call).
   it('should throw error on database error', async () => {
-    const mockError = { message: 'Database connection failed' };
-    const mockSingle = vi.fn().mockResolvedValue({ data: null, error: mockError });
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq, single: mockSingle });
-    (supabase.from as any).mockReturnValue({ select: mockSelect });
+    const mockError = new Error('Database connection failed');
+    vi.mocked(userDataApi.getCampaign).mockRejectedValue(mockError);
 
     await expect(loader.loadCampaignContext(mockCampaignId)).rejects.toThrow(
-      'Failed to load campaign context: Database connection failed',
+      'Database connection failed',
     );
-    expect(logger.error).toHaveBeenCalled();
   });
 });

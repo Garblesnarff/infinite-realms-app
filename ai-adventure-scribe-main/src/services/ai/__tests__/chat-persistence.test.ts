@@ -3,12 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { ChatPersistence } from '../chat-persistence';
 
-import { supabase } from '@/integrations/supabase/client';
+import { userDataApi } from '@/services/user-data-api';
 import logger from '@/lib/logger';
 
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    from: vi.fn(),
+// ChatPersistence was migrated from direct supabase.from('dialogue_history') calls to
+// userDataApi (the Bun server's REST API client) - see src/services/ai/chat-persistence.ts.
+// Both saveChatMessage() and getConversationHistory() now rethrow whatever error
+// userDataApi throws verbatim (no "Failed to save/get ..." wrapping message), so the
+// mocks and error-message assertions below were updated to match.
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    saveSessionMessages: vi.fn(),
+    listSessionMessages: vi.fn(),
   },
 }));
 
@@ -29,10 +35,7 @@ describe('ChatPersistence', () => {
 
   describe('saveChatMessage', () => {
     it('should save a chat message successfully', async () => {
-      const mockFrom = vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ error: null }),
-      });
-      (supabase.from as any).mockImplementation(mockFrom);
+      vi.mocked(userDataApi.saveSessionMessages).mockResolvedValue({});
 
       const params = {
         sessionId: 'session-123',
@@ -44,10 +47,8 @@ describe('ChatPersistence', () => {
 
       await ChatPersistence.saveChatMessage(params);
 
-      expect(supabase.from).toHaveBeenCalledWith('dialogue_history');
-      expect(mockFrom().insert).toHaveBeenCalledWith({
+      expect(userDataApi.saveSessionMessages).toHaveBeenCalledWith('session-123', {
         id: 'msg-789',
-        session_id: 'session-123',
         speaker_type: 'user',
         speaker_id: 'speaker-456',
         message: 'Hello world',
@@ -55,10 +56,7 @@ describe('ChatPersistence', () => {
     });
 
     it('should generate a UUID if no id is provided', async () => {
-      const mockFrom = vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ error: null }),
-      });
-      (supabase.from as any).mockImplementation(mockFrom);
+      vi.mocked(userDataApi.saveSessionMessages).mockResolvedValue({});
 
       // Mock crypto.randomUUID if it exists, or define it
       if (typeof crypto === 'undefined') {
@@ -77,19 +75,17 @@ describe('ChatPersistence', () => {
 
       await ChatPersistence.saveChatMessage(params);
 
-      expect(mockFrom().insert).toHaveBeenCalledWith(
+      expect(userDataApi.saveSessionMessages).toHaveBeenCalledWith(
+        'session-123',
         expect.objectContaining({
           id: 'random-uuid',
-        })
+        }),
       );
     });
 
-    it('should throw an error and log it if supabase insertion fails', async () => {
-      const mockError = { message: 'Insert failed' };
-      const mockFrom = vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ error: mockError }),
-      });
-      (supabase.from as any).mockImplementation(mockFrom);
+    it('should throw an error and log it if saving fails', async () => {
+      const mockError = new Error('Insert failed');
+      vi.mocked(userDataApi.saveSessionMessages).mockRejectedValue(mockError);
 
       const params = {
         sessionId: 'session-123',
@@ -97,15 +93,15 @@ describe('ChatPersistence', () => {
         content: 'Hello',
       };
 
-      await expect(ChatPersistence.saveChatMessage(params)).rejects.toThrow('Failed to save chat message');
+      // saveChatMessage() rethrows whatever userDataApi.saveSessionMessages() throws
+      // verbatim - there's no "Failed to save chat message" wrapper anymore.
+      await expect(ChatPersistence.saveChatMessage(params)).rejects.toThrow('Insert failed');
       expect(logger.error).toHaveBeenCalledWith('Error saving chat message:', mockError);
     });
 
     it('should catch and log unexpected errors', async () => {
       const unexpectedError = new Error('Unexpected');
-      (supabase.from as any).mockImplementation(() => {
-        throw unexpectedError;
-      });
+      vi.mocked(userDataApi.saveSessionMessages).mockRejectedValue(unexpectedError);
 
       const params = {
         sessionId: 'session-123',
@@ -137,19 +133,15 @@ describe('ChatPersistence', () => {
         },
       ];
 
-      const mockQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-      };
-      (supabase.from as any).mockReturnValue(mockQuery);
+      vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+        messages: mockData as any,
+        total: mockData.length,
+        hasMore: false,
+      });
 
       const history = await ChatPersistence.getConversationHistory('session-123');
 
-      expect(supabase.from).toHaveBeenCalledWith('dialogue_history');
-      expect(mockQuery.select).toHaveBeenCalledWith('id, speaker_type, message, created_at, sequence_number');
-      expect(mockQuery.eq).toHaveBeenCalledWith('session_id', 'session-123');
-      expect(mockQuery.order).toHaveBeenCalledWith('sequence_number', { ascending: true });
+      expect(userDataApi.listSessionMessages).toHaveBeenCalledWith('session-123', 0, 200);
 
       expect(history).toHaveLength(2);
       expect(history[0]).toEqual({
@@ -177,12 +169,11 @@ describe('ChatPersistence', () => {
         },
       ];
 
-      const mockQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-      };
-      (supabase.from as any).mockReturnValue(mockQuery);
+      vi.mocked(userDataApi.listSessionMessages).mockResolvedValue({
+        messages: mockData as any,
+        total: mockData.length,
+        hasMore: false,
+      });
 
       const now = new Date('2023-05-05T12:00:00Z');
       vi.useFakeTimers();
@@ -193,27 +184,29 @@ describe('ChatPersistence', () => {
       expect(history[0].timestamp).toEqual(now);
     });
 
-    it('should throw and log error if query fails', async () => {
-      const mockError = { message: 'Fetch failed' };
-      const mockQuery = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-      };
-      (supabase.from as any).mockReturnValue(mockQuery);
+    it('should throw and log error if the request fails', async () => {
+      const mockError = new Error('Fetch failed');
+      vi.mocked(userDataApi.listSessionMessages).mockRejectedValue(mockError);
 
-      await expect(ChatPersistence.getConversationHistory('session-123')).rejects.toThrow('Failed to get conversation history');
+      // getConversationHistory() rethrows verbatim - there's no "Failed to get
+      // conversation history" wrapper anymore.
+      await expect(ChatPersistence.getConversationHistory('session-123')).rejects.toThrow(
+        'Fetch failed',
+      );
       expect(logger.error).toHaveBeenCalledWith('Error getting conversation history:', mockError);
     });
 
     it('should catch and log unexpected errors during fetch', async () => {
       const unexpectedError = new Error('Unexpected');
-      (supabase.from as any).mockImplementation(() => {
-        throw unexpectedError;
-      });
+      vi.mocked(userDataApi.listSessionMessages).mockRejectedValue(unexpectedError);
 
-      await expect(ChatPersistence.getConversationHistory('session-123')).rejects.toThrow(unexpectedError);
-      expect(logger.error).toHaveBeenCalledWith('Error getting conversation history:', unexpectedError);
+      await expect(ChatPersistence.getConversationHistory('session-123')).rejects.toThrow(
+        unexpectedError,
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error getting conversation history:',
+        unexpectedError,
+      );
     });
   });
 });

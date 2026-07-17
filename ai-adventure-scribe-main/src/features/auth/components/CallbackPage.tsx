@@ -2,14 +2,15 @@
  * OAuth Callback Page
  *
  * Handles the OAuth redirect from backend after WorkOS authentication.
- * Backend passes tokens in URL hash, this page extracts and stores them,
- * then redirects to the app.
+ * The backend sends a one-time exchange code; this page exchanges it for tokens
+ * and then redirects to the app.
  */
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import logger from '@/lib/logger';
+import { persistSession } from '@/services/auth/TokenService';
 
 export default function CallbackPage() {
   const navigate = useNavigate();
@@ -18,30 +19,49 @@ export default function CallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Extract tokens from URL hash (set by backend redirect)
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
+        const exchangeCode = new URLSearchParams(window.location.search).get('code');
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+
+        if (exchangeCode) {
+          const apiUrl = import.meta.env?.VITE_API_URL || '';
+          const response = await fetch(`${apiUrl}/v1/auth/exchange`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: exchangeCode }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Token exchange failed (${response.status})`);
+          }
+
+          const tokens = await response.json();
+          accessToken = tokens.accessToken;
+          refreshToken = tokens.refreshToken;
+        } else {
+          // Deprecated deploy-compatibility fallback. Remove after all server
+          // instances no longer redirect with fragment tokens.
+          const params = new URLSearchParams(window.location.hash.substring(1));
+          accessToken = params.get('access_token');
+          refreshToken = params.get('refresh_token');
+        }
 
         if (!accessToken) {
-          logger.error('No access token in callback URL');
+          logger.error('No auth token received from callback');
           setError('Authentication failed - no access token received');
           setTimeout(() => navigate('/'), 3000);
           return;
         }
 
-        logger.info('Successfully received tokens from backend');
+        logger.info('Successfully completed authentication callback');
 
-        // Store access token for app auth and keep refresh token session-scoped.
-        // AuthContext will read these on app load.
-        localStorage.setItem('workos_access_token', accessToken);
-        if (refreshToken) {
-          sessionStorage.setItem('workos_refresh_token', refreshToken);
-          localStorage.removeItem('workos_refresh_token');
-        }
+        // Keep the established TokenService storage and AuthContext event flow.
+        persistSession({
+          access_token: accessToken,
+          ...(refreshToken ? { refresh_token: refreshToken } : {}),
+        });
 
-        // Clear URL hash
+        // Clear the one-time code or deprecated fragment from browser history.
         window.history.replaceState(null, '', window.location.pathname);
 
         // Notify AuthContext that tokens have been updated

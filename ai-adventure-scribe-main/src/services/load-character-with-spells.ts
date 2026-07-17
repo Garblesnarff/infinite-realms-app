@@ -4,6 +4,7 @@
 
 import { buildAbilityScores } from './build-ability-scores';
 import { characterSpellService } from './characterSpellApi';
+import type { CharacterSpellData } from './characterSpellApi';
 
 import type {
   Character,
@@ -94,8 +95,18 @@ export async function loadCharacterWithSpells(
         });
 
         // Convert database UUID spell IDs back to frontend kebab-case IDs
-        const cantripUUIDs = spellData.cantrips.map((c) => c.spell_id);
-        const spellUUIDs = spellData.spells.map((s) => s.spell_id);
+        // The API returns the canonical spell UUID in `id`; retain the two
+        // legacy aliases while older deployments roll forward.
+        const getApiSpellId = (spell: CharacterSpellData): string | undefined =>
+          spell.id ||
+          (spell as CharacterSpellData & { spell_id?: string }).spell_id ||
+          (spell as CharacterSpellData & { spellId?: string }).spellId;
+        const cantripUUIDs = spellData.cantrips
+          .map(getApiSpellId)
+          .filter((id): id is string => Boolean(id));
+        const spellUUIDs = spellData.spells
+          .map(getApiSpellId)
+          .filter((id): id is string => Boolean(id));
 
         const apiCantrips = convertSpellIdsToFrontend(cantripUUIDs);
         const apiKnownSpells = convertSpellIdsToFrontend(spellUUIDs);

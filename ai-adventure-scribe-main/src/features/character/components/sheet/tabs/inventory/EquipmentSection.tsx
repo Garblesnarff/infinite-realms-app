@@ -1,4 +1,4 @@
-import { Sword, Shield, Star, Package, Info, Loader2 } from 'lucide-react';
+import { Sword, Shield, Star, Sparkles, Package, Info, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { Character } from '@/types/character';
@@ -31,6 +31,9 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
         return <Shield className="w-4 h-4" />;
       case 'magic':
         return <Star className="w-4 h-4 text-purple-500" />;
+      case 'trinket':
+      case 'custom':
+        return <Sparkles className="w-4 h-4" />;
       default:
         return <Package className="w-4 h-4" />;
     }
@@ -56,7 +59,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                   className="flex items-center justify-between p-3 border rounded-lg"
                 >
                   <div className="flex items-center gap-3 flex-1">
-                    {getItemIcon(item.isMagic ? 'magic' : 'default')}
+                    {getItemIcon(item.itemType || (item.isMagic ? 'magic' : 'default'))}
 
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -89,9 +92,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                         )}
                       </div>
 
-                      <div className="text-sm text-muted-foreground">
-                        Qty: {item.quantity || 1}
-                      </div>
+                      <div className="text-sm text-muted-foreground">Qty: {item.quantity || 1}</div>
 
                       {item.isMagic && (
                         <div className="mt-2 text-xs">
@@ -121,6 +122,11 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                           )}
                         </div>
                       )}
+                      {(item.itemType === 'trinket' || item.itemType === 'custom') && (
+                        <Badge variant="outline" className="text-xs">
+                          Trinket
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -142,7 +148,11 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                           variant={item.isAttuned ? 'secondary' : 'outline'}
                           onClick={() => handleAttuneToggle(item.itemId)}
                           className="text-xs"
-                          disabled={isAttuning || !item.equipped || (!item.isAttuned && !attunementStatus.canAttune)}
+                          disabled={
+                            isAttuning ||
+                            !item.equipped ||
+                            (!item.isAttuned && !attunementStatus.canAttune)
+                          }
                           aria-pressed={item.isAttuned}
                           title={
                             !item.equipped
@@ -154,9 +164,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({
                                   : 'Attunement slots full'
                           }
                         >
-                          {isAttuning ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : null}
+                          {isAttuning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                           {item.isAttuned ? 'Unattune' : 'Attune'}
                         </Button>
                       )}

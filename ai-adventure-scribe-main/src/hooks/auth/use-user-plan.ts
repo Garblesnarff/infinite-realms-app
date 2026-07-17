@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 
 import logger from '@/lib/logger';
+import { getAccessToken } from '@/services/auth/TokenService';
 import { isOffline } from '@/utils/network';
 
 export type UserPlan = 'free' | 'pro' | 'enterprise';
@@ -29,8 +30,8 @@ export function useUserPlan({ user, loading }: UseUserPlanProps): {
       return;
     }
 
-    // Read token fresh from localStorage to avoid stale closure issues
-    const freshToken = window.localStorage.getItem('workos_access_token');
+    // Read the current token fresh to avoid stale closure issues.
+    const freshToken = getAccessToken();
     if (!freshToken) {
       setUserPlan(null);
       setUserPlanLoading(false);

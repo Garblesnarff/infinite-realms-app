@@ -2,15 +2,24 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dependencies BEFORE importing module under test
+// useCharacterData is a hybrid: character fetching moved from supabase.from('characters') to
+// userDataApi.getCharacter() (the Bun server's REST API client), while character_equipment is
+// still queried directly via supabase.from('character_equipment') - see
+// src/hooks/use-character-data.ts. Both need to be mocked. eq() resolves directly (no
+// .maybeSingle()) since the equipment query is awaited as part of Promise.all without a
+// terminal single-row call.
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn(),
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     })),
+  },
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    getCharacter: vi.fn(),
   },
 }));
 
@@ -59,6 +68,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { isValidUUID } from '@/utils/validation';
 
 
@@ -97,12 +107,13 @@ describe('useCharacterData', () => {
       character_equipment: [{ item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true }],
     };
 
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
+      eq: vi.fn().mockResolvedValue({
+        data: [{ item_name: 'Longsword', id: 'item-1', quantity: 1, equipped: true }],
+        error: null,
+      }),
     });
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
@@ -122,7 +133,8 @@ describe('useCharacterData', () => {
     expect(result.current.character?.inventory[0].itemId).toBe('item-1');
     expect(result.current.character?.inventory[0].equipped).toBe(true);
 
-    expect(supabase.from).toHaveBeenCalledWith('characters');
+    expect(userDataApi.getCharacter).toHaveBeenCalledWith(mockCharacterId);
+    expect(supabase.from).toHaveBeenCalledWith('character_equipment');
   });
 
   it('should handle invalid character ID UUID', async () => {
@@ -153,13 +165,7 @@ describe('useCharacterData', () => {
   });
 
   it('should handle character not found or unauthorized', async () => {
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
-    });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(null);
 
     renderHook(() => useCharacterData(mockCharacterId));
 
@@ -172,14 +178,12 @@ describe('useCharacterData', () => {
   });
 
   it('should handle database errors', async () => {
-    const mockError = { message: 'Supabase error' };
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: mockError });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
-    });
+    // userDataApi.getCharacter() throws (rather than returning a {data,error} tuple) on
+    // failure, so simulate the DB error as a rejection - previously (before userDataApi was
+    // explicitly mocked here) this test passed "by accident" because the unmocked module
+    // made a real fetch() that rejected with ECONNREFUSED in the test sandbox; now that it's
+    // mocked, the rejection needs to be explicit.
+    vi.mocked(userDataApi.getCharacter).mockRejectedValue(new Error('Supabase error'));
 
     renderHook(() => useCharacterData(mockCharacterId));
 
@@ -215,13 +219,7 @@ describe('useCharacterData', () => {
       },
     ];
 
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
-    });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
 
@@ -241,12 +239,13 @@ describe('useCharacterData', () => {
       character_equipment: null,
     };
 
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
+    // Explicitly reset the equipment query mock - vi.clearAllMocks() in beforeEach clears
+    // call history but not a prior test's supabase.from().mockReturnValue() implementation,
+    // so without this the "fetch and transform" test's Longsword equipment mock would leak in.
     (supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     });
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
@@ -273,13 +272,7 @@ describe('useCharacterData', () => {
       character_equipment: [],
     };
 
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
-    });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
 
@@ -306,13 +299,7 @@ describe('useCharacterData', () => {
       character_equipment: [],
     };
 
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockCharacterData, error: null });
-    (supabase.from as any).mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: mockMaybeSingle,
-    });
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue(mockCharacterData);
 
     const { result } = renderHook(() => useCharacterData(mockCharacterId));
 

@@ -128,12 +128,7 @@ export class QuestGenerator {
         },
       };
 
-      const { data, error } = await supabase.from('quests').insert(questData).select('id').single();
-
-      if (error) {
-        logger.error('Error saving quest:', error);
-        throw new Error('Failed to save quest to database');
-      }
+      const data = await userDataApi.createQuest(questData);
 
       logger.info(`💾 Saved quest "${quest.title}" with ID: ${data.id}`);
       return data.id;
@@ -166,30 +161,38 @@ export class QuestGenerator {
    * Generate a quest based on current memories and context
    */
   /**
-   * @param userId - User ID for ownership validation (SECURITY: strongly recommended)
+   * @param userId - User ID for ownership validation
    */
   static async generateMemoryBasedQuest(
     campaignId: string,
     sessionId: string,
     characterId: string,
     questType: QuestRequest['type'] = 'side',
-    userId?: string,
+    userId: string,
   ): Promise<GeneratedQuest> {
     try {
-      // Security check: Verify user ownership of campaign
+      // RLS cannot scope this WorkOS-authenticated Supabase client. Fail closed
+      // and scope the campaign lookup before generating or persisting a quest.
       if (!userId) {
-        logger.warn('[QuestGenerator] No userId provided - this is insecure');
+        throw new Error('User ID is required for quest generation');
       }
 
       // Get campaign and memories in parallel
-      const [campaign, memories] = await Promise.all([
-        userDataApi.getCampaign(campaignId),
+      const [campaignResult, memories] = await Promise.all([
+        supabase
+          .from('campaigns')
+          .select('genre')
+          .eq('id', campaignId)
+          .eq('user_id', userId)
+          .single(),
         MemoryManager.getRelevantMemories(sessionId, 'quest opportunities', 5),
       ]);
 
-      if (!campaign) {
+      if (campaignResult.error || !campaignResult.data) {
         throw new Error('Campaign not found or access denied');
       }
+
+      const campaign = campaignResult.data;
 
       const request: QuestRequest = {
         type: questType,

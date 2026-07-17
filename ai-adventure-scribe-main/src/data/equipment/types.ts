@@ -1,7 +1,7 @@
 export interface Equipment {
   id: string;
   name: string;
-  category: 'weapon' | 'armor' | 'shield' | 'tool' | 'gear' | 'consumable';
+  category: 'weapon' | 'armor' | 'shield' | 'tool' | 'gear' | 'consumable' | 'trinket';
   subcategory?: string;
   cost: {
     amount: number;

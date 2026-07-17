@@ -5,8 +5,6 @@
  */
 
 // Chat components
-export { SimpleGameChat } from './chat/SimpleGameChat';
-export { SimpleGameChatWithVoice } from './chat/SimpleGameChatWithVoice';
 export { MessageList } from './chat/MessageList';
 export { ChatInput } from './chat/ChatInput';
 export { ChatImage } from './chat/ChatImage';

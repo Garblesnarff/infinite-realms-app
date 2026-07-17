@@ -13,6 +13,7 @@ export type TacticalDelta =
       type: 'entity_moved';
       entityId: string;
       path: { x: number; y: number }[];
+      movementRemaining?: number;
       forced?: boolean;
       mode?: 'shove' | 'pull' | 'teleport';
     }
@@ -23,9 +24,16 @@ export type TacticalDelta =
 const deltaFor = (
   action: MapAction,
   result: { path?: { x: number; y: number }[] },
+  entities?: MapEntity[],
 ): TacticalDelta => {
   if (action.action === 'move')
-    return { type: 'entity_moved', entityId: action.entityId!, path: result.path ?? [] };
+    return {
+      type: 'entity_moved',
+      entityId: action.entityId!,
+      path: result.path ?? [],
+      movementRemaining: entities?.find((entity) => entity.id === action.entityId)
+        ?.movementRemaining,
+    };
   if (action.action === 'forced_move')
     return {
       type: 'entity_moved',
@@ -57,7 +65,7 @@ export async function applyTacticalMapAction(
   const result = dispatchMapAction(map, action);
   if (!result.applied) return result;
   await saveTacticalMap(map);
-  if (options.broadcast !== false) broadcast(sessionId, deltaFor(action, result));
+  if (options.broadcast !== false) broadcast(sessionId, deltaFor(action, result, map.entities));
   return result;
 }
 
@@ -89,7 +97,10 @@ export async function applyDmTacticalActions(
       (candidate) => applyTacticalMapAction(sessionId, candidate, { broadcast: false }),
       retry,
     );
-    if (result.applied) appliedDeltas.push(deltaFor(result.action, result));
+    if (result.applied) {
+      const current = await loadActiveTacticalMap(sessionId);
+      appliedDeltas.push(deltaFor(result.action, result, current?.entities));
+    }
     else {
       console.warn('[tactical] dropped invalid DM map action', {
         sessionId,

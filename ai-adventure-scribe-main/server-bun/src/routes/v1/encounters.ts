@@ -8,12 +8,24 @@
  * Ported from /server/src/routes/v1/encounters.ts
  */
 
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { authenticateRequest } from '../../lib/auth.js';
 import { recordEncounterOutcome, getDifficultyAdjustment } from '../../lib/encounter-telemetry.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
+
+const encounterTelemetrySchema = t.Object({
+  // Optional fields preserve the route's existing "Missing required fields" response.
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  difficulty: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+  resourcesUsedEst: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
+});
+
+const encounterAdjustmentQuery = t.Object({
+  sessionId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  difficulty: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+});
 
 export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
 
@@ -29,11 +41,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { error: authError || 'Unauthorized' };
     }
 
-    const { sessionId, difficulty, resourcesUsedEst } = body as {
-      sessionId?: string;
-      difficulty?: string;
-      resourcesUsedEst?: number;
-    };
+    const { sessionId, difficulty, resourcesUsedEst } = body;
 
     if (!sessionId || !difficulty || typeof resourcesUsedEst !== 'number') {
       set.status = 400;
@@ -48,7 +56,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
 
     recordEncounterOutcome(sessionId, difficulty, resourcesUsedEst);
     return { ok: true };
-  })
+  }, { body: encounterTelemetrySchema })
 
   /**
    * GET /v1/encounters/adjustment
@@ -61,8 +69,7 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
       return { error: authError || 'Unauthorized' };
     }
 
-    const sessionId = query.sessionId as string;
-    const difficulty = query.difficulty as string;
+    const { sessionId, difficulty } = query;
 
     if (!sessionId || !difficulty) {
       set.status = 400;
@@ -77,4 +84,4 @@ export const encountersRoutes = new Elysia({ prefix: '/v1/encounters' })
 
     const factor = getDifficultyAdjustment(sessionId, difficulty);
     return { ok: true, factor };
-  });
+  }, { query: encounterAdjustmentQuery });

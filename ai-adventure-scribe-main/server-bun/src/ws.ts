@@ -28,10 +28,77 @@ import { verifySessionAccess } from './services/combat/combat-authorization.js';
 export { broadcastToScene } from './services/collaboration/room-manager.js';
 
 /**
+ * Per-connection message flood control (token bucket).
+ *
+ * Keyed by the WSConnection object itself (WeakMap) so state is scoped to a
+ * single socket and is garbage-collected automatically once the connection
+ * is dropped - no explicit cleanup required on close.
+ */
+const MESSAGE_RATE_LIMIT_CAPACITY = 30; // max messages per window (burst allowance)
+const MESSAGE_RATE_LIMIT_WINDOW_MS = 10_000; // window size
+const MESSAGE_RATE_LIMIT_ABUSE_VIOLATIONS = 30; // over-budget messages in a window before we hang up
+
+interface MessageRateLimitState {
+  tokens: number;
+  windowStart: number;
+  violations: number;
+}
+
+const messageRateLimits = new WeakMap<WSConnection, MessageRateLimitState>();
+
+function checkMessageRateLimit(ws: WSConnection): { allowed: boolean; abusive: boolean } {
+  const now = Date.now();
+  let state = messageRateLimits.get(ws);
+
+  if (!state || now - state.windowStart >= MESSAGE_RATE_LIMIT_WINDOW_MS) {
+    state = { tokens: MESSAGE_RATE_LIMIT_CAPACITY, windowStart: now, violations: 0 };
+    messageRateLimits.set(ws, state);
+  }
+
+  if (state.tokens > 0) {
+    state.tokens -= 1;
+    return { allowed: true, abusive: false };
+  }
+
+  state.violations += 1;
+  return { allowed: false, abusive: state.violations > MESSAGE_RATE_LIMIT_ABUSE_VIOLATIONS };
+}
+
+/**
  * Handle incoming WebSocket messages
  */
 async function handleMessage(ws: WSConnection, rawMessage: string | Buffer) {
   const { user, roomId, requestId } = ws.data;
+
+  // Flood control: cap message throughput per connection before doing any
+  // parsing/handling work. Exceeding the burst budget drops the message and
+  // sends an error frame; sustained abuse well past the budget closes the
+  // socket outright.
+  const rateLimit = checkMessageRateLimit(ws);
+  if (!rateLimit.allowed) {
+    logger.warn(
+      { requestId, sessionId: roomId, userId: user.userId, abusive: rateLimit.abusive },
+      'ws.rate_limited',
+    );
+
+    try {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          code: 'RATE_LIMITED',
+          message: 'Too many messages, please slow down.',
+          requestId,
+        }),
+      );
+    } catch {
+      // Socket may already be closing; ignore send failures here.
+    }
+
+    if (rateLimit.abusive) {
+      ws.close(4008, 'Rate limit exceeded');
+    }
+    return;
+  }
 
   try {
     const msg = JSON.parse(rawMessage.toString());
@@ -152,6 +219,12 @@ export const wsPlugin = new Elysia().ws('/ws', {
   }),
   // Message body can be any JSON
   body: t.Any(),
+  // Cap incoming frame size to prevent memory-exhaustion / flood abuse via
+  // oversized WebSocket payloads (Bun default is 16 MB).
+  maxPayloadLength: 256 * 1024, // 256 KB
+  // Close idle sockets instead of holding them open indefinitely. 960s is
+  // Bun/uWebSockets' maximum allowed idleTimeout.
+  idleTimeout: 960,
   // Handle new WebSocket connection
   async open(ws) {
     try {

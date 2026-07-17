@@ -196,7 +196,10 @@ describe('Spell Class Restriction Enforcement', () => {
       });
 
       const validCantrips = ['guidance', 'thaumaturgy', 'sacred-flame'];
-      const validSpells = ['cure-wounds']; // Cleric only needs 1 prepared spell at level 1
+      // validateSpellSelection() expects spellsPrepared (base 1 at level 1) + the character's
+      // Wisdom modifier; createMockCharacter()'s default ability scores give a +1 Wisdom
+      // modifier, so a level-1 cleric prepares 2 spells, not 1.
+      const validSpells = ['cure-wounds', 'healing-word'];
 
       const result = validateSpellSelection(clericCharacter, validCantrips, validSpells);
 

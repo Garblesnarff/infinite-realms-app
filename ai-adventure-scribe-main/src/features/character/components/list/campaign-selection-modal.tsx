@@ -14,7 +14,6 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -58,17 +57,11 @@ const CampaignSelectionModal: React.FC<CampaignSelectionModalProps> = ({
       logger.info('Starting session with character:', characterId);
 
       // Create new game session
-      const { data: session, error } = await supabase
-        .from('game_sessions')
-        .insert({
-          campaign_id: campaignId,
-          character_id: characterId,
-          status: 'active',
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const session = await userDataApi.createSession({
+        campaign_id: campaignId,
+        character_id: characterId,
+        status: 'active',
+      });
 
       toast({
         title: 'Session Started',

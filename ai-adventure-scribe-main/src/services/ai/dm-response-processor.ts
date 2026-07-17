@@ -52,6 +52,7 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   const responseText = typeof structuredResponse?.text === 'string'
     ? structuredResponse.text
     : rawResponse;
+  const hasStructuredResponseText = typeof structuredResponse?.text === 'string';
 
   // Initialize result with raw text
   let result: { text: string; narrationSegments?: NarrationSegment[] } = { text: responseText };
@@ -59,20 +60,22 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   // 1. Post-processing logic (Formatting & Parsing)
   if (isFirstMessage) {
     logger.info('[Opening Message] Raw AI response length:', responseText.length);
-    // Strip any code-fence wrapper the model adds around the response.
-    // Pattern 1: entire response is wrapped (```response...```) — unwrap it, keep content.
-    // Pattern 2: leading metadata block before narrative — strip just that block.
-    // Preserves mid-response ROLL_REQUESTS_V1 fences in both cases.
-    let sampledText: string;
-    const entirelyWrapped = responseText.match(/^```\w*\n([\s\S]*)\n```\s*$/);
-    if (entirelyWrapped) {
-      sampledText = entirelyWrapped[1].trim();
+    if (hasStructuredResponseText) {
+      // Structured openings use the same text field as every other DM turn.
+      // Do not run legacy fence-stripping against the serialized JSON object.
+      result = { text: applyAssetPostProcessing({ text: structuredResponse.text }).text };
     } else {
-      sampledText = responseText.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
+      // Fence-stripping is retained only for legacy plain-text providers.
+      let sampledText: string;
+      const entirelyWrapped = rawResponse.match(/^```\w*\n([\s\S]*)\n```\s*$/);
+      if (entirelyWrapped) {
+        sampledText = entirelyWrapped[1].trim();
+      } else {
+        sampledText = rawResponse.replace(/^\s*```[\w\s]*\n[\s\S]*?```\s*(?:\n+|$)/, '').trim();
+      }
+      result = { text: applyAssetPostProcessing({ text: sampledText }).text };
     }
-    logger.info('[Opening Message] Sampled text length:', sampledText.length);
-    const processed = applyAssetPostProcessing({ text: sampledText });
-    result = { text: processed.text };
+    logger.info('[Opening Message] Sampled text length:', result.text.length);
   } else if (structuredResponse || voiceContext) {
     try {
       // Clean the response by removing markdown code blocks first
@@ -172,6 +175,18 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     }
   } else {
     result = applyAssetPostProcessing({ text: rawResponse });
+  }
+
+  const looksLikeJsonSoup =
+    isFirstMessage &&
+    !hasStructuredResponseText &&
+    (/^\s*[\[{]/.test(rawResponse) || /["']text["']\s*:/.test(rawResponse));
+  if (isFirstMessage && (result.text.trim().length < 50 || looksLikeJsonSoup)) {
+    logger.warn('[Opening Message] Generation failed integrity checks; using tagged fallback', {
+      length: result.text.trim().length,
+      looksLikeJsonSoup,
+    });
+    throw new Error('Opening message failed structured-output integrity checks');
   }
 
   // Normalize malformed asset tags before persistence, rendering, and memory extraction.

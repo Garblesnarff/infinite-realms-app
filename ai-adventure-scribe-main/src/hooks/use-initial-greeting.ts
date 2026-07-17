@@ -9,6 +9,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { getAccessToken } from '@/services/auth/TokenService';
 import { userDataApi } from '@/services/user-data-api';
 import { createInitialMemories } from '@/utils/game-session/initial-greeting-memories';
 import { truncateAtRollRequest } from '@/utils/roll-request/validate';
@@ -35,6 +36,36 @@ interface InitialGreetingState {
   hasGenerated: boolean;
   error: string | null;
 }
+
+const GREETING_MIN_LENGTH = 50;
+
+const storedMessageText = (message: Record<string, unknown> | undefined): string => {
+  const text = message?.text ?? message?.message;
+  return typeof text === 'string' ? text.trim() : '';
+};
+
+const isShortStoredGreeting = (message: Record<string, unknown> | undefined): boolean =>
+  storedMessageText(message).length > 0 && storedMessageText(message).length < GREETING_MIN_LENGTH;
+
+const replaceOpeningSceneMemory = async (sessionId: string, greetingText: string): Promise<boolean> => {
+  try {
+    const memories = await userDataApi.listMemories(sessionId, { limit: 200 });
+    const openingScene = memories.find(
+      (memory) =>
+        typeof memory?.id === 'string' &&
+        typeof memory?.content === 'string' &&
+        memory.content.startsWith('Opening Scene:'),
+    );
+    if (openingScene) {
+      await userDataApi.updateMemoryContent(openingScene.id, `Opening Scene: ${greetingText}`);
+      logger.info('[Initial Greeting] Repaired existing Opening Scene memory', openingScene.id);
+      return true;
+    }
+  } catch (error) {
+    logger.warn('[Initial Greeting] Could not replace existing Opening Scene memory:', error);
+  }
+  return false;
+};
 
 /**
  * useInitialGreeting Hook
@@ -67,11 +98,16 @@ export const useInitialGreeting = ({
   const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
+    const onlyFallbackMessage =
+      messages.length === 1 &&
+      messages[0].sender === 'dm' &&
+      (messages[0].context?.isFallback === true ||
+        isShortStoredGreeting(messages[0] as unknown as Record<string, unknown>));
     const shouldGenerateGreeting =
       sessionId &&
       sessionData &&
       sessionData.turn_count === 0 &&
-      messages.length === 0 &&
+      (messages.length === 0 || onlyFallbackMessage) &&
       characterId &&
       campaignId &&
       !state.hasGenerated &&
@@ -101,13 +137,17 @@ export const useInitialGreeting = ({
       logger.info('[Initial Greeting] Starting generation for session:', sessionId);
 
       // Ensure we are not resuming an existing conversation
-      const { total: existingMessageCount } = await userDataApi.listSessionMessages(
-        sessionId!,
-        0,
-        1,
-      );
+      const { total: existingMessageCount, messages: existingMessages } =
+        await userDataApi.listSessionMessages(sessionId!, 0, 10);
 
-      if ((existingMessageCount ?? 0) > 0) {
+      const isOnlyFallbackMessage =
+        existingMessageCount === 1 &&
+        existingMessages?.length === 1 &&
+        existingMessages[0]?.speaker_type === 'dm' &&
+        (existingMessages[0]?.context?.isFallback === true ||
+          isShortStoredGreeting(existingMessages[0] as Record<string, unknown>));
+
+      if ((existingMessageCount ?? 0) > 0 && !isOnlyFallbackMessage) {
         logger.info(
           '[Initial Greeting] Detected existing dialogue entries; skipping automated greeting.',
         );
@@ -136,7 +176,7 @@ export const useInitialGreeting = ({
         sessionId
       ) {
         try {
-          const token = localStorage.getItem('workos_access_token');
+          const token = getAccessToken();
           const res = await fetch(
             `/api/trpc/chronicles.getPreviouslyOn?input=${encodeURIComponent(
               JSON.stringify({ newSessionId: sessionId, campaignId }),
@@ -164,6 +204,9 @@ export const useInitialGreeting = ({
           characterDetails: characterData as unknown as Record<string, unknown>,
         },
       });
+      if (typeof openingText !== 'string' || openingText.trim().length < GREETING_MIN_LENGTH) {
+        throw new Error('Opening message was too short to be a valid scene');
+      }
 
       // Only parse structured ROLL_REQUESTS_V1 blocks from the opening message.
       // Regex-based prose detection is intentionally skipped here: option descriptions
@@ -213,12 +256,16 @@ export const useInitialGreeting = ({
 
       // Create initial memories if callback is provided (use displayText to avoid raw ROLL_REQUESTS blocks)
       if (onMemoryCreated && sessionId) {
+        const openingSceneReplaced = isOnlyFallbackMessage
+          ? await replaceOpeningSceneMemory(sessionId, displayText)
+          : false;
         await createInitialMemories(
           sessionId,
           characterData as unknown as Character,
           campaignData as unknown as Campaign,
           displayText,
           onMemoryCreated,
+          { skipOpeningScene: openingSceneReplaced },
         );
       }
 
@@ -228,7 +275,15 @@ export const useInitialGreeting = ({
         hasGenerated: true,
       }));
     } catch (error) {
-      logger.error('[Initial Greeting] Error generating greeting:', error);
+      logger.error('[Initial Greeting] Error generating greeting:', {
+        error,
+        sessionId,
+        characterId,
+        campaignId,
+        starterCampaignId: sessionData?.starter_campaign_id,
+        turnCount: sessionData?.turn_count,
+        loadedMessageCount: messages.length,
+      });
 
       setState((prev) => ({
         ...prev,
@@ -244,6 +299,7 @@ export const useInitialGreeting = ({
           sender: 'dm',
           text: 'You find yourself standing at the threshold of adventure. The world stretches before you, full of mysteries waiting to be uncovered. What do you do?',
           timestamp: new Date().toISOString(),
+          context: { isFallback: true },
         };
         await onGreetingGenerated(fallbackMessage);
 

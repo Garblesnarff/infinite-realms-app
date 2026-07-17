@@ -16,6 +16,7 @@
 /* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
 import { Elysia, t } from 'elysia';
+import { inArray } from 'drizzle-orm';
 
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -25,6 +26,8 @@ import { CharacterSpellService } from '../../services/character/character-spell-
 import { CharacterService } from '../../services/character-service.js';
 
 import type { Character, CharacterStats } from '../../../../db/schema/index';
+import { db } from '../../../../db/client';
+import { spells } from '../../../../db/schema/index';
 
 /**
  * Validation schema for character operations
@@ -109,6 +112,21 @@ const characterSchema = t.Object({
         magic_item_type: t.Optional(t.Nullable(t.String())),
         magic_item_rarity: t.Optional(t.Nullable(t.String())),
         magic_effects: t.Optional(t.Nullable(t.String())),
+      }),
+    ),
+  ),
+  inventory_items: t.Optional(
+    t.Array(
+      t.Object({
+        name: t.String({ minLength: 1 }),
+        item_type: t.String({ minLength: 1 }),
+        quantity: t.Optional(t.Number({ minimum: 0 })),
+        weight: t.Optional(t.Number({ minimum: 0 })),
+        description: t.Optional(t.Nullable(t.String())),
+        is_equipped: t.Optional(t.Boolean()),
+        is_attuned: t.Optional(t.Boolean()),
+        requires_attunement: t.Optional(t.Boolean()),
+        properties: t.Optional(t.Nullable(t.String())),
       }),
     ),
   ),
@@ -358,6 +376,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
               }
             : undefined,
           body.equipment,
+          body.inventory_items,
         );
 
         set.status = 201;
@@ -600,6 +619,16 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       // ⚡ Bolt: Use a Set for O(1) lookup complexity instead of O(N) array includes.
       // This reduces overall mapping complexity from O(M*N) to O(M+N).
       const preparedSet = new Set(preparedSpells);
+      const spellNames = [...new Set([...cantrips, ...knownSpells])];
+      const spellRows = spellNames.length
+        ? await db
+            .select({ id: spells.id, name: spells.name })
+            .from(spells)
+            .where(inArray(spells.name, spellNames))
+        : [];
+      const spellIdsByName = new Map(
+        spellRows.map((spell) => [spell.name.toLowerCase(), spell.id]),
+      );
 
       const response = {
         character: {
@@ -607,8 +636,13 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           class: character.class,
           level: character.level,
         },
-        cantrips: cantrips.map((name) => ({ name, level: 0 })),
+        cantrips: cantrips.map((name) => ({
+          id: spellIdsByName.get(name.toLowerCase()) || name,
+          name,
+          level: 0,
+        })),
         spells: knownSpells.map((name) => ({
+          id: spellIdsByName.get(name.toLowerCase()) || name,
           name,
           is_prepared: preparedSet.has(name),
         })),

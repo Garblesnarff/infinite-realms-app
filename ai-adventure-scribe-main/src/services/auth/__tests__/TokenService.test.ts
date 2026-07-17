@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
+  getAccessToken,
+  getAuthHeaders,
   getTokenExpiry,
   isTokenExpiringSoon,
   refreshAccessToken,
@@ -52,6 +54,34 @@ describe('TokenService', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  describe('getAccessToken', () => {
+    it('reads the current WorkOS token from localStorage', () => {
+      localStorage.setItem('workos_access_token', 'access');
+
+      expect(getAccessToken()).toBe('access');
+    });
+
+    it('returns null when no WorkOS token is stored', () => {
+      expect(getAccessToken()).toBeNull();
+    });
+  });
+
+  describe('getAuthHeaders', () => {
+    it('returns an authorization header when a WorkOS token is stored', () => {
+      localStorage.setItem('workos_access_token', 'access');
+
+      expect(getAuthHeaders()).toEqual({ Authorization: 'Bearer access' });
+    });
+
+    it('returns no authorization header when anonymous requests are allowed', () => {
+      expect(getAuthHeaders()).toEqual({});
+    });
+
+    it('preserves the legacy empty bearer header when requested', () => {
+      expect(getAuthHeaders({ includeEmptyToken: true })).toEqual({ Authorization: 'Bearer ' });
+    });
   });
 
   describe('getTokenExpiry', () => {

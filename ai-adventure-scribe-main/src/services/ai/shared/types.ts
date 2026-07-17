@@ -33,6 +33,7 @@ export interface GameContext {
   campaignId: string;
   characterId: string;
   sessionId?: string;
+  userId?: string;
   starterCampaignId?: string;
   campaignDetails?: Record<string, unknown>;
   characterDetails?: Record<string, unknown>;
