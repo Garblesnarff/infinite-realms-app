@@ -34,6 +34,8 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
             'map_destroyed',
             'tactical_action_queue',
             'tactical_degraded',
+            'aoe_preview',
+            'aoe_cast',
           ].includes(message.type)
         ) {
           window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));

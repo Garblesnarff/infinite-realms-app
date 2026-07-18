@@ -1,7 +1,9 @@
+/* eslint-disable max-lines */
 import { useEffect, useRef, useState } from 'react';
 
 import {
   entityFootprint,
+  type AoETemplate,
   type Point,
   type TacticalEntity,
   type TacticalMap,
@@ -25,7 +27,8 @@ type Props = {
     cover: number;
     hasLineOfSight: boolean;
   } | null;
-  aoeOrigin?: Point | null;
+  aoeTemplate?: AoETemplate | null;
+  onAoeOriginChange?: (point: Point) => void;
   onCellClick: (point: Point) => void;
   onCellHover?: (point: Point | null) => void;
 };
@@ -75,7 +78,8 @@ export function TacticalMapCanvas({
   path = [],
   animation,
   los,
-  aoeOrigin,
+  aoeTemplate,
+  onAoeOriginChange,
   onCellClick,
   onCellHover,
 }: Props) {
@@ -83,6 +87,7 @@ export function TacticalMapCanvas({
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
   const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null);
+  const templateDrag = useRef(false);
   const cellAt = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -159,17 +164,40 @@ export function TacticalMapCanvas({
       });
       ctx.stroke();
     }
-    if (aoeOrigin) {
-      ctx.fillStyle = 'rgba(213,176,112,.28)';
-      ctx.beginPath();
-      ctx.arc(
-        px + (aoeOrigin.x + 0.5) * size,
-        py + (aoeOrigin.y + 0.5) * size,
-        size * 1.5,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
+    if (aoeTemplate) {
+      const colors = {
+        'player-pending': { fill: 'rgba(79,182,196,.28)', stroke: teal },
+        'player-confirmed': { fill: 'rgba(213,176,112,.30)', stroke: gold },
+        'hostile-telegraph': { fill: 'rgba(190,72,72,.30)', stroke: 'rgb(245,148,120)' },
+      }[aoeTemplate.state];
+      const affected = new Set(aoeTemplate.geometry.cells.map((cell) => `${cell.x},${cell.y}`));
+      ctx.fillStyle = colors.fill;
+      for (const cell of aoeTemplate.geometry.cells)
+        ctx.fillRect(px + cell.x * size, py + cell.y * size, size, size);
+      ctx.strokeStyle = colors.stroke;
+      ctx.lineWidth = Math.max(2, size * 0.08);
+      for (const cell of aoeTemplate.geometry.cells) {
+        const left = px + cell.x * size;
+        const top = py + cell.y * size;
+        const edges = [
+          [{ x: cell.x, y: cell.y - 1 }, left, top, left + size, top],
+          [{ x: cell.x + 1, y: cell.y }, left + size, top, left + size, top + size],
+          [{ x: cell.x, y: cell.y + 1 }, left, top + size, left + size, top + size],
+          [{ x: cell.x - 1, y: cell.y }, left, top, left, top + size],
+        ] as const;
+        for (const [neighbour, x1, y1, x2, y2] of edges) {
+          if (affected.has(`${neighbour.x},${neighbour.y}`)) continue;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+      }
+      const origin = aoeTemplate.geometry.origin;
+      ctx.strokeStyle = colors.stroke;
+      ctx.setLineDash(aoeTemplate.state === 'hostile-telegraph' ? [5, 4] : []);
+      ctx.strokeRect(px + origin.x * size + size * 0.16, py + origin.y * size + size * 0.16, size * 0.68, size * 0.68);
+      ctx.setLineDash([]);
     }
     map.entities.forEach((entity) => {
       const animated = animation?.entityId === entity.id ? animation.path[animation.step] : null;
@@ -223,7 +251,7 @@ export function TacticalMapCanvas({
         py + (to.y + 0.5) * size - 14,
       );
     }
-  }, [map, reachable, path, animation, los, aoeOrigin, view]);
+  }, [map, reachable, path, animation, los, aoeTemplate, view]);
 
   return (
     <canvas
@@ -231,7 +259,10 @@ export function TacticalMapCanvas({
       aria-label="Tactical combat map"
       className="h-[min(52vh,520px)] w-full touch-none rounded-md border border-white/10"
       onPointerMove={(event) => {
-        if (drag.current)
+        if (templateDrag.current) {
+          const point = cellAt(event);
+          if (point) onAoeOriginChange?.(point);
+        } else if (drag.current)
           setView((current) => ({
             ...current,
             x: drag.current!.viewX + event.clientX - drag.current!.x,
@@ -244,6 +275,12 @@ export function TacticalMapCanvas({
         const moved =
           drag.current &&
           Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) > 6;
+        if (templateDrag.current) {
+          templateDrag.current = false;
+          const point = cellAt(event);
+          if (point) onAoeOriginChange?.(point);
+          return;
+        }
         drag.current = null;
         if (!moved) {
           const point = cellAt(event);
@@ -259,6 +296,12 @@ export function TacticalMapCanvas({
       }}
       onPointerDown={(event) => {
         (event.currentTarget as HTMLCanvasElement).setPointerCapture(event.pointerId);
+        if (aoeTemplate?.state === 'player-pending') {
+          templateDrag.current = true;
+          const point = cellAt(event);
+          if (point) onAoeOriginChange?.(point);
+          return;
+        }
         if (event.pointerType === 'touch')
           drag.current = { x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
       }}

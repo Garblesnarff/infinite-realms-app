@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Canonical DM response contract.
  *
@@ -36,6 +37,36 @@ export type DMMapAction =
     }
   | ForcedMoveAction;
 
+export type DMAoESpellAction = {
+  actor_id: string;
+  action_type: 'cast_spell';
+  spell_id: string;
+  origin: Point;
+  direction: Point | null;
+  slot_level: number | null;
+};
+
+export type DMTargetedCombatAction = {
+  actor_id: string;
+  action_type:
+    | 'attack'
+    | 'cast_spell'
+    | 'dash'
+    | 'disengage'
+    | 'dodge'
+    | 'help'
+    | 'hide'
+    | 'ready'
+    | 'use_object';
+  target_ids: string[];
+  weapon_id: string | null;
+  spell_id: string | null;
+  slot_level: number | null;
+  movement_feet: number;
+};
+
+export type DMCombatAction = DMTargetedCombatAction | DMAoESpellAction;
+
 export type DMResponse = {
   text: string;
   narration_segments: Array<{
@@ -56,7 +87,7 @@ export type DMResponse = {
   scene_spec: Record<string, unknown> | null;
   map_actions: DMMapAction[];
   combatants: Array<{ monster_id: string; name: string; count: number }>;
-  combat_actions: Array<Record<string, unknown>>;
+  combat_actions: DMCombatAction[];
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -116,6 +147,39 @@ const mapActionSchema = {
     'distance',
     'destination',
   ],
+} as const;
+
+const targetedCombatActionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    actor_id: { type: 'string' },
+    action_type: {
+      type: 'string',
+      enum: ['attack', 'cast_spell', 'dash', 'disengage', 'dodge', 'help', 'hide', 'ready', 'use_object'],
+    },
+    target_ids: { type: 'array', items: { type: 'string' } },
+    weapon_id: nullable({ type: 'string' }),
+    spell_id: nullable({ type: 'string' }),
+    slot_level: nullable({ type: 'number' }),
+    movement_feet: { type: 'number' },
+  },
+  required: ['actor_id', 'action_type', 'target_ids', 'weapon_id', 'spell_id', 'slot_level', 'movement_feet'],
+} as const;
+
+/** AoE target membership is always derived by the tactical engine, never the LLM. */
+const aoeCombatActionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    actor_id: { type: 'string' },
+    action_type: { type: 'string', enum: ['cast_spell'] },
+    spell_id: { type: 'string' },
+    origin: pointSchema,
+    direction: nullable(pointSchema),
+    slot_level: nullable({ type: 'number' }),
+  },
+  required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction', 'slot_level'],
 } as const;
 
 const baseProperties = {
@@ -202,41 +266,7 @@ const baseProperties = {
   },
   combat_actions: {
     type: 'array',
-    items: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        actor_id: { type: 'string' },
-        action_type: {
-          type: 'string',
-          enum: [
-            'attack',
-            'cast_spell',
-            'dash',
-            'disengage',
-            'dodge',
-            'help',
-            'hide',
-            'ready',
-            'use_object',
-          ],
-        },
-        target_ids: { type: 'array', items: { type: 'string' } },
-        weapon_id: nullable({ type: 'string' }),
-        spell_id: nullable({ type: 'string' }),
-        slot_level: nullable({ type: 'number' }),
-        movement_feet: { type: 'number' },
-      },
-      required: [
-        'actor_id',
-        'action_type',
-        'target_ids',
-        'weapon_id',
-        'spell_id',
-        'slot_level',
-        'movement_feet',
-      ],
-    },
+    items: { oneOf: [targetedCombatActionSchema, aoeCombatActionSchema] },
   },
 } as const;
 
@@ -280,6 +310,27 @@ const isMapAction = (value: unknown): value is DMMapAction => {
   );
 };
 
+const isCombatAction = (value: unknown): value is DMCombatAction => {
+  if (!value || typeof value !== 'object') return false;
+  const action = value as Record<string, unknown>;
+  if (action.action_type === 'cast_spell' && 'origin' in action) {
+    return (
+      typeof action.actor_id === 'string' &&
+      typeof action.spell_id === 'string' &&
+      isPoint(action.origin) &&
+      (action.direction === null || isPoint(action.direction)) &&
+      (action.slot_level === null || typeof action.slot_level === 'number') &&
+      !('target_ids' in action)
+    );
+  }
+  return (
+    typeof action.actor_id === 'string' &&
+    typeof action.action_type === 'string' &&
+    Array.isArray(action.target_ids) &&
+    action.target_ids.every((target) => typeof target === 'string')
+  );
+};
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -290,5 +341,7 @@ export function parseDmResponse(
     return { success: false, issues: ['text must be a string'] };
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
+  if (!Array.isArray(response.combat_actions) || !response.combat_actions.every(isCombatAction))
+    return { success: false, issues: ['combat_actions contains an invalid action'] };
   return { success: true, data: response as DMResponse };
 }

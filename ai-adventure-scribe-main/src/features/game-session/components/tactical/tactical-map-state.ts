@@ -41,6 +41,21 @@ export interface TacticalMap {
   sceneDescription: string;
 }
 
+export type AoETemplateState = 'player-pending' | 'player-confirmed' | 'hostile-telegraph';
+export interface AoETemplate {
+  state: AoETemplateState;
+  actorId: string;
+  spellId: string;
+  slotLevel: number | null;
+  geometry: {
+    shape: 'sphere' | 'cone' | 'cube' | 'line';
+    sizeFeet: number;
+    origin: Point;
+    direction: Point | null;
+    cells: Point[];
+  };
+}
+
 export type TacticalDelta =
   | { type: 'map_created'; map: TacticalMap }
   | { type: 'map_destroyed' }
