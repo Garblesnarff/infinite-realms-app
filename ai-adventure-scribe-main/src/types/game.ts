@@ -1,5 +1,6 @@
 import type { Campaign } from './campaign';
 import type { Memory } from './memory';
+import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { ActionOption } from '@/utils/parseMessageOptions';
 
 export type SpeakerType = 'player' | 'dm' | 'system';
@@ -17,6 +18,7 @@ export interface MessageContext {
   emotion?: string | null;
   intent?: string | null;
   previouslyOn?: boolean;
+  handouts?: JournalHandoutEntry[];
   diceRoll?: {
     formula: string;
     count: number;

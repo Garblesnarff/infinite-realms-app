@@ -67,6 +67,15 @@ export type DMTargetedCombatAction = {
 
 export type DMCombatAction = DMTargetedCombatAction | DMAoESpellAction;
 
+/** A document delivery intent. Authored documents resolve against canon server-side. */
+export type DMHandoutAction = {
+  mode: 'authored' | 'improvised';
+  key: string | null;
+  title: string;
+  body: string | null;
+  giver: string;
+};
+
 export type DMResponse = {
   text: string;
   narration_segments: Array<{
@@ -86,6 +95,7 @@ export type DMResponse = {
   combat_transition: 'none' | 'start' | 'end';
   scene_spec: Record<string, unknown> | null;
   map_actions: DMMapAction[];
+  handout_actions: DMHandoutAction[];
   combatants: Array<{ monster_id: string; name: string; count: number }>;
   combat_actions: DMCombatAction[];
 };
@@ -156,7 +166,17 @@ const targetedCombatActionSchema = {
     actor_id: { type: 'string' },
     action_type: {
       type: 'string',
-      enum: ['attack', 'cast_spell', 'dash', 'disengage', 'dodge', 'help', 'hide', 'ready', 'use_object'],
+      enum: [
+        'attack',
+        'cast_spell',
+        'dash',
+        'disengage',
+        'dodge',
+        'help',
+        'hide',
+        'ready',
+        'use_object',
+      ],
     },
     target_ids: { type: 'array', items: { type: 'string' } },
     weapon_id: nullable({ type: 'string' }),
@@ -164,7 +184,15 @@ const targetedCombatActionSchema = {
     slot_level: nullable({ type: 'number' }),
     movement_feet: { type: 'number' },
   },
-  required: ['actor_id', 'action_type', 'target_ids', 'weapon_id', 'spell_id', 'slot_level', 'movement_feet'],
+  required: [
+    'actor_id',
+    'action_type',
+    'target_ids',
+    'weapon_id',
+    'spell_id',
+    'slot_level',
+    'movement_feet',
+  ],
 } as const;
 
 /** AoE target membership is always derived by the tactical engine, never the LLM. */
@@ -180,6 +208,19 @@ const aoeCombatActionSchema = {
     slot_level: nullable({ type: 'number' }),
   },
   required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction', 'slot_level'],
+} as const;
+
+const handoutActionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    mode: { type: 'string', enum: ['authored', 'improvised'] },
+    key: nullable({ type: 'string' }),
+    title: { type: 'string' },
+    body: nullable({ type: 'string' }),
+    giver: { type: 'string' },
+  },
+  required: ['mode', 'key', 'title', 'body', 'giver'],
 } as const;
 
 const baseProperties = {
@@ -251,6 +292,7 @@ const baseProperties = {
     ],
   }),
   map_actions: { type: 'array', items: mapActionSchema },
+  handout_actions: { type: 'array', items: handoutActionSchema },
   combatants: {
     type: 'array',
     items: {
@@ -331,6 +373,18 @@ const isCombatAction = (value: unknown): value is DMCombatAction => {
   );
 };
 
+const isHandoutAction = (value: unknown): value is DMHandoutAction => {
+  if (!value || typeof value !== 'object') return false;
+  const action = value as Record<string, unknown>;
+  if (!['authored', 'improvised'].includes(String(action.mode))) return false;
+  if (typeof action.title !== 'string' || typeof action.giver !== 'string') return false;
+  if (action.key !== null && typeof action.key !== 'string') return false;
+  if (action.body !== null && typeof action.body !== 'string') return false;
+  return action.mode === 'authored'
+    ? typeof action.key === 'string' && action.body === null
+    : action.key === null && typeof action.body === 'string';
+};
+
 export function parseDmResponse(
   value: unknown,
 ): { success: true; data: DMResponse } | { success: false; issues: string[] } {
@@ -341,6 +395,8 @@ export function parseDmResponse(
     return { success: false, issues: ['text must be a string'] };
   if (!Array.isArray(response.map_actions) || !response.map_actions.every(isMapAction))
     return { success: false, issues: ['map_actions contains an invalid action'] };
+  if (!Array.isArray(response.handout_actions) || !response.handout_actions.every(isHandoutAction))
+    return { success: false, issues: ['handout_actions contains an invalid action'] };
   if (!Array.isArray(response.combat_actions) || !response.combat_actions.every(isCombatAction))
     return { success: false, issues: ['combat_actions contains an invalid action'] };
   return { success: true, data: response as DMResponse };

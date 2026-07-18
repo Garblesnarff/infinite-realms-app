@@ -4,8 +4,12 @@ import { CombatSummary } from './CombatSummary';
 import { CompactCharacterHeader } from './CompactCharacterHeader';
 import { MemoryCard } from './memory/MemoryCard';
 import { MemoryFilter } from './memory/MemoryFilter';
+import { HandoutCard } from '../handouts/HandoutCard';
 
+import type { CharacterState } from '@/contexts/character/types';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
+import type { JournalHandoutEntry } from '@/services/user-data-api';
+import type { Memory } from '@/types/memory';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -19,15 +23,15 @@ export interface GameSidePanelContentProps {
   combatMode: boolean;
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
-  activeTab: 'character' | 'memory' | 'combat';
-  setActiveTab: (tab: 'character' | 'memory' | 'combat') => void;
+  activeTab: 'character' | 'memory' | 'combat' | 'journal';
+  setActiveTab: (tab: 'character' | 'memory' | 'combat' | 'journal') => void;
   selectedType: string | null;
   setSelectedType: (type: string | null) => void;
   localSessionNotes: string;
   setLocalSessionNotes: (notes: string) => void;
   memoriesLoading: boolean;
-  sortedMemories: Record<string, unknown>[];
-  characterState: Record<string, unknown>;
+  sortedMemories: Memory[];
+  characterState: CharacterState;
   isInCombat: boolean;
   panelWidth: string;
   panelRef: React.RefObject<HTMLDivElement>;
@@ -37,6 +41,8 @@ export interface GameSidePanelContentProps {
   handleDrag: (e: MouseEvent) => void;
   stopDrag: () => void;
   isMobileDrawerOpen: boolean;
+  journalEntries?: JournalHandoutEntry[];
+  journalLoading?: boolean;
 }
 
 /**
@@ -58,6 +64,8 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
     memoriesLoading,
     sortedMemories,
     isInCombat,
+    journalEntries = [],
+    journalLoading = false,
   }) => {
     const sessionNotesId = useId();
 
@@ -73,10 +81,10 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
         <div className="p-4 border-b border-border">
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as 'character' | 'memory' | 'combat')}
+            onValueChange={(v) => setActiveTab(v as 'character' | 'memory' | 'combat' | 'journal')}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 h-10">
+            <TabsList className="grid w-full grid-cols-4 h-10">
               <TabsTrigger value="character" className="text-xs">
                 Character
               </TabsTrigger>
@@ -85,6 +93,9 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
               </TabsTrigger>
               <TabsTrigger value="combat" disabled={!isInCombat} className="text-xs">
                 Combat
+              </TabsTrigger>
+              <TabsTrigger value="journal" className="text-xs">
+                Journal
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -149,6 +160,38 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
             <ScrollArea className="h-full">
               <div className="p-4">
                 <CombatSummary />
+              </div>
+            </ScrollArea>
+          )}
+
+          {activeTab === 'journal' && (
+            <ScrollArea className="h-full">
+              <div className="space-y-5 p-4">
+                {journalLoading && (
+                  <p className="text-xs text-muted-foreground">Loading journal...</p>
+                )}
+                {!journalLoading && journalEntries.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No handouts delivered yet.</p>
+                )}
+                {Object.entries(
+                  journalEntries.reduce<Record<string, JournalHandoutEntry[]>>((groups, entry) => {
+                    const label =
+                      entry.sessionNumber == null
+                        ? 'This campaign'
+                        : `Session ${entry.sessionNumber}`;
+                    (groups[label] ||= []).push(entry);
+                    return groups;
+                  }, {}),
+                ).map(([session, entries]) => (
+                  <section key={session} className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {session}
+                    </h3>
+                    {entries.map((entry) => (
+                      <HandoutCard key={entry.id} entry={entry} />
+                    ))}
+                  </section>
+                ))}
               </div>
             </ScrollArea>
           )}

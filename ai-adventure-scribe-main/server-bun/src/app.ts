@@ -23,6 +23,7 @@ import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 import { billingRoutes } from './routes/v1/billing';
 import { combatRoutes } from './routes/v1/combat';
 import { tacticalMapRoutes } from './routes/v1/tactical-maps';
+import { handoutRoutes } from './routes/v1/handouts';
 import { inventoryRoutes } from './routes/v1/inventory';
 import { spellSlotsCharacterRoutes, spellSlotsUtilityRoutes } from './routes/v1/spell-slots';
 import { progressionRoutes } from './routes/v1/progression';
@@ -346,6 +347,7 @@ export function createApp() {
   // Combat routes (D&D 5E combat system)
   app.use(combatRoutes);
   app.use(tacticalMapRoutes);
+  app.use(handoutRoutes);
 
   // Inventory routes (D&D 5E inventory management)
   app.use(inventoryRoutes);

@@ -40,12 +40,17 @@ export function useSessionStorySocket(sessionId: string | null, onRemoteMessage:
         ) {
           window.dispatchEvent(new CustomEvent('tactical-map-delta', { detail: message }));
         }
+        if (['handout_delivered', 'handout_degraded'].includes(message.type)) {
+          window.dispatchEvent(new CustomEvent('campaign-journal-updated', { detail: message }));
+        }
         if (message.type === 'combat_state_updated') {
           window.dispatchEvent(new CustomEvent('combat-state-updated', { detail: message }));
           if (message.tacticalMap) {
-            window.dispatchEvent(new CustomEvent('tactical-map-delta', {
-              detail: { type: 'map_created', map: message.tacticalMap },
-            }));
+            window.dispatchEvent(
+              new CustomEvent('tactical-map-delta', {
+                detail: { type: 'map_created', map: message.tacticalMap },
+              }),
+            );
           }
         }
       } catch {

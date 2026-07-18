@@ -4,7 +4,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage';
 
 export type GameSidePanelState = {
   isExpanded: boolean;
-  activeTab: 'character' | 'memory' | 'combat';
+  activeTab: 'character' | 'memory' | 'combat' | 'journal';
   panelWidth: string;
 };
 
@@ -16,8 +16,8 @@ export type GameSidePanelState = {
 export const usePanelResize = (): {
   isExpanded: boolean;
   setIsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  activeTab: 'character' | 'memory' | 'combat';
-  setActiveTab: React.Dispatch<React.SetStateAction<'character' | 'memory' | 'combat'>>;
+  activeTab: 'character' | 'memory' | 'combat' | 'journal';
+  setActiveTab: React.Dispatch<React.SetStateAction<'character' | 'memory' | 'combat' | 'journal'>>;
   panelWidth: string;
   panelRef: React.RefObject<HTMLDivElement>;
   dragHandleRef: React.RefObject<HTMLDivElement>;
@@ -35,7 +35,7 @@ export const usePanelResize = (): {
 
   // Local state initialized from persistent state
   const [isExpanded, setIsExpanded] = useState(panelState.isExpanded);
-  const [activeTab, setActiveTab] = useState<'character' | 'memory' | 'combat'>(
+  const [activeTab, setActiveTab] = useState<'character' | 'memory' | 'combat' | 'journal'>(
     panelState.activeTab,
   );
   const [panelWidth, setPanelWidth] = useState(panelState.panelWidth);
@@ -97,12 +97,15 @@ export const usePanelResize = (): {
     document.removeEventListener('mouseup', stopDrag);
   }, [handleDrag]);
 
-  const startDrag = useCallback((e: React.MouseEvent) => {
-    isDraggingRef.current = true;
-    document.addEventListener('mousemove', handleDrag);
-    document.addEventListener('mouseup', stopDrag);
-    e.preventDefault();
-  }, [handleDrag, stopDrag]);
+  const startDrag = useCallback(
+    (e: React.MouseEvent) => {
+      isDraggingRef.current = true;
+      document.addEventListener('mousemove', handleDrag);
+      document.addEventListener('mouseup', stopDrag);
+      e.preventDefault();
+    },
+    [handleDrag, stopDrag],
+  );
 
   // Cleanup on unmount
   useEffect(() => {

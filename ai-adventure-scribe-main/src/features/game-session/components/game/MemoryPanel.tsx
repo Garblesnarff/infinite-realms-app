@@ -1,12 +1,23 @@
-import { List, ChevronDown, ChevronUp, User, Sword, Menu, ChevronLeft } from 'lucide-react';
+/* eslint-disable max-lines */
+import {
+  List,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Sword,
+  Menu,
+  ChevronLeft,
+  BookOpen,
+} from 'lucide-react';
 import React, { useState, useEffect, useId, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { CombatSummary } from './CombatSummary';
-import { RightSheetLive } from './overhaul/RightSheetLive';
 import { GameSidePanelContent } from './GameSidePanelContent';
 import { MemoryCard } from './memory/MemoryCard';
 import { MemoryFilter } from './memory/MemoryFilter';
+import { RightSheetLive } from './overhaul/RightSheetLive';
+import { HandoutCard } from '../handouts/HandoutCard';
 
 import type { MemoryType } from './memory/types';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
@@ -25,6 +36,7 @@ import { useCombat } from '@/contexts/CombatContext';
 import { useMemoryContext } from '@/contexts/MemoryContext';
 import { usePanelResize } from '@/features/game-session/hooks/use-panel-resize';
 import { useMemoryFiltering } from '@/hooks/memory/useMemoryFiltering';
+import { useCampaignJournal } from '@/hooks/use-campaign-journal';
 import { analytics } from '@/services/analytics';
 
 interface MemoryPanelProps {
@@ -104,8 +116,11 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
       }
     }, [sessionData, updateGameSessionState, localSessionNotes]);
 
+    const { data: journal, isLoading: journalLoading } = useCampaignJournal(sessionData?.id);
+    const journalEntries = journal?.entries || [];
+
     const handleTabChange = useCallback(
-      (value: 'character' | 'memory' | 'combat'): void => {
+      (value: 'character' | 'memory' | 'combat' | 'journal'): void => {
         setActiveTab(value);
         // Auto-expand when switching tabs
         setIsExpanded(true);
@@ -177,6 +192,8 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                   handleDrag={handleDrag}
                   stopDrag={stopDrag}
                   isMobileDrawerOpen={true}
+                  journalEntries={journalEntries}
+                  journalLoading={journalLoading}
                 />
                 <SheetClose asChild>
                   <Button
@@ -294,11 +311,27 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                     <Sword className="h-4 w-4" />
                   </Button>
                 )}
+                <Button
+                  variant={activeTab === 'journal' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleTabChange('journal')}
+                  aria-label="Journal"
+                  title="Journal"
+                  aria-pressed={activeTab === 'journal'}
+                  className={`h-8 px-2 transition-all duration-200 ${
+                    activeTab === 'journal'
+                      ? 'bg-amber-500/20 text-amber-100 shadow-lg'
+                      : 'text-foreground/60 hover:bg-white/5 hover:text-amber-100'
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
               </div>
               <h3 className="font-display font-semibold text-card-foreground capitalize truncate text-sm">
                 {activeTab === 'character' && '🎭 Character'}
                 {activeTab === 'memory' && '📚 Memories'}
                 {activeTab === 'combat' && '⚔️ Combat'}
+                {activeTab === 'journal' && '📜 Journal'}
               </h3>
             </div>
             <div className="flex gap-1">
@@ -337,7 +370,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
               <Tabs
                 value={activeTab}
                 onValueChange={(value) =>
-                  handleTabChange(value as 'character' | 'memory' | 'combat')
+                  handleTabChange(value as 'character' | 'memory' | 'combat' | 'journal')
                 }
                 className="flex flex-col h-full"
               >
@@ -407,6 +440,44 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                     </div>
                   </TabsContent>
                 )}
+
+                <TabsContent
+                  value="journal"
+                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent"
+                >
+                  <ScrollArea className="flex-1 bg-black/10 p-4" style={{ maxHeight: '56vh' }}>
+                    {journalLoading && (
+                      <p className="text-xs text-muted-foreground">Loading journal...</p>
+                    )}
+                    {!journalLoading && journalEntries.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No handouts delivered yet.</p>
+                    )}
+                    <div className="space-y-5">
+                      {Object.entries(
+                        journalEntries.reduce<Record<string, typeof journalEntries>>(
+                          (groups, entry) => {
+                            const label =
+                              entry.sessionNumber == null
+                                ? 'This campaign'
+                                : `Session ${entry.sessionNumber}`;
+                            (groups[label] ||= []).push(entry);
+                            return groups;
+                          },
+                          {},
+                        ),
+                      ).map(([session, entries]) => (
+                        <section key={session} className="space-y-2">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-100/70">
+                            {session}
+                          </h4>
+                          {entries.map((entry) => (
+                            <HandoutCard key={entry.id} entry={entry} />
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
               </Tabs>
             </div>
           )}

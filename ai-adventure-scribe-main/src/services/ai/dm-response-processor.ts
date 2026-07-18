@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, @typescript-eslint/no-explicit-any, no-useless-escape */
 import { applyAssetPostProcessing, insertAssetTags, getCachedAssets } from './asset-processor';
 import { voiceConsistencyService } from '../voice-consistency-service';
 import { processWorldAndMemories } from './response/world-update-processor';
@@ -44,14 +45,16 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
 
   let structuredResponse: Record<string, any> | null = null;
   try {
-    const cleaned = rawResponse.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    const cleaned = rawResponse
+      .trim()
+      .replace(/^```(?:json)?\s*/, '')
+      .replace(/\s*```$/, '');
     structuredResponse = JSON.parse(cleaned);
   } catch {
     // Backward-compatible fallback for providers that do not support schemas.
   }
-  const responseText = typeof structuredResponse?.text === 'string'
-    ? structuredResponse.text
-    : rawResponse;
+  const responseText =
+    typeof structuredResponse?.text === 'string' ? structuredResponse.text : rawResponse;
   const hasStructuredResponseText = typeof structuredResponse?.text === 'string';
 
   // Initialize result with raw text
@@ -194,7 +197,12 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   if (structuredResponse?.combat_actions?.length) {
     result.text = result.text
       .split(/(?<=[.!?])\s+/)
-      .filter((sentence) => !/(?:\b(?:hits?|miss(?:es|ed)?|succeeds?|fails?|critical hit|takes? \d+ (?:points? of )?damage)\b|\b(?:blade|arrow|spell|attack)\b.*\b(?:cuts?|strikes?|connects?|lands?)\b)/i.test(sentence))
+      .filter(
+        (sentence) =>
+          !/(?:\b(?:hits?|miss(?:es|ed)?|succeeds?|fails?|critical hit|takes? \d+ (?:points? of )?damage)\b|\b(?:blade|arrow|spell|attack)\b.*\b(?:cuts?|strikes?|connects?|lands?)\b)/i.test(
+            sentence,
+          ),
+      )
       .join(' ')
       .trim();
   }
@@ -240,10 +248,14 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
   const transition = structuredResponse?.combat_transition as 'none' | 'start' | 'end' | undefined;
   const combatantEntries = structuredResponse?.combatants || [];
   const monsterCatalog = combatantEntries.length
-    ? new Map((await import('@/services/encounters/srd-loader')).loadMonsters().flatMap((monster) => [
-        [monster.id.toLowerCase(), monster] as const,
-        [monster.name.toLowerCase(), monster] as const,
-      ]))
+    ? new Map(
+        (await import('@/services/encounters/srd-loader'))
+          .loadMonsters()
+          .flatMap((monster) => [
+            [monster.id.toLowerCase(), monster] as const,
+            [monster.name.toLowerCase(), monster] as const,
+          ]),
+      )
     : new Map();
   const structuredEnemies = combatantEntries.flatMap((entry: any) => {
     const monster = monsterCatalog.get(String(entry.monster_id || entry.name).toLowerCase());
@@ -252,9 +264,12 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
       monsterId: monster.id,
       name: monster.name,
       type: ['humanoid', 'beast', 'undead', 'dragon', 'construct'].includes(monster.type || '')
-        ? monster.type : 'unknown',
-      estimatedCR: String(monster.cr), description: `${monster.size || ''} ${monster.type || ''}`.trim(),
-      suggestedHP: monster.hitPoints || 1, suggestedAC: monster.armorClass || 10,
+        ? monster.type
+        : 'unknown',
+      estimatedCR: String(monster.cr),
+      description: `${monster.size || ''} ${monster.type || ''}`.trim(),
+      suggestedHP: monster.hitPoints || 1,
+      suggestedAC: monster.armorClass || 10,
     }));
   });
   const enhancedResult: AIResponse = {
@@ -264,10 +279,12 @@ export async function processDMResponse(params: ProcessDMResponseParams): Promis
     combat_transition: transition || 'none',
     scene_spec: structuredResponse?.scene_spec ?? null,
     map_actions: structuredResponse?.map_actions || [],
+    handout_actions: structuredResponse?.handout_actions || [],
     combat_actions: structuredResponse?.combat_actions || [],
     combatants: structuredResponse?.combatants || [],
     combatDetection: {
-      isCombat: transition === 'start' ? true : transition === 'end' ? false : combatDetection.isCombat,
+      isCombat:
+        transition === 'start' ? true : transition === 'end' ? false : combatDetection.isCombat,
       confidence: combatDetection.confidence,
       combatType: combatDetection.combatType,
       shouldStartCombat: transition === 'start',

@@ -151,7 +151,7 @@ export class LoreKeeperService {
   }
 
   /**
-   * Get all canonical entities (NPCs, locations, factions, items, monsters) for prompt injection
+   * Get all canonical entities and deliverable handouts for prompt injection.
    * Returns deduplicated list with full content for each entity
    */
   async getEntities(campaignId: string): Promise<{
@@ -160,6 +160,7 @@ export class LoreKeeperService {
     factions: CampaignChunk[];
     items: CampaignChunk[];
     monsters: CampaignChunk[];
+    handouts: CampaignChunk[];
   }> {
     const { data, error } = await supabase
       .from('campaign_chunks')
@@ -172,6 +173,7 @@ export class LoreKeeperService {
         'location',
         'faction',
         'item',
+        'handout',
         'monster',
       ])
       .order('chunk_type')
@@ -179,7 +181,7 @@ export class LoreKeeperService {
 
     if (error) {
       logger.error('[LoreKeeper] Failed to get entities:', error);
-      return { npcs: [], locations: [], factions: [], items: [], monsters: [] };
+      return { npcs: [], locations: [], factions: [], items: [], monsters: [], handouts: [] };
     }
 
     // ⚡ Bolt: Optimized to deduplicate, map, and group entities in a single O(N) pass.
@@ -190,6 +192,7 @@ export class LoreKeeperService {
       factions: [] as CampaignChunk[],
       items: [] as CampaignChunk[],
       monsters: [] as CampaignChunk[],
+      handouts: [] as CampaignChunk[],
     };
 
     const seenNames = new Set<string>();
@@ -208,6 +211,8 @@ export class LoreKeeperService {
         entities.factions.push(chunk);
       } else if (chunk.chunkType === 'item') {
         entities.items.push(chunk);
+      } else if (chunk.chunkType === 'handout') {
+        entities.handouts.push(chunk);
       } else if (chunk.chunkType === 'monster') {
         entities.monsters.push(chunk);
       }
