@@ -21,6 +21,9 @@ function parseArea(text) {
   const line = text.match(/\bline(?: that is)?\s+\d+\s+feet wide and\s+(\d+)\s+feet long\b/);
   if (line) return { shape: 'line', size_feet: Number(line[1]), confidence: 'high' };
 
+  const lineFirst = text.match(/\bline\b[^.]{0,40}?\b(\d+)\s+feet long and\s+\d+\s+feet wide\b/);
+  if (lineFirst) return { shape: 'line', size_feet: Number(lineFirst[1]), confidence: 'high' };
+
   const radius = text.match(/\b(sphere|cube)\s+(?:with )?(?:a )?radius of\s+(\d+)\s+feet\b/);
   if (radius) return { shape: radius[1], size_feet: Number(radius[2]), confidence: 'low' };
   return null;

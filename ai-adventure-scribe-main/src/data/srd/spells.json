@@ -3716,6 +3716,10 @@
     "forced_move": {
       "distance_feet": 15,
       "direction": "away"
+    },
+    "area_of_effect": {
+      "shape": "line",
+      "size_feet": 60
     }
   },
   {
@@ -4576,7 +4580,11 @@
     "classes": [
       "sorcerer",
       "wizard"
-    ]
+    ],
+    "area_of_effect": {
+      "shape": "line",
+      "size_feet": 100
+    }
   },
   {
     "id": "locate-animals-or-plants",
