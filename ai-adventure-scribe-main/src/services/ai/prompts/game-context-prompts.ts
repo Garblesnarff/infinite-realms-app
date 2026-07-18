@@ -108,9 +108,15 @@ ${campaignRules.map((rule: any) => `- ${rule.condition} → ${rule.effect}${rule
             factions = [],
             items = [],
             monsters = [],
+            handouts = [],
           } = campaignEntities || {};
           const totalEntities =
-            npcs.length + locations.length + factions.length + items.length + monsters.length;
+            npcs.length +
+            locations.length +
+            factions.length +
+            items.length +
+            monsters.length +
+            handouts.length;
 
           if (totalEntities > 0) {
             section += `
@@ -195,6 +201,23 @@ ${m.content}${hasImage ? `\n**VISUAL: Use ${assetTag} when this creature appears
   })
   .join('\n')}
 </monsters>`;
+            }
+
+            if (handouts.length > 0) {
+              section += `
+
+<available_handouts>
+<instruction>Deliver authored handouts only through handout_actions using the exact key. The server validates every key.</instruction>
+${handouts
+  .map(
+    (
+      handout: any,
+    ) => `<handout key="${handout.metadata?.key || ''}" title="${handout.metadata?.title || handout.entityName || ''}" giver="${handout.metadata?.giver || ''}">
+${handout.content}
+</handout>`,
+  )
+  .join('\n')}
+</available_handouts>`;
             }
 
             section += `

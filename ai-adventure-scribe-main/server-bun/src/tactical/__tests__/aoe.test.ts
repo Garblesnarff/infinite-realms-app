@@ -24,7 +24,7 @@ describe('AoE cell geometry', () => {
   test('accepts an AoE intent without LLM-supplied target IDs and rejects one with them', () => {
     const response = {
       text: '', narration_segments: [], roll_requests: [], combat_transition: 'none', scene_spec: null,
-      map_actions: [], combatants: [],
+      map_actions: [], handout_actions: [], combatants: [],
       combat_actions: [{ actor_id: 'caster', action_type: 'cast_spell', spell_id: 'thunderwave', origin: { x: 1, y: 3 }, direction: null, slot_level: null }],
     };
     expect(parseDmResponse(response).success).toBe(true);

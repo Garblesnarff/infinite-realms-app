@@ -86,6 +86,19 @@ export type AoECastPayload = {
   slotLevel: number | null;
 };
 
+export type JournalHandoutEntry = {
+  id: string;
+  sessionId: string;
+  sessionNumber: number | null;
+  mode: 'authored' | 'improvised';
+  key: string | null;
+  title: string;
+  body: string | null;
+  giver: string;
+  assetPath: string | null;
+  createdAt: string;
+};
+
 const CHARACTER_FIELDS = [
   'name',
   'description',
@@ -317,6 +330,23 @@ export const userDataApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actions }),
     }),
+  applyDmHandoutActions: (
+    sessionId: string,
+    actions: Array<{
+      mode: 'authored' | 'improvised';
+      key: string | null;
+      title: string;
+      body: string | null;
+      giver: string;
+    }>,
+  ): Promise<Response> =>
+    requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/handout-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actions }),
+    }),
+  getSessionJournal: (sessionId: string): Promise<{ entries: JournalHandoutEntry[] }> =>
+    request(`/v1/sessions/${encodeURIComponent(sessionId)}/journal`),
   resolveAoECast: (sessionId: string, payload: AoECastPayload): Promise<Response> =>
     requestResponse(`/v1/sessions/${encodeURIComponent(sessionId)}/tactical-map/aoe-cast`, {
       method: 'POST',

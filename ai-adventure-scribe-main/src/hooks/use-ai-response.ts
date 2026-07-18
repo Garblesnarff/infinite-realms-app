@@ -1,7 +1,10 @@
 // External/SDK Imports
 import { useRef, useCallback } from 'react';
 
-import type { DMAoESpellAction } from '../../../server-bun/src/services/dm/dm-response-schema';
+import type {
+  DMAoESpellAction,
+  DMHandoutAction,
+} from '../../../server-bun/src/services/dm/dm-response-schema';
 import type { SceneSpec } from '../../../server-bun/src/tactical/types';
 import type { ImageRequest } from '@/hooks/ai/types';
 import type { ChatMessage } from '@/types/game';
@@ -16,9 +19,17 @@ import { processRollRequests } from '@/hooks/ai/roll-processor';
 import { logIncomingRolls, logRollRequests } from '@/hooks/ai/session-logger';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
-import { executeAuthoritativeCombatIntent, executeStructuredCombatAction, type StructuredCombatAction } from '@/services/combat/combat-action-executor';
+import {
+  executeAuthoritativeCombatIntent,
+  executeStructuredCombatAction,
+  type StructuredCombatAction,
+} from '@/services/combat/combat-action-executor';
 import { MemoryManager } from '@/services/memory-manager';
-import { userDataApi, type TacticalMapActionPayload } from '@/services/user-data-api';
+import {
+  userDataApi,
+  type JournalHandoutEntry,
+  type TacticalMapActionPayload,
+} from '@/services/user-data-api';
 import { voiceConsistencyService } from '@/services/voice-consistency-service';
 
 // Voice narration types
@@ -210,29 +221,35 @@ export const useAIResponse = () => {
             currentTurnPlayerId: combatState.activeEncounter?.currentTurnParticipantId,
             pendingRolls: gameState.diceRollQueue.pendingRolls.length,
             round: combatState.activeEncounter?.currentRound,
-            participants: (combatState.activeEncounter?.participants || []).map((participant) => ({
-              id: participant.id,
-              name: participant.name,
-              type: participant.participantType,
-              hp: participant.currentHitPoints,
-              maxHp: participant.maxHitPoints,
-              armorClass: participant.armorClass,
-              conditions: (participant.conditions || []).map((condition) => condition.name),
-            })) || [],
+            participants:
+              (combatState.activeEncounter?.participants || []).map((participant) => ({
+                id: participant.id,
+                name: participant.name,
+                type: participant.participantType,
+                hp: participant.currentHitPoints,
+                maxHp: participant.maxHitPoints,
+                armorClass: participant.armorClass,
+                conditions: (participant.conditions || []).map((condition) => condition.name),
+              })) || [],
           },
         };
 
         // The tactical server computes geometry. The DM receives only its bounded
         // ASCII/digest context and never derives distances or line of sight itself.
-        if (combatState.isInCombat && sessionId && combatState.activeEncounter?.currentTurnParticipantId) {
+        if (
+          combatState.isInCombat &&
+          sessionId &&
+          combatState.activeEncounter?.currentTurnParticipantId
+        ) {
           try {
             const tacticalResponse = await userDataApi.getTacticalMapContext(
               sessionId,
               combatState.activeEncounter.currentTurnParticipantId,
             );
             if (tacticalResponse.ok) {
-              const payload = await tacticalResponse.json() as { tacticalContext?: string };
-              if (payload.tacticalContext) aiContext.gameState.tacticalContext = payload.tacticalContext;
+              const payload = (await tacticalResponse.json()) as { tacticalContext?: string };
+              if (payload.tacticalContext)
+                aiContext.gameState.tacticalContext = payload.tacticalContext;
             }
           } catch (error) {
             logger.warn('Unable to load tactical context; continuing without map context', error);
@@ -268,20 +285,28 @@ export const useAIResponse = () => {
           const enemies = result.combatDetection?.enemies || [];
           const participants = [
             {
-              encounterId: '', characterId: (characterRecord.id as string) || null,
-              name: String(characterRecord.name || 'Player'), initiativeModifier: 0,
+              encounterId: '',
+              characterId: (characterRecord.id as string) || null,
+              name: String(characterRecord.name || 'Player'),
+              initiativeModifier: 0,
             },
-            ...enemies.map((enemy) => ({ encounterId: '', name: enemy.name, initiativeModifier: 0 })),
+            ...enemies.map((enemy) => ({
+              encounterId: '',
+              name: enemy.name,
+              initiativeModifier: 0,
+            })),
           ];
           const startResponse = await userDataApi.startStructuredCombat(sessionId, {
             participants,
             sceneSpec: result.scene_spec,
           });
-          if (!startResponse.ok) logger.warn('Server refused structured combat start', await startResponse.json());
+          if (!startResponse.ok)
+            logger.warn('Server refused structured combat start', await startResponse.json());
         }
         if (sessionId && result.combat_transition === 'end') {
           const endResponse = await userDataApi.endTacticalMap(sessionId);
-          if (!endResponse.ok) logger.warn('Server refused tactical combat end', await endResponse.json());
+          if (!endResponse.ok)
+            logger.warn('Server refused tactical combat end', await endResponse.json());
         }
 
         // DM map intents are one authenticated server batch. The server owns
@@ -295,9 +320,24 @@ export const useAIResponse = () => {
             logger.warn('Server refused DM tactical action batch', await actionResponse.json());
         }
 
+        let deliveredHandouts: JournalHandoutEntry[] | undefined;
+        if (sessionId && result.handout_actions?.length) {
+          const handoutResponse = await userDataApi.applyDmHandoutActions(
+            sessionId,
+            result.handout_actions as DMHandoutAction[],
+          );
+          if (handoutResponse.ok) {
+            const payload = (await handoutResponse.json()) as { entries?: JournalHandoutEntry[] };
+            deliveredHandouts = payload.entries;
+          } else {
+            logger.warn('Server refused DM handout batch', await handoutResponse.json());
+          }
+        }
+
         if (sessionId && result.combat_actions?.length) {
           const aoeActions = result.combat_actions.filter(
-            (action): action is DMAoESpellAction => action.action_type === 'cast_spell' && 'origin' in action,
+            (action): action is DMAoESpellAction =>
+              action.action_type === 'cast_spell' && 'origin' in action,
           );
           for (const action of aoeActions) {
             const response = await userDataApi.resolveAoECast(sessionId, {
@@ -308,29 +348,47 @@ export const useAIResponse = () => {
               direction: action.direction,
               slotLevel: action.slot_level,
             });
-            if (!response.ok) logger.warn('Server refused AoE spell proposal', await response.json());
+            if (!response.ok)
+              logger.warn('Server refused AoE spell proposal', await response.json());
           }
         }
 
-        if (combatState.isInCombat && combatState.activeEncounter && result.combat_actions?.length) {
+        if (
+          combatState.isInCombat &&
+          combatState.activeEncounter &&
+          result.combat_actions?.length
+        ) {
           const resolvedActions: Array<Record<string, unknown>> = [];
           const targetedActions = result.combat_actions.filter(
             (action): action is StructuredCombatAction => 'target_ids' in action,
           );
           for (const action of targetedActions) {
-            const outcomes = await executeStructuredCombatAction(combatState.activeEncounter.id, action);
+            const outcomes = await executeStructuredCombatAction(
+              combatState.activeEncounter.id,
+              action,
+            );
             resolvedActions.push({ action, outcomes });
-            await executeAuthoritativeCombatIntent(combatState.activeEncounter.id, {
-              type: 'end_turn', actorId: action.actor_id,
-            }, 'dm');
+            await executeAuthoritativeCombatIntent(
+              combatState.activeEncounter.id,
+              {
+                type: 'end_turn',
+                actorId: action.actor_id,
+              },
+              'dm',
+            );
           }
           const narrationResult = await AIService.chatWithDM({
             message: JSON.stringify({ authoritativeCombatResults: resolvedActions }),
             context: { ...aiContext, gameState: { ...aiContext.gameState, resolutionOnly: true } },
-            conversationHistory: [...conversationHistory, {
-              id: `resolution-setup-${Date.now()}`, role: 'assistant' as const,
-              content: result.text, timestamp: new Date(),
-            }],
+            conversationHistory: [
+              ...conversationHistory,
+              {
+                id: `resolution-setup-${Date.now()}`,
+                role: 'assistant' as const,
+                content: result.text,
+                timestamp: new Date(),
+              },
+            ],
             userPlan: userPlan || undefined,
             turnCount,
           });
@@ -402,6 +460,7 @@ export const useAIResponse = () => {
             intent: 'response',
             npcRollResults:
               processedRolls.npcRollResults.length > 0 ? processedRolls.npcRollResults : undefined,
+            handouts: deliveredHandouts,
           },
           narrationSegments,
           diceRolls,

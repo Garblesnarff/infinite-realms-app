@@ -64,3 +64,6 @@ export * from './spell-slots';
 
 // Server-authoritative tactical combat maps
 export * from './tactical-maps';
+
+// Campaign-instance journal entries (handouts in v1).
+export * from './journal';

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, test } from 'bun:test';
 
 import { parseDmResponse } from '../../services/dm/dm-response-schema.js';
@@ -160,6 +161,7 @@ describe('CM-2 tactical dispatch', () => {
       roll_requests: [],
       combat_transition: 'none',
       scene_spec: null,
+      handout_actions: [],
       combatants: [],
       combat_actions: [],
       map_actions: [

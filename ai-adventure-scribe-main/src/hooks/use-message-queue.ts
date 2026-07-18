@@ -80,6 +80,7 @@ export const useMessageQueue = (sessionId: string | null) => {
                 location: message.context.location || null,
                 emotion: message.context.emotion || null,
                 intent: message.context.intent || null,
+                handouts: message.context.handouts || null,
               }
             : {};
 
@@ -165,6 +166,7 @@ export const useMessageQueue = (sessionId: string | null) => {
             location: message.context.location || null,
             emotion: message.context.emotion || null,
             intent: message.context.intent || null,
+            handouts: message.context.handouts || null,
           }
         : {},
       timestamp: message.timestamp || now,

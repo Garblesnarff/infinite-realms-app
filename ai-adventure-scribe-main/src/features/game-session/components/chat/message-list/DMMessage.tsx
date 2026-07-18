@@ -4,6 +4,7 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { formatNarrative } from './formatNarrative';
 import { MessageAssetDisplay } from './MessageAssetDisplay';
 import { MessageVoicePlayer } from './MessageVoicePlayer';
+import { HandoutCard } from '../../handouts/HandoutCard';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -177,6 +178,14 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
                 : undefined
             }
           />
+
+          {Array.isArray(message.context?.handouts) && message.context.handouts.length > 0 && (
+            <div className="mt-4 space-y-3">
+              {message.context.handouts.map((entry) => (
+                <HandoutCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )}
 
           {isFirstInGroup && hasContextMetadata && (
             <div className="mt-5 border-t border-white/10 pt-4 text-sm text-white/70 space-y-2">

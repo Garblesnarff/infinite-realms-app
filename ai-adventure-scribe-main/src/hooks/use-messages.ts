@@ -161,6 +161,7 @@ export const useMessages = (sessionId: string | null): UseMessagesReturn => {
               location: message.context.location || null,
               emotion: message.context.emotion || null,
               intent: message.context.intent || null,
+              handouts: message.context.handouts || null,
             }
           : {};
 

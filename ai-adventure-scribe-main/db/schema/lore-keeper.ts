@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Lore Keeper Schema
  *
@@ -62,6 +63,8 @@ export const chunkTypeEnum = pgEnum('chunk_type', [
   'quest_side',
   'mechanic',
   'item',
+  'handout',
+  'monster',
   'encounter',
   'session_outline',
 ]);
@@ -131,7 +134,7 @@ export const starterCampaigns = pgTable(
     difficultyIdx: index('idx_starter_campaigns_difficulty').on(table.difficulty),
     publishedIdx: index('idx_starter_campaigns_published').on(table.isPublished, table.isComplete),
     featuredIdx: index('idx_starter_campaigns_featured').on(table.isFeatured),
-  })
+  }),
 );
 
 /**
@@ -178,7 +181,7 @@ export const campaignChunks = pgTable(
     typeIdx: index('idx_campaign_chunks_type').on(table.campaignId, table.chunkType),
     entityIdx: index('idx_campaign_chunks_entity').on(table.campaignId, table.entityName),
     // Vector index created in SQL migration (Drizzle doesn't support ivfflat directly)
-  })
+  }),
 );
 
 /**
@@ -212,7 +215,7 @@ export const campaignRules = pgTable(
   (table) => ({
     campaignIdIdx: index('idx_campaign_rules_campaign_id').on(table.campaignId),
     typeIdx: index('idx_campaign_rules_type').on(table.campaignId, table.ruleType),
-  })
+  }),
 );
 
 /**
@@ -244,7 +247,7 @@ export const campaignParties = pgTable(
   (table) => ({
     campaignIdIdx: index('idx_campaign_parties_campaign_id').on(table.campaignId),
     defaultIdx: index('idx_campaign_parties_default').on(table.campaignId, table.isDefault),
-  })
+  }),
 );
 
 /**
@@ -304,7 +307,7 @@ export const partyCharacters = pgTable(
   (table) => ({
     partyIdIdx: index('idx_party_characters_party_id').on(table.partyId),
     nameIdx: index('idx_party_characters_name').on(table.characterName),
-  })
+  }),
 );
 
 // Define relations

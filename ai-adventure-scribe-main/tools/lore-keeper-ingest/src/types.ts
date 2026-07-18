@@ -14,17 +14,12 @@ export type ChunkType =
   | 'quest_side'
   | 'mechanic'
   | 'item'
+  | 'handout'
   | 'monster'
   | 'encounter'
   | 'session_outline';
 
-export type Difficulty =
-  | 'easy'
-  | 'low-medium'
-  | 'medium'
-  | 'medium-hard'
-  | 'hard'
-  | 'deadly';
+export type Difficulty = 'easy' | 'low-medium' | 'medium' | 'medium-hard' | 'hard' | 'deadly';
 
 export type RuleType = 'causality' | 'mechanic' | 'world_law';
 
