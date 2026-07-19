@@ -123,8 +123,20 @@ export const requireAuth = new Elysia({ name: 'require-auth' }).resolve(
     const { user, error } = await authenticateRequest(request);
 
     if (!user) {
-      return status(401, { error: error || 'Unauthorized' });
+      logger.warn({
+        route: new URL(request.url).pathname,
+        authOutcome: 'rejected',
+        bodyLength: JSON.stringify({ error: error || 'Unauthorized' }).length,
+        msg: 'auth.decision',
+      });
+      return status(401, { error: error || 'Unauthorized', code: 'unauthorized' });
     }
+
+    logger.debug({
+      route: new URL(request.url).pathname,
+      authOutcome: 'accepted',
+      msg: 'auth.decision',
+    });
 
     return { user };
   },

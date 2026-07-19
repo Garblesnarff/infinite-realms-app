@@ -71,6 +71,8 @@ export interface UseCharacterSelectionReturn {
   isStarterCampaign: boolean;
   templates: StarterTemplate[] | undefined;
   characters: Character[] | undefined;
+  loadError: Error | null;
+  retryLoad: () => void;
   starterCampaignId: string | null | undefined;
   handleSelectTemplate: (template: StarterTemplate) => Promise<void>;
   startGameWithCharacter: (character: Character) => void;
@@ -102,7 +104,12 @@ export function useCharacterSelection({
   });
 
   // Fetch starter character templates (only when linked to starter campaign)
-  const { data: templates, isLoading: templatesLoading } = useQuery({
+  const {
+    data: templates,
+    isLoading: templatesLoading,
+    error: templatesError,
+    refetch: refetchTemplates,
+  } = useQuery({
     queryKey: ['starterTemplates', starterCampaignId],
     queryFn: async () => {
       if (!starterCampaignId) return [];
@@ -115,7 +122,12 @@ export function useCharacterSelection({
   });
 
   // Fetch available characters (only when NOT linked to starter campaign)
-  const { data: characters, isLoading: charactersLoading } = useQuery({
+  const {
+    data: characters,
+    isLoading: charactersLoading,
+    error: charactersError,
+    refetch: refetchCharacters,
+  } = useQuery({
     queryKey: ['campaign', campaignId, 'characters', 'play', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -127,6 +139,10 @@ export function useCharacterSelection({
 
   const isLoading = starterLoading || (starterCampaignId ? templatesLoading : charactersLoading);
   const isStarterCampaign = !!starterCampaignId;
+  const loadError = (starterCampaignId ? templatesError : charactersError) as Error | null;
+  const retryLoad = () => {
+    void (starterCampaignId ? refetchTemplates() : refetchCharacters());
+  };
 
   /**
    * Create character from starter template and start game
@@ -205,6 +221,8 @@ export function useCharacterSelection({
     isStarterCampaign,
     templates,
     characters,
+    loadError,
+    retryLoad,
     starterCampaignId,
     handleSelectTemplate,
     startGameWithCharacter,

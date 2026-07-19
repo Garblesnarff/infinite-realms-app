@@ -39,6 +39,8 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     isStarterCampaign,
     templates,
     characters,
+    loadError,
+    retryLoad,
     handleSelectTemplate,
     startGameWithCharacter,
     handleCreateCharacter,
@@ -65,6 +67,13 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
         <div className="mt-4">
           {isLoading ? (
             <CharacterSelectionSkeleton />
+          ) : loadError ? (
+            <div className="text-center py-8" role="alert">
+              <p className="text-muted-foreground mb-4">
+                Unable to load characters. Please try again.
+              </p>
+              <Button onClick={retryLoad}>Retry</Button>
+            </div>
           ) : isStarterCampaign && templates && templates.length > 0 ? (
             // Show starter templates
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

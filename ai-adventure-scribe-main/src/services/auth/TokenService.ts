@@ -8,6 +8,7 @@ export interface WorkOSSession {
 
 export const SESSION_STORAGE_KEY = 'aas_workos_cached_session';
 export const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 1 minute before expiry
+let refreshInFlight: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
 
 /**
  * Read the current WorkOS access token from browser storage.
@@ -25,9 +26,9 @@ export const getAccessToken = (): string | null => {
  * Set `includeEmptyToken` only for legacy callers that intentionally sent an
  * empty Bearer token when no authenticated session was available.
  */
-export const getAuthHeaders = (
-  { includeEmptyToken = false }: { includeEmptyToken?: boolean } = {},
-): Record<string, string> => {
+export const getAuthHeaders = ({
+  includeEmptyToken = false,
+}: { includeEmptyToken?: boolean } = {}): Record<string, string> => {
   const accessToken = getAccessToken();
   if (!accessToken && !includeEmptyToken) return {};
   return { Authorization: `Bearer ${accessToken ?? ''}` };
@@ -84,6 +85,16 @@ export const refreshAccessToken = async (
     logger.error('Error refreshing token:', error);
     return null;
   }
+};
+
+/** Serialize refreshes so callers never race a rotating refresh token. */
+export const refreshAccessTokenOnce = (refreshToken: string) => {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken(refreshToken).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 };
 
 export const loadCachedSession = (): WorkOSSession | null => {

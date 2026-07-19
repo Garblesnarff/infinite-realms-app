@@ -80,6 +80,16 @@ export function createApp() {
       });
     })
     .onAfterHandle(({ request, response, store, set }) => {
+      // Inline legacy auth guards returned this envelope without a status.
+      if (
+        response &&
+        typeof response === 'object' &&
+        'error' in response &&
+        (response as { error?: unknown }).error === 'Unauthorized'
+      ) {
+        set.status ??= 401;
+        set.headers['www-authenticate'] = 'Bearer realm="Infinite Realms"';
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const start = (store as any).__startTime || performance.now();
       const durationMs = performance.now() - start;
@@ -113,7 +123,7 @@ export function createApp() {
         msg: 'request.end',
       });
     })
-    .onError(({ error, request }) => {
+    .onError(({ error, request, set, code }) => {
       const requestId = request.headers.get('x-request-id') || 'unknown';
 
       logger.error({
@@ -126,6 +136,7 @@ export function createApp() {
         msg: 'request.error',
       });
 
+      set.status = code === 'NOT_FOUND' ? 404 : code === 'VALIDATION' ? 422 : 500;
       return {
         error: 'Internal Server Error',
         message:

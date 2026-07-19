@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
 import { waitForAuth } from '@/lib/auth-gate';
-import { getAuthHeaders, loadCachedSession } from '@/services/auth/TokenService';
+import {
+  getAuthHeaders,
+  loadCachedSession,
+  persistSession,
+  refreshAccessTokenOnce,
+} from '@/services/auth/TokenService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
@@ -220,21 +225,38 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // Wait for AuthContext to verify/refresh the session before reading the
   // token — otherwise cold page loads race out with a stale/expired token.
   await waitForAuth();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...init.headers,
-    },
-  });
+  const send = () =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...init.headers,
+      },
+    });
+  let response = await send();
+
+  if (response.status === 401) {
+    const session = loadCachedSession();
+    if (session?.refresh_token) {
+      const tokens = await refreshAccessTokenOnce(session.refresh_token);
+      if (tokens) {
+        persistSession({ access_token: tokens.accessToken, refresh_token: tokens.refreshToken });
+        response = await send();
+      }
+    }
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(payload?.error || `Request failed with status ${response.status}`);
   }
 
-  return response.json() as Promise<T>;
+  const payload = (await response.json()) as T & { error?: unknown };
+  if (payload && typeof payload === 'object' && typeof payload.error === 'string') {
+    throw new Error(payload.error);
+  }
+  return payload;
 }
 
 function normalizeCharacter<T extends Record<string, any>>(character: T): T {

@@ -5,6 +5,7 @@ import { db } from '../../../../db/client';
 import { campaigns, quests } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { sql } from '../../lib/db.js';
+import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 
@@ -152,10 +153,28 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
     if (query.id) {
       const rows =
         await sql`SELECT * FROM starter_character_templates WHERE id = ${query.id} LIMIT 1`;
-      return rows[0] ?? null;
+      const body = rows[0] ?? null;
+      logger.info({
+        templateId: query.id,
+        rowCount: rows.length,
+        bodyLength: JSON.stringify(body).length,
+        msg: 'starter-template.return',
+      });
+      return body;
     }
-    if (!query.campaign_id) return [];
-    return sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`;
+    if (!query.campaign_id) {
+      logger.info({ campaignId: null, rowCount: 0, bodyLength: 2, msg: 'starter-template.return' });
+      return [];
+    }
+    const rows =
+      await sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`;
+    logger.info({
+      campaignId: query.campaign_id,
+      rowCount: rows.length,
+      bodyLength: JSON.stringify(rows).length,
+      msg: 'starter-template.return',
+    });
+    return rows;
   })
   .get('/characters/:id/quest-progress', async ({ params, user }) => {
     return sql`
