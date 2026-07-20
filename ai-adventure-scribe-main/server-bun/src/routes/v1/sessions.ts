@@ -24,6 +24,7 @@ import { db } from '../../../../db/client';
 import { sessionChronicles } from '../../../../db/schema/index';
 import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
 import { getSessionContextRouteResult } from './session-context-handler.js';
+import { getSessionListRouteResult } from './session-list-handler.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
@@ -145,18 +146,14 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
     },
   )
 
-  .get('/', async ({ query, user }) =>
-    SessionService.listSessions(
-      {
-        campaignId: query.campaign_id,
-        characterId: query.character_id,
-        status: query.status,
-        starterOnly: query.starter_only === 'true',
-        limit: query.limit ? Number(query.limit) : undefined,
-        offset: query.offset ? Number(query.offset) : undefined,
-      },
-      (user as { userId: string }).userId,
-    ),
+  .get(
+    '/',
+    async ({ query, user }) =>
+      getSessionListRouteResult(
+        query,
+        (user as { userId: string }).userId,
+        SessionService.listSessions,
+      ),
     { query: listSessionsQuery },
   )
 

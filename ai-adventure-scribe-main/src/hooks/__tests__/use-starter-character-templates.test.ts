@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // useStarterCharacterTemplates/useStarterCharacterTemplate now fetch data through
@@ -100,6 +100,20 @@ describe('useStarterCharacterTemplates', () => {
 
     expect(result.current.error?.message).toBe('Database error');
     expect(result.current.templates).toEqual([]);
+  });
+
+  it('retries a failed template request', async () => {
+    vi.mocked(userDataApi.listStarterCharacterTemplates)
+      .mockRejectedValueOnce(new Error('Temporary error'))
+      .mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() => useStarterCharacterTemplates(mockCampaignId));
+    await waitFor(() => expect(result.current.error?.message).toBe('Temporary error'));
+
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.error).toBeNull());
+    expect(userDataApi.listStarterCharacterTemplates).toHaveBeenCalledTimes(2);
   });
 
   it('should handle non-Error catch objects', async () => {

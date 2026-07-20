@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
+import type { SessionListApiRow } from '../../shared/session-list-contract';
+
 import { waitForAuth } from '@/lib/auth-gate';
 import {
   getAuthHeaders,
@@ -280,7 +282,7 @@ export const userDataApi = {
       limit?: number;
       offset?: number;
     } = {},
-  ): Promise<any[]> => {
+  ): Promise<SessionListApiRow[]> => {
     const query = new URLSearchParams();
     if (filters.campaignId) query.set('campaign_id', filters.campaignId);
     if (filters.characterId) query.set('character_id', filters.characterId);

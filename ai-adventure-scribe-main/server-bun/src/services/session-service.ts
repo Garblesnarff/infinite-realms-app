@@ -20,6 +20,7 @@ import {
   type GameSession,
   type DialogueHistory,
 } from '../../../db/schema/index';
+import { mapSessionListApiRow } from '../../../shared/session-list-contract.js';
 import { NotFoundError } from '../lib/errors.js';
 
 export { type MessagePage };
@@ -279,12 +280,13 @@ export class SessionService {
       .limit(Math.min(filters.limit ?? 50, 100))
       .offset(filters.offset ?? 0);
 
-    return rows.map((row) => ({
-      ...mapSessionContextCore(row.session),
-      session_state: row.session.sessionState,
-      character: row.character?.id ? row.character : null,
-      session_chronicles: row.chronicle?.id ? [row.chronicle] : [],
-    }));
+    return rows.map((row) =>
+      mapSessionListApiRow(
+        row.session,
+        row.character?.id ? row.character : null,
+        row.chronicle?.id ? [row.chronicle] : [],
+      ),
+    );
   }
 
   static async updateSession(

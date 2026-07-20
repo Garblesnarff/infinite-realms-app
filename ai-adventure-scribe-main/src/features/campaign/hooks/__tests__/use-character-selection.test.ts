@@ -76,6 +76,46 @@ describe('useCharacterSelection', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('surfaces starter-link failures and retries that lookup before loading characters', () => {
+    const starterError = new Error('Malformed session list');
+    const refetchStarterLink = vi.fn();
+    let charactersEnabled: boolean | undefined;
+
+    (useQuery as Mock).mockImplementation(({ queryKey, enabled }) => {
+      if (queryKey.includes('starterLink')) {
+        return {
+          data: undefined,
+          isLoading: false,
+          error: starterError,
+          refetch: refetchStarterLink,
+        };
+      }
+      if (queryKey.includes('starterTemplates')) {
+        return { data: [], isLoading: false, error: null, refetch: vi.fn() };
+      }
+      if (queryKey.includes('characters')) {
+        charactersEnabled = enabled;
+        return { data: [], isLoading: false, error: null, refetch: vi.fn() };
+      }
+      return { data: null, isLoading: false, error: null, refetch: vi.fn() };
+    });
+
+    const { result } = renderHook(() =>
+      useCharacterSelection({
+        campaignId: 'camp-1',
+        campaignName: 'Campaign 1',
+        onClose: mockOnClose,
+        isOpen: true,
+      }),
+    );
+
+    expect(result.current.loadError).toBe(starterError);
+    expect(charactersEnabled).toBe(false);
+
+    act(() => result.current.retryLoad());
+    expect(refetchStarterLink).toHaveBeenCalledOnce();
+  });
+
   it('handles handleCreateCharacter', () => {
     const { result } = renderHook(() => useCharacterSelection({
       campaignId: 'camp-1',
@@ -100,7 +140,13 @@ describe('useCharacterSelection', () => {
       isOpen: true,
     }));
 
-    const mockCharacter = { id: 'char-1', name: 'Grog' } as any;
+    const mockCharacter = {
+      id: 'char-1',
+      name: 'Grog',
+      race: 'Half-Orc',
+      class: 'Barbarian',
+      level: 1,
+    };
 
     act(() => {
       result.current.startGameWithCharacter(mockCharacter);

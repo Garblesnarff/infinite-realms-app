@@ -42,7 +42,12 @@ const StarterCharacterSelectionPage: React.FC = () => {
   const campaignId = searchParams.get('campaignId');
 
   const { campaign, isLoading: campaignLoading } = useStarterCampaign(slug);
-  const { templates, isLoading: templatesLoading } = useStarterCharacterTemplates(campaign?.id);
+  const {
+    templates,
+    isLoading: templatesLoading,
+    error: templatesError,
+    retry: retryTemplates,
+  } = useStarterCharacterTemplates(campaign?.id);
 
   const [selectedTemplate, setSelectedTemplate] = useState<StarterCharacterTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -114,6 +119,18 @@ const StarterCharacterSelectionPage: React.FC = () => {
           <Link to={`/explore/${slug}`} className="text-purple-400 hover:text-purple-300 underline">
             Return to Campaign
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (templatesError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center px-6" role="alert">
+          <h1 className="text-4xl font-bold text-white mb-4">Unable to Load Characters</h1>
+          <p className="text-gray-400 mb-8">Could not load character options. Please try again.</p>
+          <Button onClick={retryTemplates}>Retry</Button>
         </div>
       </div>
     );

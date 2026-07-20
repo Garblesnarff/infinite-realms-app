@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { resolveStarterCampaignIdFromSessionList } from '../../../../shared/session-list-contract';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
@@ -92,13 +94,18 @@ export function useCharacterSelection({
   const [isCreating, setIsCreating] = useState(false);
 
   // Check if this campaign is linked to a starter campaign
-  const { data: starterCampaignId, isLoading: starterLoading } = useQuery({
+  const {
+    data: starterCampaignId,
+    isLoading: starterLoading,
+    error: starterLinkError,
+    refetch: refetchStarterLink,
+  } = useQuery({
     queryKey: ['campaign', campaignId, 'starterLink'],
     queryFn: async () => {
       if (!user?.id) return null;
 
-      const [session] = await userDataApi.listSessions({ campaignId, starterOnly: true, limit: 1 });
-      return session?.starter_campaign_id || null;
+      const sessions = await userDataApi.listSessions({ campaignId, starterOnly: true, limit: 1 });
+      return resolveStarterCampaignIdFromSessionList(sessions);
     },
     enabled: !!user?.id && isOpen,
   });
@@ -134,14 +141,19 @@ export function useCharacterSelection({
 
       return userDataApi.listCharacters(campaignId) as Promise<Character[]>;
     },
-    enabled: !!user?.id && !starterCampaignId && !starterLoading,
+    enabled: !!user?.id && !starterCampaignId && !starterLoading && !starterLinkError,
   });
 
   const isLoading = starterLoading || (starterCampaignId ? templatesLoading : charactersLoading);
   const isStarterCampaign = !!starterCampaignId;
-  const loadError = (starterCampaignId ? templatesError : charactersError) as Error | null;
+  const loadError = (starterLinkError ||
+    (starterCampaignId ? templatesError : charactersError)) as Error | null;
   const retryLoad = () => {
-    void (starterCampaignId ? refetchTemplates() : refetchCharacters());
+    if (starterLinkError) {
+      void refetchStarterLink();
+    } else {
+      void (starterCampaignId ? refetchTemplates() : refetchCharacters());
+    }
   };
 
   /**

@@ -6,7 +6,7 @@
  * that are adapted to fit each campaign's theme and setting.
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 
 import { userDataApi } from '@/services/user-data-api';
 
@@ -49,6 +49,7 @@ interface UseStarterCharacterTemplatesResult {
   templates: StarterCharacterTemplate[];
   isLoading: boolean;
   error: Error | null;
+  retry: () => void;
 }
 
 /**
@@ -106,20 +107,26 @@ export function useStarterCharacterTemplates(
   const [templates, setTemplates] = useState<StarterCharacterTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [requestVersion, setRequestVersion] = useState(0);
+  const retry = useCallback(() => setRequestVersion((version) => version + 1), []);
 
   useEffect(() => {
     if (!campaignId) {
       setTemplates([]);
       setIsLoading(false);
+      setError(null);
       return;
     }
 
     async function fetchTemplates(): Promise<void> {
+      setIsLoading(true);
+      setError(null);
       try {
         const data = await userDataApi.listStarterCharacterTemplates(campaignId!);
         const mapped = data.map(mapTemplateRow);
         setTemplates(mapped);
       } catch (err) {
+        setTemplates([]);
         setError(err instanceof Error ? err : new Error('Failed to fetch character templates'));
       } finally {
         setIsLoading(false);
@@ -127,9 +134,12 @@ export function useStarterCharacterTemplates(
     }
 
     fetchTemplates();
-  }, [campaignId]);
+  }, [campaignId, requestVersion]);
 
-  return useMemo(() => ({ templates, isLoading, error }), [templates, isLoading, error]);
+  return useMemo(
+    () => ({ templates, isLoading, error, retry }),
+    [templates, isLoading, error, retry],
+  );
 }
 
 /**
