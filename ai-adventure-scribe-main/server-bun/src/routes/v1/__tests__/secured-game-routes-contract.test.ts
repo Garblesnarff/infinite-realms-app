@@ -11,6 +11,10 @@ describe('secured game route contracts', () => {
   it('protects every new route group with requireAuth', () => {
     expect(sessions).toContain('.use(requireAuth)');
     expect(securedData).toContain('.use(requireAuth)');
+    expect(securedData.indexOf(".get('/starter-character-templates'")).toBeLessThan(
+      securedData.indexOf('.use(requireAuth)'),
+    );
+    expect(securedData).toContain("key: 'starter-character-templates:get'");
   });
 
   it('declares session context, list, update, quest, and template routes', () => {

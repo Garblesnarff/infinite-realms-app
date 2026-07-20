@@ -1,13 +1,12 @@
 /* eslint-disable max-lines */
 /* eslint-disable import/order */
-import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
 import { swagger } from '@elysiajs/swagger';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { logger } from './lib/logger';
-import { register, httpRequestCounter, httpRequestDuration } from './lib/metrics';
-import { randomUUID } from 'crypto';
+import { register } from './lib/metrics';
+import { createRequestPipelineApp } from './http-pipeline.js';
 import { appRouter, createContext } from './trpc/index.js';
 import { wsPlugin } from './ws';
 import { blogRoutes } from './routes/blog.js';
@@ -59,94 +58,7 @@ export function createApp() {
       detail: 'Production rate limiting will collapse all proxied users into one IP bucket',
     });
   }
-  const app = new Elysia()
-    // Request ID middleware
-    .derive(({ request }) => {
-      const requestId = request.headers.get('x-request-id') || randomUUID();
-      return { requestId };
-    })
-    // Request logging middleware
-    .onRequest(({ request, store }) => {
-      const start = performance.now();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (store as any).__startTime = start;
-
-      const requestId = request.headers.get('x-request-id') || randomUUID();
-      logger.info({
-        requestId,
-        method: request.method,
-        url: new URL(request.url).pathname,
-        msg: 'request.start',
-      });
-    })
-    .onAfterHandle(({ request, response, store, set }) => {
-      // Inline legacy auth guards returned this envelope without a status.
-      if (
-        response &&
-        typeof response === 'object' &&
-        'error' in response &&
-        (response as { error?: unknown }).error === 'Unauthorized'
-      ) {
-        set.status ??= 401;
-        set.headers['www-authenticate'] = 'Bearer realm="Infinite Realms"';
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const start = (store as any).__startTime || performance.now();
-      const durationMs = performance.now() - start;
-      const url = new URL(request.url);
-      // Fix: Read status from set.status first (set by handlers), then response, then default
-      const status = set.status || (response instanceof Response ? response.status : 200);
-      const requestId = request.headers.get('x-request-id') || 'unknown';
-
-      // Prometheus metrics
-      httpRequestCounter.inc({
-        method: request.method,
-        route: url.pathname,
-        status: String(status),
-      });
-
-      httpRequestDuration.observe(
-        {
-          method: request.method,
-          route: url.pathname,
-          status: String(status),
-        },
-        durationMs / 1000,
-      );
-
-      logger.info({
-        requestId,
-        method: request.method,
-        url: url.pathname,
-        status,
-        durationMs: Math.round(durationMs * 1000) / 1000,
-        msg: 'request.end',
-      });
-    })
-    .onError(({ error, request, set, code }) => {
-      const requestId = request.headers.get('x-request-id') || 'unknown';
-
-      logger.error({
-        requestId,
-        method: request.method,
-        url: new URL(request.url).pathname,
-        error: error instanceof Error ? error.message : String(error),
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-        stack: error instanceof Error ? error.stack : undefined,
-        msg: 'request.error',
-      });
-
-      set.status = code === 'NOT_FOUND' ? 404 : code === 'VALIDATION' ? 422 : 500;
-      return {
-        error: 'Internal Server Error',
-        message:
-          process.env.NODE_ENV === 'production'
-            ? undefined
-            : error instanceof Error
-              ? error.message
-              : String(error),
-      };
-    })
+  const app = createRequestPipelineApp()
     // Security headers middleware
     .onBeforeHandle(({ set }) => {
       // Prevent MIME type sniffing

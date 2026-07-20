@@ -7,6 +7,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
+import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 import { CampaignService } from '../../services/campaign-service.js';
 
 const questBody = t.Object({
@@ -48,7 +49,48 @@ const mapQuest = (quest: typeof quests.$inferSelect) => ({
   updated_at: quest.updatedAt,
 });
 
+const publicStarterCharacterTemplateRoutes = new Elysia({
+  name: 'public-starter-character-templates',
+})
+  // Starter templates are public, marketing-adjacent reference content used
+  // before a player commits to a campaign. Keep abuse control route-scoped.
+  .use(
+    createSimpleRateLimit({
+      windowMs: 60_000,
+      max: 60,
+      key: 'starter-character-templates:get',
+    }),
+  )
+  .get('/starter-character-templates', async ({ query }) => {
+    if (query.id) {
+      const rows =
+        await sql`SELECT * FROM starter_character_templates WHERE id = ${query.id} LIMIT 1`;
+      const body = rows[0] ?? null;
+      logger.info({
+        templateId: query.id,
+        rowCount: rows.length,
+        bodyLength: JSON.stringify(body).length,
+        msg: 'starter-template.return',
+      });
+      return body;
+    }
+    if (!query.campaign_id) {
+      logger.info({ campaignId: null, rowCount: 0, bodyLength: 2, msg: 'starter-template.return' });
+      return [];
+    }
+    const rows =
+      await sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`;
+    logger.info({
+      campaignId: query.campaign_id,
+      rowCount: rows.length,
+      bodyLength: JSON.stringify(rows).length,
+      msg: 'starter-template.return',
+    });
+    return rows;
+  });
+
 export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
+  .use(publicStarterCharacterTemplateRoutes)
   .use(requireAuth)
   .get('/quests', async ({ query, user }) => {
     if (!query.campaign_id) return [];
@@ -149,33 +191,6 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
     },
     { body: questBody },
   )
-  .get('/starter-character-templates', async ({ query }) => {
-    if (query.id) {
-      const rows =
-        await sql`SELECT * FROM starter_character_templates WHERE id = ${query.id} LIMIT 1`;
-      const body = rows[0] ?? null;
-      logger.info({
-        templateId: query.id,
-        rowCount: rows.length,
-        bodyLength: JSON.stringify(body).length,
-        msg: 'starter-template.return',
-      });
-      return body;
-    }
-    if (!query.campaign_id) {
-      logger.info({ campaignId: null, rowCount: 0, bodyLength: 2, msg: 'starter-template.return' });
-      return [];
-    }
-    const rows =
-      await sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`;
-    logger.info({
-      campaignId: query.campaign_id,
-      rowCount: rows.length,
-      bodyLength: JSON.stringify(rows).length,
-      msg: 'starter-template.return',
-    });
-    return rows;
-  })
   .get('/characters/:id/quest-progress', async ({ params, user }) => {
     return sql`
       SELECT qp.status, qp.updated_at, json_build_object('title', q.title) AS quests
