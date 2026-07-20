@@ -5,11 +5,34 @@ const templates = Array.from({ length: 5 }, (_, index) => ({
   starter_campaign_id: 'the-eternal-feast',
   name: `Eternal Feast hero ${index + 1}`,
   description: 'A complete starter character template used by the pre-commitment campaign flow.',
+  backstory: `Hero ${index + 1}: ${'A richly detailed starter-character fixture. '.repeat(64)}`,
 }));
+
+// postgres.js returns queries as Result instances: Array subclasses with
+// non-enumerable query metadata. The subclass shape is what exercises Elysia's
+// production response mapper rather than its plain-array fast path.
+class MockRowList<T> extends Array<T> {
+  constructor(items: T[]) {
+    super(...items);
+    Object.defineProperties(this, {
+      count: { value: items.length, writable: true },
+      state: { value: null, writable: true },
+      command: { value: 'SELECT', writable: true },
+      columns: { value: [], writable: true },
+      statement: { value: null, writable: true },
+    });
+  }
+
+  static get [Symbol.species]() {
+    return Array;
+  }
+}
+
+const templateRows = new MockRowList(templates);
 
 const noopLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
-mock.module('../../../lib/db.js', () => ({ sql: async () => templates }));
+mock.module('../../../lib/db.js', () => ({ sql: async () => templateRows }));
 mock.module('../../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-client' } }));
 mock.module('../../../lib/logger.js', () => ({ logger: noopLogger }));
 mock.module('../../../lib/auth.js', () => ({
@@ -57,10 +80,39 @@ describe('starter template HTTP contract', () => {
       const body = await response.text();
 
       expect(response.status).toBe(200);
-      expect(body.length).toBeGreaterThan(500);
-      expect(JSON.parse(body)).toEqual(templates);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(body.length).toBeGreaterThan(10_000);
+      const payload = JSON.parse(body);
+      expect(Array.isArray(payload)).toBe(true);
+      expect(payload).toHaveLength(5);
+      expect(payload).toEqual(templates);
     });
   }
+
+  it('serializes a postgres.js RowList-shaped result through the Elysia HTTP pipeline', async () => {
+    expect(templateRows).toBeInstanceOf(Array);
+    expect(templateRows.constructor).not.toBe(Array);
+
+    const response = await app.handle(new Request(endpoint));
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(body.length).toBeGreaterThan(10_000);
+    expect(JSON.parse(body)).toEqual(templates);
+  });
+
+  it('normalizes quest progress query results before returning them', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/characters/character-1/quest-progress', {
+        headers: { authorization: 'Bearer valid-token' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(await response.json()).toEqual(templates);
+  });
 });
 
 const collateralRoutes = [
@@ -153,6 +205,7 @@ describe('HTTP response pipeline invariant', () => {
     for (const sample of samples) {
       const response = await sample.app.handle(sample.request.clone());
       const body = await response.text();
+      expect(response.headers.get('content-type')).toContain('application/json');
       const payload = JSON.parse(body) as { error?: unknown };
       const isErrorEnvelope = Object.hasOwn(payload, 'error');
 

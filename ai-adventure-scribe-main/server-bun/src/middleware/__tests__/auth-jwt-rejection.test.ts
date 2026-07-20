@@ -11,7 +11,8 @@ process.env.WORKOS_API_KEY = 'test-workos-key';
 process.env.WORKOS_CLIENT_ID = 'test-client';
 
 const logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
-const sql = async () => [];
+class MockRowList<T> extends Array<T> {}
+const sql = async () => new MockRowList();
 
 mock.module('../../lib/db.js', () => ({ sql }));
 mock.module('../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-client' } }));
@@ -22,9 +23,10 @@ const publicJwk = await exportJWK(publicKey);
 publicJwk.kid = 'test-workos-key';
 
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async () => new Response(JSON.stringify({ keys: [publicJwk] }), {
-  headers: { 'content-type': 'application/json' },
-});
+globalThis.fetch = async () =>
+  new Response(JSON.stringify({ keys: [publicJwk] }), {
+    headers: { 'content-type': 'application/json' },
+  });
 
 const { requireAuth } = await import('../auth.js');
 const app = new Elysia()
@@ -42,9 +44,11 @@ async function signedRs256(expiration: string | number) {
 }
 
 async function protectedRequest(token?: string) {
-  return app.handle(new Request('http://localhost/protected', {
-    headers: token ? { authorization: `Bearer ${token}` } : undefined,
-  }));
+  return app.handle(
+    new Request('http://localhost/protected', {
+      headers: token ? { authorization: `Bearer ${token}` } : undefined,
+    }),
+  );
 }
 
 afterAll(() => {

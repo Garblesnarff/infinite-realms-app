@@ -8,7 +8,13 @@ import { Elysia } from 'elysia';
 
 const noopLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
-mock.module('../../../lib/db.js', () => ({ sql: async () => [] }));
+class MockRowList<T> extends Array<T> {
+  static get [Symbol.species]() {
+    return Array;
+  }
+}
+
+mock.module('../../../lib/db.js', () => ({ sql: async () => new MockRowList() }));
 mock.module('../../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-client' } }));
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) =>
@@ -18,10 +24,24 @@ mock.module('../../../lib/auth.js', () => ({
 }));
 mock.module('../../../lib/logger.js', () => ({ logger: noopLogger }));
 mock.module('../../../lib/supabase.js', () => ({
-  supabaseService: { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({
-    data: { id: 'key_1', name: 'test key', permissions: ['create_release_post'], expires_at: null, disabled: false },
-    error: null,
-  }) }) }) }) },
+  supabaseService: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: {
+              id: 'key_1',
+              name: 'test key',
+              permissions: ['create_release_post'],
+              expires_at: null,
+              disabled: false,
+            },
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  },
 }));
 mock.module('../../../middleware/admin.js', () => ({
   isAdmin: () => false,
@@ -37,7 +57,9 @@ mock.module('../../../middleware/rate-limit.js', () => ({
 mock.module('../../../../../db/client', () => ({
   db: { query: { waitlist: { findFirst: async () => null } } },
 }));
-mock.module('../../../services/email-service.js', () => ({ sendWaitlistConfirmation: async () => {} }));
+mock.module('../../../services/email-service.js', () => ({
+  sendWaitlistConfirmation: async () => {},
+}));
 
 const { waitlistRoutes } = await import('../waitlist.js');
 const { observabilityRoutes } = await import('../observability.js');
@@ -59,9 +81,11 @@ describe('v1 route API boundaries', () => {
 
   it('denies unauthenticated admin requests and non-admin users', async () => {
     const anonymous = await app.handle(new Request('http://localhost/v1/admin/archive-statistics'));
-    const member = await app.handle(new Request('http://localhost/v1/admin/archive-statistics', {
-      headers: { 'x-test-user': 'member' },
-    }));
+    const member = await app.handle(
+      new Request('http://localhost/v1/admin/archive-statistics', {
+        headers: { 'x-test-user': 'member' },
+      }),
+    );
 
     expect(anonymous.status).toBe(401);
     expect(member.status).toBe(403);
@@ -70,26 +94,32 @@ describe('v1 route API boundaries', () => {
   // Regression for bead -4ru: requireApiKey must be { as: 'scoped' } or it is
   // silently inert and this request reaches the handler.
   it('denies unauthenticated internal automation requests instead of creating a post', async () => {
-    const response = await app.handle(new Request('http://localhost/v1/internal/release-post', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ version: '1.0.0', changelog: 'Notes' }),
-    }));
+    const response = await app.handle(
+      new Request('http://localhost/v1/internal/release-post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: '1.0.0', changelog: 'Notes' }),
+      }),
+    );
 
     expect(response.status).toBe(401);
   });
 
   it('returns 422 for schema-invalid public observability and authorized internal bodies', async () => {
-    const invalidMetric = await app.handle(new Request('http://localhost/v1/observability/metric', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: '' }),
-    }));
-    const invalidRelease = await app.handle(new Request('http://localhost/v1/internal/release-post', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer test-key' },
-      body: JSON.stringify({ version: 'not a version', changelog: '' }),
-    }));
+    const invalidMetric = await app.handle(
+      new Request('http://localhost/v1/observability/metric', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '' }),
+      }),
+    );
+    const invalidRelease = await app.handle(
+      new Request('http://localhost/v1/internal/release-post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer test-key' },
+        body: JSON.stringify({ version: 'not a version', changelog: '' }),
+      }),
+    );
 
     expect(invalidMetric.status).toBe(422);
     expect(invalidRelease.status).toBe(422);

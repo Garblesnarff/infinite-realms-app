@@ -6,6 +6,7 @@ import { campaigns, quests } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
 import { sql } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
+import { normalizeRows } from '../../lib/query-rows.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { createSimpleRateLimit } from '../../middleware/rate-limit.js';
 import { CampaignService } from '../../services/campaign-service.js';
@@ -63,8 +64,9 @@ const publicStarterCharacterTemplateRoutes = new Elysia({
   )
   .get('/starter-character-templates', async ({ query }) => {
     if (query.id) {
-      const rows =
-        await sql`SELECT * FROM starter_character_templates WHERE id = ${query.id} LIMIT 1`;
+      const rows = await normalizeRows(
+        sql`SELECT * FROM starter_character_templates WHERE id = ${query.id} LIMIT 1`,
+      );
       const body = rows[0] ?? null;
       logger.info({
         templateId: query.id,
@@ -78,8 +80,9 @@ const publicStarterCharacterTemplateRoutes = new Elysia({
       logger.info({ campaignId: null, rowCount: 0, bodyLength: 2, msg: 'starter-template.return' });
       return [];
     }
-    const rows =
-      await sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`;
+    const rows = await normalizeRows(
+      sql`SELECT * FROM starter_character_templates WHERE starter_campaign_id = ${query.campaign_id} ORDER BY display_order`,
+    );
     logger.info({
       campaignId: query.campaign_id,
       rowCount: rows.length,
@@ -192,14 +195,16 @@ export const securedGameDataRoutes = new Elysia({ prefix: '/v1' })
     { body: questBody },
   )
   .get('/characters/:id/quest-progress', async ({ params, user }) => {
-    return sql`
-      SELECT qp.status, qp.updated_at, json_build_object('title', q.title) AS quests
-      FROM quest_progress qp
-      INNER JOIN quests q ON q.id = qp.quest_id
-      INNER JOIN characters ch ON ch.id = qp.character_id
-      LEFT JOIN campaigns c ON c.id = q.campaign_id
-      WHERE qp.character_id = ${params.id}
-        AND (ch.user_id = ${user.userId} OR ch.owner_id = ${user.userId} OR c.user_id = ${user.userId})
-      ORDER BY qp.updated_at DESC
-    `;
+    return normalizeRows(
+      sql`
+        SELECT qp.status, qp.updated_at, json_build_object('title', q.title) AS quests
+        FROM quest_progress qp
+        INNER JOIN quests q ON q.id = qp.quest_id
+        INNER JOIN characters ch ON ch.id = qp.character_id
+        LEFT JOIN campaigns c ON c.id = q.campaign_id
+        WHERE qp.character_id = ${params.id}
+          AND (ch.user_id = ${user.userId} OR ch.owner_id = ${user.userId} OR c.user_id = ${user.userId})
+        ORDER BY qp.updated_at DESC
+      `,
+    );
   });
